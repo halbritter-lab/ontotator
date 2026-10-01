@@ -1,11 +1,13 @@
 import hashlib
+import io
 import json
 import zipfile
 from pathlib import Path
+from typing import BinaryIO
 
 from hpo_editor.domain.annotations import AnnotationSnapshot
 from hpo_editor.domain.canonical import canonical_hash
-from hpo_editor.domain.documents import Document, EvidenceSnapshot
+from hpo_editor.domain.documents import Document, EvidenceSnapshot, OntologyRef
 from hpo_editor.domain.errors import InvalidPackage
 from hpo_editor.domain.workspace import Submission
 from hpo_editor.packages.models import (
@@ -29,12 +31,20 @@ MAX_DOCUMENTS = 10_000
 MAX_DOCUMENT_TEXT_BYTES = 2 * 1024 * 1024  # 2 MiB
 
 
-def read_package(path: Path) -> ValidatedPackage:
-    """Read, stream-validate and return ValidatedPackage from ZIP archive."""
-    if not path.is_file():
-        raise InvalidPackage(f"Package file does not exist: {path}")
+def read_package(source: Path | BinaryIO) -> ValidatedPackage:
+    """Read, stream-validate and return ValidatedPackage from ZIP archive or stream."""
+    if isinstance(source, (str, Path)):
+        path = Path(source)
+        if not path.is_file():
+            raise InvalidPackage(f"Package file does not exist: {path}")
+        compressed_size = path.stat().st_size
+        target: str | Path | BinaryIO = path
+    else:
+        source.seek(0, io.SEEK_END)
+        compressed_size = source.tell()
+        source.seek(0)
+        target = source
 
-    compressed_size = path.stat().st_size
     if compressed_size > MAX_COMPRESSED_BYTES:
         raise InvalidPackage(
             f"Package compressed size exceeds limit "
@@ -45,7 +55,7 @@ def read_package(path: Path) -> ValidatedPackage:
     total_uncompressed = 0
 
     try:
-        with zipfile.ZipFile(path, "r") as z:
+        with zipfile.ZipFile(target, "r") as z:
             names = z.namelist()
             seen_names: set[str] = set()
 
@@ -221,3 +231,24 @@ def read_package(path: Path) -> ValidatedPackage:
         submissions=submissions,
         search_events=search_events,
     )
+
+
+class PackageReader:
+    """Convenience class for reading packages from paths or streams."""
+
+    @staticmethod
+    def read_from_stream(
+        stream: BinaryIO, ontology_ref: OntologyRef | None = None
+    ) -> ValidatedPackage:
+        pkg = read_package(stream)
+        if ontology_ref and pkg.manifest.ontology.sha256 != ontology_ref.sha256:
+            raise InvalidPackage(
+                f"Ontology SHA mismatch: expected {ontology_ref.sha256}, "
+                f"got {pkg.manifest.ontology.sha256}"
+            )
+        return pkg
+
+    @staticmethod
+    def read(path: Path) -> ValidatedPackage:
+        return read_package(path)
+

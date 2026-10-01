@@ -1,0 +1,1550 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Local HPO Annotation Editor API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/packages": {
+      "get": {
+        "summary": "List Packages",
+        "description": "List installed packages with metadata and ontology reference.",
+        "operationId": "list_packages_api_v1_packages_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PackageManifest"
+                  },
+                  "type": "array",
+                  "title": "Response List Packages Api V1 Packages Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload Package",
+        "description": "Upload and atomically import a work package archive.",
+        "operationId": "upload_package_api_v1_packages_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_package_api_v1_packages_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": true,
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "title": "Response Upload Package Api V1 Packages Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/packages/{package_id}/documents": {
+      "get": {
+        "summary": "List Package Documents",
+        "description": "List documents showing metadata only, without proposal counts.",
+        "operationId": "list_package_documents_api_v1_packages__package_id__documents_get",
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSummary"
+                  },
+                  "title": "Response List Package Documents Api V1 Packages  Package Id  Documents Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/review-inputs": {
+      "post": {
+        "summary": "Get Review Inputs",
+        "description": "Get selectable proposal versions for setting up a review round.",
+        "operationId": "get_review_inputs_api_v1_workspaces_review_inputs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewInputsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AnnotationSnapshot"
+                  },
+                  "type": "array",
+                  "title": "Response Get Review Inputs Api V1 Workspaces Review Inputs Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/open": {
+      "post": {
+        "summary": "Open Workspace",
+        "description": "Open or initialize a workspace view.",
+        "operationId": "open_workspace_api_v1_workspaces_open_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenWorkspaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/commands": {
+      "post": {
+        "summary": "Apply Command",
+        "description": "Execute an edit command against a workspace draft.",
+        "operationId": "apply_command_api_v1_workspaces__workspace_id__commands_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/decisions": {
+      "post": {
+        "summary": "Record Decision",
+        "description": "Record a reviewer decision against a targeted proposal.",
+        "operationId": "record_decision_api_v1_workspaces__workspace_id__decisions_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/submit": {
+      "post": {
+        "summary": "Submit Workspace",
+        "description": "Commit workspace submission upon verification.",
+        "operationId": "submit_workspace_api_v1_workspaces__workspace_id__submit_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Submission"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/submissions/{submission_id}": {
+      "get": {
+        "summary": "Read Submission",
+        "description": "Read back historical submission.",
+        "operationId": "read_submission_api_v1_workspaces__workspace_id__submissions__submission_id__get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Submission"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search": {
+      "post": {
+        "summary": "Search Ontology",
+        "description": "Execute HPO search with deterministic provenance shuffling.",
+        "operationId": "search_ontology_api_v1_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/export": {
+      "get": {
+        "summary": "Export Workspace",
+        "description": "Export scoped workspace package as downloadable ZIP.",
+        "operationId": "export_workspace_api_v1_workspaces__workspace_id__export_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActorRef": {
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "title": "Actor Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "tool"
+            ],
+            "title": "Kind"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "actor_id",
+          "kind"
+        ],
+        "title": "ActorRef",
+        "description": "Reference to human or tool actor."
+      },
+      "Annotation": {
+        "properties": {
+          "annotation_id": {
+            "type": "string",
+            "title": "Annotation Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "hpo_id": {
+            "type": "string",
+            "title": "Hpo Id"
+          },
+          "axes": {
+            "$ref": "#/components/schemas/Axes"
+          },
+          "evidence_refs": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence Refs"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "annotation_id",
+          "document_id",
+          "hpo_id",
+          "provenance"
+        ],
+        "title": "Annotation",
+        "description": "Annotation entity referencing HPO term, context axes and evidence."
+      },
+      "AnnotationRef": {
+        "properties": {
+          "annotation_id": {
+            "type": "string",
+            "title": "Annotation Id"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "annotation_id",
+          "version"
+        ],
+        "title": "AnnotationRef",
+        "description": "Reference binding annotation ID and immutable version hash."
+      },
+      "AnnotationSnapshot": {
+        "properties": {
+          "annotation": {
+            "$ref": "#/components/schemas/Annotation"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSnapshot"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "text_sha256": {
+            "type": "string",
+            "title": "Text Sha256"
+          },
+          "ontology_sha256": {
+            "type": "string",
+            "title": "Ontology Sha256"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "annotation",
+          "evidence",
+          "document_id",
+          "text_sha256",
+          "ontology_sha256",
+          "version"
+        ],
+        "title": "AnnotationSnapshot",
+        "description": "Immutable snapshot binding annotation, evidence, text and ontology digests."
+      },
+      "Axes": {
+        "properties": {
+          "definition_name": {
+            "type": "string",
+            "const": "editor-axes/v1",
+            "title": "Definition Name",
+            "default": "editor-axes/v1"
+          },
+          "assertion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "present",
+                  "absent",
+                  "uncertain"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assertion"
+          },
+          "experiencer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "patient",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiencer"
+          },
+          "temporality": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "historical",
+                  "future"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temporality"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Axes",
+        "description": "Clinical axes associated with an annotation."
+      },
+      "Body_upload_package_api_v1_packages_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_package_api_v1_packages_post"
+      },
+      "Document": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "text_sha256": {
+            "type": "string",
+            "title": "Text Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "text",
+          "language",
+          "text_sha256"
+        ],
+        "title": "Document",
+        "description": "Immutable document containing original text and UTF-8 byte SHA-256."
+      },
+      "DocumentSummary": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "text_length": {
+            "type": "integer",
+            "title": "Text Length"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "language",
+          "text_length"
+        ],
+        "title": "DocumentSummary",
+        "description": "Metadata-only summary of a document in a package."
+      },
+      "Draft": {
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/WorkspaceKey"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/ReviewTargetSet"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationSnapshot"
+            },
+            "type": "array",
+            "title": "Annotations"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSnapshot"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "document_checked": {
+            "type": "boolean",
+            "title": "Document Checked",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "targets",
+          "revision"
+        ],
+        "title": "Draft",
+        "description": "Mutable, revisioned working state of a workspace."
+      },
+      "EvidenceMention": {
+        "properties": {
+          "evidence_id": {
+            "type": "string",
+            "title": "Evidence Id"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "type": "array",
+            "title": "Segments"
+          },
+          "cue_segments": {
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "type": "array",
+            "title": "Cue Segments",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "evidence_id",
+          "segments"
+        ],
+        "title": "EvidenceMention",
+        "description": "Evidence mention spanning one or more ordered, non-overlapping segments."
+      },
+      "EvidenceRef": {
+        "properties": {
+          "evidence_id": {
+            "type": "string",
+            "title": "Evidence Id"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "evidence_id",
+          "version"
+        ],
+        "title": "EvidenceRef",
+        "description": "Reference binding evidence ID and specific immutable version hash."
+      },
+      "EvidenceSnapshot": {
+        "properties": {
+          "mention": {
+            "$ref": "#/components/schemas/EvidenceMention"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "text_sha256": {
+            "type": "string",
+            "title": "Text Sha256"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mention",
+          "document_id",
+          "text_sha256",
+          "version"
+        ],
+        "title": "EvidenceSnapshot",
+        "description": "Immutable snapshot of evidence bound to text and document."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MutationEnvelope": {
+        "properties": {
+          "mutation_id": {
+            "type": "string",
+            "title": "Mutation Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "title": "Expected Revision"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mutation_id",
+          "expected_revision",
+          "payload"
+        ],
+        "title": "MutationEnvelope",
+        "description": "Request envelope identifying a write attempt across retries."
+      },
+      "OntologyRef": {
+        "properties": {
+          "release": {
+            "type": "string",
+            "title": "Release"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "release",
+          "sha256"
+        ],
+        "title": "OntologyRef",
+        "description": "Reference to pinned HPO ontology release and digest."
+      },
+      "OpenWorkspaceRequest": {
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "annotator_id": {
+            "type": "string",
+            "title": "Annotator Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "independent",
+              "review"
+            ],
+            "title": "Mode",
+            "default": "independent"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewTargetSet"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "package_id",
+          "document_id",
+          "annotator_id"
+        ],
+        "title": "OpenWorkspaceRequest",
+        "description": "Request payload for opening a workspace draft."
+      },
+      "OpenWorkspaceResponse": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "view": {
+            "$ref": "#/components/schemas/WorkspaceView"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "view"
+        ],
+        "title": "OpenWorkspaceResponse",
+        "description": "Response returned upon opening a workspace."
+      },
+      "PackageManifest": {
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "format_version": {
+            "type": "string",
+            "const": "hpo-editor-work-package/v1",
+            "title": "Format Version",
+            "default": "hpo-editor-work-package/v1"
+          },
+          "ontology": {
+            "$ref": "#/components/schemas/OntologyRef"
+          },
+          "axes_definition": {
+            "type": "string",
+            "title": "Axes Definition",
+            "default": "editor-axes/v1"
+          },
+          "file_hashes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "File Hashes"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "origin_package_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Package Id"
+          },
+          "origin_manifest_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Manifest Hash"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "package_id",
+          "ontology",
+          "created_at"
+        ],
+        "title": "PackageManifest",
+        "description": "Manifest describing work package metadata and checksums."
+      },
+      "Provenance": {
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ActorRef"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "source_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Refs"
+          },
+          "assessment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "actor",
+          "method"
+        ],
+        "title": "Provenance",
+        "description": "Origin and extraction details for an annotation or statement."
+      },
+      "ReviewDecision": {
+        "properties": {
+          "decision_id": {
+            "type": "string",
+            "title": "Decision Id"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AnnotationRef"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "rejected",
+              "changed",
+              "uncertain"
+            ],
+            "title": "Outcome"
+          },
+          "replacement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnnotationRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reviewer_id": {
+            "type": "string",
+            "title": "Reviewer Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "decision_id",
+          "target",
+          "outcome",
+          "reviewer_id"
+        ],
+        "title": "ReviewDecision",
+        "description": "Review decision record for a targeted annotation snapshot."
+      },
+      "ReviewInputsRequest": {
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "annotator_id": {
+            "type": "string",
+            "title": "Annotator Id"
+          },
+          "mode": {
+            "type": "string",
+            "const": "review",
+            "title": "Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "package_id",
+          "document_id",
+          "annotator_id",
+          "mode"
+        ],
+        "title": "ReviewInputsRequest",
+        "description": "Request payload for fetching targeted review inputs."
+      },
+      "ReviewTargetSet": {
+        "properties": {
+          "target_set_id": {
+            "type": "string",
+            "title": "Target Set Id"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationRef"
+            },
+            "type": "array",
+            "title": "Targets"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target_set_id",
+          "targets"
+        ],
+        "title": "ReviewTargetSet",
+        "description": "Immutable, sorted set of targeted annotation references for a review round."
+      },
+      "SearchCandidate": {
+        "properties": {
+          "hpo_id": {
+            "type": "string",
+            "title": "Hpo Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "definition": {
+            "type": "string",
+            "title": "Definition",
+            "default": ""
+          },
+          "matched_term": {
+            "type": "string",
+            "title": "Matched Term",
+            "default": ""
+          },
+          "match_kind": {
+            "type": "string",
+            "title": "Match Kind",
+            "default": ""
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank",
+            "default": 0
+          },
+          "display_pos": {
+            "type": "integer",
+            "title": "Display Pos",
+            "default": 0
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "hpo_id",
+          "label"
+        ],
+        "title": "SearchCandidate",
+        "description": "Single candidate term returned by an HPO search route."
+      },
+      "SearchRequest": {
+        "properties": {
+          "workspace_key": {
+            "$ref": "#/components/schemas/WorkspaceKey"
+          },
+          "annotation_id": {
+            "type": "string",
+            "title": "Annotation Id"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "lexical",
+              "exact",
+              "id",
+              "browse"
+            ],
+            "title": "Route",
+            "default": "lexical"
+          },
+          "k": {
+            "type": "integer",
+            "title": "K",
+            "default": 10
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workspace_key",
+          "annotation_id",
+          "query"
+        ],
+        "title": "SearchRequest",
+        "description": "Search request scoped to a workspace mention/annotation."
+      },
+      "SearchResult": {
+        "properties": {
+          "route": {
+            "type": "string",
+            "title": "Route"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/SearchCandidate"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "displayed_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Displayed Ids"
+          },
+          "ranked_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ranked Ids"
+          },
+          "shuffled": {
+            "type": "boolean",
+            "title": "Shuffled",
+            "default": false
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "route",
+          "query"
+        ],
+        "title": "SearchResult",
+        "description": "Result of an HPO search query including deterministic provenance."
+      },
+      "Segment": {
+        "properties": {
+          "start": {
+            "type": "integer",
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "title": "End"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "Segment",
+        "description": "Zero-based Unicode codepoint interval [start, end)."
+      },
+      "Submission": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "origin_key": {
+            "$ref": "#/components/schemas/WorkspaceKey"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/ReviewTargetSet"
+          },
+          "draft_revision": {
+            "type": "integer",
+            "title": "Draft Revision"
+          },
+          "snapshots": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationSnapshot"
+            },
+            "type": "array",
+            "title": "Snapshots"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "document_checked": {
+            "type": "boolean",
+            "title": "Document Checked"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "submission_id",
+          "origin_key",
+          "targets",
+          "draft_revision",
+          "snapshots",
+          "decisions",
+          "document_checked",
+          "created_at"
+        ],
+        "title": "Submission",
+        "description": "Immutable local submission record."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WorkspaceKey": {
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "annotator_id": {
+            "type": "string",
+            "title": "Annotator Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "independent",
+              "review"
+            ],
+            "title": "Mode"
+          },
+          "target_set_id": {
+            "type": "string",
+            "title": "Target Set Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "package_id",
+          "document_id",
+          "annotator_id",
+          "mode",
+          "target_set_id"
+        ],
+        "title": "WorkspaceKey",
+        "description": "Identifier for an isolated local workspace."
+      },
+      "WorkspaceView": {
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/WorkspaceKey"
+          },
+          "document": {
+            "$ref": "#/components/schemas/Document"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/Draft"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/ReviewTargetSet"
+          },
+          "available_inputs": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationSnapshot"
+            },
+            "type": "array",
+            "title": "Available Inputs"
+          },
+          "submissions": {
+            "items": {
+              "$ref": "#/components/schemas/Submission"
+            },
+            "type": "array",
+            "title": "Submissions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "document",
+          "draft",
+          "targets"
+        ],
+        "title": "WorkspaceView",
+        "description": "Loaded view of a workspace including document, draft and submissions."
+      }
+    }
+  }
+}

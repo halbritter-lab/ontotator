@@ -4,13 +4,15 @@ import os
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import BinaryIO
 
 from hpo_editor.domain.errors import InvalidPackage
 from hpo_editor.packages.models import ValidatedPackage
 
 
-def write_package(package: ValidatedPackage, target: Path) -> None:
-    """Validate referential integrity and atomically write a work package archive."""
+def _prepare_package_payloads(
+    package: ValidatedPackage,
+) -> tuple[bytes, bytes, bytes, bytes, bytes, bytes]:
     # 1. Referential integrity checks
     for (ann_id, ann_ver), snap in package.annotations.items():
         if snap.annotation.document_id not in package.documents:
@@ -72,7 +74,38 @@ def write_package(package: ValidatedPackage, target: Path) -> None:
         manifest_copy.model_dump(), indent=2, ensure_ascii=False
     ).encode("utf-8")
 
-    # 4. Atomically write to temporary file and replace target
+    return (
+        manifest_bytes,
+        docs_bytes,
+        ann_bytes,
+        ev_bytes,
+        sub_bytes,
+        search_bytes,
+    )
+
+
+def write_package_to_stream(package: ValidatedPackage, stream: BinaryIO) -> None:
+    """Write package archive to stream."""
+    (
+        manifest_bytes,
+        docs_bytes,
+        ann_bytes,
+        ev_bytes,
+        sub_bytes,
+        search_bytes,
+    ) = _prepare_package_payloads(package)
+
+    with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("manifest.json", manifest_bytes)
+        z.writestr("documents.jsonl", docs_bytes)
+        z.writestr("annotations.jsonl", ann_bytes)
+        z.writestr("evidence.jsonl", ev_bytes)
+        z.writestr("submissions.jsonl", sub_bytes)
+        z.writestr("search-events.jsonl", search_bytes)
+
+
+def write_package(package: ValidatedPackage, target: Path) -> None:
+    """Validate referential integrity and atomically write a work package archive."""
     target_dir = target.parent
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -82,16 +115,23 @@ def write_package(package: ValidatedPackage, target: Path) -> None:
         tmp_path = Path(tmp_file.name)
 
     try:
-        with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
-            z.writestr("manifest.json", manifest_bytes)
-            z.writestr("documents.jsonl", docs_bytes)
-            z.writestr("annotations.jsonl", ann_bytes)
-            z.writestr("evidence.jsonl", ev_bytes)
-            z.writestr("submissions.jsonl", sub_bytes)
-            z.writestr("search-events.jsonl", search_bytes)
-
+        with open(tmp_path, "wb") as f:
+            write_package_to_stream(package, f)
         os.replace(tmp_path, target)
     except Exception:
         if tmp_path.exists():
             tmp_path.unlink()
         raise
+
+
+class PackageWriter:
+    """Convenience class for writing packages to paths or streams."""
+
+    @staticmethod
+    def write_to_stream(package: ValidatedPackage, stream: BinaryIO) -> None:
+        write_package_to_stream(package, stream)
+
+    @staticmethod
+    def write(package: ValidatedPackage, target: Path) -> None:
+        write_package(package, target)
+

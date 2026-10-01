@@ -25,9 +25,11 @@ class Database:
             self._conn = sqlite3.connect(
                 str(self.path),
                 isolation_level=None,  # Autocommit: explicit transactions
+                check_same_thread=False,
             )
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA foreign_keys = ON;")
+            self._conn.execute("PRAGMA busy_timeout = 5000;")
         return self._conn
 
     def _ensure_migrated(self) -> None:
