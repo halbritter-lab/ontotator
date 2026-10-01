@@ -1,0 +1,221 @@
+/**
+ * Shared span editor: paint, render, hover-link and read back character offsets.
+ *
+ * Adapted from hpo-span-annotator / opti-data annot_gold.
+ */
+
+const NBSP = " ";
+
+/**
+ * Sort and merge a mention's own spans so it never double-counts a character.
+ */
+export function normaliseSpans(spans) {
+  const sorted = (spans || [])
+    .map((s) => ({ start: s.char_start | 0, end: s.char_end | 0 }))
+    .filter((s) => s.end > s.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged = [];
+  for (const span of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && span.start <= last.end) {
+      last.end = Math.max(last.end, span.end);
+    } else {
+      merged.push({ ...span });
+    }
+  }
+  return merged;
+}
+
+/**
+ * Cut `text` at every span boundary and tag each piece with its mentions.
+ */
+export function decomposeRuns(textLength, mentions, extraCuts = []) {
+  const cuts = new Set([0, textLength]);
+  for (const cut of extraCuts) {
+    if (cut > 0 && cut < textLength) cuts.add(cut);
+  }
+  const owned = new Map();
+  for (const mention of mentions || []) {
+    const spans = normaliseSpans(mention.spans || []);
+    owned.set(mention.mention_id, spans);
+    for (const span of spans) {
+      if (span.start > 0 && span.start < textLength) cuts.add(span.start);
+      if (span.end > 0 && span.end < textLength) cuts.add(span.end);
+    }
+  }
+  const edges = [...cuts].sort((a, b) => a - b);
+  const runs = [];
+  for (let i = 0; i < edges.length - 1; i += 1) {
+    const start = edges[i];
+    const end = edges[i + 1];
+    const ids = [];
+    for (const [id, spans] of owned) {
+      if (spans.some((s) => s.start < end && start < s.end)) ids.push(id);
+    }
+    runs.push({ start, end, mentionIds: ids });
+  }
+  return runs;
+}
+
+/** Trim a raw drag-selection down to its visible characters. */
+export function trimToVisible(text, start, end) {
+  let a = Math.max(0, Math.min(start, end));
+  let b = Math.min(text.length, Math.max(start, end));
+  while (a < b && !text[a].trim()) a += 1;
+  while (b > a && !text[b - 1].trim()) b -= 1;
+  return b > a ? { start: a, end: b } : null;
+}
+
+export class SpanEditor {
+  constructor(container, handlers = {}) {
+    this.container = container;
+    this.handlers = handlers;
+    this.text = "";
+    this.mentions = [];
+    this.suggestions = [];
+    this.markers = [];
+    this.activeIds = new Set();
+    this.readOnly = false;
+
+    this._onMouseUpBound = (e) => this._onMouseUp(e);
+    this._onMouseOverBound = (e) => this._onHover(e, true);
+    this._onMouseOutBound = (e) => this._onHover(e, false);
+    this._onClickBound = (e) => this._onClick(e);
+
+    container.addEventListener("mouseup", this._onMouseUpBound);
+    container.addEventListener("mouseover", this._onMouseOverBound);
+    container.addEventListener("mouseout", this._onMouseOutBound);
+    container.addEventListener("click", this._onClickBound);
+  }
+
+  destroy() {
+    this.container.removeEventListener("mouseup", this._onMouseUpBound);
+    this.container.removeEventListener("mouseover", this._onMouseOverBound);
+    this.container.removeEventListener("mouseout", this._onMouseOutBound);
+    this.container.removeEventListener("click", this._onClickBound);
+  }
+
+  setReadOnly(readOnly) {
+    this.readOnly = Boolean(readOnly);
+    this.container.classList.toggle("readonly", this.readOnly);
+  }
+
+  setBlock(text) {
+    this.text = text ?? "";
+    this.render();
+  }
+
+  setMentions(mentions) {
+    this.mentions = mentions || [];
+    this.render();
+  }
+
+  setSuggestions(suggestions) {
+    this.suggestions = suggestions || [];
+    this.render();
+  }
+
+  setMarkers(markers) {
+    this.markers = markers || [];
+    this.render();
+  }
+
+  highlight(mentionIds) {
+    this.activeIds = new Set(mentionIds || []);
+    for (const node of this.container.querySelectorAll(".run")) {
+      const ids = (node.dataset.mentions || "").split(",").filter(Boolean);
+      node.classList.toggle("run--hot", ids.some((id) => this.activeIds.has(id)));
+    }
+  }
+
+  render() {
+    const marks = normaliseSpans(this.markers);
+    const runs = decomposeRuns(
+      this.text.length,
+      this.mentions,
+      marks.flatMap((m) => [m.start, m.end]),
+    );
+    const tints = normaliseSpans(this.suggestions);
+    const fragment = document.createDocumentFragment();
+
+    for (const run of runs) {
+      const node = document.createElement("span");
+      node.className = "run";
+      node.dataset.start = String(run.start);
+      node.dataset.mentions = run.mentionIds.join(",");
+      if (run.mentionIds.length === 1) node.classList.add("run--marked");
+      if (run.mentionIds.length > 1) node.classList.add("run--marked", "run--multi");
+      if (tints.some((t) => t.start < run.end && run.start < t.end)) {
+        node.classList.add("run--suggested");
+      }
+      if (marks.some((m) => m.start < run.end && run.start < m.end)) {
+        node.classList.add("run--marker");
+      }
+      if (run.mentionIds.some((id) => this.activeIds.has(id))) {
+        node.classList.add("run--hot");
+      }
+      node.appendChild(document.createTextNode(this.text.slice(run.start, run.end)));
+      fragment.appendChild(node);
+    }
+    this.container.replaceChildren(fragment);
+    if (!this.text) {
+      this.container.appendChild(document.createTextNode(NBSP));
+    }
+  }
+
+  _offsetOf(node, offset) {
+    let element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    while (element && element !== this.container && !element.classList?.contains("run")) {
+      element = element.parentElement;
+    }
+    if (!element || element === this.container) return null;
+    return Number(element.dataset.start) + offset;
+  }
+
+  _onMouseUp(event) {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+    if (this.readOnly) {
+      if (!this.container.contains(selection.anchorNode)) return;
+      this.handlers.onPaintBlocked?.();
+      return;
+    }
+
+    const spans = [];
+    for (let i = 0; i < selection.rangeCount; i += 1) {
+      const range = selection.getRangeAt(i);
+      if (!this.container.contains(range.commonAncestorContainer)) continue;
+      const from = this._offsetOf(range.startContainer, range.startOffset);
+      const to = this._offsetOf(range.endContainer, range.endOffset);
+      if (from === null || to === null) continue;
+      const span = trimToVisible(this.text, from, to);
+      if (span) spans.push(span);
+    }
+    selection.removeAllRanges();
+    if (!spans.length || !this.handlers.onPaint) return;
+    this.handlers.onPaint(spans, {
+      additive: Boolean(event?.metaKey || event?.ctrlKey),
+    });
+  }
+
+  _runIds(target) {
+    const run = target?.closest?.(".run");
+    if (!run) return null;
+    return (run.dataset.mentions || "").split(",").filter(Boolean);
+  }
+
+  _onHover(event, entering) {
+    if (!this.handlers.onHoverMentions) return;
+    const ids = this._runIds(event.target);
+    if (ids === null) return;
+    this.handlers.onHoverMentions(entering ? ids : []);
+  }
+
+  _onClick(event) {
+    if (!window.getSelection()?.isCollapsed) return;
+    const ids = this._runIds(event.target);
+    if (ids && ids.length && this.handlers.onPick) {
+      this.handlers.onPick(ids, event.target);
+    }
+  }
+}
