@@ -141,7 +141,7 @@ def _create_sample_package() -> ValidatedPackage:
 
     manifest = PackageManifest(
         package_id="pkg-test-1",
-        format_version="hpo-editor-work-package/v1",
+        format_version="ontocurator-work-package/v1",
         ontology=ont,
         axes_definition="editor-axes/v1",
         file_hashes={},  # populated on write
@@ -270,3 +270,148 @@ def test_package_rejects_unknown_reference(tmp_path: Path) -> None:
     pkg_file = tmp_path / "missing_ref.zip"
     with pytest.raises(InvalidPackage, match="references missing evidence"):
         write_package(pkg, pkg_file)
+
+
+def test_legacy_export_reimport_preserves_history(tmp_path: Path) -> None:
+    fixtures_dir = Path(__file__).parent / "fixtures" / "legacy_v1"
+    legacy_zip = fixtures_dir / "review.zip"
+    pkg = read_package(legacy_zip)
+
+    db_path = tmp_path / "repo.sqlite"
+    from ontocurator.storage.database import Database
+    from ontocurator.storage.repository import Repository
+
+    db = Database(db_path)
+    repo = Repository(db)
+
+    # First import
+    repo.import_package(pkg)
+
+    # Reimport same package: no collision, idempotent
+    repo.import_package(pkg)
+
+    # Export package
+    exported = repo.export_package(pkg.manifest.package_id)
+    assert exported.manifest.package_id == pkg.manifest.package_id
+    # Historical snapshots retain their original version and wire representation
+    export_zip = tmp_path / "exported.zip"
+    write_package(exported, export_zip)
+    reloaded = read_package(export_zip)
+    assert set(reloaded.annotations.keys()) == set(pkg.annotations.keys())
+    for k, orig_snap in pkg.annotations.items():
+        rel_snap = reloaded.annotations[k]
+        assert rel_snap.version == orig_snap.version
+        assert rel_snap.schema_version == orig_snap.schema_version
+
+
+def test_new_format_mixed_snapshots(tmp_path: Path) -> None:
+    from ontocurator.domain.axes import Axes
+
+    fixtures_dir = Path(__file__).parent / "fixtures" / "legacy_v1"
+    legacy_zip = fixtures_dir / "review.zip"
+    legacy_pkg = read_package(legacy_zip)
+
+    doc = next(iter(legacy_pkg.documents.values()))
+    ont = legacy_pkg.manifest.ontology
+
+    # Legacy snapshot from review.zip
+    legacy_snap = next(iter(legacy_pkg.annotations.values()))
+    assert legacy_snap.schema_version is None
+
+    # New v2 snapshot
+    new_ann = Annotation(
+        annotation_id="ann-new-v2",
+        document_id=doc.document_id,
+        term_id="MONDO:0000001",
+        axes=Axes(definition_name="editor-axes/v1", values={"assertion": "present"}),
+        provenance=Provenance(
+            actor=ActorRef(actor_id="dr-meier", kind="human"), method="manual"
+        ),
+    )
+    new_snap = snapshot(new_ann, [], doc, ont)
+    assert new_snap.schema_version == "ontocurator-annotation/v2"
+
+    manifest = PackageManifest(
+        package_id="pkg-mixed-1",
+        format_version="ontocurator-work-package/v1",
+        ontology=ont,
+        axes_definition="editor-axes/v1",
+        created_at="2026-10-01T20:00:00Z",
+    )
+    mixed_pkg = ValidatedPackage(
+        manifest=manifest,
+        documents={doc.document_id: doc},
+        annotations={
+            (legacy_snap.annotation.annotation_id, legacy_snap.version): legacy_snap,
+            (new_snap.annotation.annotation_id, new_snap.version): new_snap,
+        },
+        evidence=dict(legacy_pkg.evidence),
+        submissions={},
+        search_events=[],
+    )
+
+    out_zip = tmp_path / "mixed.zip"
+    write_package(mixed_pkg, out_zip)
+    loaded = read_package(out_zip)
+    assert len(loaded.annotations) == 2
+    l_snap = loaded.annotations[
+        (legacy_snap.annotation.annotation_id, legacy_snap.version)
+    ]
+    n_snap = loaded.annotations[(new_snap.annotation.annotation_id, new_snap.version)]
+    assert l_snap.schema_version is None
+    assert n_snap.schema_version == "ontocurator-annotation/v2"
+
+
+def test_profile_digest_tamper_rejected(tmp_path: Path) -> None:
+    pkg = _create_sample_package()
+    pkg_file = tmp_path / "pkg.zip"
+    write_package(pkg, pkg_file)
+
+    with zipfile.ZipFile(pkg_file, "r") as z_in:
+        files = {name: z_in.read(name) for name in z_in.namelist()}
+
+    # Make an annotation with bad axes_config_sha256
+    lines = files["annotations.jsonl"].decode("utf-8").splitlines()
+    if lines:
+        import json
+
+        ann_dict = json.loads(lines[0])
+        ann_dict["schema_version"] = "ontocurator-annotation/v2"
+        ann_dict["axes_config_sha256"] = "tampered-hash-000"
+        files["annotations.jsonl"] = (json.dumps(ann_dict) + "\n").encode("utf-8")
+        manifest = json.loads(files["manifest.json"].decode("utf-8"))
+        manifest["file_hashes"]["annotations.jsonl"] = hashlib.sha256(
+            files["annotations.jsonl"]
+        ).hexdigest()
+        files["manifest.json"] = json.dumps(manifest).encode("utf-8")
+
+    tampered_file = tmp_path / "tampered_profile.zip"
+    with zipfile.ZipFile(tampered_file, "w") as z_out:
+        for name, data in files.items():
+            z_out.writestr(name, data)
+
+    with pytest.raises(InvalidPackage, match=r"hash mismatch|HASH_MISMATCH"):
+        read_package(tampered_file)
+
+
+def test_unknown_format_rejected(tmp_path: Path) -> None:
+    pkg = _create_sample_package()
+    pkg_file = tmp_path / "pkg.zip"
+    write_package(pkg, pkg_file)
+
+    with zipfile.ZipFile(pkg_file, "r") as z_in:
+        files = {name: z_in.read(name) for name in z_in.namelist()}
+
+    import json
+
+    manifest = json.loads(files["manifest.json"].decode("utf-8"))
+    manifest["format_version"] = "unknown-format/v99"
+    files["manifest.json"] = json.dumps(manifest).encode("utf-8")
+
+    bad_format_file = tmp_path / "bad_format.zip"
+    with zipfile.ZipFile(bad_format_file, "w") as z_out:
+        for name, data in files.items():
+            z_out.writestr(name, data)
+
+    with pytest.raises(InvalidPackage, match=r"format|manifest"):
+        read_package(bad_format_file)

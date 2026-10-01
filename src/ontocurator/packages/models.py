@@ -1,8 +1,9 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.documents import Document, EvidenceSnapshot, OntologyRef
 from ontocurator.domain.workspace import Submission, WorkspaceKey
 
@@ -35,13 +36,24 @@ class PackageManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     package_id: str
-    format_version: Literal["hpo-editor-work-package/v1"] = "hpo-editor-work-package/v1"
+    format_version: Literal[
+        "ontocurator-work-package/v1", "hpo-editor-work-package/v1"
+    ] = "ontocurator-work-package/v1"
     ontology: OntologyRef
     axes_definition: str = "editor-axes/v1"
+    axes_config: AxesConfig | None = None
+    axes_config_sha256: str | None = None
     file_hashes: dict[str, str] = Field(default_factory=dict)
     created_at: str
     origin_package_id: str | None = None
     origin_manifest_hash: str | None = None
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        data = super().model_dump(*args, **kwargs)
+        if self.format_version == "hpo-editor-work-package/v1":
+            data.pop("axes_config", None)
+            data.pop("axes_config_sha256", None)
+        return data
 
 
 class ValidatedPackage(BaseModel):

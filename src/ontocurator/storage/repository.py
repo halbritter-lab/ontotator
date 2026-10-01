@@ -1,12 +1,19 @@
 import json
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
 from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.axes import (
+    CLINICAL_PHENOTYPE_CONFIG,
+    EDITOR_AXES_CONFIG,
+    AxesConfig,
+)
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import Document, EvidenceSnapshot
-from ontocurator.domain.errors import InvalidPackage, RevisionConflict
+from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
+from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.workspace import (
     Draft,
     MutationEnvelope,
@@ -97,6 +104,32 @@ class Repository:
                 ),
             )
 
+            # Resolve and store package axes profile
+            profile: AxesConfig
+            if package.manifest.axes_config is not None:
+                profile = package.manifest.axes_config
+            elif package.manifest.axes_definition == "editor-axes/v1":
+                profile = EDITOR_AXES_CONFIG
+            elif package.manifest.axes_definition == "clinical-phenotype/v1":
+                profile = CLINICAL_PHENOTYPE_CONFIG
+            else:
+                raise DomainError(
+                    "UNRESOLVABLE_PROFILE",
+                    f"Cannot resolve axes profile "
+                    f"'{package.manifest.axes_definition}' for package "
+                    f"'{package.manifest.package_id}'",
+                )
+
+            cursor.execute(
+                "INSERT INTO package_axes_profiles "
+                "(package_id, profile_json, profile_sha256) VALUES (?, ?, ?);",
+                (
+                    package.manifest.package_id,
+                    profile.model_dump_json(),
+                    profile.config_sha256,
+                ),
+            )
+
             for doc in package.documents.values():
                 cursor.execute(
                     "INSERT INTO documents "
@@ -133,9 +166,14 @@ class Repository:
                         snap.annotation.annotation_id,
                         snap.version,
                         snap.document_id,
-                        json.dumps(snap.model_dump()),
+                        json.dumps(encode_snapshot(snap)),
                     ),
                 )
+
+            def _dump_sub(s: Submission) -> dict[str, Any]:
+                d = s.model_dump()
+                d["snapshots"] = [encode_snapshot(sn) for sn in s.snapshots]
+                return d
 
             for sub in package.submissions.values():
                 cursor.execute(
@@ -148,7 +186,7 @@ class Repository:
                         json.dumps(sub.targets.model_dump()),
                         sub.draft_revision,
                         1 if sub.document_checked else 0,
-                        json.dumps(sub.model_dump()),
+                        json.dumps(_dump_sub(sub)),
                         sub.created_at,
                     ),
                 )
@@ -187,6 +225,20 @@ class Repository:
         except Exception:
             cursor.execute("ROLLBACK;")
             raise
+
+    def get_axes_config(self, package_id: str) -> AxesConfig:
+        """Return the resolved AxesConfig for an installed package."""
+        conn = self.db.get_connection()
+        row = conn.execute(
+            "SELECT profile_json FROM package_axes_profiles WHERE package_id = ?;",
+            (package_id,),
+        ).fetchone()
+        if row is None:
+            raise DomainError(
+                "PACKAGE_NOT_FOUND",
+                f"No package or axes profile found for package '{package_id}'",
+            )
+        return AxesConfig.model_validate_json(row[0])
 
     def open_draft(
         self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
@@ -331,9 +383,7 @@ class Repository:
             "WHERE wa.workspace_key = ?;",
             (k_str,),
         )
-        annotations = [
-            AnnotationSnapshot.model_validate_json(r[0]) for r in cursor.fetchall()
-        ]
+        annotations = [decode_snapshot(json.loads(r[0])) for r in cursor.fetchall()]
 
         # Load workspace evidence
         cursor.execute(
@@ -449,7 +499,7 @@ class Repository:
                             ann.annotation.annotation_id,
                             ann.version,
                             ann.document_id,
-                            json.dumps(ann.model_dump()),
+                            json.dumps(encode_snapshot(ann)),
                         ),
                     )
                     cursor.execute(
@@ -509,7 +559,12 @@ class Repository:
                         ),
                     )
 
-                resp_json = json.dumps(result.model_dump())
+                def _dump_draft(d: Draft) -> dict[str, Any]:
+                    raw = d.model_dump()
+                    raw["annotations"] = [encode_snapshot(a) for a in d.annotations]
+                    return raw
+
+                resp_json = json.dumps(_dump_draft(result))
             elif isinstance(result, Submission):
                 # Save submission record
                 cursor.execute(
@@ -517,6 +572,13 @@ class Repository:
                     "WHERE workspace_key = ?;",
                     (new_revision, now, k_str),
                 )
+
+                def _dump_sub(s: Submission) -> dict[str, Any]:
+                    d = s.model_dump()
+                    d["snapshots"] = [encode_snapshot(sn) for sn in s.snapshots]
+                    return d
+
+                sub_payload = _dump_sub(result)
                 cursor.execute(
                     "INSERT INTO submissions (submission_id, origin_key, targets_json, "
                     "draft_revision, document_checked, payload_json, created_at) "
@@ -527,7 +589,7 @@ class Repository:
                         json.dumps(result.targets.model_dump()),
                         result.draft_revision,
                         1 if result.document_checked else 0,
-                        json.dumps(result.model_dump()),
+                        json.dumps(sub_payload),
                         result.created_at,
                     ),
                 )
@@ -536,7 +598,7 @@ class Repository:
                     "(local_package_id, submission_id, local_key) VALUES (?, ?, ?);",
                     (key.package_id, result.submission_id, k_str),
                 )
-                resp_json = json.dumps(result.model_dump())
+                resp_json = json.dumps(sub_payload)
             else:
                 raise ValueError(f"Unsupported operation return type: {type(result)}")
 
@@ -591,7 +653,7 @@ class Repository:
         )
         annotations = {}
         for r in cursor.fetchall():
-            snap = AnnotationSnapshot.model_validate_json(r[0])
+            snap = decode_snapshot(json.loads(r[0]))
             annotations[(snap.annotation.annotation_id, snap.version)] = snap
 
         cursor.execute(
@@ -684,7 +746,7 @@ class Repository:
         row = cursor.fetchone()
         if row is None:
             return None
-        return AnnotationSnapshot.model_validate_json(row[0])
+        return decode_snapshot(json.loads(row[0]))
 
     def get_evidence_snapshot(
         self, evidence_id: str, version: str
@@ -715,7 +777,7 @@ class Repository:
             "WHERE p.package_id = ? AND a.document_id = ?;",
             (package_id, document_id),
         )
-        return [AnnotationSnapshot.model_validate_json(r[0]) for r in cursor.fetchall()]
+        return [decode_snapshot(json.loads(r[0])) for r in cursor.fetchall()]
 
     def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
         """Fetch immutable submissions through their compatible local bindings."""
@@ -803,7 +865,7 @@ class Repository:
         """Never silently keep conflicting immutable content under an existing ID."""
         conn = self.db.get_connection()
         entries = [
-            ("annotation_snapshots", "annotation_id", identity, item.model_dump())
+            ("annotation_snapshots", "annotation_id", identity, encode_snapshot(item))
             for identity, item in package.annotations.items()
         ] + [
             ("evidence_snapshots", "evidence_id", identity, item.model_dump())

@@ -4,9 +4,11 @@ import os
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from ontocurator.domain.errors import InvalidPackage
+from ontocurator.domain.serialization import encode_snapshot
+from ontocurator.domain.workspace import Submission
 from ontocurator.packages.models import ValidatedPackage
 
 
@@ -35,7 +37,7 @@ def _prepare_package_payloads(
     docs_bytes = ("\n".join(doc_lines) + ("\n" if doc_lines else "")).encode("utf-8")
 
     ann_lines = [
-        json.dumps(snap.model_dump(), ensure_ascii=False)
+        json.dumps(encode_snapshot(snap), ensure_ascii=False)
         for _, snap in sorted(package.annotations.items(), key=lambda kv: kv[0])
     ]
     ann_bytes = ("\n".join(ann_lines) + ("\n" if ann_lines else "")).encode("utf-8")
@@ -46,8 +48,13 @@ def _prepare_package_payloads(
     ]
     ev_bytes = ("\n".join(ev_lines) + ("\n" if ev_lines else "")).encode("utf-8")
 
+    def _dump_sub(sub: Submission) -> dict[str, Any]:
+        d = sub.model_dump()
+        d["snapshots"] = [encode_snapshot(s) for s in sub.snapshots]
+        return d
+
     sub_lines = [
-        json.dumps(sub.model_dump(), ensure_ascii=False)
+        json.dumps(_dump_sub(sub), ensure_ascii=False)
         for _, sub in sorted(package.submissions.items(), key=lambda kv: kv[0])
     ]
     sub_bytes = ("\n".join(sub_lines) + ("\n" if sub_lines else "")).encode("utf-8")

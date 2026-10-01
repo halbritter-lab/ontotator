@@ -373,3 +373,148 @@ def test_export_p_import_q_preserves_historical_submission(tmp_path: Path) -> No
     draft_q = repo2.open_draft(key_q, target_set)
     assert draft_q.revision == 0
     assert draft_q.key.package_id == "pkg-Q"
+
+
+def test_upgrade_v2_preserves_payloads_and_receipts(tmp_path: Path) -> None:
+    import json
+    import shutil
+
+    from ontocurator.domain.axes import EDITOR_AXES_CONFIG, AxesConfig
+
+    fixtures_dir = Path(__file__).parent / "fixtures" / "legacy_v1"
+    expected = json.loads((fixtures_dir / "expected.json").read_text(encoding="utf-8"))
+    db_source = fixtures_dir / "workspace-v2.sqlite"
+    db_copy = tmp_path / "upgraded.sqlite"
+    shutil.copy2(db_source, db_copy)
+
+    # Opening Database triggers _ensure_migrated() to v3
+    db = Database(db_copy)
+    repo = Repository(db)
+
+    # Verify migration v3 applied
+    conn = db.get_connection()
+    c = conn.cursor()
+    c.execute("SELECT MAX(version) FROM schema_migrations;")
+    assert c.fetchone()[0] == 3
+
+    # Table package_axes_profiles exists and populated for legacy package
+    c.execute(
+        "SELECT profile_json, profile_sha256 FROM package_axes_profiles "
+        "WHERE package_id = ?;",
+        (expected["package_id"],),
+    )
+    row = c.fetchone()
+    assert row is not None
+
+    profile = AxesConfig.model_validate_json(row[0])
+    assert profile == EDITOR_AXES_CONFIG
+    assert row[1] == EDITOR_AXES_CONFIG.config_sha256
+
+    # get_axes_config returns profile
+    assert repo.get_axes_config(expected["package_id"]) == EDITOR_AXES_CONFIG
+
+    # Check original payloads in annotation_snapshots are preserved
+    c.execute("SELECT annotation_id, version, payload_json FROM annotation_snapshots;")
+    for _ann_id, _ver, p_json in c.fetchall():
+        snap_data = json.loads(p_json)
+        assert "schema_version" not in snap_data
+        assert "hpo_id" in snap_data["annotation"]
+
+    # Check receipts are preserved
+    for mut_id, r_info in expected["receipts"].items():
+        c.execute(
+            "SELECT request_hash, response_json FROM mutation_receipts "
+            "WHERE mutation_id = ?;",
+            (mut_id,),
+        )
+        r_row = c.fetchone()
+        assert r_row is not None
+        assert r_row[0] == r_info["request_hash"]
+
+    # Replay mutation envelope
+    indep_key = WorkspaceKey(
+        package_id=expected["package_id"],
+        document_id="doc-1",
+        annotator_id="dr-schmidt",
+        mode="independent",
+        target_set_id="",
+    )
+    env_retry = MutationEnvelope(
+        mutation_id="mut-edit-1",
+        expected_revision=0,
+        payload={"action": "create_annotation", "term_id": "HP:0001252"},
+    )
+    replayed = repo.run_mutation(indep_key, env_retry, lambda d: d)
+    assert replayed.revision == 1
+
+    db.close()
+
+
+def test_migration_failure_rolls_back(tmp_path: Path) -> None:
+    import json
+    import sqlite3
+
+    db_path = tmp_path / "rollback_test.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    init_sql = (
+        Path(__file__).parent.parent
+        / "src"
+        / "ontocurator"
+        / "storage"
+        / "migrations"
+        / "001_initial.sql"
+    ).read_text(encoding="utf-8")
+    conn.executescript(init_sql)
+    conn.execute("INSERT INTO schema_migrations VALUES (1, '2026-10-01T00:00:00Z');")
+    mem_sql = (
+        Path(__file__).parent.parent
+        / "src"
+        / "ontocurator"
+        / "storage"
+        / "migrations"
+        / "002_membership.sql"
+    ).read_text(encoding="utf-8")
+    conn.executescript(mem_sql)
+    conn.execute("INSERT INTO schema_migrations VALUES (2, '2026-10-01T00:00:00Z');")
+
+    bad_manifest = {
+        "package_id": "pkg-unresolvable",
+        "format_version": "hpo-editor-work-package/v1",
+        "ontology": {"release": "2026-06-23", "sha256": "abc"},
+        "axes_definition": "unknown-nonexistent-axes/v999",
+        "file_hashes": {},
+        "created_at": "2026-10-01T00:00:00Z",
+    }
+    conn.execute(
+        "INSERT INTO packages (package_id, manifest_hash, manifest_json, created_at) "
+        "VALUES (?, ?, ?, ?);",
+        (
+            "pkg-unresolvable",
+            "dummy-hash",
+            json.dumps(bad_manifest),
+            "2026-10-01T00:00:00Z",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    # Now initializing Database should attempt migration to v3 and fail, rolling back
+    from ontocurator.domain.errors import DomainError
+
+    with pytest.raises(DomainError, match="UNRESOLVABLE_PROFILE"):
+        Database(db_path)
+
+    # Verify rollback: schema_migrations is still at 2
+    verify_conn = sqlite3.connect(str(db_path))
+    c = verify_conn.cursor()
+    c.execute("SELECT MAX(version) FROM schema_migrations;")
+    assert c.fetchone()[0] == 2
+    c.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name='package_axes_profiles';"
+    )
+    row = c.fetchone()
+    if row:
+        c.execute("SELECT COUNT(*) FROM package_axes_profiles;")
+        assert c.fetchone()[0] == 0
+    verify_conn.close()

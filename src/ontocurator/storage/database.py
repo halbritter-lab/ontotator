@@ -7,7 +7,7 @@ from typing import cast
 
 from ontocurator.domain.errors import DomainError
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 class Database:
@@ -108,6 +108,56 @@ class Database:
                     )
                 conn.execute(
                     "INSERT INTO schema_migrations VALUES (2, ?)",
+                    (datetime.now(UTC).isoformat(),),
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+        if current_ver < 3:
+            sql = (
+                Path(__file__).parent / "migrations" / "003_axes_profiles.sql"
+            ).read_text(encoding="utf-8")
+            conn.executescript("BEGIN IMMEDIATE;\n" + sql)
+            try:
+                import json
+
+                from ontocurator.domain.axes import (
+                    CLINICAL_PHENOTYPE_CONFIG,
+                    EDITOR_AXES_CONFIG,
+                    AxesConfig,
+                )
+
+                for row in conn.execute(
+                    "SELECT package_id, manifest_json FROM packages;"
+                ).fetchall():
+                    pkg_id = row[0]
+                    manifest_data = json.loads(row[1])
+                    axes_def = manifest_data.get("axes_definition")
+                    axes_cfg_raw = manifest_data.get("axes_config")
+
+                    if axes_cfg_raw is not None:
+                        profile = AxesConfig.model_validate(axes_cfg_raw)
+                    elif axes_def in ("editor-axes/v1", None):
+                        profile = EDITOR_AXES_CONFIG
+                    elif axes_def == "clinical-phenotype/v1":
+                        profile = CLINICAL_PHENOTYPE_CONFIG
+                    else:
+                        raise DomainError(
+                            "UNRESOLVABLE_PROFILE",
+                            f"Cannot resolve axes profile '{axes_def}' "
+                            f"for package '{pkg_id}'",
+                        )
+
+                    conn.execute(
+                        "INSERT INTO package_axes_profiles "
+                        "(package_id, profile_json, profile_sha256) VALUES (?, ?, ?);",
+                        (pkg_id, profile.model_dump_json(), profile.config_sha256),
+                    )
+
+                conn.execute(
+                    "INSERT INTO schema_migrations VALUES (3, ?)",
                     (datetime.now(UTC).isoformat(),),
                 )
                 conn.execute("COMMIT")

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.axes import CLINICAL_PHENOTYPE_CONFIG, EDITOR_AXES_CONFIG
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     Document,
@@ -110,6 +111,13 @@ def _read_package(source: Path | BinaryIO) -> ValidatedPackage:
     try:
         manifest_data = json.loads(file_contents["manifest.json"].decode("utf-8"))
         manifest = PackageManifest.model_validate(manifest_data)
+        if manifest.format_version not in (
+            "ontocurator-work-package/v1",
+            "hpo-editor-work-package/v1",
+        ):
+            raise InvalidPackage(
+                f"Unknown package format version: '{manifest.format_version}'"
+            )
     except Exception as e:
         raise InvalidPackage(f"Invalid manifest.json: {e}") from e
 
@@ -199,6 +207,47 @@ def _read_package(source: Path | BinaryIO) -> ValidatedPackage:
         if sub.submission_id in submissions and submissions[sub.submission_id] != sub:
             raise InvalidPackage(f"Conflicting submission: {sub.submission_id}")
         submissions[sub.submission_id] = sub
+
+    # Resolve package profile
+    package_profile = None
+    if manifest.axes_config is not None:
+        package_profile = manifest.axes_config
+    elif manifest.axes_definition == "editor-axes/v1":
+        package_profile = EDITOR_AXES_CONFIG
+    elif manifest.axes_definition == "clinical-phenotype/v1":
+        package_profile = CLINICAL_PHENOTYPE_CONFIG
+
+    is_legacy_archive = manifest.format_version == "hpo-editor-work-package/v1"
+    for snap in annotations.values():
+        if is_legacy_archive and snap.schema_version is not None:
+            raise InvalidPackage("Legacy-format archives cannot contain v2 snapshots")
+        if (
+            snap.schema_version == "ontocurator-annotation/v2"
+            and package_profile is not None
+            and snap.axes_config_sha256 != package_profile.config_sha256
+        ):
+            raise InvalidPackage(
+                "Snapshot axes_config_sha256 mismatch with package profile: "
+                f"expected {package_profile.config_sha256}, "
+                f"got {snap.axes_config_sha256}"
+            )
+
+    for sub in submissions.values():
+        for snap in sub.snapshots:
+            if is_legacy_archive and snap.schema_version is not None:
+                raise InvalidPackage(
+                    "Legacy-format archives cannot contain v2 snapshots"
+                )
+            if (
+                snap.schema_version == "ontocurator-annotation/v2"
+                and package_profile is not None
+                and snap.axes_config_sha256 != package_profile.config_sha256
+            ):
+                raise InvalidPackage(
+                    "Submitted snapshot axes_config_sha256 mismatch with profile: "
+                    f"expected {package_profile.config_sha256}, "
+                    f"got {snap.axes_config_sha256}"
+                )
 
     # Parse search-events.jsonl
     search_events: list[SearchEventRecord] = []
