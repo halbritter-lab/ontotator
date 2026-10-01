@@ -49,6 +49,7 @@ class OntologyService:
                 "ontology_sha256": ref.sha256,
                 "algorithm": "char_wb_tfidf/1",
                 "ngram_range": [3, 5],
+                "id_normalization": "dominant_prefix_int_v1",
             }
         )
 

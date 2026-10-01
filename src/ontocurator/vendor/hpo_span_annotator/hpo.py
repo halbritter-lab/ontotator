@@ -30,8 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-# `http://purl.obolibrary.org/obo/HP_0001250` -> `HP:0001250`
-_IRI_TAIL = re.compile(r"([A-Za-z]+)_(\d+)$")
+_CURIE_FORMAT = re.compile(r"^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$")
 # The release date sits inside the version IRI:
 # `http://purl.obolibrary.org/obo/hp/releases/2026-06-23/hp.json`
 _RELEASE = re.compile(r"/releases/([0-9]{4}-[0-9]{2}-[0-9]{2})/")
@@ -52,11 +51,18 @@ class OntologyError(RuntimeError):
 
 
 def curie(iri: str) -> str | None:
-    """`...obo/HP_0001250` -> `HP:0001250`, or None for anything else."""
-    match = _IRI_TAIL.search(iri or "")
-    if not match:
+    """Extract canonical CURIE from IRI or explicit CURIE string."""
+    if not iri:
         return None
-    return f"{match.group(1)}:{match.group(2)}"
+    raw = iri.strip()
+    if _CURIE_FORMAT.match(raw):
+        return raw
+    # Handle OBO-style IRIs where the final path component is PREFIX_LOCALID
+    tail = raw.rsplit("/", 1)[-1] if "/" in raw else raw
+    parts = tail.split("_")
+    if len(parts) == 2 and parts[0].isalnum() and parts[1].isalnum():
+        return f"{parts[0]}:{parts[1]}"
+    return None
 
 
 def normalise(text: str) -> str:
@@ -138,11 +144,20 @@ class Term:
 
 
 class Ontology:
-    """HPO, indexed for the three routes that touch no model."""
+    """Ontology, indexed for the three routes that touch no model."""
 
-    def __init__(self, terms: dict[str, Term], release: str) -> None:
+    def __init__(
+        self,
+        terms: dict[str, Term],
+        release: str,
+        dominant_prefix: str | None = None,
+    ) -> None:
         self.terms = terms
         self.release = release
+        self.dominant_prefix = dominant_prefix
+        self._ci_terms: dict[str, Term] = {
+            t.hpo_id.casefold(): t for t in terms.values()
+        }
         self._children: dict[str, list[str]] = {}
         for term in terms.values():
             for parent in term.parents:
@@ -171,7 +186,15 @@ class Ontology:
         return len(self.terms)
 
     def get(self, hpo_id: str) -> Term | None:
-        return self.terms.get((hpo_id or "").strip().upper())
+        if not hpo_id:
+            return None
+        trimmed = hpo_id.strip()
+        # 1. Exact match (preserves case)
+        term = self.terms.get(trimmed)
+        if term is not None:
+            return term
+        # 2. Case-insensitive match if unambiguous
+        return self._ci_terms.get(trimmed.casefold())
 
     def label_of(self, hpo_id: str) -> str:
         term = self.get(hpo_id)
@@ -236,7 +259,10 @@ class Ontology:
         return out
 
     def children_of(self, hpo_id: str) -> list[str]:
-        return list(self._children.get((hpo_id or "").upper(), []))
+        term = self.get(hpo_id)
+        if not term:
+            return []
+        return list(self._children.get(term.hpo_id, []))
 
     def siblings_of(self, hpo_id: str) -> list[str]:
         """Every term sharing a parent with this one, itself excluded.
@@ -292,20 +318,16 @@ class Ontology:
         }
 
 
-def load(path: Path, prefix: str = "HP") -> Ontology:
-    """Parse an ``hp.json`` release into an :class:`Ontology`.
+def load(path: Path, prefix: str | None = None) -> Ontology:
+    """Parse an OBO Graph JSON release into an :class:`Ontology`.
 
-    Only ``CLASS`` nodes carrying the requested prefix are kept, which drops the
-    property and individual nodes the file also carries. Obsolete classes are
-    kept but flagged: a record written last year may cite one, and resolving it
-    to "unknown term" would lose the fact that it was valid when it was chosen.
+    CLASS nodes carrying valid CURIEs are kept. If prefix is provided,
+    only classes matching that prefix are kept.
+    Dominant prefix is detected by counting loaded terms.
     """
     path = Path(path)
     if not path.is_file():
-        raise OntologyError(
-            f"{path} does not exist. Download hp.json from "
-            "https://github.com/obophenotype/human-phenotype-ontology/releases"
-        )
+        raise OntologyError(f"{path} does not exist.")
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
@@ -324,8 +346,10 @@ def load(path: Path, prefix: str = "HP") -> Ontology:
     for node in graph.get("nodes") or []:
         if node.get("type") != "CLASS":
             continue
-        hpo_id = curie(node.get("id", ""))
-        if not hpo_id or not hpo_id.startswith(f"{prefix}:"):
+        term_id = curie(node.get("id", ""))
+        if not term_id:
+            continue
+        if prefix is not None and not term_id.startswith(f"{prefix}:"):
             continue
         meta = node.get("meta") or {}
         synonyms = [
@@ -333,9 +357,9 @@ def load(path: Path, prefix: str = "HP") -> Ontology:
             for s in meta.get("synonyms") or []
             if s.get("val")
         ]
-        terms[hpo_id] = Term(
-            hpo_id=hpo_id,
-            label=str(node.get("lbl") or hpo_id),
+        terms[term_id] = Term(
+            hpo_id=term_id,
+            label=str(node.get("lbl") or term_id),
             definition=str((meta.get("definition") or {}).get("val") or ""),
             synonyms=synonyms,
             obsolete=bool(meta.get("deprecated")),
@@ -346,12 +370,30 @@ def load(path: Path, prefix: str = "HP") -> Ontology:
             continue
         child = curie(edge.get("sub", ""))
         parent = curie(edge.get("obj", ""))
-        if child in terms and parent in terms:
+        if child and parent and child in terms and parent in terms:
             terms[child].parents.append(parent)
 
     if not terms:
-        raise OntologyError(f"{path} holds no {prefix} classes")
-    return Ontology(terms, release)
+        msg = f"{path} holds no classes"
+        if prefix:
+            msg += f" with prefix {prefix}"
+        raise OntologyError(msg)
+
+    # Detect unique dominant prefix
+    prefix_counts: dict[str, int] = {}
+    for tid in terms:
+        p = tid.split(":", 1)[0]
+        prefix_counts[p] = prefix_counts.get(p, 0) + 1
+
+    sorted_counts = sorted(prefix_counts.items(), key=lambda it: it[1], reverse=True)
+    if len(sorted_counts) == 1 or (
+        len(sorted_counts) > 1 and sorted_counts[0][1] > sorted_counts[1][1]
+    ):
+        dominant_prefix = sorted_counts[0][0]
+    else:
+        dominant_prefix = None
+
+    return Ontology(terms, release, dominant_prefix=dominant_prefix)
 
 
 # --- translations ---------------------------------------------------------- #

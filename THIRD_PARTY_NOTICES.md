@@ -15,3 +15,4 @@ This project incorporates components from the following third-party software:
 - **Modifications:**
   - Integrated into isolated namespace under `ontocurator.vendor`.
   - Non-semantic search and lexical indexing retained; dense embeddings, hub and server dependencies excluded.
+  - Generalized CURIE parsing, case preservation, dominant prefix detection, and variable-width numeric ID matching without hardcoded HPO assumptions.

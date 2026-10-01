@@ -1,0 +1,129 @@
+{
+  "graphs": [
+    {
+      "id": "http://purl.obolibrary.org/obo/mondo.json",
+      "meta": {
+        "version": "http://purl.obolibrary.org/obo/mondo/releases/2026-09-01/mondo.json"
+      },
+      "nodes": [
+        {
+          "id": "http://purl.obolibrary.org/obo/MONDO_0000001",
+          "lbl": "disease or disorder",
+          "type": "CLASS",
+          "meta": {
+            "definition": {
+              "val": "A defect or pathology affecting an organism."
+            }
+          }
+        },
+        {
+          "id": "http://purl.obolibrary.org/obo/MONDO_0005070",
+          "lbl": "neurodevelopmental disorder",
+          "type": "CLASS",
+          "meta": {
+            "definition": {
+              "val": "A disorder originating during development of the nervous system."
+            }
+          }
+        },
+        {
+          "id": "http://purl.obolibrary.org/obo/MONDO_0001250",
+          "lbl": "spinal muscular atrophy",
+          "type": "CLASS",
+          "meta": {
+            "definition": {
+              "val": "A rare genetic neuromuscular disease characterized by spinal motor neuron death."
+            },
+            "synonyms": [
+              {
+                "pred": "hasExactSynonym",
+                "val": "SMA"
+              },
+              {
+                "pred": "hasRelatedSynonym",
+                "val": "infantile spinal muscular atrophy"
+              }
+            ]
+          }
+        },
+        {
+          "id": "http://purl.obolibrary.org/obo/MONDO_0005071",
+          "lbl": "epileptic encephalopathy",
+          "type": "CLASS",
+          "meta": {
+            "definition": {
+              "val": "A group of disorders characterized by progressive cerebral dysfunction caused by frequent epileptic activity."
+            },
+            "synonyms": [
+              {
+                "pred": "hasExactSynonym",
+                "val": "EIEE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "http://purl.obolibrary.org/obo/MONDO_1001",
+          "lbl": "congenital myopathy",
+          "type": "CLASS",
+          "meta": {
+            "definition": {
+              "val": "A group of rare neuromuscular disorders present from birth."
+            }
+          }
+        },
+        {
+          "id": "http://purl.obolibrary.org/obo/MONDO_0000123",
+          "lbl": "obsolete test disease",
+          "type": "CLASS",
+          "meta": {
+            "deprecated": true
+          }
+        },
+        {
+          "id": "http://purl.obolibrary.org/obo/Orphanet_791",
+          "lbl": "severe infantile spinal muscular atrophy",
+          "type": "CLASS",
+          "meta": {
+            "definition": {
+              "val": "Orphanet disease entry."
+            }
+          }
+        },
+        {
+          "id": "http://example.com/unsupported/non_obo_identifier",
+          "lbl": "Unsupported IRI class",
+          "type": "CLASS",
+          "meta": {}
+        }
+      ],
+      "edges": [
+        {
+          "sub": "http://purl.obolibrary.org/obo/MONDO_0005070",
+          "pred": "is_a",
+          "obj": "http://purl.obolibrary.org/obo/MONDO_0000001"
+        },
+        {
+          "sub": "http://purl.obolibrary.org/obo/MONDO_0001250",
+          "pred": "is_a",
+          "obj": "http://purl.obolibrary.org/obo/MONDO_0005070"
+        },
+        {
+          "sub": "http://purl.obolibrary.org/obo/MONDO_0005071",
+          "pred": "is_a",
+          "obj": "http://purl.obolibrary.org/obo/MONDO_0005070"
+        },
+        {
+          "sub": "http://purl.obolibrary.org/obo/MONDO_1001",
+          "pred": "is_a",
+          "obj": "http://purl.obolibrary.org/obo/MONDO_0000001"
+        },
+        {
+          "sub": "http://purl.obolibrary.org/obo/Orphanet_791",
+          "pred": "is_a",
+          "obj": "http://purl.obolibrary.org/obo/MONDO_0001250"
+        }
+      ]
+    }
+  ]
+}
