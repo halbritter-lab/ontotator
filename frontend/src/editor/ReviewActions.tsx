@@ -8,6 +8,7 @@ export type ReviewDecisionOutcome = "confirmed" | "rejected" | "changed" | "unce
 export interface TargetProposal {
   annotation_id: string;
   version: string;
+  term_id?: string;
   hpo_id: string;
   axes?: components["schemas"]["Axes"] | null;
   provenance: components["schemas"]["Provenance"];
@@ -118,11 +119,18 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       </div>
 
       <div className="detail-section" aria-label="Vorschlagsdetails">
-        <strong>{target.hpo_id}</strong>
+        <strong>{target.term_id ?? target.hpo_id}</strong>
         <dl>
-          <dt>Assertion</dt><dd>{target.axes?.assertion ?? "Nicht angegeben"}</dd>
-          <dt>Experiencer</dt><dd>{target.axes?.experiencer ?? "Nicht angegeben"}</dd>
-          <dt>Temporality</dt><dd>{target.axes?.temporality ?? "Nicht angegeben"}</dd>
+          {target.axes?.values && Object.keys(target.axes.values).length > 0 ? (
+            Object.entries(target.axes.values).map(([k, v]) => (
+              <React.Fragment key={k}>
+                <dt style={{ textTransform: "capitalize" }}>{k}</dt>
+                <dd>{v ?? "Nicht angegeben"}</dd>
+              </React.Fragment>
+            ))
+          ) : (
+            <dd style={{ marginLeft: 0, color: "var(--text-muted)" }}>Keine Achsen definiert</dd>
+          )}
         </dl>
         <p>Version: {target.version}</p>
         {evidence.length ? evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
@@ -151,7 +159,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </div>
       )}
 
-      {target.is_unknown && <p role="alert">Unbekannter HPO-Begriff kann nicht bestätigt werden.</p>}
+      {target.is_unknown && <p role="alert">Unbekannter Begriff kann nicht bestätigt werden.</p>}
       {/* 4 Action Buttons */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
         <button
@@ -234,11 +242,14 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             style={{ marginBottom: 8 }}
           >
             <option value="">(Wählen Sie eine Annotation aus dem Entwurf)</option>
-            {draftAnnotations.map((snap) => (
-              <option key={snap.annotation.annotation_id} value={snap.annotation.annotation_id}>
-                {snap.annotation.hpo_id} (ID: {snap.annotation.annotation_id.slice(0, 10)})
-              </option>
-            ))}
+            {draftAnnotations.map((snap) => {
+              const term = snap.annotation.term_id ?? snap.annotation.hpo_id;
+              return (
+                <option key={snap.annotation.annotation_id} value={snap.annotation.annotation_id}>
+                  {term} (ID: {snap.annotation.annotation_id.slice(0, 10)})
+                </option>
+              );
+            })}
           </select>
           <button
             type="button"

@@ -33,9 +33,28 @@ it("retains the caller continuation through a transient retry",async()=>{
 });
 
 const key = {package_id:"pkg",document_id:"doc",annotator_id:"doctor",mode:"independent" as const,target_set_id:"empty"};
-const baseView = (): WorkspaceView => ({key,document:{document_id:"doc",text:"alpha beta",language:"en",text_sha256:"text"},
-  targets:{target_set_id:"empty",targets:[]},available_inputs:[],submissions:[],
-  draft:{key,targets:{target_set_id:"empty",targets:[]},revision:0,annotations:[],evidence:[],decisions:[],document_checked:false}});
+const baseView = (): WorkspaceView => ({
+  key,
+  document: { document_id: "doc", text: "alpha beta", language: "en", text_sha256: "text" },
+  targets: { target_set_id: "empty", targets: [] },
+  available_inputs: [],
+  submissions: [],
+  term_statuses: {},
+  axes_definition: "editor-axes/v1",
+  axes_config: [
+    { id: "assertion", label: "Vorhandensein (Assertion)", options: ["present", "absent", "uncertain"], allow_empty: true },
+  ],
+  axes_config_sha256: "sha-axes",
+  draft: {
+    key,
+    targets: { target_set_id: "empty", targets: [] },
+    revision: 0,
+    annotations: [],
+    evidence: [],
+    decisions: [],
+    document_checked: false,
+  },
+});
 it("submits the API payload and preserves its envelope through a lost-response retry",async()=>{
  const view=baseView();
  const submission={submission_id:"sub",created_at:"today",draft_revision:1,snapshots:[],decisions:[],document_checked:true,origin_key:key,targets:view.targets};
@@ -69,8 +88,8 @@ it("flush yields while a write is outstanding",async()=>{
  const flushed=queue.flush();setTimeout(()=>complete({revision:1}),0);
  await flushed;await pending;expect(queue.getRevision()).toBe(1);
 });
-const proposal=(version:string,hpoId:string)=>({annotation:{annotation_id:"same",document_id:"doc",hpo_id:hpoId,
- axes:{definition_name:"editor-axes/v1" as const,assertion:"absent" as const,experiencer:null,temporality:null},
+const proposal=(version:string,hpoId:string)=>({annotation:{annotation_id:"same",document_id:"doc",term_id:hpoId,hpo_id:hpoId,
+ axes:{definition_name:"editor-axes/v1",values:{assertion:"absent"}},
  evidence_refs:[{evidence_id:"ev",version:"ev-version"}],provenance:{actor:{actor_id:"source",kind:"human" as const},method:"manual"}},
  evidence:[{mention:{evidence_id:"ev",segments:[{start:0,end:5}],cue_segments:[]},version:"ev-version",document_id:"doc",text_sha256:"text"}],
  version,document_id:"doc",text_sha256:"text",ontology_sha256:"ontology"});
@@ -124,15 +143,15 @@ it("binds a changed decision to the replacement version after queued edits",asyn
 });
 it("uses the search event when assigning a candidate and trusts obsolete metadata",async()=>{
  const view=baseView(),own=proposal("own-v1","HP:3");view.draft.annotations=[own];
- vi.spyOn(api,"searchOntology").mockResolvedValue({search_id:"search-event",candidates:[{hpo_id:"HP:4",label:"Candidate",definition:"Not obsolete",obsolete:false,matched_term:"Candidate",match_kind:"label",rank:1,display_pos:1}]} as any);
+ vi.spyOn(api,"searchOntology").mockResolvedValue({search_id:"search-event",candidates:[{term_id:"HP:4",hpo_id:"HP:4",label:"Candidate",definition:"Not obsolete",obsolete:false,matched_term:"Candidate",match_kind:"label",rank:1,display_pos:1}]} as any);
  const edit=vi.spyOn(api,"applyCommand").mockResolvedValue({...view.draft,revision:1});
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));fireEvent.click(screen.getByRole("button",{name:"Begriff ändern"}));
- fireEvent.change(screen.getByLabelText("HPO-Term suchen"),{target:{value:"Candidate"}});
+ fireEvent.change(screen.getByLabelText("Ontologie-Term suchen"),{target:{value:"Candidate"}});
  await waitFor(()=>expect(screen.getByText("Candidate")).toBeDefined());
  fireEvent.click(screen.getByText("Candidate"));
  await waitFor(()=>expect(edit).toHaveBeenCalled());
- expect(edit.mock.calls[0][1].payload).toEqual({command:"set_term",annotation_id:"same",hpo_id:"HP:4",search_event_id:"search-event"});
+ expect(edit.mock.calls[0][1].payload).toEqual({command:"set_term",annotation_id:"same",term_id:"HP:4",hpo_id:"HP:4",search_event_id:"search-event"});
 });
 it("exposes an immutable historical submission",()=>{
  const view=baseView();view.submissions=[{submission_id:"historical",created_at:"yesterday",draft_revision:1,snapshots:[proposal("old","HP:old")],decisions:[],document_checked:true,origin_key:key,targets:view.targets}];

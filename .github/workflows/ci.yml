@@ -55,6 +55,9 @@ jobs:
       - name: Install backend dependencies
         run: uv sync --python ${{ matrix.python-version }}
 
+      - name: Check OpenAPI schema drift
+        run: uv run python scripts/export_openapi.py --check
+
       - name: Install browser test runtime
         working-directory: frontend
         run: npx playwright install --with-deps chromium

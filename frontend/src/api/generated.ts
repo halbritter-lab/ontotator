@@ -227,19 +227,21 @@ export interface components {
         };
         /**
          * Annotation
-         * @description Annotation entity referencing HPO term, context axes and evidence.
+         * @description Annotation entity referencing ontology term, context axes and evidence.
          */
         Annotation: {
             /** Annotation Id */
             annotation_id: string;
             /** Document Id */
             document_id: string;
-            /** Hpo Id */
-            hpo_id: string;
+            /** Term Id */
+            term_id: string;
             axes?: components["schemas"]["Axes"];
             /** Evidence Refs */
             evidence_refs?: components["schemas"]["EvidenceRef"][];
             provenance: components["schemas"]["Provenance"];
+            /** Hpo Id */
+            readonly hpo_id: string;
         };
         /**
          * AnnotationRef
@@ -267,24 +269,52 @@ export interface components {
             ontology_sha256: string;
             /** Version */
             version: string;
+            /** Schema Version */
+            schema_version?: string | null;
+            /** Axes Config Sha256 */
+            axes_config_sha256?: string | null;
         };
         /**
          * Axes
-         * @description Clinical axes associated with an annotation.
+         * @description Context axes associated with an annotation.
          */
         Axes: {
             /**
              * Definition Name
              * @default editor-axes/v1
-             * @constant
              */
-            definition_name: "editor-axes/v1";
-            /** Assertion */
-            assertion?: ("present" | "absent" | "uncertain") | null;
-            /** Experiencer */
-            experiencer?: ("patient" | "other") | null;
-            /** Temporality */
-            temporality?: ("current" | "historical" | "future") | null;
+            definition_name: string;
+            /** Values */
+            values?: {
+                [key: string]: string | null;
+            };
+        };
+        /**
+         * AxesConfig
+         * @description Named profile definition containing configured axes.
+         */
+        AxesConfig: {
+            /** Definition Name */
+            definition_name: string;
+            /** Axes */
+            axes?: components["schemas"]["AxisDefinition"][];
+        };
+        /**
+         * AxisDefinition
+         * @description Definition of an individual annotation contextual axis.
+         */
+        AxisDefinition: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Options */
+            options: string[];
+            /**
+             * Allow Empty
+             * @default true
+             */
+            allow_empty: boolean;
         };
         /** Body_upload_package_api_v1_packages_post */
         Body_upload_package_api_v1_packages_post: {
@@ -442,16 +472,19 @@ export interface components {
             package_id: string;
             /**
              * Format Version
-             * @default hpo-editor-work-package/v1
-             * @constant
+             * @default ontocurator-work-package/v1
+             * @enum {string}
              */
-            format_version: "hpo-editor-work-package/v1";
+            format_version: "ontocurator-work-package/v1" | "hpo-editor-work-package/v1";
             ontology: components["schemas"]["OntologyRef"];
             /**
              * Axes Definition
              * @default editor-axes/v1
              */
             axes_definition: string;
+            axes_config?: components["schemas"]["AxesConfig"] | null;
+            /** Axes Config Sha256 */
+            axes_config_sha256?: string | null;
             /** File Hashes */
             file_hashes?: {
                 [key: string]: string;
@@ -524,11 +557,11 @@ export interface components {
         };
         /**
          * SearchCandidate
-         * @description Single candidate term returned by an HPO search route.
+         * @description Single candidate term returned by an ontology search route.
          */
         SearchCandidate: {
-            /** Hpo Id */
-            hpo_id: string;
+            /** Term Id */
+            term_id: string;
             /** Label */
             label: string;
             /**
@@ -563,6 +596,8 @@ export interface components {
              * @default false
              */
             obsolete: boolean;
+            /** Hpo Id */
+            readonly hpo_id: string;
         };
         /**
          * SearchRequest
@@ -692,6 +727,18 @@ export interface components {
             term_statuses?: {
                 [key: string]: "valid" | "obsolete" | "unknown";
             };
+            /**
+             * Axes Definition
+             * @default editor-axes/v1
+             */
+            axes_definition: string;
+            /** Axes Config */
+            axes_config?: components["schemas"]["AxisDefinition"][];
+            /**
+             * Axes Config Sha256
+             * @default
+             */
+            axes_config_sha256: string;
         };
     };
     responses: never;

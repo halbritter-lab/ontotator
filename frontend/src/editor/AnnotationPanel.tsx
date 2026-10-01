@@ -7,6 +7,7 @@ import type { SearchManager, WorkspaceKey } from "./searchState";
 
 export type Axes = components["schemas"]["Axes"];
 export type EvidenceSnapshot = components["schemas"]["EvidenceSnapshot"];
+export type AxisDefinition = components["schemas"]["AxisDefinition"];
 
 export interface AnnotationPanelProps {
   annotation: AnnotationSnapshot | null;
@@ -14,8 +15,10 @@ export interface AnnotationPanelProps {
   workspaceKey: WorkspaceKey;
   searchManager: SearchManager;
   selectedEvidenceId: string | null;
+  axesConfig?: AxisDefinition[];
+  axesDefinition?: string;
   onSelectEvidence: (evidenceId: string) => void;
-  onUpdateTerm: (hpoId: string, searchId?: string) => void;
+  onUpdateTerm: (termId: string, searchId?: string) => void;
   onUpdateAxes: (axes: Partial<Axes>) => void;
   onAttachMention: (segments: CodepointSegment[]) => void;
   onDetachMention: (evidenceId: string) => void;
@@ -29,6 +32,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   workspaceKey,
   searchManager,
   selectedEvidenceId,
+  axesConfig,
+  axesDefinition,
   onSelectEvidence,
   onUpdateTerm,
   onUpdateAxes,
@@ -54,12 +59,12 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   }
 
   const ann = annotation.annotation;
+  const currentTerm = ann.term_id ?? ann.hpo_id;
   const axes = ann.axes ?? {
-    definition_name: "editor-axes/v1" as const,
-    assertion: null,
-    experiencer: null,
-    temporality: null,
+    definition_name: axesDefinition ?? "editor-axes/v1",
+    values: {},
   };
+  const axesValues = axes.values ?? {};
 
   const evidenceRefs = ann.evidence_refs ?? [];
   const linkedEvidence = evidenceRefs
@@ -67,21 +72,21 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
     .filter(Boolean);
 
   const handleSelectCandidate = (candidate: SearchCandidate, searchId?: string) => {
-    onUpdateTerm(candidate.hpo_id, searchId);
+    onUpdateTerm(candidate.term_id ?? candidate.hpo_id, searchId);
     setShowSearch(false);
   };
 
   return (
     <div className="detail-pane">
-      {/* 1. Header with HPO Term */}
+      {/* 1. Header with Ontology Term */}
       <div className="detail-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase" }}>
-              HPO-Phänotyp
+              Ontologie-Term
             </span>
             <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "2px 0 4px" }}>
-              {ann.hpo_id}
+              {currentTerm}
             </h2>
           </div>
           <button
@@ -99,79 +104,56 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               searchManager={searchManager}
               annotationId={ann.annotation_id}
               workspaceKey={workspaceKey}
-              currentHpoId={ann.hpo_id}
+              currentTermId={currentTerm}
+              currentHpoId={currentTerm}
               onSelectCandidate={handleSelectCandidate}
             />
           </div>
         )}
       </div>
 
-      {/* 2. Clinical Axes */}
-      <div className="detail-section">
-        <h3>Klinische Befund-Achsen</h3>
+      {/* 2. Dynamic Context Axes (hidden if empty or undefined) */}
+      {axesConfig && axesConfig.length > 0 && (
+        <div className="detail-section" data-testid="axes-section">
+          <h3>Kontext-Achsen</h3>
+          {axesConfig.map((axis) => {
+            const val = axesValues[axis.id] ?? "";
+            const isRequired = !axis.allow_empty;
 
-        {/* Assertion */}
-        <div className="form-group">
-          <label htmlFor="assertion-select" className="form-label">
-            Vorhandensein (Assertion)
-          </label>
-          <select
-            id="assertion-select"
-            className="form-select"
-            value={axes.assertion ?? ""}
-            onChange={(e) => {
-              const val = e.target.value as "present" | "absent" | "uncertain" | "";
-              onUpdateAxes({ assertion: val === "" ? null : val });
-            }}
-          >
-            <option value="">(Nicht angegeben / keine Auswahl)</option>
-            <option value="present">Bestätigt vorhanden (present)</option>
-            <option value="absent">Ausdrücklich ausgeschlossen (absent)</option>
-            <option value="uncertain">Klinisch unsicher / Verdacht (uncertain)</option>
-          </select>
+            return (
+              <div key={axis.id} className="form-group">
+                <label htmlFor={`axis-select-${axis.id}`} className="form-label">
+                  {axis.label} {isRequired && <span style={{ color: "var(--danger)" }}>* (Pflichtfeld)</span>}
+                </label>
+                <select
+                  id={`axis-select-${axis.id}`}
+                  aria-label={axis.label}
+                  className="form-select"
+                  value={val}
+                  onChange={(e) => {
+                    const nextVal = e.target.value === "" ? null : e.target.value;
+                    const updated = {
+                      ...axesValues,
+                      [axis.id]: nextVal,
+                    };
+                    onUpdateAxes({
+                      definition_name: axesDefinition ?? axes.definition_name,
+                      values: updated,
+                    });
+                  }}
+                >
+                  <option value="">(Nicht angegeben / keine Auswahl)</option>
+                  {axis.options.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
         </div>
-
-        {/* Experiencer */}
-        <div className="form-group">
-          <label htmlFor="experiencer-select" className="form-label">
-            Betroffene Person (Experiencer)
-          </label>
-          <select
-            id="experiencer-select"
-            className="form-select"
-            value={axes.experiencer ?? ""}
-            onChange={(e) => {
-              const val = e.target.value as "patient" | "other" | "";
-              onUpdateAxes({ experiencer: val === "" ? null : val });
-            }}
-          >
-            <option value="">(Nicht angegeben / Patient)</option>
-            <option value="patient">Patient/in selbst</option>
-            <option value="other">Angehörige/r / andere Person</option>
-          </select>
-        </div>
-
-        {/* Temporality */}
-        <div className="form-group">
-          <label htmlFor="temporality-select" className="form-label">
-            Zeitlicher Bezug (Temporality)
-          </label>
-          <select
-            id="temporality-select"
-            className="form-select"
-            value={axes.temporality ?? ""}
-            onChange={(e) => {
-              const val = e.target.value as "current" | "historical" | "future" | "";
-              onUpdateAxes({ temporality: val === "" ? null : val });
-            }}
-          >
-            <option value="">(Nicht angegeben / Aktuell)</option>
-            <option value="current">Aktueller Befund</option>
-            <option value="historical">Historisch / Frühere Anamnese</option>
-            <option value="future">Zukünftig / Risikofaktor</option>
-          </select>
-        </div>
-      </div>
+      )}
 
       {/* 3. Evidence Mentions */}
       <div className="detail-section">

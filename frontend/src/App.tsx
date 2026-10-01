@@ -178,9 +178,9 @@ export const App: React.FC = () => {
       {/* App Header */}
       <header className="app-header">
         <div className="app-title">
-          <span>🏥 HPO Annotations-Editor</span>
+          <span>Ontocurator</span>
           <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 400 }}>
-            Lokale ärztliche Phänotyp-Annotation & Origin-neutrales Review
+            Lokale Ontologie-Annotation und Review
           </span>
         </div>
         <div>

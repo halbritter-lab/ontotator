@@ -103,18 +103,20 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const snap = (view.available_inputs ?? []).find(
         (i) => i.annotation.annotation_id === targetRef.annotation_id && i.version === targetRef.version
       );
+      const termId = snap?.annotation.term_id ?? snap?.annotation.hpo_id ?? targetRef.annotation_id;
       return {
         annotation_id: targetRef.annotation_id,
         version: targetRef.version,
-        hpo_id: snap?.annotation.hpo_id ?? targetRef.annotation_id,
+        term_id: termId,
+        hpo_id: termId,
         axes: snap?.annotation.axes ?? null,
         provenance: snap?.annotation.provenance ?? {
           actor: { actor_id: "unknown", kind: "tool" },
           method: "automated",
         },
         evidence_count: snap?.annotation.evidence_refs?.length ?? 0,
-        is_obsolete: view.term_statuses?.[snap?.annotation.hpo_id ?? ""] === "obsolete",
-        is_unknown: view.term_statuses?.[snap?.annotation.hpo_id ?? ""] === "unknown",
+        is_obsolete: view.term_statuses?.[termId] === "obsolete",
+        is_unknown: view.term_statuses?.[termId] === "unknown",
       };
     });
   }, [view.key.mode, view.targets, view.available_inputs, view.term_statuses]);
@@ -199,18 +201,21 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         setSelectedEvidenceId(evidenceId);
       } else {
         const newAnnId = `ann-${Date.now()}`;
-        const defaultHpoId = "HP:0000118";
+        const defaultTermId = "HP:0000118";
+        const initialValues: Record<string, string | null> = {};
+        for (const axis of view.axes_config ?? []) {
+          initialValues[axis.id] = null;
+        }
         await enqueueMutation({
           command: "create_annotation",
           annotation_id: newAnnId,
-          hpo_id: defaultHpoId,
+          term_id: defaultTermId,
+          hpo_id: defaultTermId,
           evidence_id: evidenceId,
           segments: payload.segments,
           axes: {
-            definition_name: "editor-axes/v1",
-            assertion: null,
-            experiencer: null,
-            temporality: null,
+            definition_name: view.axes_definition ?? "editor-axes/v1",
+            values: initialValues,
           },
         });
         setSelectedAnnotationId(newAnnId);
@@ -233,33 +238,38 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const handleCreateSpanless = async () => {
     try {
-    if (!spanlessHpoId.trim()) return;
-    const newAnnId = `ann-${Date.now()}`;
-    await enqueueMutation({
-      command: "create_annotation",
-      annotation_id: newAnnId,
-      hpo_id: spanlessHpoId.trim(),
-      segments: [],
-      axes: {
-        definition_name: "editor-axes/v1",
-        assertion: null,
-        experiencer: null,
-        temporality: null,
-      },
-    });
-    setSelectedAnnotationId(newAnnId);
-    setSelectedEvidenceId(null);
-    setShowSpanlessModal(false);
-    setSpanlessHpoId("");
+      if (!spanlessHpoId.trim()) return;
+      const newAnnId = `ann-${Date.now()}`;
+      const termId = spanlessHpoId.trim();
+      const initialValues: Record<string, string | null> = {};
+      for (const axis of view.axes_config ?? []) {
+        initialValues[axis.id] = null;
+      }
+      await enqueueMutation({
+        command: "create_annotation",
+        annotation_id: newAnnId,
+        term_id: termId,
+        hpo_id: termId,
+        segments: [],
+        axes: {
+          definition_name: view.axes_definition ?? "editor-axes/v1",
+          values: initialValues,
+        },
+      });
+      setSelectedAnnotationId(newAnnId);
+      setSelectedEvidenceId(null);
+      setShowSpanlessModal(false);
+      setSpanlessHpoId("");
     } catch (error) { reportError(error); }
   };
 
-  const handleUpdateTerm = async (hpoId: string, searchId?: string) => {
+  const handleUpdateTerm = async (termId: string, searchId?: string) => {
     if (!selectedAnnotationId) return;
     await enqueueMutation({
       command: "set_term",
       annotation_id: selectedAnnotationId,
-      hpo_id: hpoId,
+      term_id: termId,
+      hpo_id: termId,
       search_event_id: searchId,
     });
   };
@@ -267,15 +277,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const handleUpdateAxes = async (axesUpdate: Partial<Axes>) => {
     if (!selectedAnnotationId || !selectedAnnotation) return;
     const annotationId = selectedAnnotationId;
-    await enqueueMutation(current => ({
-      command: "set_axes",
-      annotation_id: annotationId,
-      axes: {
-        ...(current.annotations ?? []).find(a => a.annotation.annotation_id === annotationId)?.annotation.axes,
-        ...axesUpdate,
-        definition_name: "editor-axes/v1",
-      },
-    }));
+    await enqueueMutation(current => {
+      const existing = (current.annotations ?? []).find(a => a.annotation.annotation_id === annotationId)?.annotation.axes;
+      return {
+        command: "set_axes",
+        annotation_id: annotationId,
+        axes: {
+          definition_name: axesUpdate.definition_name ?? existing?.definition_name ?? view.axes_definition ?? "editor-axes/v1",
+          values: axesUpdate.values !== undefined ? axesUpdate.values : (existing?.values ?? {}),
+        },
+      };
+    });
   };
 
   const handleDetachMention = async (evidenceId: string) => {
@@ -454,7 +466,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       onClick={() => setSelectedTargetId(refKey(t))}
                     >
                       <div className="doc-id" style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span>{t.hpo_id}</span>
+                        <span>{t.term_id ?? t.hpo_id}</span>
                         {dec ? (
                           <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--primary)" }}>
                             {dec.outcome}
@@ -481,7 +493,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               const isSelected =
                 annSnap.annotation.annotation_id === selectedAnnotationId;
               const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
-              const assertion = annSnap.annotation.axes?.assertion;
+              const termId = annSnap.annotation.term_id ?? annSnap.annotation.hpo_id;
+              const firstAxisVal = annSnap.annotation.axes?.values
+                ? Object.values(annSnap.annotation.axes.values).find((v) => v !== null)
+                : null;
 
               return (
                 <li
@@ -493,10 +508,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     setSelectedEvidenceId(firstEv ?? null);
                   }}
                 >
-                  <div className="doc-id">{annSnap.annotation.hpo_id}</div>
+                  <div className="doc-id">{termId}</div>
                   <div className="doc-meta">
                     {evCount === 0 ? "Spanlos" : `${evCount} Belegstelle(n)`}
-                    {assertion && ` • ${assertion}`}
+                    {firstAxisVal && ` • ${firstAxisVal}`}
                   </div>
                 </li>
               );
@@ -556,6 +571,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             workspaceKey={view.key}
             searchManager={searchManager}
             selectedEvidenceId={selectedEvidenceId}
+            axesConfig={view.axes_config}
+            axesDefinition={view.axes_definition}
             onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
             onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
             onUpdateAxes={(axes) => { void handleUpdateAxes(axes).catch(reportError); }}
@@ -587,8 +604,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <p>{historySubmission.created_at}</p>
           <p>Dokument vollständig geprüft: {historySubmission.document_checked ? "Ja" : "Nein"}</p>
           {historySubmission.snapshots.map(snap => <div key={refKey({annotation_id:snap.annotation.annotation_id,version:snap.version})}>
-            <strong>{snap.annotation.hpo_id}</strong>
-            <p>{snap.annotation.axes?.assertion ?? "Nicht angegeben"} · {snap.annotation.axes?.experiencer ?? "Nicht angegeben"} · {snap.annotation.axes?.temporality ?? "Nicht angegeben"}</p>
+            <strong>{snap.annotation.term_id ?? snap.annotation.hpo_id}</strong>
+            <p>
+              {snap.annotation.axes?.values && Object.keys(snap.annotation.axes.values).length > 0
+                ? Object.entries(snap.annotation.axes.values)
+                    .map(([k, v]) => `${k}: ${v ?? "Nicht angegeben"}`)
+                    .join(" · ")
+                : "Keine Achsen"}
+            </p>
             {snap.evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
               {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
             </p>)}
@@ -607,18 +630,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               Spanlose Annotation anlegen
             </h2>
             <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: 16 }}>
-              Erfassen Sie einen klinischen HPO-Befund, der im Fall dokumentiert oder
+              Erfassen Sie einen Befund, der im Fall dokumentiert oder
               ausgeschlossen ist, aber keine direkte Textstelle markiert.
             </p>
             <div className="form-group">
               <label htmlFor="spanless-hpo-id" className="form-label">
-                HPO-ID (z. B. HP:0001252)
+                Ontologie-Kennung (z. B. HP:0001252, MONDO:0001250)
               </label>
               <input
                 id="spanless-hpo-id"
                 type="text"
                 className="form-control"
-                placeholder="HP:..."
+                placeholder="z.B. HP:0001252 oder MONDO:0001250"
                 value={spanlessHpoId}
                 onChange={(e) => setSpanlessHpoId(e.target.value)}
                 autoFocus

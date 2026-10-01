@@ -516,9 +516,9 @@
             "type": "string",
             "title": "Document Id"
           },
-          "hpo_id": {
+          "term_id": {
             "type": "string",
-            "title": "Hpo Id"
+            "title": "Term Id"
           },
           "axes": {
             "$ref": "#/components/schemas/Axes"
@@ -532,6 +532,11 @@
           },
           "provenance": {
             "$ref": "#/components/schemas/Provenance"
+          },
+          "hpo_id": {
+            "type": "string",
+            "title": "Hpo Id",
+            "readOnly": true
           }
         },
         "additionalProperties": false,
@@ -539,11 +544,12 @@
         "required": [
           "annotation_id",
           "document_id",
-          "hpo_id",
-          "provenance"
+          "term_id",
+          "provenance",
+          "hpo_id"
         ],
         "title": "Annotation",
-        "description": "Annotation entity referencing HPO term, context axes and evidence."
+        "description": "Annotation entity referencing ontology term, context axes and evidence."
       },
       "AnnotationRef": {
         "properties": {
@@ -592,6 +598,28 @@
           "version": {
             "type": "string",
             "title": "Version"
+          },
+          "schema_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Version"
+          },
+          "axes_config_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Axes Config Sha256"
           }
         },
         "additionalProperties": false,
@@ -611,62 +639,83 @@
         "properties": {
           "definition_name": {
             "type": "string",
-            "const": "editor-axes/v1",
             "title": "Definition Name",
             "default": "editor-axes/v1"
           },
-          "assertion": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "present",
-                  "absent",
-                  "uncertain"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assertion"
-          },
-          "experiencer": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "patient",
-                  "other"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Experiencer"
-          },
-          "temporality": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "current",
-                  "historical",
-                  "future"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Temporality"
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Values"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "Axes",
-        "description": "Clinical axes associated with an annotation."
+        "description": "Context axes associated with an annotation."
+      },
+      "AxesConfig": {
+        "properties": {
+          "definition_name": {
+            "type": "string",
+            "title": "Definition Name"
+          },
+          "axes": {
+            "items": {
+              "$ref": "#/components/schemas/AxisDefinition"
+            },
+            "type": "array",
+            "title": "Axes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "definition_name"
+        ],
+        "title": "AxesConfig",
+        "description": "Named profile definition containing configured axes."
+      },
+      "AxisDefinition": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "allow_empty": {
+            "type": "boolean",
+            "title": "Allow Empty",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "options"
+        ],
+        "title": "AxisDefinition",
+        "description": "Definition of an individual annotation contextual axis."
       },
       "Body_upload_package_api_v1_packages_post": {
         "properties": {
@@ -996,9 +1045,12 @@
           },
           "format_version": {
             "type": "string",
-            "const": "hpo-editor-work-package/v1",
+            "enum": [
+              "ontocurator-work-package/v1",
+              "hpo-editor-work-package/v1"
+            ],
             "title": "Format Version",
-            "default": "hpo-editor-work-package/v1"
+            "default": "ontocurator-work-package/v1"
           },
           "ontology": {
             "$ref": "#/components/schemas/OntologyRef"
@@ -1007,6 +1059,27 @@
             "type": "string",
             "title": "Axes Definition",
             "default": "editor-axes/v1"
+          },
+          "axes_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxesConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "axes_config_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Axes Config Sha256"
           },
           "file_hashes": {
             "additionalProperties": {
@@ -1201,9 +1274,9 @@
       },
       "SearchCandidate": {
         "properties": {
-          "hpo_id": {
+          "term_id": {
             "type": "string",
-            "title": "Hpo Id"
+            "title": "Term Id"
           },
           "label": {
             "type": "string",
@@ -1249,16 +1322,22 @@
             "type": "boolean",
             "title": "Obsolete",
             "default": false
+          },
+          "hpo_id": {
+            "type": "string",
+            "title": "Hpo Id",
+            "readOnly": true
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "hpo_id",
-          "label"
+          "term_id",
+          "label",
+          "hpo_id"
         ],
         "title": "SearchCandidate",
-        "description": "Single candidate term returned by an HPO search route."
+        "description": "Single candidate term returned by an ontology search route."
       },
       "SearchRequest": {
         "properties": {
@@ -1573,6 +1652,23 @@
             },
             "type": "object",
             "title": "Term Statuses"
+          },
+          "axes_definition": {
+            "type": "string",
+            "title": "Axes Definition",
+            "default": "editor-axes/v1"
+          },
+          "axes_config": {
+            "items": {
+              "$ref": "#/components/schemas/AxisDefinition"
+            },
+            "type": "array",
+            "title": "Axes Config"
+          },
+          "axes_config_sha256": {
+            "type": "string",
+            "title": "Axes Config Sha256",
+            "default": ""
           }
         },
         "additionalProperties": false,

@@ -192,7 +192,8 @@ def test_static_asset_serving_default_embedded_path(tmp_path: Path):
     resp = client.get("/")
     assert resp.status_code == 200
     assert (
-        "HPO Annotation Editor" in resp.text
+        "Ontocurator" in resp.text
+        or "HPO Annotation Editor" in resp.text
         or "<!DOCTYPE html>" in resp.text
         or "<!doctype html>" in resp.text
     )

@@ -39,12 +39,15 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
           annotation: {
             annotation_id: "prop-human",
             document_id: "doc-e2e-1",
+            term_id: "HP:0001252",
             hpo_id: "HP:0001252", // Hypotonia
             axes: {
               definition_name: "editor-axes/v1",
-              assertion: "present",
-              experiencer: null,
-              temporality: null,
+              values: {
+                assertion: "present",
+                experiencer: null,
+                temporality: null,
+              },
             },
             evidence_refs: [{ evidence_id: "ev-h", version: "ev-v-1" }],
             provenance: {
@@ -73,12 +76,15 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
           annotation: {
             annotation_id: "prop-tool",
             document_id: "doc-e2e-1",
+            term_id: "HP:0001250",
             hpo_id: "HP:0001250", // Seizure
             axes: {
               definition_name: "editor-axes/v1",
-              assertion: "present",
-              experiencer: null,
-              temporality: null,
+              values: {
+                assertion: "present",
+                experiencer: null,
+                temporality: null,
+              },
             },
             evidence_refs: [{ evidence_id: "ev-t", version: "ev-v-2" }],
             provenance: {
@@ -117,6 +123,14 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     },
     submissions: [],
     available_inputs: [],
+    term_statuses: {},
+    axes_definition: "editor-axes/v1",
+    axes_config: [
+      { id: "assertion", label: "Vorhandensein (Assertion)", options: ["present", "absent", "uncertain"], allow_empty: true },
+      { id: "experiencer", label: "Betroffene Person (Experiencer)", options: ["patient", "other"], allow_empty: true },
+      { id: "temporality", label: "Zeitlicher Bezug (Temporality)", options: ["current", "historical", "future"], allow_empty: true },
+    ],
+    axes_config_sha256: "sha-e2e-axes",
   };
 
   beforeEach(() => {

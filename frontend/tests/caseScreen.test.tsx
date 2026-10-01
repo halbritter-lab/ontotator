@@ -42,6 +42,14 @@ describe("CaseScreen integration", () => {
     },
     submissions: [],
     available_inputs: [],
+    term_statuses: {},
+    axes_definition: "editor-axes/v1",
+    axes_config: [
+      { id: "assertion", label: "Vorhandensein (Assertion)", options: ["present", "absent", "uncertain"], allow_empty: true },
+      { id: "experiencer", label: "Betroffene Person (Experiencer)", options: ["patient", "other"], allow_empty: true },
+      { id: "temporality", label: "Zeitlicher Bezug (Temporality)", options: ["current", "historical", "future"], allow_empty: true },
+    ],
+    axes_config_sha256: "sha-test-axes",
   };
 
   beforeEach(() => {
@@ -71,12 +79,15 @@ describe("CaseScreen integration", () => {
           annotation: {
             annotation_id: "ann-spanless-1",
             document_id: "doc-test-1",
+            term_id: "HP:0001252",
             hpo_id: "HP:0001252",
             axes: {
-              definition_name: "editor-axes/v1" as const,
-              assertion: "present" as const,
-              experiencer: null,
-              temporality: null,
+              definition_name: "editor-axes/v1",
+              values: {
+                assertion: "present",
+                experiencer: null,
+                temporality: null,
+              },
             },
             evidence_refs: [],
             provenance: {
@@ -108,8 +119,8 @@ describe("CaseScreen integration", () => {
     // Click "+ Spanlose Annotation"
     fireEvent.click(screen.getByText("+ Spanlose Annotation"));
 
-    // Enter HPO ID and submit modal
-    const input = screen.getByLabelText(/HPO-ID/i);
+    // Enter ID and submit modal
+    const input = screen.getByLabelText(/Ontologie-Kennung/i);
     fireEvent.change(input, { target: { value: "HP:0001252" } });
     fireEvent.click(screen.getByText("Annotation anlegen"));
 
@@ -120,7 +131,7 @@ describe("CaseScreen integration", () => {
           expected_revision: 0,
           payload: expect.objectContaining({
             command: "create_annotation",
-            hpo_id: "HP:0001252",
+            term_id: "HP:0001252",
             segments: [],
           }),
         })
@@ -143,12 +154,15 @@ describe("CaseScreen integration", () => {
             annotation: {
               annotation_id: "ann-1",
               document_id: "doc-test-1",
+              term_id: "HP:0001252",
               hpo_id: "HP:0001252",
               axes: {
-                definition_name: "editor-axes/v1" as const,
-                assertion: null,
-                experiencer: null,
-                temporality: null,
+                definition_name: "editor-axes/v1",
+                values: {
+                  assertion: null,
+                  experiencer: null,
+                  temporality: null,
+                },
               },
               evidence_refs: [],
               provenance: {
@@ -176,9 +190,11 @@ describe("CaseScreen integration", () => {
             ...viewWithAnn.draft.annotations[0].annotation,
             axes: {
               definition_name: "editor-axes/v1",
-              assertion: "absent",
-              experiencer: null,
-              temporality: null,
+              values: {
+                assertion: "absent",
+                experiencer: null,
+                temporality: null,
+              },
             },
           },
         },
@@ -216,7 +232,9 @@ describe("CaseScreen integration", () => {
             command: "set_axes",
             annotation_id: "ann-1",
             axes: expect.objectContaining({
-              assertion: "absent",
+              values: expect.objectContaining({
+                assertion: "absent",
+              }),
             }),
           }),
         })
@@ -235,12 +253,11 @@ describe("CaseScreen integration", () => {
             annotation: {
               annotation_id: "ann-to-del",
               document_id: "doc-test-1",
+              term_id: "HP:0001252",
               hpo_id: "HP:0001252",
               axes: {
-                definition_name: "editor-axes/v1" as const,
-                assertion: null,
-                experiencer: null,
-                temporality: null,
+                definition_name: "editor-axes/v1",
+                values: {},
               },
               evidence_refs: [],
               provenance: {
