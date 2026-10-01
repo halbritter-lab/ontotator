@@ -15,6 +15,7 @@ from ontocurator.domain.documents import (
 )
 from ontocurator.domain.errors import DomainError, InvalidPackage
 from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.serialization import decode_snapshot, verify_snapshot
 from ontocurator.domain.workspace import Submission
 from ontocurator.packages.models import (
     PackageManifest,
@@ -175,24 +176,12 @@ def _read_package(source: Path | BinaryIO) -> ValidatedPackage:
         line = line.strip()
         if not line:
             continue
-        snap = AnnotationSnapshot.model_validate_json(line)
-        # Verify hash
-        sorted_ev = sorted(
-            snap.evidence, key=lambda e: (e.mention.evidence_id, e.version)
-        )
-        expected_v = canonical_hash(
-            {
-                "annotation": snap.annotation.model_dump(),
-                "document_id": snap.document_id,
-                "evidence": [e.model_dump() for e in sorted_ev],
-                "ontology_sha256": snap.ontology_sha256,
-                "text_sha256": snap.text_sha256,
-            }
-        )
-        if snap.version != expected_v:
-            raise InvalidPackage(
-                f"AnnotationSnapshot hash mismatch: {snap.version} != {expected_v}"
-            )
+        try:
+            snap_data = json.loads(line)
+            snap = decode_snapshot(snap_data)
+            verify_snapshot(snap)
+        except Exception as exc:
+            raise InvalidPackage(f"AnnotationSnapshot hash mismatch: {exc}") from exc
         key = (snap.annotation.annotation_id, snap.version)
         if key in annotations and annotations[key] != snap:
             raise InvalidPackage(

@@ -222,3 +222,144 @@ def test_review_decision_and_target_set() -> None:
             replacement=AnnotationRef(annotation_id="ann-3", version="hash3"),
             reviewer_id="rev-1",
         )
+
+
+def test_legacy_snapshot_wire_and_hash_unchanged() -> None:
+    from ontocurator.domain.serialization import (
+        decode_snapshot,
+        encode_snapshot,
+        verify_snapshot,
+    )
+
+    legacy_raw = {
+        "annotation": {
+            "annotation_id": "ann-leg-1",
+            "document_id": "doc-1",
+            "hpo_id": "HP:0001252",
+            "axes": {
+                "definition_name": "editor-axes/v1",
+                "assertion": None,
+                "experiencer": None,
+                "temporality": None,
+            },
+            "evidence_refs": [],
+            "provenance": {
+                "actor": {"actor_id": "curator", "kind": "human"},
+                "method": "manual",
+                "source_refs": [],
+                "assessment": None,
+            },
+        },
+        "evidence": [],
+        "document_id": "doc-1",
+        "ontology_sha256": "ont-sha-1",
+        "text_sha256": "text-sha-1",
+    }
+    # Compute legacy hash
+    from ontocurator.domain.canonical import canonical_hash
+
+    expected_hash = canonical_hash(legacy_raw)
+    legacy_raw["version"] = expected_hash
+
+    snap = decode_snapshot(legacy_raw)
+    assert snap.version == expected_hash
+    # Normalized views exposed
+    assert snap.annotation.term_id == "HP:0001252"
+    assert snap.annotation.hpo_id == "HP:0001252"
+    assert snap.annotation.axes.values.get("assertion") is None
+
+    # Wire encoding preserves original representation
+    encoded = encode_snapshot(snap)
+    assert "schema_version" not in encoded
+    assert encoded["annotation"]["hpo_id"] == "HP:0001252"
+    assert encoded["version"] == expected_hash
+    verify_snapshot(snap)
+
+
+def test_new_snapshot_binds_profile_digest() -> None:
+    from ontocurator.domain.axes import AxesConfig, AxisDefinition
+    from ontocurator.domain.serialization import (
+        verify_snapshot,
+    )
+
+    doc_text = "Sample text"
+    doc = Document(
+        document_id="doc-1",
+        text=doc_text,
+        language="de",
+        text_sha256=hashlib.sha256(doc_text.encode("utf-8")).hexdigest(),
+    )
+    ont = OntologyRef(release="2026-06-23", sha256="ont-hash")
+    ann = Annotation(
+        annotation_id="ann-new-1",
+        document_id="doc-1",
+        term_id="MONDO:0000001",
+        axes=Axes(definition_name="custom/v1", values={"severity": "mild"}),
+        provenance=Provenance(
+            actor=ActorRef(actor_id="curator", kind="human"), method="manual"
+        ),
+    )
+    custom_profile = AxesConfig(
+        definition_name="custom/v1",
+        axes=[
+            AxisDefinition(id="severity", label="Severity", options=["mild", "severe"])
+        ],
+    )
+    snap = snapshot(ann, [], doc, ont, axes_config=custom_profile)
+    assert snap.schema_version == "ontocurator-annotation/v2"
+    assert snap.axes_config_sha256 == custom_profile.config_sha256
+    verify_snapshot(snap)
+
+    # Tampering with term fails verification
+    tampered_ann = snap.model_copy(deep=True)
+    tampered_ann.annotation.term_id = "MONDO:0000002"
+    with pytest.raises(InvalidAnnotation, match="HASH_MISMATCH"):
+        verify_snapshot(tampered_ann)
+
+    # Tampering with axes_config_sha256 fails verification
+    tampered_prof = snap.model_copy(deep=True)
+    tampered_prof.axes_config_sha256 = "wrong-digest"
+    with pytest.raises(InvalidAnnotation, match="HASH_MISMATCH"):
+        verify_snapshot(tampered_prof)
+
+
+def test_conflicting_term_aliases_rejected() -> None:
+    with pytest.raises(ValueError, match="Conflicting"):
+        Annotation.model_validate(
+            {
+                "annotation_id": "ann-c-1",
+                "document_id": "doc-1",
+                "term_id": "MONDO:0000001",
+                "hpo_id": "HP:0001252",
+                "provenance": {
+                    "actor": {"actor_id": "c", "kind": "human"},
+                    "method": "m",
+                },
+            }
+        )
+
+
+def test_unknown_snapshot_schema_rejected() -> None:
+    from ontocurator.domain.serialization import decode_snapshot
+
+    bad_raw = {
+        "schema_version": "future-schema/v999",
+        "version": "dummy-hash",
+        "annotation": {
+            "annotation_id": "ann-bad-1",
+            "document_id": "doc-1",
+            "term_id": "HP:0001252",
+            "axes": {"definition_name": "clinical-phenotype/v1", "values": {}},
+            "provenance": {
+                "actor": {"actor_id": "c", "kind": "human"},
+                "method": "m",
+            },
+        },
+        "evidence": [],
+        "document_id": "doc-1",
+        "ontology_sha256": "ont-sha-1",
+        "text_sha256": "text-sha-1",
+        "axes_config_sha256": "prof-sha-1",
+    }
+    with pytest.raises(InvalidAnnotation, match="Unknown snapshot schema"):
+        decode_snapshot(bad_raw)

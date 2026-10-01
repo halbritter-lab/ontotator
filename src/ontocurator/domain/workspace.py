@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.documents import EvidenceSnapshot
@@ -48,6 +48,25 @@ class Submission(BaseModel):
     decisions: list[ReviewDecision]
     document_checked: bool
     created_at: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def decode_snapshots_if_raw(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            raw_snaps = data.get("snapshots")
+            if isinstance(raw_snaps, list):
+                from ontocurator.domain.serialization import decode_snapshot
+
+                snaps = []
+                for s in raw_snaps:
+                    if isinstance(s, dict):
+                        snaps.append(decode_snapshot(s))
+                    else:
+                        snaps.append(s)
+                d = dict(data)
+                d["snapshots"] = snaps
+                return d
+        return data
 
 
 class ImportedSubmissionBinding(BaseModel):

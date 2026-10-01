@@ -262,7 +262,7 @@ class EditorService:
         ann = Annotation(
             annotation_id=cmd.annotation_id,
             document_id=doc.document_id,
-            hpo_id=cmd.hpo_id,
+            term_id=cmd.hpo_id,
             axes=cmd.axes,
             evidence_refs=evidence_refs,
             provenance=prov,
