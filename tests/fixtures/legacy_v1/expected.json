@@ -1,0 +1,49 @@
+{
+  "source_commit": "9ea59b5e326b21ed95c4e7eea183519a03d3d08e",
+  "format_version": "hpo-editor-work-package/v1",
+  "axes_definition": "editor-axes/v1",
+  "package_id": "pkg-legacy-1",
+  "review_zip_sha256": "23f15850d63a9ad4be5b16b16fb3fd08927a95e07502930a78743ed2d3b0b352",
+  "manifest_sha256": "52b628a0d1efc107067e0b468a337d65f4ec0bbb045d140765f3d18da2cf9e01",
+  "sqlite_sha256": "5f6e69c88cfd2a5606dca7fcaa456ee217c08ac5520a3e71bac382d3e85c375a",
+  "snapshot_versions": {
+    "ann1_v1": "0eb7720b8b85e19069e7f1e0b4d71fc57ad0ac86d7eab8db797d62fc7ba16836",
+    "ann1_v2": "c15983f0df0a3580cdf7e19e8c72e29dd9970f78e39e494b11d4beb39101e1d5",
+    "ann2": "5ea7239dae7e6ef493af6109dc55f494a90ab31866a8db3c03bcddedf98bb9e6",
+    "ev1": "77b7366a0ae7f6ddf22fb2efbd7e48a9e5133b2503f111ea8861dedaa16a43f1",
+    "ev2": "75e5d8669c41c582520fc6965f5988a56a896281a7f34ec5121acfee85c50db5"
+  },
+  "target_set_id": "d544a2476c8d738bb8a3b6aee713fcd64e4b32f78a99d448a87a99fc538bc48d",
+  "package_submission_id": "sub-pkg-1",
+  "workspace_submission_id": "sub-local-1",
+  "decisions": [
+    {
+      "decision_id": "dec-1",
+      "outcome": "changed",
+      "replacement_version": "c15983f0df0a3580cdf7e19e8c72e29dd9970f78e39e494b11d4beb39101e1d5"
+    },
+    {
+      "decision_id": "dec-2",
+      "outcome": "confirmed",
+      "replacement_version": null
+    }
+  ],
+  "receipts": {
+    "mut-edit-1": {
+      "request_hash": "ed38052ab0ac6bd3eb16067ff8fa45a5243ec8d58e8a4aa4531dd48d2c57836c",
+      "resulting_revision": 1
+    },
+    "mut-rev-1": {
+      "request_hash": "e55e0814302357827bd236847e6aba89f2f8a5862f5ce6cfa27f0a6d899d2789",
+      "resulting_revision": 1
+    },
+    "mut-sub-1": {
+      "request_hash": "99fc4e7ae2a1dd723e8bdcac8a395c1306caccf7ed2da40c9b81403f44503830",
+      "resulting_revision": 2
+    }
+  },
+  "draft_revisions": {
+    "independent": 1,
+    "review": 2
+  }
+}
