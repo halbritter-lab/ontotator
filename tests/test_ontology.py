@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from hpo_editor.domain.documents import OntologyRef
-from hpo_editor.domain.errors import DomainError
-from hpo_editor.domain.workspace import WorkspaceKey
-from hpo_editor.ontology.provenance import SearchRequest
-from hpo_editor.ontology.service import OntologyService
+from ontocurator.domain.documents import OntologyRef
+from ontocurator.domain.errors import DomainError
+from ontocurator.domain.workspace import WorkspaceKey
+from ontocurator.ontology.provenance import SearchRequest
+from ontocurator.ontology.service import OntologyService
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 

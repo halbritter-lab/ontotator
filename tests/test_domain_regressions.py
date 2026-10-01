@@ -2,13 +2,13 @@ import pytest
 from test_packages import _create_sample_package
 from test_reviews import _setup_review_test_env
 
-from hpo_editor.application.reviews import DecisionCommand
-from hpo_editor.domain.annotations import AnnotationRef
-from hpo_editor.domain.errors import DomainError, InvalidPackage
-from hpo_editor.domain.review import ReviewTargetSet
-from hpo_editor.domain.workspace import MutationEnvelope, WorkspaceKey
-from hpo_editor.packages.reader import read_package
-from hpo_editor.packages.writer import write_package
+from ontocurator.application.reviews import DecisionCommand
+from ontocurator.domain.annotations import AnnotationRef
+from ontocurator.domain.errors import DomainError, InvalidPackage
+from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontocurator.packages.reader import read_package
+from ontocurator.packages.writer import write_package
 
 
 def review(ctx, reviewer="one"):
@@ -115,7 +115,7 @@ def test_edit_invalidates_replacement_approval(tmp_path):
 
 
 def test_package_rejects_snapshot_document_digest_mismatch(tmp_path):
-    from hpo_editor.domain.annotations import snapshot
+    from ontocurator.domain.annotations import snapshot
 
     pkg = _create_sample_package()
     original = next(iter(pkg.annotations.values()))
@@ -132,7 +132,7 @@ def test_package_rejects_snapshot_document_digest_mismatch(tmp_path):
 
 
 def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
-    from hpo_editor.packages.models import SearchEventRecord
+    from ontocurator.packages.models import SearchEventRecord
 
     ctx = _setup_review_test_env(tmp_path)
     key, _ = review(ctx)
@@ -195,7 +195,7 @@ def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
     ["ontology", "evidence_document", "bounds", "submitted_snapshot", "target_hash"],
 )
 def test_package_rejects_self_consistent_but_unbound_content(tmp_path, mutation):
-    from hpo_editor.domain.canonical import canonical_hash
+    from ontocurator.domain.canonical import canonical_hash
 
     pkg = _create_sample_package()
     if mutation == "ontology":
@@ -229,8 +229,8 @@ def test_package_rejects_self_consistent_but_unbound_content(tmp_path, mutation)
 
 
 def test_review_versions_have_separate_decisions(tmp_path):
-    from hpo_editor.domain.annotations import snapshot
-    from hpo_editor.domain.workspace import Draft
+    from ontocurator.domain.annotations import snapshot
+    from ontocurator.domain.workspace import Draft
 
     ctx = _setup_review_test_env(tmp_path)
     first = ctx["snap_a"]
@@ -322,9 +322,9 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
 
 
 def test_sequential_search_selections_survive_two_export_imports(tmp_path):
-    from hpo_editor.packages.models import SearchEventRecord
-    from hpo_editor.storage.database import Database
-    from hpo_editor.storage.repository import Repository
+    from ontocurator.packages.models import SearchEventRecord
+    from ontocurator.storage.database import Database
+    from ontocurator.storage.repository import Repository
 
     ctx = _setup_review_test_env(tmp_path)
     key, _ = review(ctx)

@@ -2,7 +2,7 @@
 
 Automates:
 1. Frontend compilation via npm build
-2. Bundling built assets into src/hpo_editor/web/
+2. Bundling built assets into src/ontocurator/web/
 3. Wheel packaging via uv build
 4. Integrity verification of wheel contents
 """
@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = REPO_ROOT / "frontend"
-WEB_DIR = REPO_ROOT / "src" / "hpo_editor" / "web"
+WEB_DIR = REPO_ROOT / "src" / "ontocurator" / "web"
 DIST_DIR = REPO_ROOT / "dist"
 
 
@@ -50,7 +50,7 @@ def build_frontend() -> None:
 
 
 def copy_web_assets() -> None:
-    """Sync built frontend assets into src/hpo_editor/web."""
+    """Sync built frontend assets into src/ontocurator/web."""
     if WEB_DIR.exists():
         shutil.rmtree(WEB_DIR)
     WEB_DIR.mkdir(parents=True, exist_ok=True)
@@ -87,10 +87,10 @@ def verify_wheel(wheel_path: Path) -> None:
         namelist = set(z.namelist())
 
         required = [
-            "hpo_editor/__init__.py",
-            "hpo_editor/cli.py",
-            "hpo_editor/storage/migrations/001_initial.sql",
-            "hpo_editor/web/index.html",
+            "ontocurator/__init__.py",
+            "ontocurator/cli.py",
+            "ontocurator/storage/migrations/001_initial.sql",
+            "ontocurator/web/index.html",
         ]
 
         missing = [item for item in required if item not in namelist]
@@ -103,11 +103,11 @@ def verify_wheel(wheel_path: Path) -> None:
 
         # Check that at least one CSS and JS asset exists in web/assets/
         has_js = any(
-            name.startswith("hpo_editor/web/assets/") and name.endswith(".js")
+            name.startswith("ontocurator/web/assets/") and name.endswith(".js")
             for name in namelist
         )
         has_css = any(
-            name.startswith("hpo_editor/web/assets/") and name.endswith(".css")
+            name.startswith("ontocurator/web/assets/") and name.endswith(".css")
             for name in namelist
         )
         if not has_js or not has_css:

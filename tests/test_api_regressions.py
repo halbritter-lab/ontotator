@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from test_api import _create_sample_package_bytes
 from test_api import app_client as _shared_app_client
 
-from hpo_editor.packages.reader import read_package
+from ontocurator.packages.reader import read_package
 
 app_client = _shared_app_client
 

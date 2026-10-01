@@ -5,17 +5,17 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from hpo_editor.api.app import create_app
-from hpo_editor.config import AppConfig
-from hpo_editor.domain.annotations import (
+from ontocurator.api.app import create_app
+from ontocurator.config import AppConfig
+from ontocurator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from hpo_editor.domain.axes import Axes
-from hpo_editor.domain.documents import (
+from ontocurator.domain.axes import Axes
+from ontocurator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
@@ -23,9 +23,9 @@ from hpo_editor.domain.documents import (
     Segment,
     snapshot_evidence,
 )
-from hpo_editor.domain.review import ReviewTargetSet
-from hpo_editor.packages.models import PackageManifest, ValidatedPackage
-from hpo_editor.packages.writer import PackageWriter
+from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.packages.models import PackageManifest, ValidatedPackage
+from ontocurator.packages.writer import PackageWriter
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 

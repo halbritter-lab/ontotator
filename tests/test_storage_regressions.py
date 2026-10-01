@@ -3,11 +3,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 from test_storage import _sample_package
 
-from hpo_editor.application.exports import ExportService
-from hpo_editor.domain.review import ReviewTargetSet
-from hpo_editor.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
-from hpo_editor.storage.database import Database
-from hpo_editor.storage.repository import Repository
+from ontocurator.application.exports import ExportService
+from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
+from ontocurator.storage.database import Database
+from ontocurator.storage.repository import Repository
 
 
 def key_for(package_id="pkg-1"):
@@ -103,9 +103,9 @@ def test_imported_submission_seeds_draft(tmp_path):
 def test_export_fails_on_missing_decision_dependency(tmp_path):
     import pytest
 
-    from hpo_editor.domain.annotations import AnnotationRef
-    from hpo_editor.domain.errors import DomainError
-    from hpo_editor.domain.review import ReviewDecision
+    from ontocurator.domain.annotations import AnnotationRef
+    from ontocurator.domain.errors import DomainError
+    from ontocurator.domain.review import ReviewDecision
 
     repo = Repository(Database(tmp_path / "db"))
     package = _sample_package()
@@ -140,7 +140,7 @@ def test_migration_preserves_ambiguous_snapshots_with_warning(tmp_path):
     db_path = tmp_path / "legacy"
     conn = sqlite3.connect(db_path)
     conn.executescript(
-        Path("src/hpo_editor/storage/migrations/001_initial.sql").read_text()
+        Path("src/ontocurator/storage/migrations/001_initial.sql").read_text()
     )
     conn.execute("INSERT INTO schema_migrations VALUES (1, 'now')")
     for name in ("a", "b"):
@@ -174,7 +174,7 @@ def test_migration_preserves_ambiguous_snapshots_with_warning(tmp_path):
 
 
 def test_imported_search_audit_survives_scoped_export(tmp_path):
-    from hpo_editor.packages.models import SearchEventRecord
+    from ontocurator.packages.models import SearchEventRecord
 
     repo = Repository(Database(tmp_path / "db"))
     package = _sample_package()
@@ -197,7 +197,7 @@ def test_imported_search_audit_survives_scoped_export(tmp_path):
 def test_import_rejects_conflicting_existing_snapshot_atomically(tmp_path):
     import pytest
 
-    from hpo_editor.domain.errors import InvalidPackage
+    from ontocurator.domain.errors import InvalidPackage
 
     repo = Repository(Database(tmp_path / "db"))
     original = _sample_package()
@@ -242,7 +242,7 @@ def test_independent_import_resumes_at_default_api_key(tmp_path):
         )
         assert local_key.endswith(":targets-0")
         # Existing databases can still contain the pre-fix canonical binding.
-        from hpo_editor.storage.repository import _key_str
+        from ontocurator.storage.repository import _key_str
 
         repo.db.get_connection().execute(
             "UPDATE imported_submission_bindings SET local_key=?",

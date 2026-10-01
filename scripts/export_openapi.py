@@ -5,7 +5,7 @@ ontology dependencies.
 import json
 from pathlib import Path
 
-from hpo_editor.api.app import create_app
+from ontocurator.api.app import create_app
 
 
 def export_openapi() -> None:

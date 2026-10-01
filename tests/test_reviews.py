@@ -3,20 +3,20 @@ from pathlib import Path
 
 import pytest
 
-from hpo_editor.application.editing import CreateAnnotationCommand, EditorService
-from hpo_editor.application.exports import ExportService
-from hpo_editor.application.reviews import DecisionCommand, ReviewService
-from hpo_editor.application.submissions import SubmissionService, SubmitCommand
-from hpo_editor.application.workspaces import WorkspaceService
-from hpo_editor.domain.annotations import (
+from ontocurator.application.editing import CreateAnnotationCommand, EditorService
+from ontocurator.application.exports import ExportService
+from ontocurator.application.reviews import DecisionCommand, ReviewService
+from ontocurator.application.submissions import SubmissionService, SubmitCommand
+from ontocurator.application.workspaces import WorkspaceService
+from ontocurator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from hpo_editor.domain.axes import Axes
-from hpo_editor.domain.documents import (
+from ontocurator.domain.axes import Axes
+from ontocurator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
@@ -24,13 +24,13 @@ from hpo_editor.domain.documents import (
     Segment,
     snapshot_evidence,
 )
-from hpo_editor.domain.errors import DomainError, IncompleteReview
-from hpo_editor.domain.review import ReviewOutcome, ReviewTargetSet
-from hpo_editor.domain.workspace import MutationEnvelope, WorkspaceKey
-from hpo_editor.ontology.service import OntologyService
-from hpo_editor.packages.models import PackageManifest, ValidatedPackage
-from hpo_editor.storage.database import Database
-from hpo_editor.storage.repository import Repository
+from ontocurator.domain.errors import DomainError, IncompleteReview
+from ontocurator.domain.review import ReviewOutcome, ReviewTargetSet
+from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontocurator.ontology.service import OntologyService
+from ontocurator.packages.models import PackageManifest, ValidatedPackage
+from ontocurator.storage.database import Database
+from ontocurator.storage.repository import Repository
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 

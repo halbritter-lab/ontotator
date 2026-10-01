@@ -3,12 +3,10 @@ import json
 import shutil
 from pathlib import Path
 
-import pytest
-
-from hpo_editor.domain.workspace import WorkspaceKey
-from hpo_editor.packages.reader import read_package
-from hpo_editor.storage.database import Database
-from hpo_editor.storage.repository import Repository
+from ontocurator.domain.workspace import WorkspaceKey
+from ontocurator.packages.reader import read_package
+from ontocurator.storage.database import Database
+from ontocurator.storage.repository import Repository
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "legacy_v1"
 
@@ -33,7 +31,8 @@ def test_frozen_legacy_package() -> None:
     assert pkg.manifest.axes_definition == expected["axes_definition"]
 
     # Verify manifest hash
-    manifest_bytes = json.dumps(pkg.manifest.model_dump(), sort_keys=True).encode("utf-8")
+    manifest_dict = pkg.manifest.model_dump()
+    manifest_bytes = json.dumps(manifest_dict, sort_keys=True).encode("utf-8")
     assert hashlib.sha256(manifest_bytes).hexdigest() == expected["manifest_sha256"]
 
     # Verify snapshot versions
@@ -48,7 +47,7 @@ def test_frozen_legacy_package() -> None:
     sub = pkg.submissions[expected["package_submission_id"]]
     assert sub.targets.target_set_id == expected["target_set_id"]
     assert len(sub.decisions) == len(expected["decisions"])
-    for dec_exp, dec_act in zip(expected["decisions"], sub.decisions):
+    for dec_exp, dec_act in zip(expected["decisions"], sub.decisions, strict=True):
         assert dec_act.decision_id == dec_exp["decision_id"]
         assert dec_act.outcome == dec_exp["outcome"]
         if dec_exp["replacement_version"]:
@@ -64,7 +63,8 @@ def test_frozen_v2_workspace(tmp_path: Path) -> None:
     assert db_source.exists()
 
     # Verify database digest
-    assert hashlib.sha256(db_source.read_bytes()).hexdigest() == expected["sqlite_sha256"]
+    db_sha256 = hashlib.sha256(db_source.read_bytes()).hexdigest()
+    assert db_sha256 == expected["sqlite_sha256"]
 
     # Copy to tmp_path before opening to ensure no side effects
     db_copy = tmp_path / "workspace.sqlite"
@@ -115,7 +115,8 @@ def test_frozen_v2_workspace(tmp_path: Path) -> None:
     cursor = conn.cursor()
     for mut_id, r_info in expected["receipts"].items():
         cursor.execute(
-            "SELECT request_hash, response_json FROM mutation_receipts WHERE mutation_id = ?;",
+            "SELECT request_hash, response_json "
+            "FROM mutation_receipts WHERE mutation_id = ?;",
             (mut_id,),
         )
         row = cursor.fetchone()
@@ -123,7 +124,8 @@ def test_frozen_v2_workspace(tmp_path: Path) -> None:
         assert row[0] == r_info["request_hash"]
 
     # Verify receipt idempotency replay
-    from hpo_editor.domain.workspace import MutationEnvelope
+    from ontocurator.domain.workspace import MutationEnvelope
+
     env_retry = MutationEnvelope(
         mutation_id="mut-edit-1",
         expected_revision=0,

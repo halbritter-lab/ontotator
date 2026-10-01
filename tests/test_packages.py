@@ -4,15 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from hpo_editor.domain.annotations import (
+from ontocurator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from hpo_editor.domain.axes import Axes
-from hpo_editor.domain.documents import (
+from ontocurator.domain.axes import Axes
+from ontocurator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
@@ -20,16 +20,16 @@ from hpo_editor.domain.documents import (
     OntologyRef,
     Segment,
 )
-from hpo_editor.domain.errors import InvalidPackage
-from hpo_editor.domain.review import ReviewDecision, ReviewTargetSet
-from hpo_editor.domain.workspace import Submission, WorkspaceKey
-from hpo_editor.packages.models import (
+from ontocurator.domain.errors import InvalidPackage
+from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
+from ontocurator.domain.workspace import Submission, WorkspaceKey
+from ontocurator.packages.models import (
     PackageManifest,
     SearchEventRecord,
     ValidatedPackage,
 )
-from hpo_editor.packages.reader import read_package
-from hpo_editor.packages.writer import write_package
+from ontocurator.packages.reader import read_package
+from ontocurator.packages.writer import write_package
 
 
 def _create_sample_package() -> ValidatedPackage:

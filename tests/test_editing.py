@@ -3,25 +3,25 @@ from pathlib import Path
 
 import pytest
 
-from hpo_editor.application.editing import (
+from ontocurator.application.editing import (
     AttachMentionCommand,
     CreateAnnotationCommand,
     EditMentionCommand,
     EditorService,
 )
-from hpo_editor.application.workspaces import WorkspaceService
-from hpo_editor.domain.axes import Axes
-from hpo_editor.domain.documents import (
+from ontocurator.application.workspaces import WorkspaceService
+from ontocurator.domain.axes import Axes
+from ontocurator.domain.documents import (
     Document,
     OntologyRef,
     Segment,
 )
-from hpo_editor.domain.errors import DomainError
-from hpo_editor.domain.workspace import MutationEnvelope, WorkspaceKey
-from hpo_editor.ontology.service import OntologyService
-from hpo_editor.packages.models import PackageManifest, ValidatedPackage
-from hpo_editor.storage.database import Database
-from hpo_editor.storage.repository import Repository
+from ontocurator.domain.errors import DomainError
+from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontocurator.ontology.service import OntologyService
+from ontocurator.packages.models import PackageManifest, ValidatedPackage
+from ontocurator.storage.database import Database
+from ontocurator.storage.repository import Repository
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 

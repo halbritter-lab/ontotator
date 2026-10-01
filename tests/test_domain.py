@@ -2,15 +2,15 @@ import hashlib
 
 import pytest
 
-from hpo_editor.domain.annotations import (
+from ontocurator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from hpo_editor.domain.axes import Axes
-from hpo_editor.domain.documents import (
+from ontocurator.domain.axes import Axes
+from ontocurator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
@@ -19,10 +19,10 @@ from hpo_editor.domain.documents import (
     Segment,
     validate_segments,
 )
-from hpo_editor.domain.errors import (
+from ontocurator.domain.errors import (
     InvalidAnnotation,
 )
-from hpo_editor.domain.review import ReviewDecision, ReviewTargetSet
+from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 
 
 def test_codepoint_offsets() -> None:

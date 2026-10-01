@@ -9,18 +9,18 @@ import pytest
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-from hpo_editor.api.app import create_app
-from hpo_editor.cli import app as cli_app
-from hpo_editor.config import AppConfig
-from hpo_editor.domain.annotations import (
+from ontocurator.api.app import create_app
+from ontocurator.cli import app as cli_app
+from ontocurator.config import AppConfig
+from ontocurator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
     Provenance,
     snapshot,
 )
-from hpo_editor.domain.axes import Axes
-from hpo_editor.domain.documents import (
+from ontocurator.domain.axes import Axes
+from ontocurator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
@@ -28,10 +28,10 @@ from hpo_editor.domain.documents import (
     Segment,
     snapshot_evidence,
 )
-from hpo_editor.domain.review import ReviewTargetSet
-from hpo_editor.packages.models import PackageManifest, ValidatedPackage
-from hpo_editor.packages.reader import PackageReader
-from hpo_editor.packages.writer import PackageWriter
+from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.packages.models import PackageManifest, ValidatedPackage
+from ontocurator.packages.reader import PackageReader
+from ontocurator.packages.writer import PackageWriter
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 
@@ -177,7 +177,7 @@ def test_static_asset_serving_and_default_path(tmp_path: Path):
 
 
 def test_static_asset_serving_default_embedded_path(tmp_path: Path):
-    """Test that when config.web_dir is None, create_app detects src/hpo_editor/web."""
+    """Test that when config.web_dir is None, create_app detects src/ontocurator/web."""
     config = AppConfig(
         workspace_dir=tmp_path / "ws",
         database_path=tmp_path / "ws" / "test.db",
