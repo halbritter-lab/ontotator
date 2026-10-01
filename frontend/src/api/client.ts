@@ -15,6 +15,7 @@ export type Draft = components["schemas"]["Draft"];
 export type Submission = components["schemas"]["Submission"];
 export type SearchRequest = components["schemas"]["SearchRequest"];
 export type SearchResult = components["schemas"]["SearchResult"];
+export type SearchCandidate = components["schemas"]["SearchCandidate"];
 
 export class ApiError extends Error {
   readonly status: number;
