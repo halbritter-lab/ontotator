@@ -156,9 +156,7 @@ class EditorService:
             raise ValueError(f"Expected Draft from run_mutation, got {type(result)}")
         return result
 
-    def _execute_edit(
-        self, draft: Draft, cmd: EditCommand, doc: Document
-    ) -> Draft:
+    def _execute_edit(self, draft: Draft, cmd: EditCommand, doc: Document) -> Draft:
         if isinstance(cmd, CreateAnnotationCommand):
             return self._create_annotation(draft, cmd, doc)
         if isinstance(cmd, SetTermCommand):
@@ -199,9 +197,7 @@ class EditorService:
             validate_segments(doc.text, cmd.segments)
             mention_label = cmd.label
             if not mention_label and cmd.segments:
-                mention_label = doc.text[
-                    cmd.segments[0].start : cmd.segments[0].end
-                ]
+                mention_label = doc.text[cmd.segments[0].start : cmd.segments[0].end]
             mention = EvidenceMention(
                 evidence_id=cmd.evidence_id,
                 segments=cmd.segments,
@@ -209,15 +205,11 @@ class EditorService:
             ev_snap = snapshot_evidence(mention, doc)
             evidence_list.append(ev_snap)
             evidence_refs.append(
-                EvidenceRef(
-                    evidence_id=cmd.evidence_id, version=ev_snap.version
-                )
+                EvidenceRef(evidence_id=cmd.evidence_id, version=ev_snap.version)
             )
             # Add or update in draft evidence pool
             draft.evidence = [
-                e
-                for e in draft.evidence
-                if e.mention.evidence_id != cmd.evidence_id
+                e for e in draft.evidence if e.mention.evidence_id != cmd.evidence_id
             ] + [ev_snap]
 
         source_refs: list[str] = []
@@ -245,9 +237,7 @@ class EditorService:
         ] + [snap]
         return draft
 
-    def _set_term(
-        self, draft: Draft, cmd: SetTermCommand, doc: Document
-    ) -> Draft:
+    def _set_term(self, draft: Draft, cmd: SetTermCommand, doc: Document) -> Draft:
         self._validate_term(cmd.hpo_id)
         existing = next(
             (
@@ -263,12 +253,8 @@ class EditorService:
                 f"Annotation '{cmd.annotation_id}' not found in current draft",
             )
 
-        updated_ann = existing.annotation.model_copy(
-            update={"hpo_id": cmd.hpo_id}
-        )
-        new_snap = snapshot(
-            updated_ann, existing.evidence, doc, self.ontology.ref
-        )
+        updated_ann = existing.annotation.model_copy(update={"hpo_id": cmd.hpo_id})
+        new_snap = snapshot(updated_ann, existing.evidence, doc, self.ontology.ref)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
@@ -276,9 +262,7 @@ class EditorService:
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
-    def _set_axes(
-        self, draft: Draft, cmd: SetAxesCommand, doc: Document
-    ) -> Draft:
+    def _set_axes(self, draft: Draft, cmd: SetAxesCommand, doc: Document) -> Draft:
         existing = next(
             (
                 a
@@ -294,9 +278,7 @@ class EditorService:
             )
 
         updated_ann = existing.annotation.model_copy(update={"axes": cmd.axes})
-        new_snap = snapshot(
-            updated_ann, existing.evidence, doc, self.ontology.ref
-        )
+        new_snap = snapshot(updated_ann, existing.evidence, doc, self.ontology.ref)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
@@ -324,11 +306,7 @@ class EditorService:
 
         # Check existing evidence in draft
         ev_snap = next(
-            (
-                e
-                for e in draft.evidence
-                if e.mention.evidence_id == cmd.evidence_id
-            ),
+            (e for e in draft.evidence if e.mention.evidence_id == cmd.evidence_id),
             None,
         )
         if ev_snap is None:
@@ -339,23 +317,17 @@ class EditorService:
             ev_snap = snapshot_evidence(mention, doc)
             draft.evidence.append(ev_snap)
 
-        new_ref = EvidenceRef(
-            evidence_id=cmd.evidence_id, version=ev_snap.version
-        )
+        new_ref = EvidenceRef(evidence_id=cmd.evidence_id, version=ev_snap.version)
         new_refs = [
             r
             for r in existing.annotation.evidence_refs
             if r.evidence_id != cmd.evidence_id
         ] + [new_ref]
         new_ev_list = [
-            e
-            for e in existing.evidence
-            if e.mention.evidence_id != cmd.evidence_id
+            e for e in existing.evidence if e.mention.evidence_id != cmd.evidence_id
         ] + [ev_snap]
 
-        updated_ann = existing.annotation.model_copy(
-            update={"evidence_refs": new_refs}
-        )
+        updated_ann = existing.annotation.model_copy(update={"evidence_refs": new_refs})
         new_snap = snapshot(updated_ann, new_ev_list, doc, self.ontology.ref)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
@@ -372,10 +344,7 @@ class EditorService:
         referencing = [
             a
             for a in draft.annotations
-            if any(
-                r.evidence_id == cmd.evidence_id
-                for r in a.annotation.evidence_refs
-            )
+            if any(r.evidence_id == cmd.evidence_id for r in a.annotation.evidence_refs)
         ]
 
         if cmd.annotation_id and len(referencing) > 1:
@@ -401,11 +370,7 @@ class EditorService:
                     r
                     for r in target.annotation.evidence_refs
                     if r.evidence_id != cmd.evidence_id
-                ] + [
-                    EvidenceRef(
-                        evidence_id=new_ev_id, version=new_ev_snap.version
-                    )
-                ]
+                ] + [EvidenceRef(evidence_id=new_ev_id, version=new_ev_snap.version)]
                 new_ev_list = [
                     e
                     for e in target.evidence
@@ -414,18 +379,12 @@ class EditorService:
                 updated_ann = target.annotation.model_copy(
                     update={"evidence_refs": new_refs}
                 )
-                new_snap = snapshot(
-                    updated_ann, new_ev_list, doc, self.ontology.ref
-                )
+                new_snap = snapshot(updated_ann, new_ev_list, doc, self.ontology.ref)
                 draft.annotations = [
-                    a
-                    if a.annotation.annotation_id != cmd.annotation_id
-                    else new_snap
+                    a if a.annotation.annotation_id != cmd.annotation_id else new_snap
                     for a in draft.annotations
                 ]
-                self._update_decision_replacements(
-                    draft, cmd.annotation_id, new_snap
-                )
+                self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         else:
             # In-place update of mention for referencing annotations
             mention = EvidenceMention(
@@ -434,9 +393,7 @@ class EditorService:
             )
             new_ev_snap = snapshot_evidence(mention, doc)
             draft.evidence = [
-                e
-                for e in draft.evidence
-                if e.mention.evidence_id != cmd.evidence_id
+                e for e in draft.evidence if e.mention.evidence_id != cmd.evidence_id
             ] + [new_ev_snap]
 
             updated_annotations = []
@@ -455,9 +412,7 @@ class EditorService:
                         for r in snap.annotation.evidence_refs
                     ]
                     new_ev_list = [
-                        e
-                        if e.mention.evidence_id != cmd.evidence_id
-                        else new_ev_snap
+                        e if e.mention.evidence_id != cmd.evidence_id else new_ev_snap
                         for e in snap.evidence
                     ]
                     updated_ann = snap.annotation.model_copy(
@@ -499,13 +454,9 @@ class EditorService:
             if r.evidence_id != cmd.evidence_id
         ]
         new_ev_list = [
-            e
-            for e in target.evidence
-            if e.mention.evidence_id != cmd.evidence_id
+            e for e in target.evidence if e.mention.evidence_id != cmd.evidence_id
         ]
-        updated_ann = target.annotation.model_copy(
-            update={"evidence_refs": new_refs}
-        )
+        updated_ann = target.annotation.model_copy(update={"evidence_refs": new_refs})
         new_snap = snapshot(updated_ann, new_ev_list, doc, self.ontology.ref)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
@@ -526,21 +477,14 @@ class EditorService:
         draft.decisions = [
             d
             for d in draft.decisions
-            if not (
-                d.replacement
-                and d.replacement.annotation_id == cmd.annotation_id
-            )
+            if not (d.replacement and d.replacement.annotation_id == cmd.annotation_id)
         ]
         # Clean up unreferenced evidence
         active_ev_ids = {
-            r.evidence_id
-            for a in draft.annotations
-            for r in a.annotation.evidence_refs
+            r.evidence_id for a in draft.annotations for r in a.annotation.evidence_refs
         }
         draft.evidence = [
-            e
-            for e in draft.evidence
-            if e.mention.evidence_id in active_ev_ids
+            e for e in draft.evidence if e.mention.evidence_id in active_ev_ids
         ]
         return draft
 

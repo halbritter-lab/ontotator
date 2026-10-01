@@ -251,4 +251,3 @@ class PackageReader:
     @staticmethod
     def read(path: Path) -> ValidatedPackage:
         return read_package(path)
-

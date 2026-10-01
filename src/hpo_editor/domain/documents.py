@@ -131,9 +131,7 @@ def snapshot_evidence(mention: EvidenceMention, document: Document) -> EvidenceS
     return EvidenceSnapshot.create(mention, document)
 
 
-def validate_segments(
-    text: str, items: list[EvidenceMention] | list[Segment]
-) -> None:
+def validate_segments(text: str, items: list[EvidenceMention] | list[Segment]) -> None:
     """Validate that segments fall in bounds (Unicode codepoints)."""
     text_len = len(text)
     for item in items:

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "api:generate": "openapi-typescript ../contracts/openapi.json -o src/api/generated.ts",
-    "api:check": "node scripts/check-api-drift.js"
+    "api:check": "node scripts/check-api-drift.js",
+    "test:e2e": "vitest run tests/e2e"
   },
   "dependencies": {
     "react": "^18.3.1",

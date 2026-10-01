@@ -86,9 +86,7 @@ class WorkspaceService:
             else:
                 existing_draft = self.repo.open_draft(key)
                 effective_targets = existing_draft.targets
-            available_inputs = self.get_review_inputs(
-                key.package_id, key.document_id
-            )
+            available_inputs = self.get_review_inputs(key.package_id, key.document_id)
 
         draft = self.repo.open_draft(key, effective_targets)
         submissions = self.repo.get_submissions_for_workspace(key)

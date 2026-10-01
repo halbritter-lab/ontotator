@@ -44,9 +44,7 @@ def _setup_test_env(tmp_path: Path):
 
     text = "The patient showed severe hypotonia and seizure activity."
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    doc = Document(
-        document_id="doc-1", text=text, language="en", text_sha256=digest
-    )
+    doc = Document(document_id="doc-1", text=text, language="en", text_sha256=digest)
 
     pkg = ValidatedPackage(
         manifest=PackageManifest(
@@ -61,9 +59,7 @@ def _setup_test_env(tmp_path: Path):
 
 
 @pytest.mark.parametrize("actor_kind", ["human", "tool"])
-def test_create_annotation_and_provenance_equivalence(
-    tmp_path: Path, actor_kind: str
-):
+def test_create_annotation_and_provenance_equivalence(tmp_path: Path, actor_kind: str):
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = WorkspaceKey(
         package_id="pkg-1",
@@ -213,19 +209,14 @@ def test_shared_evidence_copy_on_write(tmp_path: Path):
 
     # Ann1 has a new evidence mention copy
     # Ann2 keeps the original shared-ev mention unmodified
-    ann1 = next(
-        a for a in draft.annotations if a.annotation.annotation_id == "ann-1"
-    )
-    ann2 = next(
-        a for a in draft.annotations if a.annotation.annotation_id == "ann-2"
-    )
+    ann1 = next(a for a in draft.annotations if a.annotation.annotation_id == "ann-1")
+    ann2 = next(a for a in draft.annotations if a.annotation.annotation_id == "ann-2")
 
     ev1_ref = ann1.annotation.evidence_refs[0]
     ev2_ref = ann2.annotation.evidence_refs[0]
 
     assert (
-        ev1_ref.evidence_id != ev2_ref.evidence_id
-        or ev1_ref.version != ev2_ref.version
+        ev1_ref.evidence_id != ev2_ref.evidence_id or ev1_ref.version != ev2_ref.version
     )
     ev1 = next(
         e for e in draft.evidence if e.mention.evidence_id == ev1_ref.evidence_id

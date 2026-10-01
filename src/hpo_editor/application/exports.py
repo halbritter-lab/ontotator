@@ -76,14 +76,11 @@ class ExportService:
             (k_str,),
         )
         search_events = [
-            SearchEventRecord.model_validate_json(r[0])
-            for r in cursor.fetchall()
+            SearchEventRecord.model_validate_json(r[0]) for r in cursor.fetchall()
         ]
 
         now = datetime.now(UTC).isoformat()
-        export_pkg_id = (
-            f"export-{key.package_id}-{key.document_id}-{key.annotator_id}"
-        )
+        export_pkg_id = f"export-{key.package_id}-{key.document_id}-{key.annotator_id}"
         manifest = PackageManifest(
             package_id=export_pkg_id,
             created_at=now,

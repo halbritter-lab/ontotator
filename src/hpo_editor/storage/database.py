@@ -22,6 +22,7 @@ class Database:
     def get_connection(self) -> sqlite3.Connection:
         """Return active connection with foreign keys enabled."""
         if self._conn is None:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = sqlite3.connect(
                 str(self.path),
                 isolation_level=None,  # Autocommit: explicit transactions

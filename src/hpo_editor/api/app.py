@@ -100,11 +100,19 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     app.include_router(router)
 
-    # Mount static assets if provided
+    # Mount static assets if provided or embedded
+    web_path: Path | None = None
     if config and config.web_dir and Path(config.web_dir).is_dir():
+        web_path = Path(config.web_dir)
+    else:
+        embedded_web = Path(__file__).parent.parent / "web"
+        if embedded_web.is_dir() and (embedded_web / "index.html").is_file():
+            web_path = embedded_web
+
+    if web_path:
         app.mount(
             "/",
-            StaticFiles(directory=str(config.web_dir), html=True),
+            StaticFiles(directory=str(web_path), html=True),
             name="static",
         )
 

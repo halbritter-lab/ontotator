@@ -162,12 +162,8 @@ class OntologyService:
 
     def hierarchy_warnings(self, ids: list[str]) -> list[HierarchyWarning]:
         """Check all given term IDs against each other for ancestry."""
-        unique_ids = list(
-            dict.fromkeys((i or "").strip().upper() for i in ids if i)
-        )
-        ancestor_map = {
-            hpo_id: self.all_ancestors_of(hpo_id) for hpo_id in unique_ids
-        }
+        unique_ids = list(dict.fromkeys((i or "").strip().upper() for i in ids if i))
+        ancestor_map = {hpo_id: self.all_ancestors_of(hpo_id) for hpo_id in unique_ids}
 
         warnings: list[HierarchyWarning] = []
         for child_id in unique_ids:

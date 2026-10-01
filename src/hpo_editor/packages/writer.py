@@ -134,4 +134,3 @@ class PackageWriter:
     @staticmethod
     def write(package: ValidatedPackage, target: Path) -> None:
         write_package(package, target)
-

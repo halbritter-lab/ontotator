@@ -25,8 +25,7 @@ def verify_security(request: Request, expected_token: str) -> None:
     if origin_header:
         origin_clean = origin_header.lower()
         if not any(
-            origin_clean.startswith(f"http://{allowed}")
-            for allowed in ALLOWED_HOSTS
+            origin_clean.startswith(f"http://{allowed}") for allowed in ALLOWED_HOSTS
         ):
             raise HTTPException(
                 status_code=403,

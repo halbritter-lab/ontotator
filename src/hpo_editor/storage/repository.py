@@ -543,9 +543,7 @@ class Repository:
             (package_id,),
         )
         return [
-            Document(
-                document_id=r[0], text=r[1], language=r[2], text_sha256=r[3]
-            )
+            Document(document_id=r[0], text=r[1], language=r[2], text_sha256=r[3])
             for r in cursor.fetchall()
         ]
 
@@ -593,14 +591,9 @@ class Repository:
             "WHERE d.package_id = ? AND d.document_id = ?;",
             (package_id, document_id),
         )
-        return [
-            AnnotationSnapshot.model_validate_json(r[0])
-            for r in cursor.fetchall()
-        ]
+        return [AnnotationSnapshot.model_validate_json(r[0]) for r in cursor.fetchall()]
 
-    def get_submissions_for_workspace(
-        self, key: WorkspaceKey
-    ) -> list[Submission]:
+    def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
         """Fetch all submissions filed under a workspace key."""
         k_str = _key_str(key)
         conn = self.db.get_connection()
@@ -610,9 +603,7 @@ class Repository:
             "ORDER BY created_at ASC;",
             (k_str,),
         )
-        return [
-            Submission.model_validate_json(r[0]) for r in cursor.fetchall()
-        ]
+        return [Submission.model_validate_json(r[0]) for r in cursor.fetchall()]
 
     def get_submission(self, submission_id: str) -> Submission | None:
         """Fetch a submission by ID."""

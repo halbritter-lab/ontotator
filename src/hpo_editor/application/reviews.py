@@ -84,9 +84,7 @@ class ReviewService:
                     None,
                 )
             if target_snap is not None:
-                status = self.ontology.validate_term(
-                    target_snap.annotation.hpo_id
-                )
+                status = self.ontology.validate_term(target_snap.annotation.hpo_id)
                 if status.status == "obsolete":
                     raise DomainError(
                         "CANNOT_CONFIRM_OBSOLETE_TERM",

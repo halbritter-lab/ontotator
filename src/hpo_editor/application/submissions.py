@@ -81,8 +81,7 @@ class SubmissionService:
 
         if key.mode == "review":
             decided_targets = {
-                (d.target.annotation_id, d.target.version)
-                for d in draft.decisions
+                (d.target.annotation_id, d.target.version) for d in draft.decisions
             }
             missing = [
                 t
@@ -123,9 +122,7 @@ class SubmissionService:
 
             # Include any other new draft annotations not linked as replacements
             rep_ids = {
-                d.replacement.annotation_id
-                for d in draft.decisions
-                if d.replacement
+                d.replacement.annotation_id for d in draft.decisions if d.replacement
             }
             for a in draft.annotations:
                 if a.annotation.annotation_id not in rep_ids:

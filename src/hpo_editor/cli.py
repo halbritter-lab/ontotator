@@ -11,10 +11,12 @@ import uvicorn
 
 from hpo_editor.api.app import create_app
 from hpo_editor.config import AppConfig
+from hpo_editor.domain.errors import DomainError
 
 app = typer.Typer(
     name="hpo-editor",
     help="Local application for annotating and reviewing HPO annotations.",
+    no_args_is_help=True,
 )
 
 
@@ -22,6 +24,21 @@ def _find_free_port(host: str) -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, 0))
         return int(s.getsockname()[1])
+
+
+def _is_port_in_use(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, port))
+            return False
+        except OSError:
+            return True
+
+
+@app.command()
+def version() -> None:
+    """Print current version of HPO Annotation Editor."""
+    typer.echo("0.1.0")
 
 
 @app.command()
@@ -87,6 +104,31 @@ def serve(
         )
         raise typer.Exit(code=1)
 
+    if port != 0 and _is_port_in_use(host, port):
+        typer.echo(
+            f"Error: Port {port} is already in use on {host}.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    resolved_web_dir: Path | None = None
+    if web_dir is not None:
+        resolved_web_dir = web_dir.resolve()
+        if not resolved_web_dir.is_dir():
+            typer.echo(
+                f"Error: Specified web assets directory not found at: "
+                f"{resolved_web_dir}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+    else:
+        embedded = Path(__file__).parent / "web"
+        frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
+        if embedded.is_dir() and (embedded / "index.html").is_file():
+            resolved_web_dir = embedded
+        elif frontend_dist.is_dir() and (frontend_dist / "index.html").is_file():
+            resolved_web_dir = frontend_dist
+
     workspace = workspace.resolve()
     workspace.mkdir(parents=True, exist_ok=True)
     db_path = workspace / "editor.db"
@@ -101,10 +143,24 @@ def serve(
         session_token=token,
         host=host,
         port=actual_port,
-        web_dir=web_dir.resolve() if web_dir else None,
+        web_dir=resolved_web_dir,
     )
 
-    api_app = create_app(config)
+    try:
+        api_app = create_app(config)
+    except DomainError as exc:
+        if exc.code == "UNKNOWN_DB_VERSION":
+            typer.echo(
+                f"Error: Newer database version detected: {exc.details}",
+                err=True,
+            )
+        else:
+            typer.echo(f"Error: {exc.code}: {exc.details}", err=True)
+        raise typer.Exit(code=1) from exc
+    except Exception as exc:
+        typer.echo(f"Error: Failed to initialize editor: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
     url = f"http://{host}:{actual_port}/#token={token}"
 
     typer.echo("==================================================")
