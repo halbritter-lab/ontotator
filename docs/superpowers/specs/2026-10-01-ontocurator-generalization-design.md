@@ -37,25 +37,58 @@ Bisher war das Projekt auf die Human Phenotype Ontology (HPO) mit Bezeichnern wi
 * SQLite-Schema:
   * Spalte `hpo_id` in Tabelle `annotations` wird zu `term_id` migriert (mit View/Kompatibilität in Migration).
 
-### 2.3 Ontologie-Index & Suche (`ontology/service.py`, `vendor/hpo_span_annotator/`)
+### 2.3 Konfigurierbare & dynamische Kontextachsen (`domain/axes.py`)
+* Bisher waren `assertion`, `experiencer` und `temporality` fest in `Axes` eincodiert.
+* **Neues Modell `AxisDefinition` & `AxesConfig`:**
+  ```python
+  class AxisOption(BaseModel):
+      id: str
+      label: str
+
+  class AxisDefinition(BaseModel):
+      id: str
+      label: str
+      options: list[str]  # oder list[AxisOption]
+      allow_empty: bool = True
+
+  class Axes(BaseModel):
+      definition_name: str = "clinical-phenotype/v1"
+      values: dict[str, str] = Field(default_factory=dict)
+  ```
+* **Abwärtskompatibilität:**
+  * Eingaben mit alten Einzelfeldern (`{"assertion": "present", ...}`) werden automatisch in `values={"assertion": "present"}` normalisiert.
+  * Convenience-Properties `.assertion`, `.experiencer`, `.temporality` bleiben für Abwärtskompatibilität als Getter/Setter auf `values` erhalten.
+* **Work-Package & Server-Config:**
+  * `manifest.json` enthält `axes_definition` (Name) und optional `axes_config: list[AxisDefinition]`.
+  * Standard-Profile: `"clinical-phenotype/v1"` (oder `"editor-axes/v1"`) enthält die 3 bekannten klinischen Achsen.
+  * Eigene Profile (oder leere Achsen `[]` für reine Vokabulare/Gene/Krankheiten) werden direkt im Paket oder per CLI `--axes-config` bereitgestellt.
+* **Dynamische Benutzeroberfläche:**
+  * Das Backend liefert im Workspace-View die `axes_config` mit.
+  * Das React-Frontend rendert Dropdowns dynamisch über die konfigurierten Achsen.
+  * Ist `axes_config` leer (`[]`), wird der Achsenbereich in der UI automatisch ausgeblendet.
+
+### 2.4 Ontologie-Index & Suche (`ontology/service.py`, `vendor/hpo_span_annotator/`)
 * Der OBO-Parser (`HPOTreeIndex` / `OntologyIndex`) liest bereits `_IRI_TAIL = re.compile(r"([A-Za-z]+)_(\d+)$")`.
 * Erkennung des Standard-Präfixes: Aus der geladenen Datei (z. B. `hp.json` -> `HP`, `mondo.json` -> `MONDO`) wird das dominante Präfix abgeleitet.
 * Bei numerischen Suchanfragen wird mit dem aktiven Präfix aufgefüllt.
 * Explizite CURIE-Eingaben (`MONDO:0000001`, `HP:0001250`) werden unverändert gesucht.
 
-### 2.4 Work-Package-Format v1
+### 2.5 Work-Package-Format v1
 * Manifest `format_version`: `ontocurator-work-package/v1`.
 * Import akzeptiert sowohl `ontocurator-work-package/v1` als auch `hpo-editor-work-package/v1`.
 * Export erzeugt `ontocurator-work-package/v1`.
+* Enthält `axes_definition` und optional `axes_config`.
 
-### 2.5 Frontend (UI & Typen)
+### 2.6 Frontend (UI & Typen)
 * UI-Header: „Ontocurator – Local Ontology Annotation & Review“.
 * Tabellen, Formulare, Labels: „Term / Concept ID“, „Term Label“.
-* OpenAPI-Generierung: TypeScript-Typen spiegeln `term_id` wider.
+* Dynamische Achsen-Komponente statt statischer Dropdowns.
+* OpenAPI-Generierung: TypeScript-Typen spiegeln `term_id` und dynamische `Axes` wider.
 
 ---
 
 ## 3. Risiken & Abwärtskompatibilität
-* **Bestehende Arbeitsbereiche / SQLite-Dateien:** Migration benennt die Spalte oder stellt über SQLite-Spaltenaliase Kompatibilität her.
-* **Bestehende Zip-Archive:** Der Paket-Reader akzeptiert weiterhin Archive mit `hpo-editor-work-package/v1` und wandelt Alt-Einträge mit `hpo_id` verlustfrei in `term_id` um.
+* **Bestehende Arbeitsbereiche / SQLite-Dateien:** Migration speichert `values` als JSON-Objekt oder migriert Spalten verlustfrei.
+* **Bestehende Zip-Archive:** Der Paket-Reader akzeptiert weiterhin Archive mit `hpo-editor-work-package/v1`, mappt `assertion/experiencer/temporality` in `values` und ordnet `editor-axes/v1` zu.
 * **Testabdeckung:** Vollständige Test-Suite wird auf die neuen Paket- und Modulnamen umgestellt und muss grün durchlaufen.
+
