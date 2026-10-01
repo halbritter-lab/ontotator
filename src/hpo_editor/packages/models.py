@@ -47,8 +47,12 @@ class ValidatedPackage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     manifest: PackageManifest
-    documents: dict[str, Document]
-    annotations: dict[tuple[str, str], AnnotationSnapshot]
-    evidence: dict[tuple[str, str], EvidenceSnapshot]
-    submissions: dict[str, Submission]
+    documents: dict[str, Document] = Field(default_factory=dict)
+    annotations: dict[tuple[str, str], AnnotationSnapshot] = Field(
+        default_factory=dict
+    )
+    evidence: dict[tuple[str, str], EvidenceSnapshot] = Field(
+        default_factory=dict
+    )
+    submissions: dict[str, Submission] = Field(default_factory=dict)
     search_events: list[SearchEventRecord] = Field(default_factory=list)

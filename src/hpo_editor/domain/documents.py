@@ -126,19 +126,33 @@ class EvidenceSnapshot(BaseModel):
         )
 
 
-def validate_segments(text: str, mentions: list[EvidenceMention]) -> None:
-    """Validate that mention segments fall in bounds (Unicode codepoints)."""
+def snapshot_evidence(mention: EvidenceMention, document: Document) -> EvidenceSnapshot:
+    """Create an immutable EvidenceSnapshot with RFC-8785 canonical hash version."""
+    return EvidenceSnapshot.create(mention, document)
+
+
+def validate_segments(
+    text: str, items: list[EvidenceMention] | list[Segment]
+) -> None:
+    """Validate that segments fall in bounds (Unicode codepoints)."""
     text_len = len(text)
-    for mention in mentions:
-        for seg in mention.segments:
-            if seg.end > text_len:
+    for item in items:
+        if isinstance(item, Segment):
+            if item.end > text_len:
                 raise InvalidAnnotation(
-                    f"Segment [{seg.start}, {seg.end}) is out of bounds "
+                    f"Segment [{item.start}, {item.end}) is out of bounds "
                     f"for text of length {text_len}"
                 )
-        for cue in mention.cue_segments:
-            if cue.end > text_len:
-                raise InvalidAnnotation(
-                    f"Cue segment [{cue.start}, {cue.end}) is out of bounds "
-                    f"for text of length {text_len}"
-                )
+        else:
+            for seg in item.segments:
+                if seg.end > text_len:
+                    raise InvalidAnnotation(
+                        f"Segment [{seg.start}, {seg.end}) is out of bounds "
+                        f"for text of length {text_len}"
+                    )
+            for cue in item.cue_segments:
+                if cue.end > text_len:
+                    raise InvalidAnnotation(
+                        f"Cue segment [{cue.start}, {cue.end}) is out of bounds "
+                        f"for text of length {text_len}"
+                    )

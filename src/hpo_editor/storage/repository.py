@@ -516,3 +516,113 @@ class Repository:
             submissions=submissions,
             search_events=search_events,
         )
+
+    def get_document(self, package_id: str, document_id: str) -> Document | None:
+        """Fetch a document by package and document ID."""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT document_id, text, language, text_sha256 FROM documents "
+            "WHERE package_id = ? AND document_id = ?;",
+            (package_id, document_id),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return Document(
+            document_id=row[0], text=row[1], language=row[2], text_sha256=row[3]
+        )
+
+    def list_documents(self, package_id: str) -> list[Document]:
+        """Fetch all documents for a package."""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT document_id, text, language, text_sha256 FROM documents "
+            "WHERE package_id = ? ORDER BY document_id;",
+            (package_id,),
+        )
+        return [
+            Document(
+                document_id=r[0], text=r[1], language=r[2], text_sha256=r[3]
+            )
+            for r in cursor.fetchall()
+        ]
+
+    def get_annotation_snapshot(
+        self, annotation_id: str, version: str
+    ) -> AnnotationSnapshot | None:
+        """Fetch an annotation snapshot by ID and version."""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT payload_json FROM annotation_snapshots "
+            "WHERE annotation_id = ? AND version = ?;",
+            (annotation_id, version),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return AnnotationSnapshot.model_validate_json(row[0])
+
+    def get_evidence_snapshot(
+        self, evidence_id: str, version: str
+    ) -> EvidenceSnapshot | None:
+        """Fetch an evidence snapshot by ID and version."""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT payload_json FROM evidence_snapshots "
+            "WHERE evidence_id = ? AND version = ?;",
+            (evidence_id, version),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return EvidenceSnapshot.model_validate_json(row[0])
+
+    def list_annotations_for_document(
+        self, package_id: str, document_id: str
+    ) -> list[AnnotationSnapshot]:
+        """Fetch all historical/imported annotation snapshots for a document."""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT a.payload_json FROM annotation_snapshots a "
+            "JOIN documents d ON a.document_id = d.document_id "
+            "WHERE d.package_id = ? AND d.document_id = ?;",
+            (package_id, document_id),
+        )
+        return [
+            AnnotationSnapshot.model_validate_json(r[0])
+            for r in cursor.fetchall()
+        ]
+
+    def get_submissions_for_workspace(
+        self, key: WorkspaceKey
+    ) -> list[Submission]:
+        """Fetch all submissions filed under a workspace key."""
+        k_str = _key_str(key)
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT payload_json FROM submissions WHERE origin_key = ? "
+            "ORDER BY created_at ASC;",
+            (k_str,),
+        )
+        return [
+            Submission.model_validate_json(r[0]) for r in cursor.fetchall()
+        ]
+
+    def get_submission(self, submission_id: str) -> Submission | None:
+        """Fetch a submission by ID."""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT payload_json FROM submissions WHERE submission_id = ?;",
+            (submission_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return Submission.model_validate_json(row[0])

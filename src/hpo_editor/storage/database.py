@@ -15,6 +15,10 @@ class Database:
         self._conn: sqlite3.Connection | None = None
         self._ensure_migrated()
 
+    def run_migrations(self) -> None:
+        """Run pending schema migrations."""
+        self._ensure_migrated()
+
     def get_connection(self) -> sqlite3.Connection:
         """Return active connection with foreign keys enabled."""
         if self._conn is None:
