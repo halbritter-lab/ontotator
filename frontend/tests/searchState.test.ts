@@ -35,6 +35,7 @@ describe("SearchManager", () => {
   it("updates state with candidates upon successful search", async () => {
     const candidate: SearchCandidate = {
       hpo_id: "HP:0001252",
+      obsolete: false,
       label: "Hypotonia",
       definition: "Muscular hypotonia",
       matched_term: "hypotonia",
@@ -83,6 +84,7 @@ describe("SearchManager", () => {
 
     const candidateA: SearchCandidate = {
       hpo_id: "HP:0000001",
+      obsolete: false,
       label: "Term A",
       definition: "",
       matched_term: "term a",
@@ -92,6 +94,7 @@ describe("SearchManager", () => {
     };
     const candidateB: SearchCandidate = {
       hpo_id: "HP:0000002",
+      obsolete: false,
       label: "Term B",
       definition: "",
       matched_term: "term b",
@@ -135,6 +138,7 @@ describe("SearchManager", () => {
   it("clears candidates and aborts when empty query follows a search", async () => {
     const candidate: SearchCandidate = {
       hpo_id: "HP:0001252",
+      obsolete: false,
       label: "Hypotonia",
       definition: "",
       matched_term: "hypotonia",

@@ -4,6 +4,7 @@ import type { components } from "../api/generated";
 export type WorkspaceKey = components["schemas"]["WorkspaceKey"];
 
 export interface SearchState {
+  searchId: string | null;
   query: string;
   route: "lexical" | "exact" | "id" | "browse";
   candidates: SearchCandidate[];
@@ -16,6 +17,7 @@ export type SearchListener = (state: SearchState) => void;
 
 export class SearchManager {
   private state: SearchState = {
+    searchId: null,
     query: "",
     route: "lexical",
     candidates: [],
@@ -53,6 +55,7 @@ export class SearchManager {
     }
     this.state.requestId++;
     this.updateState({
+      searchId: null,
       query: "",
       candidates: [],
       isLoading: false,
@@ -78,8 +81,9 @@ export class SearchManager {
 
     if (!query) {
       this.updateState({
-        query: rawQuery,
+        searchId: null,
         candidates: [],
+        query: rawQuery,
         isLoading: false,
         error: null,
         route,
@@ -88,6 +92,8 @@ export class SearchManager {
     }
 
     this.updateState({
+      searchId: null,
+      candidates: [],
       query: rawQuery,
       isLoading: true,
       error: null,
@@ -109,6 +115,7 @@ export class SearchManager {
       if (this.state.requestId === currentRequestId) {
         const candidates = result.candidates ?? [];
         this.updateState({
+          searchId: result.search_id ?? null,
           candidates,
           isLoading: false,
           error: null,

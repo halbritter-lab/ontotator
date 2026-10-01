@@ -3,18 +3,35 @@
 from __future__ import annotations
 
 import secrets
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
 
-ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost", "[::1]", "testserver"})
+ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
-def verify_security(request: Request, expected_token: str) -> None:
+def verify_security(request: Request, expected_token: str, port: int = 8000) -> None:
     """Validate host header against DNS rebinding and verify session token."""
     # 1. Host header validation
     host_header = request.headers.get("host", "")
-    host_name = host_header.split(":")[0].strip().lower()
-    if host_name not in ALLOWED_HOSTS:
+    try:
+        authority = urlsplit(f"http://{host_header}")
+        host_name = authority.hostname
+        host_port = authority.port or 80
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid Host header") from None
+    is_test_transport = (
+        request.client is not None
+        and request.client.host == "testclient"
+        and host_name == "testserver"
+    )
+    if not is_test_transport and (
+        host_name not in ALLOWED_HOSTS
+        or host_port != port
+        or authority.username
+        or authority.password
+        or authority.path
+    ):
         raise HTTPException(
             status_code=403,
             detail="Forbidden: Host header not permitted on loopback service",
@@ -23,10 +40,23 @@ def verify_security(request: Request, expected_token: str) -> None:
     # 2. Origin validation (if present)
     origin_header = request.headers.get("origin")
     if origin_header:
-        origin_clean = origin_header.lower()
-        if not any(
-            origin_clean.startswith(f"http://{allowed}") for allowed in ALLOWED_HOSTS
-        ):
+        try:
+            origin = urlsplit(origin_header)
+            same_origin = (
+                origin.scheme == "http"
+                and origin.hostname == host_name
+                and (origin.port or 80) == host_port
+                and not (
+                    origin.username
+                    or origin.password
+                    or origin.path
+                    or origin.query
+                    or origin.fragment
+                )
+            )
+        except ValueError:
+            same_origin = False
+        if not same_origin:
             raise HTTPException(
                 status_code=403,
                 detail="Forbidden: Cross-origin request not permitted",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -10,12 +11,12 @@ from hpo_editor.domain.annotations import (
     ActorKind,
     ActorRef,
     Annotation,
-    AnnotationRef,
     AnnotationSnapshot,
     Provenance,
     snapshot,
 )
 from hpo_editor.domain.axes import Axes
+from hpo_editor.domain.canonical import canonical_hash
 from hpo_editor.domain.documents import (
     Document,
     EvidenceMention,
@@ -39,6 +40,7 @@ class CreateAnnotationCommand(BaseModel):
     command: Literal["create_annotation"] = "create_annotation"
     annotation_id: str
     hpo_id: str
+    search_event_id: str | None = None
     axes: Axes = Field(default_factory=Axes)
     evidence_id: str | None = None
     segments: list[Segment] = Field(default_factory=list)
@@ -58,6 +60,7 @@ class SetTermCommand(BaseModel):
     command: Literal["set_term"] = "set_term"
     annotation_id: str
     hpo_id: str
+    search_event_id: str | None = None
 
 
 class SetAxesCommand(BaseModel):
@@ -149,7 +152,42 @@ class EditorService:
             )
 
         def operation(draft: Draft) -> Draft:
-            return self._execute_edit(draft, cmd, doc)
+            result = self._execute_edit(draft, cmd, doc)
+            if (
+                isinstance(cmd, (CreateAnnotationCommand, SetTermCommand))
+                and cmd.search_event_id
+            ):
+                event = self.repo.get_search_event(cmd.search_event_id)
+                if (
+                    event is None
+                    or event.workspace_key != key
+                    or event.annotation_id != cmd.annotation_id
+                    or cmd.hpo_id not in event.candidates
+                ):
+                    raise DomainError(
+                        "INVALID_SEARCH_SELECTION",
+                        "Search selection does not match this workspace, "
+                        "annotation and candidate",
+                    )
+                event = event.model_copy(deep=True)
+                event.source_search_event_id = cmd.search_event_id
+                event.event_id = "selection-" + canonical_hash(
+                    {
+                        "workspace": key.model_dump(),
+                        "mutation_id": envelope.mutation_id,
+                        "query_event_id": cmd.search_event_id,
+                    }
+                )
+                event.timestamp = datetime.now(UTC).isoformat()
+                event.selected_hpo_id = cmd.hpo_id
+                event.displayed_position = event.candidates.index(cmd.hpo_id) + 1
+                event.ranked_position = (
+                    event.ranked_ids.index(cmd.hpo_id) + 1
+                    if cmd.hpo_id in event.ranked_ids
+                    else None
+                )
+                self.repo.save_search_event(event)
+            return result
 
         result = self.repo.run_mutation(key, envelope, operation)
         if not isinstance(result, Draft):
@@ -235,6 +273,7 @@ class EditorService:
             for a in draft.annotations
             if a.annotation.annotation_id != cmd.annotation_id
         ] + [snap]
+        self._update_decision_replacements(draft, cmd.annotation_id, snap)
         return draft
 
     def _set_term(self, draft: Draft, cmd: SetTermCommand, doc: Document) -> Draft:
@@ -491,11 +530,13 @@ class EditorService:
     def _update_decision_replacements(
         self, draft: Draft, annotation_id: str, new_snap: AnnotationSnapshot
     ) -> None:
-        """Keep replacement versions in sync when a replacement annotation is edited."""
-        new_ref = AnnotationRef(
-            annotation_id=new_snap.annotation.annotation_id,
-            version=new_snap.version,
-        )
-        for dec in draft.decisions:
-            if dec.replacement and dec.replacement.annotation_id == annotation_id:
-                dec.replacement = new_ref
+        """Editing an approved replacement requires a fresh review decision."""
+        draft.decisions = [
+            dec
+            for dec in draft.decisions
+            if not (
+                dec.replacement
+                and dec.replacement.annotation_id == annotation_id
+                and dec.replacement.version != new_snap.version
+            )
+        ]

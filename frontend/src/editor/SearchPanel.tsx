@@ -7,7 +7,7 @@ export interface SearchPanelProps {
   annotationId: string;
   workspaceKey: WorkspaceKey;
   currentHpoId?: string | null;
-  onSelectCandidate: (candidate: SearchCandidate) => void;
+  onSelectCandidate: (candidate: SearchCandidate, searchId?: string) => void;
 }
 
 export const SearchPanel: React.FC<SearchPanelProps> = ({
@@ -27,6 +27,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     });
   }, [searchManager]);
 
+  useEffect(() => {
+    searchManager.clear();
+    setQueryInput("");
+  }, [annotationId, workspaceKey, searchManager]);
+
   const handleQueryChange = (val: string) => {
     setQueryInput(val);
     searchManager.search(val, annotationId, workspaceKey, route);
@@ -39,13 +44,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     }
   };
 
-  const isObsolete = (c: SearchCandidate): boolean => {
-    return (
-      c.match_kind === "obsolete" ||
-      c.label.toLowerCase().includes("obsolete") ||
-      c.definition.toLowerCase().includes("obsolete")
-    );
-  };
+  const isObsolete = (c: SearchCandidate): boolean => c.obsolete === true;
 
   return (
     <div className="search-panel">
@@ -133,7 +132,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 }
                 onClick={() => {
                   if (!obsolete) {
-                    onSelectCandidate(cand);
+                    onSelectCandidate(cand, state.searchId ?? undefined);
                   }
                 }}
               >

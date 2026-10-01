@@ -7,8 +7,14 @@ from typing import BinaryIO
 
 from hpo_editor.domain.annotations import AnnotationSnapshot
 from hpo_editor.domain.canonical import canonical_hash
-from hpo_editor.domain.documents import Document, EvidenceSnapshot, OntologyRef
-from hpo_editor.domain.errors import InvalidPackage
+from hpo_editor.domain.documents import (
+    Document,
+    EvidenceSnapshot,
+    OntologyRef,
+    validate_segments,
+)
+from hpo_editor.domain.errors import DomainError, InvalidPackage
+from hpo_editor.domain.review import ReviewTargetSet
 from hpo_editor.domain.workspace import Submission
 from hpo_editor.packages.models import (
     PackageManifest,
@@ -31,7 +37,7 @@ MAX_DOCUMENTS = 10_000
 MAX_DOCUMENT_TEXT_BYTES = 2 * 1024 * 1024  # 2 MiB
 
 
-def read_package(source: Path | BinaryIO) -> ValidatedPackage:
+def _read_package(source: Path | BinaryIO) -> ValidatedPackage:
     """Read, stream-validate and return ValidatedPackage from ZIP archive or stream."""
     if isinstance(source, (str, Path)):
         path = Path(source)
@@ -133,6 +139,8 @@ def read_package(source: Path | BinaryIO) -> ValidatedPackage:
             raise InvalidPackage(
                 f"Document '{doc.document_id}' text exceeds 2 MiB limit"
             )
+        if doc.document_id in documents and documents[doc.document_id] != doc:
+            raise InvalidPackage(f"Conflicting document: {doc.document_id}")
         documents[doc.document_id] = doc
 
     # Parse evidence.jsonl
@@ -199,6 +207,8 @@ def read_package(source: Path | BinaryIO) -> ValidatedPackage:
         if not line:
             continue
         sub = Submission.model_validate_json(line)
+        if sub.submission_id in submissions and submissions[sub.submission_id] != sub:
+            raise InvalidPackage(f"Conflicting submission: {sub.submission_id}")
         submissions[sub.submission_id] = sub
 
     # Parse search-events.jsonl
@@ -209,19 +219,100 @@ def read_package(source: Path | BinaryIO) -> ValidatedPackage:
             continue
         search_events.append(SearchEventRecord.model_validate_json(line))
 
-    # Cross-reference validation
-    for (ann_id, ann_ver), snap in annotations.items():
-        if snap.annotation.document_id not in documents:
+    # Hashes alone do not establish that a snapshot belongs to this document.
+    for ev in evidence.values():
+        bound_doc = documents.get(ev.document_id)
+        if bound_doc is None or ev.text_sha256 != bound_doc.text_sha256:
+            raise InvalidPackage("Evidence document or text digest mismatch")
+        try:
+            validate_segments(bound_doc.text, [ev.mention])
+        except Exception as exc:
+            raise InvalidPackage(f"Evidence bounds invalid: {exc}") from exc
+
+    for snap in annotations.values():
+        bound_doc = documents.get(snap.document_id)
+        if (
+            bound_doc is None
+            or snap.annotation.document_id != snap.document_id
+            or snap.text_sha256 != bound_doc.text_sha256
+            or snap.ontology_sha256 != manifest.ontology.sha256
+        ):
             raise InvalidPackage(
-                f"Annotation ({ann_id}, {ann_ver}) references missing document "
-                f"'{snap.annotation.document_id}'"
+                "Annotation document, text or ontology identity mismatch"
             )
-        for ref in snap.annotation.evidence_refs:
-            if (ref.evidence_id, ref.version) not in evidence:
+        refs = {(r.evidence_id, r.version) for r in snap.annotation.evidence_refs}
+        embedded = {(e.mention.evidence_id, e.version): e for e in snap.evidence}
+        if refs != set(embedded) or len(embedded) != len(snap.evidence):
+            raise InvalidPackage(
+                "Annotation evidence references do not match embedded evidence"
+            )
+        for ref, ev in embedded.items():
+            if (
+                evidence.get(ref) != ev
+                or ev.document_id != bound_doc.document_id
+                or ev.text_sha256 != bound_doc.text_sha256
+            ):
                 raise InvalidPackage(
-                    f"Annotation ({ann_id}, {ann_ver}) references missing evidence "
-                    f"({ref.evidence_id}, {ref.version})"
+                    "Annotation evidence is missing or bound to another document"
                 )
+
+    for sub in submissions.values():
+        if sub.origin_key.document_id not in documents:
+            raise InvalidPackage("Submission references missing document")
+        canonical_targets = ReviewTargetSet.create(sub.targets.targets)
+        if sub.targets != canonical_targets:
+            raise InvalidPackage("Submission target set identity mismatch")
+        if (
+            sub.origin_key.mode == "review"
+            and sub.origin_key.target_set_id != sub.targets.target_set_id
+        ):
+            raise InvalidPackage("Submission workspace target identity mismatch")
+        target_refs = {(r.annotation_id, r.version) for r in sub.targets.targets}
+        for ref in target_refs:
+            target_snapshot = annotations.get(ref)
+            if (
+                target_snapshot is None
+                or target_snapshot.document_id != sub.origin_key.document_id
+            ):
+                raise InvalidPackage(
+                    "Submission target is missing or belongs to another document"
+                )
+        submitted = {(a.annotation.annotation_id, a.version): a for a in sub.snapshots}
+        if len(submitted) != len(sub.snapshots):
+            raise InvalidPackage("Duplicate submitted annotation reference")
+        for ref, snap in submitted.items():
+            if (
+                annotations.get(ref) != snap
+                or snap.document_id != sub.origin_key.document_id
+            ):
+                raise InvalidPackage(
+                    "Submitted snapshot is missing, changed or from another document"
+                )
+        decided = {(d.target.annotation_id, d.target.version) for d in sub.decisions}
+        if sub.origin_key.mode == "review":
+            if decided != target_refs or len(decided) != len(sub.decisions):
+                raise InvalidPackage(
+                    "Submission decisions do not cover exactly its review targets"
+                )
+        elif sub.decisions or target_refs:
+            raise InvalidPackage(
+                "Independent submission cannot contain review decisions or targets"
+            )
+        for decision in sub.decisions:
+            approved = (
+                decision.target
+                if decision.outcome == "confirmed"
+                else decision.replacement
+            )
+            if (
+                approved is not None
+                and (approved.annotation_id, approved.version) not in submitted
+            ):
+                raise InvalidPackage(
+                    "Approved annotation version missing from submission"
+                )
+        if not sub.document_checked:
+            raise InvalidPackage("Submitted document must be checked")
 
     return ValidatedPackage(
         manifest=manifest,
@@ -231,6 +322,15 @@ def read_package(source: Path | BinaryIO) -> ValidatedPackage:
         submissions=submissions,
         search_events=search_events,
     )
+
+
+def read_package(source: Path | BinaryIO) -> ValidatedPackage:
+    try:
+        return _read_package(source)
+    except InvalidPackage:
+        raise
+    except (ValueError, UnicodeError, KeyError, DomainError) as exc:
+        raise InvalidPackage(f"Invalid package dataset: {exc}") from exc
 
 
 class PackageReader:

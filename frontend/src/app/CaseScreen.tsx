@@ -1,6 +1,7 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
+  ValidationError,
   type AnnotationSnapshot,
   type Draft,
   type Submission,
@@ -18,6 +19,8 @@ import { SearchManager } from "../editor/searchState";
 import { TextPane } from "../editor/TextPane";
 import type { MentionDisplay, SelectionPayload } from "../spans/adapter";
 
+const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
+
 export type WorkspaceView = components["schemas"]["WorkspaceView"];
 
 export interface CaseScreenProps {
@@ -32,10 +35,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onClose,
 }) => {
   const [draft, setDraft] = useState<Draft>(view.draft);
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(
-    view.targets?.targets?.[0]?.annotation_id ?? null
+    view.targets?.targets?.[0] ? refKey(view.targets.targets[0]) : null
   );
   const [selectionIntent, setSelectionIntent] = useState<"new_mention" | "extend_mention">("new_mention");
   const [queueState, setQueueState] = useState<QueueState>("saved");
@@ -46,6 +52,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [showSpanlessModal, setShowSpanlessModal] = useState<boolean>(false);
   const [spanlessHpoId, setSpanlessHpoId] = useState<string>("");
   const [completedSubmission, setCompletedSubmission] = useState<Submission | null>(null);
+  const [historySubmission, setHistorySubmission] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const searchManager = useMemo(() => new SearchManager(api), []);
@@ -106,33 +113,55 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           method: "automated",
         },
         evidence_count: snap?.annotation.evidence_refs?.length ?? 0,
-        is_obsolete: false,
+        is_obsolete: view.term_statuses?.[snap?.annotation.hpo_id ?? ""] === "obsolete",
+        is_unknown: view.term_statuses?.[snap?.annotation.hpo_id ?? ""] === "unknown",
       };
     });
-  }, [view.key.mode, view.targets, view.available_inputs]);
+  }, [view.key.mode, view.targets, view.available_inputs, view.term_statuses]);
 
   const decisionsMap = useMemo(() => {
     const map: Record<string, ReviewDecision> = {};
     for (const d of draft.decisions ?? []) {
-      map[d.target.annotation_id] = d;
+      map[refKey(d.target)] = d;
     }
     return map;
   }, [draft.decisions]);
 
   const selectedTarget = useMemo(() => {
     if (!selectedTargetId) return null;
-    return reviewTargets.find((t) => t.annotation_id === selectedTargetId) ?? null;
+    return reviewTargets.find((t) => refKey(t) === selectedTargetId) ?? null;
   }, [reviewTargets, selectedTargetId]);
 
+  const targetSnapshot = (view.available_inputs ?? []).find(s => selectedTarget &&
+    s.annotation.annotation_id === selectedTarget.annotation_id && s.version === selectedTarget.version);
+  const targetMentions: MentionDisplay[] = (targetSnapshot?.evidence ?? []).map(ev => ({
+    evidence_id: `target:${ev.mention.evidence_id}:${ev.version}`,
+    segments: ev.mention.segments,
+  }));
+  const reportError = (error: unknown) => setActionError(error instanceof Error ? error.message : String(error));
+  const downloadExport = async () => {
+    try { await queueRef.current.flush(); await api.downloadExport(workspaceId); }
+    catch (error) { reportError(error); }
+  };
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (["saving", "dirty", "error"].includes(queueRef.current.getState())) {
+        event.preventDefault(); event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
   // Execute mutation through the queue
-  const enqueueMutation = async (payload: Record<string, unknown>): Promise<Draft> => {
+  const enqueueMutation = async (payload: Record<string, unknown> | ((current: Draft) => Record<string, unknown>)): Promise<Draft> => {
+    setActionError(null);
+    const mutationId = crypto.randomUUID();
+    let envelope: Parameters<typeof api.applyCommand>[1] | undefined;
     return queueRef.current.enqueue(async (expectedRevision) => {
-      const mutationId = `mut-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const updatedDraft = await api.applyCommand(workspaceId, {
-        mutation_id: mutationId,
-        expected_revision: expectedRevision,
-        payload,
-      });
+      envelope ??= { mutation_id: mutationId, expected_revision: expectedRevision, payload: typeof payload === "function" ? payload(latestDraft.current) : payload };
+      const updatedDraft = await api.applyCommand(workspaceId, envelope);
+      latestDraft.current = updatedDraft;
       setDraft(updatedDraft);
       return updatedDraft;
     });
@@ -142,23 +171,20 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const handleSelection = async (payload: SelectionPayload) => {
     if (!payload.segments || payload.segments.length === 0) return;
 
+    setActionError(null);
+    try {
     if (payload.intent === "extend_mention" && selectedEvidenceId) {
-      const existingEv = allEvidenceMap[selectedEvidenceId];
-      if (!existingEv) return;
-
-      const existingSegments = existingEv.mention.segments.map((s) => ({
-        start: s.start,
-        end: s.end,
-      }));
-      const newSegments = [...existingSegments, ...payload.segments].sort(
-        (a, b) => a.start - b.start
-      );
-
-      await enqueueMutation({
-        command: "edit_mention",
-        evidence_id: selectedEvidenceId,
-        annotation_id: selectedAnnotationId,
-        segments: newSegments,
+      const evidenceId = selectedEvidenceId;
+      const annotationId = selectedAnnotationId;
+      await enqueueMutation(current => {
+        const existingEv = (current.evidence ?? []).find(ev => ev.mention.evidence_id === evidenceId);
+        if (!existingEv) throw new ValidationError("Belegstelle ist nicht mehr vorhanden");
+        return {
+          command: "edit_mention",
+          evidence_id: evidenceId,
+          annotation_id: annotationId,
+          segments: [...existingEv.mention.segments, ...payload.segments].sort((a, b) => a.start - b.start),
+        };
       });
       setSelectionIntent("new_mention");
     } else {
@@ -191,9 +217,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         setSelectedEvidenceId(evidenceId);
       }
     }
+    } catch (error) { reportError(error); }
   };
 
   const handlePickMention = (evidenceId: string) => {
+    if (evidenceId.startsWith("target:")) return;
     setSelectedEvidenceId(evidenceId);
     const owner = (draft.annotations ?? []).find((a) =>
       (a.annotation.evidence_refs ?? []).some((r) => r.evidence_id === evidenceId)
@@ -204,6 +232,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const handleCreateSpanless = async () => {
+    try {
     if (!spanlessHpoId.trim()) return;
     const newAnnId = `ann-${Date.now()}`;
     await enqueueMutation({
@@ -222,35 +251,31 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setSelectedEvidenceId(null);
     setShowSpanlessModal(false);
     setSpanlessHpoId("");
+    } catch (error) { reportError(error); }
   };
 
-  const handleUpdateTerm = async (hpoId: string) => {
+  const handleUpdateTerm = async (hpoId: string, searchId?: string) => {
     if (!selectedAnnotationId) return;
     await enqueueMutation({
       command: "set_term",
       annotation_id: selectedAnnotationId,
       hpo_id: hpoId,
+      search_event_id: searchId,
     });
   };
 
   const handleUpdateAxes = async (axesUpdate: Partial<Axes>) => {
     if (!selectedAnnotationId || !selectedAnnotation) return;
-    const currentAxes = selectedAnnotation.annotation.axes ?? {
-      definition_name: "editor-axes/v1",
-      assertion: null,
-      experiencer: null,
-      temporality: null,
-    };
-    const newAxes: Axes = {
-      ...currentAxes,
-      ...axesUpdate,
-      definition_name: "editor-axes/v1",
-    };
-    await enqueueMutation({
+    const annotationId = selectedAnnotationId;
+    await enqueueMutation(current => ({
       command: "set_axes",
-      annotation_id: selectedAnnotationId,
-      axes: newAxes,
-    });
+      annotation_id: annotationId,
+      axes: {
+        ...(current.annotations ?? []).find(a => a.annotation.annotation_id === annotationId)?.annotation.axes,
+        ...axesUpdate,
+        definition_name: "editor-axes/v1",
+      },
+    }));
   };
 
   const handleDetachMention = async (evidenceId: string) => {
@@ -280,9 +305,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const handleReviewDecision = async (payload: DecisionPayload) => {
     if (!selectedTarget) return;
 
-    await queueRef.current.enqueue(async (expectedRevision) => {
-      const mutationId = `mut-dec-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const updatedDraft = await api.recordDecision(workspaceId, {
+    setActionError(null);
+    const mutationId = crypto.randomUUID();
+    let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
+    try { await queueRef.current.enqueue(async (expectedRevision) => {
+      const replacement = payload.replacement && (latestDraft.current.annotations ?? []).find(a => a.annotation.annotation_id === payload.replacement!.annotation_id);
+      envelope ??= {
         mutation_id: mutationId,
         expected_revision: expectedRevision,
         payload: {
@@ -291,13 +319,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             version: selectedTarget.version,
           },
           outcome: payload.outcome,
-          replacement: payload.replacement,
+          replacement: replacement ? { annotation_id: replacement.annotation.annotation_id, version: replacement.version } : payload.replacement,
           note: payload.note,
         },
-      });
+      };
+      const updatedDraft = await api.recordDecision(workspaceId, envelope);
+      latestDraft.current = updatedDraft;
       setDraft(updatedDraft);
       return updatedDraft;
-    });
+    }); } catch (error) { reportError(error); }
   };
 
   // Submit and finalize workspace
@@ -309,8 +339,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       return;
     }
 
+    try {
+      await queueRef.current.flush();
+    } catch (error) { reportError(error); return; }
+
     if (view.key.mode === "review") {
-      const missingTargets = reviewTargets.filter((t) => !decisionsMap[t.annotation_id]);
+      const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
       if (missingTargets.length > 0) {
         setSubmitError(
           `Es sind noch ${missingTargets.length} unentschiedene Review-Ziele offen. Bitte treffen Sie für jeden Vorschlag eine Entscheidung.`
@@ -320,16 +354,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
 
     try {
+      const mutationId = crypto.randomUUID();
+      let envelope: Parameters<typeof api.submitWorkspace>[1] | undefined;
       const submission = await queueRef.current.enqueue(async (expectedRevision) => {
-        const mutationId = `mut-sub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        return api.submitWorkspace(workspaceId, {
+        envelope ??= {
           mutation_id: mutationId,
           expected_revision: expectedRevision,
           payload: {
-            command: "submit_workspace",
             document_checked: true,
           },
-        });
+        };
+        return api.submitWorkspace(workspaceId, envelope);
       });
       setCompletedSubmission(submission);
     } catch (err: unknown) {
@@ -343,7 +378,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       {/* Header */}
       <header className="app-header">
         <div className="app-title">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={async () => { try { await queueRef.current.flush(); onClose(); } catch (error) { reportError(error); } }}>
             ← Zurück
           </button>
           <span>Fall: {view.document.document_id}</span>
@@ -378,6 +413,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </button>
           )}
 
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+            setSelectedAnnotationId(null); setSelectedEvidenceId(null); setSelectionIntent("new_mention");
+          }}>Neue Annotation markieren</button>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -386,16 +424,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             + Spanlose Annotation
           </button>
 
-          <a
-            href={api.getExportUrl(workspaceId)}
+          <button
+            onClick={downloadExport}
             className="btn btn-secondary btn-sm"
-            download
           >
             📥 Export (.zip)
-          </a>
+          </button>
         </div>
       </header>
 
+      {actionError && <div role="alert" style={{ color: "var(--danger)", padding: 12 }}>{actionError}</div>}
       {/* Main Workspace Layout */}
       <div className="app-layout">
         {/* Left: Sidebar (Annotations & Review Targets) */}
@@ -407,13 +445,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               </div>
               <ul className="doc-list" style={{ maxHeight: "40%", borderBottom: "2px solid var(--border-color)" }}>
                 {reviewTargets.map((t) => {
-                  const isSelected = t.annotation_id === selectedTargetId;
-                  const dec = decisionsMap[t.annotation_id];
+                  const isSelected = refKey(t) === selectedTargetId;
+                  const dec = decisionsMap[refKey(t)];
                   return (
                     <li
-                      key={t.annotation_id}
+                      key={refKey(t)}
                       className={`doc-item ${isSelected ? "selected" : ""}`}
-                      onClick={() => setSelectedTargetId(t.annotation_id)}
+                      onClick={() => setSelectedTargetId(refKey(t))}
                     >
                       <div className="doc-id" style={{ display: "flex", justifyContent: "space-between" }}>
                         <span>{t.hpo_id}</span>
@@ -465,6 +503,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             })}
           </ul>
 
+          {(view.submissions ?? []).length > 0 && <div className="detail-section">
+            <h3>Bisherige Abgaben</h3>
+            {view.submissions!.map(submission => <button type="button" className="btn btn-secondary btn-sm"
+              key={submission.submission_id} onClick={() => setHistorySubmission(submission)}>
+              {submission.created_at} · {submission.submission_id}
+            </button>)}
+          </div>}
           {/* Submission Box at bottom of sidebar */}
           <div style={{ padding: 14, borderTop: "1px solid var(--border-color)", background: "var(--bg-primary)" }}>
             <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: "0.8rem", cursor: "pointer", marginBottom: 10 }}>
@@ -495,7 +540,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         {/* Center: Text View */}
         <TextPane
           text={view.document.text}
-          mentions={mentionsDisplay}
+          mentions={[...mentionsDisplay, ...targetMentions]}
           selectedEvidenceId={selectedEvidenceId}
           selectionIntent={selectionIntent}
           onSelection={handleSelection}
@@ -512,20 +557,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             searchManager={searchManager}
             selectedEvidenceId={selectedEvidenceId}
             onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
-            onUpdateTerm={handleUpdateTerm}
-            onUpdateAxes={handleUpdateAxes}
+            onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
+            onUpdateAxes={(axes) => { void handleUpdateAxes(axes).catch(reportError); }}
             onAttachMention={(segments) =>
               handleSelection({ segments, intent: "new_mention" })
             }
-            onDetachMention={handleDetachMention}
-            onDeleteAnnotation={handleDeleteAnnotation}
+            onDetachMention={(id) => { void handleDetachMention(id).catch(reportError); }}
+            onDeleteAnnotation={(id) => { void handleDeleteAnnotation(id).catch(reportError); }}
             onSetIntent={setSelectionIntent}
           />
 
           {view.key.mode === "review" && selectedTarget && (
             <ReviewActions
+              key={refKey(selectedTarget)}
               target={selectedTarget}
-              currentDecision={decisionsMap[selectedTarget.annotation_id] ?? null}
+              evidence={targetSnapshot?.evidence ?? []}
+              documentText={view.document.text}
+              currentDecision={decisionsMap[refKey(selectedTarget)] ?? null}
               draftAnnotations={draft.annotations ?? []}
               onDecide={handleReviewDecision}
             />
@@ -533,6 +581,24 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         </div>
       </div>
 
+      {historySubmission && <div className="modal-overlay">
+        <div className="modal-content" role="dialog" aria-label="Historische Abgabe">
+          <h2>Abgabe {historySubmission.submission_id}</h2>
+          <p>{historySubmission.created_at}</p>
+          <p>Dokument vollständig geprüft: {historySubmission.document_checked ? "Ja" : "Nein"}</p>
+          {historySubmission.snapshots.map(snap => <div key={refKey({annotation_id:snap.annotation.annotation_id,version:snap.version})}>
+            <strong>{snap.annotation.hpo_id}</strong>
+            <p>{snap.annotation.axes?.assertion ?? "Nicht angegeben"} · {snap.annotation.axes?.experiencer ?? "Nicht angegeben"} · {snap.annotation.axes?.temporality ?? "Nicht angegeben"}</p>
+            {snap.evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
+              {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
+            </p>)}
+          </div>)}
+          {historySubmission.decisions.map(decision => <p key={refKey(decision.target)}>
+            {decision.target.annotation_id} ({decision.target.version}): {decision.outcome} {decision.note}
+          </p>)}
+          <button type="button" className="btn btn-secondary" onClick={() => setHistorySubmission(null)}>Schließen</button>
+        </div>
+      </div>}
       {/* Modal for adding spanless annotation */}
       {showSpanlessModal && (
         <div className="modal-overlay" onClick={() => setShowSpanlessModal(false)}>
@@ -620,13 +686,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               <div><strong>Entscheidungen:</strong> {completedSubmission.decisions?.length ?? 0}</div>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <a
-                href={api.getExportUrl(workspaceId)}
+              <button
+                onClick={downloadExport}
                 className="btn btn-primary"
-                download
-              >
+                  >
                 📥 Paket herunterladen
-              </a>
+              </button>
               <button
                 type="button"
                 className="btn btn-secondary"

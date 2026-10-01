@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 from hpo_editor.api.routes import router
 from hpo_editor.api.security import verify_security
@@ -55,13 +56,32 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         async def security_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
             if request.url.path.startswith("/api/"):
                 try:
-                    verify_security(request, config.session_token)
+                    verify_security(request, config.session_token, config.port)
                 except HTTPException as exc:
                     return JSONResponse(
                         status_code=exc.status_code,
                         content={"detail": exc.detail},
                     )
             return await call_next(request)
+
+    # Service-level command parsing must report client validation failures as 422.
+    @app.exception_handler(ValidationError)
+    async def validation_error_handler(
+        _req: Request, exc: ValidationError
+    ) -> JSONResponse:
+        errors = exc.errors(
+            include_url=False, include_context=False, include_input=False
+        )
+        details = "; ".join(
+            f"{'.'.join(map(str, error['loc']))}: {error['msg']}" for error in errors
+        )
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": "VALIDATION_ERROR",
+                "details": details,
+            },
+        )
 
     # Error handling
     @app.exception_handler(RevisionConflict)

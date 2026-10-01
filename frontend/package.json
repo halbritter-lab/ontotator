@@ -12,13 +12,15 @@
     "test:watch": "vitest",
     "api:generate": "openapi-typescript ../contracts/openapi.json -o src/api/generated.ts",
     "api:check": "node scripts/check-api-drift.js",
-    "test:e2e": "vitest run tests/e2e"
+    "test:e2e": "npm run build && playwright test",
+    "test:components": "vitest run tests/e2e"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^20.14.0",

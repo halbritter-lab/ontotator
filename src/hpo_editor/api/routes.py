@@ -5,7 +5,9 @@ from __future__ import annotations
 import base64
 import io
 import json
+from datetime import UTC, datetime
 from typing import Annotated, Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import Response
@@ -32,7 +34,7 @@ from hpo_editor.domain.workspace import (
 )
 from hpo_editor.ontology.provenance import SearchRequest, SearchResult
 from hpo_editor.ontology.service import OntologyService
-from hpo_editor.packages.models import PackageManifest
+from hpo_editor.packages.models import PackageManifest, SearchEventRecord
 from hpo_editor.packages.reader import PackageReader
 from hpo_editor.packages.writer import PackageWriter
 from hpo_editor.storage.repository import Repository
@@ -200,7 +202,10 @@ def open_workspace(
     ws_svc: WorkspaceSvcDep,
 ) -> OpenWorkspaceResponse:
     """Open or initialize a workspace view."""
-    target_set_id = req.targets.target_set_id if req.targets else "targets-0"
+    targets = req.targets
+    if targets is not None and not targets.target_set_id:
+        targets = ReviewTargetSet.create(targets.targets)
+    target_set_id = targets.target_set_id if targets else "targets-0"
     key = WorkspaceKey(
         package_id=req.package_id,
         document_id=req.document_id,
@@ -208,7 +213,7 @@ def open_workspace(
         mode=req.mode,
         target_set_id=target_set_id,
     )
-    view = ws_svc.open(key, req.targets)
+    view = ws_svc.open(key, targets)
     return OpenWorkspaceResponse(
         workspace_id=encode_workspace_id(key),
         view=view,
@@ -263,9 +268,31 @@ def read_submission(
 def search_ontology(
     req: SearchRequest,
     ontology: OntologyDep,
+    repo: RepoDep,
+    ws_svc: WorkspaceSvcDep,
 ) -> SearchResult:
     """Execute HPO search with deterministic provenance shuffling."""
-    return ontology.search(req)
+    ws_svc.get_document(req.workspace_key.package_id, req.workspace_key.document_id)
+    result = ontology.search(req)
+    result.search_id = str(uuid4())
+    result.index_identity = ontology.index_identity
+    event = SearchEventRecord(
+        event_id=result.search_id,
+        workspace_key=req.workspace_key,
+        annotation_id=req.annotation_id,
+        query=req.query,
+        route=req.route,
+        candidates=result.displayed_ids,
+        ranked_ids=result.ranked_ids,
+        candidate_scores={
+            c.hpo_id: c.score for c in result.candidates if c.score is not None
+        },
+        ontology_release=ontology.ref.release,
+        index_identity=result.index_identity,
+        timestamp=datetime.now(UTC).isoformat(),
+    )
+    repo.save_search_event(event)
+    return result
 
 
 @router.get("/workspaces/{workspace_id}/export")

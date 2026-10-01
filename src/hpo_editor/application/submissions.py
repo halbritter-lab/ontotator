@@ -57,19 +57,17 @@ class SubmissionService:
 
     def read(self, key: WorkspaceKey, submission_id: str) -> Submission:
         """Read a historical submission scoped to its local workspace."""
-        sub = self.repo.get_submission(submission_id)
+        sub = next(
+            (
+                s
+                for s in self.repo.get_submissions_for_workspace(key)
+                if s.submission_id == submission_id
+            ),
+            None,
+        )
         if sub is None:
             raise DomainError(
-                "SUBMISSION_NOT_FOUND",
-                f"Submission '{submission_id}' not found",
-            )
-        if (
-            sub.origin_key.package_id != key.package_id
-            or sub.origin_key.document_id != key.document_id
-        ):
-            raise DomainError(
-                "SUBMISSION_MISMATCH",
-                f"Submission '{submission_id}' does not belong to workspace {key}",
+                "SUBMISSION_NOT_FOUND", "Submission not found in this workspace"
             )
         return sub
 
@@ -93,32 +91,42 @@ class SubmissionService:
                     f"Review is incomplete: {len(missing)} targets lack a decision"
                 )
 
-            # Collect confirmed target snapshots
+            members = {
+                (a.annotation.annotation_id, a.version): a
+                for a in self.repo.list_annotations_for_document(
+                    key.package_id, key.document_id
+                )
+            }
+            target_refs = {(t.annotation_id, t.version) for t in draft.targets.targets}
+            if (
+                len(decided_targets) != len(draft.decisions)
+                or decided_targets != target_refs
+            ):
+                raise IncompleteReview(
+                    "Decisions must match exactly the active review targets"
+                )
+            current = {
+                (a.annotation.annotation_id, a.version): a for a in draft.annotations
+            }
             for dec in draft.decisions:
-                if dec.outcome == "confirmed":
-                    snap = self.repo.get_annotation_snapshot(
-                        dec.target.annotation_id, dec.target.version
+                target = members.get((dec.target.annotation_id, dec.target.version))
+                if target is None:
+                    raise DomainError(
+                        "TARGET_NOT_FOUND", "Reviewed target is unavailable"
                     )
-                    if snap is not None:
-                        snapshots.append(snap)
-                elif dec.outcome == "changed" and dec.replacement:
-                    rep_snap = next(
-                        (
-                            a
-                            for a in draft.annotations
-                            if a.annotation.annotation_id
-                            == dec.replacement.annotation_id
-                            and a.version == dec.replacement.version
-                        ),
-                        None,
+                if dec.outcome == "confirmed":
+                    snapshots.append(target)
+                elif dec.outcome == "changed":
+                    rep = dec.replacement
+                    rep_snap = (
+                        current.get((rep.annotation_id, rep.version)) if rep else None
                     )
                     if rep_snap is None:
-                        rep_snap = self.repo.get_annotation_snapshot(
-                            dec.replacement.annotation_id,
-                            dec.replacement.version,
+                        raise DomainError(
+                            "REPLACEMENT_NOT_FOUND",
+                            "Approved replacement version is no longer in the draft",
                         )
-                    if rep_snap is not None:
-                        snapshots.append(rep_snap)
+                    snapshots.append(rep_snap)
 
             # Include any other new draft annotations not linked as replacements
             rep_ids = {

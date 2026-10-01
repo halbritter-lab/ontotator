@@ -558,6 +558,11 @@ export interface components {
             display_pos: number;
             /** Score */
             score?: number | null;
+            /**
+             * Obsolete
+             * @default false
+             */
+            obsolete: boolean;
         };
         /**
          * SearchRequest
@@ -603,6 +608,10 @@ export interface components {
             shuffled: boolean;
             /** Seed */
             seed?: string | null;
+            /** Search Id */
+            search_id?: string | null;
+            /** Index Identity */
+            index_identity?: string | null;
         };
         /**
          * Segment
@@ -679,6 +688,10 @@ export interface components {
             available_inputs?: components["schemas"]["AnnotationSnapshot"][];
             /** Submissions */
             submissions?: components["schemas"]["Submission"][];
+            /** Term Statuses */
+            term_statuses?: {
+                [key: string]: "valid" | "obsolete" | "unknown";
+            };
         };
     };
     responses: never;

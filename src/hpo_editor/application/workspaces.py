@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from hpo_editor.domain.annotations import AnnotationSnapshot
@@ -34,6 +36,9 @@ class WorkspaceView(BaseModel):
     targets: ReviewTargetSet
     available_inputs: list[AnnotationSnapshot] = Field(default_factory=list)
     submissions: list[Submission] = Field(default_factory=list)
+    term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = Field(
+        default_factory=dict
+    )
 
 
 class WorkspaceService:
@@ -87,6 +92,30 @@ class WorkspaceService:
                 existing_draft = self.repo.open_draft(key)
                 effective_targets = existing_draft.targets
             available_inputs = self.get_review_inputs(key.package_id, key.document_id)
+            canonical = ReviewTargetSet.create(effective_targets.targets)
+            if (
+                effective_targets != canonical
+                or key.target_set_id != canonical.target_set_id
+            ):
+                raise DomainError(
+                    "INVALID_TARGET_SET",
+                    "Review target identity does not match its canonical content",
+                )
+            members = {
+                (a.annotation.annotation_id, a.version): a for a in available_inputs
+            }
+            for target in canonical.targets:
+                snap = members.get((target.annotation_id, target.version))
+                if (
+                    snap is None
+                    or snap.document_id != doc.document_id
+                    or snap.text_sha256 != doc.text_sha256
+                    or snap.ontology_sha256 != self.ontology.ref.sha256
+                ):
+                    raise DomainError(
+                        "INVALID_REVIEW_TARGET",
+                        "Review target does not match this document and ontology",
+                    )
 
         draft = self.repo.open_draft(key, effective_targets)
         submissions = self.repo.get_submissions_for_workspace(key)
@@ -98,4 +127,10 @@ class WorkspaceService:
             targets=effective_targets,
             available_inputs=available_inputs,
             submissions=submissions,
+            term_statuses={
+                a.annotation.hpo_id: self.ontology.validate_term(
+                    a.annotation.hpo_id
+                ).status
+                for a in available_inputs
+            },
         )

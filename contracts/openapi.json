@@ -1244,6 +1244,11 @@
               }
             ],
             "title": "Score"
+          },
+          "obsolete": {
+            "type": "boolean",
+            "title": "Obsolete",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -1281,6 +1286,8 @@
           },
           "k": {
             "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "K",
             "default": 10
           }
@@ -1341,6 +1348,28 @@
               }
             ],
             "title": "Seed"
+          },
+          "search_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Id"
+          },
+          "index_identity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Identity"
           }
         },
         "additionalProperties": false,
@@ -1532,6 +1561,18 @@
             },
             "type": "array",
             "title": "Submissions"
+          },
+          "term_statuses": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "valid",
+                "obsolete",
+                "unknown"
+              ]
+            },
+            "type": "object",
+            "title": "Term Statuses"
           }
         },
         "additionalProperties": false,

@@ -1,0 +1,251 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+from test_storage import _sample_package
+
+from hpo_editor.application.exports import ExportService
+from hpo_editor.domain.review import ReviewTargetSet
+from hpo_editor.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
+from hpo_editor.storage.database import Database
+from hpo_editor.storage.repository import Repository
+
+
+def key_for(package_id="pkg-1"):
+    return WorkspaceKey(
+        package_id=package_id,
+        document_id="doc-1",
+        annotator_id="a",
+        mode="independent",
+        target_set_id=ReviewTargetSet.create([]).target_set_id,
+    )
+
+
+def test_package_membership_does_not_follow_document_id(tmp_path):
+    repo = Repository(Database(tmp_path / "db"))
+    first = _sample_package()
+    empty = _sample_package("empty").model_copy(
+        update={"annotations": {}, "evidence": {}}
+    )
+    repo.import_package(first)
+    repo.import_package(empty)
+    assert repo.list_annotations_for_document("empty", "doc-1") == []
+    assert repo.export_package("empty").annotations == {}
+    assert repo.export_package("empty").evidence == {}
+
+
+def test_parallel_retry_runs_once(tmp_path):
+    repo = Repository(Database(tmp_path / "db"))
+    repo.import_package(_sample_package())
+    key = key_for()
+    repo.open_draft(key)
+    envelope = MutationEnvelope(mutation_id="same", expected_revision=0, payload={})
+    calls = []
+
+    def operation(draft):
+        calls.append(1)
+        time.sleep(0.1)
+        return draft
+
+    with ThreadPoolExecutor(2) as pool:
+        results = list(
+            pool.map(lambda _: repo.run_mutation(key, envelope, operation), range(2))
+        )
+    assert [r.revision for r in results] == [1, 1]
+    assert len(calls) == 1
+
+
+def test_imported_submission_has_local_binding_and_unique_export(tmp_path):
+    repo = Repository(Database(tmp_path / "db"))
+    package = _sample_package()
+    origin = key_for("original")
+    submission = Submission(
+        submission_id="s",
+        origin_key=origin,
+        targets=ReviewTargetSet.create([]),
+        draft_revision=0,
+        snapshots=list(package.annotations.values()),
+        decisions=[],
+        document_checked=True,
+        created_at="now",
+    )
+    package.submissions["s"] = submission
+    repo.import_package(package)
+    assert repo.get_submissions_for_workspace(key_for()) == [submission]
+    service = ExportService(repo)
+    a, b = service.for_workspace(key_for()), service.for_workspace(key_for())
+    assert a.manifest.package_id != b.manifest.package_id
+    assert a.manifest.origin_manifest_hash
+    assert a.submissions["s"].origin_key == origin
+    assert a.annotations == package.annotations
+
+
+def test_imported_submission_seeds_draft(tmp_path):
+    repo = Repository(Database(tmp_path / "db"))
+    package = _sample_package()
+    sub = Submission(
+        submission_id="seed",
+        origin_key=key_for("origin"),
+        targets=ReviewTargetSet.create([]),
+        draft_revision=8,
+        snapshots=list(package.annotations.values()),
+        decisions=[],
+        document_checked=True,
+        created_at="now",
+    )
+    package.submissions["seed"] = sub
+    repo.import_package(package)
+    draft = repo.open_draft(key_for())
+    assert draft.annotations == sub.snapshots
+    assert draft.revision == 0
+    assert repo.open_draft(key_for()) == draft
+
+
+def test_export_fails_on_missing_decision_dependency(tmp_path):
+    import pytest
+
+    from hpo_editor.domain.annotations import AnnotationRef
+    from hpo_editor.domain.errors import DomainError
+    from hpo_editor.domain.review import ReviewDecision
+
+    repo = Repository(Database(tmp_path / "db"))
+    package = _sample_package()
+    decision = ReviewDecision(
+        decision_id="decision",
+        target=AnnotationRef(annotation_id="missing", version="missing"),
+        outcome="rejected",
+        reviewer_id="a",
+    )
+    sub = Submission(
+        submission_id="broken",
+        origin_key=key_for(),
+        targets=ReviewTargetSet.create([]),
+        draft_revision=0,
+        snapshots=[],
+        decisions=[decision],
+        document_checked=True,
+        created_at="now",
+    )
+    package.submissions["broken"] = sub
+    repo.import_package(package)
+    with pytest.raises(DomainError, match="missing"):
+        ExportService(repo).for_workspace(key_for())
+
+
+def test_migration_preserves_ambiguous_snapshots_with_warning(tmp_path):
+    import sqlite3
+    from pathlib import Path
+
+    import pytest
+
+    db_path = tmp_path / "legacy"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        Path("src/hpo_editor/storage/migrations/001_initial.sql").read_text()
+    )
+    conn.execute("INSERT INTO schema_migrations VALUES (1, 'now')")
+    for name in ("a", "b"):
+        conn.execute(
+            "INSERT INTO packages VALUES (?, ?, ?, ?)", (name, "hash", "{}", "now")
+        )
+        conn.execute(
+            "INSERT INTO documents VALUES (?, ?, ?, ?, ?)",
+            ("doc", name, "", "de", "hash"),
+        )
+    conn.execute(
+        "INSERT INTO annotation_snapshots VALUES ('ann', 'version', 'doc', '{}')"
+    )
+    conn.commit()
+    conn.close()
+    with pytest.warns(RuntimeWarning, match="ambiguous"):
+        db = Database(db_path)
+    assert (
+        db.get_connection()
+        .execute("SELECT count(*) FROM annotation_snapshots")
+        .fetchone()[0]
+        == 1
+    )
+    assert (
+        db.get_connection()
+        .execute("SELECT count(*) FROM package_annotations")
+        .fetchone()[0]
+        == 0
+    )
+    assert db.migration_warnings
+
+
+def test_imported_search_audit_survives_scoped_export(tmp_path):
+    from hpo_editor.packages.models import SearchEventRecord
+
+    repo = Repository(Database(tmp_path / "db"))
+    package = _sample_package()
+    event = SearchEventRecord(
+        event_id="lookup",
+        workspace_key=key_for("origin"),
+        annotation_id="ann-1",
+        query="hypotonia",
+        route="lexical",
+        candidates=["HP:0001252"],
+        ontology_release="2026",
+        index_identity="index",
+        timestamp="now",
+    )
+    package.search_events = [event]
+    repo.import_package(package)
+    assert ExportService(repo).for_workspace(key_for()).search_events == [event]
+
+
+def test_import_rejects_conflicting_existing_snapshot_atomically(tmp_path):
+    import pytest
+
+    from hpo_editor.domain.errors import InvalidPackage
+
+    repo = Repository(Database(tmp_path / "db"))
+    original = _sample_package()
+    repo.import_package(original)
+    conflicting = _sample_package("conflicting")
+    snap = next(iter(conflicting.annotations.values()))
+    snap.annotation.hpo_id = "HP:9999999"
+    with pytest.raises(InvalidPackage):
+        repo.import_package(conflicting)
+    assert repo.get_document("conflicting", "doc-1") is None
+    assert repo.export_package("pkg-1").annotations == original.annotations
+
+
+def test_independent_import_resumes_at_default_api_key(tmp_path):
+    for historical_target in (ReviewTargetSet.create([]).target_set_id, "targets-0"):
+        repo = Repository(Database(tmp_path / historical_target))
+        package = _sample_package()
+        origin = key_for("origin").model_copy(
+            update={"target_set_id": historical_target}
+        )
+        sub = Submission(
+            submission_id="resume",
+            origin_key=origin,
+            targets=ReviewTargetSet.create([]),
+            draft_revision=8,
+            snapshots=list(package.annotations.values()),
+            decisions=[],
+            document_checked=True,
+            created_at="now",
+        )
+        package.submissions[sub.submission_id] = sub
+        repo.import_package(package)
+        api_key = key_for().model_copy(update={"target_set_id": "targets-0"})
+        assert repo.get_submissions_for_workspace(api_key) == [sub]
+        assert repo.open_draft(api_key).annotations == sub.snapshots
+        assert repo.get_submissions_for_workspace(key_for()) == [sub]
+        assert repo.get_submission("resume").origin_key == origin
+        local_key = (
+            repo.db.get_connection()
+            .execute("SELECT local_key FROM imported_submission_bindings")
+            .fetchone()[0]
+        )
+        assert local_key.endswith(":targets-0")
+        # Existing databases can still contain the pre-fix canonical binding.
+        from hpo_editor.storage.repository import _key_str
+
+        repo.db.get_connection().execute(
+            "UPDATE imported_submission_bindings SET local_key=?",
+            (_key_str(key_for()),),
+        )
+        assert repo.get_submissions_for_workspace(api_key) == [sub]

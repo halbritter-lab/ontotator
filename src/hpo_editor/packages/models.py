@@ -13,11 +13,14 @@ class SearchEventRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     event_id: str
+    source_search_event_id: str | None = None
     workspace_key: WorkspaceKey
     annotation_id: str
     query: str
     route: str
     candidates: list[str]
+    ranked_ids: list[str] = Field(default_factory=list)
+    candidate_scores: dict[str, float] = Field(default_factory=dict)
     selected_hpo_id: str | None = None
     ranked_position: int | None = None
     displayed_position: int | None = None

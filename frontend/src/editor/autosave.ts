@@ -1,4 +1,4 @@
-import { ConflictError } from "../api/client";
+import { ApiError, ConflictError } from "../api/client";
 
 export type QueueState = "saved" | "dirty" | "saving" | "error" | "conflict";
 
@@ -28,113 +28,75 @@ export interface MutationQueue {
 export function createMutationQueue(options: MutationQueueOptions): MutationQueue {
   let revision = options.initialRevision;
   let state: QueueState = "saved";
-  let isProcessing = false;
-  let isDisposed = false;
-
+  let disposed = false;
+  let processing: Promise<void> | null = null;
   const queue: QueuedOperation<any>[] = [];
-
   const updateState = (next: QueueState) => {
-    if (state !== next) {
-      state = next;
-      options.onState?.(state);
-    }
+    if (state !== next) { state = next; options.onState?.(next); }
   };
-
-  const processNext = async (): Promise<void> => {
-    if (isProcessing || isDisposed || state === "conflict") {
-      return;
-    }
-
-    if (queue.length === 0) {
-      if (state === "saving" || state === "dirty") {
-        updateState("saved");
-      }
-      return;
-    }
-
-    isProcessing = true;
-    updateState("saving");
-
-    const currentOp = queue[0];
-
-    try {
-      const result = await currentOp.fn(revision);
-
-      // Successfully processed: remove from queue
-      queue.shift();
-
-      if (result && typeof result === "object") {
-        if (typeof result.revision === "number") {
-          revision = result.revision;
-        } else if (typeof result.draft_revision === "number") {
-          revision = result.draft_revision;
+  const process = (): Promise<void> => {
+    if (processing) return processing;
+    if (disposed || state === "error" || state === "conflict") return Promise.resolve();
+    processing = Promise.resolve().then(async () => {
+      while (queue.length && !disposed && state !== "error" && state !== "conflict") {
+        updateState("saving");
+        const operation = queue[0];
+        try {
+          const result = await operation.fn(revision);
+          queue.shift();
+          if (result && typeof result === "object") {
+            revision = result.revision ?? result.draft_revision ?? revision;
+          }
+          operation.resolve(result);
+        } catch (error) {
+          if (error instanceof ConflictError) {
+            updateState("conflict");
+            operation.reject(error);
+          } else if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) {
+            // A rejected command was not applied. Let the user correct it.
+            queue.shift();
+            operation.reject(error);
+          } else {
+            // Keep both the operation and its caller pending until an explicit retry.
+            updateState("error");
+          }
         }
       }
-
-      currentOp.resolve(result);
-
-      if (queue.length === 0) {
-        updateState("saved");
-      }
-    } catch (err: unknown) {
-      if (err instanceof ConflictError) {
-        // Revision conflict: Halt queue immediately, do not auto-retry
-        updateState("conflict");
-        currentOp.reject(err);
-      } else {
-        // Other error (e.g. 500, network error): Halt queue and report error
-        updateState("error");
-        currentOp.reject(err);
-      }
-    } finally {
-      isProcessing = false;
-      if (state === "saving" && queue.length > 0) {
-        processNext();
-      }
-    }
+      if (!queue.length && !disposed) updateState("saved");
+    }).finally(() => {
+      processing = null;
+      // A resolved caller may enqueue its next edit before this finalizer runs.
+      if (queue.length && !disposed && state !== "error" && state !== "conflict") void process();
+    });
+    return processing;
   };
-
   return {
-    enqueue<T extends { revision?: number; draft_revision?: number } | void>(
-      fn: (expectedRevision: number) => Promise<T>
-    ): Promise<T> {
-      return new Promise<T>((resolve, reject) => {
+    enqueue(fn) {
+      return new Promise((resolve, reject) => {
+        if (disposed) { reject(new Error("Workspace closed")); return; }
         queue.push({ fn, resolve, reject });
-        processNext();
+        void process();
       });
     },
-
-    getState(): QueueState {
-      return state;
-    },
-
-    getRevision(): number {
-      return revision;
-    },
-
-    setRevision(rev: number): void {
+    getState: () => state,
+    getRevision: () => revision,
+    setRevision(rev) {
       revision = rev;
-      if (state === "conflict") {
-        updateState("saved");
+      if (state === "conflict") updateState("saved");
+    },
+    async retry() {
+      if (processing) await processing;
+      if (state === "error") { updateState("dirty"); await process(); }
+    },
+    async flush() {
+      while (queue.length) {
+        if (state === "error" || state === "conflict") throw new Error("Pending changes could not be saved");
+        await process();
       }
     },
-
-    async retry(): Promise<void> {
-      if (state === "error") {
-        updateState("saving");
-        await processNext();
-      }
-    },
-
-    async flush(): Promise<void> {
-      while (queue.length > 0 && state !== "conflict") {
-        await processNext();
-      }
-    },
-
-    dispose(): void {
-      isDisposed = true;
-      queue.length = 0;
+    dispose() {
+      disposed = true;
+      for (const operation of queue.splice(0)) operation.reject(new Error("Workspace closed"));
     },
   };
 }

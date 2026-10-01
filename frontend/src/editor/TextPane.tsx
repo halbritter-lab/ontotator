@@ -28,6 +28,9 @@ export const TextPane: React.FC<TextPaneProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<SpanEditorHandle | null>(null);
 
+  const callbacks = useRef({ onSelection, onPick });
+  callbacks.current = { onSelection, onPick };
+
   // Mount span editor once or when text changes
   useEffect(() => {
     if (!containerRef.current) return;
@@ -36,8 +39,8 @@ export const TextPane: React.FC<TextPaneProps> = ({
       containerRef.current,
       text,
       mentions,
-      (payload) => onSelection(payload),
-      (evidenceId) => onPick(evidenceId)
+      (payload) => callbacks.current.onSelection(payload),
+      (evidenceId) => callbacks.current.onPick(evidenceId)
     );
     handleRef.current = handle;
 

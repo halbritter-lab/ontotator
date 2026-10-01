@@ -30,7 +30,7 @@ class SearchRequest(BaseModel):
     annotation_id: str
     query: str
     route: Literal["lexical", "exact", "id", "browse"] = "lexical"
-    k: int = 10
+    k: int = Field(default=10, ge=1, le=100)
 
 
 class SearchCandidate(BaseModel):
@@ -46,6 +46,7 @@ class SearchCandidate(BaseModel):
     rank: int = 0
     display_pos: int = 0
     score: float | None = None
+    obsolete: bool = False
 
 
 class SearchResult(BaseModel):
@@ -60,6 +61,8 @@ class SearchResult(BaseModel):
     ranked_ids: list[str] = Field(default_factory=list)
     shuffled: bool = False
     seed: str | None = None
+    search_id: str | None = None
+    index_identity: str | None = None
 
 
 class HierarchyWarning(BaseModel):

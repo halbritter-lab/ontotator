@@ -13,6 +13,7 @@ export interface TargetProposal {
   provenance: components["schemas"]["Provenance"];
   evidence_count: number;
   is_obsolete?: boolean;
+  is_unknown?: boolean;
 }
 
 export interface DecisionPayload {
@@ -28,6 +29,8 @@ export interface ReviewActionsProps {
   target: TargetProposal;
   currentDecision: ReviewDecision | null;
   draftAnnotations: AnnotationSnapshot[];
+  evidence?: components["schemas"]["EvidenceSnapshot"][];
+  documentText?: string;
   onDecide: (payload: DecisionPayload) => void;
 }
 
@@ -36,8 +39,10 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   currentDecision,
   draftAnnotations,
   onDecide,
+  evidence = [],
+  documentText = "",
 }) => {
-  const [selectedReplacementId, setSelectedReplacementId] = useState<string>("");
+  const [selectedReplacementId, setSelectedReplacementId] = useState<string>(currentDecision?.replacement?.annotation_id ?? "");
   const [note, setNote] = useState<string>(currentDecision?.note ?? "");
   const [showReplacementSelect, setShowReplacementSelect] = useState<boolean>(
     currentDecision?.outcome === "changed"
@@ -112,6 +117,18 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         )}
       </div>
 
+      <div className="detail-section" aria-label="Vorschlagsdetails">
+        <strong>{target.hpo_id}</strong>
+        <dl>
+          <dt>Assertion</dt><dd>{target.axes?.assertion ?? "Nicht angegeben"}</dd>
+          <dt>Experiencer</dt><dd>{target.axes?.experiencer ?? "Nicht angegeben"}</dd>
+          <dt>Temporality</dt><dd>{target.axes?.temporality ?? "Nicht angegeben"}</dd>
+        </dl>
+        <p>Version: {target.version}</p>
+        {evidence.length ? evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
+          {ev.mention.segments.map(seg => Array.from(documentText).slice(seg.start, seg.end).join("")).join(" … ")}
+        </p>) : <p>Keine Belegstelle (spanlos)</p>}
+      </div>
       {/* Origin Info */}
       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 12 }}>
         Quelle: <strong>{target.provenance.actor.kind}</strong> ({target.provenance.actor.actor_id}) •
@@ -134,6 +151,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </div>
       )}
 
+      {target.is_unknown && <p role="alert">Unbekannter HPO-Begriff kann nicht bestätigt werden.</p>}
       {/* 4 Action Buttons */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
         <button
@@ -145,7 +163,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             borderColor: "#86efac",
           }}
           onClick={() => handleOutcomeClick("confirmed")}
-          disabled={target.is_obsolete}
+          disabled={target.is_obsolete || target.is_unknown}
           title="Vorschlag unverändert annehmen"
         >
           ✓ Bestätigen

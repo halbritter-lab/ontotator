@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal
 
+from hpo_editor.domain.canonical import canonical_hash
 from hpo_editor.domain.documents import OntologyRef
 from hpo_editor.domain.errors import DomainError
 from hpo_editor.ontology.provenance import (
@@ -43,6 +44,13 @@ class OntologyService:
         self.ontology = ontology
         self.engine = engine
         self.ref = ref
+        self.index_identity = canonical_hash(
+            {
+                "ontology_sha256": ref.sha256,
+                "algorithm": "char_wb_tfidf/1",
+                "ngram_range": [3, 5],
+            }
+        )
 
     @classmethod
     def load(
@@ -125,6 +133,7 @@ class OntologyService:
                 rank=hit.get("rank", 0),
                 display_pos=hit.get("display_pos", 0),
                 score=hit.get("score"),
+                obsolete=self.validate_term(hit["hpo_id"]).status == "obsolete",
             )
             for hit in raw_result["hits"]
         ]

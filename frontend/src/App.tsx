@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   api,
   initSessionToken,
@@ -10,10 +10,14 @@ import {
 import type { components } from "./api/generated";
 import { CaseScreen } from "./app/CaseScreen";
 
+const snapshotKey = (s: AnnotationSnapshot) => JSON.stringify([s.annotation.annotation_id, s.version]);
+
 export type WorkspaceMode = "independent" | "review";
 export type ReviewTargetSet = components["schemas"]["ReviewTargetSet"];
 
 export const App: React.FC = () => {
+  const documentRequest = useRef(0);
+  const reviewRequest = useRef(0);
   const [packages, setPackages] = useState<PackageManifest[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
@@ -50,11 +54,15 @@ export const App: React.FC = () => {
   };
 
   const handleSelectPackage = async (pkgId: string) => {
+    const requestId = ++documentRequest.current;
+    ++reviewRequest.current;
+    setDocuments([]);
     setSelectedPackageId(pkgId);
     setSelectedDocId(null);
     setReviewInputs([]);
     try {
       const docs = await api.listDocuments(pkgId);
+      if (requestId !== documentRequest.current) return;
       setDocuments(docs);
       if (docs.length > 0) {
         setSelectedDocId(docs[0].document_id);
@@ -84,6 +92,7 @@ export const App: React.FC = () => {
 
   const handleFetchReviewInputs = async () => {
     if (!selectedPackageId || !selectedDocId) return;
+    const requestId = ++reviewRequest.current;
     setIsLoadingInputs(true);
     setError(null);
     try {
@@ -93,16 +102,24 @@ export const App: React.FC = () => {
         annotator_id: annotatorId.trim() || "reviewer-1",
         mode: "review",
       });
+      if (requestId !== reviewRequest.current) return;
       setReviewInputs(inputs);
       // Select all by default
-      const allIds = new Set(inputs.map((i) => i.annotation.annotation_id));
+      const allIds = new Set(inputs.map(snapshotKey));
       setSelectedTargetIds(allIds);
     } catch (err: unknown) {
       setError(`Fehler beim Abrufen der Review-Vorschläge: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setIsLoadingInputs(false);
+      if (requestId === reviewRequest.current) setIsLoadingInputs(false);
     }
   };
+
+  useEffect(() => {
+    ++reviewRequest.current;
+    setReviewInputs([]);
+    setSelectedTargetIds(new Set());
+    if (mode === "review" && selectedPackageId && selectedDocId) void handleFetchReviewInputs();
+  }, [mode, selectedPackageId, selectedDocId, annotatorId]);
 
   const handleOpenWorkspace = async () => {
     if (!selectedPackageId || !selectedDocId) return;
@@ -112,14 +129,14 @@ export const App: React.FC = () => {
 
     if (mode === "review") {
       const chosenSnapshots = reviewInputs.filter((i) =>
-        selectedTargetIds.has(i.annotation.annotation_id)
+        selectedTargetIds.has(snapshotKey(i))
       );
       if (chosenSnapshots.length === 0) {
         setError("Bitte wählen Sie mindestens einen Vorschlag für die Review-Runde aus.");
         return;
       }
       targets = {
-        target_set_id: `target-set-${Date.now()}`,
+        target_set_id: "",
         targets: chosenSnapshots.map((s) => ({
           annotation_id: s.annotation.annotation_id,
           version: s.version,
@@ -239,7 +256,7 @@ export const App: React.FC = () => {
                 id="doc-select"
                 className="form-select"
                 value={selectedDocId ?? ""}
-                onChange={(e) => setSelectedDocId(e.target.value)}
+                onChange={(e) => { setSelectedDocId(e.target.value); setReviewInputs([]); setSelectedTargetIds(new Set()); }}
               >
                 {documents.length === 0 && <option value="">Keine Dokumente</option>}
                 {documents.map((doc) => (
@@ -292,9 +309,6 @@ export const App: React.FC = () => {
                 onChange={(e) => {
                   const m = e.target.value as WorkspaceMode;
                   setMode(m);
-                  if (m === "review") {
-                    handleFetchReviewInputs();
-                  }
                 }}
               >
                 <option value="independent">
@@ -348,11 +362,11 @@ export const App: React.FC = () => {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {reviewInputs.map((input) => {
                     const ann = input.annotation;
-                    const isChecked = selectedTargetIds.has(ann.annotation_id);
+                    const isChecked = selectedTargetIds.has(snapshotKey(input));
 
                     return (
                       <label
-                        key={ann.annotation_id}
+                        key={snapshotKey(input)}
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -369,8 +383,8 @@ export const App: React.FC = () => {
                           checked={isChecked}
                           onChange={(e) => {
                             const next = new Set(selectedTargetIds);
-                            if (e.target.checked) next.add(ann.annotation_id);
-                            else next.delete(ann.annotation_id);
+                            if (e.target.checked) next.add(snapshotKey(input));
+                            else next.delete(snapshotKey(input));
                             setSelectedTargetIds(next);
                           }}
                         />

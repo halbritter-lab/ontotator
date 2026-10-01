@@ -53,7 +53,7 @@ describe("createMutationQueue", () => {
     const p1 = queue.enqueue(mockMutationFail);
     const p2 = queue.enqueue(mockMutation2);
 
-    await expect(p1).rejects.toThrow("Server 500 Internal Error");
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Queue must be in error state, definitely NOT 'saved'!
     expect(queue.getState()).toBe("error");
@@ -63,6 +63,7 @@ describe("createMutationQueue", () => {
     // Now if flushed / retried successfully:
     mockMutationFail.mockResolvedValueOnce({ revision: 2 });
     await queue.retry();
+    await expect(p1).resolves.toEqual({ revision: 2 });
     const res2 = await p2;
     expect(res2).toEqual({ revision: 2 });
     expect(queue.getState()).toBe("saved");

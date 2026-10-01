@@ -133,7 +133,7 @@ Work packages are versioned ZIP archives (`hpo-editor-work-package/v1`) containi
 
 ## Mapping of Acceptance Criteria (Design Spec 1–12)
 
-The implementation satisfies all 12 criteria specified in the design document:
+The following tests cover the design document's acceptance criteria. Component tests use mocked APIs; the Playwright tests in `frontend/browser` additionally exercise the built application against the real Python service.
 
 | # | Acceptance Criterion | Verification Test Cases |
 |---|---|---|
@@ -167,6 +167,7 @@ cd frontend
 npm run typecheck
 npm run api:check
 npm test
+npx playwright install chromium
 npm run test:e2e
 npm run build
 cd ..
@@ -174,3 +175,7 @@ cd ..
 # Build release bundle (Frontend -> Web Assets -> Wheel Packaging -> Verification)
 uv run python scripts/build_release.py
 ```
+
+Browser tests start an isolated local service with synthetic documents and a temporary database; they do not use an existing workspace.
+
+Schema upgrades preserve legacy snapshots. If an older database cannot establish which package owned an annotation, the migration records a warning and leaves that snapshot unassigned. Reimport the original work package to restore its explicit membership.

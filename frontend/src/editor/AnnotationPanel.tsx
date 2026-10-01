@@ -15,7 +15,7 @@ export interface AnnotationPanelProps {
   searchManager: SearchManager;
   selectedEvidenceId: string | null;
   onSelectEvidence: (evidenceId: string) => void;
-  onUpdateTerm: (hpoId: string) => void;
+  onUpdateTerm: (hpoId: string, searchId?: string) => void;
   onUpdateAxes: (axes: Partial<Axes>) => void;
   onAttachMention: (segments: CodepointSegment[]) => void;
   onDetachMention: (evidenceId: string) => void;
@@ -66,8 +66,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
     .map((ref) => allEvidence[ref.evidence_id])
     .filter(Boolean);
 
-  const handleSelectCandidate = (candidate: SearchCandidate) => {
-    onUpdateTerm(candidate.hpo_id);
+  const handleSelectCandidate = (candidate: SearchCandidate, searchId?: string) => {
+    onUpdateTerm(candidate.hpo_id, searchId);
     setShowSearch(false);
   };
 

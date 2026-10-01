@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from hpo_editor.domain.annotations import AnnotationSnapshot
+from hpo_editor.domain.canonical import canonical_hash
 from hpo_editor.domain.documents import EvidenceSnapshot
 from hpo_editor.domain.errors import DomainError
 from hpo_editor.domain.workspace import WorkspaceKey
 from hpo_editor.packages.models import (
     PackageManifest,
-    SearchEventRecord,
     ValidatedPackage,
 )
-from hpo_editor.storage.repository import Repository, _key_str
+from hpo_editor.storage.repository import Repository
 
 
 class ExportService:
@@ -42,50 +43,62 @@ class ExportService:
         annotations_map: dict[tuple[str, str], AnnotationSnapshot] = {}
         evidence_map: dict[tuple[str, str], EvidenceSnapshot] = {}
 
-        for sub in subs:
-            # Add snapshots in submission
-            for snap in sub.snapshots:
-                k = (snap.annotation.annotation_id, snap.version)
-                annotations_map[k] = snap
-                for ev in snap.evidence:
-                    ev_k = (ev.mention.evidence_id, ev.version)
-                    evidence_map[ev_k] = ev
-
-            # If review mode, also preserve the original targeted proposal snapshots
-            if key.mode == "review":
-                for target_ref in sub.targets.targets:
-                    orig_snap = self.repo.get_annotation_snapshot(
-                        target_ref.annotation_id, target_ref.version
+        def include_snapshot(snap: AnnotationSnapshot) -> None:
+            if (
+                snap.document_id != key.document_id
+                or snap.text_sha256 != doc.text_sha256
+            ):
+                raise DomainError(
+                    "INVALID_EXPORT_DEPENDENCY",
+                    "Snapshot belongs to a different document",
+                )
+            annotations_map[(snap.annotation.annotation_id, snap.version)] = snap
+            embedded = {
+                (ev.mention.evidence_id, ev.version): ev for ev in snap.evidence
+            }
+            for ref in snap.annotation.evidence_refs:
+                ev_key = (ref.evidence_id, ref.version)
+                ev = embedded.get(ev_key)
+                if ev is None:
+                    raise DomainError(
+                        "MISSING_EXPORT_DEPENDENCY",
+                        "Referenced evidence snapshot is missing",
                     )
-                    if orig_snap is not None:
-                        k = (
-                            orig_snap.annotation.annotation_id,
-                            orig_snap.version,
-                        )
-                        annotations_map[k] = orig_snap
-                        for ev in orig_snap.evidence:
-                            ev_k = (ev.mention.evidence_id, ev.version)
-                            evidence_map[ev_k] = ev
+                evidence_map[ev_key] = ev
+            evidence_map.update(embedded)
 
-        # Load search events for this workspace
-        k_str = _key_str(key)
-        conn = self.repo.db.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT payload_json FROM search_events WHERE workspace_key = ?;",
-            (k_str,),
-        )
-        search_events = [
-            SearchEventRecord.model_validate_json(r[0]) for r in cursor.fetchall()
-        ]
+        for sub in subs:
+            for snap in sub.snapshots:
+                include_snapshot(snap)
+
+        for sub in subs:
+            refs = list(sub.targets.targets)
+            for decision in sub.decisions:
+                refs.append(decision.target)
+                if decision.replacement is not None:
+                    refs.append(decision.replacement)
+            for ref in refs:
+                ref_key = (ref.annotation_id, ref.version)
+                if ref_key in annotations_map:
+                    continue
+                dependency = orig_pkg.annotations.get(ref_key)
+                if dependency is None:
+                    raise DomainError(
+                        "MISSING_EXPORT_DEPENDENCY",
+                        "Referenced annotation snapshot is missing",
+                    )
+                include_snapshot(dependency)
+
+        search_events = self.repo.get_search_events_for_workspace(key)
 
         now = datetime.now(UTC).isoformat()
-        export_pkg_id = f"export-{key.package_id}-{key.document_id}-{key.annotator_id}"
+        export_pkg_id = f"export-{uuid4()}"
         manifest = PackageManifest(
             package_id=export_pkg_id,
             created_at=now,
             ontology=ontology_ref,
             origin_package_id=key.package_id,
+            origin_manifest_hash=canonical_hash(orig_pkg.manifest.model_dump()),
         )
 
         return ValidatedPackage(

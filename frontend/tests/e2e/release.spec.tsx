@@ -178,7 +178,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     expect(screen.getByText("HP:0001250")).toBeDefined();
 
     // 3. Select Human proposal: verify all 4 review actions are rendered identically
-    fireEvent.click(screen.getByText("prop-human"));
+    fireEvent.click(screen.getAllByText("prop-human")[0]);
     expect(screen.getByRole("button", { name: /Bestätigen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Verwerfen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Ändern/i })).toBeDefined();
@@ -200,7 +200,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     });
 
     // 4. Select Tool proposal: verify the exact same 4 actions are present
-    fireEvent.click(screen.getByText("prop-tool"));
+    fireEvent.click(screen.getAllByText("prop-tool")[0]);
     expect(screen.getByRole("button", { name: /Bestätigen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Verwerfen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Ändern/i })).toBeDefined();
@@ -241,7 +241,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     // Verification of export link availability after submission
     await waitFor(() => {
       expect(screen.getByText(/Fall erfolgreich abgeschlossen/i)).toBeDefined();
-      expect(screen.getByRole("link", { name: /Paket herunterladen/i })).toBeDefined();
+      expect(screen.getByRole("button", { name: /Paket herunterladen/i })).toBeDefined();
     });
   });
 });

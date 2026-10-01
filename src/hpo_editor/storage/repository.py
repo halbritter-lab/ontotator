@@ -32,6 +32,27 @@ def _key_str(key: WorkspaceKey) -> str:
     return ":".join(parts)
 
 
+def _local_import_key(origin: WorkspaceKey, package_id: str) -> WorkspaceKey:
+    """Bind historical content to the local API's independent workspace identity."""
+    return origin.model_copy(
+        update={
+            "package_id": package_id,
+            "target_set_id": "targets-0"
+            if origin.mode == "independent"
+            else origin.target_set_id,
+        }
+    )
+
+
+def _workspace_aliases(key: WorkspaceKey) -> tuple[str, ...]:
+    """Read both historical empty-target and API-default independent bindings."""
+    keys = {_key_str(key)}
+    if key.mode == "independent":
+        for target_id in ("targets-0", ReviewTargetSet.create([]).target_set_id):
+            keys.add(_key_str(key.model_copy(update={"target_set_id": target_id})))
+    return tuple(sorted(keys))
+
+
 class Repository:
     """Storage repository for work packages, revisioned drafts and submissions."""
 
@@ -44,23 +65,25 @@ class Repository:
         conn = self.db.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT manifest_hash FROM packages WHERE package_id = ?;",
-            (package.manifest.package_id,),
-        )
-        row = cursor.fetchone()
-        if row is not None:
-            existing_hash = row[0]
-            if existing_hash != manifest_hash:
-                raise InvalidPackage(
-                    f"Package '{package.manifest.package_id}' exists with "
-                    f"different manifest hash"
-                )
-            return package.manifest.package_id
-
-        # Insert package data atomically
         cursor.execute("BEGIN IMMEDIATE;")
         try:
+            self._verify_existing_snapshots(package)
+            cursor.execute(
+                "SELECT manifest_hash FROM packages WHERE package_id = ?;",
+                (package.manifest.package_id,),
+            )
+            row = cursor.fetchone()
+            if row is not None:
+                existing_hash = row[0]
+                if existing_hash != manifest_hash:
+                    raise InvalidPackage(
+                        f"Package '{package.manifest.package_id}' exists with "
+                        f"different manifest hash"
+                    )
+                self._store_package_membership(package)
+                cursor.execute("COMMIT;")
+                return package.manifest.package_id
+
             now = datetime.now(UTC).isoformat()
             cursor.execute(
                 "INSERT INTO packages "
@@ -136,7 +159,11 @@ class Repository:
                     (
                         package.manifest.package_id,
                         sub.submission_id,
-                        _key_str(sub.origin_key),
+                        _key_str(
+                            _local_import_key(
+                                sub.origin_key, package.manifest.package_id
+                            )
+                        ),
                     ),
                 )
 
@@ -154,6 +181,7 @@ class Repository:
                     ),
                 )
 
+            self._store_package_membership(package)
             cursor.execute("COMMIT;")
             return package.manifest.package_id
         except Exception:
@@ -164,6 +192,21 @@ class Repository:
         self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
     ) -> Draft:
         """Open or initialize mutable workspace draft."""
+        conn = self.db.get_connection()
+        if conn.in_transaction:
+            return self._open_draft(key, targets)
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            draft = self._open_draft(key, targets)
+            conn.execute("COMMIT")
+            return draft
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+
+    def _open_draft(
+        self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
+    ) -> Draft:
         conn = self.db.get_connection()
         cursor = conn.cursor()
         k_str = _key_str(key)
@@ -198,15 +241,83 @@ class Repository:
                     now,
                 ),
             )
-            return Draft(
-                key=key,
-                targets=effective_targets,
-                revision=0,
-                annotations=[],
-                evidence=[],
-                decisions=[],
-                document_checked=False,
-            )
+            submissions = self.get_submissions_for_workspace(key)
+            if submissions:
+                latest = submissions[-1]
+                confirmed = {
+                    (d.target.annotation_id, d.target.version)
+                    for d in latest.decisions
+                    if d.outcome == "confirmed"
+                }
+                annotations = [
+                    a
+                    for a in latest.snapshots
+                    if key.mode != "review"
+                    or (a.annotation.annotation_id, a.version) not in confirmed
+                ]
+                for ann in annotations:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO annotation_snapshots VALUES (?, ?, ?, "
+                        "?)",
+                        (
+                            ann.annotation.annotation_id,
+                            ann.version,
+                            ann.document_id,
+                            ann.model_dump_json(),
+                        ),
+                    )
+                    cursor.execute(
+                        "INSERT INTO workspace_annotations VALUES (?, ?, ?)",
+                        (k_str, ann.annotation.annotation_id, ann.version),
+                    )
+                    for ev in ann.evidence:
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO evidence_snapshots VALUES (?, ?, "
+                            "?, ?)",
+                            (
+                                ev.mention.evidence_id,
+                                ev.version,
+                                ev.document_id,
+                                ev.model_dump_json(),
+                            ),
+                        )
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO workspace_evidence VALUES (?, ?, ?)",
+                            (k_str, ev.mention.evidence_id, ev.version),
+                        )
+                for dec in latest.decisions:
+                    # Rebind the local decision identity to this workspace.
+                    dec = dec.model_copy(
+                        update={
+                            "decision_id": canonical_hash(
+                                {
+                                    "workspace": key.model_dump(),
+                                    "target": dec.target.model_dump(),
+                                }
+                            )
+                        }
+                    )
+                    cursor.execute(
+                        "INSERT INTO workspace_decisions VALUES (?, ?, ?, ?, ?, ?, ?, "
+                        "?, ?, ?)",
+                        (
+                            dec.decision_id,
+                            k_str,
+                            dec.target.annotation_id,
+                            dec.target.version,
+                            dec.outcome,
+                            dec.replacement.annotation_id if dec.replacement else None,
+                            dec.replacement.version if dec.replacement else None,
+                            dec.note,
+                            dec.reviewer_id,
+                            dec.model_dump_json(),
+                        ),
+                    )
+                cursor.execute(
+                    "UPDATE workspaces SET targets_json=? WHERE workspace_key=?",
+                    (latest.targets.model_dump_json(), k_str),
+                )
+            return self._open_draft(key, targets)
 
         revision = int(row[0])
         doc_checked = bool(row[1])
@@ -267,28 +378,29 @@ class Repository:
         conn = self.db.get_connection()
         cursor = conn.cursor()
 
-        # Check existing receipt
-        cursor.execute(
-            "SELECT request_hash, response_json FROM mutation_receipts "
-            "WHERE workspace_key = ? AND mutation_id = ?;",
-            (k_str, envelope.mutation_id),
-        )
-        receipt_row = cursor.fetchone()
-        if receipt_row is not None:
-            existing_hash, resp_json = receipt_row[0], receipt_row[1]
-            if existing_hash != request_hash:
-                raise RevisionConflict(
-                    f"Mutation ID reused with different payload: {envelope.mutation_id}"
-                )
-            # Replay stored response without incrementing revision
-            data = json.loads(resp_json)
-            if "submission_id" in data:
-                return Submission.model_validate(data)
-            return Draft.model_validate(data)
-
-        # Begin transaction
         cursor.execute("BEGIN IMMEDIATE;")
         try:
+            # Check existing receipt
+            cursor.execute(
+                "SELECT request_hash, response_json FROM mutation_receipts "
+                "WHERE workspace_key = ? AND mutation_id = ?;",
+                (k_str, envelope.mutation_id),
+            )
+            receipt_row = cursor.fetchone()
+            if receipt_row is not None:
+                existing_hash, resp_json = receipt_row[0], receipt_row[1]
+                if existing_hash != request_hash:
+                    raise RevisionConflict(
+                        "Mutation ID reused with different payload: "
+                        f"{envelope.mutation_id}"
+                    )
+                # Replay stored response without incrementing revision
+                data = json.loads(resp_json)
+                cursor.execute("COMMIT;")
+                if "submission_id" in data:
+                    return Submission.model_validate(data)
+                return Draft.model_validate(data)
+
             cursor.execute(
                 "SELECT revision FROM workspaces WHERE workspace_key = ?;",
                 (k_str,),
@@ -466,13 +578,16 @@ class Repository:
             for r in cursor.fetchall()
         }
 
-        # Load all annotations for these documents
-        doc_ids = list(documents.keys())
-        placeholders = ",".join("?" * len(doc_ids))
         cursor.execute(
-            f"SELECT payload_json FROM annotation_snapshots "
-            f"WHERE document_id IN ({placeholders});",
-            doc_ids,
+            "SELECT a.payload_json FROM annotation_snapshots a JOIN "
+            "package_annotations p "
+            "ON a.annotation_id=p.annotation_id AND a.version=p.version WHERE "
+            "p.package_id=? "
+            "UNION SELECT a.payload_json FROM annotation_snapshots a JOIN "
+            "workspace_annotations wa "
+            "ON a.annotation_id=wa.annotation_id AND a.version=wa.version JOIN "
+            "workspaces w USING(workspace_key) WHERE w.package_id=?",
+            (package_id, package_id),
         )
         annotations = {}
         for r in cursor.fetchall():
@@ -480,9 +595,14 @@ class Repository:
             annotations[(snap.annotation.annotation_id, snap.version)] = snap
 
         cursor.execute(
-            f"SELECT payload_json FROM evidence_snapshots "
-            f"WHERE document_id IN ({placeholders});",
-            doc_ids,
+            "SELECT e.payload_json FROM evidence_snapshots e JOIN package_evidence p "
+            "ON e.evidence_id=p.evidence_id AND e.version=p.version WHERE "
+            "p.package_id=? "
+            "UNION SELECT e.payload_json FROM evidence_snapshots e JOIN "
+            "workspace_evidence we "
+            "ON e.evidence_id=we.evidence_id AND e.version=we.version JOIN workspaces "
+            "w USING(workspace_key) WHERE w.package_id=?",
+            (package_id, package_id),
         )
         evidence = {}
         for r in cursor.fetchall():
@@ -501,8 +621,11 @@ class Repository:
         }
 
         cursor.execute(
-            "SELECT payload_json FROM search_events WHERE workspace_key LIKE ?;",
-            (f"{package_id}:%",),
+            "SELECT e.payload_json FROM search_events e "
+            "WHERE json_extract(e.payload_json, '$.workspace_key.package_id')=? "
+            "OR EXISTS (SELECT 1 FROM package_search_events p "
+            "WHERE p.event_id=e.event_id AND p.package_id=?);",
+            (package_id, package_id),
         )
         search_events = [
             SearchEventRecord.model_validate_json(r[0]) for r in cursor.fetchall()
@@ -587,23 +710,25 @@ class Repository:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT a.payload_json FROM annotation_snapshots a "
-            "JOIN documents d ON a.document_id = d.document_id "
-            "WHERE d.package_id = ? AND d.document_id = ?;",
+            "JOIN package_annotations p ON a.annotation_id=p.annotation_id AND "
+            "a.version=p.version "
+            "WHERE p.package_id = ? AND a.document_id = ?;",
             (package_id, document_id),
         )
         return [AnnotationSnapshot.model_validate_json(r[0]) for r in cursor.fetchall()]
 
     def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
-        """Fetch all submissions filed under a workspace key."""
-        k_str = _key_str(key)
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT payload_json FROM submissions WHERE origin_key = ? "
-            "ORDER BY created_at ASC;",
-            (k_str,),
+        """Fetch immutable submissions through their compatible local bindings."""
+        aliases = _workspace_aliases(key)
+        placeholders = ",".join("?" for _ in aliases)
+        rows = self.db.get_connection().execute(
+            "SELECT s.payload_json FROM submissions s "
+            "JOIN imported_submission_bindings b "
+            f"USING(submission_id) WHERE b.local_key IN ({placeholders}) "
+            "ORDER BY s.created_at ASC;",
+            aliases,
         )
-        return [Submission.model_validate_json(r[0]) for r in cursor.fetchall()]
+        return [Submission.model_validate_json(row[0]) for row in rows]
 
     def get_submission(self, submission_id: str) -> Submission | None:
         """Fetch a submission by ID."""
@@ -617,3 +742,85 @@ class Repository:
         if row is None:
             return None
         return Submission.model_validate_json(row[0])
+
+    def _store_package_membership(self, package: ValidatedPackage) -> None:
+        conn = self.db.get_connection()
+        conn.executemany(
+            "INSERT OR IGNORE INTO package_annotations VALUES (?, ?, ?)",
+            [(package.manifest.package_id, *ref) for ref in package.annotations],
+        )
+        conn.executemany(
+            "INSERT OR IGNORE INTO package_evidence VALUES (?, ?, ?)",
+            [(package.manifest.package_id, *ref) for ref in package.evidence],
+        )
+
+        for event in package.search_events:
+            local_key = _local_import_key(
+                event.workspace_key, package.manifest.package_id
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO package_search_events VALUES (?, ?, ?)",
+                (package.manifest.package_id, event.event_id, _key_str(local_key)),
+            )
+
+    def save_search_event(self, event: SearchEventRecord) -> None:
+        self.db.get_connection().execute(
+            "INSERT INTO search_events VALUES (?, ?, ?, ?, ?)",
+            (
+                event.event_id,
+                _key_str(event.workspace_key),
+                event.annotation_id,
+                event.model_dump_json(),
+                event.timestamp,
+            ),
+        )
+
+    def get_search_event(self, event_id: str) -> SearchEventRecord | None:
+        row = (
+            self.db.get_connection()
+            .execute(
+                "SELECT payload_json FROM search_events WHERE event_id=?", (event_id,)
+            )
+            .fetchone()
+        )
+        return SearchEventRecord.model_validate_json(row[0]) if row else None
+
+    def get_search_events_for_workspace(
+        self, key: WorkspaceKey
+    ) -> list[SearchEventRecord]:
+        aliases = _workspace_aliases(key)
+        placeholders = ",".join("?" for _ in aliases)
+        rows = self.db.get_connection().execute(
+            "SELECT e.payload_json FROM search_events e "
+            f"WHERE e.workspace_key IN ({placeholders}) "
+            "OR EXISTS (SELECT 1 FROM package_search_events p "
+            f"WHERE p.event_id=e.event_id AND p.local_key IN ({placeholders}))",
+            (*aliases, *aliases),
+        )
+        return [SearchEventRecord.model_validate_json(row[0]) for row in rows]
+
+    def _verify_existing_snapshots(self, package: ValidatedPackage) -> None:
+        """Never silently keep conflicting immutable content under an existing ID."""
+        conn = self.db.get_connection()
+        entries = [
+            ("annotation_snapshots", "annotation_id", identity, item.model_dump())
+            for identity, item in package.annotations.items()
+        ] + [
+            ("evidence_snapshots", "evidence_id", identity, item.model_dump())
+            for identity, item in package.evidence.items()
+        ]
+        for table, column, identity, payload in entries:
+            row = conn.execute(
+                f"SELECT payload_json FROM {table} WHERE {column}=? AND version=?",
+                identity,
+            ).fetchone()
+            if row and canonical_hash(json.loads(row[0])) != canonical_hash(payload):
+                raise InvalidPackage("Conflicting immutable snapshot content")
+        for submission in package.submissions.values():
+            existing = self.get_submission(submission.submission_id)
+            if existing is not None and existing != submission:
+                raise InvalidPackage("Conflicting immutable submission content")
+        for event in package.search_events:
+            existing_event = self.get_search_event(event.event_id)
+            if existing_event is not None and existing_event != event:
+                raise InvalidPackage("Conflicting search event content")

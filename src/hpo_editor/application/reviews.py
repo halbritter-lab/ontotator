@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from hpo_editor.domain.annotations import AnnotationRef
+from hpo_editor.domain.canonical import canonical_hash
 from hpo_editor.domain.errors import DomainError
 from hpo_editor.domain.review import ReviewDecision, ReviewOutcome
 from hpo_editor.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
@@ -68,35 +69,25 @@ class ReviewService:
                 f"is not part of the active review target set",
             )
 
-        # 2. Check obsolete/unknown term cannot be confirmed
-        if cmd.outcome == "confirmed":
-            target_snap = self.repo.get_annotation_snapshot(
-                cmd.target.annotation_id, cmd.target.version
+        available = {
+            (a.annotation.annotation_id, a.version): a
+            for a in self.repo.list_annotations_for_document(
+                key.package_id, key.document_id
             )
-            if target_snap is None:
-                target_snap = next(
-                    (
-                        a
-                        for a in draft.annotations
-                        if a.annotation.annotation_id == cmd.target.annotation_id
-                        and a.version == cmd.target.version
-                    ),
-                    None,
+        }
+        target_snap = available.get((cmd.target.annotation_id, cmd.target.version))
+        if target_snap is None:
+            raise DomainError(
+                "TARGET_NOT_FOUND", "Target is unavailable in this document"
+            )
+        if cmd.outcome == "confirmed":
+            status = self.ontology.validate_term(target_snap.annotation.hpo_id)
+            if status.status in {"obsolete", "unknown"}:
+                raise DomainError(
+                    f"CANNOT_CONFIRM_{status.status.upper()}_TERM",
+                    f"Cannot confirm {status.status} HPO term "
+                    f"'{target_snap.annotation.hpo_id}'",
                 )
-            if target_snap is not None:
-                status = self.ontology.validate_term(target_snap.annotation.hpo_id)
-                if status.status == "obsolete":
-                    raise DomainError(
-                        "CANNOT_CONFIRM_OBSOLETE_TERM",
-                        "Cannot confirm obsolete HPO term "
-                        f"'{target_snap.annotation.hpo_id}'",
-                    )
-                if status.status == "unknown":
-                    raise DomainError(
-                        "CANNOT_CONFIRM_UNKNOWN_TERM",
-                        "Cannot confirm unknown HPO term "
-                        f"'{target_snap.annotation.hpo_id}'",
-                    )
 
         # 3. Changed outcome requires replacement
         if cmd.outcome == "changed":
@@ -112,8 +103,27 @@ class ReviewService:
                     f"Replacement must be None when outcome is '{cmd.outcome}'",
                 )
 
+        if cmd.replacement is not None:
+            replacement = next(
+                (
+                    a
+                    for a in draft.annotations
+                    if a.annotation.annotation_id == cmd.replacement.annotation_id
+                    and a.version == cmd.replacement.version
+                ),
+                None,
+            )
+            if replacement is None or replacement.document_id != key.document_id:
+                raise DomainError(
+                    "REPLACEMENT_NOT_FOUND",
+                    "Replacement must be an exact current draft version",
+                )
+
         decision = ReviewDecision(
-            decision_id=f"dec-{cmd.target.annotation_id}",
+            decision_id="dec-"
+            + canonical_hash(
+                {"workspace": key.model_dump(), "target": cmd.target.model_dump()}
+            ),
             target=cmd.target,
             outcome=cmd.outcome,
             replacement=cmd.replacement,
@@ -121,10 +131,8 @@ class ReviewService:
             reviewer_id=key.annotator_id,
         )
 
-        draft.decisions = [
-            d
-            for d in draft.decisions
-            if d.target.annotation_id != cmd.target.annotation_id
-        ] + [decision]
+        draft.decisions = [d for d in draft.decisions if d.target != cmd.target] + [
+            decision
+        ]
 
         return draft

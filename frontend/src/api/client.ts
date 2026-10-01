@@ -69,9 +69,11 @@ export function initSessionToken(): string | null {
     // Remove the hash fragment without reloading page
     history.replaceState(null, "", window.location.pathname + window.location.search);
     activeSessionToken = token;
+    window.sessionStorage.setItem("hpo-editor-token", token);
     return token;
   }
 
+  activeSessionToken ??= window.sessionStorage.getItem("hpo-editor-token");
   return activeSessionToken;
 }
 
@@ -269,12 +271,25 @@ export class ApiClient {
   }
 
   getExportUrl(workspaceId: string): string {
-    const token = this.token ?? activeSessionToken;
-    const base = `${this.baseUrl}/api/v1/workspaces/${encodeURIComponent(
-      workspaceId
-    )}/export`;
-    return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+    return `${this.baseUrl}/api/v1/workspaces/${encodeURIComponent(workspaceId)}/export`;
   }
+
+  async downloadExport(workspaceId: string): Promise<void> {
+    const token = this.token ?? activeSessionToken;
+    const response = await fetch(this.getExportUrl(workspaceId), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) throw new ApiError(response.status, `Export fehlgeschlagen (${response.status})`);
+    const url = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "hpo-export.zip";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
 }
 
 export const api = new ApiClient();
