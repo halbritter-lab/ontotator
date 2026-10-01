@@ -1,6 +1,7 @@
-from typing import Any, Literal
+from collections.abc import Mapping
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import AxesConfig
@@ -22,12 +23,60 @@ class SearchEventRecord(BaseModel):
     candidates: list[str]
     ranked_ids: list[str] = Field(default_factory=list)
     candidate_scores: dict[str, float] = Field(default_factory=dict)
-    selected_hpo_id: str | None = None
+    selected_term_id: str | None = None
     ranked_position: int | None = None
     displayed_position: int | None = None
     ontology_release: str
     index_identity: str
     timestamp: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+            has_term = "selected_term_id" in d
+            has_hpo = "selected_hpo_id" in d
+            if has_term and has_hpo:
+                if d["selected_term_id"] != d["selected_hpo_id"]:
+                    raise ValueError(
+                        f"Conflicting 'selected_term_id' "
+                        f"('{d['selected_term_id']}') and "
+                        f"'selected_hpo_id' ('{d['selected_hpo_id']}') provided"
+                    )
+                d.pop("selected_hpo_id")
+            elif has_hpo:
+                d["selected_term_id"] = d.pop("selected_hpo_id")
+            return d
+        return data
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def selected_hpo_id(self) -> str | None:
+        return self.selected_term_id
+
+    @selected_hpo_id.setter
+    def selected_hpo_id(self, val: str | None) -> None:
+        self.selected_term_id = val
+
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, Any] | None = None,
+        deep: bool = False,
+    ) -> Self:
+        if update:
+            up = dict(update)
+            if "selected_hpo_id" in up and "selected_term_id" not in up:
+                up["selected_term_id"] = up.pop("selected_hpo_id")
+            elif "selected_hpo_id" in up and "selected_term_id" in up:
+                if up["selected_term_id"] != up["selected_hpo_id"]:
+                    raise ValueError(
+                        "Conflicting 'selected_term_id' and 'selected_hpo_id' provided"
+                    )
+                up.pop("selected_hpo_id")
+            return super().model_copy(update=up, deep=deep)
+        return super().model_copy(update=update, deep=deep)
 
 
 class PackageManifest(BaseModel):

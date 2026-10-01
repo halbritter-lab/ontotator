@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import BinaryIO
 
 from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.axes import CLINICAL_PHENOTYPE_CONFIG, EDITOR_AXES_CONFIG
+from ontocurator.domain.axes import (
+    CLINICAL_PHENOTYPE_CONFIG,
+    EDITOR_AXES_CONFIG,
+    AxesConfig,
+)
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     Document,
@@ -39,7 +43,10 @@ MAX_DOCUMENTS = 10_000
 MAX_DOCUMENT_TEXT_BYTES = 2 * 1024 * 1024  # 2 MiB
 
 
-def _read_package(source: Path | BinaryIO) -> ValidatedPackage:
+def _read_package(
+    source: Path | BinaryIO,
+    fallback_axes_config: AxesConfig | None = None,
+) -> ValidatedPackage:
     """Read, stream-validate and return ValidatedPackage from ZIP archive or stream."""
     if isinstance(source, (str, Path)):
         path = Path(source)
@@ -211,11 +218,47 @@ def _read_package(source: Path | BinaryIO) -> ValidatedPackage:
     # Resolve package profile
     package_profile = None
     if manifest.axes_config is not None:
+        if (
+            manifest.axes_definition == "editor-axes/v1"
+            and manifest.axes_config.axes != EDITOR_AXES_CONFIG.axes
+        ):
+            raise InvalidPackage(
+                "Reserved profile name 'editor-axes/v1' cannot be redefined "
+                "with different axes"
+            )
+        if (
+            manifest.axes_definition == "clinical-phenotype/v1"
+            and manifest.axes_config.axes != CLINICAL_PHENOTYPE_CONFIG.axes
+        ):
+            raise InvalidPackage(
+                "Reserved profile name 'clinical-phenotype/v1' cannot be redefined "
+                "with different axes"
+            )
         package_profile = manifest.axes_config
     elif manifest.axes_definition == "editor-axes/v1":
         package_profile = EDITOR_AXES_CONFIG
     elif manifest.axes_definition == "clinical-phenotype/v1":
         package_profile = CLINICAL_PHENOTYPE_CONFIG
+    elif (
+        fallback_axes_config is not None
+        and fallback_axes_config.definition_name == manifest.axes_definition
+    ):
+        package_profile = fallback_axes_config
+        manifest.axes_config = package_profile
+        manifest.axes_config_sha256 = package_profile.config_sha256
+    else:
+        raise InvalidPackage(
+            f"Unknown or unresolvable axes profile: '{manifest.axes_definition}'"
+        )
+
+    if (
+        manifest.axes_config_sha256 is not None
+        and manifest.axes_config_sha256 != package_profile.config_sha256
+    ):
+        raise InvalidPackage(
+            f"Axes config SHA-256 mismatch: expected {manifest.axes_config_sha256}, "
+            f"got {package_profile.config_sha256}"
+        )
 
     is_legacy_archive = manifest.format_version == "hpo-editor-work-package/v1"
     for snap in annotations.values():
@@ -362,9 +405,22 @@ def _read_package(source: Path | BinaryIO) -> ValidatedPackage:
     )
 
 
-def read_package(source: Path | BinaryIO) -> ValidatedPackage:
+def read_package(
+    source: Path | BinaryIO,
+    expected_ontology_ref: OntologyRef | None = None,
+    fallback_axes_config: AxesConfig | None = None,
+) -> ValidatedPackage:
     try:
-        return _read_package(source)
+        pkg = _read_package(source, fallback_axes_config=fallback_axes_config)
+        if (
+            expected_ontology_ref
+            and pkg.manifest.ontology.sha256 != expected_ontology_ref.sha256
+        ):
+            raise InvalidPackage(
+                f"Ontology SHA mismatch: expected {expected_ontology_ref.sha256}, "
+                f"got {pkg.manifest.ontology.sha256}"
+            )
+        return pkg
     except InvalidPackage:
         raise
     except (ValueError, UnicodeError, KeyError, DomainError) as exc:
@@ -376,16 +432,24 @@ class PackageReader:
 
     @staticmethod
     def read_from_stream(
-        stream: BinaryIO, ontology_ref: OntologyRef | None = None
+        stream: BinaryIO,
+        ontology_ref: OntologyRef | None = None,
+        fallback_axes_config: AxesConfig | None = None,
     ) -> ValidatedPackage:
-        pkg = read_package(stream)
-        if ontology_ref and pkg.manifest.ontology.sha256 != ontology_ref.sha256:
-            raise InvalidPackage(
-                f"Ontology SHA mismatch: expected {ontology_ref.sha256}, "
-                f"got {pkg.manifest.ontology.sha256}"
-            )
-        return pkg
+        return read_package(
+            stream,
+            expected_ontology_ref=ontology_ref,
+            fallback_axes_config=fallback_axes_config,
+        )
 
     @staticmethod
-    def read(path: Path) -> ValidatedPackage:
-        return read_package(path)
+    def read(
+        path: Path,
+        expected_ontology_ref: OntologyRef | None = None,
+        fallback_axes_config: AxesConfig | None = None,
+    ) -> ValidatedPackage:
+        return read_package(
+            path,
+            expected_ontology_ref=expected_ontology_ref,
+            fallback_axes_config=fallback_axes_config,
+        )

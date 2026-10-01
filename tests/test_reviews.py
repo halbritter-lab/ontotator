@@ -406,3 +406,220 @@ def test_independent_mode_null_finding_and_hidden_proposals(tmp_path: Path):
     assert len(indep_pkg.annotations) == 0
     assert len(indep_pkg.evidence) == 0
     assert len(indep_pkg.submissions) == 1
+
+
+def test_required_axes_enforced_on_confirmation_replacement_and_submission(
+    tmp_path: Path,
+):
+    from ontocurator.domain.axes import AxesConfig, AxisDefinition
+
+    db_path = tmp_path / "test.db"
+    db = Database(db_path)
+    db.run_migrations()
+    repo = Repository(db)
+    ontology = _make_ontology_service()
+    ws_svc = WorkspaceService(repo, ontology)
+    edit_svc = EditorService(repo, ontology)
+    rev_svc = ReviewService(repo, ontology)
+    sub_svc = SubmissionService(repo)
+
+    text = "The patient showed severe hypotonia and seizure activity."
+    text_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    doc = Document(
+        document_id="doc-1", text=text, language="en", text_sha256=text_digest
+    )
+
+    custom_config = AxesConfig(
+        definition_name="strict-profile/v1",
+        axes=[
+            AxisDefinition(
+                id="severity",
+                label="Severity",
+                options=["mild", "severe"],
+                allow_empty=False,
+            )
+        ],
+    )
+
+    # Incomplete proposal (severity is None)
+    ann_incomplete = Annotation(
+        annotation_id="prop-inc",
+        document_id="doc-1",
+        term_id="HP:0001252",
+        axes=Axes(definition_name="strict-profile/v1", values={"severity": None}),
+        provenance=Provenance(
+            actor=ActorRef(actor_id="dr-meier", kind="human"),
+            method="manual",
+        ),
+    )
+    snap_inc = snapshot(
+        ann_incomplete, [], doc, ontology.ref, axes_config=custom_config
+    )
+
+    pkg = ValidatedPackage(
+        manifest=PackageManifest(
+            format_version="ontocurator-work-package/v1",
+            package_id="pkg-strict-1",
+            created_at="2026-10-01T00:00:00Z",
+            ontology=ontology.ref,
+            axes_definition="strict-profile/v1",
+            axes_config=custom_config,
+            axes_config_sha256=custom_config.config_sha256,
+        ),
+        documents={"doc-1": doc},
+        annotations={(snap_inc.annotation.annotation_id, snap_inc.version): snap_inc},
+    )
+    repo.import_package(pkg)
+
+    targets = ReviewTargetSet.create(
+        [AnnotationRef(annotation_id="prop-inc", version=snap_inc.version)]
+    )
+    ws_key = WorkspaceKey(
+        package_id="pkg-strict-1",
+        document_id="doc-1",
+        annotator_id="rev-1",
+        mode="review",
+        target_set_id=targets.target_set_id,
+    )
+    ws_svc.open(ws_key, targets)
+
+    # 1. Confirming an incomplete annotation fails
+    with pytest.raises(DomainError, match="INCOMPLETE_AXES"):
+        rev_svc.decide(
+            ws_key,
+            MutationEnvelope(
+                mutation_id="dec-confirm-bad",
+                expected_revision=0,
+                payload=DecisionCommand(
+                    target=AnnotationRef(
+                        annotation_id="prop-inc", version=snap_inc.version
+                    ),
+                    outcome="confirmed",
+                ).model_dump(),
+            ),
+        )
+
+    # 2. Rejecting does NOT require complete axes
+    draft = rev_svc.decide(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="dec-reject-ok",
+            expected_revision=0,
+            payload=DecisionCommand(
+                target=AnnotationRef(
+                    annotation_id="prop-inc", version=snap_inc.version
+                ),
+                outcome="rejected",
+            ).model_dump(),
+        ),
+    )
+    assert len(draft.decisions) == 1
+    assert draft.decisions[0].outcome == "rejected"
+
+    # 3. Create incomplete replacement -> should fail when set as replacement
+    edit_draft_bad = edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="create-rep-bad",
+            expected_revision=1,
+            payload=CreateAnnotationCommand(
+                annotation_id="rep-bad",
+                term_id="HP:0001252",
+                axes=Axes(
+                    definition_name="strict-profile/v1", values={"severity": None}
+                ),
+            ).model_dump(),
+        ),
+    )
+    with pytest.raises(DomainError, match="INCOMPLETE_AXES"):
+        rev_svc.decide(
+            ws_key,
+            MutationEnvelope(
+                mutation_id="dec-changed-bad",
+                expected_revision=2,
+                payload=DecisionCommand(
+                    target=AnnotationRef(
+                        annotation_id="prop-inc", version=snap_inc.version
+                    ),
+                    outcome="changed",
+                    replacement=AnnotationRef(
+                        annotation_id="rep-bad",
+                        version=edit_draft_bad.annotations[0].version,
+                    ),
+                ).model_dump(),
+            ),
+        )
+
+    # 4. Create complete replacement in draft and approve replacement
+    edit_draft_good = edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="create-rep-good",
+            expected_revision=2,
+            payload=CreateAnnotationCommand(
+                annotation_id="rep-1",
+                term_id="HP:0001252",
+                axes=Axes(
+                    definition_name="strict-profile/v1", values={"severity": "severe"}
+                ),
+            ).model_dump(),
+        ),
+    )
+
+    draft = rev_svc.decide(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="dec-changed-ok",
+            expected_revision=3,
+            payload=DecisionCommand(
+                target=AnnotationRef(
+                    annotation_id="prop-inc", version=snap_inc.version
+                ),
+                outcome="changed",
+                replacement=AnnotationRef(
+                    annotation_id="rep-1",
+                    version=next(
+                        a
+                        for a in edit_draft_good.annotations
+                        if a.annotation.annotation_id == "rep-1"
+                    ).version,
+                ),
+            ).model_dump(),
+        ),
+    )
+    assert len(draft.decisions) == 1
+    assert draft.decisions[0].outcome == "changed"
+
+    # 5. Submission fails because rep-bad is still in draft annotations
+    # with incomplete axes
+    with pytest.raises(DomainError, match="INCOMPLETE_AXES"):
+        sub_svc.submit(
+            ws_key,
+            MutationEnvelope(
+                mutation_id="sub-bad",
+                expected_revision=4,
+                payload=SubmitCommand(document_checked=True).model_dump(),
+            ),
+        )
+
+    # 6. Delete rep-bad, then submission succeeds
+    from ontocurator.application.editing import DeleteDraftAnnotationCommand
+
+    edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="del-rep-bad",
+            expected_revision=4,
+            payload=DeleteDraftAnnotationCommand(annotation_id="rep-bad").model_dump(),
+        ),
+    )
+
+    sub = sub_svc.submit(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="sub-ok",
+            expected_revision=5,
+            payload=SubmitCommand(document_checked=True).model_dump(),
+        ),
+    )
+    assert len(sub.snapshots) == 1

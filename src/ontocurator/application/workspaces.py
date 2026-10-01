@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.axes import AxisDefinition
 from ontocurator.domain.documents import Document
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.review import ReviewTargetSet
@@ -39,6 +40,9 @@ class WorkspaceView(BaseModel):
     term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = Field(
         default_factory=dict
     )
+    axes_definition: str = "editor-axes/v1"
+    axes_config: list[AxisDefinition] = Field(default_factory=list)
+    axes_config_sha256: str = ""
 
 
 class WorkspaceService:
@@ -119,6 +123,13 @@ class WorkspaceService:
 
         draft = self.repo.open_draft(key, effective_targets)
         submissions = self.repo.get_submissions_for_workspace(key)
+        axes_profile = self.repo.get_axes_config(key.package_id)
+
+        term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = {}
+        for a in available_inputs:
+            tid = a.annotation.term_id
+            if tid not in term_statuses:
+                term_statuses[tid] = self.ontology.validate_term(tid).status
 
         return WorkspaceView(
             key=key,
@@ -127,10 +138,8 @@ class WorkspaceService:
             targets=effective_targets,
             available_inputs=available_inputs,
             submissions=submissions,
-            term_statuses={
-                a.annotation.hpo_id: self.ontology.validate_term(
-                    a.annotation.hpo_id
-                ).status
-                for a in available_inputs
-            },
+            term_statuses=term_statuses,
+            axes_definition=axes_profile.definition_name,
+            axes_config=axes_profile.axes,
+            axes_config_sha256=axes_profile.config_sha256,
         )

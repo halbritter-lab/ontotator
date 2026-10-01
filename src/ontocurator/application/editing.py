@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from ontocurator.domain.annotations import (
     ActorKind,
@@ -15,7 +15,7 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.axes import Axes
+from ontocurator.domain.axes import Axes, AxesConfig, validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     Document,
@@ -39,7 +39,7 @@ class CreateAnnotationCommand(BaseModel):
 
     command: Literal["create_annotation"] = "create_annotation"
     annotation_id: str
-    hpo_id: str
+    term_id: str
     search_event_id: str | None = None
     axes: Axes = Field(default_factory=Axes)
     evidence_id: str | None = None
@@ -51,16 +51,70 @@ class CreateAnnotationCommand(BaseModel):
     source_annotation_id: str | None = None
     source_version: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def handle_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+            has_term = "term_id" in d
+            has_hpo = "hpo_id" in d
+            if has_term and has_hpo:
+                if d["term_id"] != d["hpo_id"]:
+                    raise ValueError(
+                        f"Conflicting 'term_id' ('{d['term_id']}') and "
+                        f"'hpo_id' ('{d['hpo_id']}') provided"
+                    )
+                d.pop("hpo_id")
+            elif has_hpo:
+                d["term_id"] = d.pop("hpo_id")
+            return d
+        return data
+
+    @property
+    def hpo_id(self) -> str:
+        return self.term_id
+
+    @hpo_id.setter
+    def hpo_id(self, val: str) -> None:
+        self.term_id = val
+
 
 class SetTermCommand(BaseModel):
-    """Command updating an annotation's HPO concept."""
+    """Command updating an annotation's ontology concept."""
 
     model_config = ConfigDict(extra="forbid")
 
     command: Literal["set_term"] = "set_term"
     annotation_id: str
-    hpo_id: str
+    term_id: str
     search_event_id: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+            has_term = "term_id" in d
+            has_hpo = "hpo_id" in d
+            if has_term and has_hpo:
+                if d["term_id"] != d["hpo_id"]:
+                    raise ValueError(
+                        f"Conflicting 'term_id' ('{d['term_id']}') and "
+                        f"'hpo_id' ('{d['hpo_id']}') provided"
+                    )
+                d.pop("hpo_id")
+            elif has_hpo:
+                d["term_id"] = d.pop("hpo_id")
+            return d
+        return data
+
+    @property
+    def hpo_id(self) -> str:
+        return self.term_id
+
+    @hpo_id.setter
+    def hpo_id(self, val: str) -> None:
+        self.term_id = val
 
 
 class SetAxesCommand(BaseModel):
@@ -150,9 +204,10 @@ class EditorService:
                 "DOCUMENT_NOT_FOUND",
                 f"Document '{key.document_id}' not found in package '{key.package_id}'",
             )
+        profile = self.repo.get_axes_config(key.package_id)
 
         def operation(draft: Draft) -> Draft:
-            result = self._execute_edit(draft, cmd, doc)
+            result = self._execute_edit(draft, cmd, doc, profile)
             if (
                 isinstance(cmd, (CreateAnnotationCommand, SetTermCommand))
                 and cmd.search_event_id
@@ -162,7 +217,7 @@ class EditorService:
                     event is None
                     or event.workspace_key != key
                     or event.annotation_id != cmd.annotation_id
-                    or cmd.hpo_id not in event.candidates
+                    or cmd.term_id not in event.candidates
                 ):
                     raise DomainError(
                         "INVALID_SEARCH_SELECTION",
@@ -179,11 +234,12 @@ class EditorService:
                     }
                 )
                 event.timestamp = datetime.now(UTC).isoformat()
-                event.selected_hpo_id = cmd.hpo_id
-                event.displayed_position = event.candidates.index(cmd.hpo_id) + 1
+                event.selected_term_id = cmd.term_id
+                event.selected_hpo_id = cmd.term_id
+                event.displayed_position = event.candidates.index(cmd.term_id) + 1
                 event.ranked_position = (
-                    event.ranked_ids.index(cmd.hpo_id) + 1
-                    if cmd.hpo_id in event.ranked_ids
+                    event.ranked_ids.index(cmd.term_id) + 1
+                    if cmd.term_id in event.ranked_ids
                     else None
                 )
                 self.repo.save_search_event(event)
@@ -194,19 +250,21 @@ class EditorService:
             raise ValueError(f"Expected Draft from run_mutation, got {type(result)}")
         return result
 
-    def _execute_edit(self, draft: Draft, cmd: EditCommand, doc: Document) -> Draft:
+    def _execute_edit(
+        self, draft: Draft, cmd: EditCommand, doc: Document, profile: AxesConfig
+    ) -> Draft:
         if isinstance(cmd, CreateAnnotationCommand):
-            return self._create_annotation(draft, cmd, doc)
+            return self._create_annotation(draft, cmd, doc, profile)
         if isinstance(cmd, SetTermCommand):
-            return self._set_term(draft, cmd, doc)
+            return self._set_term(draft, cmd, doc, profile)
         if isinstance(cmd, SetAxesCommand):
-            return self._set_axes(draft, cmd, doc)
+            return self._set_axes(draft, cmd, doc, profile)
         if isinstance(cmd, AttachMentionCommand):
-            return self._attach_mention(draft, cmd, doc)
+            return self._attach_mention(draft, cmd, doc, profile)
         if isinstance(cmd, EditMentionCommand):
-            return self._edit_mention(draft, cmd, doc)
+            return self._edit_mention(draft, cmd, doc, profile)
         if isinstance(cmd, DetachMentionCommand):
-            return self._detach_mention(draft, cmd, doc)
+            return self._detach_mention(draft, cmd, doc, profile)
         if isinstance(cmd, DeleteDraftAnnotationCommand):
             return self._delete_annotation(draft, cmd)
         raise ValueError(f"Unhandled command: {cmd}")
@@ -225,9 +283,28 @@ class EditorService:
             )
 
     def _create_annotation(
-        self, draft: Draft, cmd: CreateAnnotationCommand, doc: Document
+        self,
+        draft: Draft,
+        cmd: CreateAnnotationCommand,
+        doc: Document,
+        profile: AxesConfig,
     ) -> Draft:
-        self._validate_term(cmd.hpo_id)
+        self._validate_term(cmd.term_id)
+        axes = cmd.axes
+        if (
+            axes.definition_name == "editor-axes/v1"
+            and profile.definition_name != "editor-axes/v1"
+            and not axes.values
+        ):
+            axes = Axes(
+                definition_name=profile.definition_name,
+                values={a.id: None for a in profile.axes},
+            )
+        try:
+            validate_axes(axes, profile, complete=False)
+        except ValueError as exc:
+            raise DomainError("INVALID_AXES", str(exc)) from exc
+
         evidence_list: list[EvidenceSnapshot] = []
         evidence_refs: list[EvidenceRef] = []
 
@@ -262,12 +339,12 @@ class EditorService:
         ann = Annotation(
             annotation_id=cmd.annotation_id,
             document_id=doc.document_id,
-            term_id=cmd.hpo_id,
-            axes=cmd.axes,
+            term_id=cmd.term_id,
+            axes=axes,
             evidence_refs=evidence_refs,
             provenance=prov,
         )
-        snap = snapshot(ann, evidence_list, doc, self.ontology.ref)
+        snap = snapshot(ann, evidence_list, doc, self.ontology.ref, axes_config=profile)
         draft.annotations = [
             a
             for a in draft.annotations
@@ -276,8 +353,14 @@ class EditorService:
         self._update_decision_replacements(draft, cmd.annotation_id, snap)
         return draft
 
-    def _set_term(self, draft: Draft, cmd: SetTermCommand, doc: Document) -> Draft:
-        self._validate_term(cmd.hpo_id)
+    def _set_term(
+        self,
+        draft: Draft,
+        cmd: SetTermCommand,
+        doc: Document,
+        profile: AxesConfig,
+    ) -> Draft:
+        self._validate_term(cmd.term_id)
         existing = next(
             (
                 a
@@ -292,8 +375,10 @@ class EditorService:
                 f"Annotation '{cmd.annotation_id}' not found in current draft",
             )
 
-        updated_ann = existing.annotation.model_copy(update={"hpo_id": cmd.hpo_id})
-        new_snap = snapshot(updated_ann, existing.evidence, doc, self.ontology.ref)
+        updated_ann = existing.annotation.model_copy(update={"term_id": cmd.term_id})
+        new_snap = snapshot(
+            updated_ann, existing.evidence, doc, self.ontology.ref, axes_config=profile
+        )
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
@@ -301,7 +386,13 @@ class EditorService:
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
-    def _set_axes(self, draft: Draft, cmd: SetAxesCommand, doc: Document) -> Draft:
+    def _set_axes(
+        self,
+        draft: Draft,
+        cmd: SetAxesCommand,
+        doc: Document,
+        profile: AxesConfig,
+    ) -> Draft:
         existing = next(
             (
                 a
@@ -315,9 +406,15 @@ class EditorService:
                 "ANNOTATION_NOT_FOUND",
                 f"Annotation '{cmd.annotation_id}' not found in current draft",
             )
+        try:
+            validate_axes(cmd.axes, profile, complete=False)
+        except ValueError as exc:
+            raise DomainError("INVALID_AXES", str(exc)) from exc
 
         updated_ann = existing.annotation.model_copy(update={"axes": cmd.axes})
-        new_snap = snapshot(updated_ann, existing.evidence, doc, self.ontology.ref)
+        new_snap = snapshot(
+            updated_ann, existing.evidence, doc, self.ontology.ref, axes_config=profile
+        )
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
@@ -326,7 +423,11 @@ class EditorService:
         return draft
 
     def _attach_mention(
-        self, draft: Draft, cmd: AttachMentionCommand, doc: Document
+        self,
+        draft: Draft,
+        cmd: AttachMentionCommand,
+        doc: Document,
+        profile: AxesConfig,
     ) -> Draft:
         validate_segments(doc.text, cmd.segments)
         existing = next(
@@ -367,7 +468,9 @@ class EditorService:
         ] + [ev_snap]
 
         updated_ann = existing.annotation.model_copy(update={"evidence_refs": new_refs})
-        new_snap = snapshot(updated_ann, new_ev_list, doc, self.ontology.ref)
+        new_snap = snapshot(
+            updated_ann, new_ev_list, doc, self.ontology.ref, axes_config=profile
+        )
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
@@ -376,7 +479,11 @@ class EditorService:
         return draft
 
     def _edit_mention(
-        self, draft: Draft, cmd: EditMentionCommand, doc: Document
+        self,
+        draft: Draft,
+        cmd: EditMentionCommand,
+        doc: Document,
+        profile: AxesConfig,
     ) -> Draft:
         validate_segments(doc.text, cmd.segments)
 
@@ -418,7 +525,13 @@ class EditorService:
                 updated_ann = target.annotation.model_copy(
                     update={"evidence_refs": new_refs}
                 )
-                new_snap = snapshot(updated_ann, new_ev_list, doc, self.ontology.ref)
+                new_snap = snapshot(
+                    updated_ann,
+                    new_ev_list,
+                    doc,
+                    self.ontology.ref,
+                    axes_config=profile,
+                )
                 draft.annotations = [
                     a if a.annotation.annotation_id != cmd.annotation_id else new_snap
                     for a in draft.annotations
@@ -458,7 +571,11 @@ class EditorService:
                         update={"evidence_refs": new_refs}
                     )
                     updated_snap = snapshot(
-                        updated_ann, new_ev_list, doc, self.ontology.ref
+                        updated_ann,
+                        new_ev_list,
+                        doc,
+                        self.ontology.ref,
+                        axes_config=profile,
                     )
                     updated_annotations.append(updated_snap)
                     self._update_decision_replacements(
@@ -471,7 +588,11 @@ class EditorService:
         return draft
 
     def _detach_mention(
-        self, draft: Draft, cmd: DetachMentionCommand, doc: Document
+        self,
+        draft: Draft,
+        cmd: DetachMentionCommand,
+        doc: Document,
+        profile: AxesConfig,
     ) -> Draft:
         target = next(
             (
@@ -496,7 +617,9 @@ class EditorService:
             e for e in target.evidence if e.mention.evidence_id != cmd.evidence_id
         ]
         updated_ann = target.annotation.model_copy(update={"evidence_refs": new_refs})
-        new_snap = snapshot(updated_ann, new_ev_list, doc, self.ontology.ref)
+        new_snap = snapshot(
+            updated_ann, new_ev_list, doc, self.ontology.ref, axes_config=profile
+        )
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations

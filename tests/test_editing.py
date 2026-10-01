@@ -268,3 +268,78 @@ def test_reject_obsolete_or_unknown_term_creation(tmp_path: Path):
                 ).model_dump(),
             ),
         )
+
+
+def test_create_and_set_term_with_term_id(tmp_path: Path):
+    from ontocurator.application.editing import SetTermCommand
+
+    _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
+    ws_key = WorkspaceKey(
+        package_id="pkg-1",
+        document_id="doc-1",
+        annotator_id="annotator-1",
+        mode="independent",
+        target_set_id="targets-0",
+    )
+    ws_svc.open(ws_key)
+
+    # 1. Create with term_id
+    cmd = CreateAnnotationCommand(
+        annotation_id="ann-term-1",
+        term_id="HP:0001252",
+        axes=Axes(),
+    )
+    assert cmd.term_id == "HP:0001252"
+    assert cmd.hpo_id == "HP:0001252"
+
+    draft = edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="mut-t1",
+            expected_revision=0,
+            payload=cmd.model_dump(),
+        ),
+    )
+    assert draft.annotations[0].annotation.term_id == "HP:0001252"
+
+    # 2. Set term with term_id
+    cmd_set = SetTermCommand(
+        annotation_id="ann-term-1",
+        term_id="HP:0001250",
+    )
+    assert cmd_set.term_id == "HP:0001250"
+    assert cmd_set.hpo_id == "HP:0001250"
+
+    draft2 = edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="mut-t2",
+            expected_revision=1,
+            payload=cmd_set.model_dump(),
+        ),
+    )
+    assert draft2.annotations[0].annotation.term_id == "HP:0001250"
+
+
+def test_command_conflicting_term_id_and_hpo_id_rejected():
+    from pydantic import ValidationError
+
+    from ontocurator.application.editing import SetTermCommand
+
+    with pytest.raises((ValueError, ValidationError), match="Conflicting"):
+        CreateAnnotationCommand.model_validate(
+            {
+                "annotation_id": "a1",
+                "term_id": "HP:0001250",
+                "hpo_id": "HP:0001252",
+            }
+        )
+
+    with pytest.raises((ValueError, ValidationError), match="Conflicting"):
+        SetTermCommand.model_validate(
+            {
+                "annotation_id": "a1",
+                "term_id": "HP:0001250",
+                "hpo_id": "HP:0001252",
+            }
+        )

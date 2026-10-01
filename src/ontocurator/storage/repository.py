@@ -66,11 +66,51 @@ class Repository:
     def __init__(self, db: Database) -> None:
         self.db = db
 
-    def import_package(self, package: ValidatedPackage) -> str:
+    def import_package(
+        self,
+        package: ValidatedPackage,
+        fallback_axes_config: AxesConfig | None = None,
+    ) -> str:
         """Atomically import package into database or verify idempotency."""
         manifest_hash = canonical_hash(package.manifest.model_dump())
         conn = self.db.get_connection()
         cursor = conn.cursor()
+
+        # Resolve package axes profile
+        profile: AxesConfig
+        if package.manifest.axes_config is not None:
+            if (
+                package.manifest.axes_definition == "editor-axes/v1"
+                and package.manifest.axes_config.axes != EDITOR_AXES_CONFIG.axes
+            ):
+                raise InvalidPackage(
+                    "Reserved profile name 'editor-axes/v1' cannot be redefined "
+                    "with different axes"
+                )
+            if (
+                package.manifest.axes_definition == "clinical-phenotype/v1"
+                and package.manifest.axes_config.axes != CLINICAL_PHENOTYPE_CONFIG.axes
+            ):
+                raise InvalidPackage(
+                    "Reserved profile name 'clinical-phenotype/v1' cannot be redefined "
+                    "with different axes"
+                )
+            profile = package.manifest.axes_config
+        elif package.manifest.axes_definition == "editor-axes/v1":
+            profile = EDITOR_AXES_CONFIG
+        elif package.manifest.axes_definition == "clinical-phenotype/v1":
+            profile = CLINICAL_PHENOTYPE_CONFIG
+        elif (
+            fallback_axes_config is not None
+            and fallback_axes_config.definition_name == package.manifest.axes_definition
+        ):
+            profile = fallback_axes_config
+        else:
+            raise DomainError(
+                "UNRESOLVABLE_PROFILE",
+                f"Cannot resolve axes profile '{package.manifest.axes_definition}' "
+                f"for package '{package.manifest.package_id}'",
+            )
 
         cursor.execute("BEGIN IMMEDIATE;")
         try:
@@ -86,6 +126,15 @@ class Repository:
                     raise InvalidPackage(
                         f"Package '{package.manifest.package_id}' exists with "
                         f"different manifest hash"
+                    )
+                prof_row = cursor.execute(
+                    "SELECT profile_sha256 FROM package_axes_profiles "
+                    "WHERE package_id = ?;",
+                    (package.manifest.package_id,),
+                ).fetchone()
+                if prof_row is not None and prof_row[0] != profile.config_sha256:
+                    raise InvalidPackage(
+                        "Conflicting axes profile resolution for existing package"
                     )
                 self._store_package_membership(package)
                 cursor.execute("COMMIT;")
@@ -103,22 +152,6 @@ class Repository:
                     now,
                 ),
             )
-
-            # Resolve and store package axes profile
-            profile: AxesConfig
-            if package.manifest.axes_config is not None:
-                profile = package.manifest.axes_config
-            elif package.manifest.axes_definition == "editor-axes/v1":
-                profile = EDITOR_AXES_CONFIG
-            elif package.manifest.axes_definition == "clinical-phenotype/v1":
-                profile = CLINICAL_PHENOTYPE_CONFIG
-            else:
-                raise DomainError(
-                    "UNRESOLVABLE_PROFILE",
-                    f"Cannot resolve axes profile "
-                    f"'{package.manifest.axes_definition}' for package "
-                    f"'{package.manifest.package_id}'",
-                )
 
             cursor.execute(
                 "INSERT INTO package_axes_profiles "

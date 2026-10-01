@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.axes import EDITOR_AXES_CONFIG, validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError, IncompleteReview
 from ontocurator.domain.workspace import (
@@ -147,6 +148,25 @@ class SubmissionService:
             if k not in seen_snaps:
                 seen_snaps.add(k)
                 deduped_snaps.append(s)
+
+        profile = self.repo.get_axes_config(key.package_id)
+        for s in deduped_snaps:
+            cfg = (
+                EDITOR_AXES_CONFIG
+                if (
+                    s.schema_version is None
+                    and s.annotation.axes.definition_name == "editor-axes/v1"
+                )
+                else profile
+            )
+            try:
+                validate_axes(s.annotation.axes, cfg, complete=True)
+            except ValueError as exc:
+                raise DomainError(
+                    "INCOMPLETE_AXES",
+                    f"Cannot submit annotation '{s.annotation.annotation_id}' "
+                    f"with incomplete required axes: {exc}",
+                ) from exc
 
         canonical_content = {
             "key": key.model_dump(),

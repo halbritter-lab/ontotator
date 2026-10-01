@@ -2,7 +2,14 @@ import re
 from collections.abc import Mapping
 from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    computed_field,
+    model_validator,
+)
 
 from ontocurator.domain.axes import (
     CLINICAL_PHENOTYPE_CONFIG,
@@ -96,6 +103,7 @@ class Annotation(BaseModel):
             )
         return self
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def hpo_id(self) -> str:
         return self.term_id

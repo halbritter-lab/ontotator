@@ -89,14 +89,18 @@ class ExportService:
                     )
                 include_snapshot(dependency)
 
+        axes_profile = self.repo.get_axes_config(key.package_id)
         search_events = self.repo.get_search_events_for_workspace(key)
-
         now = datetime.now(UTC).isoformat()
         export_pkg_id = f"export-{uuid4()}"
         manifest = PackageManifest(
+            format_version="ontocurator-work-package/v1",
             package_id=export_pkg_id,
             created_at=now,
             ontology=ontology_ref,
+            axes_definition=axes_profile.definition_name,
+            axes_config=axes_profile,
+            axes_config_sha256=axes_profile.config_sha256,
             origin_package_id=key.package_id,
             origin_manifest_hash=canonical_hash(orig_pkg.manifest.model_dump()),
         )

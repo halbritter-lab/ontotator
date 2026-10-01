@@ -88,7 +88,7 @@ class OntologyService:
         term = self.ontology.get(hpo_id)
         if term is None:
             return TermStatus(
-                hpo_id=hpo_id,
+                term_id=hpo_id,
                 status="unknown",
                 label=None,
                 definition=None,
@@ -99,7 +99,7 @@ class OntologyService:
             "obsolete" if term.obsolete else "valid"
         )
         return TermStatus(
-            hpo_id=term.hpo_id,
+            term_id=term.hpo_id,
             status=status_type,
             label=term.label,
             definition=term.definition or None,
@@ -125,7 +125,7 @@ class OntologyService:
 
         candidates = [
             SearchCandidate(
-                hpo_id=hit["hpo_id"],
+                term_id=hit["hpo_id"],
                 label=hit["label"],
                 definition=hit.get("definition", ""),
                 matched_term=hit.get("matched_term", ""),

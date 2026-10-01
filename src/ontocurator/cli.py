@@ -88,6 +88,13 @@ def serve(
             help="Directory containing built static web assets.",
         ),
     ] = None,
+    axes_config: Annotated[
+        Path | None,
+        typer.Option(
+            "--axes-config",
+            help="Path to JSON file defining an AxesConfig profile fallback.",
+        ),
+    ] = None,
 ) -> None:
     """Start local secured HPO annotation editor server."""
     if host not in {"127.0.0.1", "localhost", "::1"}:
@@ -136,6 +143,28 @@ def serve(
     actual_port = port if port != 0 else _find_free_port(host)
     token = secrets.token_urlsafe(32)
 
+    parsed_axes_config = None
+    if axes_config is not None:
+        resolved_axes_path = axes_config.resolve()
+        if not resolved_axes_path.is_file():
+            typer.echo(
+                f"Error: Axes config file not found at: {resolved_axes_path}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+        try:
+            from ontocurator.domain.axes import AxesConfig
+
+            parsed_axes_config = AxesConfig.model_validate_json(
+                resolved_axes_path.read_text(encoding="utf-8")
+            )
+        except Exception as exc:
+            typer.echo(
+                f"Error: Failed to parse axes configuration: {exc}",
+                err=True,
+            )
+            raise typer.Exit(code=1) from exc
+
     config = AppConfig(
         workspace_dir=workspace,
         database_path=db_path,
@@ -144,6 +173,7 @@ def serve(
         host=host,
         port=actual_port,
         web_dir=resolved_web_dir,
+        axes_config=parsed_axes_config,
     )
 
     try:
@@ -164,7 +194,7 @@ def serve(
     url = f"http://{host}:{actual_port}/#token={token}"
 
     typer.echo("==================================================")
-    typer.echo(f"  HPO Annotation Editor running on port {actual_port}")
+    typer.echo(f"  Ontocurator running on port {actual_port}")
     typer.echo(f"  Workspace: {workspace}")
     typer.echo(f"  URL: http://{host}:{actual_port}/")
     typer.echo("==================================================")

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.documents import OntologyRef
 
 
@@ -22,3 +23,4 @@ class AppConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     web_dir: Path | None = None
+    axes_config: AxesConfig | None = None

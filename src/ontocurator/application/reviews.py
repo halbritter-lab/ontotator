@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from ontocurator.domain.annotations import AnnotationRef
+from ontocurator.domain.axes import EDITOR_AXES_CONFIG, validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.review import ReviewDecision, ReviewOutcome
@@ -76,18 +77,37 @@ class ReviewService:
             )
         }
         target_snap = available.get((cmd.target.annotation_id, cmd.target.version))
+        profile = self.repo.get_axes_config(key.package_id)
+
         if target_snap is None:
             raise DomainError(
                 "TARGET_NOT_FOUND", "Target is unavailable in this document"
             )
         if cmd.outcome == "confirmed":
-            status = self.ontology.validate_term(target_snap.annotation.hpo_id)
+            status = self.ontology.validate_term(target_snap.annotation.term_id)
             if status.status in {"obsolete", "unknown"}:
                 raise DomainError(
                     f"CANNOT_CONFIRM_{status.status.upper()}_TERM",
-                    f"Cannot confirm {status.status} HPO term "
-                    f"'{target_snap.annotation.hpo_id}'",
+                    f"Cannot confirm {status.status} term "
+                    f"'{target_snap.annotation.term_id}'",
                 )
+            target_profile = (
+                EDITOR_AXES_CONFIG
+                if (
+                    target_snap.schema_version is None
+                    and target_snap.annotation.axes.definition_name == "editor-axes/v1"
+                )
+                else profile
+            )
+            try:
+                validate_axes(
+                    target_snap.annotation.axes, target_profile, complete=True
+                )
+            except ValueError as exc:
+                raise DomainError(
+                    "INCOMPLETE_AXES",
+                    f"Cannot confirm annotation with incomplete required axes: {exc}",
+                ) from exc
 
         # 3. Changed outcome requires replacement
         if cmd.outcome == "changed":
@@ -118,6 +138,13 @@ class ReviewService:
                     "REPLACEMENT_NOT_FOUND",
                     "Replacement must be an exact current draft version",
                 )
+            try:
+                validate_axes(replacement.annotation.axes, profile, complete=True)
+            except ValueError as exc:
+                raise DomainError(
+                    "INCOMPLETE_AXES",
+                    f"Cannot approve replacement with incomplete required axes: {exc}",
+                ) from exc
 
         decision = ReviewDecision(
             decision_id="dec-"
