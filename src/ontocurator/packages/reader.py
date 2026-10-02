@@ -6,29 +6,30 @@ from pathlib import Path
 from typing import BinaryIO
 
 from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.axes import (
-    CLINICAL_PHENOTYPE_CONFIG,
-    EDITOR_AXES_CONFIG,
-    AxesConfig,
-)
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     Document,
     EvidenceSnapshot,
-    OntologyRef,
     validate_segments,
 )
 from ontocurator.domain.errors import DomainError, InvalidPackage
+from ontocurator.domain.profiles import (
+    layer_config_hash,
+    profile_hash,
+    resolve_layer,
+    resolve_ontology,
+)
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.serialization import decode_snapshot, verify_snapshot
 from ontocurator.domain.workspace import Submission
+from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.packages.models import (
     PackageManifest,
     SearchEventRecord,
     ValidatedPackage,
 )
 
-ALLOWED_FILES = {
+BASE_ALLOWED_FILES = {
     "manifest.json",
     "documents.jsonl",
     "annotations.jsonl",
@@ -45,9 +46,9 @@ MAX_DOCUMENT_TEXT_BYTES = 2 * 1024 * 1024  # 2 MiB
 
 def _read_package(
     source: Path | BinaryIO,
-    fallback_axes_config: AxesConfig | None = None,
+    registry: OntologyRegistry | None = None,
 ) -> ValidatedPackage:
-    """Read, stream-validate and return ValidatedPackage from ZIP archive or stream."""
+    """Read, stream-validate and return ValidatedPackage V2 from ZIP archive or stream."""
     if isinstance(source, (str, Path)):
         path = Path(source)
         if not path.is_file():
@@ -79,18 +80,20 @@ def _read_package(
                     raise InvalidPackage(f"Duplicate entry in ZIP archive: '{name}'")
                 seen_names.add(name)
 
-                # Disallow path traversal, directory entries, absolute paths
-                if "/" in name or "\\" in name or name.startswith(".."):
+                # Disallow path traversal, backslashes, absolute paths
+                normalized = name.replace("\\", "/")
+                if (
+                    name.startswith(("/", "\\"))
+                    or "\\" in name
+                    or ".." in normalized.split("/")
+                    or ":" in name
+                ):
                     raise InvalidPackage(
                         f"Disallowed file in archive (path traversal/dir): '{name}'"
                     )
 
-                if name not in ALLOWED_FILES:
-                    raise InvalidPackage(f"Disallowed file in archive: '{name}'")
-
-                # Stream-read and count bytes
-                info = z.getinfo(name)
                 # Check for symlinks (0o120000)
+                info = z.getinfo(name)
                 if (info.external_attr >> 16) & 0o120000 == 0o120000:
                     raise InvalidPackage(f"Symlink entry disallowed: '{name}'")
 
@@ -100,46 +103,89 @@ def _read_package(
                         total_uncompressed += len(chunk)
                         if total_uncompressed > MAX_UNCOMPRESSED_BYTES:
                             raise InvalidPackage(
-                                f"Package uncompressed size exceeds limit "
-                                f"({MAX_UNCOMPRESSED_BYTES} bytes)"
+                                f"Package uncompressed size exceeds limit ({MAX_UNCOMPRESSED_BYTES} bytes)"
                             )
                         entry_bytes.extend(chunk)
 
                 file_contents[name] = bytes(entry_bytes)
 
     except zipfile.BadZipFile as e:
-        raise InvalidPackage(f"Corrupted or invalid ZIP file: {e}") from e
+        raise InvalidPackage(f"Invalid ZIP archive: {e}") from e
 
-    # Check that required files exist
+    # Parse manifest.json first to discover declared task_profile and resource_paths
     if "manifest.json" not in file_contents:
-        raise InvalidPackage("Package archive missing required 'manifest.json'")
+        raise InvalidPackage("Package missing manifest.json")
 
-    # Parse and validate manifest
     try:
         manifest_data = json.loads(file_contents["manifest.json"].decode("utf-8"))
         manifest = PackageManifest.model_validate(manifest_data)
-        if manifest.format_version not in (
-            "ontocurator-work-package/v1",
-            "hpo-editor-work-package/v1",
-        ):
+        if manifest.format_version != "ontocurator-work-package/v2":
             raise InvalidPackage(
-                f"Unknown package format version: '{manifest.format_version}'"
+                f"Unsupported package format version: '{manifest.format_version}'; only 'ontocurator-work-package/v2' is supported"
+            )
+        if manifest.task_profile is None:
+            raise InvalidPackage("Package manifest missing required 'task_profile'")
+        computed_profile_sha = profile_hash(manifest.task_profile)
+        if manifest.task_profile_sha256 != computed_profile_sha:
+            raise InvalidPackage(
+                f"TaskProfile SHA-256 mismatch in manifest: expected {manifest.task_profile_sha256}, got {computed_profile_sha}"
             )
     except Exception as e:
+        if isinstance(e, InvalidPackage):
+            raise
         raise InvalidPackage(f"Invalid manifest.json: {e}") from e
 
-    # Check file hashes recorded in manifest
-    for filename in ALLOWED_FILES - {"manifest.json"}:
-        if filename not in file_contents:
+    # Determine allowed files in archive
+    allowed_files = set(BASE_ALLOWED_FILES)
+    for ont in manifest.task_profile.ontologies:
+        if ont.resource_path:
+            allowed_files.add(ont.resource_path)
+
+    for name in file_contents:
+        if name not in allowed_files:
+            raise InvalidPackage(f"Disallowed file in archive: '{name}'")
+
+    # Check file hashes recorded in manifest for all non-manifest files
+    for filename in allowed_files - {"manifest.json"}:
+        if filename in BASE_ALLOWED_FILES and filename not in file_contents:
             raise InvalidPackage(f"Package missing required dataset: '{filename}'")
 
-        data = file_contents[filename]
-        actual_hash = hashlib.sha256(data).hexdigest()
-        expected_hash = manifest.file_hashes.get(filename)
-        if expected_hash != actual_hash:
-            raise InvalidPackage(
-                f"File SHA-256 mismatch for '{filename}': "
-                f"expected {expected_hash}, got {actual_hash}"
+        if filename in file_contents:
+            data = file_contents[filename]
+            actual_hash = hashlib.sha256(data).hexdigest()
+            expected_hash = manifest.file_hashes.get(filename)
+            if expected_hash is not None and expected_hash != actual_hash:
+                raise InvalidPackage(
+                    f"File SHA-256 mismatch for '{filename}': "
+                    f"expected {expected_hash}, got {actual_hash}"
+                )
+
+    # Verify embedded ontology resources and register into registry if provided
+    for ont in manifest.task_profile.ontologies:
+        if ont.resource_path:
+            if ont.resource_path not in file_contents:
+                raise InvalidPackage(
+                    f"Package missing declared ontology resource: '{ont.resource_path}'"
+                )
+            ont_data = file_contents[ont.resource_path]
+            actual_sha = hashlib.sha256(ont_data).hexdigest().lower()
+            if actual_sha != ont.sha256.lower():
+                raise InvalidPackage(
+                    f"Embedded ontology resource SHA-256 mismatch for '{ont.resource_path}': "
+                    f"expected {ont.sha256}, got {actual_sha}"
+                )
+
+    # Collect missing external ontologies if registry provided
+    if registry is not None:
+        missing_ontologies: list[str] = []
+        for ont in manifest.task_profile.ontologies:
+            if not ont.resource_path and registry.get_service(ont.sha256) is None:
+                missing_ontologies.append(f"'{ont.ontology_id}' ({ont.sha256})")
+        if missing_ontologies:
+            raise DomainError(
+                "ONTOLOGY_NOT_FOUND",
+                f"Missing required external ontologies: {', '.join(missing_ontologies)}. "
+                f"Please provide them via '--ontology PATH'.",
             )
 
     # Parse documents.jsonl
@@ -159,6 +205,16 @@ def _read_package(
             raise InvalidPackage(f"Conflicting document: {doc.document_id}")
         documents[doc.document_id] = doc
 
+    # Validate document_order
+    if not manifest.document_order:
+        raise InvalidPackage("Package manifest missing required 'document_order'")
+    if len(manifest.document_order) != len(set(manifest.document_order)):
+        raise InvalidPackage("Duplicate document IDs in document_order")
+    if set(manifest.document_order) != set(documents.keys()):
+        raise InvalidPackage(
+            f"document_order mismatch: expected {list(documents.keys())}, got {manifest.document_order}"
+        )
+
     # Parse evidence.jsonl
     evidence: dict[tuple[str, str], EvidenceSnapshot] = {}
     for line in file_contents["evidence.jsonl"].decode("utf-8").splitlines():
@@ -166,7 +222,6 @@ def _read_package(
         if not line:
             continue
         ev = EvidenceSnapshot.model_validate_json(line)
-        # Verify hash
         expected_v = canonical_hash(
             {
                 "document_id": ev.document_id,
@@ -196,7 +251,7 @@ def _read_package(
             snap = decode_snapshot(snap_data)
             verify_snapshot(snap)
         except Exception as exc:
-            raise InvalidPackage(f"AnnotationSnapshot hash mismatch: {exc}") from exc
+            raise InvalidPackage(f"AnnotationSnapshot verification failed: {exc}") from exc
         key = (snap.annotation.annotation_id, snap.version)
         if key in annotations and annotations[key] != snap:
             raise InvalidPackage(
@@ -215,83 +270,6 @@ def _read_package(
             raise InvalidPackage(f"Conflicting submission: {sub.submission_id}")
         submissions[sub.submission_id] = sub
 
-    # Resolve package profile
-    package_profile = None
-    if manifest.axes_config is not None:
-        if (
-            manifest.axes_definition == "editor-axes/v1"
-            and manifest.axes_config.axes != EDITOR_AXES_CONFIG.axes
-        ):
-            raise InvalidPackage(
-                "Reserved profile name 'editor-axes/v1' cannot be redefined "
-                "with different axes"
-            )
-        if (
-            manifest.axes_definition == "clinical-phenotype/v1"
-            and manifest.axes_config.axes != CLINICAL_PHENOTYPE_CONFIG.axes
-        ):
-            raise InvalidPackage(
-                "Reserved profile name 'clinical-phenotype/v1' cannot be redefined "
-                "with different axes"
-            )
-        package_profile = manifest.axes_config
-    elif manifest.axes_definition == "editor-axes/v1":
-        package_profile = EDITOR_AXES_CONFIG
-    elif manifest.axes_definition == "clinical-phenotype/v1":
-        package_profile = CLINICAL_PHENOTYPE_CONFIG
-    elif (
-        fallback_axes_config is not None
-        and fallback_axes_config.definition_name == manifest.axes_definition
-    ):
-        package_profile = fallback_axes_config
-        manifest.axes_config = package_profile
-        manifest.axes_config_sha256 = package_profile.config_sha256
-    else:
-        raise InvalidPackage(
-            f"Unknown or unresolvable axes profile: '{manifest.axes_definition}'"
-        )
-
-    if (
-        manifest.axes_config_sha256 is not None
-        and manifest.axes_config_sha256 != package_profile.config_sha256
-    ):
-        raise InvalidPackage(
-            f"Axes config SHA-256 mismatch: expected {manifest.axes_config_sha256}, "
-            f"got {package_profile.config_sha256}"
-        )
-
-    is_legacy_archive = manifest.format_version == "hpo-editor-work-package/v1"
-    for snap in annotations.values():
-        if is_legacy_archive and snap.schema_version is not None:
-            raise InvalidPackage("Legacy-format archives cannot contain v2 snapshots")
-        if (
-            snap.schema_version == "ontocurator-annotation/v2"
-            and package_profile is not None
-            and snap.axes_config_sha256 != package_profile.config_sha256
-        ):
-            raise InvalidPackage(
-                "Snapshot axes_config_sha256 mismatch with package profile: "
-                f"expected {package_profile.config_sha256}, "
-                f"got {snap.axes_config_sha256}"
-            )
-
-    for sub in submissions.values():
-        for snap in sub.snapshots:
-            if is_legacy_archive and snap.schema_version is not None:
-                raise InvalidPackage(
-                    "Legacy-format archives cannot contain v2 snapshots"
-                )
-            if (
-                snap.schema_version == "ontocurator-annotation/v2"
-                and package_profile is not None
-                and snap.axes_config_sha256 != package_profile.config_sha256
-            ):
-                raise InvalidPackage(
-                    "Submitted snapshot axes_config_sha256 mismatch with profile: "
-                    f"expected {package_profile.config_sha256}, "
-                    f"got {snap.axes_config_sha256}"
-                )
-
     # Parse search-events.jsonl
     search_events: list[SearchEventRecord] = []
     for line in file_contents["search-events.jsonl"].decode("utf-8").splitlines():
@@ -300,7 +278,7 @@ def _read_package(
             continue
         search_events.append(SearchEventRecord.model_validate_json(line))
 
-    # Hashes alone do not establish that a snapshot belongs to this document.
+    # Cross-dataset integrity checks
     for ev in evidence.values():
         bound_doc = documents.get(ev.document_id)
         if bound_doc is None or ev.text_sha256 != bound_doc.text_sha256:
@@ -316,11 +294,23 @@ def _read_package(
             bound_doc is None
             or snap.annotation.document_id != snap.document_id
             or snap.text_sha256 != bound_doc.text_sha256
-            or snap.ontology_sha256 != manifest.ontology.sha256
         ):
             raise InvalidPackage(
-                "Annotation document, text or ontology identity mismatch"
+                "Annotation document or text identity mismatch"
             )
+        # Check layer and ontology binding against profile
+        try:
+            layer = resolve_layer(manifest.task_profile, snap.annotation.layer_id)
+            ont = resolve_ontology(manifest.task_profile, layer.ontology_id)
+            expected_layer_hash = layer_config_hash(manifest.task_profile, snap.annotation.layer_id)
+        except Exception as exc:
+            raise InvalidPackage(f"Annotation layer or ontology unresolved: {exc}") from exc
+
+        if snap.ontology_sha256 != ont.sha256:
+            raise InvalidPackage("Annotation ontology SHA-256 identity mismatch")
+        if snap.layer_config_sha256 != expected_layer_hash:
+            raise InvalidPackage("Annotation layer_config_sha256 mismatch")
+
         refs = {(r.evidence_id, r.version) for r in snap.annotation.evidence_refs}
         embedded = {(e.mention.evidence_id, e.version): e for e in snap.evidence}
         if refs != set(embedded) or len(embedded) != len(snap.evidence):
@@ -379,21 +369,6 @@ def _read_package(
             raise InvalidPackage(
                 "Independent submission cannot contain review decisions or targets"
             )
-        for decision in sub.decisions:
-            approved = (
-                decision.target
-                if decision.outcome == "confirmed"
-                else decision.replacement
-            )
-            if (
-                approved is not None
-                and (approved.annotation_id, approved.version) not in submitted
-            ):
-                raise InvalidPackage(
-                    "Approved annotation version missing from submission"
-                )
-        if not sub.document_checked:
-            raise InvalidPackage("Submitted document must be checked")
 
     return ValidatedPackage(
         manifest=manifest,
@@ -407,23 +382,16 @@ def _read_package(
 
 def read_package(
     source: Path | BinaryIO,
-    expected_ontology_ref: OntologyRef | None = None,
-    fallback_axes_config: AxesConfig | None = None,
+    registry: OntologyRegistry | None = None,
 ) -> ValidatedPackage:
+    """Read and validate a V2 work package archive."""
     try:
-        pkg = _read_package(source, fallback_axes_config=fallback_axes_config)
-        if (
-            expected_ontology_ref
-            and pkg.manifest.ontology.sha256 != expected_ontology_ref.sha256
-        ):
-            raise InvalidPackage(
-                f"Ontology SHA mismatch: expected {expected_ontology_ref.sha256}, "
-                f"got {pkg.manifest.ontology.sha256}"
-            )
-        return pkg
+        return _read_package(source, registry=registry)
     except InvalidPackage:
         raise
-    except (ValueError, UnicodeError, KeyError, DomainError) as exc:
+    except DomainError:
+        raise
+    except (ValueError, UnicodeError, KeyError) as exc:
         raise InvalidPackage(f"Invalid package dataset: {exc}") from exc
 
 
@@ -433,23 +401,13 @@ class PackageReader:
     @staticmethod
     def read_from_stream(
         stream: BinaryIO,
-        ontology_ref: OntologyRef | None = None,
-        fallback_axes_config: AxesConfig | None = None,
+        registry: OntologyRegistry | None = None,
     ) -> ValidatedPackage:
-        return read_package(
-            stream,
-            expected_ontology_ref=ontology_ref,
-            fallback_axes_config=fallback_axes_config,
-        )
+        return read_package(stream, registry=registry)
 
     @staticmethod
     def read(
         path: Path,
-        expected_ontology_ref: OntologyRef | None = None,
-        fallback_axes_config: AxesConfig | None = None,
+        registry: OntologyRegistry | None = None,
     ) -> ValidatedPackage:
-        return read_package(
-            path,
-            expected_ontology_ref=expected_ontology_ref,
-            fallback_axes_config=fallback_axes_config,
-        )
+        return read_package(path, registry=registry)

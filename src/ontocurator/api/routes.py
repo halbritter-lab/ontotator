@@ -273,19 +273,37 @@ def read_submission(
 @router.post("/search")
 def search_ontology(
     req: SearchRequest,
-    ontology: OntologyDep,
+    request: Request,
     repo: RepoDep,
     ws_svc: WorkspaceSvcDep,
 ) -> SearchResult:
-    """Execute HPO search with deterministic provenance shuffling."""
+    """Execute ontology search with deterministic provenance shuffling and layer scoping."""
     ws_svc.get_document(req.workspace_key.package_id, req.workspace_key.document_id)
+    registry = getattr(request.app.state, "ontology_registry", None)
+    profile = (
+        repo.get_task_profile(req.workspace_key.package_id)
+        if hasattr(repo, "get_task_profile")
+        else None
+    )
+    if registry is not None and profile is not None:
+        ontology = registry.for_layer(profile, req.layer_id)
+    else:
+        ontology = getattr(request.app.state, "ontology", None)
+        if ontology is None:
+            raise DomainError("ONTOLOGY_NOT_FOUND", "No ontology configured")
+
     result = ontology.search(req)
     result.search_id = str(uuid4())
     result.index_identity = ontology.index_identity
+    result.layer_id = req.layer_id
+    result.ontology_sha256 = ontology.ref.sha256
+
     event = SearchEventRecord(
         event_id=result.search_id,
         workspace_key=req.workspace_key,
         annotation_id=req.annotation_id,
+        layer_id=req.layer_id,
+        ontology_sha256=ontology.ref.sha256,
         query=req.query,
         route=req.route,
         candidates=result.displayed_ids,

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from ontocurator.domain.errors import InvalidPackage
+from ontocurator.domain.profiles import profile_hash
 from ontocurator.domain.serialization import encode_snapshot
 from ontocurator.domain.workspace import Submission
 from ontocurator.packages.models import ValidatedPackage
@@ -14,7 +15,8 @@ from ontocurator.packages.models import ValidatedPackage
 
 def _prepare_package_payloads(
     package: ValidatedPackage,
-) -> tuple[bytes, bytes, bytes, bytes, bytes, bytes]:
+    embedded_files: dict[str, bytes] | None = None,
+) -> tuple[bytes, bytes, bytes, bytes, bytes, bytes, dict[str, bytes]]:
     # 1. Referential integrity checks
     for (ann_id, ann_ver), snap in package.annotations.items():
         if snap.annotation.document_id not in package.documents:
@@ -30,9 +32,11 @@ def _prepare_package_payloads(
                 )
 
     # 2. Serialize jsonl datasets
+    doc_order = package.manifest.document_order or list(package.documents.keys())
     doc_lines = [
-        json.dumps(doc.model_dump(), ensure_ascii=False)
-        for _, doc in sorted(package.documents.items(), key=lambda kv: kv[0])
+        json.dumps(package.documents[doc_id].model_dump(), ensure_ascii=False)
+        for doc_id in doc_order
+        if doc_id in package.documents
     ]
     docs_bytes = ("\n".join(doc_lines) + ("\n" if doc_lines else "")).encode("utf-8")
 
@@ -76,7 +80,19 @@ def _prepare_package_payloads(
         "search-events.jsonl": hashlib.sha256(search_bytes).hexdigest(),
     }
 
-    manifest_copy = package.manifest.model_copy(update={"file_hashes": file_hashes})
+    extra_files = embedded_files or {}
+    for filename, data in extra_files.items():
+        file_hashes[filename] = hashlib.sha256(data).hexdigest()
+
+    manifest_updates: dict[str, Any] = {
+        "file_hashes": file_hashes,
+        "format_version": "ontocurator-work-package/v2",
+        "document_order": doc_order,
+    }
+    if package.manifest.task_profile is not None:
+        manifest_updates["task_profile_sha256"] = profile_hash(package.manifest.task_profile)
+
+    manifest_copy = package.manifest.model_copy(update=manifest_updates)
     manifest_bytes = json.dumps(
         manifest_copy.model_dump(), indent=2, ensure_ascii=False
     ).encode("utf-8")
@@ -88,10 +104,15 @@ def _prepare_package_payloads(
         ev_bytes,
         sub_bytes,
         search_bytes,
+        extra_files,
     )
 
 
-def write_package_to_stream(package: ValidatedPackage, stream: BinaryIO) -> None:
+def write_package_to_stream(
+    package: ValidatedPackage,
+    stream: BinaryIO,
+    embedded_files: dict[str, bytes] | None = None,
+) -> None:
     """Write package archive to stream."""
     (
         manifest_bytes,
@@ -100,7 +121,8 @@ def write_package_to_stream(package: ValidatedPackage, stream: BinaryIO) -> None
         ev_bytes,
         sub_bytes,
         search_bytes,
-    ) = _prepare_package_payloads(package)
+        extra_files,
+    ) = _prepare_package_payloads(package, embedded_files=embedded_files)
 
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as z:
         z.writestr("manifest.json", manifest_bytes)
@@ -109,9 +131,15 @@ def write_package_to_stream(package: ValidatedPackage, stream: BinaryIO) -> None
         z.writestr("evidence.jsonl", ev_bytes)
         z.writestr("submissions.jsonl", sub_bytes)
         z.writestr("search-events.jsonl", search_bytes)
+        for name, data in extra_files.items():
+            z.writestr(name, data)
 
 
-def write_package(package: ValidatedPackage, target: Path) -> None:
+def write_package(
+    package: ValidatedPackage,
+    target: Path,
+    embedded_files: dict[str, bytes] | None = None,
+) -> None:
     """Validate referential integrity and atomically write a work package archive."""
     target_dir = target.parent
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -123,7 +151,7 @@ def write_package(package: ValidatedPackage, target: Path) -> None:
 
     try:
         with open(tmp_path, "wb") as f:
-            write_package_to_stream(package, f)
+            write_package_to_stream(package, f, embedded_files=embedded_files)
         os.replace(tmp_path, target)
     except Exception:
         if tmp_path.exists():
@@ -135,9 +163,17 @@ class PackageWriter:
     """Convenience class for writing packages to paths or streams."""
 
     @staticmethod
-    def write_to_stream(package: ValidatedPackage, stream: BinaryIO) -> None:
-        write_package_to_stream(package, stream)
+    def write_to_stream(
+        package: ValidatedPackage,
+        stream: BinaryIO,
+        embedded_files: dict[str, bytes] | None = None,
+    ) -> None:
+        write_package_to_stream(package, stream, embedded_files=embedded_files)
 
     @staticmethod
-    def write(package: ValidatedPackage, target: Path) -> None:
-        write_package(package, target)
+    def write(
+        package: ValidatedPackage,
+        target: Path,
+        embedded_files: dict[str, bytes] | None = None,
+    ) -> None:
+        write_package(package, target, embedded_files=embedded_files)

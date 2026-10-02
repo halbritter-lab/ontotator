@@ -58,3 +58,15 @@ def test_cli_serve_invalid_axes_config_schema_rejected(tmp_path) -> None:
     result = runner.invoke(app, ["serve", "--axes-config", str(bad_schema)])
     assert result.exit_code == 1
     assert "error" in result.output.lower()
+
+
+def test_cli_serve_nonexistent_ontology_rejected(tmp_path) -> None:
+    from ontocurator.cli import app
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["serve", "--ontology", str(tmp_path / "missing.json")],
+    )
+    assert result.exit_code == 1
+    assert "not found" in result.output.lower() or "error" in result.output.lower()

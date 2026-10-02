@@ -150,6 +150,9 @@ class OntologyService:
             ranked_ids=ranked_ids,
             shuffled=raw_result.get("shuffled", False),
             seed=seed,
+            layer_id=request.layer_id,
+            ontology_sha256=self.ref.sha256,
+            index_identity=self.index_identity,
         )
 
     def all_ancestors_of(self, hpo_id: str) -> set[str]:

@@ -26,6 +26,8 @@ class SearchEventRecord(BaseModel):
     selected_term_id: str | None = None
     ranked_position: int | None = None
     displayed_position: int | None = None
+    layer_id: str = "hpo-layer"
+    ontology_sha256: str = ""
     ontology_release: str
     index_identity: str
     timestamp: str

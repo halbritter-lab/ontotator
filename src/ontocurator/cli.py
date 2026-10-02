@@ -52,13 +52,13 @@ def serve(
         ),
     ] = Path("./workspace"),
     ontology: Annotated[
-        Path,
+        list[Path] | None,
         typer.Option(
             "--ontology",
             "-o",
-            help="Path to HPO JSON release file (hp.json).",
+            help="Path to ontology JSON release file (repeatable).",
         ),
-    ] = Path("./hp.json"),
+    ] = None,
     port: Annotated[
         int,
         typer.Option(
@@ -112,12 +112,14 @@ def serve(
         )
         raise typer.Exit(code=1)
 
-    if not ontology.exists():
-        typer.echo(
-            f"Error: Ontology file not found at: {ontology.resolve()}",
-            err=True,
-        )
-        raise typer.Exit(code=1)
+    ontology_list = [p.resolve() for p in (ontology or [])]
+    for ont_p in ontology_list:
+        if not ont_p.exists():
+            typer.echo(
+                f"Error: Ontology file not found at: {ont_p}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
 
     if port != 0 and _is_port_in_use(host, port):
         typer.echo(
@@ -188,7 +190,8 @@ def serve(
     config = AppConfig(
         workspace_dir=workspace,
         database_path=db_path,
-        ontology_path=ontology.resolve(),
+        ontology_path=ontology_list[0] if ontology_list else None,
+        ontology_paths=ontology_list,
         session_token=effective_token,
         host=host,
         port=actual_port,

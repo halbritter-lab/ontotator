@@ -77,6 +77,7 @@ class SearchRequest(BaseModel):
 
     workspace_key: WorkspaceKey
     annotation_id: str
+    layer_id: str = "hpo-layer"
     query: str
     route: Literal["lexical", "exact", "id", "browse"] = "lexical"
     k: int = Field(default=10, ge=1, le=100)
@@ -159,6 +160,8 @@ class SearchResult(BaseModel):
     shuffled: bool = False
     seed: str | None = None
     search_id: str | None = None
+    layer_id: str | None = None
+    ontology_sha256: str | None = None
     index_identity: str | None = None
 
 
