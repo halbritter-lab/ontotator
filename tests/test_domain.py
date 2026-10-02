@@ -10,7 +10,6 @@ from ontocurator.domain.annotations import (
     snapshot,
 )
 from ontocurator.domain.axes import Axes, AxisDefinition
-from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     Document,
     EvidenceMention,

@@ -9,17 +9,23 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.axes import Axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     EvidenceSnapshot,
-    OntologyRef,
     Segment,
 )
 from ontocurator.domain.errors import InvalidPackage, RevisionConflict
+from ontocurator.domain.profiles import (
+    AnnotationTypeDefinition,
+    AxisDefinition,
+    LayerDefinition,
+    OntologyDefinition,
+    TaskProfile,
+    profile_hash,
+)
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.workspace import (
     Draft,
@@ -31,6 +37,60 @@ from ontocurator.packages.models import PackageManifest, ValidatedPackage
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import Repository
 
+HP_DIGEST = "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4"
+
+
+def _create_storage_sample_profile() -> TaskProfile:
+    hp_ont = OntologyDefinition(
+        ontology_id="hp",
+        label="Human Phenotype Ontology",
+        release="2026-06-23",
+        sha256=HP_DIGEST,
+        format="obo-graph-json",
+    )
+    pheno_type = AnnotationTypeDefinition(
+        type_id="phenotype",
+        label="Phenotype",
+        axes=[
+            AxisDefinition(
+                id="assertion",
+                label="Assertion",
+                options=["present", "absent", "uncertain"],
+                allow_empty=True,
+            ),
+            AxisDefinition(
+                id="experiencer",
+                label="Experiencer",
+                options=["patient", "other"],
+                allow_empty=True,
+            ),
+            AxisDefinition(
+                id="temporality",
+                label="Temporality",
+                options=["current", "historical", "future"],
+                allow_empty=True,
+            ),
+        ],
+        evidence_policy="optional",
+    )
+    layer = LayerDefinition(
+        layer_id="hpo-layer",
+        label="Phenotypes",
+        ontology_id="hp",
+        access="editable",
+        default_visible=True,
+        default_type_id="phenotype",
+        annotation_types=[pheno_type],
+    )
+    return TaskProfile(
+        profile_id="hpo-context-example/v1",
+        version="1.0.0",
+        preset="editor-axes/v1",
+        ontologies=[hp_ont],
+        layers=[layer],
+        default_layer_id="hpo-layer",
+    )
+
 
 def _sample_package(pkg_id: str = "pkg-1") -> ValidatedPackage:
     text = "Patient exhibits hypotonia."
@@ -40,7 +100,7 @@ def _sample_package(pkg_id: str = "pkg-1") -> ValidatedPackage:
         language="de",
         text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
     )
-    ont = OntologyRef(release="2026-06-23", sha256="ont-123")
+    profile = _create_storage_sample_profile()
     ev = EvidenceSnapshot.create(
         mention=EvidenceMention(
             evidence_id="ev-1",
@@ -51,19 +111,24 @@ def _sample_package(pkg_id: str = "pkg-1") -> ValidatedPackage:
     ann = Annotation(
         annotation_id="ann-1",
         document_id="doc-1",
-        hpo_id="HP:0001252",
-        axes=Axes(assertion="present", experiencer="patient", temporality="current"),
+        layer_id="hpo-layer",
+        type_id="phenotype",
+        term_id="HP:0001252",
+        axes_values={"assertion": "present", "experiencer": "patient", "temporality": "current"},
         evidence_refs=[EvidenceRef(evidence_id="ev-1", version=ev.version)],
         provenance=Provenance(
             actor=ActorRef(actor_id="dr-meier", kind="human"),
             method="manual",
         ),
     )
-    snap = snapshot(ann, [ev], doc, ont)
+    snap = snapshot(ann, [ev], doc, profile)
 
     manifest = PackageManifest(
         package_id=pkg_id,
-        ontology=ont,
+        format_version="ontocurator-work-package/v2",
+        document_order=["doc-1"],
+        task_profile=profile,
+        task_profile_sha256=profile_hash(profile),
         created_at="2026-10-01T20:00:00Z",
     )
     return ValidatedPackage(
@@ -216,9 +281,9 @@ def test_package_idempotent_import_and_hash_collision_rejection(tmp_path: Path) 
     id2 = repo.import_package(pkg)
     assert id2 == "pkg-idem"
 
-    # Same package_id with different ontology / manifest hash -> rejection
+    # Same package_id with different manifest hash -> rejection
     pkg_colliding = _sample_package("pkg-idem")
-    pkg_colliding.manifest.ontology.release = "2026-09-01"
+    pkg_colliding.manifest.created_at = "2026-10-02T12:00:00Z"
     with pytest.raises(InvalidPackage, match="exists with different manifest hash"):
         repo.import_package(pkg_colliding)
 
@@ -247,7 +312,7 @@ def test_persistence_across_process_restart(tmp_path: Path) -> None:
         payload={"action": "check"},
     )
     repo1.run_mutation(
-        key, env, lambda d: d.model_copy(update={"document_checked": True})
+        key, env, lambda d: d.model_copy(update={"checked_layer_ids": ["hpo"]})
     )
 
     db1.close()
@@ -259,6 +324,7 @@ def test_persistence_across_process_restart(tmp_path: Path) -> None:
     draft2 = repo2.open_draft(key)
     assert draft2.revision == 1
     assert draft2.document_checked is True
+    assert draft2.checked_layer_ids == ["hpo"]
     db2.close()
 
 
@@ -375,146 +441,41 @@ def test_export_p_import_q_preserves_historical_submission(tmp_path: Path) -> No
     assert draft_q.key.package_id == "pkg-Q"
 
 
-def test_upgrade_v2_preserves_payloads_and_receipts(tmp_path: Path) -> None:
-    import json
+def test_legacy_v2_database_rejected_byte_identically(tmp_path: Path) -> None:
     import shutil
 
-    from ontocurator.domain.axes import EDITOR_AXES_CONFIG, AxesConfig
+    from ontocurator.domain.errors import DomainError
 
     fixtures_dir = Path(__file__).parent / "fixtures" / "legacy_v1"
-    expected = json.loads((fixtures_dir / "expected.json").read_text(encoding="utf-8"))
     db_source = fixtures_dir / "workspace-v2.sqlite"
     db_copy = tmp_path / "upgraded.sqlite"
     shutil.copy2(db_source, db_copy)
 
-    # Opening Database triggers _ensure_migrated() to v3
-    db = Database(db_copy)
-    repo = Repository(db)
+    before_bytes = db_copy.read_bytes()
 
-    # Verify migration v3 applied
-    conn = db.get_connection()
-    c = conn.cursor()
-    c.execute("SELECT MAX(version) FROM schema_migrations;")
-    assert c.fetchone()[0] == 3
+    with pytest.raises(DomainError) as exc_info:
+        Database(db_copy)
 
-    # Table package_axes_profiles exists and populated for legacy package
-    c.execute(
-        "SELECT profile_json, profile_sha256 FROM package_axes_profiles "
-        "WHERE package_id = ?;",
-        (expected["package_id"],),
-    )
-    row = c.fetchone()
-    assert row is not None
-
-    profile = AxesConfig.model_validate_json(row[0])
-    assert profile == EDITOR_AXES_CONFIG
-    assert row[1] == EDITOR_AXES_CONFIG.config_sha256
-
-    # get_axes_config returns profile
-    assert repo.get_axes_config(expected["package_id"]) == EDITOR_AXES_CONFIG
-
-    # Check original payloads in annotation_snapshots are preserved
-    c.execute("SELECT annotation_id, version, payload_json FROM annotation_snapshots;")
-    for _ann_id, _ver, p_json in c.fetchall():
-        snap_data = json.loads(p_json)
-        assert "schema_version" not in snap_data
-        assert "hpo_id" in snap_data["annotation"]
-
-    # Check receipts are preserved
-    for mut_id, r_info in expected["receipts"].items():
-        c.execute(
-            "SELECT request_hash, response_json FROM mutation_receipts "
-            "WHERE mutation_id = ?;",
-            (mut_id,),
-        )
-        r_row = c.fetchone()
-        assert r_row is not None
-        assert r_row[0] == r_info["request_hash"]
-
-    # Replay mutation envelope
-    indep_key = WorkspaceKey(
-        package_id=expected["package_id"],
-        document_id="doc-1",
-        annotator_id="dr-schmidt",
-        mode="independent",
-        target_set_id="",
-    )
-    env_retry = MutationEnvelope(
-        mutation_id="mut-edit-1",
-        expected_revision=0,
-        payload={"action": "create_annotation", "term_id": "HP:0001252"},
-    )
-    replayed = repo.run_mutation(indep_key, env_retry, lambda d: d)
-    assert replayed.revision == 1
-
-    db.close()
+    assert exc_info.value.code == "UNSUPPORTED_WORKSPACE_VERSION"
+    assert db_copy.read_bytes() == before_bytes
 
 
-def test_migration_failure_rolls_back(tmp_path: Path) -> None:
-    import json
+def test_legacy_v1_database_rejected_byte_identically(tmp_path: Path) -> None:
     import sqlite3
 
-    db_path = tmp_path / "rollback_test.sqlite"
-    conn = sqlite3.connect(str(db_path))
-    init_sql = (
-        Path(__file__).parent.parent
-        / "src"
-        / "ontocurator"
-        / "storage"
-        / "migrations"
-        / "001_initial.sql"
-    ).read_text(encoding="utf-8")
-    conn.executescript(init_sql)
-    conn.execute("INSERT INTO schema_migrations VALUES (1, '2026-10-01T00:00:00Z');")
-    mem_sql = (
-        Path(__file__).parent.parent
-        / "src"
-        / "ontocurator"
-        / "storage"
-        / "migrations"
-        / "002_membership.sql"
-    ).read_text(encoding="utf-8")
-    conn.executescript(mem_sql)
-    conn.execute("INSERT INTO schema_migrations VALUES (2, '2026-10-01T00:00:00Z');")
+    from ontocurator.domain.errors import DomainError
 
-    bad_manifest = {
-        "package_id": "pkg-unresolvable",
-        "format_version": "hpo-editor-work-package/v1",
-        "ontology": {"release": "2026-06-23", "sha256": "abc"},
-        "axes_definition": "unknown-nonexistent-axes/v999",
-        "file_hashes": {},
-        "created_at": "2026-10-01T00:00:00Z",
-    }
-    conn.execute(
-        "INSERT INTO packages (package_id, manifest_hash, manifest_json, created_at) "
-        "VALUES (?, ?, ?, ?);",
-        (
-            "pkg-unresolvable",
-            "dummy-hash",
-            json.dumps(bad_manifest),
-            "2026-10-01T00:00:00Z",
-        ),
-    )
+    db_path = tmp_path / "legacy_v1.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("CREATE TABLE schema_migrations (version INTEGER, applied_at TEXT);")
+    conn.execute("INSERT INTO schema_migrations VALUES (1, '2026-10-01T00:00:00Z');")
     conn.commit()
     conn.close()
 
-    # Now initializing Database should attempt migration to v3 and fail, rolling back
-    from ontocurator.domain.errors import DomainError
+    before_bytes = db_path.read_bytes()
 
-    with pytest.raises(DomainError, match="UNRESOLVABLE_PROFILE"):
+    with pytest.raises(DomainError) as exc_info:
         Database(db_path)
 
-    # Verify rollback: schema_migrations is still at 2
-    verify_conn = sqlite3.connect(str(db_path))
-    c = verify_conn.cursor()
-    c.execute("SELECT MAX(version) FROM schema_migrations;")
-    assert c.fetchone()[0] == 2
-    c.execute(
-        "SELECT name FROM sqlite_master "
-        "WHERE type='table' AND name='package_axes_profiles';"
-    )
-    row = c.fetchone()
-    if row:
-        c.execute("SELECT COUNT(*) FROM package_axes_profiles;")
-        assert c.fetchone()[0] == 0
-    verify_conn.close()
+    assert exc_info.value.code == "UNSUPPORTED_WORKSPACE_VERSION"
+    assert db_path.read_bytes() == before_bytes

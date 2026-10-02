@@ -16,6 +16,7 @@ class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     workspace_dir: Path
+    database_path: Path | None = None
     ontology_path: Path | None = None
     ontology_paths: list[Path] = []
     expected_ontology_ref: OntologyRef | None = None

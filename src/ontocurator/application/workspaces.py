@@ -10,8 +10,11 @@ from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import AxisDefinition
 from ontocurator.domain.documents import Document
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.profiles import TaskProfile, resolve_layer, resolve_ontology
 from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import Draft, Submission, WorkspaceKey
+from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
 from ontocurator.storage.repository import Repository
 
@@ -48,9 +51,30 @@ class WorkspaceView(BaseModel):
 class WorkspaceService:
     """Coordinates workspace opening, document summaries and input selection."""
 
-    def __init__(self, repo: Repository, ontology: OntologyService) -> None:
+    def __init__(
+        self,
+        repo: Repository,
+        ontology: OntologyService | OntologyRegistry,
+    ) -> None:
         self.repo = repo
-        self.ontology = ontology
+        if isinstance(ontology, OntologyRegistry):
+            self.registry: OntologyRegistry | None = ontology
+            self.ontology: OntologyService | None = None
+        else:
+            self.registry = None
+            self.ontology = ontology
+
+    def _get_service_for_layer(
+        self, profile: TaskProfile, layer_id: str
+    ) -> OntologyService:
+        if self.registry is not None:
+            return self.registry.for_layer(profile, layer_id)
+        if self.ontology is not None:
+            return self.ontology
+        raise DomainError(
+            "ONTOLOGY_NOT_FOUND",
+            f"No ontology service configured for layer '{layer_id}'",
+        )
 
     def list_documents(self, package_id: str) -> list[DocumentSummary]:
         """List documents showing only metadata, without proposal counts."""
@@ -85,17 +109,46 @@ class WorkspaceService:
     ) -> WorkspaceView:
         """Open or initialize a workspace view."""
         doc = self.get_document(key.package_id, key.document_id)
+        profile = self.repo.get_task_profile(key.package_id)
+        scope = build_scope(profile, key.mode)
+
+        if key.scope_id and key.scope_id != scope.scope_id:
+            raise DomainError(
+                "INVALID_SCOPE",
+                f"Workspace scope_id '{key.scope_id}' does not match expected '{scope.scope_id}'",
+            )
+        if not key.scope_id:
+            key = key.model_copy(update={"scope_id": scope.scope_id})
+
+        term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = {}
 
         if key.mode == "independent":
             effective_targets = ReviewTargetSet.create([])
             available_inputs: list[AnnotationSnapshot] = []
+        elif key.mode == "assisted":
+            effective_targets = ReviewTargetSet.create([])
+            all_inputs = self.get_review_inputs(key.package_id, key.document_id)
+            available_inputs = [
+                s for s in all_inputs if s.annotation.layer_id in scope.reference_layer_ids
+            ]
+            for a in available_inputs:
+                tid = a.annotation.term_id
+                if tid not in term_statuses:
+                    service = self._get_service_for_layer(profile, a.annotation.layer_id)
+                    term_statuses[tid] = service.validate_term(tid).status
         else:
+            # review mode
             if targets is not None:
                 effective_targets = targets
             else:
                 existing_draft = self.repo.open_draft(key)
                 effective_targets = existing_draft.targets
-            available_inputs = self.get_review_inputs(key.package_id, key.document_id)
+            all_inputs = self.get_review_inputs(key.package_id, key.document_id)
+            available_inputs = [
+                s
+                for s in all_inputs
+                if s.annotation.layer_id in (scope.editable_layer_ids + scope.reference_layer_ids)
+            ]
             canonical = ReviewTargetSet.create(effective_targets.targets)
             if (
                 effective_targets != canonical
@@ -110,26 +163,37 @@ class WorkspaceService:
             }
             for target in canonical.targets:
                 snap = members.get((target.annotation_id, target.version))
-                if (
-                    snap is None
-                    or snap.document_id != doc.document_id
-                    or snap.text_sha256 != doc.text_sha256
-                    or snap.ontology_sha256 != self.ontology.ref.sha256
-                ):
+                if snap is None:
                     raise DomainError(
                         "INVALID_REVIEW_TARGET",
-                        "Review target does not match this document and ontology",
+                        "Review target not found in available inputs",
                     )
+                if snap.document_id != doc.document_id or snap.text_sha256 != doc.text_sha256:
+                    raise DomainError(
+                        "INVALID_REVIEW_TARGET",
+                        "Review target does not match this document",
+                    )
+                if snap.annotation.layer_id not in scope.editable_layer_ids:
+                    raise DomainError(
+                        "INVALID_REVIEW_TARGET",
+                        f"Review target layer '{snap.annotation.layer_id}' is not an editable layer in this scope",
+                    )
+                layer = resolve_layer(profile, snap.annotation.layer_id)
+                ont = resolve_ontology(profile, layer.ontology_id)
+                if snap.ontology_sha256 != ont.sha256:
+                    raise DomainError(
+                        "INVALID_REVIEW_TARGET",
+                        "Review target ontology SHA-256 does not match configured layer ontology",
+                    )
+            for a in available_inputs:
+                tid = a.annotation.term_id
+                if tid not in term_statuses:
+                    service = self._get_service_for_layer(profile, a.annotation.layer_id)
+                    term_statuses[tid] = service.validate_term(tid).status
 
         draft = self.repo.open_draft(key, effective_targets)
         submissions = self.repo.get_submissions_for_workspace(key)
         axes_profile = self.repo.get_axes_config(key.package_id)
-
-        term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = {}
-        for a in available_inputs:
-            tid = a.annotation.term_id
-            if tid not in term_statuses:
-                term_statuses[tid] = self.ontology.validate_term(tid).status
 
         return WorkspaceView(
             key=key,

@@ -5,13 +5,12 @@ from typing import Any
 
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import (
-    CLINICAL_PHENOTYPE_CONFIG,
-    EDITOR_AXES_CONFIG,
     AxesConfig,
 )
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
+from ontocurator.domain.profiles import TaskProfile, profile_hash
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.workspace import (
@@ -34,6 +33,7 @@ def _key_str(key: WorkspaceKey) -> str:
         key.document_id,
         key.annotator_id,
         key.mode,
+        key.scope_id,
         key.target_set_id,
     ]
     return ":".join(parts)
@@ -76,41 +76,8 @@ class Repository:
         conn = self.db.get_connection()
         cursor = conn.cursor()
 
-        # Resolve package axes profile
-        profile: AxesConfig
-        if package.manifest.axes_config is not None:
-            if (
-                package.manifest.axes_definition == "editor-axes/v1"
-                and package.manifest.axes_config.axes != EDITOR_AXES_CONFIG.axes
-            ):
-                raise InvalidPackage(
-                    "Reserved profile name 'editor-axes/v1' cannot be redefined "
-                    "with different axes"
-                )
-            if (
-                package.manifest.axes_definition == "clinical-phenotype/v1"
-                and package.manifest.axes_config.axes != CLINICAL_PHENOTYPE_CONFIG.axes
-            ):
-                raise InvalidPackage(
-                    "Reserved profile name 'clinical-phenotype/v1' cannot be redefined "
-                    "with different axes"
-                )
-            profile = package.manifest.axes_config
-        elif package.manifest.axes_definition == "editor-axes/v1":
-            profile = EDITOR_AXES_CONFIG
-        elif package.manifest.axes_definition == "clinical-phenotype/v1":
-            profile = CLINICAL_PHENOTYPE_CONFIG
-        elif (
-            fallback_axes_config is not None
-            and fallback_axes_config.definition_name == package.manifest.axes_definition
-        ):
-            profile = fallback_axes_config
-        else:
-            raise DomainError(
-                "UNRESOLVABLE_PROFILE",
-                f"Cannot resolve axes profile '{package.manifest.axes_definition}' "
-                f"for package '{package.manifest.package_id}'",
-            )
+        task_profile = package.manifest.task_profile
+        t_hash = package.manifest.task_profile_sha256 or profile_hash(task_profile)
 
         cursor.execute("BEGIN IMMEDIATE;")
         try:
@@ -128,13 +95,13 @@ class Repository:
                         f"different manifest hash"
                     )
                 prof_row = cursor.execute(
-                    "SELECT profile_sha256 FROM package_axes_profiles "
+                    "SELECT profile_sha256 FROM package_task_profiles "
                     "WHERE package_id = ?;",
                     (package.manifest.package_id,),
                 ).fetchone()
-                if prof_row is not None and prof_row[0] != profile.config_sha256:
+                if prof_row is not None and prof_row[0] != t_hash:
                     raise InvalidPackage(
-                        "Conflicting axes profile resolution for existing package"
+                        "Conflicting task profile resolution for existing package"
                     )
                 self._store_package_membership(package)
                 cursor.execute("COMMIT;")
@@ -154,12 +121,12 @@ class Repository:
             )
 
             cursor.execute(
-                "INSERT INTO package_axes_profiles "
+                "INSERT INTO package_task_profiles "
                 "(package_id, profile_json, profile_sha256) VALUES (?, ?, ?);",
                 (
                     package.manifest.package_id,
-                    profile.model_dump_json(),
-                    profile.config_sha256,
+                    task_profile.model_dump_json(),
+                    t_hash,
                 ),
             )
 
@@ -209,16 +176,17 @@ class Repository:
                 return d
 
             for sub in package.submissions.values():
+                checked_ids = getattr(sub, "checked_layer_ids", [])
                 cursor.execute(
                     "INSERT OR IGNORE INTO submissions (submission_id, origin_key, "
-                    "targets_json, draft_revision, document_checked, payload_json, "
+                    "targets_json, draft_revision, checked_layer_ids_json, payload_json, "
                     "created_at) VALUES (?, ?, ?, ?, ?, ?, ?);",
                     (
                         sub.submission_id,
                         _key_str(sub.origin_key),
                         json.dumps(sub.targets.model_dump()),
                         sub.draft_revision,
-                        1 if sub.document_checked else 0,
+                        json.dumps(checked_ids),
                         json.dumps(_dump_sub(sub)),
                         sub.created_at,
                     ),
@@ -241,12 +209,15 @@ class Repository:
             for event in package.search_events:
                 cursor.execute(
                     "INSERT OR IGNORE INTO search_events "
-                    "(event_id, workspace_key, annotation_id, payload_json, "
-                    "timestamp) VALUES (?, ?, ?, ?, ?);",
+                    "(event_id, workspace_key, annotation_id, layer_id, "
+                    "ontology_sha256, payload_json, timestamp) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?);",
                     (
                         event.event_id,
                         _key_str(event.workspace_key),
                         event.annotation_id,
+                        getattr(event, "layer_id", None),
+                        getattr(event, "ontology_sha256", None),
                         json.dumps(event.model_dump()),
                         event.timestamp,
                     ),
@@ -259,19 +230,29 @@ class Repository:
             cursor.execute("ROLLBACK;")
             raise
 
-    def get_axes_config(self, package_id: str) -> AxesConfig:
-        """Return the resolved AxesConfig for an installed package."""
+    def get_task_profile(self, package_id: str) -> TaskProfile:
+        """Return the resolved TaskProfile for an installed package."""
         conn = self.db.get_connection()
         row = conn.execute(
-            "SELECT profile_json FROM package_axes_profiles WHERE package_id = ?;",
+            "SELECT profile_json FROM package_task_profiles WHERE package_id = ?;",
             (package_id,),
         ).fetchone()
         if row is None:
             raise DomainError(
                 "PACKAGE_NOT_FOUND",
-                f"No package or axes profile found for package '{package_id}'",
+                f"No package or task profile found for package '{package_id}'",
             )
-        return AxesConfig.model_validate_json(row[0])
+        return TaskProfile.model_validate_json(row[0])
+
+    def get_axes_config(self, package_id: str) -> AxesConfig:
+        """Return AxesConfig synthesized from package task profile for backwards compatibility."""
+        tp = self.get_task_profile(package_id)
+        name = tp.preset or "custom"
+        for layer in tp.layers:
+            for at in layer.annotation_types:
+                if at.axes:
+                    return AxesConfig(definition_name=name, axes=at.axes)
+        return AxesConfig(definition_name=name, axes=[])
 
     def open_draft(
         self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
@@ -297,7 +278,7 @@ class Repository:
         k_str = _key_str(key)
 
         cursor.execute(
-            "SELECT revision, document_checked, targets_json "
+            "SELECT revision, checked_layer_ids_json, targets_json "
             "FROM workspaces WHERE workspace_key = ?;",
             (k_str,),
         )
@@ -312,15 +293,16 @@ class Repository:
             cursor.execute(
                 "INSERT INTO workspaces "
                 "(workspace_key, package_id, document_id, annotator_id, "
-                "mode, target_set_id, targets_json, revision, "
-                "document_checked, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?);",
+                "mode, scope_id, target_set_id, targets_json, revision, "
+                "checked_layer_ids_json, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '[]', ?);",
                 (
                     k_str,
                     key.package_id,
                     key.document_id,
                     key.annotator_id,
                     key.mode,
+                    key.scope_id,
                     key.target_set_id,
                     json.dumps(effective_targets.model_dump()),
                     now,
@@ -405,7 +387,7 @@ class Repository:
             return self._open_draft(key, targets)
 
         revision = int(row[0])
-        doc_checked = bool(row[1])
+        checked_layers = json.loads(row[1]) if row[1] else []
         parsed_targets = ReviewTargetSet.model_validate_json(row[2])
 
         # Load workspace annotations
@@ -446,7 +428,7 @@ class Repository:
             annotations=annotations,
             evidence=evidence,
             decisions=decisions,
-            document_checked=doc_checked,
+            checked_layer_ids=checked_layers,
         )
 
     def run_mutation(
@@ -508,11 +490,11 @@ class Repository:
                 # Update workspace record
                 cursor.execute(
                     "UPDATE workspaces "
-                    "SET revision = ?, document_checked = ?, updated_at = ? "
+                    "SET revision = ?, checked_layer_ids_json = ?, updated_at = ? "
                     "WHERE workspace_key = ?;",
                     (
                         new_revision,
-                        1 if result.document_checked else 0,
+                        json.dumps(result.checked_layer_ids),
                         now,
                         k_str,
                     ),
@@ -614,14 +596,14 @@ class Repository:
                 sub_payload = _dump_sub(result)
                 cursor.execute(
                     "INSERT INTO submissions (submission_id, origin_key, targets_json, "
-                    "draft_revision, document_checked, payload_json, created_at) "
+                    "draft_revision, checked_layer_ids_json, payload_json, created_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?);",
                     (
                         result.submission_id,
                         k_str,
                         json.dumps(result.targets.model_dump()),
                         result.draft_revision,
-                        1 if result.document_checked else 0,
+                        json.dumps(getattr(result, "checked_layer_ids", [])),
                         json.dumps(sub_payload),
                         result.created_at,
                     ),
@@ -752,18 +734,34 @@ class Repository:
         )
 
     def list_documents(self, package_id: str) -> list[Document]:
-        """Fetch all documents for a package."""
+        """Fetch all documents for a package, preserving document_order if present."""
         conn = self.db.get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT document_id, text, language, text_sha256 FROM documents "
-            "WHERE package_id = ? ORDER BY document_id;",
+            "SELECT manifest_json FROM packages WHERE package_id = ?;",
             (package_id,),
         )
-        return [
+        row = cursor.fetchone()
+        order_map: dict[str, int] = {}
+        if row is not None:
+            m = json.loads(row[0])
+            for idx, doc_id in enumerate(m.get("document_order", [])):
+                order_map[doc_id] = idx
+
+        cursor.execute(
+            "SELECT document_id, text, language, text_sha256 FROM documents "
+            "WHERE package_id = ?;",
+            (package_id,),
+        )
+        docs = [
             Document(document_id=r[0], text=r[1], language=r[2], text_sha256=r[3])
             for r in cursor.fetchall()
         ]
+        if order_map:
+            docs.sort(key=lambda d: order_map.get(d.document_id, 999999))
+        else:
+            docs.sort(key=lambda d: d.document_id)
+        return docs
 
     def get_annotation_snapshot(
         self, annotation_id: str, version: str
@@ -860,11 +858,15 @@ class Repository:
 
     def save_search_event(self, event: SearchEventRecord) -> None:
         self.db.get_connection().execute(
-            "INSERT INTO search_events VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO search_events (event_id, workspace_key, annotation_id, "
+            "layer_id, ontology_sha256, payload_json, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 event.event_id,
                 _key_str(event.workspace_key),
                 event.annotation_id,
+                getattr(event, "layer_id", None),
+                getattr(event, "ontology_sha256", None),
                 event.model_dump_json(),
                 event.timestamp,
             ),

@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+
 import pytest
 
 from ontocurator.domain.errors import DomainError

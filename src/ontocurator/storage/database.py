@@ -1,23 +1,22 @@
 import sqlite3
 import threading
-import warnings
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
 from ontocurator.domain.errors import DomainError
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 
 class Database:
-    """SQLite database connection and migration manager."""
+    """SQLite database connection manager for ontocurator-workspace/v4."""
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self._local = threading.local()
         self._connections: list[sqlite3.Connection] = []
         self._lock = threading.Lock()
+        self.migration_warnings: list[str] = []
         self._ensure_migrated()
 
     def run_migrations(self) -> None:
@@ -42,133 +41,68 @@ class Database:
         return cast(sqlite3.Connection, self._local.conn)
 
     def _ensure_migrated(self) -> None:
+        # Pre-DDL version check if file already exists with non-zero size
+        if self.path.exists() and self.path.stat().st_size > 0:
+            ro_uri = f"file:{self.path.resolve().as_posix()}?mode=ro"
+            try:
+                ro_conn = sqlite3.connect(ro_uri, uri=True)
+            except Exception as exc:
+                raise DomainError(
+                    "UNSUPPORTED_WORKSPACE_VERSION",
+                    f"Unable to read existing database: {exc}",
+                ) from exc
+            try:
+                cursor = ro_conn.cursor()
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='workspace_metadata';"
+                )
+                has_meta = cursor.fetchone() is not None
+                if has_meta:
+                    cursor.execute(
+                        "SELECT value FROM workspace_metadata WHERE key = 'format_version';"
+                    )
+                    row = cursor.fetchone()
+                    if row is None or row[0] != "ontocurator-workspace/v4":
+                        raise DomainError(
+                            "UNSUPPORTED_WORKSPACE_VERSION",
+                            f"Database workspace format '{row[0] if row else None}' is not supported. "
+                            "Expected 'ontocurator-workspace/v4'.",
+                        )
+                else:
+                    cursor.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations';"
+                    )
+                    has_mig = cursor.fetchone() is not None
+                    if has_mig:
+                        cursor.execute("SELECT MAX(version) FROM schema_migrations;")
+                        row = cursor.fetchone()
+                        ver = row[0] if row else None
+                        raise DomainError(
+                            "UNSUPPORTED_WORKSPACE_VERSION",
+                            f"Legacy database version {ver} is not supported. "
+                            "Please create a fresh workspace directory or use an external migration tool.",
+                        )
+                    else:
+                        raise DomainError(
+                            "UNSUPPORTED_WORKSPACE_VERSION",
+                            "Existing database does not contain valid workspace metadata.",
+                        )
+            finally:
+                ro_conn.close()
+
+            # Format confirmed as v4
+            return
+
+        # Fresh database: initialize schema_v4.sql
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT name FROM sqlite_master "
-            "WHERE type='table' AND name='schema_migrations';"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='workspace_metadata';"
         )
-        table_exists = cursor.fetchone() is not None
-
-        current_ver = 0
-        if table_exists:
-            cursor.execute("SELECT MAX(version) FROM schema_migrations;")
-            row = cursor.fetchone()
-            if row and row[0] is not None:
-                current_ver = int(row[0])
-
-        if current_ver > CURRENT_SCHEMA_VERSION:
-            raise DomainError(
-                "UNKNOWN_DB_VERSION",
-                f"Database version {current_ver} is newer than supported "
-                f"version {CURRENT_SCHEMA_VERSION}",
-            )
-
-        if current_ver < 1:
-            migration_path = Path(__file__).parent / "migrations" / "001_initial.sql"
-            sql = migration_path.read_text(encoding="utf-8")
-            now = datetime.now(UTC).isoformat()
-            full_script = (
-                f"{sql}\nINSERT INTO schema_migrations (version, applied_at) "
-                f"VALUES (1, '{now}');"
-            )
-            cursor.executescript(full_script)
-
-        if current_ver < 2:
-            sql = (
-                Path(__file__).parent / "migrations" / "002_membership.sql"
-            ).read_text(encoding="utf-8")
-            conn.executescript("BEGIN IMMEDIATE;\n" + sql)
-            try:
-                import json
-
-                for row in conn.execute(
-                    "SELECT b.local_package_id, s.submission_id, s.payload_json FROM "
-                    "imported_submission_bindings b JOIN submissions s "
-                    "USING(submission_id)"
-                ).fetchall():
-                    key = json.loads(row[2])["origin_key"]
-                    key["package_id"] = row[0]
-                    if key["mode"] == "independent":
-                        key["target_set_id"] = "targets-0"
-                    local_key = ":".join(
-                        key[k]
-                        for k in (
-                            "package_id",
-                            "document_id",
-                            "annotator_id",
-                            "mode",
-                            "target_set_id",
-                        )
-                    )
-                    conn.execute(
-                        "UPDATE imported_submission_bindings SET local_key = ? WHERE "
-                        "local_package_id = ? AND submission_id = ?",
-                        (local_key, row[0], row[1]),
-                    )
-                conn.execute(
-                    "INSERT INTO schema_migrations VALUES (2, ?)",
-                    (datetime.now(UTC).isoformat(),),
-                )
-                conn.execute("COMMIT")
-            except Exception:
-                conn.execute("ROLLBACK")
-                raise
-
-        if current_ver < 3:
-            sql = (
-                Path(__file__).parent / "migrations" / "003_axes_profiles.sql"
-            ).read_text(encoding="utf-8")
-            conn.executescript("BEGIN IMMEDIATE;\n" + sql)
-            try:
-                import json
-
-                from ontocurator.domain.axes import (
-                    CLINICAL_PHENOTYPE_CONFIG,
-                    EDITOR_AXES_CONFIG,
-                    AxesConfig,
-                )
-
-                for row in conn.execute(
-                    "SELECT package_id, manifest_json FROM packages;"
-                ).fetchall():
-                    pkg_id = row[0]
-                    manifest_data = json.loads(row[1])
-                    axes_def = manifest_data.get("axes_definition")
-                    axes_cfg_raw = manifest_data.get("axes_config")
-
-                    if axes_cfg_raw is not None:
-                        profile = AxesConfig.model_validate(axes_cfg_raw)
-                    elif axes_def in ("editor-axes/v1", None):
-                        profile = EDITOR_AXES_CONFIG
-                    elif axes_def == "clinical-phenotype/v1":
-                        profile = CLINICAL_PHENOTYPE_CONFIG
-                    else:
-                        raise DomainError(
-                            "UNRESOLVABLE_PROFILE",
-                            f"Cannot resolve axes profile '{axes_def}' "
-                            f"for package '{pkg_id}'",
-                        )
-
-                    conn.execute(
-                        "INSERT INTO package_axes_profiles "
-                        "(package_id, profile_json, profile_sha256) VALUES (?, ?, ?);",
-                        (pkg_id, profile.model_dump_json(), profile.config_sha256),
-                    )
-
-                conn.execute(
-                    "INSERT INTO schema_migrations VALUES (3, ?)",
-                    (datetime.now(UTC).isoformat(),),
-                )
-                conn.execute("COMMIT")
-            except Exception:
-                conn.execute("ROLLBACK")
-                raise
-        self.migration_warnings = [
-            row[0] for row in conn.execute("SELECT message FROM migration_warnings")
-        ]
-        for message in self.migration_warnings:
-            warnings.warn(message, RuntimeWarning, stacklevel=2)
+        if cursor.fetchone() is None:
+            schema_path = Path(__file__).parent / "schema_v4.sql"
+            sql = schema_path.read_text(encoding="utf-8")
+            cursor.executescript(sql)
 
     def close(self) -> None:
         """Close connections after request workers have stopped."""

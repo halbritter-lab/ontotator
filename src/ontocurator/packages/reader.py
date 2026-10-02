@@ -179,7 +179,12 @@ def _read_package(
     if registry is not None:
         missing_ontologies: list[str] = []
         for ont in manifest.task_profile.ontologies:
-            if not ont.resource_path and registry.get_service(ont.sha256) is None:
+            has_ont = (
+                registry.has_ontology(ont.sha256)
+                if hasattr(registry, "has_ontology")
+                else (registry.get_service(ont.sha256) is not None)
+            )
+            if not ont.resource_path and not has_ont:
                 missing_ontologies.append(f"'{ont.ontology_id}' ({ont.sha256})")
         if missing_ontologies:
             raise DomainError(

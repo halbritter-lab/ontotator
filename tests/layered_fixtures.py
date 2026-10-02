@@ -26,7 +26,7 @@ from ontocurator.domain.profiles import (
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
 
 HP_DIGEST = "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4"
-MONDO_DIGEST = "1111111111111111111111111111111111111111111111111111111111111111"
+MONDO_DIGEST = "e47645d858059a37897a4c913d10efc6b7d16fdc24edd6656080a90777735223"
 EXT_DIGEST = "2222222222222222222222222222222222222222222222222222222222222222"
 
 
@@ -259,9 +259,9 @@ def make_layered_package(
             ontology_id="ext",
             label="Extended Secondary Ontology",
             release="2026-01-01",
-            sha256=EXT_DIGEST,
+            sha256=MONDO_DIGEST,
             format="obo-graph-json",
-            resource_path="ontologies/ext.json",
+            resource_path="ontologies/mondo.json",
         )
 
         type_optional = AnnotationTypeDefinition(

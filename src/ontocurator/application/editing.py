@@ -15,7 +15,7 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.axes import Axes, AxesConfig, validate_axes
+from ontocurator.domain.axes import Axes, validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     Document,
@@ -27,7 +27,14 @@ from ontocurator.domain.documents import (
     validate_segments,
 )
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.profiles import (
+    TaskProfile,
+    resolve_layer,
+    resolve_type,
+)
+from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
+from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
 from ontocurator.storage.repository import Repository
 
@@ -40,8 +47,10 @@ class CreateAnnotationCommand(BaseModel):
     command: Literal["create_annotation"] = "create_annotation"
     annotation_id: str
     term_id: str
+    layer_id: str | None = None
+    type_id: str | None = None
     search_event_id: str | None = None
-    axes: Axes = Field(default_factory=Axes)
+    axes_values: dict[str, str] = Field(default_factory=dict)
     evidence_id: str | None = None
     segments: list[Segment] = Field(default_factory=list)
     label: str | None = None
@@ -67,6 +76,13 @@ class CreateAnnotationCommand(BaseModel):
                 d.pop("hpo_id")
             elif has_hpo:
                 d["term_id"] = d.pop("hpo_id")
+
+            if "axes" in d and "axes_values" not in d:
+                raw_axes = d.pop("axes")
+                if isinstance(raw_axes, dict):
+                    d["axes_values"] = raw_axes.get("values", raw_axes)
+                elif hasattr(raw_axes, "values"):
+                    d["axes_values"] = raw_axes.values
             return d
         return data
 
@@ -77,6 +93,10 @@ class CreateAnnotationCommand(BaseModel):
     @hpo_id.setter
     def hpo_id(self, val: str) -> None:
         self.term_id = val
+
+    @property
+    def axes(self) -> Axes:
+        return Axes(definition_name="custom", values=self.axes_values)
 
 
 class SetTermCommand(BaseModel):
@@ -124,7 +144,25 @@ class SetAxesCommand(BaseModel):
 
     command: Literal["set_axes"] = "set_axes"
     annotation_id: str
-    axes: Axes
+    axes_values: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+            if "axes" in d and "axes_values" not in d:
+                raw_axes = d.pop("axes")
+                if isinstance(raw_axes, dict):
+                    d["axes_values"] = raw_axes.get("values", raw_axes)
+                elif hasattr(raw_axes, "values"):
+                    d["axes_values"] = raw_axes.values
+            return d
+        return data
+
+    @property
+    def axes(self) -> Axes:
+        return Axes(definition_name="custom", values=self.axes_values)
 
 
 class AttachMentionCommand(BaseModel):
@@ -170,6 +208,26 @@ class DeleteDraftAnnotationCommand(BaseModel):
     annotation_id: str
 
 
+class CheckLayerCommand(BaseModel):
+    """Command toggling checked status for a specific layer."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    command: Literal["check_layer"] = "check_layer"
+    layer_id: str
+    checked: bool
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_kind(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+            if "kind" in d and "command" not in d:
+                d["command"] = d.pop("kind")
+            return d
+        return data
+
+
 EditCommand = Annotated[
     CreateAnnotationCommand
     | SetTermCommand
@@ -177,19 +235,41 @@ EditCommand = Annotated[
     | AttachMentionCommand
     | EditMentionCommand
     | DetachMentionCommand
-    | DeleteDraftAnnotationCommand,
+    | DeleteDraftAnnotationCommand
+    | CheckLayerCommand,
     Field(discriminator="command"),
 ]
 
 _edit_adapter: TypeAdapter[EditCommand] = TypeAdapter(EditCommand)
 
 
-class EditorService:
-    """Coordinates annotation commands, validations, and copy-on-write logic."""
+class EditingService:
+    """Coordinates command validation, mutation and atomic draft updates."""
 
-    def __init__(self, repo: Repository, ontology: OntologyService) -> None:
+    def __init__(
+        self,
+        repo: Repository,
+        ontology: OntologyService | OntologyRegistry,
+    ) -> None:
         self.repo = repo
-        self.ontology = ontology
+        if isinstance(ontology, OntologyRegistry):
+            self.registry: OntologyRegistry | None = ontology
+            self.ontology: OntologyService | None = None
+        else:
+            self.registry = None
+            self.ontology = ontology
+
+    def _get_service_for_layer(
+        self, profile: TaskProfile, layer_id: str
+    ) -> OntologyService:
+        if self.registry is not None:
+            return self.registry.for_layer(profile, layer_id)
+        if self.ontology is not None:
+            return self.ontology
+        raise DomainError(
+            "ONTOLOGY_NOT_FOUND",
+            f"No ontology service configured for layer '{layer_id}'",
+        )
 
     def parse_command(self, payload: dict[str, Any]) -> EditCommand:
         """Parse untyped mutation payload into typed EditCommand."""
@@ -204,10 +284,17 @@ class EditorService:
                 "DOCUMENT_NOT_FOUND",
                 f"Document '{key.document_id}' not found in package '{key.package_id}'",
             )
-        profile = self.repo.get_axes_config(key.package_id)
+        profile = self.repo.get_task_profile(key.package_id)
+        scope = build_scope(profile, key.mode)
+
+        if key.scope_id and key.scope_id != scope.scope_id:
+            raise DomainError(
+                "INVALID_SCOPE",
+                f"Workspace scope_id '{key.scope_id}' does not match expected '{scope.scope_id}'",
+            )
 
         def operation(draft: Draft) -> Draft:
-            result = self._execute_edit(draft, cmd, doc, profile)
+            result = self._execute_edit(draft, cmd, doc, profile, scope)
             if (
                 isinstance(cmd, (CreateAnnotationCommand, SetTermCommand))
                 and cmd.search_event_id
@@ -250,36 +337,68 @@ class EditorService:
             raise ValueError(f"Expected Draft from run_mutation, got {type(result)}")
         return result
 
+    apply_edit = apply
+
     def _execute_edit(
-        self, draft: Draft, cmd: EditCommand, doc: Document, profile: AxesConfig
+        self,
+        draft: Draft,
+        cmd: EditCommand,
+        doc: Document,
+        profile: TaskProfile,
+        scope: TaskScope,
     ) -> Draft:
+        if isinstance(cmd, CheckLayerCommand):
+            return self._check_layer(draft, cmd, scope)
         if isinstance(cmd, CreateAnnotationCommand):
-            return self._create_annotation(draft, cmd, doc, profile)
+            return self._create_annotation(draft, cmd, doc, profile, scope)
         if isinstance(cmd, SetTermCommand):
-            return self._set_term(draft, cmd, doc, profile)
+            return self._set_term(draft, cmd, doc, profile, scope)
         if isinstance(cmd, SetAxesCommand):
-            return self._set_axes(draft, cmd, doc, profile)
+            return self._set_axes(draft, cmd, doc, profile, scope)
         if isinstance(cmd, AttachMentionCommand):
-            return self._attach_mention(draft, cmd, doc, profile)
+            return self._attach_mention(draft, cmd, doc, profile, scope)
         if isinstance(cmd, EditMentionCommand):
-            return self._edit_mention(draft, cmd, doc, profile)
+            return self._edit_mention(draft, cmd, doc, profile, scope)
         if isinstance(cmd, DetachMentionCommand):
-            return self._detach_mention(draft, cmd, doc, profile)
+            return self._detach_mention(draft, cmd, doc, profile, scope)
         if isinstance(cmd, DeleteDraftAnnotationCommand):
-            return self._delete_annotation(draft, cmd)
+            return self._delete_annotation(draft, cmd, scope)
         raise ValueError(f"Unhandled command: {cmd}")
 
-    def _validate_term(self, hpo_id: str) -> None:
-        status = self.ontology.validate_term(hpo_id)
+    def _check_layer(
+        self,
+        draft: Draft,
+        cmd: CheckLayerCommand,
+        scope: TaskScope,
+    ) -> Draft:
+        if cmd.layer_id not in scope.editable_layer_ids:
+            raise DomainError(
+                "INVALID_LAYER",
+                f"Layer '{cmd.layer_id}' cannot be checked in this workspace",
+            )
+        if cmd.checked:
+            draft.checked_layer_ids = sorted(list(set(draft.checked_layer_ids) | {cmd.layer_id}))
+        else:
+            draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != cmd.layer_id]
+        return draft
+
+    def _validate_term_for_layer(
+        self,
+        profile: TaskProfile,
+        layer_id: str,
+        term_id: str,
+    ) -> None:
+        service = self._get_service_for_layer(profile, layer_id)
+        status = service.validate_term(term_id)
         if status.status == "obsolete":
             raise DomainError(
                 "OBSOLETE_TERM",
-                f"HPO term '{hpo_id}' is obsolete and cannot be newly created",
+                f"Term '{term_id}' is obsolete and cannot be newly created",
             )
         if status.status == "unknown":
             raise DomainError(
                 "UNKNOWN_TERM",
-                f"HPO term '{hpo_id}' is not present in the current ontology release",
+                f"Term '{term_id}' is not present in the current ontology release",
             )
 
     def _create_annotation(
@@ -287,44 +406,71 @@ class EditorService:
         draft: Draft,
         cmd: CreateAnnotationCommand,
         doc: Document,
-        profile: AxesConfig,
+        profile: TaskProfile,
+        scope: TaskScope,
     ) -> Draft:
-        self._validate_term(cmd.term_id)
-        axes = cmd.axes
-        if (
-            axes.definition_name == "editor-axes/v1"
-            and profile.definition_name != "editor-axes/v1"
-            and not axes.values
-        ):
-            axes = Axes(
-                definition_name=profile.definition_name,
-                values={a.id: None for a in profile.axes},
+        target_layer = cmd.layer_id
+        if target_layer is None:
+            if len(scope.editable_layer_ids) == 1:
+                target_layer = scope.editable_layer_ids[0]
+            else:
+                raise DomainError(
+                    "MISSING_LAYER",
+                    "layer_id is required when multiple editable layers exist",
+                )
+
+        if target_layer in scope.reference_layer_ids:
+            raise DomainError(
+                "REFERENCE_LAYER_READ_ONLY",
+                f"Layer '{target_layer}' is reference-only and cannot be edited",
             )
+        if target_layer not in scope.editable_layer_ids:
+            raise DomainError(
+                "UNKNOWN_LAYER",
+                f"Layer '{target_layer}' is not in this workspace scope",
+            )
+
+        layer_def = resolve_layer(profile, target_layer)
+        target_type = cmd.type_id
+        if target_type is None:
+            target_type = layer_def.default_type_id or (
+                layer_def.annotation_types[0].type_id if layer_def.annotation_types else None
+            )
+            if target_type is None:
+                raise DomainError("MISSING_TYPE", f"No type defined for layer '{target_layer}'")
+
+        type_def = resolve_type(profile, target_layer, target_type)
+
+        self._validate_term_for_layer(profile, target_layer, cmd.term_id)
+
+        if any(a.annotation.annotation_id == cmd.annotation_id for a in draft.annotations):
+            raise DomainError(
+                "DUPLICATE_ANNOTATION_ID",
+                f"Annotation '{cmd.annotation_id}' already exists in current draft",
+            )
+
         try:
-            validate_axes(axes, profile, complete=False)
+            validate_axes(cmd.axes_values, type_def.axes, complete=False)
         except ValueError as exc:
             raise DomainError("INVALID_AXES", str(exc)) from exc
 
         evidence_list: list[EvidenceSnapshot] = []
         evidence_refs: list[EvidenceRef] = []
 
-        if cmd.evidence_id and cmd.segments:
+        if cmd.segments:
             validate_segments(doc.text, cmd.segments)
-            mention_label = cmd.label
-            if not mention_label and cmd.segments:
-                mention_label = doc.text[cmd.segments[0].start : cmd.segments[0].end]
+            mention_id = cmd.evidence_id or f"ev-{cmd.annotation_id}"
             mention = EvidenceMention(
-                evidence_id=cmd.evidence_id,
+                evidence_id=mention_id,
                 segments=cmd.segments,
             )
             ev_snap = snapshot_evidence(mention, doc)
             evidence_list.append(ev_snap)
             evidence_refs.append(
-                EvidenceRef(evidence_id=cmd.evidence_id, version=ev_snap.version)
+                EvidenceRef(evidence_id=mention_id, version=ev_snap.version)
             )
-            # Add or update in draft evidence pool
             draft.evidence = [
-                e for e in draft.evidence if e.mention.evidence_id != cmd.evidence_id
+                e for e in draft.evidence if e.mention.evidence_id != mention_id
             ] + [ev_snap]
 
         source_refs: list[str] = []
@@ -339,17 +485,19 @@ class EditorService:
         ann = Annotation(
             annotation_id=cmd.annotation_id,
             document_id=doc.document_id,
+            layer_id=target_layer,
+            type_id=target_type,
             term_id=cmd.term_id,
-            axes=axes,
+            axes_values=cmd.axes_values,
             evidence_refs=evidence_refs,
             provenance=prov,
         )
-        snap = snapshot(ann, evidence_list, doc, self.ontology.ref, axes_config=profile)
+        snap = snapshot(ann, evidence_list, doc, profile)
         draft.annotations = [
-            a
-            for a in draft.annotations
-            if a.annotation.annotation_id != cmd.annotation_id
+            a for a in draft.annotations if a.annotation.annotation_id != cmd.annotation_id
         ] + [snap]
+        # Invalidate checked status for this layer
+        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != target_layer]
         self._update_decision_replacements(draft, cmd.annotation_id, snap)
         return draft
 
@@ -358,15 +506,11 @@ class EditorService:
         draft: Draft,
         cmd: SetTermCommand,
         doc: Document,
-        profile: AxesConfig,
+        profile: TaskProfile,
+        scope: TaskScope,
     ) -> Draft:
-        self._validate_term(cmd.term_id)
         existing = next(
-            (
-                a
-                for a in draft.annotations
-                if a.annotation.annotation_id == cmd.annotation_id
-            ),
+            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
             None,
         )
         if existing is None:
@@ -374,15 +518,21 @@ class EditorService:
                 "ANNOTATION_NOT_FOUND",
                 f"Annotation '{cmd.annotation_id}' not found in current draft",
             )
+        layer_id = existing.annotation.layer_id
+        if layer_id not in scope.editable_layer_ids:
+            raise DomainError(
+                "REFERENCE_LAYER_READ_ONLY",
+                f"Annotation '{cmd.annotation_id}' belongs to reference layer '{layer_id}'",
+            )
 
+        self._validate_term_for_layer(profile, layer_id, cmd.term_id)
         updated_ann = existing.annotation.model_copy(update={"term_id": cmd.term_id})
-        new_snap = snapshot(
-            updated_ann, existing.evidence, doc, self.ontology.ref, axes_config=profile
-        )
+        new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
         ]
+        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
@@ -391,14 +541,11 @@ class EditorService:
         draft: Draft,
         cmd: SetAxesCommand,
         doc: Document,
-        profile: AxesConfig,
+        profile: TaskProfile,
+        scope: TaskScope,
     ) -> Draft:
         existing = next(
-            (
-                a
-                for a in draft.annotations
-                if a.annotation.annotation_id == cmd.annotation_id
-            ),
+            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
             None,
         )
         if existing is None:
@@ -406,19 +553,27 @@ class EditorService:
                 "ANNOTATION_NOT_FOUND",
                 f"Annotation '{cmd.annotation_id}' not found in current draft",
             )
+        layer_id = existing.annotation.layer_id
+        type_id = existing.annotation.type_id
+        if layer_id not in scope.editable_layer_ids:
+            raise DomainError(
+                "REFERENCE_LAYER_READ_ONLY",
+                f"Annotation '{cmd.annotation_id}' belongs to reference layer '{layer_id}'",
+            )
+
+        type_def = resolve_type(profile, layer_id, type_id)
         try:
-            validate_axes(cmd.axes, profile, complete=False)
+            validate_axes(cmd.axes_values, type_def.axes, complete=False)
         except ValueError as exc:
             raise DomainError("INVALID_AXES", str(exc)) from exc
 
-        updated_ann = existing.annotation.model_copy(update={"axes": cmd.axes})
-        new_snap = snapshot(
-            updated_ann, existing.evidence, doc, self.ontology.ref, axes_config=profile
-        )
+        updated_ann = existing.annotation.model_copy(update={"axes_values": cmd.axes_values})
+        new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
         ]
+        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
@@ -427,15 +582,12 @@ class EditorService:
         draft: Draft,
         cmd: AttachMentionCommand,
         doc: Document,
-        profile: AxesConfig,
+        profile: TaskProfile,
+        scope: TaskScope,
     ) -> Draft:
         validate_segments(doc.text, cmd.segments)
         existing = next(
-            (
-                a
-                for a in draft.annotations
-                if a.annotation.annotation_id == cmd.annotation_id
-            ),
+            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
             None,
         )
         if existing is None:
@@ -443,8 +595,13 @@ class EditorService:
                 "ANNOTATION_NOT_FOUND",
                 f"Annotation '{cmd.annotation_id}' not found in current draft",
             )
+        layer_id = existing.annotation.layer_id
+        if layer_id not in scope.editable_layer_ids:
+            raise DomainError(
+                "REFERENCE_LAYER_READ_ONLY",
+                f"Annotation '{cmd.annotation_id}' belongs to reference layer '{layer_id}'",
+            )
 
-        # Check existing evidence in draft
         ev_snap = next(
             (e for e in draft.evidence if e.mention.evidence_id == cmd.evidence_id),
             None,
@@ -459,22 +616,19 @@ class EditorService:
 
         new_ref = EvidenceRef(evidence_id=cmd.evidence_id, version=ev_snap.version)
         new_refs = [
-            r
-            for r in existing.annotation.evidence_refs
-            if r.evidence_id != cmd.evidence_id
+            r for r in existing.annotation.evidence_refs if r.evidence_id != cmd.evidence_id
         ] + [new_ref]
         new_ev_list = [
             e for e in existing.evidence if e.mention.evidence_id != cmd.evidence_id
         ] + [ev_snap]
 
         updated_ann = existing.annotation.model_copy(update={"evidence_refs": new_refs})
-        new_snap = snapshot(
-            updated_ann, new_ev_list, doc, self.ontology.ref, axes_config=profile
-        )
+        new_snap = snapshot(updated_ann, new_ev_list, doc, profile)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
         ]
+        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
@@ -483,7 +637,8 @@ class EditorService:
         draft: Draft,
         cmd: EditMentionCommand,
         doc: Document,
-        profile: AxesConfig,
+        profile: TaskProfile,
+        scope: TaskScope,
     ) -> Draft:
         validate_segments(doc.text, cmd.segments)
 
@@ -494,7 +649,7 @@ class EditorService:
         ]
 
         if cmd.annotation_id and len(referencing) > 1:
-            # Copy-on-write for the selected annotation
+            # Copy-on-write for the selected target annotation
             new_ev_id = f"{cmd.evidence_id}-cow-{len(draft.evidence) + 1}"
             mention = EvidenceMention(
                 evidence_id=new_ev_id,
@@ -504,14 +659,16 @@ class EditorService:
             draft.evidence.append(new_ev_snap)
 
             target = next(
-                (
-                    a
-                    for a in draft.annotations
-                    if a.annotation.annotation_id == cmd.annotation_id
-                ),
+                (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
                 None,
             )
             if target:
+                layer_id = target.annotation.layer_id
+                if layer_id not in scope.editable_layer_ids:
+                    raise DomainError(
+                        "REFERENCE_LAYER_READ_ONLY",
+                        f"Annotation belongs to reference layer '{layer_id}'",
+                    )
                 new_refs = [
                     r
                     for r in target.annotation.evidence_refs
@@ -522,23 +679,16 @@ class EditorService:
                     for e in target.evidence
                     if e.mention.evidence_id != cmd.evidence_id
                 ] + [new_ev_snap]
-                updated_ann = target.annotation.model_copy(
-                    update={"evidence_refs": new_refs}
-                )
-                new_snap = snapshot(
-                    updated_ann,
-                    new_ev_list,
-                    doc,
-                    self.ontology.ref,
-                    axes_config=profile,
-                )
+                updated_ann = target.annotation.model_copy(update={"evidence_refs": new_refs})
+                new_snap = snapshot(updated_ann, new_ev_list, doc, profile)
                 draft.annotations = [
                     a if a.annotation.annotation_id != cmd.annotation_id else new_snap
                     for a in draft.annotations
                 ]
+                draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
                 self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         else:
-            # In-place update of mention for referencing annotations
+            # In-place update of mention
             mention = EvidenceMention(
                 evidence_id=cmd.evidence_id,
                 segments=cmd.segments,
@@ -548,12 +698,17 @@ class EditorService:
                 e for e in draft.evidence if e.mention.evidence_id != cmd.evidence_id
             ] + [new_ev_snap]
 
+            affected_layers: set[str] = set()
             updated_annotations = []
-            for snap in draft.annotations:
-                if any(
-                    r.evidence_id == cmd.evidence_id
-                    for r in snap.annotation.evidence_refs
-                ):
+            for snap_item in draft.annotations:
+                if any(r.evidence_id == cmd.evidence_id for r in snap_item.annotation.evidence_refs):
+                    layer_id = snap_item.annotation.layer_id
+                    if layer_id not in scope.editable_layer_ids:
+                        raise DomainError(
+                            "REFERENCE_LAYER_READ_ONLY",
+                            f"Annotation belongs to reference layer '{layer_id}'",
+                        )
+                    affected_layers.add(layer_id)
                     new_refs = [
                         r
                         if r.evidence_id != cmd.evidence_id
@@ -561,29 +716,24 @@ class EditorService:
                             evidence_id=cmd.evidence_id,
                             version=new_ev_snap.version,
                         )
-                        for r in snap.annotation.evidence_refs
+                        for r in snap_item.annotation.evidence_refs
                     ]
                     new_ev_list = [
                         e if e.mention.evidence_id != cmd.evidence_id else new_ev_snap
-                        for e in snap.evidence
+                        for e in snap_item.evidence
                     ]
-                    updated_ann = snap.annotation.model_copy(
-                        update={"evidence_refs": new_refs}
-                    )
-                    updated_snap = snapshot(
-                        updated_ann,
-                        new_ev_list,
-                        doc,
-                        self.ontology.ref,
-                        axes_config=profile,
-                    )
+                    updated_ann = snap_item.annotation.model_copy(update={"evidence_refs": new_refs})
+                    updated_snap = snapshot(updated_ann, new_ev_list, doc, profile)
                     updated_annotations.append(updated_snap)
                     self._update_decision_replacements(
-                        draft, snap.annotation.annotation_id, updated_snap
+                        draft, snap_item.annotation.annotation_id, updated_snap
                     )
                 else:
-                    updated_annotations.append(snap)
+                    updated_annotations.append(snap_item)
             draft.annotations = updated_annotations
+            draft.checked_layer_ids = [
+                lid for lid in draft.checked_layer_ids if lid not in affected_layers
+            ]
 
         return draft
 
@@ -592,14 +742,11 @@ class EditorService:
         draft: Draft,
         cmd: DetachMentionCommand,
         doc: Document,
-        profile: AxesConfig,
+        profile: TaskProfile,
+        scope: TaskScope,
     ) -> Draft:
         target = next(
-            (
-                a
-                for a in draft.annotations
-                if a.annotation.annotation_id == cmd.annotation_id
-            ),
+            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
             None,
         )
         if target is None:
@@ -607,41 +754,56 @@ class EditorService:
                 "ANNOTATION_NOT_FOUND",
                 f"Annotation '{cmd.annotation_id}' not found",
             )
+        layer_id = target.annotation.layer_id
+        if layer_id not in scope.editable_layer_ids:
+            raise DomainError(
+                "REFERENCE_LAYER_READ_ONLY",
+                f"Annotation belongs to reference layer '{layer_id}'",
+            )
 
         new_refs = [
-            r
-            for r in target.annotation.evidence_refs
-            if r.evidence_id != cmd.evidence_id
+            r for r in target.annotation.evidence_refs if r.evidence_id != cmd.evidence_id
         ]
         new_ev_list = [
             e for e in target.evidence if e.mention.evidence_id != cmd.evidence_id
         ]
         updated_ann = target.annotation.model_copy(update={"evidence_refs": new_refs})
-        new_snap = snapshot(
-            updated_ann, new_ev_list, doc, self.ontology.ref, axes_config=profile
-        )
+        new_snap = snapshot(updated_ann, new_ev_list, doc, profile)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
         ]
+        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
     def _delete_annotation(
-        self, draft: Draft, cmd: DeleteDraftAnnotationCommand
+        self,
+        draft: Draft,
+        cmd: DeleteDraftAnnotationCommand,
+        scope: TaskScope,
     ) -> Draft:
+        target = next(
+            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
+            None,
+        )
+        if target:
+            layer_id = target.annotation.layer_id
+            if layer_id not in scope.editable_layer_ids:
+                raise DomainError(
+                    "REFERENCE_LAYER_READ_ONLY",
+                    f"Annotation belongs to reference layer '{layer_id}'",
+                )
+            draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
+
         draft.annotations = [
-            a
-            for a in draft.annotations
-            if a.annotation.annotation_id != cmd.annotation_id
+            a for a in draft.annotations if a.annotation.annotation_id != cmd.annotation_id
         ]
-        # Remove any decisions whose replacement was this annotation
         draft.decisions = [
             d
             for d in draft.decisions
             if not (d.replacement and d.replacement.annotation_id == cmd.annotation_id)
         ]
-        # Clean up unreferenced evidence
         active_ev_ids = {
             r.evidence_id for a in draft.annotations for r in a.annotation.evidence_refs
         }
@@ -651,7 +813,10 @@ class EditorService:
         return draft
 
     def _update_decision_replacements(
-        self, draft: Draft, annotation_id: str, new_snap: AnnotationSnapshot
+        self,
+        draft: Draft,
+        annotation_id: str,
+        new_snap: AnnotationSnapshot,
     ) -> None:
         """Editing an approved replacement requires a fresh review decision."""
         draft.decisions = [
@@ -663,3 +828,6 @@ class EditorService:
                 and dec.replacement.version != new_snap.version
             )
         ]
+
+
+EditorService = EditingService

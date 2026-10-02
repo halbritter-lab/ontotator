@@ -158,15 +158,11 @@ async def upload_package(
     request: Request,
 ) -> dict[str, str | dict[str, object]]:
     """Upload and atomically import a work package archive."""
-    fallback_axes = getattr(
-        getattr(request.app.state, "config", None), "axes_config", None
-    )
+    registry = getattr(request.app.state, "ontology_registry", None)
     content = await file.read()
     stream = io.BytesIO(content)
-    pkg = PackageReader.read_from_stream(
-        stream, ontology.ref, fallback_axes_config=fallback_axes
-    )
-    package_id = repo.import_package(pkg, fallback_axes_config=fallback_axes)
+    pkg = PackageReader.read_from_stream(stream, registry=registry)
+    package_id = repo.import_package(pkg)
     return {"package_id": package_id, "manifest": pkg.manifest.model_dump()}
 
 
@@ -221,7 +217,7 @@ def open_workspace(
     )
     view = ws_svc.open(key, targets)
     return OpenWorkspaceResponse(
-        workspace_id=encode_workspace_id(key),
+        workspace_id=encode_workspace_id(view.key),
         view=view,
     )
 

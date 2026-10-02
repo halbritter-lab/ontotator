@@ -67,7 +67,10 @@ class OntologyRegistry:
         sha = ont_def.sha256.lower()
 
         if sha in self._services:
-            return self._services[sha]
+            svc = self._services[sha]
+            if svc.ref.release in ("unknown", "pinned") and ont_def.release:
+                svc.ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
+            return svc
 
         if sha in self._registered_paths:
             ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
@@ -86,6 +89,11 @@ class OntologyRegistry:
             f"Ontology '{ont_def.ontology_id}' ({ont_def.label}, release: {ont_def.release}, SHA-256: {ont_def.sha256}) "
             f"for layer '{layer_id}' is not available. Please provide it via '--ontology PATH'.",
         )
+
+    def has_ontology(self, sha256: str) -> bool:
+        """Check if an ontology with the given SHA-256 is registered or loaded."""
+        sha = sha256.lower()
+        return sha in self._services or sha in self._registered_paths
 
     def get_service(self, sha256: str) -> OntologyService | None:
         """Return cached or registered OntologyService by SHA-256, if available."""

@@ -131,46 +131,30 @@ def test_export_fails_on_missing_decision_dependency(tmp_path):
         ExportService(repo).for_workspace(key_for())
 
 
-def test_migration_preserves_ambiguous_snapshots_with_warning(tmp_path):
+def test_legacy_database_rejected_byte_identically(tmp_path):
     import sqlite3
     from pathlib import Path
 
     import pytest
 
-    db_path = tmp_path / "legacy"
+    from ontocurator.domain.errors import DomainError
+
+    db_path = tmp_path / "legacy.sqlite"
     conn = sqlite3.connect(db_path)
     conn.executescript(
-        Path("src/ontocurator/storage/migrations/001_initial.sql").read_text()
+        Path("src/ontocurator/storage/migrations/001_initial.sql").read_text(
+            encoding="utf-8"
+        )
     )
     conn.execute("INSERT INTO schema_migrations VALUES (1, 'now')")
-    for name in ("a", "b"):
-        conn.execute(
-            "INSERT INTO packages VALUES (?, ?, ?, ?)", (name, "hash", "{}", "now")
-        )
-        conn.execute(
-            "INSERT INTO documents VALUES (?, ?, ?, ?, ?)",
-            ("doc", name, "", "de", "hash"),
-        )
-    conn.execute(
-        "INSERT INTO annotation_snapshots VALUES ('ann', 'version', 'doc', '{}')"
-    )
     conn.commit()
     conn.close()
-    with pytest.warns(RuntimeWarning, match="ambiguous"):
-        db = Database(db_path)
-    assert (
-        db.get_connection()
-        .execute("SELECT count(*) FROM annotation_snapshots")
-        .fetchone()[0]
-        == 1
-    )
-    assert (
-        db.get_connection()
-        .execute("SELECT count(*) FROM package_annotations")
-        .fetchone()[0]
-        == 0
-    )
-    assert db.migration_warnings
+
+    before_bytes = db_path.read_bytes()
+    with pytest.raises(DomainError) as exc_info:
+        Database(db_path)
+    assert exc_info.value.code == "UNSUPPORTED_WORKSPACE_VERSION"
+    assert db_path.read_bytes() == before_bytes
 
 
 def test_imported_search_audit_survives_scoped_export(tmp_path):
@@ -204,7 +188,7 @@ def test_import_rejects_conflicting_existing_snapshot_atomically(tmp_path):
     repo.import_package(original)
     conflicting = _sample_package("conflicting")
     snap = next(iter(conflicting.annotations.values()))
-    snap.annotation.hpo_id = "HP:9999999"
+    snap.annotation.term_id = "HP:9999999"
     with pytest.raises(InvalidPackage):
         repo.import_package(conflicting)
     assert repo.get_document("conflicting", "doc-1") is None

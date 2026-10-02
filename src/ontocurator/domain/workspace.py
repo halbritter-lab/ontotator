@@ -6,7 +6,7 @@ from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.documents import EvidenceSnapshot
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 
-WorkspaceMode = Literal["independent", "review"]
+WorkspaceMode = Literal["independent", "review", "assisted"]
 
 
 class WorkspaceKey(BaseModel):
@@ -18,6 +18,7 @@ class WorkspaceKey(BaseModel):
     document_id: str
     annotator_id: str
     mode: WorkspaceMode
+    scope_id: str = ""
     target_set_id: str
 
 
@@ -32,7 +33,19 @@ class Draft(BaseModel):
     annotations: list[AnnotationSnapshot] = Field(default_factory=list)
     evidence: list[EvidenceSnapshot] = Field(default_factory=list)
     decisions: list[ReviewDecision] = Field(default_factory=list)
-    document_checked: bool = False
+    checked_layer_ids: list[str] = Field(default_factory=list)
+
+    @property
+    def document_checked(self) -> bool:
+        return len(self.checked_layer_ids) > 0
+
+    @document_checked.setter
+    def document_checked(self, value: bool) -> None:
+        if value:
+            if not self.checked_layer_ids:
+                self.checked_layer_ids = ["hpo"]
+        else:
+            self.checked_layer_ids = []
 
     @model_validator(mode="before")
     @classmethod
@@ -50,7 +63,11 @@ class Draft(BaseModel):
                         snaps.append(s)
                 d = dict(data)
                 d["annotations"] = snaps
-                return d
+                data = d
+            if data.get("document_checked") and not data.get("checked_layer_ids"):
+                d = dict(data)
+                d["checked_layer_ids"] = ["hpo"]
+                data = d
         return data
 
 
@@ -65,7 +82,8 @@ class Submission(BaseModel):
     draft_revision: int
     snapshots: list[AnnotationSnapshot]
     decisions: list[ReviewDecision]
-    document_checked: bool
+    checked_layer_ids: list[str] = Field(default_factory=list)
+    document_checked: bool = True
     created_at: str
 
     @model_validator(mode="before")

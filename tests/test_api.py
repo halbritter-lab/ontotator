@@ -8,20 +8,11 @@ from fastapi.testclient import TestClient
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
 from ontocurator.domain.annotations import (
-    ActorRef,
-    Annotation,
     AnnotationRef,
-    Provenance,
-    snapshot,
 )
-from ontocurator.domain.axes import Axes
 from ontocurator.domain.documents import (
     Document,
-    EvidenceMention,
-    EvidenceRef,
     OntologyRef,
-    Segment,
-    snapshot_evidence,
 )
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
@@ -36,43 +27,10 @@ def _make_ontology_ref() -> OntologyRef:
     return OntologyRef(release="2026-06-23", sha256=digest)
 
 
-def _create_sample_package_bytes(ontology_ref: OntologyRef) -> bytes:
-    text = "The patient showed severe hypotonia and seizure activity."
-    text_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    doc = Document(
-        document_id="doc-1",
-        text=text,
-        language="en",
-        text_sha256=text_digest,
-    )
+def _create_sample_package_bytes(ontology_ref: OntologyRef | None = None) -> bytes:
+    from test_storage import _sample_package
 
-    ev_a = snapshot_evidence(
-        EvidenceMention(evidence_id="ev-a", segments=[Segment(start=27, end=36)]),
-        doc,
-    )
-    ann_a = Annotation(
-        annotation_id="prop-1",
-        document_id="doc-1",
-        hpo_id="HP:0001252",
-        axes=Axes(assertion="present"),
-        evidence_refs=[EvidenceRef(evidence_id="ev-a", version=ev_a.version)],
-        provenance=Provenance(
-            actor=ActorRef(actor_id="dr-meier", kind="human"),
-            method="manual",
-        ),
-    )
-    snap_a = snapshot(ann_a, [ev_a], doc, ontology_ref)
-
-    pkg = ValidatedPackage(
-        manifest=PackageManifest(
-            package_id="pkg-api-1",
-            created_at="2026-10-01T00:00:00Z",
-            ontology=ontology_ref,
-        ),
-        documents={"doc-1": doc},
-        annotations={(snap_a.annotation.annotation_id, snap_a.version): snap_a},
-        evidence={(ev_a.mention.evidence_id, ev_a.version): ev_a},
-    )
+    pkg = _sample_package("pkg-api-1")
     buf = io.BytesIO()
     PackageWriter.write_to_stream(pkg, buf)
     return buf.getvalue()

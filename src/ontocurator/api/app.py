@@ -36,7 +36,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     if config is not None:
         # Initialize storage and ontology
-        db = Database(config.database_path)
+        db_path = config.database_path or (config.workspace_dir / "editor.db")
+        db = Database(db_path)
         repo = Repository(db)
 
         from ontocurator.ontology.registry import OntologyRegistry
