@@ -131,6 +131,15 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             return (
               <li
                 key={`${candidateTermId}-${cand.rank}`}
+                role="button"
+                tabIndex={obsolete ? -1 : 0}
+                aria-disabled={obsolete}
+                onKeyDown={(event) => {
+                  if (!obsolete && (event.key === "Enter" || event.key === " ")) {
+                    event.preventDefault();
+                    onSelectCandidate(cand, state.searchId ?? undefined);
+                  }
+                }}
                 className={`candidate-card ${obsolete ? "candidate-obsolete" : ""}`}
                 style={
                   isSelected

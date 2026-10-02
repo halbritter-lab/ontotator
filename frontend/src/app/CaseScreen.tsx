@@ -25,6 +25,7 @@ import {
   type ReviewDecision,
   type TargetProposal,
 } from "../editor/ReviewActions";
+import { SearchPanel } from "../editor/SearchPanel";
 import { SearchManager } from "../editor/searchState";
 import { TextPane } from "../editor/TextPane";
 import type { MentionDisplay, SelectionPayload } from "../spans/adapter";
@@ -49,6 +50,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onNavigateCase,
   documentList,
 }) => {
+  const [pendingAnnotation, setPendingAnnotation] = useState<{
+    annotationId: string; evidenceId: string; layerId: string; typeId: string;
+    segments: SelectionPayload["segments"];
+  } | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const creatingPending = useRef(false);
   const [draft, setDraft] = useState<Draft>(view.draft);
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
@@ -192,6 +199,22 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }));
   }, [targetSnapshot, layerSelection.visibleLayerIds]);
 
+  const visibleSources = useMemo(() => view.key.mode === "independent" ? [] :
+    (view.available_inputs ?? []).filter(s =>
+      layerSelection.visibleLayerIds.includes(s.annotation.layer_id) &&
+      !(view.targets?.targets ?? []).some(t => t.annotation_id === s.annotation.annotation_id && t.version === s.version)),
+    [view.key.mode, view.available_inputs, view.targets, layerSelection.visibleLayerIds]);
+  const sourceKey = (s: AnnotationSnapshot) => refKey({ annotation_id: s.annotation.annotation_id, version: s.version });
+  const selectedSource = visibleSources.find(s => sourceKey(s) === selectedSourceId);
+  const sourceMentions = visibleSources.flatMap(s => s.evidence.map(ev => ({
+    evidence_id: `source:${sourceKey(s)}:${ev.mention.evidence_id}:${ev.version}`,
+    sourceId: sourceKey(s), segments: ev.mention.segments,
+  })));
+  const selectSource = (id: string) => {
+    setSelectedSourceId(id); setSelectedAnnotationId(null); setSelectedEvidenceId(null);
+    setSelectionIntent("new_mention"); cancelPending();
+  };
+
   const reportError = (error: unknown) => setActionError(error instanceof Error ? error.message : String(error));
 
   const downloadExport = async () => {
@@ -261,33 +284,40 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           const activeLayerId = layerSelection.activeLayerId;
           const activeLayerDef = (view.layers ?? []).find(l => l.layer_id === activeLayerId);
           const activeTypeId = layerSelection.activeTypeId ?? activeLayerDef?.annotation_types?.[0]?.type_id ?? "default";
-          const activeTypeDef = activeLayerDef?.annotation_types?.find(t => t.type_id === activeTypeId);
-
-          const newAnnId = `ann-${Date.now()}`;
-          const defaultTermId = activeLayerDef?.ontology_id === "mondo" ? "MONDO:0000001" : "HP:0000118";
-          const initialValues: Record<string, string | null> = {};
-          for (const axis of (activeTypeDef?.axes ?? view.axes_config ?? [])) {
-            initialValues[axis.id] = null;
-          }
-          await enqueueMutation({
-            command: "create_annotation",
-            annotation_id: newAnnId,
-            layer_id: activeLayerId,
-            type_id: activeTypeId,
-            term_id: defaultTermId,
-            evidence_id: evidenceId,
-            segments: payload.segments,
-            axes_values: initialValues,
-          });
-          setSelectedAnnotationId(newAnnId);
-          setSelectedEvidenceId(evidenceId);
+          setSelectedSourceId(null);
+          setPendingAnnotation({ annotationId: `ann-${crypto.randomUUID()}`, evidenceId,
+            layerId: activeLayerId, typeId: activeTypeId, segments: payload.segments });
         }
       }
     } catch (error) { reportError(error); }
   };
 
+  const cancelPending = () => { setPendingAnnotation(null); searchManager.clear(); };
+
+  const createPendingAnnotation = async (termId: string, searchId?: string) => {
+    if (!pendingAnnotation || creatingPending.current) return;
+    creatingPending.current = true;
+    const pending = pendingAnnotation;
+    try {
+      const type = view.layers?.find(l => l.layer_id === pending.layerId)?.annotation_types.find(t => t.type_id === pending.typeId);
+      await enqueueMutation({ command: "create_annotation", annotation_id: pending.annotationId,
+        evidence_id: pending.evidenceId, layer_id: pending.layerId, type_id: pending.typeId,
+        term_id: termId, search_event_id: searchId, segments: pending.segments,
+        axes_values: Object.fromEntries((type?.axes ?? []).map(axis => [axis.id, null])) });
+      setPendingAnnotation(null);
+      setSelectedAnnotationId(pending.annotationId);
+      setSelectedEvidenceId(pending.evidenceId);
+      searchManager.clear();
+    } catch (error) { reportError(error); }
+    finally { creatingPending.current = false; }
+  };
+
   const handlePickMention = (evidenceId: string) => {
-    if (evidenceId.startsWith("target:")) return;
+    const source = sourceMentions.find(mention => mention.evidence_id === evidenceId);
+    if (source) { selectSource(source.sourceId); return; }
+    if (evidenceId.startsWith("target:") || evidenceId === pendingAnnotation?.evidenceId) return;
+    setSelectedSourceId(null);
+    cancelPending();
     setSelectedEvidenceId(evidenceId);
     const owner = (draft.annotations ?? []).find((a) =>
       (a.annotation.evidence_refs ?? []).some((r) => r.evidence_id === evidenceId)
@@ -324,6 +354,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         segments: [],
         axes_values: initialValues,
       });
+      setSelectedSourceId(null); cancelPending();
       setSelectedAnnotationId(newAnnId);
       setSelectedEvidenceId(null);
       setShowSpanlessModal(false);
@@ -420,15 +451,20 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       reference_layer_ids: [],
     };
     const next = setActiveLayer(layerSelection, view.layers ?? [], scope, layerId);
+    setSelectedAnnotationId(null); setSelectedEvidenceId(null); setSelectedSourceId(null);
+    setSelectionIntent("new_mention"); cancelPending();
     setLayerSelection(next);
   };
 
   const handleToggleVisibility = (layerId: string) => {
     const next = toggleLayerVisibility(layerSelection, layerId);
+    setSelectedAnnotationId(null); setSelectedEvidenceId(null); setSelectedSourceId(null);
+    setSelectionIntent("new_mention"); cancelPending();
     setLayerSelection(next);
   };
 
   const handleSetActiveType = (typeId: string) => {
+    cancelPending();
     setLayerSelection(setActiveType(layerSelection, view.layers ?? [], typeId));
   };
 
@@ -573,7 +609,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           )}
 
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
-            setSelectedAnnotationId(null); setSelectedEvidenceId(null); setSelectionIntent("new_mention");
+            setSelectedAnnotationId(null); setSelectedEvidenceId(null); setSelectedSourceId(null); cancelPending(); setSelectionIntent("new_mention");
           }}>Neue Annotation markieren</button>
           <button
             type="button"
@@ -647,6 +683,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </>
           )}
 
+          {visibleSources.length > 0 && <section aria-label="Referenzannotationen">
+            <div className="sidebar-header">Referenzannotationen ({visibleSources.length})</div>
+            {visibleSources.map(s => <button type="button" className="btn btn-secondary" key={sourceKey(s)}
+              aria-pressed={sourceKey(s) === selectedSourceId} onClick={() => selectSource(sourceKey(s))}>
+              {s.annotation.term_id} · {view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Nur lesen
+            </button>)}
+          </section>}
+
           <div className="sidebar-header">
             Eigene Annotationen ({visibleAnnotations.length})
           </div>
@@ -665,6 +709,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   key={annSnap.annotation.annotation_id}
                   className={`doc-item ${isSelected ? "selected" : ""}`}
                   onClick={() => {
+                    setSelectedSourceId(null); cancelPending();
                     setSelectedAnnotationId(annSnap.annotation.annotation_id);
                     const firstEv = annSnap.annotation.evidence_refs?.[0]?.evidence_id;
                     setSelectedEvidenceId(firstEv ?? null);
@@ -741,7 +786,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         {/* Center: Text View */}
         <TextPane
           text={view.document.text}
-          mentions={[...mentionsDisplay, ...targetMentions]}
+          mentions={[...mentionsDisplay, ...targetMentions, ...sourceMentions, ...(pendingAnnotation ? [{ evidence_id: pendingAnnotation.evidenceId, segments: pendingAnnotation.segments }] : [])]}
           selectedEvidenceId={selectedEvidenceId}
           selectionIntent={selectionIntent}
           onSelection={handleSelection}
@@ -751,7 +796,28 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
         {/* Right: Annotation & Search Panel + Review Actions */}
         <div style={{ display: "flex", flexDirection: "column", width: 380, borderLeft: "1px solid var(--border-color)" }}>
-          <AnnotationPanel
+          {selectedSource ? <section className="detail-pane" aria-label="Referenzdetails">
+            <div className="detail-section">
+              <h2>{selectedSource.annotation.term_id}</h2>
+              <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label} · Nur lesen</p>
+              <p>{selectedSource.annotation.provenance.actor.actor_id} · {selectedSource.annotation.provenance.method}</p>
+              {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Nicht angegeben"}</p>)}
+              <h3>Belegstellen ({selectedSource.evidence.length})</h3>
+              {selectedSource.evidence.map(ev => <p key={ev.version}>
+                {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
+              </p>)}
+            </div>
+          </section> : pendingAnnotation ? <section className="detail-pane" aria-label="Neue Annotation">
+            <div className="detail-section">
+              <h2>Begriff für die Markierung wählen</h2>
+              <p>Die Annotation wird nach Auswahl eines Begriffs gespeichert.</p>
+              <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
+                annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
+                onSelectCandidate={(candidate, searchId) => { void createPendingAnnotation(candidate.term_id, searchId); }} />
+              <button type="button" className="btn btn-secondary" disabled={queueState === "saving"} onClick={cancelPending}>Abbrechen</button>
+            </div>
+          </section> : <AnnotationPanel
+            key={selectedAnnotationId ?? "empty"}
             annotation={selectedAnnotation}
             allEvidence={allEvidenceMap}
             workspaceKey={view.key}
@@ -768,7 +834,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             onDetachMention={(id) => { void handleDetachMention(id).catch(reportError); }}
             onDeleteAnnotation={(id) => { void handleDeleteAnnotation(id).catch(reportError); }}
             onSetIntent={setSelectionIntent}
-          />
+          />}
 
           {view.key.mode === "review" && selectedTarget && (
             <ReviewActions

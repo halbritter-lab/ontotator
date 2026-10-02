@@ -36,6 +36,17 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await page.getByRole("button", { name: "Annotation anlegen", exact: true }).click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);
 
+    await page.getByRole("button", { name: "Nächster Fall" }).click();
+    await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
+    await expect(page.locator(".status-badge")).toContainText("Rev 0");
+    await page.getByRole("button", { name: /Spanlose Annotation/ }).click();
+    await page.locator("#spanless-hpo-id").fill("HP:0001252");
+    await page.getByRole("button", { name: "Annotation anlegen", exact: true }).click();
+    await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001252");
+    await page.getByRole("button", { name: "Vorheriger Fall" }).click();
+    await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001250");
+    await expect(page.locator(".sidebar .doc-item")).not.toContainText("HP:0001252");
+
     // 4. Single-layer check logic: submit blocked without checkmark
     await page.getByRole("button", { name: /Fall abschließen/ }).click();
     await expect(page.getByText("Bitte bestätigen Sie zuerst, dass der Fall vollständig durchgesehen wurde.")).toBeVisible();
@@ -78,12 +89,22 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     const targetRadio = targetLayer.locator('input[type="radio"]');
     await expect(targetRadio).toBeChecked();
 
+    await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
+    await page.getByRole("button", { name: /MONDO:0005027/ }).click();
+    await expect(page.getByLabel("Referenzdetails")).toContainText("Reference Diseases");
+    await expect(page.getByLabel("Referenzdetails")).toContainText("Epilepsie");
+    await expect(page.getByRole("button", { name: /Begriff ändern|Annotation löschen/ })).toHaveCount(0);
+    await expect(page.locator(".text-container .run--marked")).not.toHaveCount(0);
+
     // 4. Toggle visibility of reference layer
     const refVisibility = refLayer.locator('input[type="checkbox"]');
     await expect(refVisibility).toBeChecked();
     // Toggle off
     await refVisibility.uncheck();
     await expect(refVisibility).not.toBeChecked();
+    await expect(page.getByLabel("Referenzdetails")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toHaveCount(0);
+    await expect(page.locator(".text-container .run--marked")).toHaveCount(0);
     // Toggle back on
     await refVisibility.check();
     await expect(refVisibility).toBeChecked();

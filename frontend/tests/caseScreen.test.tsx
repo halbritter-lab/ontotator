@@ -347,4 +347,38 @@ describe("CaseScreen integration", () => {
       );
     });
   });
+  it("keeps a pending span local and creates only the term chosen in a configured ontology", async () => {
+    const view = structuredClone(sampleView);
+    view.layers![0].ontology_id = "custom-ontology";
+    const search = vi.spyOn(api, "searchOntology").mockResolvedValue({
+      search_id: "search-custom", candidates: [{ term_id: "CUSTOM:42", label: "Custom finding", rank: 1 }],
+    } as any);
+    const mutate = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
+    const rendered = render(<CaseScreen view={view} workspaceId="ws-custom" onClose={vi.fn()} />);
+    const text = rendered.container.querySelector(".text-container")!;
+    const node = text.querySelector(".run")!.firstChild!;
+    const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 3);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+    fireEvent.mouseUp(text);
+    expect(screen.getByLabelText("Neue Annotation")).toBeDefined();
+    expect(mutate).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Ontologie-Term suchen"), { target: { value: "Custom" } });
+    fireEvent.keyDown((await screen.findByText("Custom finding")).closest(".candidate-card")!, { key: "Enter" });
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith("ws-custom", expect.objectContaining({
+      expected_revision: 0,
+      payload: expect.objectContaining({ command: "create_annotation", layer_id: "phenotype",
+        type_id: "default", term_id: "CUSTOM:42", segments: [{ start: 0, end: 3 }], search_event_id: "search-custom" }),
+    })));
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ layer_id: "phenotype" }));
+    expect(search.mock.calls[0][0].annotation_id).toBe(mutate.mock.calls[0][1].payload.annotation_id);
+  });
+
+  it("does not expose imported sources in an independent view", () => {
+    const view = structuredClone(sampleView);
+    view.available_inputs = [{ annotation: { annotation_id: "private", layer_id: "phenotype", term_id: "SECRET:42" }, evidence: [], version: "v" }] as any;
+    render(<CaseScreen view={view} workspaceId="ws-independent" onClose={vi.fn()} />);
+    expect(screen.queryByText(/SECRET:42/)).toBeNull();
+    expect(screen.queryByLabelText("Referenzannotationen")).toBeNull();
+  });
+
 });

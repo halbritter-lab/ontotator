@@ -84,6 +84,8 @@ test("real backend: repeated and discontinuous evidence preserves Unicode offset
   await importFixture(page, "browser-spans");
   await page.getByRole("button", { name: /Arbeitsbereich öffnen/ }).click();
   await selectText(page, 0, 9);
+  await page.getByLabel("Ontologie-Term suchen").fill("Hypotonia");
+  await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
   await expect(page.locator(".status-badge")).toContainText("Rev 1");
   await page.getByRole("button", { name: "+ Segment", exact: true }).click();
   await selectText(page, 14, 21);

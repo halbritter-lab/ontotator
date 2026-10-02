@@ -87,6 +87,13 @@ test.describe("Evidence Spans Proof & Verification", () => {
     // Text is "Hypotonia and seizure. A😀é\r\nB"
     // Select "Hypotonia" (offsets 0 to 9)
     await selectText(page, 0, 9);
+    await expect(page.locator(".status-badge")).toContainText("Rev 0");
+    await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
+    await page.getByRole("button", { name: "Abbrechen", exact: true }).click();
+    await expect(page.locator(".text-container .run--marked")).toHaveCount(0);
+    await selectText(page, 0, 9);
+    await page.getByLabel("Ontologie-Term suchen").fill("Hypotonia");
+    await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
     await expect(page.locator(".status-badge")).toContainText("Rev 1");
 
     // The span must now be marked

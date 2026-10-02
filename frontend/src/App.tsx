@@ -206,6 +206,7 @@ export const App: React.FC = () => {
   if (activeWorkspace) {
     return (
       <CaseScreen
+        key={activeWorkspace.workspace_id}
         view={activeWorkspace.view}
         workspaceId={activeWorkspace.workspace_id}
         documentList={documents}
