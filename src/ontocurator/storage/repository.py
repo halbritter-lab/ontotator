@@ -12,6 +12,7 @@ from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
 from ontocurator.domain.profiles import OntologyDefinition, TaskProfile, profile_hash
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
+from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.workspace import (
     Draft,
@@ -39,11 +40,14 @@ def _key_str(key: WorkspaceKey) -> str:
     return ":".join(parts)
 
 
-def _local_import_key(origin: WorkspaceKey, package_id: str) -> WorkspaceKey:
-    """Bind historical content to the local API's independent workspace identity."""
+def _local_import_key(
+    origin: WorkspaceKey, package_id: str, profile: TaskProfile
+) -> WorkspaceKey:
+    """Bind immutable history to the imported profile's local workspace identity."""
     return origin.model_copy(
         update={
             "package_id": package_id,
+            "scope_id": build_scope(profile, origin.mode).scope_id,
             "target_set_id": "targets-0"
             if origin.mode == "independent"
             else origin.target_set_id,
@@ -205,7 +209,9 @@ class Repository:
                         sub.submission_id,
                         _key_str(
                             _local_import_key(
-                                sub.origin_key, package.manifest.package_id
+                                sub.origin_key,
+                                package.manifest.package_id,
+                                task_profile,
                             )
                         ),
                     ),
@@ -952,6 +958,9 @@ class Repository:
         return Submission.model_validate_json(row[0])
 
     def _store_package_membership(self, package: ValidatedPackage) -> None:
+        profile = package.manifest.task_profile
+        if profile is None:
+            raise InvalidPackage("Package task profile is required")
         conn = self.db.get_connection()
         conn.executemany(
             "INSERT OR IGNORE INTO package_annotations VALUES (?, ?, ?)",
@@ -964,7 +973,7 @@ class Repository:
 
         for event in package.search_events:
             local_key = _local_import_key(
-                event.workspace_key, package.manifest.package_id
+                event.workspace_key, package.manifest.package_id, profile
             )
             conn.execute(
                 "INSERT OR IGNORE INTO package_search_events VALUES (?, ?, ?)",

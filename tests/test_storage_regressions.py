@@ -5,6 +5,7 @@ from test_storage import _sample_package
 
 from ontocurator.application.exports import ExportService
 from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import Repository
@@ -16,6 +17,9 @@ def key_for(package_id="pkg-1"):
         document_id="doc-1",
         annotator_id="a",
         mode="independent",
+        scope_id=build_scope(
+            _sample_package().manifest.task_profile, "independent"
+        ).scope_id,
         target_set_id=ReviewTargetSet.create([]).target_set_id,
     )
 

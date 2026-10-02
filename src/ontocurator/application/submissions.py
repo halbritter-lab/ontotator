@@ -31,6 +31,30 @@ class SubmitCommand(BaseModel):
     checked_layer_ids: list[str] | None = None
 
 
+def validate_annotation_completion(
+    snap: AnnotationSnapshot, profile: TaskProfile
+) -> None:
+    """Enforce the configured requirements for an approved annotation version."""
+    type_def = resolve_type(profile, snap.annotation.layer_id, snap.annotation.type_id)
+    if (
+        type_def.evidence_policy == "required_on_complete"
+        and not snap.annotation.evidence_refs
+    ):
+        raise DomainError(
+            "MISSING_EVIDENCE",
+            f"Annotation '{snap.annotation.annotation_id}' in layer '{snap.annotation.layer_id}' "
+            "requires evidence before approval or submission",
+        )
+    for axis in type_def.axes:
+        if not axis.allow_empty:
+            val = snap.annotation.axes_values.get(axis.id)
+            if val is None or val == "":
+                raise DomainError(
+                    "INCOMPLETE_AXES",
+                    f"Required axis '{axis.id}' is empty on annotation '{snap.annotation.annotation_id}'",
+                )
+
+
 def validate_completion(
     draft: Draft,
     profile: TaskProfile,
@@ -48,26 +72,7 @@ def validate_completion(
 
     # 2. Check draft annotations for required axes and evidence policies
     for snap in draft.annotations:
-        type_def = resolve_type(
-            profile, snap.annotation.layer_id, snap.annotation.type_id
-        )
-        if (
-            type_def.evidence_policy == "required_on_complete"
-            and not snap.annotation.evidence_refs
-        ):
-            raise DomainError(
-                "MISSING_EVIDENCE",
-                f"Annotation '{snap.annotation.annotation_id}' in layer '{snap.annotation.layer_id}' "
-                f"requires evidence before submission",
-            )
-        for axis in type_def.axes:
-            if not axis.allow_empty:
-                val = snap.annotation.axes_values.get(axis.id)
-                if val is None or val == "":
-                    raise DomainError(
-                        "INCOMPLETE_AXES",
-                        f"Required axis '{axis.id}' is empty on annotation '{snap.annotation.annotation_id}'",
-                    )
+        validate_annotation_completion(snap, profile)
 
     # 3. If in review mode, validate review completeness
     if scope.mode == "review":
@@ -192,6 +197,10 @@ class SubmissionService:
         else:
             snapshots = list(draft.annotations)
             decisions = []
+
+        # Imported confirmed targets are assembled after draft validation.
+        for snap in snapshots:
+            validate_annotation_completion(snap, task_profile)
 
         # Deduplicate snapshots stably
         seen_snaps: set[tuple[str, str]] = set()

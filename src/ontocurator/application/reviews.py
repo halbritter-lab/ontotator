@@ -6,10 +6,10 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from ontocurator.application.submissions import validate_annotation_completion
 from ontocurator.domain.annotations import AnnotationRef
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
-from ontocurator.domain.profiles import resolve_type
 from ontocurator.domain.review import ReviewDecision, ReviewOutcome
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
@@ -109,19 +109,7 @@ class ReviewService:
                         f"'{target_snap.annotation.term_id}'",
                     )
 
-            target_type = resolve_type(
-                task_profile,
-                target_snap.annotation.layer_id,
-                target_snap.annotation.type_id,
-            )
-            for axis in target_type.axes:
-                if not axis.allow_empty:
-                    val = target_snap.annotation.axes_values.get(axis.id)
-                    if val is None or val == "":
-                        raise DomainError(
-                            "INCOMPLETE_AXES",
-                            "Cannot confirm annotation with incomplete required axes",
-                        )
+            validate_annotation_completion(target_snap, task_profile)
 
         # 3. Changed outcome requires replacement
         if cmd.outcome == "changed":
@@ -162,19 +150,7 @@ class ReviewService:
                     f"and type '{target_snap.annotation.type_id}' as the target",
                 )
 
-            rep_type = resolve_type(
-                task_profile,
-                replacement.annotation.layer_id,
-                replacement.annotation.type_id,
-            )
-            for axis in rep_type.axes:
-                if not axis.allow_empty:
-                    val = replacement.annotation.axes_values.get(axis.id)
-                    if val is None or val == "":
-                        raise DomainError(
-                            "INCOMPLETE_AXES",
-                            f"Cannot approve replacement with incomplete required axes: {axis.id}",
-                        )
+            validate_annotation_completion(replacement, task_profile)
 
         decision = ReviewDecision(
             decision_id="dec-"
