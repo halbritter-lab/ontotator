@@ -343,3 +343,62 @@ def test_command_conflicting_term_id_and_hpo_id_rejected():
                 "hpo_id": "HP:0001252",
             }
         )
+
+
+def test_discontinuous_segments_and_repeated_evidence_mentions(tmp_path: Path):
+    _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
+    ws_key = WorkspaceKey(
+        package_id="pkg-1",
+        document_id="doc-1",
+        annotator_id="annotator-1",
+        mode="independent",
+        target_set_id="targets-0",
+    )
+    ws_svc.open(ws_key)
+
+    # 1. Create annotation with discontinuous segments in a single mention
+    cmd1 = CreateAnnotationCommand(
+        annotation_id="ann-multi-ev",
+        hpo_id="HP:0001252",
+        axes=Axes(assertion="present"),
+        evidence_id="ev-discontinuous",
+        segments=[Segment(start=27, end=36), Segment(start=41, end=48)],
+    )
+    draft1 = edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="m1",
+            expected_revision=0,
+            payload=cmd1.model_dump(),
+        ),
+    )
+    assert len(draft1.annotations) == 1
+    assert len(draft1.evidence) == 1
+    ev_disc = draft1.evidence[0]
+    assert len(ev_disc.mention.segments) == 2
+    assert ev_disc.mention.segments[0].start == 27
+    assert ev_disc.mention.segments[1].start == 41
+
+    # 2. Attach a second distinct evidence mention to the same annotation
+    cmd2 = AttachMentionCommand(
+        annotation_id="ann-multi-ev",
+        evidence_id="ev-second",
+        segments=[Segment(start=0, end=11)],
+    )
+    draft2 = edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="m2",
+            expected_revision=1,
+            payload=cmd2.model_dump(),
+        ),
+    )
+    assert len(draft2.annotations) == 1
+    ann = draft2.annotations[0].annotation
+    assert len(ann.evidence_refs) == 2
+    assert {ref.evidence_id for ref in ann.evidence_refs} == {
+        "ev-discontinuous",
+        "ev-second",
+    }
+    assert len(draft2.evidence) == 2
+
