@@ -1,0 +1,65 @@
+{
+  "schema": "ontocurator-task-profile/v1",
+  "profile_id": "hpo-context-example/v1",
+  "version": "1.0.0",
+  "preset": "hpo-context-example",
+  "ontologies": [
+    {
+      "ontology_id": "hp",
+      "label": "Human Phenotype Ontology",
+      "release": "2026-06-23",
+      "sha256": "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4",
+      "format": "obo-graph-json",
+      "resource_path": "ontologies/hp.json"
+    }
+  ],
+  "layers": [
+    {
+      "layer_id": "hpo-layer",
+      "label": "Phenotypic abnormalities",
+      "ontology_id": "hp",
+      "access": "editable",
+      "default_visible": true,
+      "default_type_id": "phenotype",
+      "annotation_types": [
+        {
+          "type_id": "phenotype",
+          "label": "Phenotype",
+          "axes": [
+            {
+              "id": "assertion",
+              "label": "Assertion",
+              "options": [
+                "present",
+                "absent",
+                "uncertain"
+              ],
+              "allow_empty": true
+            },
+            {
+              "id": "experiencer",
+              "label": "Experiencer",
+              "options": [
+                "patient",
+                "other"
+              ],
+              "allow_empty": true
+            },
+            {
+              "id": "temporality",
+              "label": "Temporality",
+              "options": [
+                "current",
+                "historical",
+                "future"
+              ],
+              "allow_empty": true
+            }
+          ],
+          "evidence_policy": "optional"
+        }
+      ]
+    }
+  ],
+  "default_layer_id": "hpo-layer"
+}

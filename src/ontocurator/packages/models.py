@@ -79,6 +79,9 @@ class SearchEventRecord(BaseModel):
         return super().model_copy(update=update, deep=deep)
 
 
+from ontocurator.domain.profiles import TaskProfile
+
+
 class PackageManifest(BaseModel):
     """Manifest describing work package metadata and checksums."""
 
@@ -86,10 +89,15 @@ class PackageManifest(BaseModel):
 
     package_id: str
     format_version: Literal[
-        "ontocurator-work-package/v1", "hpo-editor-work-package/v1"
-    ] = "ontocurator-work-package/v1"
-    ontology: OntologyRef
-    axes_definition: str = "editor-axes/v1"
+        "ontocurator-work-package/v2",
+        "ontocurator-work-package/v1",
+        "hpo-editor-work-package/v1",
+    ] = "ontocurator-work-package/v2"
+    document_order: list[str] = Field(default_factory=list)
+    task_profile: TaskProfile | None = None
+    task_profile_sha256: str | None = None
+    ontology: OntologyRef | None = None
+    axes_definition: str | None = None
     axes_config: AxesConfig | None = None
     axes_config_sha256: str | None = None
     file_hashes: dict[str, str] = Field(default_factory=dict)
@@ -103,6 +111,7 @@ class PackageManifest(BaseModel):
             data.pop("axes_config", None)
             data.pop("axes_config_sha256", None)
         return data
+
 
 
 class ValidatedPackage(BaseModel):

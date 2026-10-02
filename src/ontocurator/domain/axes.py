@@ -97,7 +97,7 @@ class Axes(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    definition_name: str = "editor-axes/v1"
+    definition_name: str | None = None
     values: dict[str, str | None] = Field(default_factory=dict)
 
     @model_validator(mode="before")
@@ -141,34 +141,31 @@ class Axes(BaseModel):
     def temporality(self, val: str | None) -> None:
         self.values["temporality"] = val
 
-    @model_validator(mode="after")
-    def validate_builtin_profiles(self) -> "Axes":
-        if self.definition_name == "editor-axes/v1":
-            validate_axes(self, EDITOR_AXES_CONFIG, complete=False)
-        elif self.definition_name == "clinical-phenotype/v1":
-            validate_axes(self, CLINICAL_PHENOTYPE_CONFIG, complete=False)
-        return self
-
 
 def validate_axes(
-    axes: Axes,
-    config: AxesConfig,
+    axes: Axes | dict[str, str | None],
+    config: AxesConfig | list[AxisDefinition],
     *,
     complete: bool,
 ) -> None:
-    """Validate annotation axes against a resolved profile configuration."""
-    if axes.definition_name != config.definition_name:
-        raise ValueError(
-            f"Profile mismatch: axes has definition '{axes.definition_name}', "
-            f"expected '{config.definition_name}'"
-        )
+    """Validate annotation axes against a resolved axis configuration without domain preset branching."""
+    if isinstance(config, AxesConfig):
+        if isinstance(axes, Axes) and axes.definition_name and axes.definition_name != config.definition_name:
+            raise ValueError(
+                f"Profile mismatch: axes has definition '{axes.definition_name}', "
+                f"expected '{config.definition_name}'"
+            )
+        axis_defs = config.axes
+    else:
+        axis_defs = config
 
-    config_map = {a.id: a for a in config.axes}
+    vals = axes.values if isinstance(axes, Axes) else axes
+    config_map = {a.id: a for a in axis_defs}
 
-    for k, v in axes.values.items():
+    for k, v in vals.items():
         if k not in config_map:
             raise ValueError(
-                f"Unknown axis '{k}' for profile '{config.definition_name}'"
+                f"Unknown axis '{k}'"
             )
         axis_def = config_map[k]
         if v is not None and v not in axis_def.options:
@@ -177,10 +174,11 @@ def validate_axes(
             )
 
     if complete:
-        for axis_def in config.axes:
+        for axis_def in axis_defs:
             if not axis_def.allow_empty:
-                val = axes.values.get(axis_def.id)
+                val = vals.get(axis_def.id)
                 if val is None or val == "":
                     raise ValueError(
                         f"Required axis '{axis_def.id}' cannot be empty for completion"
                     )
+

@@ -1,30 +1,28 @@
 import re
-from collections.abc import Mapping
-from typing import Any, Literal, Self
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    PrivateAttr,
-    computed_field,
     model_validator,
 )
 
-from ontocurator.domain.axes import (
-    CLINICAL_PHENOTYPE_CONFIG,
-    EDITOR_AXES_CONFIG,
-    Axes,
-    AxesConfig,
-)
+from ontocurator.domain.axes import Axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     Document,
     EvidenceRef,
     EvidenceSnapshot,
-    OntologyRef,
 )
 from ontocurator.domain.errors import InvalidAnnotation
+from ontocurator.domain.profiles import (
+    TaskProfile,
+    layer_config_hash,
+    resolve_layer,
+    resolve_ontology,
+    resolve_type,
+)
 
 CURIE_PATTERN = re.compile(r"^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$")
 
@@ -61,35 +59,42 @@ class AnnotationRef(BaseModel):
 
 
 class Annotation(BaseModel):
-    """Annotation entity referencing ontology term, context axes and evidence."""
+    """Annotation entity referencing ontology term, layer, type, context axes and evidence."""
 
     model_config = ConfigDict(extra="forbid")
 
     annotation_id: str
     document_id: str
+    layer_id: str = "hpo-layer"
+    type_id: str = "phenotype"
     term_id: str
-    axes: Axes = Field(default_factory=Axes)
+    axes_values: dict[str, str | None] = Field(default_factory=dict)
     evidence_refs: list[EvidenceRef] = Field(default_factory=list)
     provenance: Provenance
 
     @model_validator(mode="before")
     @classmethod
-    def handle_aliases(cls, data: Any) -> Any:
+    def handle_axes_and_aliases(cls, data: Any) -> Any:
         if isinstance(data, dict):
             d = dict(data)
-            has_term = "term_id" in d
-            has_hpo = "hpo_id" in d
-            if has_term and has_hpo:
-                if d["term_id"] != d["hpo_id"]:
-                    raise ValueError(
-                        f"Conflicting 'term_id' ('{d['term_id']}') and "
-                        f"'hpo_id' ('{d['hpo_id']}') provided"
-                    )
-                d.pop("hpo_id")
-            elif has_hpo:
-                d["term_id"] = d.pop("hpo_id")
+            if "hpo_id" in d and "term_id" not in d:
+                # Do not accept hpo_id as alias anymore
+                raise ValueError("Deprecated field 'hpo_id' is no longer supported; use 'term_id'")
+            if "hpo_id" in d:
+                raise ValueError("Deprecated field 'hpo_id' is no longer supported")
+
+            if "axes" in d and "axes_values" not in d:
+                raw_axes = d.pop("axes")
+                if isinstance(raw_axes, dict):
+                    d["axes_values"] = raw_axes.get("values", raw_axes)
+                elif hasattr(raw_axes, "values"):
+                    d["axes_values"] = raw_axes.values
             return d
         return data
+
+    @property
+    def axes(self) -> Axes:
+        return Axes(values=self.axes_values)
 
     @model_validator(mode="after")
     def validate_and_sort(self) -> "Annotation":
@@ -103,51 +108,20 @@ class Annotation(BaseModel):
             )
         return self
 
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def hpo_id(self) -> str:
-        return self.term_id
-
-    @hpo_id.setter
-    def hpo_id(self, val: str) -> None:
-        self.term_id = val
-
-    def model_copy(
-        self,
-        *,
-        update: Mapping[str, Any] | None = None,
-        deep: bool = False,
-    ) -> Self:
-        if update:
-            up = dict(update)
-            if "hpo_id" in up and "term_id" not in up:
-                up["term_id"] = up.pop("hpo_id")
-            elif "hpo_id" in up and "term_id" in up:
-                if up["term_id"] != up["hpo_id"]:
-                    raise ValueError(
-                        f"Conflicting 'term_id' ('{up['term_id']}') and "
-                        f"'hpo_id' ('{up['hpo_id']}') provided"
-                    )
-                up.pop("hpo_id")
-            update = up
-        return super().model_copy(update=update, deep=deep)
-
 
 class AnnotationSnapshot(BaseModel):
-    """Immutable snapshot binding annotation, evidence, text and ontology digests."""
+    """Immutable snapshot binding annotation, evidence, text, layer config and ontology digests (V3)."""
 
     model_config = ConfigDict(extra="forbid")
 
+    schema_version: Literal["ontocurator-annotation/v3"] = "ontocurator-annotation/v3"
     annotation: Annotation
     evidence: list[EvidenceSnapshot]
     document_id: str
     text_sha256: str
     ontology_sha256: str
+    layer_config_sha256: str
     version: str
-    schema_version: str | None = None
-    axes_config_sha256: str | None = None
-
-    _legacy_wire: dict[str, Any] | None = PrivateAttr(default=None)
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, AnnotationSnapshot):
@@ -155,7 +129,7 @@ class AnnotationSnapshot(BaseModel):
         return (
             self.version == other.version
             and self.schema_version == other.schema_version
-            and self.axes_config_sha256 == other.axes_config_sha256
+            and self.layer_config_sha256 == other.layer_config_sha256
             and self.document_id == other.document_id
             and self.text_sha256 == other.text_sha256
             and self.ontology_sha256 == other.ontology_sha256
@@ -168,15 +142,19 @@ def snapshot(
     annotation: Annotation,
     evidence: list[EvidenceSnapshot],
     document: Document,
-    ontology: OntologyRef,
-    axes_config: AxesConfig | None = None,
+    profile: TaskProfile,
 ) -> AnnotationSnapshot:
-    """Create an immutable AnnotationSnapshot with RFC-8785 canonical hash version."""
+    """Create an immutable AnnotationSnapshot V3 with RFC-8785 canonical hash version."""
     if annotation.document_id != document.document_id:
         raise InvalidAnnotation(
             f"Annotation document_id '{annotation.document_id}' does not "
             f"match Document '{document.document_id}'"
         )
+
+    layer_def = resolve_layer(profile, annotation.layer_id)
+    resolve_type(profile, annotation.layer_id, annotation.type_id)
+    ont_def = resolve_ontology(profile, layer_def.ontology_id)
+    layer_hash = layer_config_hash(profile, annotation.layer_id)
 
     # Order evidence snapshots stably by evidence_id
     sorted_ev = sorted(evidence, key=lambda e: (e.mention.evidence_id, e.version))
@@ -186,37 +164,28 @@ def snapshot(
     for ref in annotation.evidence_refs:
         if (ref.evidence_id, ref.version) not in ev_map:
             raise InvalidAnnotation(
-                f"Annotation references missing evidence "
-                f"({ref.evidence_id}, {ref.version})"
+                f"Annotation references missing evidence ({ref.evidence_id}, {ref.version})"
             )
 
-    if axes_config is None:
-        if annotation.axes.definition_name == "editor-axes/v1":
-            axes_config = EDITOR_AXES_CONFIG
-        else:
-            axes_config = CLINICAL_PHENOTYPE_CONFIG
-
-    schema_version = "ontocurator-annotation/v2"
-    axes_config_sha256 = axes_config.config_sha256
+    schema_version = "ontocurator-annotation/v3"
 
     canonical_content = {
         "schema_version": schema_version,
         "annotation": {
             "annotation_id": annotation.annotation_id,
             "document_id": annotation.document_id,
+            "layer_id": annotation.layer_id,
+            "type_id": annotation.type_id,
             "term_id": annotation.term_id,
-            "axes": {
-                "definition_name": annotation.axes.definition_name,
-                "values": annotation.axes.values,
-            },
+            "axes_values": annotation.axes_values,
             "evidence_refs": [r.model_dump() for r in annotation.evidence_refs],
             "provenance": annotation.provenance.model_dump(),
         },
         "document_id": document.document_id,
         "evidence": [e.model_dump() for e in sorted_ev],
-        "ontology_sha256": ontology.sha256,
+        "layer_config_sha256": layer_hash,
+        "ontology_sha256": ont_def.sha256,
         "text_sha256": document.text_sha256,
-        "axes_config_sha256": axes_config_sha256,
     }
     v = canonical_hash(canonical_content)
 
@@ -226,7 +195,7 @@ def snapshot(
         evidence=sorted_ev,
         document_id=document.document_id,
         text_sha256=document.text_sha256,
-        ontology_sha256=ontology.sha256,
-        axes_config_sha256=axes_config_sha256,
+        ontology_sha256=ont_def.sha256,
+        layer_config_sha256=layer_hash,
         version=v,
     )
