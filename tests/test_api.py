@@ -1,5 +1,6 @@
 import hashlib
 import io
+import json
 from pathlib import Path
 
 import pytest
@@ -395,12 +396,33 @@ def test_search_discards_mismatched_annotation_layer(app_client):
 
 
 def test_same_term_id_in_different_layers_isolated_status(app_client):
+    from layered_fixtures import make_layered_package
+
     client, _ = app_client
-    pkg_bytes = _create_sample_package_bytes("multi_editable")
-    client.post(
-        "/api/v1/packages",
-        files={"file": ("package.zip", pkg_bytes, "application/zip")},
+    # An ontology may import a CURIE also present in another artifact. Both
+    # definitions must actually contain that CURIE; HP IDs are not MONDO IDs.
+    pkg = make_layered_package("multi_editable")
+    secondary = json.loads((FIXTURE_PATH.parent / "mondo.json").read_bytes())
+    secondary["graphs"][0]["nodes"].append(
+        {
+            "id": "HP:0001250",
+            "lbl": "Secondary seizure label",
+            "type": "CLASS",
+        }
     )
+    secondary_bytes = json.dumps(secondary).encode()
+    pkg.manifest.task_profile.ontologies[1].sha256 = hashlib.sha256(
+        secondary_bytes
+    ).hexdigest()
+    buffer = io.BytesIO()
+    PackageWriter.write_to_stream(
+        pkg, buffer, embedded_files={"ontologies/mondo.json": secondary_bytes}
+    )
+    imported = client.post(
+        "/api/v1/packages",
+        files={"file": ("package.zip", buffer.getvalue(), "application/zip")},
+    )
+    assert imported.status_code == 200, imported.text
 
     open_res = client.post(
         "/api/v1/workspaces/open",
@@ -417,7 +439,7 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
     ws_id = open_res.json()["workspace_id"]
 
     # Add HP:0001250 in layer-1
-    client.post(
+    first = client.post(
         f"/api/v1/workspaces/{ws_id}/commands",
         json={
             "mutation_id": "m1",
@@ -431,8 +453,9 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
             },
         },
     )
+    assert first.status_code == 200, first.text
     # Add HP:0001250 in layer-2
-    client.post(
+    second = client.post(
         f"/api/v1/workspaces/{ws_id}/commands",
         json={
             "mutation_id": "m2",
@@ -448,6 +471,7 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
         },
     )
 
+    assert second.status_code == 200, second.text
     # Re-open workspace view and verify term_statuses
     reopen_res = client.post(
         "/api/v1/workspaces/open",
@@ -461,6 +485,22 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
     statuses = reopen_res.json()["view"]["term_statuses"]
     assert "layer-1:HP:0001250" in statuses
     assert "layer-2:HP:0001250" in statuses
+    labels = []
+    for layer_id in ("layer-1", "layer-2"):
+        found = client.post(
+            "/api/v1/search",
+            json={
+                "workspace_key": view["key"],
+                "annotation_id": "new-search",
+                "layer_id": layer_id,
+                "query": "HP:0001250",
+                "route": "id",
+                "k": 5,
+            },
+        )
+        assert found.status_code == 200, found.text
+        labels.append(found.json()["candidates"][0]["label"])
+    assert labels == ["Seizure", "Secondary seizure label"]
 
 
 def test_revision_conflict_409_and_domain_error_422(app_client):

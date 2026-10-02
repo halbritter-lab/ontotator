@@ -152,4 +152,9 @@ class ExportService:
             evidence=evidence_map,
             submissions=submissions_map,
             search_events=search_events,
+            embedded_files={
+                ont.resource_path: orig_pkg.embedded_files[ont.resource_path]
+                for ont in task_profile.ontologies
+                if ont.resource_path and ont.resource_path in orig_pkg.embedded_files
+            },
         )

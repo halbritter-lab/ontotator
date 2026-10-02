@@ -90,6 +90,7 @@ def verify_wheel(wheel_path: Path) -> None:
             "ontocurator/__init__.py",
             "ontocurator/cli.py",
             "ontocurator/storage/schema_v4.sql",
+            "ontocurator/storage/ontology_resources.sql",
             "ontocurator/web/index.html",
         ]
 

@@ -34,7 +34,7 @@ from ontocurator.domain.workspace import (
     WorkspaceMode,
 )
 from ontocurator.ontology.provenance import SearchRequest, SearchResult
-from ontocurator.ontology.service import OntologyService
+from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.packages.models import PackageManifest, SearchEventRecord
 from ontocurator.packages.reader import PackageReader
 from ontocurator.packages.writer import PackageWriter
@@ -100,12 +100,12 @@ def get_repo(request: Request) -> Repository:
     return request.app.state.repo  # type: ignore[no-any-return]
 
 
-def get_ontology(request: Request) -> OntologyService:
-    return request.app.state.ontology  # type: ignore[no-any-return]
+def get_ontology(request: Request) -> OntologyRegistry:
+    return request.app.state.ontology_registry  # type: ignore[no-any-return]
 
 
 RepoDep = Annotated[Repository, Depends(get_repo)]
-OntologyDep = Annotated[OntologyService, Depends(get_ontology)]
+OntologyDep = Annotated[OntologyRegistry, Depends(get_ontology)]
 
 
 def get_workspace_service(
@@ -126,7 +126,7 @@ def get_review_service(
     repo: RepoDep,
     ontology: OntologyDep,
 ) -> ReviewService:
-    return ReviewService(repo, ontology)
+    return ReviewService(repo, registry=ontology)
 
 
 def get_submission_service(
@@ -155,15 +155,18 @@ ExportSvcDep = Annotated[ExportService, Depends(get_export_service)]
 async def upload_package(
     file: UploadFile,
     repo: RepoDep,
-    ontology: OntologyDep,
     request: Request,
 ) -> dict[str, str | dict[str, object]]:
     """Upload and atomically import a work package archive."""
-    registry = getattr(request.app.state, "ontology_registry", None)
+    registry = request.app.state.ontology_registry
     content = await file.read()
     stream = io.BytesIO(content)
     pkg = PackageReader.read_from_stream(stream, registry=registry)
+    assert pkg.manifest.task_profile is not None
+    services = registry.prepare_package(pkg.manifest.task_profile, pkg.embedded_files)
     package_id = repo.import_package(pkg)
+    for service in services:
+        registry.register_service(service)
     return {"package_id": package_id, "manifest": pkg.manifest.model_dump()}
 
 
@@ -309,13 +312,7 @@ def search_ontology(
     except Exception:
         pass
 
-    registry = getattr(request.app.state, "ontology_registry", None)
-    if registry is not None:
-        ontology = registry.for_layer(profile, req.layer_id)
-    else:
-        ontology = getattr(request.app.state, "ontology", None)
-        if ontology is None:
-            raise DomainError("ONTOLOGY_NOT_FOUND", "No ontology configured")
+    ontology = request.app.state.ontology_registry.for_layer(profile, req.layer_id)
 
     result = cast(SearchResult, ontology.search(req))
     result.search_id = str(uuid4())

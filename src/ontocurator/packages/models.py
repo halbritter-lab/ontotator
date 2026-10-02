@@ -124,3 +124,4 @@ class ValidatedPackage(BaseModel):
     evidence: dict[tuple[str, str], EvidenceSnapshot] = Field(default_factory=dict)
     submissions: dict[str, Submission] = Field(default_factory=dict)
     search_events: list[SearchEventRecord] = Field(default_factory=list)
+    embedded_files: dict[str, bytes] = Field(default_factory=dict, exclude=True)

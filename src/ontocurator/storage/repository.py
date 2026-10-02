@@ -10,7 +10,7 @@ from ontocurator.domain.axes import (
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
-from ontocurator.domain.profiles import TaskProfile, profile_hash
+from ontocurator.domain.profiles import OntologyDefinition, TaskProfile, profile_hash
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.workspace import (
@@ -107,6 +107,7 @@ class Repository:
                     raise InvalidPackage(
                         "Conflicting task profile resolution for existing package"
                     )
+                self._store_ontology_resources(package)
                 self._store_package_membership(package)
                 cursor.execute("COMMIT;")
                 return package.manifest.package_id
@@ -227,12 +228,54 @@ class Repository:
                     ),
                 )
 
+            self._store_ontology_resources(package)
             self._store_package_membership(package)
             cursor.execute("COMMIT;")
             return package.manifest.package_id
         except Exception:
             cursor.execute("ROLLBACK;")
             raise
+
+    def _store_ontology_resources(self, package: ValidatedPackage) -> None:
+        """Persist resources inside the same transaction as their package."""
+        self.db.get_connection().executemany(
+            "INSERT OR IGNORE INTO package_ontology_resources "
+            "(package_id, resource_path, content) VALUES (?, ?, ?)",
+            [
+                (package.manifest.package_id, path, data)
+                for path, data in package.embedded_files.items()
+            ],
+        )
+
+    def get_embedded_files(self, package_id: str) -> dict[str, bytes]:
+        rows = (
+            self.db.get_connection()
+            .execute(
+                "SELECT resource_path, content FROM package_ontology_resources WHERE package_id=?",
+                (package_id,),
+            )
+            .fetchall()
+        )
+        return {row[0]: bytes(row[1]) for row in rows}
+
+    def ontology_resources(self) -> list[tuple[OntologyDefinition, bytes]]:
+        """Return persisted definitions and bytes for registry restoration at startup."""
+        rows = (
+            self.db.get_connection()
+            .execute(
+                "SELECT p.profile_json, r.resource_path, r.content "
+                "FROM package_ontology_resources r JOIN package_task_profiles p "
+                "ON r.package_id=p.package_id"
+            )
+            .fetchall()
+        )
+        result = []
+        for row in rows:
+            profile = TaskProfile.model_validate_json(row[0])
+            for ont in profile.ontologies:
+                if ont.resource_path == row[1]:
+                    result.append((ont, bytes(row[2])))
+        return result
 
     def get_task_profile(self, package_id: str) -> TaskProfile:
         """Return the resolved TaskProfile for an installed package."""
@@ -719,6 +762,7 @@ class Repository:
             evidence=evidence,
             submissions=submissions,
             search_events=search_events,
+            embedded_files=self.get_embedded_files(package_id),
         )
 
     def get_document(self, package_id: str, document_id: str) -> Document | None:

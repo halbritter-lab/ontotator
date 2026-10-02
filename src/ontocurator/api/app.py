@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -13,14 +12,12 @@ from pydantic import ValidationError
 from ontocurator.api.routes import router
 from ontocurator.api.security import verify_security
 from ontocurator.config import AppConfig
-from ontocurator.domain.documents import OntologyRef
 from ontocurator.domain.errors import (
     DomainError,
     IncompleteReview,
     InvalidPackage,
     RevisionConflict,
 )
-from ontocurator.ontology.service import OntologyService
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import Repository
 
@@ -47,23 +44,24 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             if p.is_file():
                 registry.register_path(p)
         if config.ontology_path and config.ontology_path.is_file():
-            registry.register_path(config.ontology_path)
+            if config.expected_ontology_ref is not None:
+                from ontocurator.ontology.service import OntologyService
+
+                registry.register_service(
+                    OntologyService.load(
+                        config.ontology_path, config.expected_ontology_ref
+                    )
+                )
+            else:
+                registry.register_path(config.ontology_path)
+
+        for definition, data in repo.ontology_resources():
+            if registry.get_service(definition.sha256) is None:
+                registry.register_service(registry.load_resource(data, definition))
 
         app.state.config = config
         app.state.repo = repo
         app.state.ontology_registry = registry
-
-        # Maintain app.state.ontology if a primary ontology was configured
-        primary_path = config.ontology_path or (
-            config.ontology_paths[0] if config.ontology_paths else None
-        )
-        if primary_path and primary_path.is_file():
-            expected_ref = config.expected_ontology_ref
-            if expected_ref is None:
-                raw = primary_path.read_bytes()
-                digest = hashlib.sha256(raw).hexdigest()
-                expected_ref = OntologyRef(release="pinned", sha256=digest)
-            app.state.ontology = OntologyService.load(primary_path, expected_ref)
 
         # Security middleware for API requests
         @app.middleware("http")

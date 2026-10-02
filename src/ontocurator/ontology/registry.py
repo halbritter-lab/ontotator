@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from ontocurator.domain.documents import OntologyRef
 from ontocurator.domain.errors import DomainError
@@ -12,6 +13,7 @@ from ontocurator.domain.profiles import (
     resolve_ontology,
 )
 from ontocurator.ontology.service import OntologyService
+from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
 
 
 class OntologyRegistry:
@@ -53,6 +55,38 @@ class OntologyRegistry:
     def register_service(self, service: OntologyService) -> None:
         """Register an already-instantiated OntologyService."""
         self._services[service.ref.sha256.lower()] = service
+
+    @staticmethod
+    def load_resource(data: bytes, expected: OntologyDefinition) -> OntologyService:
+        """Validate and parse archive bytes without retaining a temporary path."""
+        with TemporaryDirectory(prefix="ontocurator-ontology-") as directory:
+            path = Path(directory) / "ontology.json"
+            path.write_bytes(data)
+            try:
+                return OntologyService.load(
+                    path, OntologyRef(release=expected.release, sha256=expected.sha256)
+                )
+            except DomainError:
+                raise
+            except (ValueError, KeyError, TypeError, OntologyError) as exc:
+                raise DomainError("INVALID_ONTOLOGY", str(exc)) from exc
+
+    def prepare_package(
+        self, profile: TaskProfile, resources: dict[str, bytes]
+    ) -> list[OntologyService]:
+        """Parse all resources before package commit; publish services only afterward."""
+        prepared = []
+        for ont in profile.ontologies:
+            if ont.resource_path and ont.resource_path in resources:
+                prepared.append(self.load_resource(resources[ont.resource_path], ont))
+            else:
+                service = self.get_service(ont.sha256)
+                if service is None:
+                    raise DomainError(
+                        "ONTOLOGY_NOT_FOUND", f"Missing ontology '{ont.ontology_id}'"
+                    )
+                prepared.append(service)
+        return prepared
 
     def register_path(self, path: Path | str) -> str:
         """Inspect and register a local ontology file without prior expected metadata, returning its SHA-256."""

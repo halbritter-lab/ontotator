@@ -392,6 +392,11 @@ def _read_package(
         evidence=evidence,
         submissions=submissions,
         search_events=search_events,
+        embedded_files={
+            ont.resource_path: file_contents[ont.resource_path]
+            for ont in manifest.task_profile.ontologies
+            if ont.resource_path and ont.resource_path in file_contents
+        },
     )
 
 

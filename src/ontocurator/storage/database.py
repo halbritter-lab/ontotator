@@ -18,6 +18,9 @@ class Database:
         self._lock = threading.Lock()
         self.migration_warnings: list[str] = []
         self._ensure_migrated()
+        # Add the resource store only after accepting the current workspace format.
+        resource_schema = Path(__file__).parent / "ontology_resources.sql"
+        self.get_connection().executescript(resource_schema.read_text(encoding="utf-8"))
 
     def run_migrations(self) -> None:
         """Run pending schema migrations."""

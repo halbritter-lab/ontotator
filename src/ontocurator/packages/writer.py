@@ -80,7 +80,9 @@ def _prepare_package_payloads(
         "search-events.jsonl": hashlib.sha256(search_bytes).hexdigest(),
     }
 
-    extra_files = embedded_files or {}
+    extra_files = dict(package.embedded_files)
+    if embedded_files:
+        extra_files.update(embedded_files)
     for filename, data in extra_files.items():
         file_hashes[filename] = hashlib.sha256(data).hexdigest()
 
