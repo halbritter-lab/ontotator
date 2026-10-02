@@ -354,16 +354,25 @@ body {
 }
 
 /* Spans in text */
-.mention-span {
-  background-color: var(--span-highlight);
-  border-radius: 2px;
-  padding: 1px 2px;
-  cursor: pointer;
+.run {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
 }
 
-.mention-span.selected {
+.mention-span,
+.run--marked {
+  background-color: var(--span-highlight);
+  cursor: pointer;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.mention-span.selected,
+.run--hot {
   background-color: var(--span-selected);
-  outline: 2px solid var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 
 /* Modal / Setup dialog */

@@ -72,11 +72,22 @@ export function initSessionToken(): string | null {
     // Remove the hash fragment without reloading page
     history.replaceState(null, "", window.location.pathname + window.location.search);
     activeSessionToken = token;
-    window.sessionStorage.setItem("hpo-editor-token", token);
+    try {
+      window.sessionStorage.setItem("hpo-editor-token", token);
+      window.localStorage.setItem("hpo-editor-token", token);
+    } catch {
+      // storage unavailable
+    }
     return token;
   }
 
-  activeSessionToken ??= window.sessionStorage.getItem("hpo-editor-token");
+  try {
+    activeSessionToken ??=
+      window.sessionStorage.getItem("hpo-editor-token") ??
+      window.localStorage.getItem("hpo-editor-token");
+  } catch {
+    // storage unavailable
+  }
   return activeSessionToken;
 }
 
@@ -86,6 +97,14 @@ export function getActiveSessionToken(): string | null {
 
 export function setActiveSessionToken(token: string | null): void {
   activeSessionToken = token;
+  if (token && typeof window !== "undefined") {
+    try {
+      window.sessionStorage.setItem("hpo-editor-token", token);
+      window.localStorage.setItem("hpo-editor-token", token);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export interface ApiClientOptions {

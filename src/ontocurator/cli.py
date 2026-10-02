@@ -95,6 +95,14 @@ def serve(
             help="Path to JSON file defining an AxesConfig profile fallback.",
         ),
     ] = None,
+    token: Annotated[
+        str | None,
+        typer.Option(
+            "--token",
+            "-t",
+            help="Custom session token (generated or restored automatically if omitted).",
+        ),
+    ] = None,
 ) -> None:
     """Start local secured HPO annotation editor server."""
     if host not in {"127.0.0.1", "localhost", "::1"}:
@@ -141,7 +149,19 @@ def serve(
     db_path = workspace / "editor.db"
 
     actual_port = port if port != 0 else _find_free_port(host)
-    token = secrets.token_urlsafe(32)
+    token_file = workspace / ".session_token"
+    if token:
+        effective_token = token
+    elif token_file.is_file():
+        saved = token_file.read_text(encoding="utf-8").strip()
+        effective_token = saved if saved else secrets.token_urlsafe(32)
+    else:
+        effective_token = secrets.token_urlsafe(32)
+
+    try:
+        token_file.write_text(effective_token, encoding="utf-8")
+    except Exception:
+        pass
 
     parsed_axes_config = None
     if axes_config is not None:
@@ -169,7 +189,7 @@ def serve(
         workspace_dir=workspace,
         database_path=db_path,
         ontology_path=ontology.resolve(),
-        session_token=token,
+        session_token=effective_token,
         host=host,
         port=actual_port,
         web_dir=resolved_web_dir,
@@ -191,12 +211,13 @@ def serve(
         typer.echo(f"Error: Failed to initialize editor: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    url = f"http://{host}:{actual_port}/#token={token}"
+    url = f"http://{host}:{actual_port}/#token={effective_token}"
 
     typer.echo("==================================================")
     typer.echo(f"  Ontocurator running on port {actual_port}")
     typer.echo(f"  Workspace: {workspace}")
-    typer.echo(f"  URL: http://{host}:{actual_port}/")
+    typer.echo(f"  URL: {url}")
+    typer.echo(f"  Token: {effective_token}")
     typer.echo("==================================================")
 
     if not no_browser:

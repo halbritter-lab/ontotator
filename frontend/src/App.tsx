@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   api,
   initSessionToken,
+  getActiveSessionToken,
+  setActiveSessionToken,
   type AnnotationSnapshot,
   type DocumentSummary,
   type OpenWorkspaceResponse,
@@ -34,6 +36,7 @@ export const App: React.FC = () => {
   const [activeWorkspace, setActiveWorkspace] = useState<OpenWorkspaceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [tokenInput, setTokenInput] = useState<string>("");
 
   useEffect(() => {
     initSessionToken();
@@ -211,6 +214,49 @@ export const App: React.FC = () => {
             }}
           >
             {error}
+          </div>
+        )}
+
+        {error && (error.includes("Forbidden") || error.includes("Missing Bearer") || error.includes("token")) && (
+          <div
+            style={{
+              padding: "20px 24px",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "var(--radius)",
+              marginBottom: 24,
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
+            }}
+          >
+            <h3 style={{ fontSize: "1.05rem", marginBottom: 8, color: "var(--text-main)" }}>
+              🔑 Session-Token eingeben
+            </h3>
+            <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: 16 }}>
+              Die lokale API erfordert ein Sicherheits-Token. Bitte geben Sie das Session-Token ein oder öffnen Sie die URL mit dem Parameter <code>#token=...</code> im Browser.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (tokenInput.trim()) {
+                  setActiveSessionToken(tokenInput.trim());
+                  setError(null);
+                  loadPackages();
+                }
+              }}
+              style={{ display: "flex", gap: 10 }}
+            >
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Session-Token einfügen..."
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}
+              />
+              <button type="submit" className="btn btn-primary" disabled={!tokenInput.trim()}>
+                Verbinden
+              </button>
+            </form>
           </div>
         )}
 
