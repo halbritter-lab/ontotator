@@ -179,7 +179,7 @@ export interface paths {
         put?: never;
         /**
          * Search Ontology
-         * @description Execute HPO search with deterministic provenance shuffling.
+         * @description Execute ontology search with deterministic provenance shuffling and layer scoping.
          */
         post: operations["search_ontology_api_v1_search_post"];
         delete?: never;
@@ -227,21 +227,32 @@ export interface components {
         };
         /**
          * Annotation
-         * @description Annotation entity referencing ontology term, context axes and evidence.
+         * @description Annotation entity referencing ontology term, layer, type, context axes and evidence.
          */
         Annotation: {
             /** Annotation Id */
             annotation_id: string;
             /** Document Id */
             document_id: string;
+            /**
+             * Layer Id
+             * @default hpo-layer
+             */
+            layer_id: string;
+            /**
+             * Type Id
+             * @default phenotype
+             */
+            type_id: string;
             /** Term Id */
             term_id: string;
-            axes?: components["schemas"]["Axes"];
+            /** Axes Values */
+            axes_values?: {
+                [key: string]: string | null;
+            };
             /** Evidence Refs */
             evidence_refs?: components["schemas"]["EvidenceRef"][];
             provenance: components["schemas"]["Provenance"];
-            /** Hpo Id */
-            readonly hpo_id: string;
         };
         /**
          * AnnotationRef
@@ -255,9 +266,15 @@ export interface components {
         };
         /**
          * AnnotationSnapshot
-         * @description Immutable snapshot binding annotation, evidence, text and ontology digests.
+         * @description Immutable snapshot binding annotation, evidence, text, layer config and ontology digests (V3).
          */
         AnnotationSnapshot: {
+            /**
+             * Schema Version
+             * @default ontocurator-annotation/v3
+             * @constant
+             */
+            schema_version: "ontocurator-annotation/v3";
             annotation: components["schemas"]["Annotation"];
             /** Evidence */
             evidence: components["schemas"]["EvidenceSnapshot"][];
@@ -267,27 +284,28 @@ export interface components {
             text_sha256: string;
             /** Ontology Sha256 */
             ontology_sha256: string;
+            /** Layer Config Sha256 */
+            layer_config_sha256: string;
             /** Version */
             version: string;
-            /** Schema Version */
-            schema_version?: string | null;
-            /** Axes Config Sha256 */
-            axes_config_sha256?: string | null;
         };
         /**
-         * Axes
-         * @description Context axes associated with an annotation.
+         * AnnotationTypeDefinition
+         * @description Definition of an annotation type available in a layer.
          */
-        Axes: {
+        AnnotationTypeDefinition: {
+            /** Type Id */
+            type_id: string;
+            /** Label */
+            label: string;
+            /** Axes */
+            axes?: components["schemas"]["AxisDefinition"][];
             /**
-             * Definition Name
-             * @default editor-axes/v1
+             * Evidence Policy
+             * @default optional
+             * @enum {string}
              */
-            definition_name: string;
-            /** Values */
-            values?: {
-                [key: string]: string | null;
-            };
+            evidence_policy: "optional" | "required_on_complete";
         };
         /**
          * AxesConfig
@@ -346,6 +364,14 @@ export interface components {
             language: string;
             /** Text Length */
             text_length: number;
+            /** Position */
+            position: number;
+            /**
+             * Status
+             * @default not_started
+             * @enum {string}
+             */
+            status: "not_started" | "in_progress" | "completed";
         };
         /**
          * Draft
@@ -362,11 +388,8 @@ export interface components {
             evidence?: components["schemas"]["EvidenceSnapshot"][];
             /** Decisions */
             decisions?: components["schemas"]["ReviewDecision"][];
-            /**
-             * Document Checked
-             * @default false
-             */
-            document_checked: boolean;
+            /** Checked Layer Ids */
+            checked_layer_ids?: string[];
         };
         /**
          * EvidenceMention
@@ -412,6 +435,32 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * LayerDefinition
+         * @description Definition of an annotation layer binding an ontology and types.
+         */
+        LayerDefinition: {
+            /** Layer Id */
+            layer_id: string;
+            /** Label */
+            label: string;
+            /** Ontology Id */
+            ontology_id: string;
+            /**
+             * Access
+             * @enum {string}
+             */
+            access: "editable" | "reference";
+            /**
+             * Default Visible
+             * @default true
+             */
+            default_visible: boolean;
+            /** Default Type Id */
+            default_type_id: string;
+            /** Annotation Types */
+            annotation_types: components["schemas"]["AnnotationTypeDefinition"][];
+        };
+        /**
          * MutationEnvelope
          * @description Request envelope identifying a write attempt across retries.
          */
@@ -424,6 +473,28 @@ export interface components {
             payload: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * OntologyDefinition
+         * @description Definition of an ontology artifact bound to a task profile.
+         */
+        OntologyDefinition: {
+            /** Ontology Id */
+            ontology_id: string;
+            /** Label */
+            label: string;
+            /** Release */
+            release: string;
+            /** Sha256 */
+            sha256: string;
+            /**
+             * Format
+             * @default obo-graph-json
+             * @constant
+             */
+            format: "obo-graph-json";
+            /** Resource Path */
+            resource_path?: string | null;
         };
         /**
          * OntologyRef
@@ -451,7 +522,7 @@ export interface components {
              * @default independent
              * @enum {string}
              */
-            mode: "independent" | "review";
+            mode: "independent" | "review" | "assisted";
             targets?: components["schemas"]["ReviewTargetSet"] | null;
         };
         /**
@@ -472,16 +543,18 @@ export interface components {
             package_id: string;
             /**
              * Format Version
-             * @default ontocurator-work-package/v1
+             * @default ontocurator-work-package/v2
              * @enum {string}
              */
-            format_version: "ontocurator-work-package/v1" | "hpo-editor-work-package/v1";
-            ontology: components["schemas"]["OntologyRef"];
-            /**
-             * Axes Definition
-             * @default editor-axes/v1
-             */
-            axes_definition: string;
+            format_version: "ontocurator-work-package/v2" | "ontocurator-work-package/v1" | "hpo-editor-work-package/v1";
+            /** Document Order */
+            document_order?: string[];
+            task_profile?: components["schemas"]["TaskProfile"] | null;
+            /** Task Profile Sha256 */
+            task_profile_sha256?: string | null;
+            ontology?: components["schemas"]["OntologyRef"] | null;
+            /** Axes Definition */
+            axes_definition?: string | null;
             axes_config?: components["schemas"]["AxesConfig"] | null;
             /** Axes Config Sha256 */
             axes_config_sha256?: string | null;
@@ -607,6 +680,11 @@ export interface components {
             workspace_key: components["schemas"]["WorkspaceKey"];
             /** Annotation Id */
             annotation_id: string;
+            /**
+             * Layer Id
+             * @default hpo-layer
+             */
+            layer_id: string;
             /** Query */
             query: string;
             /**
@@ -645,6 +723,10 @@ export interface components {
             seed?: string | null;
             /** Search Id */
             search_id?: string | null;
+            /** Layer Id */
+            layer_id?: string | null;
+            /** Ontology Sha256 */
+            ontology_sha256?: string | null;
             /** Index Identity */
             index_identity?: string | null;
         };
@@ -663,9 +745,15 @@ export interface components {
          * @description Immutable local submission record.
          */
         Submission: {
+            /**
+             * Format Version
+             * @default ontocurator-submission/v2
+             */
+            format_version: string;
             /** Submission Id */
             submission_id: string;
             origin_key: components["schemas"]["WorkspaceKey"];
+            scope?: components["schemas"]["TaskScope"] | null;
             targets: components["schemas"]["ReviewTargetSet"];
             /** Draft Revision */
             draft_revision: number;
@@ -673,10 +761,56 @@ export interface components {
             snapshots: components["schemas"]["AnnotationSnapshot"][];
             /** Decisions */
             decisions: components["schemas"]["ReviewDecision"][];
-            /** Document Checked */
+            /** Checked Layer Ids */
+            checked_layer_ids?: string[];
+            /**
+             * Document Checked
+             * @default true
+             */
             document_checked: boolean;
             /** Created At */
             created_at: string;
+        };
+        /**
+         * TaskProfile
+         * @description Complete specification of task profile, ontologies, layers, and types.
+         */
+        TaskProfile: {
+            /**
+             * Schema
+             * @default ontocurator-task-profile/v1
+             * @constant
+             */
+            schema: "ontocurator-task-profile/v1";
+            /** Profile Id */
+            profile_id: string;
+            /** Version */
+            version: string;
+            /** Ontologies */
+            ontologies: components["schemas"]["OntologyDefinition"][];
+            /** Layers */
+            layers: components["schemas"]["LayerDefinition"][];
+            /** Default Layer Id */
+            default_layer_id: string;
+            /** Preset */
+            preset?: string | null;
+        };
+        /**
+         * TaskScope
+         * @description Execution scope defining active editable and reference layers for a workspace.
+         */
+        TaskScope: {
+            /** Scope Id */
+            scope_id: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "independent" | "review" | "assisted";
+            /** Editable Layer Ids */
+            editable_layer_ids: string[];
+            /** Reference Layer Ids */
+            reference_layer_ids: string[];
         };
         /** ValidationError */
         ValidationError: {
@@ -706,7 +840,12 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "independent" | "review";
+            mode: "independent" | "review" | "assisted";
+            /**
+             * Scope Id
+             * @default
+             */
+            scope_id: string;
             /** Target Set Id */
             target_set_id: string;
         };
@@ -719,6 +858,13 @@ export interface components {
             document: components["schemas"]["Document"];
             draft: components["schemas"]["Draft"];
             targets: components["schemas"]["ReviewTargetSet"];
+            scope: components["schemas"]["TaskScope"];
+            /** Layers */
+            layers?: components["schemas"]["LayerDefinition"][];
+            /** Ontologies */
+            ontologies?: components["schemas"]["OntologyDefinition"][];
+            /** Checked Layer Ids */
+            checked_layer_ids?: string[];
             /** Available Inputs */
             available_inputs?: components["schemas"]["AnnotationSnapshot"][];
             /** Submissions */
@@ -808,7 +954,10 @@ export interface operations {
     };
     list_package_documents_api_v1_packages__package_id__documents_get: {
         parameters: {
-            query?: never;
+            query?: {
+                annotator_id?: string | null;
+                mode?: ("independent" | "review" | "assisted") | null;
+            };
             header?: never;
             path: {
                 package_id: string;

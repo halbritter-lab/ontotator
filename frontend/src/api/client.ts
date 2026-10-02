@@ -18,7 +18,12 @@ export type SearchResult = components["schemas"]["SearchResult"];
 export type SearchCandidate = components["schemas"]["SearchCandidate"];
 export type AxisDefinition = components["schemas"]["AxisDefinition"];
 export type AxesConfig = components["schemas"]["AxesConfig"];
-export type Axes = components["schemas"]["Axes"];
+export type AxesValues = Record<string, string | null>;
+export type Axes = AxesValues;
+export type LayerDefinition = components["schemas"]["LayerDefinition"];
+export type TaskScope = components["schemas"]["TaskScope"];
+export type AnnotationTypeDefinition = components["schemas"]["AnnotationTypeDefinition"];
+export type OntologyDefinition = components["schemas"]["OntologyDefinition"];
 
 export class ApiError extends Error {
   readonly status: number;
@@ -205,14 +210,28 @@ export class ApiClient {
     });
   }
 
-  async listDocuments(packageId: string): Promise<DocumentSummary[]> {
+  async listDocuments(
+    packageId: string,
+    params?: { annotator_id?: string; mode?: string }
+  ): Promise<DocumentSummary[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.annotator_id) {
+      searchParams.set("annotator_id", params.annotator_id);
+    }
+    if (params?.mode) {
+      searchParams.set("mode", params.mode);
+    }
+    const qs = searchParams.toString();
     return this.request<DocumentSummary[]>(
-      `/api/v1/packages/${encodeURIComponent(packageId)}/documents`,
+      `/api/v1/packages/${encodeURIComponent(packageId)}/documents${
+        qs ? `?${qs}` : ""
+      }`,
       {
         method: "GET",
       }
     );
   }
+
 
   async getReviewInputs(
     req: ReviewInputsRequest

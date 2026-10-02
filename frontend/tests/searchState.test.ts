@@ -11,6 +11,7 @@ describe("SearchManager", () => {
     document_id: "doc-1",
     annotator_id: "user-1",
     mode: "independent" as const,
+    scope_id: "scope-1",
     target_set_id: "targets-0",
   };
 
@@ -177,4 +178,70 @@ describe("SearchManager", () => {
     expect(manager.getState().isLoading).toBe(false);
     expect(manager.getState().error).toBe("Network timeout");
   });
+
+  it("discards delayed search response if active layer changed", async () => {
+    let resolveLayer1: (res: SearchResult) => void;
+    const promiseLayer1 = new Promise<SearchResult>((res) => {
+      resolveLayer1 = res;
+    });
+
+    searchOntologySpy.mockImplementation((req: any) => {
+      if (req.layer_id === "layer-1") return promiseLayer1;
+      return Promise.resolve({
+        route: "lexical",
+        query: req.query,
+        layer_id: req.layer_id,
+        candidates: [
+          {
+            term_id: "MONDO:0001",
+            hpo_id: "MONDO:0001",
+            label: "Disease 1",
+            definition: "",
+            matched_term: "disease",
+            match_kind: "exact_label",
+            obsolete: false,
+            rank: 1,
+            display_pos: 0,
+          },
+        ],
+        shuffled: false,
+      });
+    });
+
+    const manager = new SearchManager(mockClient);
+    const req1 = manager.search("seizure", "ann-1", sampleKey, "lexical", 10, "layer-1");
+
+    // User switches layer to layer-2 and searches there
+    manager.setLayer("layer-2");
+    const req2 = manager.search("seizure", "ann-2", sampleKey, "lexical", 10, "layer-2");
+    await req2;
+
+    expect(manager.getState().candidates[0].term_id).toBe("MONDO:0001");
+
+    // Later, layer-1 search resolves
+    resolveLayer1!({
+      route: "lexical",
+      query: "seizure",
+      layer_id: "layer-1",
+      shuffled: false,
+      candidates: [
+        {
+          term_id: "HP:0001250",
+          hpo_id: "HP:0001250",
+          label: "Seizure",
+          definition: "",
+          matched_term: "seizure",
+          match_kind: "exact_label",
+          obsolete: false,
+          rank: 1,
+          display_pos: 0,
+        },
+      ],
+    });
+    await req1;
+
+    // Must still retain layer-2 candidate, layer-1 response discarded!
+    expect(manager.getState().candidates[0].term_id).toBe("MONDO:0001");
+  });
 });
+

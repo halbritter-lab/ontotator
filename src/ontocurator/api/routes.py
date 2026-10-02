@@ -25,6 +25,7 @@ from ontocurator.application.workspaces import (
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import (
     Draft,
     MutationEnvelope,
@@ -179,9 +180,12 @@ def list_packages(repo: RepoDep) -> list[PackageManifest]:
 def list_package_documents(
     package_id: str,
     ws_svc: WorkspaceSvcDep,
+    annotator_id: str | None = None,
+    mode: WorkspaceMode | None = None,
 ) -> list[DocumentSummary]:
     """List documents showing metadata only, without proposal counts."""
-    return ws_svc.list_documents(package_id)
+    return ws_svc.list_documents(package_id, annotator_id, mode)
+
 
 
 @router.post("/workspaces/review-inputs")
@@ -275,18 +279,46 @@ def search_ontology(
 ) -> SearchResult:
     """Execute ontology search with deterministic provenance shuffling and layer scoping."""
     ws_svc.get_document(req.workspace_key.package_id, req.workspace_key.document_id)
+    profile = repo.get_task_profile(req.workspace_key.package_id)
+    scope = build_scope(profile, req.workspace_key.mode)
+    profile_layer_ids = [l.layer_id for l in profile.layers]
+    if req.layer_id not in profile_layer_ids:
+        raise DomainError(
+            "UNKNOWN_LAYER",
+            f"Layer '{req.layer_id}' is not defined in task profile",
+        )
+    accessible = scope.editable_layer_ids + scope.reference_layer_ids
+    if req.layer_id not in accessible:
+        raise DomainError(
+            "INVALID_LAYER",
+            f"Layer '{req.layer_id}' is not accessible in workspace scope '{scope.scope_id}'",
+        )
+
+    # If annotation exists in draft, verify layer matches
+    try:
+        draft = repo.open_draft(req.workspace_key)
+        for snap in draft.annotations:
+            if snap.annotation.annotation_id == req.annotation_id:
+                if snap.annotation.layer_id != req.layer_id:
+                    raise DomainError(
+                        "LAYER_MISMATCH",
+                        f"Annotation '{req.annotation_id}' belongs to layer '{snap.annotation.layer_id}', not '{req.layer_id}'",
+                    )
+                break
+    except DomainError:
+        raise
+    except Exception:
+        pass
+
+
     registry = getattr(request.app.state, "ontology_registry", None)
-    profile = (
-        repo.get_task_profile(req.workspace_key.package_id)
-        if hasattr(repo, "get_task_profile")
-        else None
-    )
-    if registry is not None and profile is not None:
+    if registry is not None:
         ontology = registry.for_layer(profile, req.layer_id)
     else:
         ontology = getattr(request.app.state, "ontology", None)
         if ontology is None:
             raise DomainError("ONTOLOGY_NOT_FOUND", "No ontology configured")
+
 
     result = ontology.search(req)
     result.search_id = str(uuid4())

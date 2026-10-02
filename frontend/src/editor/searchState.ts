@@ -3,9 +3,18 @@ import type { components } from "../api/generated";
 
 export type WorkspaceKey = components["schemas"]["WorkspaceKey"];
 
+export interface SearchContext {
+  workspaceId: string;
+  documentId: string;
+  layerId: string;
+  typeId?: string | null;
+  requestId: number;
+}
+
 export interface SearchState {
   searchId: string | null;
   query: string;
+  layerId: string | null;
   route: "lexical" | "exact" | "id" | "browse";
   candidates: SearchCandidate[];
   isLoading: boolean;
@@ -19,6 +28,7 @@ export class SearchManager {
   private state: SearchState = {
     searchId: null,
     query: "",
+    layerId: null,
     route: "lexical",
     candidates: [],
     isLoading: false,
@@ -26,6 +36,7 @@ export class SearchManager {
     requestId: 0,
   };
 
+  private currentLayerId: string | null = null;
   private listeners = new Set<SearchListener>();
   private activeAbortController: AbortController | null = null;
 
@@ -33,6 +44,17 @@ export class SearchManager {
 
   getState(): SearchState {
     return this.state;
+  }
+
+  getCurrentLayerId(): string | null {
+    return this.currentLayerId;
+  }
+
+  setLayer(layerId: string | null): void {
+    if (this.currentLayerId !== layerId) {
+      this.currentLayerId = layerId;
+      this.clear();
+    }
   }
 
   subscribe(listener: SearchListener): () => void {
@@ -57,6 +79,7 @@ export class SearchManager {
     this.updateState({
       searchId: null,
       query: "",
+      layerId: this.currentLayerId,
       candidates: [],
       isLoading: false,
       error: null,
@@ -68,9 +91,15 @@ export class SearchManager {
     annotationId: string,
     workspaceKey: WorkspaceKey,
     route: "lexical" | "exact" | "id" | "browse" = "lexical",
-    k = 10
+    k = 10,
+    layerId?: string | null
   ): Promise<SearchCandidate[]> {
     const query = rawQuery.trim();
+
+    if (layerId !== undefined && layerId !== null) {
+      this.currentLayerId = layerId;
+    }
+    const targetLayerId = this.currentLayerId;
 
     if (this.activeAbortController) {
       this.activeAbortController.abort();
@@ -84,6 +113,7 @@ export class SearchManager {
         searchId: null,
         candidates: [],
         query: rawQuery,
+        layerId: targetLayerId,
         isLoading: false,
         error: null,
         route,
@@ -95,6 +125,7 @@ export class SearchManager {
       searchId: null,
       candidates: [],
       query: rawQuery,
+      layerId: targetLayerId,
       isLoading: true,
       error: null,
       route,
@@ -104,19 +135,25 @@ export class SearchManager {
       const searchReq: SearchRequest = {
         workspace_key: workspaceKey,
         annotation_id: annotationId,
+        layer_id: targetLayerId ?? "hpo-layer",
         query,
         route,
         k,
       };
 
+
       const result = await this.client.searchOntology(searchReq);
 
-      // Only apply if this request is still the latest one
-      if (this.state.requestId === currentRequestId) {
+      // Only apply if this request is still the latest one AND layer hasn't changed
+      if (
+        this.state.requestId === currentRequestId &&
+        this.currentLayerId === targetLayerId
+      ) {
         const candidates = result.candidates ?? [];
         this.updateState({
           searchId: result.search_id ?? null,
           candidates,
+          layerId: targetLayerId,
           isLoading: false,
           error: null,
         });
@@ -124,7 +161,10 @@ export class SearchManager {
       }
       return this.state.candidates;
     } catch (err: unknown) {
-      if (this.state.requestId === currentRequestId) {
+      if (
+        this.state.requestId === currentRequestId &&
+        this.currentLayerId === targetLayerId
+      ) {
         const message = err instanceof Error ? err.message : String(err);
         this.updateState({
           candidates: [],

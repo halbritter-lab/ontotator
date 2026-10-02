@@ -29,6 +29,8 @@ class SubmitCommand(BaseModel):
 
     command: str = "submit_workspace"
     document_checked: bool = True
+    checked_layer_ids: list[str] | None = None
+
 
 
 def validate_completion(
@@ -122,6 +124,9 @@ class SubmissionService:
     def _create_submission(
         self, draft: Draft, cmd: SubmitCommand, key: WorkspaceKey
     ) -> Submission:
+        if cmd.checked_layer_ids is not None:
+            draft.checked_layer_ids = list(cmd.checked_layer_ids)
+
         task_profile = self.repo.get_task_profile(key.package_id)
         scope = build_scope(task_profile, key.mode)
 

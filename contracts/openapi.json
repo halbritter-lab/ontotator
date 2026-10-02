@@ -91,6 +91,43 @@
               "type": "string",
               "title": "Package Id"
             }
+          },
+          {
+            "name": "annotator_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Annotator Id"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "independent",
+                    "review",
+                    "assisted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            }
           }
         ],
         "responses": {
@@ -405,7 +442,7 @@
     "/api/v1/search": {
       "post": {
         "summary": "Search Ontology",
-        "description": "Execute HPO search with deterministic provenance shuffling.",
+        "description": "Execute ontology search with deterministic provenance shuffling and layer scoping.",
         "operationId": "search_ontology_api_v1_search_post",
         "requestBody": {
           "content": {
@@ -516,12 +553,33 @@
             "type": "string",
             "title": "Document Id"
           },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id",
+            "default": "hpo-layer"
+          },
+          "type_id": {
+            "type": "string",
+            "title": "Type Id",
+            "default": "phenotype"
+          },
           "term_id": {
             "type": "string",
             "title": "Term Id"
           },
-          "axes": {
-            "$ref": "#/components/schemas/Axes"
+          "axes_values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Axes Values"
           },
           "evidence_refs": {
             "items": {
@@ -532,11 +590,6 @@
           },
           "provenance": {
             "$ref": "#/components/schemas/Provenance"
-          },
-          "hpo_id": {
-            "type": "string",
-            "title": "Hpo Id",
-            "readOnly": true
           }
         },
         "additionalProperties": false,
@@ -545,11 +598,10 @@
           "annotation_id",
           "document_id",
           "term_id",
-          "provenance",
-          "hpo_id"
+          "provenance"
         ],
         "title": "Annotation",
-        "description": "Annotation entity referencing ontology term, context axes and evidence."
+        "description": "Annotation entity referencing ontology term, layer, type, context axes and evidence."
       },
       "AnnotationRef": {
         "properties": {
@@ -573,6 +625,12 @@
       },
       "AnnotationSnapshot": {
         "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "ontocurator-annotation/v3",
+            "title": "Schema Version",
+            "default": "ontocurator-annotation/v3"
+          },
           "annotation": {
             "$ref": "#/components/schemas/Annotation"
           },
@@ -595,31 +653,13 @@
             "type": "string",
             "title": "Ontology Sha256"
           },
+          "layer_config_sha256": {
+            "type": "string",
+            "title": "Layer Config Sha256"
+          },
           "version": {
             "type": "string",
             "title": "Version"
-          },
-          "schema_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Schema Version"
-          },
-          "axes_config_sha256": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Axes Config Sha256"
           }
         },
         "additionalProperties": false,
@@ -630,37 +670,47 @@
           "document_id",
           "text_sha256",
           "ontology_sha256",
+          "layer_config_sha256",
           "version"
         ],
         "title": "AnnotationSnapshot",
-        "description": "Immutable snapshot binding annotation, evidence, text and ontology digests."
+        "description": "Immutable snapshot binding annotation, evidence, text, layer config and ontology digests (V3)."
       },
-      "Axes": {
+      "AnnotationTypeDefinition": {
         "properties": {
-          "definition_name": {
+          "type_id": {
             "type": "string",
-            "title": "Definition Name",
-            "default": "editor-axes/v1"
+            "title": "Type Id"
           },
-          "values": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "axes": {
+            "items": {
+              "$ref": "#/components/schemas/AxisDefinition"
             },
-            "type": "object",
-            "title": "Values"
+            "type": "array",
+            "title": "Axes"
+          },
+          "evidence_policy": {
+            "type": "string",
+            "enum": [
+              "optional",
+              "required_on_complete"
+            ],
+            "title": "Evidence Policy",
+            "default": "optional"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "Axes",
-        "description": "Context axes associated with an annotation."
+        "required": [
+          "type_id",
+          "label"
+        ],
+        "title": "AnnotationTypeDefinition",
+        "description": "Definition of an annotation type available in a layer."
       },
       "AxesConfig": {
         "properties": {
@@ -774,6 +824,20 @@
           "text_length": {
             "type": "integer",
             "title": "Text Length"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress",
+              "completed"
+            ],
+            "title": "Status",
+            "default": "not_started"
           }
         },
         "additionalProperties": false,
@@ -781,7 +845,8 @@
         "required": [
           "document_id",
           "language",
-          "text_length"
+          "text_length",
+          "position"
         ],
         "title": "DocumentSummary",
         "description": "Metadata-only summary of a document in a package."
@@ -819,10 +884,12 @@
             "type": "array",
             "title": "Decisions"
           },
-          "document_checked": {
-            "type": "boolean",
-            "title": "Document Checked",
-            "default": false
+          "checked_layer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Checked Layer Ids"
           }
         },
         "additionalProperties": false,
@@ -928,6 +995,58 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "LayerDefinition": {
+        "properties": {
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "editable",
+              "reference"
+            ],
+            "title": "Access"
+          },
+          "default_visible": {
+            "type": "boolean",
+            "title": "Default Visible",
+            "default": true
+          },
+          "default_type_id": {
+            "type": "string",
+            "title": "Default Type Id"
+          },
+          "annotation_types": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationTypeDefinition"
+            },
+            "type": "array",
+            "title": "Annotation Types"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "layer_id",
+          "label",
+          "ontology_id",
+          "access",
+          "default_type_id",
+          "annotation_types"
+        ],
+        "title": "LayerDefinition",
+        "description": "Definition of an annotation layer binding an ontology and types."
+      },
       "MutationEnvelope": {
         "properties": {
           "mutation_id": {
@@ -953,6 +1072,53 @@
         ],
         "title": "MutationEnvelope",
         "description": "Request envelope identifying a write attempt across retries."
+      },
+      "OntologyDefinition": {
+        "properties": {
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "release": {
+            "type": "string",
+            "title": "Release"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "format": {
+            "type": "string",
+            "const": "obo-graph-json",
+            "title": "Format",
+            "default": "obo-graph-json"
+          },
+          "resource_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Path"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ontology_id",
+          "label",
+          "release",
+          "sha256"
+        ],
+        "title": "OntologyDefinition",
+        "description": "Definition of an ontology artifact bound to a task profile."
       },
       "OntologyRef": {
         "properties": {
@@ -992,7 +1158,8 @@
             "type": "string",
             "enum": [
               "independent",
-              "review"
+              "review",
+              "assisted"
             ],
             "title": "Mode",
             "default": "independent"
@@ -1046,19 +1213,61 @@
           "format_version": {
             "type": "string",
             "enum": [
+              "ontocurator-work-package/v2",
               "ontocurator-work-package/v1",
               "hpo-editor-work-package/v1"
             ],
             "title": "Format Version",
-            "default": "ontocurator-work-package/v1"
+            "default": "ontocurator-work-package/v2"
+          },
+          "document_order": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Document Order"
+          },
+          "task_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_profile_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Profile Sha256"
           },
           "ontology": {
-            "$ref": "#/components/schemas/OntologyRef"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OntologyRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "axes_definition": {
-            "type": "string",
-            "title": "Axes Definition",
-            "default": "editor-axes/v1"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Axes Definition"
           },
           "axes_config": {
             "anyOf": [
@@ -1119,7 +1328,6 @@
         "type": "object",
         "required": [
           "package_id",
-          "ontology",
           "created_at"
         ],
         "title": "PackageManifest",
@@ -1348,6 +1556,11 @@
             "type": "string",
             "title": "Annotation Id"
           },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id",
+            "default": "hpo-layer"
+          },
           "query": {
             "type": "string",
             "title": "Query"
@@ -1439,6 +1652,28 @@
             ],
             "title": "Search Id"
           },
+          "layer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layer Id"
+          },
+          "ontology_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ontology Sha256"
+          },
           "index_identity": {
             "anyOf": [
               {
@@ -1482,12 +1717,27 @@
       },
       "Submission": {
         "properties": {
+          "format_version": {
+            "type": "string",
+            "title": "Format Version",
+            "default": "ontocurator-submission/v2"
+          },
           "submission_id": {
             "type": "string",
             "title": "Submission Id"
           },
           "origin_key": {
             "$ref": "#/components/schemas/WorkspaceKey"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "targets": {
             "$ref": "#/components/schemas/ReviewTargetSet"
@@ -1510,9 +1760,17 @@
             "type": "array",
             "title": "Decisions"
           },
+          "checked_layer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Checked Layer Ids"
+          },
           "document_checked": {
             "type": "boolean",
-            "title": "Document Checked"
+            "title": "Document Checked",
+            "default": true
           },
           "created_at": {
             "type": "string",
@@ -1528,11 +1786,109 @@
           "draft_revision",
           "snapshots",
           "decisions",
-          "document_checked",
           "created_at"
         ],
         "title": "Submission",
         "description": "Immutable local submission record."
+      },
+      "TaskProfile": {
+        "properties": {
+          "schema": {
+            "type": "string",
+            "const": "ontocurator-task-profile/v1",
+            "title": "Schema",
+            "default": "ontocurator-task-profile/v1"
+          },
+          "profile_id": {
+            "type": "string",
+            "title": "Profile Id"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "ontologies": {
+            "items": {
+              "$ref": "#/components/schemas/OntologyDefinition"
+            },
+            "type": "array",
+            "title": "Ontologies"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerDefinition"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "default_layer_id": {
+            "type": "string",
+            "title": "Default Layer Id"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile_id",
+          "version",
+          "ontologies",
+          "layers",
+          "default_layer_id"
+        ],
+        "title": "TaskProfile",
+        "description": "Complete specification of task profile, ontologies, layers, and types."
+      },
+      "TaskScope": {
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "title": "Scope Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "independent",
+              "review",
+              "assisted"
+            ],
+            "title": "Mode"
+          },
+          "editable_layer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Editable Layer Ids"
+          },
+          "reference_layer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reference Layer Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scope_id",
+          "mode",
+          "editable_layer_ids",
+          "reference_layer_ids"
+        ],
+        "title": "TaskScope",
+        "description": "Execution scope defining active editable and reference layers for a workspace."
       },
       "ValidationError": {
         "properties": {
@@ -1592,9 +1948,15 @@
             "type": "string",
             "enum": [
               "independent",
-              "review"
+              "review",
+              "assisted"
             ],
             "title": "Mode"
+          },
+          "scope_id": {
+            "type": "string",
+            "title": "Scope Id",
+            "default": ""
           },
           "target_set_id": {
             "type": "string",
@@ -1626,6 +1988,30 @@
           },
           "targets": {
             "$ref": "#/components/schemas/ReviewTargetSet"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/TaskScope"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerDefinition"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "ontologies": {
+            "items": {
+              "$ref": "#/components/schemas/OntologyDefinition"
+            },
+            "type": "array",
+            "title": "Ontologies"
+          },
+          "checked_layer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Checked Layer Ids"
           },
           "available_inputs": {
             "items": {
@@ -1677,7 +2063,8 @@
           "key",
           "document",
           "draft",
-          "targets"
+          "targets",
+          "scope"
         ],
         "title": "WorkspaceView",
         "description": "Loaded view of a workspace including document, draft and submissions."

@@ -1,7 +1,7 @@
 import json
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import (
@@ -77,7 +77,9 @@ class Repository:
         cursor = conn.cursor()
 
         task_profile = package.manifest.task_profile
-        t_hash = package.manifest.task_profile_sha256 or profile_hash(task_profile)
+        t_hash = package.manifest.task_profile_sha256 or (
+            profile_hash(task_profile) if task_profile is not None else ""
+        )
 
         cursor.execute("BEGIN IMMEDIATE;")
         try:
@@ -762,6 +764,73 @@ class Repository:
         else:
             docs.sort(key=lambda d: d.document_id)
         return docs
+
+    def get_document_status(
+        self,
+        package_id: str,
+        document_id: str,
+        annotator_id: str,
+        mode: str,
+    ) -> Literal["not_started", "in_progress", "completed"]:
+        """Compute document progress status strictly isolated to annotator and mode."""
+        conn = self.db.get_connection()
+        prefix = f"{package_id}:{document_id}:{annotator_id}:{mode}:%"
+
+        # Check for any submissions for this user/mode/document
+        sub_row = conn.execute(
+            "SELECT s.draft_revision FROM submissions s "
+            "JOIN imported_submission_bindings b USING(submission_id) "
+            "WHERE b.local_package_id = ? AND b.local_key LIKE ? "
+            "ORDER BY s.created_at DESC LIMIT 1;",
+            (package_id, prefix),
+        ).fetchone()
+
+        if sub_row is None:
+            # Also check if origin_key directly matches
+            sub_row = conn.execute(
+                "SELECT draft_revision FROM submissions WHERE origin_key LIKE ? "
+                "ORDER BY created_at DESC LIMIT 1;",
+                (prefix,),
+            ).fetchone()
+
+        # Check existing draft workspace
+        ws_row = conn.execute(
+            "SELECT workspace_key, revision, checked_layer_ids_json FROM workspaces "
+            "WHERE package_id = ? AND document_id = ? AND annotator_id = ? AND mode = ?;",
+            (package_id, document_id, annotator_id, mode),
+        ).fetchone()
+
+        if sub_row is not None:
+            sub_rev = sub_row[0]
+            if ws_row is not None:
+                ws_rev = ws_row[1]
+                if ws_rev > sub_rev:
+                    return "in_progress"
+            return "completed"
+
+        if ws_row is None:
+            return "not_started"
+
+        ws_key, ws_rev, checked_json = ws_row
+        checked_layers = json.loads(checked_json) if checked_json else []
+        if ws_rev > 0 or len(checked_layers) > 0:
+            return "in_progress"
+
+        has_ann = conn.execute(
+            "SELECT 1 FROM workspace_annotations WHERE workspace_key = ? LIMIT 1;",
+            (ws_key,),
+        ).fetchone()
+        if has_ann is not None:
+            return "in_progress"
+
+        has_dec = conn.execute(
+            "SELECT 1 FROM workspace_decisions WHERE workspace_key = ? LIMIT 1;",
+            (ws_key,),
+        ).fetchone()
+        if has_dec is not None:
+            return "in_progress"
+
+        return "not_started"
 
     def get_annotation_snapshot(
         self, annotation_id: str, version: str
