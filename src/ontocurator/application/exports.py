@@ -32,9 +32,14 @@ class ExportService:
                 f"Document '{key.document_id}' not found for export",
             )
 
-        # Get original package manifest for ontology ref
         orig_pkg = self.repo.export_package(key.package_id)
-        ontology_ref = orig_pkg.manifest.ontology
+
+        # Load task profile and scope
+        task_profile = self.repo.get_task_profile(key.package_id)
+        from ontocurator.domain.profiles import TaskProfile, profile_hash
+        from ontocurator.domain.scopes import build_scope
+
+        scope = build_scope(task_profile, key.mode)
 
         # Load submissions for this workspace key
         subs = self.repo.get_submissions_for_workspace(key)
@@ -52,6 +57,11 @@ class ExportService:
                     "INVALID_EXPORT_DEPENDENCY",
                     "Snapshot belongs to a different document",
                 )
+            if (
+                key.mode == "independent"
+                and snap.annotation.layer_id not in scope.editable_layer_ids
+            ):
+                return
             annotations_map[(snap.annotation.annotation_id, snap.version)] = snap
             embedded = {
                 (ev.mention.evidence_id, ev.version): ev for ev in snap.evidence
@@ -72,7 +82,7 @@ class ExportService:
                 include_snapshot(snap)
 
         for sub in subs:
-            refs = list(sub.targets.targets)
+            refs = list(sub.targets.targets) if key.mode == "review" else []
             for decision in sub.decisions:
                 refs.append(decision.target)
                 if decision.replacement is not None:
@@ -89,10 +99,39 @@ class ExportService:
                     )
                 include_snapshot(dependency)
 
-        task_profile = self.repo.get_task_profile(key.package_id)
-        from ontocurator.domain.profiles import profile_hash
+        if key.mode == "independent":
+            projected_layers = [
+                layer
+                for layer in task_profile.layers
+                if layer.layer_id in scope.editable_layer_ids
+            ]
+            used_ontology_ids = {layer.ontology_id for layer in projected_layers}
+            projected_ontologies = [
+                ont
+                for ont in task_profile.ontologies
+                if ont.ontology_id in used_ontology_ids
+            ]
+            default_layer_id = (
+                task_profile.default_layer_id
+                if task_profile.default_layer_id in scope.editable_layer_ids
+                else scope.editable_layer_ids[0]
+            )
+            task_profile = TaskProfile(
+                profile_id=task_profile.profile_id,
+                version=task_profile.version,
+                ontologies=projected_ontologies,
+                layers=projected_layers,
+                default_layer_id=default_layer_id,
+                preset=task_profile.preset,
+            )
 
         search_events = self.repo.get_search_events_for_workspace(key)
+        if key.mode == "independent":
+            search_events = [
+                evt
+                for evt in search_events
+                if evt.layer_id is None or evt.layer_id in scope.editable_layer_ids
+            ]
         now = datetime.now(UTC).isoformat()
         export_pkg_id = f"export-{uuid4()}"
         manifest = PackageManifest(

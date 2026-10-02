@@ -160,13 +160,9 @@ def _read_package(
                     f"expected {expected_hash}, got {actual_hash}"
                 )
 
-    # Verify embedded ontology resources and register into registry if provided
+    # Verify embedded ontology resources
     for ont in manifest.task_profile.ontologies:
-        if ont.resource_path:
-            if ont.resource_path not in file_contents:
-                raise InvalidPackage(
-                    f"Package missing declared ontology resource: '{ont.resource_path}'"
-                )
+        if ont.resource_path and ont.resource_path in file_contents:
             ont_data = file_contents[ont.resource_path]
             actual_sha = hashlib.sha256(ont_data).hexdigest().lower()
             if actual_sha != ont.sha256.lower():
@@ -175,16 +171,17 @@ def _read_package(
                     f"expected {ont.sha256}, got {actual_sha}"
                 )
 
-    # Collect missing external ontologies if registry provided
+    # Collect missing ontologies
     if registry is not None:
         missing_ontologies: list[str] = []
         for ont in manifest.task_profile.ontologies:
+            has_embedded = bool(ont.resource_path and ont.resource_path in file_contents)
             has_ont = (
                 registry.has_ontology(ont.sha256)
                 if hasattr(registry, "has_ontology")
                 else (registry.get_service(ont.sha256) is not None)
             )
-            if not ont.resource_path and not has_ont:
+            if not has_embedded and not has_ont:
                 missing_ontologies.append(f"'{ont.ontology_id}' ({ont.sha256})")
         if missing_ontologies:
             raise DomainError(
@@ -192,6 +189,12 @@ def _read_package(
                 f"Missing required external ontologies: {', '.join(missing_ontologies)}. "
                 f"Please provide them via '--ontology PATH'.",
             )
+    else:
+        for ont in manifest.task_profile.ontologies:
+            if ont.resource_path and ont.resource_path not in file_contents:
+                raise InvalidPackage(
+                    f"Package missing declared ontology resource: '{ont.resource_path}'"
+                )
 
     # Parse documents.jsonl
     documents: dict[str, Document] = {}

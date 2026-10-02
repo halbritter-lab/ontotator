@@ -10,8 +10,10 @@ from ontocurator.domain.annotations import AnnotationRef
 from ontocurator.domain.axes import EDITOR_AXES_CONFIG, validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.profiles import resolve_type
 from ontocurator.domain.review import ReviewDecision, ReviewOutcome
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
+from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
 from ontocurator.storage.repository import Repository
 
@@ -30,9 +32,15 @@ class DecisionCommand(BaseModel):
 class ReviewService:
     """Coordinates review decisions against targeted proposals."""
 
-    def __init__(self, repo: Repository, ontology: OntologyService) -> None:
+    def __init__(
+        self,
+        repo: Repository,
+        ontology: OntologyService | None = None,
+        registry: OntologyRegistry | None = None,
+    ) -> None:
         self.repo = repo
         self.ontology = ontology
+        self.registry = registry
 
     def parse_command(self, payload: dict[str, Any]) -> DecisionCommand:
         return DecisionCommand.model_validate(payload)
@@ -77,37 +85,40 @@ class ReviewService:
             )
         }
         target_snap = available.get((cmd.target.annotation_id, cmd.target.version))
-        profile = self.repo.get_axes_config(key.package_id)
+        task_profile = self.repo.get_task_profile(key.package_id)
 
         if target_snap is None:
             raise DomainError(
                 "TARGET_NOT_FOUND", "Target is unavailable in this document"
             )
+
         if cmd.outcome == "confirmed":
-            status = self.ontology.validate_term(target_snap.annotation.term_id)
-            if status.status in {"obsolete", "unknown"}:
-                raise DomainError(
-                    f"CANNOT_CONFIRM_{status.status.upper()}_TERM",
-                    f"Cannot confirm {status.status} term "
-                    f"'{target_snap.annotation.term_id}'",
-                )
-            target_profile = (
-                EDITOR_AXES_CONFIG
-                if (
-                    target_snap.schema_version is None
-                    and target_snap.annotation.axes.definition_name == "editor-axes/v1"
-                )
-                else profile
+            ont_svc = None
+            if self.registry is not None:
+                ont_svc = self.registry.for_layer(task_profile, target_snap.annotation.layer_id)
+            elif self.ontology is not None:
+                ont_svc = self.ontology
+
+            if ont_svc is not None:
+                status = ont_svc.validate_term(target_snap.annotation.term_id)
+                if status.status in {"obsolete", "unknown"}:
+                    raise DomainError(
+                        f"CANNOT_CONFIRM_{status.status.upper()}_TERM",
+                        f"Cannot confirm {status.status} term "
+                        f"'{target_snap.annotation.term_id}'",
+                    )
+
+            target_type = resolve_type(
+                task_profile, target_snap.annotation.layer_id, target_snap.annotation.type_id
             )
-            try:
-                validate_axes(
-                    target_snap.annotation.axes, target_profile, complete=True
-                )
-            except ValueError as exc:
-                raise DomainError(
-                    "INCOMPLETE_AXES",
-                    f"Cannot confirm annotation with incomplete required axes: {exc}",
-                ) from exc
+            for axis in target_type.axes:
+                if not axis.allow_empty:
+                    val = target_snap.annotation.axes_values.get(axis.id)
+                    if val is None or val == "":
+                        raise DomainError(
+                            "INCOMPLETE_AXES",
+                            "Cannot confirm annotation with incomplete required axes",
+                        )
 
         # 3. Changed outcome requires replacement
         if cmd.outcome == "changed":
@@ -138,13 +149,27 @@ class ReviewService:
                     "REPLACEMENT_NOT_FOUND",
                     "Replacement must be an exact current draft version",
                 )
-            try:
-                validate_axes(replacement.annotation.axes, profile, complete=True)
-            except ValueError as exc:
+            if (
+                replacement.annotation.layer_id != target_snap.annotation.layer_id
+                or replacement.annotation.type_id != target_snap.annotation.type_id
+            ):
                 raise DomainError(
-                    "INCOMPLETE_AXES",
-                    f"Cannot approve replacement with incomplete required axes: {exc}",
-                ) from exc
+                    "REPLACEMENT_LAYER_TYPE_MISMATCH",
+                    f"Replacement must belong to the same layer '{target_snap.annotation.layer_id}' "
+                    f"and type '{target_snap.annotation.type_id}' as the target",
+                )
+
+            rep_type = resolve_type(
+                task_profile, replacement.annotation.layer_id, replacement.annotation.type_id
+            )
+            for axis in rep_type.axes:
+                if not axis.allow_empty:
+                    val = replacement.annotation.axes_values.get(axis.id)
+                    if val is None or val == "":
+                        raise DomainError(
+                            "INCOMPLETE_AXES",
+                            f"Cannot approve replacement with incomplete required axes: {axis.id}",
+                        )
 
         decision = ReviewDecision(
             decision_id="dec-"
@@ -161,5 +186,9 @@ class ReviewService:
         draft.decisions = [d for d in draft.decisions if d.target != cmd.target] + [
             decision
         ]
+
+        # Invalidate target layer checkmark
+        target_layer = target_snap.annotation.layer_id
+        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != target_layer]
 
         return draft

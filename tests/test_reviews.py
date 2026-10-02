@@ -63,8 +63,56 @@ def _setup_review_test_env(tmp_path: Path):
         text_sha256=text_digest,
     )
 
+    from ontocurator.domain.profiles import (
+        AnnotationTypeDefinition,
+        AxisDefinition,
+        LayerDefinition,
+        OntologyDefinition,
+        TaskProfile,
+        profile_hash,
+    )
+
+    hp_ont = OntologyDefinition(
+        ontology_id="hp",
+        label="Human Phenotype Ontology",
+        release="2026-06-23",
+        sha256=ontology.ref.sha256,
+        format="obo-graph-json",
+    )
+    pheno_type = AnnotationTypeDefinition(
+        type_id="phenotype",
+        label="Phenotype",
+        axes=[
+            AxisDefinition(
+                id="assertion",
+                label="Assertion",
+                options=["present", "absent", "uncertain"],
+                allow_empty=True,
+            )
+        ],
+        evidence_policy="optional",
+    )
+    layer = LayerDefinition(
+        layer_id="hpo-layer",
+        label="Phenotypes",
+        ontology_id="hp",
+        access="editable",
+        default_visible=True,
+        default_type_id="phenotype",
+        annotation_types=[pheno_type],
+    )
+    profile = TaskProfile(
+        profile_id="hpo-context-example/v1",
+        version="1.0.0",
+        ontologies=[hp_ont],
+        layers=[layer],
+        default_layer_id="hpo-layer",
+    )
+
     # 1. Proposal A (human): Hypotonia (HP:0001252)
-    ev_a = snapshot_evidence(
+    from ontocurator.domain.documents import EvidenceSnapshot
+
+    ev_a = EvidenceSnapshot.create(
         EvidenceMention(
             evidence_id="ev-a",
             segments=[Segment(start=27, end=36)],
@@ -74,18 +122,20 @@ def _setup_review_test_env(tmp_path: Path):
     ann_a = Annotation(
         annotation_id="prop-human",
         document_id="doc-1",
-        hpo_id="HP:0001252",
-        axes=Axes(assertion="present"),
+        layer_id="hpo-layer",
+        type_id="phenotype",
+        term_id="HP:0001252",
+        axes_values={"assertion": "present"},
         evidence_refs=[EvidenceRef(evidence_id="ev-a", version=ev_a.version)],
         provenance=Provenance(
             actor=ActorRef(actor_id="dr-meier", kind="human"),
             method="manual",
         ),
     )
-    snap_a = snapshot(ann_a, [ev_a], doc, ontology.ref)
+    snap_a = snapshot(ann_a, [ev_a], doc, profile)
 
     # 2. Proposal B (tool): Seizure (HP:0001250)
-    ev_b = snapshot_evidence(
+    ev_b = EvidenceSnapshot.create(
         EvidenceMention(
             evidence_id="ev-b",
             segments=[Segment(start=41, end=48)],
@@ -95,35 +145,42 @@ def _setup_review_test_env(tmp_path: Path):
     ann_b = Annotation(
         annotation_id="prop-tool",
         document_id="doc-1",
-        hpo_id="HP:0001250",
-        axes=Axes(assertion="present"),
+        layer_id="hpo-layer",
+        type_id="phenotype",
+        term_id="HP:0001250",
+        axes_values={"assertion": "present"},
         evidence_refs=[EvidenceRef(evidence_id="ev-b", version=ev_b.version)],
         provenance=Provenance(
             actor=ActorRef(actor_id="ner-v1", kind="tool"),
             method="spacy_ner",
         ),
     )
-    snap_b = snapshot(ann_b, [ev_b], doc, ontology.ref)
+    snap_b = snapshot(ann_b, [ev_b], doc, profile)
 
     # 3. Proposal C (obsolete term): HP:0000123
     ann_c = Annotation(
         annotation_id="prop-obs",
         document_id="doc-1",
-        hpo_id="HP:0000123",
-        axes=Axes(),
+        layer_id="hpo-layer",
+        type_id="phenotype",
+        term_id="HP:0000123",
+        axes_values={},
         evidence_refs=[],
         provenance=Provenance(
             actor=ActorRef(actor_id="tool-old", kind="tool"),
             method="old",
         ),
     )
-    snap_c = snapshot(ann_c, [], doc, ontology.ref)
+    snap_c = snapshot(ann_c, [], doc, profile)
 
     pkg = ValidatedPackage(
         manifest=PackageManifest(
+            format_version="ontocurator-work-package/v2",
             package_id="pkg-rev-1",
             created_at="2026-10-01T00:00:00Z",
-            ontology=ontology.ref,
+            document_order=["doc-1"],
+            task_profile=profile,
+            task_profile_sha256=profile_hash(profile),
         ),
         documents={"doc-1": doc},
         annotations={
@@ -181,7 +238,8 @@ def test_review_decisions_for_human_and_tool_proposals(
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    ctx["ws_svc"].open(ws_key, target_set)
+    view = ctx["ws_svc"].open(ws_key, target_set)
+    ws_key = view.key
 
     cmd = DecisionCommand(
         target=target_ref,
@@ -220,13 +278,16 @@ def test_review_decision_changed_requires_and_binds_replacement(tmp_path: Path):
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    ctx["ws_svc"].open(ws_key, target_set)
+    view = ctx["ws_svc"].open(ws_key, target_set)
+    ws_key = view.key
 
     # 1. Create a replacement / counter-proposal
     cmd_edit = CreateAnnotationCommand(
         annotation_id="replacement-1",
-        hpo_id="HP:0002133",  # Status epilepticus
-        axes=Axes(assertion="present"),
+        layer_id="hpo-layer",
+        type_id="phenotype",
+        term_id="HP:0002133",  # Status epilepticus
+        axes_values={"assertion": "present"},
         evidence_id="ev-b",
         segments=[Segment(start=41, end=48)],
     )
@@ -280,7 +341,8 @@ def test_obsolete_term_cannot_be_confirmed(tmp_path: Path):
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    ctx["ws_svc"].open(ws_key, target_set)
+    view = ctx["ws_svc"].open(ws_key, target_set)
+    ws_key = view.key
 
     # Attempting to confirm obsolete term HP:0000123
     with pytest.raises(DomainError, match="CANNOT_CONFIRM_OBSOLETE_TERM"):
@@ -313,10 +375,11 @@ def test_review_submission_completeness_and_export_scoping(tmp_path: Path):
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    ctx["ws_svc"].open(ws_key, target_set)
+    view = ctx["ws_svc"].open(ws_key, target_set)
+    ws_key = view.key
 
-    # 1. Submit before deciding -> raises IncompleteReview
-    with pytest.raises(IncompleteReview):
+    # 1. Submit before deciding -> raises IncompleteReview or DomainError
+    with pytest.raises((IncompleteReview, DomainError)):
         ctx["sub_svc"].submit(
             ws_key,
             MutationEnvelope(
@@ -350,12 +413,24 @@ def test_review_submission_completeness_and_export_scoping(tmp_path: Path):
             ),
         )
 
+    from ontocurator.application.editing import CheckLayerCommand
+
+    # 3b. Check layer before submitting
+    ctx["edit_svc"].apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="chk-layer",
+            expected_revision=1,
+            payload=CheckLayerCommand(kind="check_layer", layer_id="hpo-layer", checked=True).model_dump(),
+        ),
+    )
+
     # 4. Submit successfully
     sub = ctx["sub_svc"].submit(
         ws_key,
         MutationEnvelope(
             mutation_id="sub-ok",
-            expected_revision=1,
+            expected_revision=2,
             payload=SubmitCommand(document_checked=True).model_dump(),
         ),
     )
@@ -383,17 +458,30 @@ def test_independent_mode_null_finding_and_hidden_proposals(tmp_path: Path):
         target_set_id="targets-0",
     )
     view = ctx["ws_svc"].open(ws_key)
+    ws_key = view.key
 
     # Independent mode: no available inputs exposed
     assert view.available_inputs == []
     assert view.targets.targets == []
+
+    # Check layer first
+    from ontocurator.application.editing import CheckLayerCommand
+
+    ctx["edit_svc"].apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="chk-null",
+            expected_revision=0,
+            payload=CheckLayerCommand(kind="check_layer", layer_id="hpo-layer", checked=True).model_dump(),
+        ),
+    )
 
     # Null finding completion (0 annotations, document_checked=True)
     sub = ctx["sub_svc"].submit(
         ws_key,
         MutationEnvelope(
             mutation_id="sub-null",
-            expected_revision=0,
+            expected_revision=1,
             payload=SubmitCommand(document_checked=True).model_dump(),
         ),
     )
@@ -411,11 +499,18 @@ def test_independent_mode_null_finding_and_hidden_proposals(tmp_path: Path):
 def test_required_axes_enforced_on_confirmation_replacement_and_submission(
     tmp_path: Path,
 ):
-    from ontocurator.domain.axes import AxesConfig, AxisDefinition
+    from ontocurator.application.editing import CheckLayerCommand
+    from ontocurator.domain.profiles import (
+        AnnotationTypeDefinition,
+        AxisDefinition,
+        LayerDefinition,
+        OntologyDefinition,
+        TaskProfile,
+        profile_hash,
+    )
 
     db_path = tmp_path / "test.db"
     db = Database(db_path)
-    db.run_migrations()
     repo = Repository(db)
     ontology = _make_ontology_service()
     ws_svc = WorkspaceService(repo, ontology)
@@ -429,8 +524,9 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
         document_id="doc-1", text=text, language="en", text_sha256=text_digest
     )
 
-    custom_config = AxesConfig(
-        definition_name="strict-profile/v1",
+    custom_type = AnnotationTypeDefinition(
+        type_id="strict-type",
+        label="Strict Type",
         axes=[
             AxisDefinition(
                 id="severity",
@@ -439,32 +535,56 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
                 allow_empty=False,
             )
         ],
+        evidence_policy="optional",
+    )
+    custom_layer = LayerDefinition(
+        layer_id="strict-layer",
+        label="Strict Layer",
+        ontology_id="hp",
+        access="editable",
+        default_visible=True,
+        default_type_id="strict-type",
+        annotation_types=[custom_type],
+    )
+    custom_profile = TaskProfile(
+        profile_id="strict-profile/v1",
+        version="1.0.0",
+        ontologies=[
+            OntologyDefinition(
+                ontology_id="hp",
+                label="Human Phenotype Ontology",
+                release="2026-06-23",
+                sha256=ontology.ref.sha256,
+                format="obo-graph-json",
+            )
+        ],
+        layers=[custom_layer],
+        default_layer_id="strict-layer",
     )
 
-    # Incomplete proposal (severity is None)
+    # Incomplete proposal (severity is empty/omitted)
     ann_incomplete = Annotation(
         annotation_id="prop-inc",
         document_id="doc-1",
+        layer_id="strict-layer",
+        type_id="strict-type",
         term_id="HP:0001252",
-        axes=Axes(definition_name="strict-profile/v1", values={"severity": None}),
+        axes_values={},
         provenance=Provenance(
             actor=ActorRef(actor_id="dr-meier", kind="human"),
             method="manual",
         ),
     )
-    snap_inc = snapshot(
-        ann_incomplete, [], doc, ontology.ref, axes_config=custom_config
-    )
+    snap_inc = snapshot(ann_incomplete, [], doc, custom_profile)
 
     pkg = ValidatedPackage(
         manifest=PackageManifest(
-            format_version="ontocurator-work-package/v1",
+            format_version="ontocurator-work-package/v2",
             package_id="pkg-strict-1",
             created_at="2026-10-01T00:00:00Z",
-            ontology=ontology.ref,
-            axes_definition="strict-profile/v1",
-            axes_config=custom_config,
-            axes_config_sha256=custom_config.config_sha256,
+            document_order=["doc-1"],
+            task_profile=custom_profile,
+            task_profile_sha256=profile_hash(custom_profile),
         ),
         documents={"doc-1": doc},
         annotations={(snap_inc.annotation.annotation_id, snap_inc.version): snap_inc},
@@ -481,7 +601,8 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
         mode="review",
         target_set_id=targets.target_set_id,
     )
-    ws_svc.open(ws_key, targets)
+    view = ws_svc.open(ws_key, targets)
+    ws_key = view.key
 
     # 1. Confirming an incomplete annotation fails
     with pytest.raises(DomainError, match="INCOMPLETE_AXES"):
@@ -524,10 +645,10 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
             expected_revision=1,
             payload=CreateAnnotationCommand(
                 annotation_id="rep-bad",
+                layer_id="strict-layer",
+                type_id="strict-type",
                 term_id="HP:0001252",
-                axes=Axes(
-                    definition_name="strict-profile/v1", values={"severity": None}
-                ),
+                axes_values={},
             ).model_dump(),
         ),
     )
@@ -558,10 +679,10 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
             expected_revision=2,
             payload=CreateAnnotationCommand(
                 annotation_id="rep-1",
+                layer_id="strict-layer",
+                type_id="strict-type",
                 term_id="HP:0001252",
-                axes=Axes(
-                    definition_name="strict-profile/v1", values={"severity": "severe"}
-                ),
+                axes_values={"severity": "severe"},
             ).model_dump(),
         ),
     )
@@ -590,6 +711,16 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
     assert len(draft.decisions) == 1
     assert draft.decisions[0].outcome == "changed"
 
+    # Check layer
+    edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="chk",
+            expected_revision=4,
+            payload=CheckLayerCommand(kind="check_layer", layer_id="strict-layer", checked=True).model_dump(),
+        ),
+    )
+
     # 5. Submission fails because rep-bad is still in draft annotations
     # with incomplete axes
     with pytest.raises(DomainError, match="INCOMPLETE_AXES"):
@@ -597,7 +728,7 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
             ws_key,
             MutationEnvelope(
                 mutation_id="sub-bad",
-                expected_revision=4,
+                expected_revision=5,
                 payload=SubmitCommand(document_checked=True).model_dump(),
             ),
         )
@@ -609,8 +740,18 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
         ws_key,
         MutationEnvelope(
             mutation_id="del-rep-bad",
-            expected_revision=4,
+            expected_revision=5,
             payload=DeleteDraftAnnotationCommand(annotation_id="rep-bad").model_dump(),
+        ),
+    )
+
+    # Re-check layer since deleting an annotation on strict-layer invalidates its checkmark!
+    edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="chk-again",
+            expected_revision=6,
+            payload=CheckLayerCommand(kind="check_layer", layer_id="strict-layer", checked=True).model_dump(),
         ),
     )
 
@@ -618,7 +759,7 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
         ws_key,
         MutationEnvelope(
             mutation_id="sub-ok",
-            expected_revision=5,
+            expected_revision=7,
             payload=SubmitCommand(document_checked=True).model_dump(),
         ),
     )

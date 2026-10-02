@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.documents import EvidenceSnapshot
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
+from ontocurator.domain.scopes import TaskScope
 
 WorkspaceMode = Literal["independent", "review", "assisted"]
 
@@ -76,8 +77,10 @@ class Submission(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    format_version: str = "ontocurator-submission/v2"
     submission_id: str
     origin_key: WorkspaceKey
+    scope: TaskScope | None = None
     targets: ReviewTargetSet
     draft_revision: int
     snapshots: list[AnnotationSnapshot]
