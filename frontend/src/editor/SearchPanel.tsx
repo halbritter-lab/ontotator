@@ -6,6 +6,7 @@ export interface SearchPanelProps {
   searchManager: SearchManager;
   annotationId: string;
   workspaceKey: WorkspaceKey;
+  layerId?: string;
   currentTermId?: string | null;
   currentHpoId?: string | null;
   onSelectCandidate: (candidate: SearchCandidate, searchId?: string) => void;
@@ -15,6 +16,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   searchManager,
   annotationId,
   workspaceKey,
+  layerId,
   currentTermId,
   currentHpoId,
   onSelectCandidate,
@@ -32,17 +34,17 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   useEffect(() => {
     searchManager.clear();
     setQueryInput("");
-  }, [annotationId, workspaceKey, searchManager]);
+  }, [annotationId, workspaceKey, layerId, searchManager]);
 
   const handleQueryChange = (val: string) => {
     setQueryInput(val);
-    searchManager.search(val, annotationId, workspaceKey, route);
+    searchManager.search(val, annotationId, workspaceKey, route, 10, layerId);
   };
 
   const handleRouteChange = (newRoute: "lexical" | "exact" | "id" | "browse") => {
     setRoute(newRoute);
     if (queryInput) {
-      searchManager.search(queryInput, annotationId, workspaceKey, newRoute);
+      searchManager.search(queryInput, annotationId, workspaceKey, newRoute, 10, layerId);
     }
   };
 

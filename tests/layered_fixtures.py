@@ -225,10 +225,10 @@ def make_layered_package(
         )
         snap_ref_2 = snapshot(ann_ref_2, [ev_2], doc_beta, profile)
 
-        evidence[("doc-beta", "ev-ref-1")] = ev_1
-        evidence[("doc-beta", "ev-ref-2")] = ev_2
-        annotations[("doc-beta", "ann-ref-1")] = snap_ref_1
-        annotations[("doc-beta", "ann-ref-2")] = snap_ref_2
+        evidence[(ev_1.mention.evidence_id, ev_1.version)] = ev_1
+        evidence[(ev_2.mention.evidence_id, ev_2.version)] = ev_2
+        annotations[(ann_ref_1.annotation_id, snap_ref_1.version)] = snap_ref_1
+        annotations[(ann_ref_2.annotation_id, snap_ref_2.version)] = snap_ref_2
 
         manifest = PackageManifest(
             package_id="pkg-scenario-b",

@@ -8,9 +8,12 @@ export type ReviewDecisionOutcome = "confirmed" | "rejected" | "changed" | "unce
 export interface TargetProposal {
   annotation_id: string;
   version: string;
+  layer_id?: string;
+  type_id?: string;
   term_id?: string;
-  hpo_id: string;
-  axes?: components["schemas"]["Axes"] | null;
+  hpo_id?: string;
+  axes?: Record<string, unknown> | null;
+  axes_values?: Record<string, string | null> | null;
   provenance: components["schemas"]["Provenance"];
   evidence_count: number;
   is_obsolete?: boolean;
@@ -121,16 +124,19 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       <div className="detail-section" aria-label="Vorschlagsdetails">
         <strong>{target.term_id ?? target.hpo_id}</strong>
         <dl>
-          {target.axes?.values && Object.keys(target.axes.values).length > 0 ? (
-            Object.entries(target.axes.values).map(([k, v]) => (
+          {(() => {
+            const rawAxes = target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
+            const entries = Object.entries(rawAxes);
+            if (entries.length === 0) {
+              return <dd style={{ marginLeft: 0, color: "var(--text-muted)" }}>Keine Achsen definiert</dd>;
+            }
+            return entries.map(([k, v]) => (
               <React.Fragment key={k}>
                 <dt style={{ textTransform: "capitalize" }}>{k}</dt>
-                <dd>{v ?? "Nicht angegeben"}</dd>
+                <dd>{typeof v === "string" ? v : (v !== null && v !== undefined ? String(v) : "Nicht angegeben")}</dd>
               </React.Fragment>
-            ))
-          ) : (
-            <dd style={{ marginLeft: 0, color: "var(--text-muted)" }}>Keine Achsen definiert</dd>
-          )}
+            ));
+          })()}
         </dl>
         <p>Version: {target.version}</p>
         {evidence.length ? evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
@@ -242,14 +248,20 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             style={{ marginBottom: 8 }}
           >
             <option value="">(Wählen Sie eine Annotation aus dem Entwurf)</option>
-            {draftAnnotations.map((snap) => {
-              const term = snap.annotation.term_id ?? snap.annotation.hpo_id;
-              return (
-                <option key={snap.annotation.annotation_id} value={snap.annotation.annotation_id}>
-                  {term} (ID: {snap.annotation.annotation_id.slice(0, 10)})
-                </option>
-              );
-            })}
+            {draftAnnotations
+              .filter((snap) => {
+                if (target.layer_id && snap.annotation.layer_id !== target.layer_id) return false;
+                if (target.type_id && snap.annotation.type_id !== target.type_id) return false;
+                return true;
+              })
+              .map((snap) => {
+                const term = snap.annotation.term_id ?? (snap.annotation as any).hpo_id;
+                return (
+                  <option key={snap.annotation.annotation_id} value={snap.annotation.annotation_id}>
+                    {term} (ID: {snap.annotation.annotation_id.slice(0, 10)})
+                  </option>
+                );
+              })}
           </select>
           <button
             type="button"

@@ -50,7 +50,7 @@ class CreateAnnotationCommand(BaseModel):
     layer_id: str | None = None
     type_id: str | None = None
     search_event_id: str | None = None
-    axes_values: dict[str, str] = Field(default_factory=dict)
+    axes_values: dict[str, str | None] = Field(default_factory=dict)
     evidence_id: str | None = None
     segments: list[Segment] = Field(default_factory=list)
     label: str | None = None
@@ -144,7 +144,7 @@ class SetAxesCommand(BaseModel):
 
     command: Literal["set_axes"] = "set_axes"
     annotation_id: str
-    axes_values: dict[str, str] = Field(default_factory=dict)
+    axes_values: dict[str, str | None] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod

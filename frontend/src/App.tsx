@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   api,
   initSessionToken,
-  getActiveSessionToken,
   setActiveSessionToken,
   type AnnotationSnapshot,
   type DocumentSummary,
@@ -14,7 +13,7 @@ import { CaseScreen } from "./app/CaseScreen";
 
 const snapshotKey = (s: AnnotationSnapshot) => JSON.stringify([s.annotation.annotation_id, s.version]);
 
-export type WorkspaceMode = "independent" | "review";
+export type WorkspaceMode = "independent" | "review" | "assisted";
 export type ReviewTargetSet = components["schemas"]["ReviewTargetSet"];
 
 export const App: React.FC = () => {
@@ -64,7 +63,7 @@ export const App: React.FC = () => {
     setSelectedDocId(null);
     setReviewInputs([]);
     try {
-      const docs = await api.listDocuments(pkgId);
+      const docs = await api.listDocuments(pkgId, { annotator_id: annotatorId.trim() || undefined, mode });
       if (requestId !== documentRequest.current) return;
       setDocuments(docs);
       if (docs.length > 0) {
@@ -124,6 +123,15 @@ export const App: React.FC = () => {
     if (mode === "review" && selectedPackageId && selectedDocId) void handleFetchReviewInputs();
   }, [mode, selectedPackageId, selectedDocId, annotatorId]);
 
+  useEffect(() => {
+    if (selectedPackageId) {
+      void api
+        .listDocuments(selectedPackageId, { annotator_id: annotatorId.trim() || undefined, mode })
+        .then((docs) => setDocuments(docs))
+        .catch(() => {});
+    }
+  }, [annotatorId, mode, selectedPackageId]);
+
   const handleOpenWorkspace = async () => {
     if (!selectedPackageId || !selectedDocId) return;
     setError(null);
@@ -161,15 +169,52 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleNavigateCase = async (docId: string) => {
+    if (!selectedPackageId) return;
+    setError(null);
+    let targets: ReviewTargetSet | null = null;
+    if (mode === "review") {
+      const inputs = await api.getReviewInputs({
+        package_id: selectedPackageId,
+        document_id: docId,
+        annotator_id: annotatorId.trim() || "reviewer-1",
+        mode: "review",
+      });
+      if (inputs.length > 0) {
+        targets = {
+          target_set_id: "",
+          targets: inputs.map((s) => ({
+            annotation_id: s.annotation.annotation_id,
+            version: s.version,
+          })),
+        };
+      }
+    }
+    const res = await api.openWorkspace({
+      package_id: selectedPackageId,
+      document_id: docId,
+      annotator_id: annotatorId.trim() || "annotator-1",
+      mode,
+      targets,
+    });
+    setSelectedDocId(docId);
+    setActiveWorkspace(res);
+    const docs = await api.listDocuments(selectedPackageId, { annotator_id: annotatorId.trim() || undefined, mode });
+    setDocuments(docs);
+  };
+
   if (activeWorkspace) {
     return (
       <CaseScreen
         view={activeWorkspace.view}
         workspaceId={activeWorkspace.workspace_id}
-        onClose={() => {
+        documentList={documents}
+        onNavigateCase={handleNavigateCase}
+        onClose={async () => {
           setActiveWorkspace(null);
           if (selectedPackageId) {
-            handleSelectPackage(selectedPackageId);
+            const docs = await api.listDocuments(selectedPackageId, { annotator_id: annotatorId.trim() || undefined, mode });
+            setDocuments(docs);
           }
         }}
       />
@@ -288,7 +333,7 @@ export const App: React.FC = () => {
                 {packages.length === 0 && <option value="">Keine Pakete gefunden</option>}
                 {packages.map((pkg) => (
                   <option key={pkg.package_id} value={pkg.package_id}>
-                    {pkg.package_id} (Release: {pkg.ontology.release})
+                    {pkg.package_id} {pkg.ontology?.release ? `(Release: ${pkg.ontology.release})` : ""}
                   </option>
                 ))}
               </select>
@@ -307,7 +352,7 @@ export const App: React.FC = () => {
                 {documents.length === 0 && <option value="">Keine Dokumente</option>}
                 {documents.map((doc) => (
                   <option key={doc.document_id} value={doc.document_id}>
-                    {doc.document_id} ({doc.text_length} Zeichen, {doc.language.toUpperCase()})
+                    Fall {doc.position}: {doc.document_id} ({doc.text_length} Zeichen, {doc.language.toUpperCase()})
                   </option>
                 ))}
               </select>
@@ -363,11 +408,14 @@ export const App: React.FC = () => {
                 <option value="review">
                   Review-Modus (Vorschläge herkunftsunabhängig prüfen)
                 </option>
+                <option value="assisted">
+                  Assisted-Modus (Referenzannotation zur Unterstützung)
+                </option>
               </select>
             </div>
           </div>
 
-          {/* Info Banner */}
+          {/* Info Banners */}
           {mode === "independent" && (
             <div
               style={{
@@ -380,6 +428,20 @@ export const App: React.FC = () => {
             >
               🔒 <strong>Unabhängiger Modus:</strong> Sie annotieren den Text ohne Kenntnis
               vorhandener Vorschläge, KI-Hypothesen oder fremder Annotationen.
+            </div>
+          )}
+
+          {mode === "assisted" && (
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "var(--primary-light)",
+                color: "var(--primary-hover)",
+                borderRadius: "var(--radius)",
+                fontSize: "0.85rem",
+              }}
+            >
+              💡 <strong>Assisted-Modus:</strong> Sie sehen autorisierte Referenzannotationen zur Unterstützung bei der eigenständigen Neuannotation. Es besteht keine Mapping- oder Reviewpflicht.
             </div>
           )}
 
@@ -409,6 +471,7 @@ export const App: React.FC = () => {
                   {reviewInputs.map((input) => {
                     const ann = input.annotation;
                     const isChecked = selectedTargetIds.has(snapshotKey(input));
+                    const term = ann.term_id ?? (ann as any).hpo_id;
 
                     return (
                       <label
@@ -435,7 +498,7 @@ export const App: React.FC = () => {
                           }}
                         />
                         <div style={{ flex: 1 }}>
-                          <span style={{ fontWeight: 600 }}>{ann.hpo_id}</span>
+                          <span style={{ fontWeight: 600 }}>{term}</span>
                           <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginLeft: 8 }}>
                             ({ann.evidence_refs?.length ?? 0} Belegstellen • Version: {input.version.slice(0, 8)})
                           </span>

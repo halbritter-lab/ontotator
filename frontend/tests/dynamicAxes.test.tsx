@@ -10,16 +10,15 @@ describe("Dynamic Axes and Non-HPO UI", () => {
   } as unknown as ApiClient);
 
   const sampleAnnotation: AnnotationSnapshot = {
+    schema_version: "ontocurator-annotation/v3",
     annotation: {
       annotation_id: "ann-custom-1",
       document_id: "doc-1",
+      layer_id: "disease",
+      type_id: "default",
       term_id: "MONDO:0001250",
-      hpo_id: "MONDO:0001250",
-      axes: {
-        definition_name: "rare-disease/v1",
-        values: {
-          severity: "severe",
-        },
+      axes_values: {
+        severity: "severe",
       },
       evidence_refs: [],
       provenance: {
@@ -31,6 +30,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
     document_id: "doc-1",
     text_sha256: "text-sha",
     ontology_sha256: "ont-sha",
+    layer_config_sha256: "test-layer-sha",
     version: "v-1",
   };
 
@@ -61,6 +61,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
           document_id: "doc-1",
           annotator_id: "user",
           mode: "independent",
+          scope_id: "scope-default",
           target_set_id: "targets",
         }}
         searchManager={mockSearchManager}
@@ -95,11 +96,8 @@ describe("Dynamic Axes and Non-HPO UI", () => {
 
     fireEvent.change(confidenceSelect, { target: { value: "high" } });
     expect(onUpdateAxes).toHaveBeenCalledWith({
-      definition_name: "rare-disease/v1",
-      values: {
-        severity: "severe",
-        confidence: "high",
-      },
+      severity: "severe",
+      confidence: "high",
     });
   });
 
@@ -115,6 +113,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
           document_id: "doc-1",
           annotator_id: "user",
           mode: "independent",
+          scope_id: "scope-default",
           target_set_id: "targets",
         }}
         searchManager={mockSearchManager}
@@ -135,10 +134,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
     fireEvent.change(severitySelect, { target: { value: "" } });
 
     expect(onUpdateAxes).toHaveBeenCalledWith({
-      definition_name: "rare-disease/v1",
-      values: {
-        severity: null,
-      },
+      severity: null,
     });
   });
 
@@ -152,6 +148,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
           document_id: "doc-1",
           annotator_id: "user",
           mode: "independent",
+          scope_id: "scope-default",
           target_set_id: "targets",
         }}
         searchManager={mockSearchManager}

@@ -5,7 +5,8 @@ import type { CodepointSegment } from "../spans/adapter";
 import { SearchPanel } from "./SearchPanel";
 import type { SearchManager, WorkspaceKey } from "./searchState";
 
-export type Axes = components["schemas"]["Axes"];
+export type AxesValues = Record<string, string | null>;
+export type Axes = AxesValues;
 export type EvidenceSnapshot = components["schemas"]["EvidenceSnapshot"];
 export type AxisDefinition = components["schemas"]["AxisDefinition"];
 
@@ -15,6 +16,7 @@ export interface AnnotationPanelProps {
   workspaceKey: WorkspaceKey;
   searchManager: SearchManager;
   selectedEvidenceId: string | null;
+  layerId?: string;
   axesConfig?: AxisDefinition[];
   axesDefinition?: string;
   onSelectEvidence: (evidenceId: string) => void;
@@ -32,8 +34,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   workspaceKey,
   searchManager,
   selectedEvidenceId,
+  layerId,
   axesConfig,
-  axesDefinition,
   onSelectEvidence,
   onUpdateTerm,
   onUpdateAxes,
@@ -59,12 +61,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   }
 
   const ann = annotation.annotation;
-  const currentTerm = ann.term_id ?? ann.hpo_id;
-  const axes = ann.axes ?? {
-    definition_name: axesDefinition ?? "editor-axes/v1",
-    values: {},
-  };
-  const axesValues = axes.values ?? {};
+  const currentTerm = ann.term_id ?? (ann as any).hpo_id;
+  const axesValues = ann.axes_values ?? (ann as any).axes?.values ?? {};
 
   const evidenceRefs = ann.evidence_refs ?? [];
   const linkedEvidence = evidenceRefs
@@ -103,6 +101,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             <SearchPanel
               searchManager={searchManager}
               annotationId={ann.annotation_id}
+              layerId={layerId ?? ann.layer_id}
               workspaceKey={workspaceKey}
               currentTermId={currentTerm}
               currentHpoId={currentTerm}
@@ -136,10 +135,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                       ...axesValues,
                       [axis.id]: nextVal,
                     };
-                    onUpdateAxes({
-                      definition_name: axesDefinition ?? axes.definition_name,
-                      values: updated,
-                    });
+                    onUpdateAxes(updated);
                   }}
                 >
                   <option value="">(Nicht angegeben / keine Auswahl)</option>

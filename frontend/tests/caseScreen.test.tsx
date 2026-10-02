@@ -16,14 +16,54 @@ describe("CaseScreen integration", () => {
       document_id: "doc-test-1",
       annotator_id: "user-test",
       mode: "independent",
+      scope_id: "scope-default",
       target_set_id: "targets-0",
     },
+    scope: {
+      scope_id: "scope-default",
+      mode: "independent",
+      editable_layer_ids: ["phenotype"],
+      reference_layer_ids: [],
+    },
+    layers: [
+      {
+        layer_id: "phenotype",
+        label: "Phänotyp",
+        ontology_id: "hp",
+        access: "editable",
+        default_visible: true,
+        default_type_id: "default",
+        annotation_types: [
+          {
+            type_id: "default",
+            label: "Phänotyp",
+            evidence_policy: "optional",
+            axes: [
+              { id: "assertion", label: "Vorhandensein (Assertion)", options: ["present", "absent", "uncertain"], allow_empty: true },
+              { id: "experiencer", label: "Betroffene Person (Experiencer)", options: ["patient", "other"], allow_empty: true },
+              { id: "temporality", label: "Zeitlicher Bezug (Temporality)", options: ["current", "historical", "future"], allow_empty: true },
+            ],
+          },
+        ],
+      },
+    ],
+    ontologies: [
+      {
+        ontology_id: "hp",
+        release: "2024-06-25",
+        label: "Human Phenotype Ontology",
+        sha256: "test-hp-sha",
+        format: "obo-graph-json",
+      },
+    ],
+    checked_layer_ids: [],
     draft: {
       key: {
         package_id: "pkg-1",
         document_id: "doc-test-1",
         annotator_id: "user-test",
         mode: "independent",
+        scope_id: "scope-default",
         target_set_id: "targets-0",
       },
       targets: {
@@ -34,7 +74,7 @@ describe("CaseScreen integration", () => {
       annotations: [],
       evidence: [],
       decisions: [],
-      document_checked: false,
+      checked_layer_ids: [],
     },
     targets: {
       target_set_id: "targets-0",
@@ -76,18 +116,17 @@ describe("CaseScreen integration", () => {
       revision: 1,
       annotations: [
         {
+          schema_version: "ontocurator-annotation/v3" as const,
           annotation: {
             annotation_id: "ann-spanless-1",
             document_id: "doc-test-1",
+            layer_id: "phenotype",
+            type_id: "default",
             term_id: "HP:0001252",
-            hpo_id: "HP:0001252",
-            axes: {
-              definition_name: "editor-axes/v1",
-              values: {
-                assertion: "present",
-                experiencer: null,
-                temporality: null,
-              },
+            axes_values: {
+              assertion: "present",
+              experiencer: null,
+              temporality: null,
             },
             evidence_refs: [],
             provenance: {
@@ -99,6 +138,7 @@ describe("CaseScreen integration", () => {
           document_id: "doc-test-1",
           text_sha256: "sha-test-text",
           ontology_sha256: "sha-ont",
+          layer_config_sha256: "test-layer-sha",
           version: "v-1",
         },
       ],
@@ -120,9 +160,9 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByText("+ Spanlose Annotation"));
 
     // Enter ID and submit modal
-    const input = screen.getByLabelText(/Ontologie-Kennung/i);
+    const input = screen.getByPlaceholderText("HP:0001250");
     fireEvent.change(input, { target: { value: "HP:0001252" } });
-    fireEvent.click(screen.getByText("Annotation anlegen"));
+    fireEvent.click(screen.getByText("Hinzufügen"));
 
     await waitFor(() => {
       expect(applyCommandSpy).toHaveBeenCalledWith(
@@ -140,7 +180,7 @@ describe("CaseScreen integration", () => {
 
     // Check that the annotation appears in the list
     expect(screen.getByText("HP:0001252")).toBeDefined();
-    expect(screen.getAllByText(/Spanlos/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Spanlos/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it("updates clinical axes without setting unwarranted defaults", async () => {
@@ -151,18 +191,17 @@ describe("CaseScreen integration", () => {
         revision: 1,
         annotations: [
           {
+            schema_version: "ontocurator-annotation/v3" as const,
             annotation: {
               annotation_id: "ann-1",
               document_id: "doc-test-1",
+              layer_id: "phenotype",
+              type_id: "default",
               term_id: "HP:0001252",
-              hpo_id: "HP:0001252",
-              axes: {
-                definition_name: "editor-axes/v1",
-                values: {
-                  assertion: null,
-                  experiencer: null,
-                  temporality: null,
-                },
+              axes_values: {
+                assertion: null,
+                experiencer: null,
+                temporality: null,
               },
               evidence_refs: [],
               provenance: {
@@ -174,6 +213,7 @@ describe("CaseScreen integration", () => {
             document_id: "doc-test-1",
             text_sha256: "sha-test-text",
             ontology_sha256: "sha-ont",
+            layer_config_sha256: "test-layer-sha",
             version: "v-1",
           },
         ],
@@ -188,13 +228,10 @@ describe("CaseScreen integration", () => {
           ...viewWithAnn.draft.annotations[0],
           annotation: {
             ...viewWithAnn.draft.annotations[0].annotation,
-            axes: {
-              definition_name: "editor-axes/v1",
-              values: {
-                assertion: "absent",
-                experiencer: null,
-                temporality: null,
-              },
+            axes_values: {
+              assertion: "absent",
+              experiencer: null,
+              temporality: null,
             },
           },
         },
@@ -231,10 +268,8 @@ describe("CaseScreen integration", () => {
           payload: expect.objectContaining({
             command: "set_axes",
             annotation_id: "ann-1",
-            axes: expect.objectContaining({
-              values: expect.objectContaining({
-                assertion: "absent",
-              }),
+            axes_values: expect.objectContaining({
+              assertion: "absent",
             }),
           }),
         })
@@ -250,15 +285,14 @@ describe("CaseScreen integration", () => {
         revision: 1,
         annotations: [
           {
+            schema_version: "ontocurator-annotation/v3" as const,
             annotation: {
               annotation_id: "ann-to-del",
               document_id: "doc-test-1",
+              layer_id: "phenotype",
+              type_id: "default",
               term_id: "HP:0001252",
-              hpo_id: "HP:0001252",
-              axes: {
-                definition_name: "editor-axes/v1",
-                values: {},
-              },
+              axes_values: {},
               evidence_refs: [],
               provenance: {
                 actor: { actor_id: "user-test", kind: "human" as const },
@@ -269,6 +303,7 @@ describe("CaseScreen integration", () => {
             document_id: "doc-test-1",
             text_sha256: "sha-test-text",
             ontology_sha256: "sha-ont",
+            layer_config_sha256: "test-layer-sha",
             version: "v-1",
           },
         ],

@@ -4,6 +4,46 @@ import { CaseScreen, type WorkspaceView } from "../../src/app/CaseScreen";
 import { api } from "../../src/api/client";
 
 describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
+  const scope = {
+    scope_id: "scope-default",
+    mode: "review" as const,
+    editable_layer_ids: ["phenotype"],
+    reference_layer_ids: [],
+  };
+
+  const layers = [
+    {
+      layer_id: "phenotype",
+      label: "Phänotyp",
+      ontology_id: "hp",
+      access: "editable" as const,
+      default_visible: true,
+      default_type_id: "default",
+      annotation_types: [
+        {
+          type_id: "default",
+          label: "Phänotyp",
+          evidence_policy: "optional" as const,
+          axes: [
+            { id: "assertion", label: "Vorhandensein (Assertion)", options: ["present", "absent", "uncertain"], allow_empty: true },
+            { id: "experiencer", label: "Betroffene Person (Experiencer)", options: ["patient", "other"], allow_empty: true },
+            { id: "temporality", label: "Zeitlicher Bezug (Temporality)", options: ["current", "historical", "future"], allow_empty: true },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const ontologies = [
+    {
+      ontology_id: "hp",
+      release: "2024-06-25",
+      label: "Human Phenotype Ontology",
+      sha256: "test-hp-sha",
+      format: "obo-graph-json" as const,
+    },
+  ];
+
   const e2eView: WorkspaceView = {
     document: {
       document_id: "doc-e2e-1",
@@ -16,14 +56,20 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
       document_id: "doc-e2e-1",
       annotator_id: "clinician-reviewer",
       mode: "review",
+      scope_id: "scope-default",
       target_set_id: "target-set-e2e",
     },
+    scope,
+    layers,
+    ontologies,
+    checked_layer_ids: [],
     draft: {
       key: {
         package_id: "pkg-release-e2e",
         document_id: "doc-e2e-1",
         annotator_id: "clinician-reviewer",
         mode: "review",
+        scope_id: "scope-default",
         target_set_id: "target-set-e2e",
       },
       targets: {
@@ -36,18 +82,17 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
       revision: 0,
       annotations: [
         {
+          schema_version: "ontocurator-annotation/v3",
           annotation: {
             annotation_id: "prop-human",
             document_id: "doc-e2e-1",
+            layer_id: "phenotype",
+            type_id: "default",
             term_id: "HP:0001252",
-            hpo_id: "HP:0001252", // Hypotonia
-            axes: {
-              definition_name: "editor-axes/v1",
-              values: {
-                assertion: "present",
-                experiencer: null,
-                temporality: null,
-              },
+            axes_values: {
+              assertion: "present",
+              experiencer: null,
+              temporality: null,
             },
             evidence_refs: [{ evidence_id: "ev-h", version: "ev-v-1" }],
             provenance: {
@@ -70,21 +115,21 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
           document_id: "doc-e2e-1",
           text_sha256: "sha-doc-rich-text",
           ontology_sha256: "sha-ont",
+          layer_config_sha256: "test-layer-sha",
           version: "v-human-1",
         },
         {
+          schema_version: "ontocurator-annotation/v3",
           annotation: {
             annotation_id: "prop-tool",
             document_id: "doc-e2e-1",
+            layer_id: "phenotype",
+            type_id: "default",
             term_id: "HP:0001250",
-            hpo_id: "HP:0001250", // Seizure
-            axes: {
-              definition_name: "editor-axes/v1",
-              values: {
-                assertion: "present",
-                experiencer: null,
-                temporality: null,
-              },
+            axes_values: {
+              assertion: "present",
+              experiencer: null,
+              temporality: null,
             },
             evidence_refs: [{ evidence_id: "ev-t", version: "ev-v-2" }],
             provenance: {
@@ -107,12 +152,13 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
           document_id: "doc-e2e-1",
           text_sha256: "sha-doc-rich-text",
           ontology_sha256: "sha-ont",
+          layer_config_sha256: "test-layer-sha",
           version: "v-tool-1",
         },
       ],
       evidence: [],
       decisions: [],
-      document_checked: false,
+      checked_layer_ids: [],
     },
     targets: {
       target_set_id: "target-set-e2e",
@@ -164,13 +210,24 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
         } as any;
       });
 
+    const applyCommandSpy = vi.spyOn(api, "applyCommand").mockImplementation(async () => {
+      return {
+        ...e2eView.draft,
+        decisions: currentDecisions,
+        checked_layer_ids: ["phenotype"],
+      } as any;
+    });
+
     const submitSpy = vi.spyOn(api, "submitWorkspace").mockResolvedValue({
+      format_version: "ontocurator-work-package/v2",
       submission_id: "sub-e2e-final-1",
       origin_key: e2eView.key,
+      scope: e2eView.scope,
       targets: e2eView.targets,
       draft_revision: 2,
       snapshots: e2eView.draft.annotations as any,
       decisions: [],
+      checked_layer_ids: ["phenotype"],
       document_checked: true,
       created_at: new Date().toISOString(),
     });
@@ -236,8 +293,9 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // 5. Complete / Submit workspace
     // Toggle document checked confirmation
-    const checkbox = screen.getByLabelText(/Dokument vollständig geprüft/i);
+    const checkbox = screen.getByRole("checkbox", { name: /Dokument vollständig geprüft/i });
     fireEvent.click(checkbox);
+    await waitFor(() => expect(applyCommandSpy).toHaveBeenCalled());
 
     // Click confirm submission
     const submitBtn = screen.getByRole("button", { name: /Fall abschließen & abgeben/i });
@@ -254,8 +312,8 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // Verification of export link availability after submission
     await waitFor(() => {
-      expect(screen.getByText(/Fall erfolgreich abgeschlossen/i)).toBeDefined();
-      expect(screen.getByRole("button", { name: /Paket herunterladen/i })).toBeDefined();
+      expect(screen.getByText(/Fall erfolgreich abgegeben/i)).toBeDefined();
+      expect(screen.getByRole("button", { name: /Export herunterladen/i })).toBeDefined();
     });
   });
 });

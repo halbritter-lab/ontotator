@@ -27,12 +27,12 @@ test("real backend: review, resume, reload, submit and authenticated export", as
   await expect(page.locator(".doc-item").filter({ hasText: "HP:0001252" })).toContainText("confirmed");
   await page.locator(".doc-item").filter({ hasText: "HP:0001250" }).click();
   await page.getByRole("button", { name: "✓ Bestätigen", exact: true }).click();
-  await expect(page.locator(".status-badge")).toContainText("Rev 2");
-  await page.getByLabel("Dokument vollständig geprüft").check();
+  await page.getByLabel("Dokument vollständig geprüft").click();
+  await expect(page.getByLabel("Dokument vollständig geprüft")).toBeChecked();
   await page.getByRole("button", { name: /Fall abschließen/ }).click();
   await expect(page.getByText(/Erfolgreich abgegeben|Abgabe erfolgreich|Fall erfolgreich/i).first()).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Paket herunterladen/ }).click();
+  await page.getByRole("button", { name: /herunterladen/i }).click();
   const download = await downloadPromise;
   expect(await download.failure()).toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.zip$/);

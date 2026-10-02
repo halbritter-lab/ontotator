@@ -3,12 +3,22 @@ import {
   api,
   ValidationError,
   type AnnotationSnapshot,
+  type AxesValues,
+  type DocumentSummary,
   type Draft,
   type Submission,
 } from "../api/client";
 import type { components } from "../api/generated";
-import { AnnotationPanel, type Axes, type EvidenceSnapshot } from "../editor/AnnotationPanel";
+import { AnnotationPanel, type EvidenceSnapshot } from "../editor/AnnotationPanel";
 import { createMutationQueue, type QueueState } from "../editor/autosave";
+import { LayerControls } from "../editor/LayerControls";
+import {
+  initLayerSelection,
+  setActiveLayer,
+  setActiveType,
+  toggleLayerVisibility,
+  type LayerSelection,
+} from "../editor/layerState";
 import {
   ReviewActions,
   type DecisionPayload,
@@ -18,6 +28,7 @@ import {
 import { SearchManager } from "../editor/searchState";
 import { TextPane } from "../editor/TextPane";
 import type { MentionDisplay, SelectionPayload } from "../spans/adapter";
+import { CaseNavigation } from "./CaseNavigation";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
@@ -27,16 +38,25 @@ export interface CaseScreenProps {
   view: WorkspaceView;
   workspaceId: string;
   onClose: () => void;
+  onNavigateCase?: (documentId: string) => Promise<void>;
+  documentList?: DocumentSummary[];
 }
 
 export const CaseScreen: React.FC<CaseScreenProps> = ({
   view,
   workspaceId,
   onClose,
+  onNavigateCase,
+  documentList,
 }) => {
   const [draft, setDraft] = useState<Draft>(view.draft);
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
+
+  const [layerSelection, setLayerSelection] = useState<LayerSelection>(() =>
+    initLayerSelection(view.layers ?? [], view.scope)
+  );
+
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
@@ -46,7 +66,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [selectionIntent, setSelectionIntent] = useState<"new_mention" | "extend_mention">("new_mention");
   const [queueState, setQueueState] = useState<QueueState>("saved");
   const [statusText, setStatusText] = useState<string>("Gespeichert");
-  const [documentChecked, setDocumentChecked] = useState<boolean>(draft.document_checked);
 
   // Modals
   const [showSpanlessModal, setShowSpanlessModal] = useState<boolean>(false);
@@ -56,6 +75,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const searchManager = useMemo(() => new SearchManager(api), []);
+
+  useEffect(() => {
+    searchManager.setLayer(layerSelection.activeLayerId);
+  }, [layerSelection.activeLayerId, searchManager]);
 
   // Dedicated mutation queue for this workspace
   const queueRef = useRef(
@@ -79,12 +102,31 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     return map;
   }, [draft.evidence]);
 
+  // Visible annotations based on layer visibility
+  const visibleAnnotations = useMemo(() => {
+    return (draft.annotations ?? []).filter((a) =>
+      layerSelection.visibleLayerIds.includes(a.annotation.layer_id)
+    );
+  }, [draft.annotations, layerSelection.visibleLayerIds]);
+
+  const visibleEvidenceIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const ann of visibleAnnotations) {
+      for (const ref of ann.annotation.evidence_refs ?? []) {
+        ids.add(ref.evidence_id);
+      }
+    }
+    return ids;
+  }, [visibleAnnotations]);
+
   const mentionsDisplay: MentionDisplay[] = useMemo(() => {
-    return (draft.evidence ?? []).map((ev) => ({
-      evidence_id: ev.mention.evidence_id,
-      segments: ev.mention.segments.map((s) => ({ start: s.start, end: s.end })),
-    }));
-  }, [draft.evidence]);
+    return (draft.evidence ?? [])
+      .filter((ev) => visibleEvidenceIds.has(ev.mention.evidence_id))
+      .map((ev) => ({
+        evidence_id: ev.mention.evidence_id,
+        segments: ev.mention.segments.map((s) => ({ start: s.start, end: s.end })),
+      }));
+  }, [draft.evidence, visibleEvidenceIds]);
 
   const selectedAnnotation: AnnotationSnapshot | null = useMemo(() => {
     if (!selectedAnnotationId) return null;
@@ -103,20 +145,25 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const snap = (view.available_inputs ?? []).find(
         (i) => i.annotation.annotation_id === targetRef.annotation_id && i.version === targetRef.version
       );
-      const termId = snap?.annotation.term_id ?? snap?.annotation.hpo_id ?? targetRef.annotation_id;
+      const termId = snap?.annotation.term_id ?? (snap?.annotation as any)?.hpo_id ?? targetRef.annotation_id;
+      const layerId = snap?.annotation.layer_id;
+      const statusKey = layerId ? `${layerId}:${termId}` : termId;
       return {
         annotation_id: targetRef.annotation_id,
         version: targetRef.version,
+        layer_id: layerId,
+        type_id: snap?.annotation.type_id,
         term_id: termId,
         hpo_id: termId,
-        axes: snap?.annotation.axes ?? null,
+        axes: (snap?.annotation.axes_values ?? (snap?.annotation as any)?.axes?.values) as any,
+        axes_values: snap?.annotation.axes_values ?? null,
         provenance: snap?.annotation.provenance ?? {
           actor: { actor_id: "unknown", kind: "tool" },
           method: "automated",
         },
         evidence_count: snap?.annotation.evidence_refs?.length ?? 0,
-        is_obsolete: view.term_statuses?.[termId] === "obsolete",
-        is_unknown: view.term_statuses?.[termId] === "unknown",
+        is_obsolete: (view.term_statuses?.[statusKey] ?? view.term_statuses?.[termId]) === "obsolete",
+        is_unknown: (view.term_statuses?.[statusKey] ?? view.term_statuses?.[termId]) === "unknown",
       };
     });
   }, [view.key.mode, view.targets, view.available_inputs, view.term_statuses]);
@@ -136,15 +183,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const targetSnapshot = (view.available_inputs ?? []).find(s => selectedTarget &&
     s.annotation.annotation_id === selectedTarget.annotation_id && s.version === selectedTarget.version);
-  const targetMentions: MentionDisplay[] = (targetSnapshot?.evidence ?? []).map(ev => ({
-    evidence_id: `target:${ev.mention.evidence_id}:${ev.version}`,
-    segments: ev.mention.segments,
-  }));
+
+  const targetMentions: MentionDisplay[] = useMemo(() => {
+    if (!targetSnapshot) return [];
+    if (!layerSelection.visibleLayerIds.includes(targetSnapshot.annotation.layer_id)) return [];
+    return (targetSnapshot.evidence ?? []).map((ev) => ({
+      evidence_id: `target:${ev.mention.evidence_id}:${ev.version}`,
+      segments: ev.mention.segments,
+    }));
+  }, [targetSnapshot, layerSelection.visibleLayerIds]);
+
   const reportError = (error: unknown) => setActionError(error instanceof Error ? error.message : String(error));
+
   const downloadExport = async () => {
     try { await queueRef.current.flush(); await api.downloadExport(workspaceId); }
     catch (error) { reportError(error); }
   };
+
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (["saving", "dirty", "error"].includes(queueRef.current.getState())) {
@@ -175,53 +230,60 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
     setActionError(null);
     try {
-    if (payload.intent === "extend_mention" && selectedEvidenceId) {
-      const evidenceId = selectedEvidenceId;
-      const annotationId = selectedAnnotationId;
-      await enqueueMutation(current => {
-        const existingEv = (current.evidence ?? []).find(ev => ev.mention.evidence_id === evidenceId);
-        if (!existingEv) throw new ValidationError("Belegstelle ist nicht mehr vorhanden");
-        return {
-          command: "edit_mention",
-          evidence_id: evidenceId,
-          annotation_id: annotationId,
-          segments: [...existingEv.mention.segments, ...payload.segments].sort((a, b) => a.start - b.start),
-        };
-      });
-      setSelectionIntent("new_mention");
-    } else {
-      const evidenceId = `ev-${Date.now()}`;
-      if (selectedAnnotationId) {
-        await enqueueMutation({
-          command: "attach_mention",
-          annotation_id: selectedAnnotationId,
-          evidence_id: evidenceId,
-          segments: payload.segments,
+      if (payload.intent === "extend_mention" && selectedEvidenceId) {
+        const evidenceId = selectedEvidenceId;
+        const annotationId = selectedAnnotationId;
+        await enqueueMutation(current => {
+          const existingEv = (current.evidence ?? []).find(ev => ev.mention.evidence_id === evidenceId);
+          if (!existingEv) throw new ValidationError("Belegstelle ist nicht mehr vorhanden");
+          return {
+            command: "edit_mention",
+            evidence_id: evidenceId,
+            annotation_id: annotationId,
+            segments: [...existingEv.mention.segments, ...payload.segments].sort((a, b) => a.start - b.start),
+          };
         });
-        setSelectedEvidenceId(evidenceId);
+        setSelectionIntent("new_mention");
       } else {
-        const newAnnId = `ann-${Date.now()}`;
-        const defaultTermId = "HP:0000118";
-        const initialValues: Record<string, string | null> = {};
-        for (const axis of view.axes_config ?? []) {
-          initialValues[axis.id] = null;
+        const evidenceId = `ev-${Date.now()}`;
+        if (selectedAnnotationId) {
+          await enqueueMutation({
+            command: "attach_mention",
+            annotation_id: selectedAnnotationId,
+            evidence_id: evidenceId,
+            segments: payload.segments,
+          });
+          setSelectedEvidenceId(evidenceId);
+        } else {
+          if (!layerSelection.activeLayerId) {
+            setActionError("Keine aktive editierbare Schicht ausgewählt. Bitte Schicht aktivieren.");
+            return;
+          }
+          const activeLayerId = layerSelection.activeLayerId;
+          const activeLayerDef = (view.layers ?? []).find(l => l.layer_id === activeLayerId);
+          const activeTypeId = layerSelection.activeTypeId ?? activeLayerDef?.annotation_types?.[0]?.type_id ?? "default";
+          const activeTypeDef = activeLayerDef?.annotation_types?.find(t => t.type_id === activeTypeId);
+
+          const newAnnId = `ann-${Date.now()}`;
+          const defaultTermId = activeLayerDef?.ontology_id === "mondo" ? "MONDO:0000001" : "HP:0000118";
+          const initialValues: Record<string, string | null> = {};
+          for (const axis of (activeTypeDef?.axes ?? view.axes_config ?? [])) {
+            initialValues[axis.id] = null;
+          }
+          await enqueueMutation({
+            command: "create_annotation",
+            annotation_id: newAnnId,
+            layer_id: activeLayerId,
+            type_id: activeTypeId,
+            term_id: defaultTermId,
+            evidence_id: evidenceId,
+            segments: payload.segments,
+            axes_values: initialValues,
+          });
+          setSelectedAnnotationId(newAnnId);
+          setSelectedEvidenceId(evidenceId);
         }
-        await enqueueMutation({
-          command: "create_annotation",
-          annotation_id: newAnnId,
-          term_id: defaultTermId,
-          hpo_id: defaultTermId,
-          evidence_id: evidenceId,
-          segments: payload.segments,
-          axes: {
-            definition_name: view.axes_definition ?? "editor-axes/v1",
-            values: initialValues,
-          },
-        });
-        setSelectedAnnotationId(newAnnId);
-        setSelectedEvidenceId(evidenceId);
       }
-    }
     } catch (error) { reportError(error); }
   };
 
@@ -239,22 +301,29 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const handleCreateSpanless = async () => {
     try {
       if (!spanlessHpoId.trim()) return;
+      if (!layerSelection.activeLayerId) {
+        setActionError("Keine aktive editierbare Schicht ausgewählt. Bitte Schicht aktivieren.");
+        return;
+      }
+      const activeLayerId = layerSelection.activeLayerId;
+      const activeLayerDef = (view.layers ?? []).find(l => l.layer_id === activeLayerId);
+      const activeTypeId = layerSelection.activeTypeId ?? activeLayerDef?.annotation_types?.[0]?.type_id ?? "default";
+      const activeTypeDef = activeLayerDef?.annotation_types?.find(t => t.type_id === activeTypeId);
+
       const newAnnId = `ann-${Date.now()}`;
       const termId = spanlessHpoId.trim();
       const initialValues: Record<string, string | null> = {};
-      for (const axis of view.axes_config ?? []) {
+      for (const axis of (activeTypeDef?.axes ?? view.axes_config ?? [])) {
         initialValues[axis.id] = null;
       }
       await enqueueMutation({
         command: "create_annotation",
         annotation_id: newAnnId,
+        layer_id: activeLayerId,
+        type_id: activeTypeId,
         term_id: termId,
-        hpo_id: termId,
         segments: [],
-        axes: {
-          definition_name: view.axes_definition ?? "editor-axes/v1",
-          values: initialValues,
-        },
+        axes_values: initialValues,
       });
       setSelectedAnnotationId(newAnnId);
       setSelectedEvidenceId(null);
@@ -269,24 +338,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       command: "set_term",
       annotation_id: selectedAnnotationId,
       term_id: termId,
-      hpo_id: termId,
       search_event_id: searchId,
     });
   };
 
-  const handleUpdateAxes = async (axesUpdate: Partial<Axes>) => {
+  const handleUpdateAxes = async (axesValues: Partial<AxesValues>) => {
     if (!selectedAnnotationId || !selectedAnnotation) return;
     const annotationId = selectedAnnotationId;
-    await enqueueMutation(current => {
-      const existing = (current.annotations ?? []).find(a => a.annotation.annotation_id === annotationId)?.annotation.axes;
-      return {
-        command: "set_axes",
-        annotation_id: annotationId,
-        axes: {
-          definition_name: axesUpdate.definition_name ?? existing?.definition_name ?? view.axes_definition ?? "editor-axes/v1",
-          values: axesUpdate.values !== undefined ? axesUpdate.values : (existing?.values ?? {}),
-        },
-      };
+    await enqueueMutation({
+      command: "set_axes",
+      annotation_id: annotationId,
+      axes_values: axesValues as Record<string, string | null>,
     });
   };
 
@@ -320,34 +382,77 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setActionError(null);
     const mutationId = crypto.randomUUID();
     let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
-    try { await queueRef.current.enqueue(async (expectedRevision) => {
-      const replacement = payload.replacement && (latestDraft.current.annotations ?? []).find(a => a.annotation.annotation_id === payload.replacement!.annotation_id);
-      envelope ??= {
-        mutation_id: mutationId,
-        expected_revision: expectedRevision,
-        payload: {
-          target: {
-            annotation_id: selectedTarget.annotation_id,
-            version: selectedTarget.version,
+    try {
+      await queueRef.current.enqueue(async (expectedRevision) => {
+        const replacement = payload.replacement && (latestDraft.current.annotations ?? []).find(a => a.annotation.annotation_id === payload.replacement!.annotation_id);
+        envelope ??= {
+          mutation_id: mutationId,
+          expected_revision: expectedRevision,
+          payload: {
+            target: {
+              annotation_id: selectedTarget.annotation_id,
+              version: selectedTarget.version,
+            },
+            outcome: payload.outcome,
+            replacement: replacement ? { annotation_id: replacement.annotation.annotation_id, version: replacement.version } : payload.replacement,
+            note: payload.note,
           },
-          outcome: payload.outcome,
-          replacement: replacement ? { annotation_id: replacement.annotation.annotation_id, version: replacement.version } : payload.replacement,
-          note: payload.note,
-        },
-      };
-      const updatedDraft = await api.recordDecision(workspaceId, envelope);
-      latestDraft.current = updatedDraft;
-      setDraft(updatedDraft);
-      return updatedDraft;
-    }); } catch (error) { reportError(error); }
+        };
+        const updatedDraft = await api.recordDecision(workspaceId, envelope);
+        latestDraft.current = updatedDraft;
+        setDraft(updatedDraft);
+        return updatedDraft;
+      });
+    } catch (error) { reportError(error); }
   };
+
+  // Layer state handlers
+  const handleSetActiveLayer = async (layerId: string) => {
+    try {
+      await queueRef.current.flush();
+    } catch (error) {
+      reportError(error);
+      return;
+    }
+    const scope = view.scope ?? {
+      mode: view.key.mode,
+      annotator_id: view.key.annotator_id,
+      editable_layer_ids: editableLayerIds,
+      reference_layer_ids: [],
+    };
+    const next = setActiveLayer(layerSelection, view.layers ?? [], scope, layerId);
+    setLayerSelection(next);
+  };
+
+  const handleToggleVisibility = (layerId: string) => {
+    const next = toggleLayerVisibility(layerSelection, layerId);
+    setLayerSelection(next);
+  };
+
+  const handleSetActiveType = (typeId: string) => {
+    setLayerSelection(setActiveType(layerSelection, view.layers ?? [], typeId));
+  };
+
+  // Single-layer check logic vs multi-layer check logic
+  const isSingleLayer = (view.layers ?? []).length <= 1;
+  const singleLayerId = view.scope?.editable_layer_ids?.[0] ?? view.layers?.[0]?.layer_id;
+  const editableLayerIds = view.scope?.editable_layer_ids ?? (view.layers ? view.layers.map(l => l.layer_id) : []);
 
   // Submit and finalize workspace
   const handleSubmitWorkspace = async () => {
     setSubmitError(null);
 
-    if (!documentChecked) {
-      setSubmitError("Bitte bestätigen Sie zuerst, dass der Fall vollständig durchgesehen wurde.");
+    const checkedIds = latestDraft.current.checked_layer_ids ?? [];
+    const unchecked = editableLayerIds.filter((id) => !checkedIds.includes(id));
+    if (unchecked.length > 0) {
+      if (isSingleLayer) {
+        setSubmitError("Bitte bestätigen Sie zuerst, dass der Fall vollständig durchgesehen wurde.");
+      } else {
+        const uncheckedNames = unchecked
+          .map((id) => view.layers?.find((l) => l.layer_id === id)?.label ?? id)
+          .join(", ");
+        setSubmitError(`Bitte markieren Sie alle editierbaren Schichten als geprüft vor der Abgabe: ${uncheckedNames}`);
+      }
       return;
     }
 
@@ -373,7 +478,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           mutation_id: mutationId,
           expected_revision: expectedRevision,
           payload: {
+            command: "submit_workspace",
             document_checked: true,
+            checked_layer_ids: latestDraft.current.checked_layer_ids ?? [],
           },
         };
         return api.submitWorkspace(workspaceId, envelope);
@@ -385,6 +492,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
 
+  // Selected annotation axes configuration
+  const selectedAnnotationLayerDef = useMemo(() => {
+    if (!selectedAnnotation) return null;
+    return (view.layers ?? []).find((l) => l.layer_id === selectedAnnotation.annotation.layer_id) ?? null;
+  }, [selectedAnnotation, view.layers]);
+
+  const selectedAnnotationTypeDef = useMemo(() => {
+    if (!selectedAnnotation || !selectedAnnotationLayerDef) return null;
+    return selectedAnnotationLayerDef.annotation_types?.find(
+      (t) => t.type_id === selectedAnnotation.annotation.type_id
+    ) ?? null;
+  }, [selectedAnnotation, selectedAnnotationLayerDef]);
+
+  const currentAxesConfig = useMemo(() => {
+    return selectedAnnotationTypeDef?.axes ?? view.axes_config ?? [];
+  }, [selectedAnnotationTypeDef, view.axes_config]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
@@ -393,13 +517,37 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <button type="button" className="btn btn-secondary btn-sm" onClick={async () => { try { await queueRef.current.flush(); onClose(); } catch (error) { reportError(error); } }}>
             ← Zurück
           </button>
-          <span>Fall: {view.document.document_id}</span>
+          {documentList && documentList.length > 0 && onNavigateCase ? (
+            <CaseNavigation
+              documents={documentList}
+              currentDocumentId={view.document.document_id}
+              onNavigate={async (docId) => {
+                try {
+                  await queueRef.current.flush();
+                  await onNavigateCase(docId);
+                } catch (err) {
+                  reportError(err);
+                }
+              }}
+              disabled={queueState === "saving"}
+            />
+          ) : (
+            <span>Fall: {view.document.document_id}</span>
+          )}
           <span
             className={`badge ${
-              view.key.mode === "review" ? "badge-review" : "badge-independent"
+              view.key.mode === "review"
+                ? "badge-review"
+                : view.key.mode === "assisted"
+                ? "badge-assisted"
+                : "badge-independent"
             }`}
           >
-            {view.key.mode === "review" ? "Review-Modus" : "Unabhängige Annotation"}
+            {view.key.mode === "review"
+              ? "Review-Modus"
+              : view.key.mode === "assisted"
+              ? "Assisted-Modus"
+              : "Unabhängige Annotation"}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -450,6 +598,21 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       <div className="app-layout">
         {/* Left: Sidebar (Annotations & Review Targets) */}
         <aside className="sidebar">
+          {/* Multi-layer controls (rendered only if >1 layer) */}
+          <LayerControls
+            layers={view.layers ?? []}
+            scope={view.scope ?? { scope_id: "default", mode: view.key.mode, editable_layer_ids: [], reference_layer_ids: [] }}
+            selection={layerSelection}
+            checkedLayerIds={draft.checked_layer_ids ?? []}
+            onToggleVisibility={handleToggleVisibility}
+            onSetActiveLayer={handleSetActiveLayer}
+            onSetActiveType={handleSetActiveType}
+            onCheckLayer={(layerId, checked) => {
+              void enqueueMutation({ command: "check_layer", layer_id: layerId, checked }).catch(reportError);
+            }}
+            disabled={queueState === "saving"}
+          />
+
           {view.key.mode === "review" && (
             <>
               <div className="sidebar-header">
@@ -486,17 +649,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           )}
 
           <div className="sidebar-header">
-            Eigene Annotationen ({(draft.annotations ?? []).length})
+            Eigene Annotationen ({visibleAnnotations.length})
           </div>
           <ul className="doc-list">
-            {(draft.annotations ?? []).map((annSnap) => {
+            {visibleAnnotations.map((annSnap) => {
               const isSelected =
                 annSnap.annotation.annotation_id === selectedAnnotationId;
               const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
-              const termId = annSnap.annotation.term_id ?? annSnap.annotation.hpo_id;
-              const firstAxisVal = annSnap.annotation.axes?.values
-                ? Object.values(annSnap.annotation.axes.values).find((v) => v !== null)
-                : null;
+              const termId = annSnap.annotation.term_id ?? (annSnap.annotation as any).hpo_id;
+              const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
+              const firstAxisVal = Object.values(axesValues).find((v): v is string => typeof v === "string" && v.length > 0);
+              const layerName = view.layers?.find((l) => l.layer_id === annSnap.annotation.layer_id)?.label;
 
               return (
                 <li
@@ -508,7 +671,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     setSelectedEvidenceId(firstEv ?? null);
                   }}
                 >
-                  <div className="doc-id">{termId}</div>
+                  <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>{termId}</span>
+                    {layerName && (view.layers ?? []).length > 1 && (
+                      <span className="badge" style={{ fontSize: "0.7rem" }}>{layerName}</span>
+                    )}
+                  </div>
                   <div className="doc-meta">
                     {evCount === 0 ? "Spanlos" : `${evCount} Belegstelle(n)`}
                     {firstAxisVal && ` • ${firstAxisVal}`}
@@ -525,17 +693,36 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               {submission.created_at} · {submission.submission_id}
             </button>)}
           </div>}
+
           {/* Submission Box at bottom of sidebar */}
           <div style={{ padding: 14, borderTop: "1px solid var(--border-color)", background: "var(--bg-primary)" }}>
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: "0.8rem", cursor: "pointer", marginBottom: 10 }}>
-              <input
-                type="checkbox"
-                checked={documentChecked}
-                onChange={(e) => setDocumentChecked(e.target.checked)}
-                style={{ marginTop: 2 }}
-              />
-              <span>Dokument vollständig geprüft</span>
-            </label>
+            {isSingleLayer ? (
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: "0.8rem", cursor: "pointer", marginBottom: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={singleLayerId ? (draft.checked_layer_ids ?? []).includes(singleLayerId) : false}
+                  onChange={(e) => {
+                    if (singleLayerId) {
+                      void enqueueMutation({
+                        command: "check_layer",
+                        layer_id: singleLayerId,
+                        checked: e.target.checked,
+                      }).catch(reportError);
+                    }
+                  }}
+                  style={{ marginTop: 2 }}
+                />
+                <span>Dokument vollständig geprüft</span>
+              </label>
+            ) : (
+              <div style={{ marginBottom: 10, fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                {editableLayerIds.length > 0 && (
+                  <div>
+                    Geprüft: {(draft.checked_layer_ids ?? []).filter(id => editableLayerIds.includes(id)).length} von {editableLayerIds.length} Schichten
+                  </div>
+                )}
+              </div>
+            )}
             <button
               type="button"
               className="btn btn-primary btn-sm"
@@ -571,11 +758,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             workspaceKey={view.key}
             searchManager={searchManager}
             selectedEvidenceId={selectedEvidenceId}
-            axesConfig={view.axes_config}
-            axesDefinition={view.axes_definition}
+            layerId={selectedAnnotation?.annotation.layer_id}
+            axesConfig={currentAxesConfig}
             onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
             onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
-            onUpdateAxes={(axes) => { void handleUpdateAxes(axes).catch(reportError); }}
+            onUpdateAxes={(axesValues) => { void handleUpdateAxes(axesValues).catch(reportError); }}
             onAttachMention={(segments) =>
               handleSelection({ segments, intent: "new_mention" })
             }
@@ -602,56 +789,96 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <div className="modal-content" role="dialog" aria-label="Historische Abgabe">
           <h2>Abgabe {historySubmission.submission_id}</h2>
           <p>{historySubmission.created_at}</p>
-          <p>Dokument vollständig geprüft: {historySubmission.document_checked ? "Ja" : "Nein"}</p>
-          {historySubmission.snapshots.map(snap => <div key={refKey({annotation_id:snap.annotation.annotation_id,version:snap.version})}>
-            <strong>{snap.annotation.term_id ?? snap.annotation.hpo_id}</strong>
-            <p>
-              {snap.annotation.axes?.values && Object.keys(snap.annotation.axes.values).length > 0
-                ? Object.entries(snap.annotation.axes.values)
-                    .map(([k, v]) => `${k}: ${v ?? "Nicht angegeben"}`)
-                    .join(" · ")
-                : "Keine Achsen"}
-            </p>
-            {snap.evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
-              {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
-            </p>)}
-          </div>)}
+          <p>
+            Geprüfte Schichten:{" "}
+            {historySubmission.checked_layer_ids && historySubmission.checked_layer_ids.length > 0
+              ? historySubmission.checked_layer_ids.join(", ")
+              : (historySubmission.document_checked ? "Dokument geprüft" : "Keine")}
+          </p>
+          {historySubmission.snapshots.map(snap => {
+            const axesVal = snap.annotation.axes_values ?? (snap.annotation as any).axes?.values;
+            return (
+              <div key={refKey({annotation_id:snap.annotation.annotation_id,version:snap.version})}>
+                <strong>{snap.annotation.term_id ?? (snap.annotation as any).hpo_id}</strong>
+                <p>
+                  {axesVal && Object.keys(axesVal).length > 0
+                    ? Object.entries(axesVal)
+                        .map(([k, v]) => `${k}: ${v ?? "Nicht angegeben"}`)
+                        .join(" · ")
+                    : "Keine Achsen"}
+                </p>
+                {snap.evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
+                  {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
+                </p>)}
+              </div>
+            );
+          })}
           {historySubmission.decisions.map(decision => <p key={refKey(decision.target)}>
             {decision.target.annotation_id} ({decision.target.version}): {decision.outcome} {decision.note}
           </p>)}
-          <button type="button" className="btn btn-secondary" onClick={() => setHistorySubmission(null)}>Schließen</button>
+          <button type="button" className="btn btn-secondary" onClick={() => setHistorySubmission(null)}>
+            Schließen
+          </button>
         </div>
       </div>}
-      {/* Modal for adding spanless annotation */}
+
+      {completedSubmission && <div className="modal-overlay">
+        <div className="modal-content" role="dialog" aria-label="Abgabe abgeschlossen">
+          <h2>✓ Fall erfolgreich abgegeben!</h2>
+          <p>Abgabe-ID: <code>{completedSubmission.submission_id}</code></p>
+          <p>Zeitstempel: {completedSubmission.created_at}</p>
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={downloadExport}
+            >
+              📥 Export herunterladen
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setCompletedSubmission(null)}
+            >
+              Im Fall bleiben
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+            >
+              Zurück zur Übersicht
+            </button>
+          </div>
+        </div>
+      </div>}
+
       {showSpanlessModal && (
-        <div className="modal-overlay" onClick={() => setShowSpanlessModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: 12 }}>
-              Spanlose Annotation anlegen
-            </h2>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: 16 }}>
-              Erfassen Sie einen Befund, der im Fall dokumentiert oder
-              ausgeschlossen ist, aber keine direkte Textstelle markiert.
+        <div className="modal-overlay">
+          <div className="modal-content" role="dialog" aria-label="Spanlose Annotation erstellen">
+            <h2>Spanlose Annotation hinzufügen</h2>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+              Geben Sie die Kennung des Begriffs ein (z. B. <code>HP:0001250</code> oder <code>1250</code>):
             </p>
             <div className="form-group">
-              <label htmlFor="spanless-hpo-id" className="form-label">
-                Ontologie-Kennung (z. B. HP:0001252, MONDO:0001250)
-              </label>
               <input
                 id="spanless-hpo-id"
                 type="text"
                 className="form-control"
-                placeholder="z.B. HP:0001252 oder MONDO:0001250"
+                placeholder="HP:0001250"
                 value={spanlessHpoId}
                 onChange={(e) => setSpanlessHpoId(e.target.value)}
                 autoFocus
               />
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setShowSpanlessModal(false)}
+                onClick={() => {
+                  setShowSpanlessModal(false);
+                  setSpanlessHpoId("");
+                }}
               >
                 Abbrechen
               </button>
@@ -660,67 +887,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 className="btn btn-primary"
                 onClick={handleCreateSpanless}
                 disabled={!spanlessHpoId.trim()}
+                aria-label="Annotation anlegen"
               >
-                Annotation anlegen
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal on 409 Conflict */}
-      {queueState === "conflict" && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2 style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--danger)", marginBottom: 12 }}>
-              ⚠️ Revisionskonflikt
-            </h2>
-            <p style={{ fontSize: "0.9rem", color: "var(--text-main)", marginBottom: 16 }}>
-              Der Stand dieses Arbeitsbereichs wurde an anderer Stelle (z. B. in einem zweiten Browser-Tab)
-              geändert. Um Datenverlust zu vermeiden, wurden weitere automatische Speicherversuche gestoppt.
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={onClose}
-              >
-                Fall neu laden (lokalen Stand verwerfen)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal on successful completion/submission */}
-      {completedSubmission && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2 style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--success)", marginBottom: 12 }}>
-              ✓ Fall erfolgreich abgeschlossen!
-            </h2>
-            <p style={{ fontSize: "0.9rem", color: "var(--text-main)", marginBottom: 12 }}>
-              Die Annotationen und Entscheidungen wurden verbindlich festgeschrieben.
-            </p>
-            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 16, background: "var(--bg-primary)", padding: 10, borderRadius: "var(--radius)" }}>
-              <div><strong>Abgabe-ID:</strong> {completedSubmission.submission_id}</div>
-              <div><strong>Zeitstempel:</strong> {completedSubmission.created_at}</div>
-              <div><strong>Snapshots:</strong> {completedSubmission.snapshots?.length ?? 0}</div>
-              <div><strong>Entscheidungen:</strong> {completedSubmission.decisions?.length ?? 0}</div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                onClick={downloadExport}
-                className="btn btn-primary"
-                  >
-                📥 Paket herunterladen
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={onClose}
-              >
-                Zur Fallauswahl
+                Hinzufügen
               </button>
             </div>
           </div>
