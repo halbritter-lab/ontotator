@@ -19,7 +19,6 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.axes import Axes
 from ontocurator.domain.documents import (
     Document,
     EvidenceMention,
@@ -27,6 +26,14 @@ from ontocurator.domain.documents import (
     OntologyRef,
     Segment,
     snapshot_evidence,
+)
+from ontocurator.domain.profiles import (
+    AnnotationTypeDefinition,
+    AxisDefinition,
+    LayerDefinition,
+    OntologyDefinition,
+    TaskProfile,
+    profile_hash,
 )
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
@@ -56,6 +63,44 @@ def _create_rich_synthetic_package(ontology_ref: OntologyRef) -> bytes:
         text_sha256=text_digest,
     )
 
+    hp_ont = OntologyDefinition(
+        ontology_id="hp",
+        label="Human Phenotype Ontology",
+        release=ontology_ref.release,
+        sha256=ontology_ref.sha256,
+        format="obo-graph-json",
+        resource_path="ontologies/hp.json",
+    )
+    pheno_type = AnnotationTypeDefinition(
+        type_id="phenotype",
+        label="Phenotype",
+        axes=[
+            AxisDefinition(
+                id="assertion",
+                label="Assertion",
+                options=["present", "absent", "uncertain"],
+                allow_empty=True,
+            )
+        ],
+        evidence_policy="optional",
+    )
+    layer = LayerDefinition(
+        layer_id="hpo-layer",
+        label="Phenotypes",
+        ontology_id="hp",
+        access="editable",
+        default_visible=True,
+        default_type_id="phenotype",
+        annotation_types=[pheno_type],
+    )
+    profile = TaskProfile(
+        profile_id="hpo-context-example/v1",
+        version="1.0.0",
+        ontologies=[hp_ont],
+        layers=[layer],
+        default_layer_id="hpo-layer",
+    )
+
     # Human proposal for hypotonia (codepoints 14..23: "hypotonia")
     ev_human = snapshot_evidence(
         EvidenceMention(evidence_id="ev-human", segments=[Segment(start=14, end=23)]),
@@ -64,15 +109,17 @@ def _create_rich_synthetic_package(ontology_ref: OntologyRef) -> bytes:
     ann_human = Annotation(
         annotation_id="prop-human",
         document_id="doc-rich",
-        hpo_id="HP:0001252",  # Hypotonia
-        axes=Axes(assertion="present"),
+        layer_id="hpo-layer",
+        type_id="phenotype",
+        term_id="HP:0001252",  # Hypotonia
+        axes_values={"assertion": "present"},
         evidence_refs=[EvidenceRef(evidence_id="ev-human", version=ev_human.version)],
         provenance=Provenance(
             actor=ActorRef(actor_id="dr-carter", kind="human"),
             method="manual",
         ),
     )
-    snap_human = snapshot(ann_human, [ev_human], doc, ontology_ref)
+    snap_human = snapshot(ann_human, [ev_human], doc, profile)
 
     # Tool proposal for seizure (codepoints 59..66: "seizure")
     ev_tool = snapshot_evidence(
@@ -82,21 +129,26 @@ def _create_rich_synthetic_package(ontology_ref: OntologyRef) -> bytes:
     ann_tool = Annotation(
         annotation_id="prop-tool",
         document_id="doc-rich",
-        hpo_id="HP:0001250",  # Seizure
-        axes=Axes(assertion="present"),
+        layer_id="hpo-layer",
+        type_id="phenotype",
+        term_id="HP:0001250",  # Seizure
+        axes_values={"assertion": "present"},
         evidence_refs=[EvidenceRef(evidence_id="ev-tool", version=ev_tool.version)],
         provenance=Provenance(
             actor=ActorRef(actor_id="nlp-pipeline-v2", kind="tool"),
             method="model_prediction",
         ),
     )
-    snap_tool = snapshot(ann_tool, [ev_tool], doc, ontology_ref)
+    snap_tool = snapshot(ann_tool, [ev_tool], doc, profile)
 
     pkg = ValidatedPackage(
         manifest=PackageManifest(
             package_id="pkg-offline-e2e",
+            format_version="ontocurator-work-package/v2",
+            document_order=["doc-rich"],
+            task_profile=profile,
+            task_profile_sha256=profile_hash(profile),
             created_at="2026-10-01T12:00:00Z",
-            ontology=ontology_ref,
         ),
         documents={"doc-rich": doc},
         annotations={
@@ -311,6 +363,7 @@ def test_offline_end_to_end_lifecycle(tmp_path: Path, offline_network_guard):
                 "target_set_id": target_set.target_set_id,
             },
             "annotation_id": "search-ann-1",
+            "layer_id": "hpo-layer",
             "query": "hypotonia",
             "route": "id",
             "k": 5,
@@ -346,7 +399,9 @@ def test_offline_end_to_end_lifecycle(tmp_path: Path, offline_network_guard):
             "payload": {
                 "command": "create_annotation",
                 "annotation_id": "counter-seizure-1",
-                "hpo_id": "HP:0002133",  # Status epilepticus
+                "layer_id": "hpo-layer",
+                "type_id": "phenotype",
+                "term_id": "HP:0002133",  # Status epilepticus
                 "axes": {"assertion": "present"},
                 "evidence_id": "ev-tool",
                 "segments": [{"start": 59, "end": 66}],
@@ -383,14 +438,14 @@ def test_offline_end_to_end_lifecycle(tmp_path: Path, offline_network_guard):
     assert resp.status_code == 200
     rev = resp.json()["revision"]
 
-    # 8. Submit Workspace with document_checked = True
+    # 8. Submit Workspace with checked_layer_ids
     resp = client.post(
         f"/api/v1/workspaces/{ws_id}/submit",
         json={
             "mutation_id": "mut-submit-1",
             "expected_revision": rev,
             "payload": {
-                "document_checked": True,
+                "checked_layer_ids": ["hpo-layer"],
             },
         },
     )
@@ -398,7 +453,7 @@ def test_offline_end_to_end_lifecycle(tmp_path: Path, offline_network_guard):
     sub_data = resp.json()
     sub_id = sub_data["submission_id"]
     assert sub_id
-    assert sub_data["document_checked"] is True
+    assert sub_data["checked_layer_ids"] == ["hpo-layer"]
 
     # 9. Simulate Server Restart: Reinitialize AppConfig and Database on same workspace
     config_restarted = AppConfig(
@@ -422,7 +477,9 @@ def test_offline_end_to_end_lifecycle(tmp_path: Path, offline_network_guard):
     # 11. Unpack and verify exported package
     buf = io.BytesIO(exported_bytes)
     assert zipfile.is_zipfile(buf)
-    exported_pkg = PackageReader.read_from_stream(buf)
+    exported_pkg = PackageReader.read_from_stream(
+        buf, registry=client_restarted.app.state.ontology_registry
+    )
 
     # Verify Document and Unicode text preservation (emojis, accented characters)
     assert "doc-rich" in exported_pkg.documents
@@ -435,7 +492,7 @@ def test_offline_end_to_end_lifecycle(tmp_path: Path, offline_network_guard):
     # Verify submission and review decisions preserved
     assert sub_id in exported_pkg.submissions
     sub_entry = exported_pkg.submissions[sub_id]
-    assert sub_entry.document_checked is True
+    assert sub_entry.checked_layer_ids == ["hpo-layer"]
     assert len(sub_entry.decisions) == 2
     outcomes = {d.outcome for d in sub_entry.decisions}
     assert outcomes == {"confirmed", "changed"}

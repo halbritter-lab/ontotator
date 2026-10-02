@@ -1,6 +1,12 @@
-# Work Package Format v1 (`ontocurator-work-package/v1` and `hpo-editor-work-package/v1`)
+# Work Package Format v1 (Historical Reference)
+
+> [!NOTE]
+> This document describes the legacy v1 work package format (`ontocurator-work-package/v1` and `hpo-editor-work-package/v1`).
+> For the current multi-layer task profile format, see [Work Package Format v2](work-package-v2.md).
+> Ontocurator rejects v1 work packages at import to guarantee strict layer and profile integrity.
 
 ## Overview
+
 
 The work package is an unencrypted, validated ZIP archive for lossless roundtripping of ontology annotation tasks between editor instances. It encapsulates immutable document texts, ontology references, historical or newly created snapshots, review submissions, and search provenance.
 

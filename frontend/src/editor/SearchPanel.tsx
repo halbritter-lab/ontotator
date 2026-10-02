@@ -8,7 +8,6 @@ export interface SearchPanelProps {
   workspaceKey: WorkspaceKey;
   layerId?: string;
   currentTermId?: string | null;
-  currentHpoId?: string | null;
   onSelectCandidate: (candidate: SearchCandidate, searchId?: string) => void;
 }
 
@@ -18,7 +17,6 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   workspaceKey,
   layerId,
   currentTermId,
-  currentHpoId,
   onSelectCandidate,
 }) => {
   const [state, setState] = useState<SearchState>(searchManager.getState());
@@ -126,8 +124,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         <ul className="candidate-list">
           {state.candidates.map((cand) => {
             const obsolete = isObsolete(cand);
-            const candidateTermId = cand.term_id ?? cand.hpo_id;
-            const targetTermId = currentTermId ?? currentHpoId;
+            const candidateTermId = cand.term_id;
+            const targetTermId = currentTermId;
             const isSelected = candidateTermId === targetTermId;
 
             return (

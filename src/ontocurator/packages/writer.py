@@ -90,7 +90,9 @@ def _prepare_package_payloads(
         "document_order": doc_order,
     }
     if package.manifest.task_profile is not None:
-        manifest_updates["task_profile_sha256"] = profile_hash(package.manifest.task_profile)
+        manifest_updates["task_profile_sha256"] = profile_hash(
+            package.manifest.task_profile
+        )
 
     manifest_copy = package.manifest.model_copy(update=manifest_updates)
     manifest_bytes = json.dumps(

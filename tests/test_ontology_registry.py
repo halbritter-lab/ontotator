@@ -14,7 +14,9 @@ from ontocurator.domain.profiles import (
 from ontocurator.ontology.registry import OntologyRegistry
 
 
-def _create_synthetic_obo(tmp_path: Path, filename: str, term_id: str, label: str) -> tuple[Path, str]:
+def _create_synthetic_obo(
+    tmp_path: Path, filename: str, term_id: str, label: str
+) -> tuple[Path, str]:
     obo_curie = term_id.replace(":", "_")
     data = {
         "graphs": [
@@ -41,7 +43,9 @@ def _create_synthetic_obo(tmp_path: Path, filename: str, term_id: str, label: st
 
 
 def test_registry_registration_and_hash_validation(tmp_path: Path):
-    path, digest = _create_synthetic_obo(tmp_path, "ont1.json", "TEST:0001", "Cardiac Arrest")
+    path, digest = _create_synthetic_obo(
+        tmp_path, "ont1.json", "TEST:0001", "Cardiac Arrest"
+    )
     registry = OntologyRegistry()
 
     expected_good = OntologyDefinition(
@@ -64,8 +68,12 @@ def test_registry_registration_and_hash_validation(tmp_path: Path):
 
 
 def test_same_term_id_in_two_ontologies_independent_indices_and_labels(tmp_path: Path):
-    path1, digest1 = _create_synthetic_obo(tmp_path, "ont1.json", "TEST:0001", "Cardiac Arrest")
-    path2, digest2 = _create_synthetic_obo(tmp_path, "ont2.json", "TEST:0001", "Renal Failure")
+    path1, digest1 = _create_synthetic_obo(
+        tmp_path, "ont1.json", "TEST:0001", "Cardiac Arrest"
+    )
+    path2, digest2 = _create_synthetic_obo(
+        tmp_path, "ont2.json", "TEST:0001", "Renal Failure"
+    )
 
     registry = OntologyRegistry()
     ont1_def = OntologyDefinition(
@@ -142,7 +150,10 @@ def test_same_term_id_in_two_ontologies_independent_indices_and_labels(tmp_path:
     res1 = svc1.search(req1)
     assert res1.layer_id == "layer-cardiac"
     assert res1.ontology_sha256 == ont1_def.sha256
-    assert any(c.term_id == "TEST:0001" and c.label == "Cardiac Arrest" for c in res1.candidates)
+    assert any(
+        c.term_id == "TEST:0001" and c.label == "Cardiac Arrest"
+        for c in res1.candidates
+    )
 
     req_none1 = SearchRequest(
         workspace_key=ws_key,
@@ -165,7 +176,9 @@ def test_same_term_id_in_two_ontologies_independent_indices_and_labels(tmp_path:
     res2 = svc2.search(req2)
     assert res2.layer_id == "layer-renal"
     assert res2.ontology_sha256 == ont2_def.sha256
-    assert any(c.term_id == "TEST:0001" and c.label == "Renal Failure" for c in res2.candidates)
+    assert any(
+        c.term_id == "TEST:0001" and c.label == "Renal Failure" for c in res2.candidates
+    )
 
     req_none2 = SearchRequest(
         workspace_key=ws_key,
@@ -182,12 +195,20 @@ def test_numeric_search_is_scoped_to_layer_ontology(tmp_path: Path):
     from ontocurator.domain.workspace import WorkspaceKey
     from ontocurator.ontology.provenance import SearchRequest
 
-    path1, digest1 = _create_synthetic_obo(tmp_path, "ont1.json", "TEST:0001", "Condition Alpha")
-    path2, digest2 = _create_synthetic_obo(tmp_path, "ont2.json", "TEST:0001", "Condition Beta")
+    path1, digest1 = _create_synthetic_obo(
+        tmp_path, "ont1.json", "TEST:0001", "Condition Alpha"
+    )
+    path2, digest2 = _create_synthetic_obo(
+        tmp_path, "ont2.json", "TEST:0001", "Condition Beta"
+    )
 
     registry = OntologyRegistry()
-    ont1_def = OntologyDefinition(ontology_id="ont1", label="Ont 1", release="v1", sha256=digest1)
-    ont2_def = OntologyDefinition(ontology_id="ont2", label="Ont 2", release="v2", sha256=digest2)
+    ont1_def = OntologyDefinition(
+        ontology_id="ont1", label="Ont 1", release="v1", sha256=digest1
+    )
+    ont2_def = OntologyDefinition(
+        ontology_id="ont2", label="Ont 2", release="v2", sha256=digest2
+    )
     registry.register(path1, ont1_def)
     registry.register(path2, ont2_def)
 
@@ -220,18 +241,34 @@ def test_numeric_search_is_scoped_to_layer_ontology(tmp_path: Path):
     svc2 = registry.for_layer(profile, "l2")
 
     ws_key = WorkspaceKey(
-        package_id="p", document_id="d", annotator_id="u", mode="independent", target_set_id="t"
+        package_id="p",
+        document_id="d",
+        annotator_id="u",
+        mode="independent",
+        target_set_id="t",
     )
 
     # Numeric lookup "1" resolves correctly within each index
     res1 = svc1.search(
-        SearchRequest(workspace_key=ws_key, annotation_id="a1", layer_id="l1", query="1", route="id")
+        SearchRequest(
+            workspace_key=ws_key,
+            annotation_id="a1",
+            layer_id="l1",
+            query="1",
+            route="id",
+        )
     )
     assert len(res1.candidates) == 1
     assert res1.candidates[0].label == "Condition Alpha"
 
     res2 = svc2.search(
-        SearchRequest(workspace_key=ws_key, annotation_id="a2", layer_id="l2", query="1", route="id")
+        SearchRequest(
+            workspace_key=ws_key,
+            annotation_id="a2",
+            layer_id="l2",
+            query="1",
+            route="id",
+        )
     )
     assert len(res2.candidates) == 1
     assert res2.candidates[0].label == "Condition Beta"
@@ -265,9 +302,13 @@ def test_missing_ontology_resource_reported_clearly(tmp_path: Path):
 
 
 def test_registry_caching_by_sha256(tmp_path: Path):
-    path, digest = _create_synthetic_obo(tmp_path, "ont.json", "TEST:0001", "Some Condition")
+    path, digest = _create_synthetic_obo(
+        tmp_path, "ont.json", "TEST:0001", "Some Condition"
+    )
     registry = OntologyRegistry()
-    ont_def = OntologyDefinition(ontology_id="ont", label="Ont", release="v1", sha256=digest)
+    ont_def = OntologyDefinition(
+        ontology_id="ont", label="Ont", release="v1", sha256=digest
+    )
     registry.register(path, ont_def)
 
     type_def = AnnotationTypeDefinition(type_id="t1", label="T1", axes=[])

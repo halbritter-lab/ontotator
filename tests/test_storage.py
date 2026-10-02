@@ -114,7 +114,11 @@ def _sample_package(pkg_id: str = "pkg-1") -> ValidatedPackage:
         layer_id="hpo-layer",
         type_id="phenotype",
         term_id="HP:0001252",
-        axes_values={"assertion": "present", "experiencer": "patient", "temporality": "current"},
+        axes_values={
+            "assertion": "present",
+            "experiencer": "patient",
+            "temporality": "current",
+        },
         evidence_refs=[EvidenceRef(evidence_id="ev-1", version=ev.version)],
         provenance=Provenance(
             actor=ActorRef(actor_id="dr-meier", kind="human"),

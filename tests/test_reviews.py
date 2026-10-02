@@ -15,14 +15,12 @@ from ontocurator.domain.annotations import (
     Provenance,
     snapshot,
 )
-from ontocurator.domain.axes import Axes
 from ontocurator.domain.documents import (
     Document,
     EvidenceMention,
     EvidenceRef,
     OntologyRef,
     Segment,
-    snapshot_evidence,
 )
 from ontocurator.domain.errors import DomainError, IncompleteReview
 from ontocurator.domain.review import ReviewOutcome, ReviewTargetSet
@@ -206,6 +204,7 @@ def _setup_review_test_env(tmp_path: Path):
         "snap_a": snap_a,
         "snap_b": snap_b,
         "snap_c": snap_c,
+        "profile": profile,
     }
 
 
@@ -421,7 +420,9 @@ def test_review_submission_completeness_and_export_scoping(tmp_path: Path):
         MutationEnvelope(
             mutation_id="chk-layer",
             expected_revision=1,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="hpo-layer", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="hpo-layer", checked=True
+            ).model_dump(),
         ),
     )
 
@@ -472,7 +473,9 @@ def test_independent_mode_null_finding_and_hidden_proposals(tmp_path: Path):
         MutationEnvelope(
             mutation_id="chk-null",
             expected_revision=0,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="hpo-layer", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="hpo-layer", checked=True
+            ).model_dump(),
         ),
     )
 
@@ -717,7 +720,9 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
         MutationEnvelope(
             mutation_id="chk",
             expected_revision=4,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="strict-layer", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="strict-layer", checked=True
+            ).model_dump(),
         ),
     )
 
@@ -751,7 +756,9 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
         MutationEnvelope(
             mutation_id="chk-again",
             expected_revision=6,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="strict-layer", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="strict-layer", checked=True
+            ).model_dump(),
         ),
     )
 

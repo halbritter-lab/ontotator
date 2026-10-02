@@ -216,7 +216,9 @@ def test_editing_rejects_invalid_layer_or_type(tmp_path: Path) -> None:
         editing_service.apply_edit(
             key,
             MutationEnvelope(
-                mutation_id="m1", expected_revision=0, payload=cmd_bad_layer.model_dump()
+                mutation_id="m1",
+                expected_revision=0,
+                payload=cmd_bad_layer.model_dump(),
             ),
         )
     assert exc_info.value.code in ("UNKNOWN_LAYER", "INVALID_LAYER")
@@ -285,7 +287,7 @@ def test_copy_on_write_evidence_leaves_source_intact(tmp_path: Path) -> None:
         evidence_id="ev-shared",
         segments=[Segment(start=24, end=33)],
     )
-    draft2 = editing_service.apply_edit(
+    _ = editing_service.apply_edit(
         key,
         MutationEnvelope(
             mutation_id="m2", expected_revision=1, payload=cmd2.model_dump()
@@ -306,8 +308,12 @@ def test_copy_on_write_evidence_leaves_source_intact(tmp_path: Path) -> None:
     )
 
     # Check that ann-2 still references the original evidence
-    snap_ann2 = next(s for s in draft3.annotations if s.annotation.annotation_id == "ann-2")
-    snap_ann1 = next(s for s in draft3.annotations if s.annotation.annotation_id == "ann-1")
+    snap_ann2 = next(
+        s for s in draft3.annotations if s.annotation.annotation_id == "ann-2"
+    )
+    snap_ann1 = next(
+        s for s in draft3.annotations if s.annotation.annotation_id == "ann-1"
+    )
     assert snap_ann2.annotation.evidence_refs[0].version == ev_initial.version
     assert snap_ann1.annotation.evidence_refs[0].version != ev_initial.version
 

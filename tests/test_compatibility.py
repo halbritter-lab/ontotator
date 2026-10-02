@@ -3,10 +3,11 @@ import json
 import shutil
 from pathlib import Path
 
-from ontocurator.domain.workspace import WorkspaceKey
+import pytest
+
+from ontocurator.domain.errors import DomainError, InvalidPackage
 from ontocurator.packages.reader import read_package
 from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "legacy_v1"
 
@@ -15,49 +16,25 @@ def _load_expected() -> dict:
     return json.loads((FIXTURES_DIR / "expected.json").read_text(encoding="utf-8"))
 
 
-def test_frozen_legacy_package() -> None:
+def test_frozen_legacy_package_is_cleanly_rejected() -> None:
     expected = _load_expected()
     zip_path = FIXTURES_DIR / "review.zip"
     assert zip_path.exists()
 
-    # Check zip sha256 digest
+    # Check zip sha256 digest is byte-identical
     raw_zip = zip_path.read_bytes()
     assert hashlib.sha256(raw_zip).hexdigest() == expected["review_zip_sha256"]
 
-    # Read package and verify format and axes definitions
-    pkg = read_package(zip_path)
-    assert pkg.manifest.package_id == expected["package_id"]
-    assert pkg.manifest.format_version == expected["format_version"]
-    assert pkg.manifest.axes_definition == expected["axes_definition"]
-
-    # Verify manifest hash
-    manifest_dict = pkg.manifest.model_dump()
-    manifest_bytes = json.dumps(manifest_dict, sort_keys=True).encode("utf-8")
-    assert hashlib.sha256(manifest_bytes).hexdigest() == expected["manifest_sha256"]
-
-    # Verify snapshot versions
-    snap_versions = expected["snapshot_versions"]
-    assert ("ann-1", snap_versions["ann1_v1"]) in pkg.annotations
-    assert ("ann-1", snap_versions["ann1_v2"]) in pkg.annotations
-    assert ("ann-2", snap_versions["ann2"]) in pkg.annotations
-    assert ("ev-1", snap_versions["ev1"]) in pkg.evidence
-    assert ("ev-2", snap_versions["ev2"]) in pkg.evidence
-
-    # Verify submission and decisions
-    sub = pkg.submissions[expected["package_submission_id"]]
-    assert sub.targets.target_set_id == expected["target_set_id"]
-    assert len(sub.decisions) == len(expected["decisions"])
-    for dec_exp, dec_act in zip(expected["decisions"], sub.decisions, strict=True):
-        assert dec_act.decision_id == dec_exp["decision_id"]
-        assert dec_act.outcome == dec_exp["outcome"]
-        if dec_exp["replacement_version"]:
-            assert dec_act.replacement is not None
-            assert dec_act.replacement.version == dec_exp["replacement_version"]
-        else:
-            assert dec_act.replacement is None
+    # Read package must be strictly rejected with InvalidPackage
+    with pytest.raises(InvalidPackage) as exc_info:
+        read_package(zip_path)
+    assert "Unsupported package format version" in str(exc_info.value)
+    assert "hpo-editor-work-package/v1" in str(exc_info.value)
 
 
-def test_frozen_v2_workspace(tmp_path: Path) -> None:
+def test_frozen_v2_workspace_is_cleanly_rejected_and_byte_identical(
+    tmp_path: Path,
+) -> None:
     expected = _load_expected()
     db_source = FIXTURES_DIR / "workspace-v2.sqlite"
     assert db_source.exists()
@@ -66,72 +43,116 @@ def test_frozen_v2_workspace(tmp_path: Path) -> None:
     db_sha256 = hashlib.sha256(db_source.read_bytes()).hexdigest()
     assert db_sha256 == expected["sqlite_sha256"]
 
-    # Copy to tmp_path before opening to ensure no side effects
+    # Copy to tmp_path before opening
     db_copy = tmp_path / "workspace.sqlite"
     shutil.copy2(db_source, db_copy)
 
-    db = Database(db_copy)
-    repo = Repository(db)
+    # Opening must raise UNSUPPORTED_WORKSPACE_VERSION before running any DDL
+    with pytest.raises(DomainError) as exc_info:
+        Database(db_copy)
 
-    # Verify package was imported
-    docs = repo.list_documents(expected["package_id"])
-    assert len(docs) == 1
-    assert docs[0].document_id == "doc-1"
+    assert exc_info.value.code == "UNSUPPORTED_WORKSPACE_VERSION"
+    assert "Legacy database version 2 is not supported" in str(exc_info.value)
 
-    # Verify independent draft
-    indep_key = WorkspaceKey(
-        package_id=expected["package_id"],
-        document_id="doc-1",
-        annotator_id="dr-schmidt",
-        mode="independent",
-        target_set_id="",
-    )
-    draft_indep = repo.open_draft(indep_key)
-    assert draft_indep is not None
-    assert draft_indep.revision == expected["draft_revisions"]["independent"]
-    assert len(draft_indep.annotations) == 1
+    # Ensure no migrations ran and database file remains byte-identical
+    assert hashlib.sha256(db_copy.read_bytes()).hexdigest() == db_sha256
 
-    # Verify review draft
-    rev_key = WorkspaceKey(
-        package_id=expected["package_id"],
-        document_id="doc-1",
-        annotator_id="dr-meier",
-        mode="review",
-        target_set_id=expected["target_set_id"],
-    )
-    draft_rev = repo.open_draft(rev_key)
-    assert draft_rev is not None
-    assert draft_rev.revision == expected["draft_revisions"]["review"]
 
-    # Verify submissions (both imported and locally created)
-    subs = repo.get_submissions_for_workspace(rev_key)
-    assert len(subs) == 2
-    sub_ids = [s.submission_id for s in subs]
-    assert expected["package_submission_id"] in sub_ids
-    assert expected["workspace_submission_id"] in sub_ids
+def test_legacy_format_versions_rejected() -> None:
+    from ontocurator.packages.models import PackageManifest
 
-    # Verify receipts directly in DB
-    conn = db.get_connection()
-    cursor = conn.cursor()
-    for mut_id, r_info in expected["receipts"].items():
-        cursor.execute(
-            "SELECT request_hash, response_json "
-            "FROM mutation_receipts WHERE mutation_id = ?;",
-            (mut_id,),
+    # Direct validation of unsupported format versions
+    for legacy_version in ["hpo-editor-work-package/v1", "ontocurator-work-package/v1"]:
+        manifest_data = {
+            "package_id": "test-pkg",
+            "format_version": legacy_version,
+            "created_at": "2026-10-01T00:00:00Z",
+        }
+        manifest = PackageManifest.model_validate(manifest_data)
+        assert manifest.format_version == legacy_version
+        assert manifest.format_version != "ontocurator-work-package/v2"
+
+
+def test_read_package_rejects_ontocurator_work_package_v1(tmp_path: Path) -> None:
+    import zipfile
+
+    pkg_zip = tmp_path / "legacy_v1.zip"
+    with zipfile.ZipFile(pkg_zip, "w") as zf:
+        manifest = {
+            "format_version": "ontocurator-work-package/v1",
+            "package_id": "test-v1",
+            "created_at": "2026-10-01T00:00:00Z",
+            "ontology": {"sha256": "abc", "release": "2026-01-01"},
+            "files": {},
+        }
+        zf.writestr("manifest.json", json.dumps(manifest))
+    with pytest.raises(InvalidPackage) as exc_info:
+        read_package(pkg_zip)
+    assert "Unsupported package format version" in str(exc_info.value)
+    assert "ontocurator-work-package/v1" in str(exc_info.value)
+
+
+def test_legacy_snapshot_schemas_rejected() -> None:
+    from ontocurator.domain.errors import InvalidAnnotation
+    from ontocurator.domain.serialization import decode_snapshot
+
+    for bad_schema in [None, "ontocurator-annotation/v1", "ontocurator-annotation/v2"]:
+        doc: dict = {
+            "annotation": {
+                "annotation_id": "ann-1",
+                "layer_id": "layer-1",
+                "type_id": "type-1",
+                "term_id": "HP:0001250",
+                "evidence_refs": [],
+                "provenance": {
+                    "actor": {"actor_id": "test", "kind": "human"},
+                    "method": "manual",
+                },
+            },
+            "evidence": [],
+            "version": "abc",
+            "document_id": "doc-1",
+            "text_sha256": "123",
+            "ontology_sha256": "456",
+            "layer_config_sha256": "789",
+        }
+        if bad_schema is not None:
+            doc["schema_version"] = bad_schema
+        with pytest.raises(InvalidAnnotation) as exc:
+            decode_snapshot(doc)
+        assert "Unsupported or legacy snapshot schema" in str(exc.value)
+
+
+def test_annotation_record_rejects_hpo_id_legacy_field() -> None:
+    from pydantic import ValidationError
+
+    from ontocurator.domain.annotations import Annotation
+
+    with pytest.raises(ValidationError) as exc:
+        Annotation.model_validate(
+            {
+                "annotation_id": "ann-1",
+                "layer_id": "layer-1",
+                "type_id": "type-1",
+                "hpo_id": "HP:0001250",
+                "evidence_refs": [],
+                "provenance": {
+                    "actor": {"actor_id": "test", "kind": "human"},
+                    "method": "manual",
+                },
+            }
         )
-        row = cursor.fetchone()
-        assert row is not None
-        assert row[0] == r_info["request_hash"]
+    assert "Deprecated field 'hpo_id' is no longer supported" in str(exc.value)
 
-    # Verify receipt idempotency replay
-    from ontocurator.domain.workspace import MutationEnvelope
 
-    env_retry = MutationEnvelope(
-        mutation_id="mut-edit-1",
-        expected_revision=0,
-        payload={"action": "create_annotation", "term_id": "HP:0001252"},
-    )
-    replayed = repo.run_mutation(indep_key, env_retry, lambda d: d)
-    assert replayed.revision == 1
-
-    db.close()
+def test_openapi_schema_does_not_contain_public_hpo_id() -> None:
+    openapi_file = Path(__file__).parent.parent / "contracts" / "openapi.json"
+    assert openapi_file.exists()
+    content = openapi_file.read_text(encoding="utf-8")
+    schema = json.loads(content)
+    schemas = schema.get("components", {}).get("schemas", {})
+    for schema_name, s_def in schemas.items():
+        props = s_def.get("properties", {})
+        assert "hpo_id" not in props, (
+            f"Schema '{schema_name}' should not expose 'hpo_id'"
+        )

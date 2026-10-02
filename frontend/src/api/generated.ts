@@ -669,8 +669,6 @@ export interface components {
              * @default false
              */
             obsolete: boolean;
-            /** Hpo Id */
-            readonly hpo_id: string;
         };
         /**
          * SearchRequest

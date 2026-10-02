@@ -471,7 +471,7 @@ export const App: React.FC = () => {
                   {reviewInputs.map((input) => {
                     const ann = input.annotation;
                     const isChecked = selectedTargetIds.has(snapshotKey(input));
-                    const term = ann.term_id ?? (ann as any).hpo_id;
+                    const term = ann.term_id;
 
                     return (
                       <label

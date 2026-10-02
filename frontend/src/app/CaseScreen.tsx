@@ -145,7 +145,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const snap = (view.available_inputs ?? []).find(
         (i) => i.annotation.annotation_id === targetRef.annotation_id && i.version === targetRef.version
       );
-      const termId = snap?.annotation.term_id ?? (snap?.annotation as any)?.hpo_id ?? targetRef.annotation_id;
+      const termId = snap?.annotation.term_id ?? targetRef.annotation_id;
       const layerId = snap?.annotation.layer_id;
       const statusKey = layerId ? `${layerId}:${termId}` : termId;
       return {
@@ -154,7 +154,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         layer_id: layerId,
         type_id: snap?.annotation.type_id,
         term_id: termId,
-        hpo_id: termId,
         axes: (snap?.annotation.axes_values ?? (snap?.annotation as any)?.axes?.values) as any,
         axes_values: snap?.annotation.axes_values ?? null,
         provenance: snap?.annotation.provenance ?? {
@@ -629,7 +628,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       onClick={() => setSelectedTargetId(refKey(t))}
                     >
                       <div className="doc-id" style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span>{t.term_id ?? t.hpo_id}</span>
+                        <span>{t.term_id}</span>
                         {dec ? (
                           <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--primary)" }}>
                             {dec.outcome}
@@ -656,7 +655,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               const isSelected =
                 annSnap.annotation.annotation_id === selectedAnnotationId;
               const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
-              const termId = annSnap.annotation.term_id ?? (annSnap.annotation as any).hpo_id;
+              const termId = annSnap.annotation.term_id;
               const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
               const firstAxisVal = Object.values(axesValues).find((v): v is string => typeof v === "string" && v.length > 0);
               const layerName = view.layers?.find((l) => l.layer_id === annSnap.annotation.layer_id)?.label;
@@ -799,7 +798,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             const axesVal = snap.annotation.axes_values ?? (snap.annotation as any).axes?.values;
             return (
               <div key={refKey({annotation_id:snap.annotation.annotation_id,version:snap.version})}>
-                <strong>{snap.annotation.term_id ?? (snap.annotation as any).hpo_id}</strong>
+                <strong>{snap.annotation.term_id}</strong>
                 <p>
                   {axesVal && Object.keys(axesVal).length > 0
                     ? Object.entries(axesVal)

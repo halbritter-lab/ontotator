@@ -254,7 +254,9 @@ def test_package_rejects_legacy_v1_format(tmp_path: Path) -> None:
         for name, data in files.items():
             z_out.writestr(name, data)
 
-    with pytest.raises(InvalidPackage, match="only 'ontocurator-work-package/v2' is supported"):
+    with pytest.raises(
+        InvalidPackage, match="only 'ontocurator-work-package/v2' is supported"
+    ):
         read_package(tampered_file)
 
 
@@ -352,7 +354,9 @@ def test_package_embedded_ontology_resource_validation(tmp_path: Path) -> None:
     pkg_file = tmp_path / "embedded.zip"
     write_package(pkg, pkg_file, embedded_files={"ontologies/hp.json": raw_obo})
     loaded = read_package(pkg_file)
-    assert loaded.manifest.task_profile.ontologies[0].resource_path == "ontologies/hp.json"
+    assert (
+        loaded.manifest.task_profile.ontologies[0].resource_path == "ontologies/hp.json"
+    )
 
     # 2. Package with mismatched embedded ontology SHA-256 is rejected
     with zipfile.ZipFile(pkg_file, "r") as z_in:
@@ -361,7 +365,9 @@ def test_package_embedded_ontology_resource_validation(tmp_path: Path) -> None:
     files["ontologies/hp.json"] = b'{"graphs": [{"tampered": true}]}'
     # Also update file_hashes so the outer archive check passes but the ontology check fails
     manifest_dict = json.loads(files["manifest.json"].decode("utf-8"))
-    manifest_dict["file_hashes"]["ontologies/hp.json"] = hashlib.sha256(files["ontologies/hp.json"]).hexdigest()
+    manifest_dict["file_hashes"]["ontologies/hp.json"] = hashlib.sha256(
+        files["ontologies/hp.json"]
+    ).hexdigest()
     files["manifest.json"] = json.dumps(manifest_dict).encode("utf-8")
 
     bad_ont_file = tmp_path / "bad_ont.zip"
@@ -369,7 +375,9 @@ def test_package_embedded_ontology_resource_validation(tmp_path: Path) -> None:
         for name, data in files.items():
             z_out.writestr(name, data)
 
-    with pytest.raises(InvalidPackage, match="Embedded ontology resource SHA-256 mismatch"):
+    with pytest.raises(
+        InvalidPackage, match="Embedded ontology resource SHA-256 mismatch"
+    ):
         read_package(bad_ont_file)
 
 

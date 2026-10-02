@@ -7,7 +7,6 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.axes import EDITOR_AXES_CONFIG, validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import resolve_type
@@ -95,7 +94,9 @@ class ReviewService:
         if cmd.outcome == "confirmed":
             ont_svc = None
             if self.registry is not None:
-                ont_svc = self.registry.for_layer(task_profile, target_snap.annotation.layer_id)
+                ont_svc = self.registry.for_layer(
+                    task_profile, target_snap.annotation.layer_id
+                )
             elif self.ontology is not None:
                 ont_svc = self.ontology
 
@@ -109,7 +110,9 @@ class ReviewService:
                     )
 
             target_type = resolve_type(
-                task_profile, target_snap.annotation.layer_id, target_snap.annotation.type_id
+                task_profile,
+                target_snap.annotation.layer_id,
+                target_snap.annotation.type_id,
             )
             for axis in target_type.axes:
                 if not axis.allow_empty:
@@ -160,7 +163,9 @@ class ReviewService:
                 )
 
             rep_type = resolve_type(
-                task_profile, replacement.annotation.layer_id, replacement.annotation.type_id
+                task_profile,
+                replacement.annotation.layer_id,
+                replacement.annotation.type_id,
             )
             for axis in rep_type.axes:
                 if not axis.allow_empty:
@@ -189,6 +194,8 @@ class ReviewService:
 
         # Invalidate target layer checkmark
         target_layer = target_snap.annotation.layer_id
-        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != target_layer]
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != target_layer
+        ]
 
         return draft

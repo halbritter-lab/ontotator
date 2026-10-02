@@ -44,8 +44,12 @@ def make_layered_package(
 ) -> ValidatedPackage:
     """Create synthetic test packages for scenarios A, B, and C."""
     # Non-alphabetical document ordering for testing document_order preservation
-    doc_beta = _make_doc("doc-beta", "Der Patient leidet an Epilepsie und Muskelhypotonie.")
-    doc_alpha = _make_doc("doc-alpha", "Unauffälliger Befund bei der Kontrolluntersuchung.")
+    doc_beta = _make_doc(
+        "doc-beta", "Der Patient leidet an Epilepsie und Muskelhypotonie."
+    )
+    doc_alpha = _make_doc(
+        "doc-alpha", "Unauffälliger Befund bei der Kontrolluntersuchung."
+    )
     document_order = ["doc-beta", "doc-alpha"]
     documents = {doc.document_id: doc for doc in [doc_beta, doc_alpha]}
 

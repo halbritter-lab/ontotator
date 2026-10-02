@@ -159,7 +159,11 @@ def test_origin_does_not_change_validation() -> None:
         layer_id="hpo-layer",
         type_id="phenotype",
         term_id="HP:0001252",
-        axes_values={"assertion": "present", "experiencer": "patient", "temporality": "current"},
+        axes_values={
+            "assertion": "present",
+            "experiencer": "patient",
+            "temporality": "current",
+        },
         evidence_refs=[EvidenceRef(evidence_id="ev-1", version=ev_snap.version)],
         provenance=human_prov,
     )
@@ -170,7 +174,11 @@ def test_origin_does_not_change_validation() -> None:
         layer_id="hpo-layer",
         type_id="phenotype",
         term_id="HP:0001252",
-        axes_values={"assertion": "present", "experiencer": "patient", "temporality": "current"},
+        axes_values={
+            "assertion": "present",
+            "experiencer": "patient",
+            "temporality": "current",
+        },
         evidence_refs=[EvidenceRef(evidence_id="ev-1", version=ev_snap.version)],
         provenance=tool_prov,
     )
@@ -209,7 +217,11 @@ def test_evidence_edit_changes_version_not_id() -> None:
         layer_id="hpo-layer",
         type_id="phenotype",
         term_id="HP:0001252",
-        axes_values={"assertion": "present", "experiencer": "patient", "temporality": "current"},
+        axes_values={
+            "assertion": "present",
+            "experiencer": "patient",
+            "temporality": "current",
+        },
         evidence_refs=[
             EvidenceRef(evidence_id="ev-stable-1", version=ev_snap_v1.version)
         ],
@@ -309,13 +321,17 @@ def test_legacy_snapshot_rejected() -> None:
         "text_sha256": "text-sha-1",
         "version": "dummy-hash",
     }
-    with pytest.raises(InvalidAnnotation, match="only 'ontocurator-annotation/v3' is supported"):
+    with pytest.raises(
+        InvalidAnnotation, match="only 'ontocurator-annotation/v3' is supported"
+    ):
         decode_snapshot(legacy_raw)
 
     # 2. V2 snapshot rejected
     v2_raw = dict(legacy_raw)
     v2_raw["schema_version"] = "ontocurator-annotation/v2"
-    with pytest.raises(InvalidAnnotation, match="only 'ontocurator-annotation/v3' is supported"):
+    with pytest.raises(
+        InvalidAnnotation, match="only 'ontocurator-annotation/v3' is supported"
+    ):
         decode_snapshot(v2_raw)
 
 
@@ -398,5 +414,7 @@ def test_unknown_snapshot_schema_rejected() -> None:
         "text_sha256": "text-sha-1",
         "layer_config_sha256": "prof-sha-1",
     }
-    with pytest.raises(InvalidAnnotation, match="only 'ontocurator-annotation/v3' is supported"):
+    with pytest.raises(
+        InvalidAnnotation, match="only 'ontocurator-annotation/v3' is supported"
+    ):
         decode_snapshot(bad_raw)

@@ -24,8 +24,8 @@ def review(ctx, reviewer="one"):
         mode="review",
         target_set_id=targets.target_set_id,
     )
-    ctx["ws_svc"].open(key, targets)
-    return key, ref
+    view = ctx["ws_svc"].open(key, targets)
+    return view.key, ref
 
 
 def test_decision_identity_is_workspace_scoped(tmp_path):
@@ -82,7 +82,9 @@ def test_edit_invalidates_replacement_approval(tmp_path):
             payload={
                 "command": "create_annotation",
                 "annotation_id": "replacement",
-                "hpo_id": "HP:0001252",
+                "layer_id": "hpo-layer",
+                "type_id": "phenotype",
+                "term_id": "HP:0001252",
             },
         ),
     )
@@ -107,7 +109,7 @@ def test_edit_invalidates_replacement_approval(tmp_path):
             payload={
                 "command": "set_term",
                 "annotation_id": "replacement",
-                "hpo_id": "HP:0001250",
+                "term_id": "HP:0001250",
             },
         ),
     )
@@ -121,7 +123,7 @@ def test_package_rejects_snapshot_document_digest_mismatch(tmp_path):
     original = next(iter(pkg.annotations.values()))
     doc = pkg.documents["doc-1"].model_copy(update={"text_sha256": "forged"})
     forged = snapshot(
-        original.annotation, original.evidence, doc, pkg.manifest.ontology
+        original.annotation, original.evidence, doc, pkg.manifest.task_profile
     )
     pkg.annotations = {(forged.annotation.annotation_id, forged.version): forged}
     pkg.submissions = {}
@@ -144,6 +146,7 @@ def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
         route="lexical",
         candidates=["HP:0001250", "HP:0001252"],
         ranked_ids=["HP:0001252", "HP:0001250"],
+        layer_id="hpo-layer",
         ontology_release="test",
         index_identity="test",
         timestamp="2026-10-01",
@@ -157,7 +160,9 @@ def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
             payload={
                 "command": "create_annotation",
                 "annotation_id": "new",
-                "hpo_id": "HP:0001250",
+                "layer_id": "hpo-layer",
+                "type_id": "phenotype",
+                "term_id": "HP:0001250",
                 "search_event_id": "search",
             },
         ),
@@ -168,7 +173,11 @@ def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
         for e in ctx["repo"].get_search_events_for_workspace(key)
         if e.event_id != "search"
     )
-    assert (saved.selected_hpo_id, saved.displayed_position, saved.ranked_position) == (
+    assert (
+        saved.selected_term_id,
+        saved.displayed_position,
+        saved.ranked_position,
+    ) == (
         "HP:0001250",
         1,
         2,
@@ -183,7 +192,9 @@ def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
                 payload={
                     "command": "create_annotation",
                     "annotation_id": "new",
-                    "hpo_id": "HP:0001250",
+                    "layer_id": "hpo-layer",
+                    "type_id": "phenotype",
+                    "term_id": "HP:0001250",
                     "search_event_id": "search",
                 },
             ),
@@ -196,10 +207,12 @@ def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
 )
 def test_package_rejects_self_consistent_but_unbound_content(tmp_path, mutation):
     from ontocurator.domain.canonical import canonical_hash
+    from ontocurator.domain.profiles import profile_hash
 
     pkg = _create_sample_package()
     if mutation == "ontology":
-        pkg.manifest.ontology.sha256 = "wrong-ontology"
+        pkg.manifest.task_profile.ontologies[0].sha256 = "wrong-ontology"
+        pkg.manifest.task_profile_sha256 = profile_hash(pkg.manifest.task_profile)
     elif mutation in {"evidence_document", "bounds"}:
         ev = next(iter(pkg.evidence.values()))
         pkg.annotations = {}
@@ -235,24 +248,29 @@ def test_review_versions_have_separate_decisions(tmp_path):
     ctx = _setup_review_test_env(tmp_path)
     first = ctx["snap_a"]
     second = snapshot(
-        first.annotation.model_copy(update={"hpo_id": "HP:0001250"}),
+        first.annotation.model_copy(update={"term_id": "HP:0001250"}),
         first.evidence,
         ctx["doc"],
-        ctx["ontology"].ref,
+        ctx["profile"],
     )
     refs = [
         AnnotationRef(annotation_id=s.annotation.annotation_id, version=s.version)
         for s in [first, second]
     ]
     targets = ReviewTargetSet.create(refs)
+    from ontocurator.domain.scopes import build_scope
+
+    scope = build_scope(ctx["profile"], "review")
     key = WorkspaceKey(
         package_id="pkg-rev-1",
         document_id="doc-1",
         annotator_id="one",
         mode="review",
+        scope_id=scope.scope_id,
         target_set_id=targets.target_set_id,
     )
     draft = Draft(key=key, targets=targets, revision=0)
+
     # Both immutable versions are members of the same document.
     ctx["repo"].list_annotations_for_document = lambda *_: [first, second]
     for ref in refs:
@@ -281,7 +299,7 @@ def test_submission_fails_when_target_disappears(tmp_path):
             MutationEnvelope(
                 mutation_id="submit",
                 expected_revision=1,
-                payload={"document_checked": True},
+                payload={"checked_layer_ids": ["hpo-layer"]},
             ),
         )
 
@@ -302,7 +320,7 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
         MutationEnvelope(
             mutation_id="submit",
             expected_revision=1,
-            payload={"document_checked": True},
+            payload={"checked_layer_ids": ["hpo-layer"]},
         ),
     )
     pkg = ctx["exp_svc"].for_workspace(key)
@@ -322,6 +340,7 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
 
 
 def test_sequential_search_selections_survive_two_export_imports(tmp_path):
+    from ontocurator.ontology.registry import OntologyRegistry
     from ontocurator.packages.models import SearchEventRecord
     from ontocurator.storage.database import Database
     from ontocurator.storage.repository import Repository
@@ -336,6 +355,7 @@ def test_sequential_search_selections_survive_two_export_imports(tmp_path):
         route="lexical",
         candidates=["HP:0001250", "HP:0001252"],
         ranked_ids=["HP:0001252", "HP:0001250"],
+        layer_id="hpo-layer",
         ontology_release="test",
         index_identity="test",
         timestamp="2026-10-01",
@@ -344,27 +364,42 @@ def test_sequential_search_selections_survive_two_export_imports(tmp_path):
     db = Database(tmp_path / "recipient.db")
     db.run_migrations()
     recipient = Repository(db)
+    reg = OntologyRegistry()
+    reg.register_service(ctx["ontology"])
+
     for revision, term in enumerate(["HP:0001250", "HP:0001252"]):
+        if revision == 0:
+            payload = {
+                "command": "create_annotation",
+                "annotation_id": "new",
+                "layer_id": "hpo-layer",
+                "type_id": "phenotype",
+                "term_id": term,
+                "search_event_id": "query",
+            }
+        else:
+            payload = {
+                "command": "set_term",
+                "annotation_id": "new",
+                "term_id": term,
+                "search_event_id": "query",
+            }
         envelope = MutationEnvelope(
             mutation_id=f"select-{revision}",
             expected_revision=revision,
-            payload={
-                "command": "create_annotation" if revision == 0 else "set_term",
-                "annotation_id": "new",
-                "hpo_id": term,
-                "search_event_id": "query",
-            },
+            payload=payload,
         )
         ctx["edit_svc"].apply(key, envelope)
+
         ctx["edit_svc"].apply(key, envelope)  # Retry must not duplicate the audit row.
         exported = ctx["exp_svc"].for_workspace(key)
         path = tmp_path / f"export-{revision}.zip"
         write_package(exported, path)
-        recipient.import_package(read_package(path))
+        recipient.import_package(read_package(path, registry=reg))
     rows = ctx["repo"].get_search_events_for_workspace(key)
     assert len(rows) == 3
     assert ctx["repo"].get_search_event("query") == query
     selections = [e for e in rows if e.event_id != "query"]
-    assert {e.selected_hpo_id for e in selections} == {"HP:0001250", "HP:0001252"}
+    assert {e.selected_term_id for e in selections} == {"HP:0001250", "HP:0001252"}
     assert {e.source_search_event_id for e in selections} == {"query"}
     assert all(recipient.get_search_event(e.event_id) == e for e in rows)

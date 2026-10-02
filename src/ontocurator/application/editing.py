@@ -322,7 +322,6 @@ class EditingService:
                 )
                 event.timestamp = datetime.now(UTC).isoformat()
                 event.selected_term_id = cmd.term_id
-                event.selected_hpo_id = cmd.term_id
                 event.displayed_position = event.candidates.index(cmd.term_id) + 1
                 event.ranked_position = (
                     event.ranked_ids.index(cmd.term_id) + 1
@@ -377,9 +376,13 @@ class EditingService:
                 f"Layer '{cmd.layer_id}' cannot be checked in this workspace",
             )
         if cmd.checked:
-            draft.checked_layer_ids = sorted(list(set(draft.checked_layer_ids) | {cmd.layer_id}))
+            draft.checked_layer_ids = sorted(
+                list(set(draft.checked_layer_ids) | {cmd.layer_id})
+            )
         else:
-            draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != cmd.layer_id]
+            draft.checked_layer_ids = [
+                lid for lid in draft.checked_layer_ids if lid != cmd.layer_id
+            ]
         return draft
 
     def _validate_term_for_layer(
@@ -434,16 +437,22 @@ class EditingService:
         target_type = cmd.type_id
         if target_type is None:
             target_type = layer_def.default_type_id or (
-                layer_def.annotation_types[0].type_id if layer_def.annotation_types else None
+                layer_def.annotation_types[0].type_id
+                if layer_def.annotation_types
+                else None
             )
             if target_type is None:
-                raise DomainError("MISSING_TYPE", f"No type defined for layer '{target_layer}'")
+                raise DomainError(
+                    "MISSING_TYPE", f"No type defined for layer '{target_layer}'"
+                )
 
         type_def = resolve_type(profile, target_layer, target_type)
 
         self._validate_term_for_layer(profile, target_layer, cmd.term_id)
 
-        if any(a.annotation.annotation_id == cmd.annotation_id for a in draft.annotations):
+        if any(
+            a.annotation.annotation_id == cmd.annotation_id for a in draft.annotations
+        ):
             raise DomainError(
                 "DUPLICATE_ANNOTATION_ID",
                 f"Annotation '{cmd.annotation_id}' already exists in current draft",
@@ -494,10 +503,14 @@ class EditingService:
         )
         snap = snapshot(ann, evidence_list, doc, profile)
         draft.annotations = [
-            a for a in draft.annotations if a.annotation.annotation_id != cmd.annotation_id
+            a
+            for a in draft.annotations
+            if a.annotation.annotation_id != cmd.annotation_id
         ] + [snap]
         # Invalidate checked status for this layer
-        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != target_layer]
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != target_layer
+        ]
         self._update_decision_replacements(draft, cmd.annotation_id, snap)
         return draft
 
@@ -510,7 +523,11 @@ class EditingService:
         scope: TaskScope,
     ) -> Draft:
         existing = next(
-            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
+            (
+                a
+                for a in draft.annotations
+                if a.annotation.annotation_id == cmd.annotation_id
+            ),
             None,
         )
         if existing is None:
@@ -532,7 +549,9 @@ class EditingService:
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
         ]
-        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != layer_id
+        ]
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
@@ -545,7 +564,11 @@ class EditingService:
         scope: TaskScope,
     ) -> Draft:
         existing = next(
-            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
+            (
+                a
+                for a in draft.annotations
+                if a.annotation.annotation_id == cmd.annotation_id
+            ),
             None,
         )
         if existing is None:
@@ -567,13 +590,17 @@ class EditingService:
         except ValueError as exc:
             raise DomainError("INVALID_AXES", str(exc)) from exc
 
-        updated_ann = existing.annotation.model_copy(update={"axes_values": cmd.axes_values})
+        updated_ann = existing.annotation.model_copy(
+            update={"axes_values": cmd.axes_values}
+        )
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
         ]
-        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != layer_id
+        ]
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
@@ -587,7 +614,11 @@ class EditingService:
     ) -> Draft:
         validate_segments(doc.text, cmd.segments)
         existing = next(
-            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
+            (
+                a
+                for a in draft.annotations
+                if a.annotation.annotation_id == cmd.annotation_id
+            ),
             None,
         )
         if existing is None:
@@ -616,7 +647,9 @@ class EditingService:
 
         new_ref = EvidenceRef(evidence_id=cmd.evidence_id, version=ev_snap.version)
         new_refs = [
-            r for r in existing.annotation.evidence_refs if r.evidence_id != cmd.evidence_id
+            r
+            for r in existing.annotation.evidence_refs
+            if r.evidence_id != cmd.evidence_id
         ] + [new_ref]
         new_ev_list = [
             e for e in existing.evidence if e.mention.evidence_id != cmd.evidence_id
@@ -628,7 +661,9 @@ class EditingService:
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
         ]
-        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != layer_id
+        ]
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
@@ -659,7 +694,11 @@ class EditingService:
             draft.evidence.append(new_ev_snap)
 
             target = next(
-                (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
+                (
+                    a
+                    for a in draft.annotations
+                    if a.annotation.annotation_id == cmd.annotation_id
+                ),
                 None,
             )
             if target:
@@ -679,13 +718,17 @@ class EditingService:
                     for e in target.evidence
                     if e.mention.evidence_id != cmd.evidence_id
                 ] + [new_ev_snap]
-                updated_ann = target.annotation.model_copy(update={"evidence_refs": new_refs})
+                updated_ann = target.annotation.model_copy(
+                    update={"evidence_refs": new_refs}
+                )
                 new_snap = snapshot(updated_ann, new_ev_list, doc, profile)
                 draft.annotations = [
                     a if a.annotation.annotation_id != cmd.annotation_id else new_snap
                     for a in draft.annotations
                 ]
-                draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
+                draft.checked_layer_ids = [
+                    lid for lid in draft.checked_layer_ids if lid != layer_id
+                ]
                 self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         else:
             # In-place update of mention
@@ -701,7 +744,10 @@ class EditingService:
             affected_layers: set[str] = set()
             updated_annotations = []
             for snap_item in draft.annotations:
-                if any(r.evidence_id == cmd.evidence_id for r in snap_item.annotation.evidence_refs):
+                if any(
+                    r.evidence_id == cmd.evidence_id
+                    for r in snap_item.annotation.evidence_refs
+                ):
                     layer_id = snap_item.annotation.layer_id
                     if layer_id not in scope.editable_layer_ids:
                         raise DomainError(
@@ -722,7 +768,9 @@ class EditingService:
                         e if e.mention.evidence_id != cmd.evidence_id else new_ev_snap
                         for e in snap_item.evidence
                     ]
-                    updated_ann = snap_item.annotation.model_copy(update={"evidence_refs": new_refs})
+                    updated_ann = snap_item.annotation.model_copy(
+                        update={"evidence_refs": new_refs}
+                    )
                     updated_snap = snapshot(updated_ann, new_ev_list, doc, profile)
                     updated_annotations.append(updated_snap)
                     self._update_decision_replacements(
@@ -746,7 +794,11 @@ class EditingService:
         scope: TaskScope,
     ) -> Draft:
         target = next(
-            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
+            (
+                a
+                for a in draft.annotations
+                if a.annotation.annotation_id == cmd.annotation_id
+            ),
             None,
         )
         if target is None:
@@ -762,7 +814,9 @@ class EditingService:
             )
 
         new_refs = [
-            r for r in target.annotation.evidence_refs if r.evidence_id != cmd.evidence_id
+            r
+            for r in target.annotation.evidence_refs
+            if r.evidence_id != cmd.evidence_id
         ]
         new_ev_list = [
             e for e in target.evidence if e.mention.evidence_id != cmd.evidence_id
@@ -773,7 +827,9 @@ class EditingService:
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
             for a in draft.annotations
         ]
-        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != layer_id
+        ]
         self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
         return draft
 
@@ -784,7 +840,11 @@ class EditingService:
         scope: TaskScope,
     ) -> Draft:
         target = next(
-            (a for a in draft.annotations if a.annotation.annotation_id == cmd.annotation_id),
+            (
+                a
+                for a in draft.annotations
+                if a.annotation.annotation_id == cmd.annotation_id
+            ),
             None,
         )
         if target:
@@ -794,10 +854,14 @@ class EditingService:
                     "REFERENCE_LAYER_READ_ONLY",
                     f"Annotation belongs to reference layer '{layer_id}'",
                 )
-            draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != layer_id]
+            draft.checked_layer_ids = [
+                lid for lid in draft.checked_layer_ids if lid != layer_id
+            ]
 
         draft.annotations = [
-            a for a in draft.annotations if a.annotation.annotation_id != cmd.annotation_id
+            a
+            for a in draft.annotations
+            if a.annotation.annotation_id != cmd.annotation_id
         ]
         draft.decisions = [
             d

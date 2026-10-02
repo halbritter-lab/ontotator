@@ -242,8 +242,8 @@ def test_hash_consistency_and_stability():
     )
     extended_profile = p1.model_copy(
         update={
-            "ontologies": p1.ontologies + [second_ont],
-            "layers": p1.layers + [second_layer],
+            "ontologies": [*p1.ontologies, second_ont],
+            "layers": [*p1.layers, second_layer],
         }
     )
 
@@ -351,9 +351,11 @@ def test_layered_fixtures_scenarios():
     pkg_c = make_layered_package("multi_editable")
     assert pkg_c.manifest.format_version == "ontocurator-work-package/v2"
     assert len(pkg_c.manifest.task_profile.layers) == 2
-    assert all(l.access == "editable" for l in pkg_c.manifest.task_profile.layers)
+    assert all(
+        layer.access == "editable" for layer in pkg_c.manifest.task_profile.layers
+    )
+
     t_opt = resolve_type(pkg_c.manifest.task_profile, "layer-1", "type-opt")
     t_req = resolve_type(pkg_c.manifest.task_profile, "layer-2", "type-req")
     assert t_opt.evidence_policy == "optional"
     assert t_req.evidence_policy == "required_on_complete"
-

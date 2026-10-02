@@ -150,7 +150,11 @@ def validate_axes(
 ) -> None:
     """Validate annotation axes against a resolved axis configuration without domain preset branching."""
     if isinstance(config, AxesConfig):
-        if isinstance(axes, Axes) and axes.definition_name and axes.definition_name != config.definition_name:
+        if (
+            isinstance(axes, Axes)
+            and axes.definition_name
+            and axes.definition_name != config.definition_name
+        ):
             raise ValueError(
                 f"Profile mismatch: axes has definition '{axes.definition_name}', "
                 f"expected '{config.definition_name}'"
@@ -164,9 +168,7 @@ def validate_axes(
 
     for k, v in vals.items():
         if k not in config_map:
-            raise ValueError(
-                f"Unknown axis '{k}'"
-            )
+            raise ValueError(f"Unknown axis '{k}'")
         axis_def = config_map[k]
         if v is not None and v not in axis_def.options:
             raise ValueError(
@@ -181,4 +183,3 @@ def validate_axes(
                     raise ValueError(
                         f"Required axis '{axis_def.id}' cannot be empty for completion"
                     )
-

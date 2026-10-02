@@ -1,5 +1,4 @@
-"""CLI entry points for local HPO annotation editor."""
-
+import contextlib
 import secrets
 import socket
 import webbrowser
@@ -14,8 +13,8 @@ from ontocurator.config import AppConfig
 from ontocurator.domain.errors import DomainError
 
 app = typer.Typer(
-    name="hpo-editor",
-    help="Local application for annotating and reviewing HPO annotations.",
+    name="ontocurator",
+    help="Local application for annotating and reviewing ontology concepts on clinical texts.",
     no_args_is_help=True,
 )
 
@@ -37,7 +36,7 @@ def _is_port_in_use(host: str, port: int) -> bool:
 
 @app.command()
 def version() -> None:
-    """Print current version of HPO Annotation Editor."""
+    """Print current version of Ontocurator."""
     typer.echo("0.1.0")
 
 
@@ -160,10 +159,8 @@ def serve(
     else:
         effective_token = secrets.token_urlsafe(32)
 
-    try:
+    with contextlib.suppress(Exception):
         token_file.write_text(effective_token, encoding="utf-8")
-    except Exception:
-        pass
 
     parsed_axes_config = None
     if axes_config is not None:

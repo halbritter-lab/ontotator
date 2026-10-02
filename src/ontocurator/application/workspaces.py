@@ -148,7 +148,7 @@ class WorkspaceService:
 
         accessible_layer_ids = scope.editable_layer_ids + scope.reference_layer_ids
         layers = [resolve_layer(profile, lid) for lid in accessible_layer_ids]
-        ont_ids = {l.ontology_id for l in layers}
+        ont_ids = {layer.ontology_id for layer in layers}
         ontologies = [resolve_ontology(profile, oid) for oid in sorted(ont_ids)]
 
         term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = {}
@@ -160,7 +160,9 @@ class WorkspaceService:
             effective_targets = ReviewTargetSet.create([])
             all_inputs = self.get_review_inputs(key.package_id, key.document_id)
             available_inputs = [
-                s for s in all_inputs if s.annotation.layer_id in scope.reference_layer_ids
+                s
+                for s in all_inputs
+                if s.annotation.layer_id in scope.reference_layer_ids
             ]
         else:
             # review mode
@@ -173,7 +175,8 @@ class WorkspaceService:
             available_inputs = [
                 s
                 for s in all_inputs
-                if s.annotation.layer_id in (scope.editable_layer_ids + scope.reference_layer_ids)
+                if s.annotation.layer_id
+                in (scope.editable_layer_ids + scope.reference_layer_ids)
             ]
             canonical = ReviewTargetSet.create(effective_targets.targets)
             if (
@@ -194,7 +197,10 @@ class WorkspaceService:
                         "INVALID_REVIEW_TARGET",
                         "Review target not found in available inputs",
                     )
-                if snap.document_id != doc.document_id or snap.text_sha256 != doc.text_sha256:
+                if (
+                    snap.document_id != doc.document_id
+                    or snap.text_sha256 != doc.text_sha256
+                ):
                     raise DomainError(
                         "INVALID_REVIEW_TARGET",
                         "Review target does not match this document",
@@ -226,7 +232,9 @@ class WorkspaceService:
             st_key = f"{snap.annotation.layer_id}:{snap.annotation.term_id}"
             if st_key not in term_statuses:
                 service = self._get_service_for_layer(profile, snap.annotation.layer_id)
-                term_statuses[st_key] = service.validate_term(snap.annotation.term_id).status
+                term_statuses[st_key] = service.validate_term(
+                    snap.annotation.term_id
+                ).status
 
         submissions = self.repo.get_submissions_for_workspace(key)
         axes_profile = self.repo.get_axes_config(key.package_id)
@@ -247,4 +255,3 @@ class WorkspaceService:
             axes_config=axes_profile.axes,
             axes_config_sha256=axes_profile.config_sha256,
         )
-

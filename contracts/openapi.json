@@ -1530,19 +1530,13 @@
             "type": "boolean",
             "title": "Obsolete",
             "default": false
-          },
-          "hpo_id": {
-            "type": "string",
-            "title": "Hpo Id",
-            "readOnly": true
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "term_id",
-          "label",
-          "hpo_id"
+          "label"
         ],
         "title": "SearchCandidate",
         "description": "Single candidate term returned by an ontology search route."

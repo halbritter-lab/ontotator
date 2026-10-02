@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.documents import Document, EvidenceSnapshot, OntologyRef
+from ontocurator.domain.profiles import TaskProfile
 from ontocurator.domain.workspace import Submission, WorkspaceKey
 
 
@@ -81,9 +82,6 @@ class SearchEventRecord(BaseModel):
         return super().model_copy(update=update, deep=deep)
 
 
-from ontocurator.domain.profiles import TaskProfile
-
-
 class PackageManifest(BaseModel):
     """Manifest describing work package metadata and checksums."""
 
@@ -113,7 +111,6 @@ class PackageManifest(BaseModel):
             data.pop("axes_config", None)
             data.pop("axes_config_sha256", None)
         return data
-
 
 
 class ValidatedPackage(BaseModel):

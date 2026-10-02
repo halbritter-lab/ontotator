@@ -11,7 +11,6 @@ export interface TargetProposal {
   layer_id?: string;
   type_id?: string;
   term_id?: string;
-  hpo_id?: string;
   axes?: Record<string, unknown> | null;
   axes_values?: Record<string, string | null> | null;
   provenance: components["schemas"]["Provenance"];
@@ -122,7 +121,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       </div>
 
       <div className="detail-section" aria-label="Vorschlagsdetails">
-        <strong>{target.term_id ?? target.hpo_id}</strong>
+        <strong>{target.term_id}</strong>
         <dl>
           {(() => {
             const rawAxes = target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
@@ -255,7 +254,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
                 return true;
               })
               .map((snap) => {
-                const term = snap.annotation.term_id ?? (snap.annotation as any).hpo_id;
+                const term = snap.annotation.term_id;
                 return (
                   <option key={snap.annotation.annotation_id} value={snap.annotation.annotation_id}>
                     {term} (ID: {snap.annotation.annotation_id.slice(0, 10)})

@@ -77,9 +77,11 @@ class Repository:
         cursor = conn.cursor()
 
         task_profile = package.manifest.task_profile
-        t_hash = package.manifest.task_profile_sha256 or (
-            profile_hash(task_profile) if task_profile is not None else ""
-        )
+        if task_profile is None:
+            raise InvalidPackage(
+                f"Package '{package.manifest.package_id}' is missing mandatory task profile"
+            )
+        t_hash = package.manifest.task_profile_sha256 or profile_hash(task_profile)
 
         cursor.execute("BEGIN IMMEDIATE;")
         try:

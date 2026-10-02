@@ -3,9 +3,9 @@
 import hashlib
 import io
 import os
+import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import uvicorn
 from fastapi import Query
@@ -29,15 +29,14 @@ from ontocurator.domain.profiles import (
     TaskProfile,
     profile_hash,
 )
-import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tests.layered_fixtures import HP_DIGEST, make_layered_package
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.packages.writer import PackageWriter
+from ontocurator.packages.models import PackageManifest, ValidatedPackage  # noqa: E402
+from ontocurator.packages.writer import PackageWriter  # noqa: E402
+from tests.layered_fixtures import HP_DIGEST, make_layered_package  # noqa: E402
 
 ONTOLOGY = ROOT / "tests/fixtures/hp.json"
 MONDO_ONTOLOGY = ROOT / "tests/fixtures/mondo.json"
@@ -162,7 +161,7 @@ if __name__ == "__main__":
         app = create_app(config)
 
         @app.get("/__synthetic_fixture__")
-        def fixture(scenario: Optional[str] = Query(None)) -> Response:
+        def fixture(scenario: str | None = Query(None)) -> Response:
             if scenario in ("single", "assisted", "multi_editable"):
                 data = scenario_package(scenario)
             else:

@@ -6,7 +6,7 @@ import base64
 import io
 import json
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
@@ -187,7 +187,6 @@ def list_package_documents(
     return ws_svc.list_documents(package_id, annotator_id, mode)
 
 
-
 @router.post("/workspaces/review-inputs")
 def get_review_inputs(
     req: ReviewInputsRequest,
@@ -281,7 +280,7 @@ def search_ontology(
     ws_svc.get_document(req.workspace_key.package_id, req.workspace_key.document_id)
     profile = repo.get_task_profile(req.workspace_key.package_id)
     scope = build_scope(profile, req.workspace_key.mode)
-    profile_layer_ids = [l.layer_id for l in profile.layers]
+    profile_layer_ids = [layer.layer_id for layer in profile.layers]
     if req.layer_id not in profile_layer_ids:
         raise DomainError(
             "UNKNOWN_LAYER",
@@ -310,7 +309,6 @@ def search_ontology(
     except Exception:
         pass
 
-
     registry = getattr(request.app.state, "ontology_registry", None)
     if registry is not None:
         ontology = registry.for_layer(profile, req.layer_id)
@@ -319,8 +317,7 @@ def search_ontology(
         if ontology is None:
             raise DomainError("ONTOLOGY_NOT_FOUND", "No ontology configured")
 
-
-    result = ontology.search(req)
+    result = cast(SearchResult, ontology.search(req))
     result.search_id = str(uuid4())
     result.index_identity = ontology.index_identity
     result.layer_id = req.layer_id
@@ -337,7 +334,7 @@ def search_ontology(
         candidates=result.displayed_ids,
         ranked_ids=result.ranked_ids,
         candidate_scores={
-            c.hpo_id: c.score for c in result.candidates if c.score is not None
+            c.term_id: c.score for c in result.candidates if c.score is not None
         },
         ontology_release=ontology.ref.release,
         index_identity=result.index_identity,

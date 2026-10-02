@@ -117,7 +117,6 @@ class SearchCandidate(BaseModel):
             return d
         return data
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def hpo_id(self) -> str:
         return self.term_id

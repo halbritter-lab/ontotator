@@ -4,18 +4,21 @@ import io
 from pathlib import Path
 
 import pytest
+from layered_fixtures import make_layered_package
 
-from layered_fixtures import HP_DIGEST, MONDO_DIGEST, make_layered_package
-from ontocurator.application.editing import CheckLayerCommand, CreateAnnotationCommand, EditorService
+from ontocurator.application.editing import (
+    CheckLayerCommand,
+    CreateAnnotationCommand,
+    EditorService,
+)
 from ontocurator.application.exports import ExportService
 from ontocurator.application.reviews import DecisionCommand, ReviewService
-from ontocurator.application.submissions import SubmissionService, validate_completion
+from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.workspaces import WorkspaceService
 from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.domain.documents import EvidenceMention, Segment
-from ontocurator.domain.errors import DomainError, IncompleteReview
+from ontocurator.domain.documents import Segment
+from ontocurator.domain.errors import DomainError
 from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.packages.reader import read_package
@@ -33,7 +36,9 @@ def test_registry(tmp_path: Path) -> OntologyRegistry:
     return reg
 
 
-def test_null_finding_can_be_submitted_per_layer(tmp_path: Path, test_registry: OntologyRegistry):
+def test_null_finding_can_be_submitted_per_layer(
+    tmp_path: Path, test_registry: OntologyRegistry
+):
     db = Database(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("single")
@@ -102,7 +107,9 @@ def test_two_editable_layers_require_both_checked_to_submit(
     cmd1 = CheckLayerCommand(kind="check_layer", layer_id="layer-1", checked=True)
     draft1 = edit_svc.apply(
         ws_key,
-        MutationEnvelope(mutation_id="m1", expected_revision=0, payload=cmd1.model_dump()),
+        MutationEnvelope(
+            mutation_id="m1", expected_revision=0, payload=cmd1.model_dump()
+        ),
     )
     assert draft1.checked_layer_ids == ["layer-1"]
 
@@ -120,7 +127,9 @@ def test_two_editable_layers_require_both_checked_to_submit(
     cmd2 = CheckLayerCommand(kind="check_layer", layer_id="layer-2", checked=True)
     draft2 = edit_svc.apply(
         ws_key,
-        MutationEnvelope(mutation_id="m2", expected_revision=1, payload=cmd2.model_dump()),
+        MutationEnvelope(
+            mutation_id="m2", expected_revision=1, payload=cmd2.model_dump()
+        ),
     )
     assert set(draft2.checked_layer_ids) == {"layer-1", "layer-2"}
 
@@ -160,7 +169,9 @@ def test_reference_layer_generates_no_checking_obligation(
     cmd = CheckLayerCommand(kind="check_layer", layer_id="target-layer", checked=True)
     edit_svc.apply(
         ws_key,
-        MutationEnvelope(mutation_id="m1", expected_revision=0, payload=cmd.model_dump()),
+        MutationEnvelope(
+            mutation_id="m1", expected_revision=0, payload=cmd.model_dump()
+        ),
     )
 
     # Submitting succeeds without checking reference-layer
@@ -208,15 +219,21 @@ def test_assisted_mode_allows_any_number_of_source_and_target_annotations(
     )
     draft = edit_svc.apply(
         ws_key,
-        MutationEnvelope(mutation_id="m1", expected_revision=0, payload=cmd.model_dump()),
+        MutationEnvelope(
+            mutation_id="m1", expected_revision=0, payload=cmd.model_dump()
+        ),
     )
     assert len(draft.annotations) == 1
 
     # Check target-layer and submit
-    check_cmd = CheckLayerCommand(kind="check_layer", layer_id="target-layer", checked=True)
+    check_cmd = CheckLayerCommand(
+        kind="check_layer", layer_id="target-layer", checked=True
+    )
     edit_svc.apply(
         ws_key,
-        MutationEnvelope(mutation_id="m2", expected_revision=1, payload=check_cmd.model_dump()),
+        MutationEnvelope(
+            mutation_id="m2", expected_revision=1, payload=check_cmd.model_dump()
+        ),
     )
 
     env_sub = MutationEnvelope(
@@ -261,7 +278,9 @@ def test_required_axes_and_evidence_on_complete_enforced(
     )
     edit_svc.apply(
         ws_key,
-        MutationEnvelope(mutation_id="m1", expected_revision=0, payload=cmd.model_dump()),
+        MutationEnvelope(
+            mutation_id="m1", expected_revision=0, payload=cmd.model_dump()
+        ),
     )
 
     # Check both layers
@@ -270,7 +289,9 @@ def test_required_axes_and_evidence_on_complete_enforced(
         MutationEnvelope(
             mutation_id="m2",
             expected_revision=1,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="layer-1", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="layer-1", checked=True
+            ).model_dump(),
         ),
     )
     edit_svc.apply(
@@ -278,7 +299,9 @@ def test_required_axes_and_evidence_on_complete_enforced(
         MutationEnvelope(
             mutation_id="m3",
             expected_revision=2,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="layer-2", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="layer-2", checked=True
+            ).model_dump(),
         ),
     )
 
@@ -286,7 +309,11 @@ def test_required_axes_and_evidence_on_complete_enforced(
     with pytest.raises(DomainError) as exc_info:
         sub_svc.submit(
             ws_key,
-            MutationEnvelope(mutation_id="sub1", expected_revision=3, payload={"command": "submit_workspace"}),
+            MutationEnvelope(
+                mutation_id="sub1",
+                expected_revision=3,
+                payload={"command": "submit_workspace"},
+            ),
         )
     assert exc_info.value.code == "MISSING_EVIDENCE"
 
@@ -304,7 +331,12 @@ def test_review_replacement_must_match_target_layer_and_type(
     rev_svc = ReviewService(repo, registry=test_registry)
 
     # Populate a target on layer-1 (type: type-opt)
-    from ontocurator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
+    from ontocurator.domain.annotations import (
+        ActorRef,
+        Annotation,
+        Provenance,
+        snapshot,
+    )
 
     ann_obj = Annotation(
         annotation_id="ann-target-1",
@@ -314,7 +346,9 @@ def test_review_replacement_must_match_target_layer_and_type(
         term_id="HP:0001252",
         axes_values={"certainty": "high"},
         evidence_refs=[],
-        provenance=Provenance(actor=ActorRef(actor_id="source", kind="tool"), method="import"),
+        provenance=Provenance(
+            actor=ActorRef(actor_id="source", kind="tool"), method="import"
+        ),
     )
     snap = snapshot(ann_obj, [], pkg.documents["doc-beta"], pkg.manifest.task_profile)
     repo.db.get_connection().execute(
@@ -350,7 +384,9 @@ def test_review_replacement_must_match_target_layer_and_type(
     )
     draft1 = edit_svc.apply(
         ws_key,
-        MutationEnvelope(mutation_id="m1", expected_revision=0, payload=cmd_rep.model_dump()),
+        MutationEnvelope(
+            mutation_id="m1", expected_revision=0, payload=cmd_rep.model_dump()
+        ),
     )
     replacement = AnnotationRef(
         annotation_id=draft1.annotations[0].annotation.annotation_id,
@@ -366,7 +402,9 @@ def test_review_replacement_must_match_target_layer_and_type(
     with pytest.raises(DomainError) as exc_info:
         rev_svc.decide(
             ws_key,
-            MutationEnvelope(mutation_id="dec1", expected_revision=1, payload=cmd_dec.model_dump()),
+            MutationEnvelope(
+                mutation_id="dec1", expected_revision=1, payload=cmd_dec.model_dump()
+            ),
         )
     assert exc_info.value.code == "REPLACEMENT_LAYER_TYPE_MISMATCH"
 
@@ -384,7 +422,12 @@ def test_review_decision_invalidates_only_target_layer_check(
     rev_svc = ReviewService(repo, registry=test_registry)
 
     # We create a target on layer-1
-    from ontocurator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
+    from ontocurator.domain.annotations import (
+        ActorRef,
+        Annotation,
+        Provenance,
+        snapshot,
+    )
 
     ann_obj = Annotation(
         annotation_id="ann-target-1",
@@ -394,7 +437,9 @@ def test_review_decision_invalidates_only_target_layer_check(
         term_id="HP:0001252",
         axes_values={"certainty": "high"},
         evidence_refs=[],
-        provenance=Provenance(actor=ActorRef(actor_id="source", kind="tool"), method="import"),
+        provenance=Provenance(
+            actor=ActorRef(actor_id="source", kind="tool"), method="import"
+        ),
     )
     snap = snapshot(ann_obj, [], pkg.documents["doc-beta"], pkg.manifest.task_profile)
     repo.db.get_connection().execute(
@@ -426,7 +471,9 @@ def test_review_decision_invalidates_only_target_layer_check(
         MutationEnvelope(
             mutation_id="m1",
             expected_revision=0,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="layer-1", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="layer-1", checked=True
+            ).model_dump(),
         ),
     )
     draft = edit_svc.apply(
@@ -434,7 +481,9 @@ def test_review_decision_invalidates_only_target_layer_check(
         MutationEnvelope(
             mutation_id="m2",
             expected_revision=1,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="layer-2", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="layer-2", checked=True
+            ).model_dump(),
         ),
     )
     assert set(draft.checked_layer_ids) == {"layer-1", "layer-2"}
@@ -445,7 +494,12 @@ def test_review_decision_invalidates_only_target_layer_check(
         MutationEnvelope(
             mutation_id="dec1",
             expected_revision=2,
-            payload=DecisionCommand(target=AnnotationRef(annotation_id="ann-target-1", version=snap.version), outcome="confirmed").model_dump(),
+            payload=DecisionCommand(
+                target=AnnotationRef(
+                    annotation_id="ann-target-1", version=snap.version
+                ),
+                outcome="confirmed",
+            ).model_dump(),
         ),
     )
     current_draft = repo.open_draft(ws_key)
@@ -481,12 +535,18 @@ def test_reopen_workspace_after_submission_creates_new_draft_preserving_submissi
         MutationEnvelope(
             mutation_id="m1",
             expected_revision=0,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="hpo-layer", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="hpo-layer", checked=True
+            ).model_dump(),
         ),
     )
     sub = sub_svc.submit(
         ws_key,
-        MutationEnvelope(mutation_id="sub1", expected_revision=1, payload={"command": "submit_workspace"}),
+        MutationEnvelope(
+            mutation_id="sub1",
+            expected_revision=1,
+            payload={"command": "submit_workspace"},
+        ),
     )
     assert sub.draft_revision == 2
 
@@ -504,7 +564,9 @@ def test_reopen_workspace_after_submission_creates_new_draft_preserving_submissi
         MutationEnvelope(
             mutation_id="m2",
             expected_revision=sub.draft_revision,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="hpo-layer", checked=False).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="hpo-layer", checked=False
+            ).model_dump(),
         ),
     )
     draft_after = repo.open_draft(ws_key)
@@ -552,19 +614,27 @@ def test_independent_export_isolation_and_hash_stability(
     )
     edit_svc.apply(
         ws_key,
-        MutationEnvelope(mutation_id="m1", expected_revision=0, payload=cmd.model_dump()),
+        MutationEnvelope(
+            mutation_id="m1", expected_revision=0, payload=cmd.model_dump()
+        ),
     )
     edit_svc.apply(
         ws_key,
         MutationEnvelope(
             mutation_id="m2",
             expected_revision=1,
-            payload=CheckLayerCommand(kind="check_layer", layer_id="target-layer", checked=True).model_dump(),
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="target-layer", checked=True
+            ).model_dump(),
         ),
     )
-    sub = sub_svc.submit(
+    _ = sub_svc.submit(
         ws_key,
-        MutationEnvelope(mutation_id="sub1", expected_revision=2, payload={"command": "submit_workspace"}),
+        MutationEnvelope(
+            mutation_id="sub1",
+            expected_revision=2,
+            payload={"command": "submit_workspace"},
+        ),
     )
 
     # Export independent workspace

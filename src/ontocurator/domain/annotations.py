@@ -79,7 +79,9 @@ class Annotation(BaseModel):
             d = dict(data)
             if "hpo_id" in d and "term_id" not in d:
                 # Do not accept hpo_id as alias anymore
-                raise ValueError("Deprecated field 'hpo_id' is no longer supported; use 'term_id'")
+                raise ValueError(
+                    "Deprecated field 'hpo_id' is no longer supported; use 'term_id'"
+                )
             if "hpo_id" in d:
                 raise ValueError("Deprecated field 'hpo_id' is no longer supported")
 
@@ -167,7 +169,7 @@ def snapshot(
                 f"Annotation references missing evidence ({ref.evidence_id}, {ref.version})"
             )
 
-    schema_version = "ontocurator-annotation/v3"
+    schema_version: Literal["ontocurator-annotation/v3"] = "ontocurator-annotation/v3"
 
     canonical_content = {
         "schema_version": schema_version,

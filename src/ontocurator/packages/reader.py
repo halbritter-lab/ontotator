@@ -118,11 +118,12 @@ def _read_package(
 
     try:
         manifest_data = json.loads(file_contents["manifest.json"].decode("utf-8"))
-        manifest = PackageManifest.model_validate(manifest_data)
-        if manifest.format_version != "ontocurator-work-package/v2":
+        format_version = manifest_data.get("format_version")
+        if format_version != "ontocurator-work-package/v2":
             raise InvalidPackage(
-                f"Unsupported package format version: '{manifest.format_version}'; only 'ontocurator-work-package/v2' is supported"
+                f"Unsupported package format version: '{format_version}'; only 'ontocurator-work-package/v2' is supported"
             )
+        manifest = PackageManifest.model_validate(manifest_data)
         if manifest.task_profile is None:
             raise InvalidPackage("Package manifest missing required 'task_profile'")
         computed_profile_sha = profile_hash(manifest.task_profile)
@@ -175,7 +176,9 @@ def _read_package(
     if registry is not None:
         missing_ontologies: list[str] = []
         for ont in manifest.task_profile.ontologies:
-            has_embedded = bool(ont.resource_path and ont.resource_path in file_contents)
+            has_embedded = bool(
+                ont.resource_path and ont.resource_path in file_contents
+            )
             has_ont = (
                 registry.has_ontology(ont.sha256)
                 if hasattr(registry, "has_ontology")
@@ -259,7 +262,9 @@ def _read_package(
             snap = decode_snapshot(snap_data)
             verify_snapshot(snap)
         except Exception as exc:
-            raise InvalidPackage(f"AnnotationSnapshot verification failed: {exc}") from exc
+            raise InvalidPackage(
+                f"AnnotationSnapshot verification failed: {exc}"
+            ) from exc
         key = (snap.annotation.annotation_id, snap.version)
         if key in annotations and annotations[key] != snap:
             raise InvalidPackage(
@@ -303,16 +308,18 @@ def _read_package(
             or snap.annotation.document_id != snap.document_id
             or snap.text_sha256 != bound_doc.text_sha256
         ):
-            raise InvalidPackage(
-                "Annotation document or text identity mismatch"
-            )
+            raise InvalidPackage("Annotation document or text identity mismatch")
         # Check layer and ontology binding against profile
         try:
             layer = resolve_layer(manifest.task_profile, snap.annotation.layer_id)
             ont = resolve_ontology(manifest.task_profile, layer.ontology_id)
-            expected_layer_hash = layer_config_hash(manifest.task_profile, snap.annotation.layer_id)
+            expected_layer_hash = layer_config_hash(
+                manifest.task_profile, snap.annotation.layer_id
+            )
         except Exception as exc:
-            raise InvalidPackage(f"Annotation layer or ontology unresolved: {exc}") from exc
+            raise InvalidPackage(
+                f"Annotation layer or ontology unresolved: {exc}"
+            ) from exc
 
         if snap.ontology_sha256 != ont.sha256:
             raise InvalidPackage("Annotation ontology SHA-256 identity mismatch")

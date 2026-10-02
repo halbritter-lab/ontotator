@@ -43,7 +43,9 @@ class AnnotationTypeDefinition(BaseModel):
         seen_axes: set[str] = set()
         for ax in self.axes:
             if ax.id in seen_axes:
-                raise ValueError(f"Duplicate axis id '{ax.id}' in type '{self.type_id}'")
+                raise ValueError(
+                    f"Duplicate axis id '{ax.id}' in type '{self.type_id}'"
+                )
             seen_axes.add(ax.id)
         return self
 
@@ -68,12 +70,16 @@ class LayerDefinition(BaseModel):
         if not self.ontology_id or not self.ontology_id.strip():
             raise ValueError("ontology_id cannot be empty")
         if not self.annotation_types:
-            raise ValueError(f"Layer '{self.layer_id}' must have at least one annotation type")
+            raise ValueError(
+                f"Layer '{self.layer_id}' must have at least one annotation type"
+            )
 
         seen_types: set[str] = set()
         for t in self.annotation_types:
             if t.type_id in seen_types:
-                raise ValueError(f"Duplicate type id '{t.type_id}' in layer '{self.layer_id}'")
+                raise ValueError(
+                    f"Duplicate type id '{t.type_id}' in layer '{self.layer_id}'"
+                )
             seen_types.add(t.type_id)
 
         if self.default_type_id not in seen_types:
@@ -106,7 +112,9 @@ class TaskProfile(BaseModel):
         seen_ontologies: set[str] = set()
         for ont in self.ontologies:
             if ont.ontology_id in seen_ontologies:
-                raise ValueError(f"Duplicate ontology id '{ont.ontology_id}' in profile")
+                raise ValueError(
+                    f"Duplicate ontology id '{ont.ontology_id}' in profile"
+                )
             seen_ontologies.add(ont.ontology_id)
 
         seen_layers: set[str] = set()

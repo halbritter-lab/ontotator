@@ -189,7 +189,6 @@ const proposal = (version: string, hpoId: string) => ({
    layer_id: "phenotype",
    type_id: "default",
    term_id: hpoId,
-   hpo_id: hpoId,
    axes_values: { assertion: "absent" },
    evidence_refs: [{ evidence_id: "ev", version: "ev-version" }],
    provenance: { actor: { actor_id: "source", kind: "human" as const }, method: "manual" },
@@ -263,7 +262,7 @@ it("binds a changed decision to the replacement version after queued edits", asy
 it("uses the search event when assigning a candidate and trusts obsolete metadata", async () => {
  const view = baseView(), own = proposal("own-v1", "HP:3");
  view.draft.annotations = [own];
- vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "search-event", candidates: [{ term_id: "HP:4", hpo_id: "HP:4", label: "Candidate", definition: "Not obsolete", obsolete: false, matched_term: "Candidate", match_kind: "label", rank: 1, display_pos: 1 }] } as any);
+ vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "search-event", candidates: [{ term_id: "HP:4", label: "Candidate", definition: "Not obsolete", obsolete: false, matched_term: "Candidate", match_kind: "label", rank: 1, display_pos: 1 }] } as any);
  const edit = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));

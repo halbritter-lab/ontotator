@@ -1,11 +1,11 @@
-from typing import Any
+from typing import Any, Literal
 
 from ontocurator.domain.annotations import Annotation, AnnotationSnapshot
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import EvidenceSnapshot
 from ontocurator.domain.errors import InvalidAnnotation
 
-V3_SCHEMA_VERSION = "ontocurator-annotation/v3"
+V3_SCHEMA_VERSION: Literal["ontocurator-annotation/v3"] = "ontocurator-annotation/v3"
 
 
 def decode_snapshot(raw: dict[str, Any]) -> AnnotationSnapshot:

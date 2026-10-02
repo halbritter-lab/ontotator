@@ -89,7 +89,7 @@ def verify_wheel(wheel_path: Path) -> None:
         required = [
             "ontocurator/__init__.py",
             "ontocurator/cli.py",
-            "ontocurator/storage/migrations/001_initial.sql",
+            "ontocurator/storage/schema_v4.sql",
             "ontocurator/web/index.html",
         ]
 

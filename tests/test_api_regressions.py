@@ -30,23 +30,26 @@ def test_same_origin_is_allowed(app_client):
     assert response.status_code == 200
 
 
-def _open(client, config, mode="independent", targets=None):
+def _open(client, config, mode="independent", targets=None, scenario=None):
+    pkg_scenario = scenario or ("assisted" if mode == "review" else "single")
     response = client.post(
         "/api/v1/packages",
         files={
             "file": (
                 "fixture.zip",
-                _create_sample_package_bytes(config.expected_ontology_ref),
+                _create_sample_package_bytes(pkg_scenario),
                 "application/zip",
             )
         },
     )
     assert response.status_code == 200
+    pkg_id = response.json()["package_id"]
+    doc_id = "doc-beta"
     response = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-api-1",
-            "document_id": "doc-1",
+            "package_id": pkg_id,
+            "document_id": doc_id,
             "annotator_id": "reviewer",
             "mode": mode,
             "targets": targets,
@@ -69,7 +72,10 @@ def test_invalid_command_body_returns_validation_error_not_server_error(app_clie
         json={
             "mutation_id": "invalid-body",
             "expected_revision": 0,
-            "payload": {"command": "submit_workspace", "document_checked": True},
+            "payload": {
+                "command": "submit_workspace",
+                "checked_layer_ids": ["invalid"],
+            },
         },
     )
     assert response.status_code == 422
@@ -77,22 +83,76 @@ def test_invalid_command_body_returns_validation_error_not_server_error(app_clie
 
 def test_review_open_computes_stable_target_identity(app_client):
     client, config = app_client
-    _open(client, config)
+    opened = _open(client, config, mode="independent", scenario="single")
+    pkg_id = opened["view"]["key"]["package_id"]
+    doc_id = opened["view"]["key"]["document_id"]
+
+    from ontocurator.domain.annotations import (
+        ActorRef,
+        Annotation,
+        Provenance,
+        snapshot,
+    )
+    from ontocurator.domain.serialization import encode_snapshot
+
+    doc = client.app.state.repo.get_document(pkg_id, doc_id)
+    profile = client.app.state.repo.get_task_profile(pkg_id)
+    ann = Annotation(
+        annotation_id="ann-target-1",
+        document_id=doc_id,
+        layer_id="hpo-layer",
+        type_id="phenotype",
+        term_id="HP:0001252",
+        axes_values={"assertion": "present"},
+        provenance=Provenance(
+            actor=ActorRef(actor_id="test", kind="human"), method="manual"
+        ),
+    )
+    snap = snapshot(ann, [], doc, profile)
+    db_conn = client.app.state.repo.db.get_connection()
+    db_conn.execute(
+        "INSERT INTO annotation_snapshots VALUES (?, ?, ?, ?)",
+        (
+            snap.annotation.annotation_id,
+            snap.version,
+            doc_id,
+            json.dumps(encode_snapshot(snap)),
+        ),
+    )
+    db_conn.execute(
+        "INSERT INTO package_annotations VALUES (?, ?, ?)",
+        (pkg_id, snap.annotation.annotation_id, snap.version),
+    )
+    db_conn.commit()
+
     inputs = client.post(
         "/api/v1/workspaces/review-inputs",
         json={
-            "package_id": "pkg-api-1",
-            "document_id": "doc-1",
+            "package_id": pkg_id,
+            "document_id": doc_id,
             "annotator_id": "reviewer",
             "mode": "review",
         },
     ).json()
+    assert len(inputs) > 0
     target = {
         "annotation_id": inputs[0]["annotation"]["annotation_id"],
         "version": inputs[0]["version"],
     }
-    first = _open(client, config, "review", {"target_set_id": "", "targets": [target]})
-    second = _open(client, config, "review", {"target_set_id": "", "targets": [target]})
+    first = _open(
+        client,
+        config,
+        "review",
+        {"target_set_id": "", "targets": [target]},
+        scenario="single",
+    )
+    second = _open(
+        client,
+        config,
+        "review",
+        {"target_set_id": "", "targets": [target]},
+        scenario="single",
+    )
     assert first["workspace_id"] == second["workspace_id"]
     assert len(first["view"]["key"]["target_set_id"]) == 64
 
@@ -100,11 +160,13 @@ def test_review_open_computes_stable_target_identity(app_client):
 def test_search_is_recorded_and_exported(app_client):
     client, config = app_client
     opened = _open(client, config)
+    layer_id = opened["view"]["layers"][0]["layer_id"]
     response = client.post(
         "/api/v1/search",
         json={
             "workspace_key": opened["view"]["key"],
             "annotation_id": "new-annotation",
+            "layer_id": layer_id,
             "query": "HP:0001252",
             "route": "id",
             "k": 5,
@@ -115,7 +177,9 @@ def test_search_is_recorded_and_exported(app_client):
     assert result.get("search_id")
     exported = client.get(f"/api/v1/workspaces/{opened['workspace_id']}/export")
     assert exported.status_code == 200
-    package = read_package(io.BytesIO(exported.content))
+    package = read_package(
+        io.BytesIO(exported.content), registry=client.app.state.ontology_registry
+    )
     assert len(package.search_events) == 1
     event = package.search_events[0]
     assert event.event_id == result["search_id"]

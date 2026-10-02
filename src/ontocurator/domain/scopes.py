@@ -25,11 +25,15 @@ class TaskScope(BaseModel):
 
 def build_scope(profile: TaskProfile, mode: WorkspaceMode) -> TaskScope:
     """Build deterministic task scope from profile and workspace mode."""
-    editable = [layer.layer_id for layer in profile.layers if layer.access == "editable"]
+    editable = [
+        layer.layer_id for layer in profile.layers if layer.access == "editable"
+    ]
     if mode == "independent":
         reference: list[str] = []
     else:
-        reference = [layer.layer_id for layer in profile.layers if layer.access == "reference"]
+        reference = [
+            layer.layer_id for layer in profile.layers if layer.access == "reference"
+        ]
 
     p_hash = profile_hash(profile)
     content = {

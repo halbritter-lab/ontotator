@@ -8,7 +8,6 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.axes import EDITOR_AXES_CONFIG, validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError, IncompleteReview
 from ontocurator.domain.profiles import TaskProfile, resolve_type
@@ -32,7 +31,6 @@ class SubmitCommand(BaseModel):
     checked_layer_ids: list[str] | None = None
 
 
-
 def validate_completion(
     draft: Draft,
     profile: TaskProfile,
@@ -50,8 +48,13 @@ def validate_completion(
 
     # 2. Check draft annotations for required axes and evidence policies
     for snap in draft.annotations:
-        type_def = resolve_type(profile, snap.annotation.layer_id, snap.annotation.type_id)
-        if type_def.evidence_policy == "required_on_complete" and not snap.annotation.evidence_refs:
+        type_def = resolve_type(
+            profile, snap.annotation.layer_id, snap.annotation.type_id
+        )
+        if (
+            type_def.evidence_policy == "required_on_complete"
+            and not snap.annotation.evidence_refs
+        ):
             raise DomainError(
                 "MISSING_EVIDENCE",
                 f"Annotation '{snap.annotation.annotation_id}' in layer '{snap.annotation.layer_id}' "
@@ -69,12 +72,25 @@ def validate_completion(
     # 3. If in review mode, validate review completeness
     if scope.mode == "review":
         target_refs = {(t.annotation_id, t.version) for t in draft.targets.targets}
-        decided_targets = {(d.target.annotation_id, d.target.version) for d in draft.decisions}
-        missing = [t for t in draft.targets.targets if (t.annotation_id, t.version) not in decided_targets]
+        decided_targets = {
+            (d.target.annotation_id, d.target.version) for d in draft.decisions
+        }
+        missing = [
+            t
+            for t in draft.targets.targets
+            if (t.annotation_id, t.version) not in decided_targets
+        ]
         if missing:
-            raise IncompleteReview(f"Review is incomplete: {len(missing)} targets lack a decision")
-        if len(decided_targets) != len(draft.decisions) or decided_targets != target_refs:
-            raise IncompleteReview("Decisions must match exactly the active review targets")
+            raise IncompleteReview(
+                f"Review is incomplete: {len(missing)} targets lack a decision"
+            )
+        if (
+            len(decided_targets) != len(draft.decisions)
+            or decided_targets != target_refs
+        ):
+            raise IncompleteReview(
+                "Decisions must match exactly the active review targets"
+            )
 
 
 class SubmissionService:

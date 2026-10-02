@@ -50,6 +50,10 @@ class OntologyRegistry:
             ref = OntologyRef(release=expected.release, sha256=expected.sha256)
             self._services[expected_sha] = OntologyService.load(p, ref)
 
+    def register_service(self, service: OntologyService) -> None:
+        """Register an already-instantiated OntologyService."""
+        self._services[service.ref.sha256.lower()] = service
+
     def register_path(self, path: Path | str) -> str:
         """Inspect and register a local ontology file without prior expected metadata, returning its SHA-256."""
         p = Path(path)

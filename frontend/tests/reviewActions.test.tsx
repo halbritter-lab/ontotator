@@ -7,7 +7,6 @@ describe("ReviewActions", () => {
     annotation_id: "prop-1",
     version: "v-prop-1",
     term_id: "HP:0001252",
-    hpo_id: "HP:0001252",
     axes: {
       definition_name: "editor-axes/v1",
       values: {

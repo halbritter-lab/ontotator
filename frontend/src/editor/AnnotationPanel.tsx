@@ -61,7 +61,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   }
 
   const ann = annotation.annotation;
-  const currentTerm = ann.term_id ?? (ann as any).hpo_id;
+  const currentTerm = ann.term_id;
   const axesValues = ann.axes_values ?? (ann as any).axes?.values ?? {};
 
   const evidenceRefs = ann.evidence_refs ?? [];
@@ -70,9 +70,10 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
     .filter(Boolean);
 
   const handleSelectCandidate = (candidate: SearchCandidate, searchId?: string) => {
-    onUpdateTerm(candidate.term_id ?? candidate.hpo_id, searchId);
+    onUpdateTerm(candidate.term_id, searchId);
     setShowSearch(false);
   };
+
 
   return (
     <div className="detail-pane">
@@ -104,7 +105,6 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               layerId={layerId ?? ann.layer_id}
               workspaceKey={workspaceKey}
               currentTermId={currentTerm}
-              currentHpoId={currentTerm}
               onSelectCandidate={handleSelectCandidate}
             />
           </div>

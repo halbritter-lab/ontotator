@@ -36,7 +36,6 @@ describe("SearchManager", () => {
   it("updates state with candidates upon successful search", async () => {
     const candidate: SearchCandidate = {
       term_id: "HP:0001252",
-      hpo_id: "HP:0001252",
       obsolete: false,
       label: "Hypotonia",
       definition: "Muscular hypotonia",
@@ -86,7 +85,6 @@ describe("SearchManager", () => {
 
     const candidateA: SearchCandidate = {
       term_id: "HP:0000001",
-      hpo_id: "HP:0000001",
       obsolete: false,
       label: "Term A",
       definition: "",
@@ -97,7 +95,6 @@ describe("SearchManager", () => {
     };
     const candidateB: SearchCandidate = {
       term_id: "HP:0000002",
-      hpo_id: "HP:0000002",
       obsolete: false,
       label: "Term B",
       definition: "",
@@ -106,6 +103,7 @@ describe("SearchManager", () => {
       rank: 1,
       display_pos: 0,
     };
+
 
     const manager = new SearchManager(mockClient);
 
@@ -142,7 +140,6 @@ describe("SearchManager", () => {
   it("clears candidates and aborts when empty query follows a search", async () => {
     const candidate: SearchCandidate = {
       term_id: "HP:0001252",
-      hpo_id: "HP:0001252",
       obsolete: false,
       label: "Hypotonia",
       definition: "",
@@ -194,7 +191,6 @@ describe("SearchManager", () => {
         candidates: [
           {
             term_id: "MONDO:0001",
-            hpo_id: "MONDO:0001",
             label: "Disease 1",
             definition: "",
             matched_term: "disease",
@@ -227,7 +223,6 @@ describe("SearchManager", () => {
       candidates: [
         {
           term_id: "HP:0001250",
-          hpo_id: "HP:0001250",
           label: "Seizure",
           definition: "",
           matched_term: "seizure",
@@ -239,6 +234,7 @@ describe("SearchManager", () => {
       ],
     });
     await req1;
+
 
     // Must still retain layer-2 candidate, layer-1 response discarded!
     expect(manager.getState().candidates[0].term_id).toBe("MONDO:0001");

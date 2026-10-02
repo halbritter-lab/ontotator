@@ -7,15 +7,9 @@ from fastapi.testclient import TestClient
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
-from ontocurator.domain.annotations import (
-    AnnotationRef,
-)
 from ontocurator.domain.documents import (
-    Document,
     OntologyRef,
 )
-from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.packages.models import PackageManifest, ValidatedPackage
 from ontocurator.packages.writer import PackageWriter
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
@@ -52,7 +46,6 @@ def app_client(tmp_path: Path):
     return client, config
 
 
-
 def test_auth_and_host_validation(app_client):
     client, _ = app_client
 
@@ -81,7 +74,7 @@ def test_auth_and_host_validation(app_client):
 
 
 def test_full_package_review_and_export_lifecycle(app_client):
-    client, config = app_client
+    client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("single")
 
     # 1. Upload work package
@@ -211,7 +204,8 @@ def test_document_list_with_position_and_status(app_client):
     client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("single")
     client.post(
-        "/api/v1/packages", files={"file": ("package.zip", pkg_bytes, "application/zip")}
+        "/api/v1/packages",
+        files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
 
     # Initially both not_started
@@ -302,7 +296,8 @@ def test_rejected_foreign_layer_commands_and_search(app_client):
     client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("single")
     client.post(
-        "/api/v1/packages", files={"file": ("package.zip", pkg_bytes, "application/zip")}
+        "/api/v1/packages",
+        files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
 
     open_res = client.post(
@@ -353,7 +348,8 @@ def test_search_discards_mismatched_annotation_layer(app_client):
     client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("multi_editable")
     client.post(
-        "/api/v1/packages", files={"file": ("package.zip", pkg_bytes, "application/zip")}
+        "/api/v1/packages",
+        files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
 
     open_res = client.post(
@@ -402,7 +398,8 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
     client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("multi_editable")
     client.post(
-        "/api/v1/packages", files={"file": ("package.zip", pkg_bytes, "application/zip")}
+        "/api/v1/packages",
+        files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
 
     open_res = client.post(
@@ -467,7 +464,7 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
 
 
 def test_revision_conflict_409_and_domain_error_422(app_client):
-    client, config = app_client
+    client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("single")
 
     # Upload
@@ -520,9 +517,9 @@ def test_revision_conflict_409_and_domain_error_422(app_client):
     assert resp.json()["code"] == "LAYER_NOT_CHECKED"
 
 
-
 def test_api_create_term_with_term_id_and_alias_conflict(app_client):
-    client, config = app_client
+    client, _ = app_client
+
     pkg_bytes = _create_sample_package_bytes("single")
 
     client.post(
