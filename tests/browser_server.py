@@ -139,7 +139,26 @@ def fixture_package() -> bytes:
 
 
 def scenario_package(scenario: str) -> bytes:
-    pkg = make_layered_package(scenario)  # type: ignore[arg-type]
+    fixture_scenario = "assisted" if scenario == "review_references" else scenario
+    pkg = make_layered_package(fixture_scenario)  # type: ignore[arg-type]
+    if scenario == "review_references":
+        pkg.manifest.package_id = "pkg-review-references"
+        annotation = Annotation(
+            annotation_id="review-proposal",
+            document_id="doc-beta",
+            layer_id="target-layer",
+            type_id="phenotype",
+            term_id="HP:0001250",
+            axes_values={},
+            evidence_refs=[],
+            provenance=Provenance(
+                actor=ActorRef(actor_id="source", kind="tool"), method="import"
+            ),
+        )
+        proposal = snapshot(
+            annotation, [], pkg.documents["doc-beta"], pkg.manifest.task_profile
+        )
+        pkg.annotations[(annotation.annotation_id, proposal.version)] = proposal
     result = io.BytesIO()
     PackageWriter.write_to_stream(pkg, result)
     return result.getvalue()
@@ -162,7 +181,12 @@ if __name__ == "__main__":
 
         @app.get("/__synthetic_fixture__")
         def fixture(scenario: str | None = Query(None)) -> Response:
-            if scenario in ("single", "assisted", "multi_editable"):
+            if scenario in (
+                "single",
+                "assisted",
+                "multi_editable",
+                "review_references",
+            ):
                 data = scenario_package(scenario)
             else:
                 data = fixture_package()

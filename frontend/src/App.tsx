@@ -180,15 +180,13 @@ export const App: React.FC = () => {
         annotator_id: annotatorId.trim() || "reviewer-1",
         mode: "review",
       });
-      if (inputs.length > 0) {
-        targets = {
-          target_set_id: "",
-          targets: inputs.map((s) => ({
-            annotation_id: s.annotation.annotation_id,
-            version: s.version,
-          })),
-        };
-      }
+      targets = {
+        target_set_id: "",
+        targets: inputs.map((s) => ({
+          annotation_id: s.annotation.annotation_id,
+          version: s.version,
+        })),
+      };
     }
     const res = await api.openWorkspace({
       package_id: selectedPackageId,

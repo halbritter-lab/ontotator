@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.axes import validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError, IncompleteReview
 from ontocurator.domain.profiles import TaskProfile, resolve_type
@@ -53,6 +54,10 @@ def validate_annotation_completion(
                     "INCOMPLETE_AXES",
                     f"Required axis '{axis.id}' is empty on annotation '{snap.annotation.annotation_id}'",
                 )
+    try:
+        validate_axes(snap.annotation.axes_values, type_def.axes, complete=True)
+    except ValueError as exc:
+        raise DomainError("INVALID_AXES", str(exc)) from exc
 
 
 def validate_completion(

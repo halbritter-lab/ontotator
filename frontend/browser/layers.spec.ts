@@ -10,7 +10,8 @@ async function importScenario(page: Page, scenario: string, annotator: string) {
     buffer: await fixture.body(),
   });
   await expect(page.locator("#package-select")).toHaveValue(
-    scenario === "single" ? "pkg-scenario-a" : scenario === "assisted" ? "pkg-scenario-b" : "pkg-scenario-c"
+    scenario === "review_references" ? "pkg-review-references" :
+      scenario === "single" ? "pkg-scenario-a" : scenario === "multi_editable" ? "pkg-scenario-c" : "pkg-scenario-b"
   );
   await page.getByLabel("Ihre Annotator-Kennung").fill(annotator);
 }
@@ -114,6 +115,21 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await page.locator("#spanless-hpo-id").fill("HP:0001252");
     await page.getByRole("button", { name: "Annotation anlegen", exact: true }).click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);
+  });
+
+  test("Review excludes reference targets and permits returning to a case with references", async ({ page }) => {
+    await importScenario(page, "review_references", "review-reference-navigation");
+    await page.locator("#mode-select").selectOption("review");
+    await expect(page.getByRole("heading", { name: "Verfügbare Vorschläge zur Prüfung (1)" })).toBeVisible();
+    await page.getByRole("button", { name: /Arbeitsbereich öffnen/ }).click();
+    await expect(page.getByText("Fall 1 von 2")).toBeVisible();
+    await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
+
+    await page.getByRole("button", { name: "Nächster Fall" }).click();
+    await expect(page.getByText("Fall 2 von 2")).toBeVisible();
+    await page.getByRole("button", { name: "Vorheriger Fall" }).click();
+    await expect(page.getByText("Fall 1 von 2")).toBeVisible();
+    await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
   });
 
   test("Scenario C: Multi-editable layers require both layers checked before completion", async ({ page }) => {

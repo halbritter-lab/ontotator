@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.axes import validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     Document,
@@ -18,6 +19,7 @@ from ontocurator.domain.profiles import (
     profile_hash,
     resolve_layer,
     resolve_ontology,
+    resolve_type,
 )
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.serialization import decode_snapshot, verify_snapshot
@@ -309,16 +311,20 @@ def _read_package(
             or snap.text_sha256 != bound_doc.text_sha256
         ):
             raise InvalidPackage("Annotation document or text identity mismatch")
-        # Check layer and ontology binding against profile
+        # Check layer, type, axes and ontology binding against profile.
         try:
             layer = resolve_layer(manifest.task_profile, snap.annotation.layer_id)
             ont = resolve_ontology(manifest.task_profile, layer.ontology_id)
+            type_def = resolve_type(
+                manifest.task_profile, layer.layer_id, snap.annotation.type_id
+            )
+            validate_axes(snap.annotation.axes_values, type_def.axes, complete=False)
             expected_layer_hash = layer_config_hash(
                 manifest.task_profile, snap.annotation.layer_id
             )
         except Exception as exc:
             raise InvalidPackage(
-                f"Annotation layer or ontology unresolved: {exc}"
+                f"Annotation does not match task profile: {exc}"
             ) from exc
 
         if snap.ontology_sha256 != ont.sha256:

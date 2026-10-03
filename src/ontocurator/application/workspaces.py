@@ -127,8 +127,14 @@ class WorkspaceService:
     def get_review_inputs(
         self, package_id: str, document_id: str
     ) -> list[AnnotationSnapshot]:
-        """Fetch historical annotations available for review setup."""
-        return self.repo.list_annotations_for_document(package_id, document_id)
+        """Fetch historical annotations eligible as review targets."""
+        profile = self.repo.get_task_profile(package_id)
+        scope = build_scope(profile, "review")
+        return [
+            snap
+            for snap in self.repo.list_annotations_for_document(package_id, document_id)
+            if snap.annotation.layer_id in scope.editable_layer_ids
+        ]
 
     def open(
         self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
@@ -158,7 +164,9 @@ class WorkspaceService:
             available_inputs: list[AnnotationSnapshot] = []
         elif key.mode == "assisted":
             effective_targets = ReviewTargetSet.create([])
-            all_inputs = self.get_review_inputs(key.package_id, key.document_id)
+            all_inputs = self.repo.list_annotations_for_document(
+                key.package_id, key.document_id
+            )
             available_inputs = [
                 s
                 for s in all_inputs
@@ -171,7 +179,9 @@ class WorkspaceService:
             else:
                 existing_draft = self.repo.open_draft(key)
                 effective_targets = existing_draft.targets
-            all_inputs = self.get_review_inputs(key.package_id, key.document_id)
+            all_inputs = self.repo.list_annotations_for_document(
+                key.package_id, key.document_id
+            )
             available_inputs = [
                 s
                 for s in all_inputs

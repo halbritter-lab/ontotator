@@ -1,4 +1,5 @@
 import hashlib
+from pathlib import Path
 from typing import Literal
 
 from ontocurator.domain.annotations import (
@@ -25,8 +26,9 @@ from ontocurator.domain.profiles import (
 )
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
 
-HP_DIGEST = "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4"
-MONDO_DIGEST = "e47645d858059a37897a4c913d10efc6b7d16fdc24edd6656080a90777735223"
+FIXTURES = Path(__file__).parent / "fixtures"
+HP_DIGEST = hashlib.sha256((FIXTURES / "hp.json").read_bytes()).hexdigest()
+MONDO_DIGEST = hashlib.sha256((FIXTURES / "mondo.json").read_bytes()).hexdigest()
 EXT_DIGEST = "2222222222222222222222222222222222222222222222222222222222222222"
 
 
