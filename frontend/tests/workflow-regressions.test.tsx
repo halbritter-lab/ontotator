@@ -236,7 +236,7 @@ it("allows clearing an existing review decision back to offen", async () => {
   decisions: [],
  });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
- expect(screen.getByText("confirmed")).toBeDefined();
+ expect(screen.getByText(/Bestätigt/i)).toBeDefined();
  fireEvent.click(screen.getByRole("button", { name: /Auswahl aufheben/ }));
  await waitFor(() => expect(decide).toHaveBeenCalled());
  expect(decide.mock.calls[0][1].payload.outcome).toBeNull();
@@ -590,5 +590,77 @@ it("automatically adopts a review proposal as a draft annotation on 'Ändern & B
   const latestCall = decideSpy.mock.calls[decideSpy.mock.calls.length - 1];
   expect(latestCall[1].payload.outcome).toBe("changed");
   expect(latestCall[1].payload.target).toEqual({ annotation_id: "same", version: "target-v1" });
+});
+
+it("hides markings of replaced or rejected review targets in text and grays them out in the sidebar list", async () => {
+  const target1 = proposal("t1-v1", "HP:0001");
+  target1.evidence = [{ mention: { evidence_id: "ev1", segments: [{ start: 0, end: 5 }] }, version: "ev1-v" }];
+  const target2 = proposal("t2-v1", "HP:0002");
+  target2.annotation.annotation_id = "t2";
+  target2.evidence = [{ mention: { evidence_id: "ev2", segments: [{ start: 6, end: 10 }] }, version: "ev2-v" }];
+
+  const ownSnap = proposal("rep-v1", "HP:0003");
+  ownSnap.annotation.annotation_id = "rep-ann";
+  ownSnap.annotation.evidence_refs = [{ evidence_id: "rep-ev", version: "v1" }];
+  const ownEv = { mention: { evidence_id: "rep-ev", segments: [{ start: 0, end: 5 }] }, version: "v1" };
+
+  const view = baseView();
+  view.key = { ...key, mode: "review" };
+  view.scope = { ...scope, mode: "review" };
+  view.available_inputs = [target1, target2];
+  view.targets = {
+    target_set_id: "targets",
+    targets: [
+      { annotation_id: "same", version: "t1-v1" },
+      { annotation_id: "t2", version: "t2-v1" },
+    ],
+  };
+  view.draft = {
+    ...view.draft,
+    key: view.key,
+    targets: view.targets,
+    annotations: [ownSnap],
+    evidence: [ownEv],
+    decisions: [
+      {
+        decision_id: "d1",
+        target: { annotation_id: "same", version: "t1-v1" },
+        outcome: "changed",
+        replacement: { annotation_id: "rep-ann", version: "rep-v1" },
+        reviewer_id: "annotator",
+      },
+      {
+        decision_id: "d2",
+        target: { annotation_id: "t2", version: "t2-v1" },
+        outcome: "rejected",
+        reviewer_id: "annotator",
+      },
+    ],
+  };
+
+  const rendered = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+
+  // 1. In text pane: neither target1 nor target2 should render .run--target because both are resolved (changed & rejected)
+  const targetRuns = rendered.container.querySelectorAll(".run--target");
+  expect(targetRuns.length).toBe(0);
+
+  // 2. The own replacement annotation IS rendered in text
+  const ownRuns = rendered.container.querySelectorAll(".run--own");
+  expect(ownRuns.length).toBeGreaterThan(0);
+
+  // 3. In sidebar: target1 has badge '✎ Ersetzt' and resolved styling
+  expect(screen.getByText("✎ Ersetzt")).toBeDefined();
+  expect(screen.getByText("↳ durch Gegenfassung ersetzt")).toBeDefined();
+
+  // 4. In sidebar: target2 has badge '✕ Verworfen' and resolved styling
+  expect(screen.getByText("✕ Verworfen")).toBeDefined();
+  expect(screen.getByText("✕ Vorschlag verworfen")).toBeDefined();
+
+  // 5. Selecting target1 in sidebar opens ReviewActions in inspector while markings remain completely hidden from text
+  fireEvent.click(screen.getAllByText("HP:0001")[0]);
+  await waitFor(() => {
+    expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
+  });
+  expect(rendered.container.querySelectorAll(".run--target").length).toBe(0);
 });
 });

@@ -239,6 +239,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const mentions: MentionDisplay[] = [];
     for (const target of reviewTargets) {
       if (!target.layer_id || !layerSelection.visibleLayerIds.includes(target.layer_id)) continue;
+      const dec = decisionsMap[refKey(target)];
+      // If target is replaced or rejected, its markings completely disappear from text
+      if (dec?.outcome === "changed" || dec?.outcome === "rejected") {
+        continue;
+      }
       const snap = (view.available_inputs ?? []).find(
         (s) => s.annotation.annotation_id === target.annotation_id && s.version === target.version
       );
@@ -254,7 +259,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       }
     }
     return mentions;
-  }, [view.key.mode, reviewTargets, view.available_inputs, layerSelection.visibleLayerIds]);
+  }, [view.key.mode, reviewTargets, view.available_inputs, layerSelection.visibleLayerIds, decisionsMap, selectedTargetId]);
 
   const visibleSources = useMemo(() => view.key.mode === "independent" ? [] :
     (view.available_inputs ?? []).filter(s =>
@@ -975,10 +980,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 {reviewTargets.map((t) => {
                   const isSelected = refKey(t) === selectedTargetId;
                   const dec = decisionsMap[refKey(t)];
+                  const isResolved = dec?.outcome === "changed" || dec?.outcome === "rejected";
                   return (
                     <li
                       key={refKey(t)}
-                      className={`doc-item ${isSelected ? "selected" : ""}`}
+                      className={`doc-item ${isSelected ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}`}
+                      style={{
+                        opacity: isResolved && !isSelected ? 0.55 : 1,
+                        background: isResolved && !isSelected ? "rgba(0, 0, 0, 0.02)" : undefined,
+                      }}
                       onClick={() => {
                         const targetKey = refKey(t);
                         setSelectedTargetId(targetKey);
@@ -997,18 +1007,50 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         }
                       }}
                     >
-                      <div className="doc-id" style={{ display: "flex", justifyContent: "space-between" }}>
-                        <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
+                      <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
+                          <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
+                        </span>
                         {dec ? (
-                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--primary)" }}>
-                            {dec.outcome}
+                          <span
+                            className="badge"
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              padding: "2px 6px",
+                              backgroundColor:
+                                dec.outcome === "confirmed" ? "var(--success-light)"
+                                : dec.outcome === "rejected" ? "var(--danger-light)"
+                                : dec.outcome === "changed" ? "#e2e8f0"
+                                : "var(--warning-light)",
+                              color:
+                                dec.outcome === "confirmed" ? "var(--success)"
+                                : dec.outcome === "rejected" ? "var(--danger)"
+                                : dec.outcome === "changed" ? "#475569"
+                                : "var(--warning)",
+                            }}
+                          >
+                            {dec.outcome === "confirmed" ? "✓ Bestätigt"
+                             : dec.outcome === "rejected" ? "✕ Verworfen"
+                             : dec.outcome === "changed" ? "✎ Ersetzt"
+                             : "? Unsicher"}
                           </span>
                         ) : (
                           <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>offen</span>
                         )}
                       </div>
-                      <div className="doc-meta">
-                        {t.evidence_count} Belegstelle(n) • {t.provenance.actor.kind}
+                      <div className="doc-meta" style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
+                        {dec?.outcome === "changed" ? (
+                          <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
+                            ↳ durch Gegenfassung ersetzt
+                          </span>
+                        ) : dec?.outcome === "rejected" ? (
+                          <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
+                            ✕ Vorschlag verworfen
+                          </span>
+                        ) : (
+                          <>{t.evidence_count} Belegstelle(n) • {t.provenance.actor.kind}</>
+                        )}
                       </div>
                     </li>
                   );
