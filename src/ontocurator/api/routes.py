@@ -6,6 +6,7 @@ import base64
 import io
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Literal, cast
 from uuid import uuid4
 
@@ -392,4 +393,91 @@ def export_workspace(
         content=zip_bytes,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+class OntologyInfo(BaseModel):
+    ontology_id: str
+    release: str
+    sha256: str
+    term_count: int
+    path: str | None = None
+
+
+@router.get("/ontologies")
+def list_ontologies(request: Request) -> list[OntologyInfo]:
+    """List loaded ontologies in memory registry."""
+    registry = request.app.state.ontology_registry
+    results: list[OntologyInfo] = []
+    for sha, svc in registry._services.items():
+        ont_id = (svc.ontology.dominant_prefix or "unknown").lower()
+        results.append(
+            OntologyInfo(
+                ontology_id=ont_id,
+                release=svc.ontology.release or svc.ref.release,
+                sha256=sha,
+                term_count=len(svc.ontology.terms),
+            )
+        )
+    return results
+
+
+@router.post("/ontologies")
+async def upload_ontology(
+    file: UploadFile,
+    request: Request,
+) -> OntologyInfo:
+    """Upload and register an ontology file into the active workspace."""
+    content = await file.read()
+    registry = request.app.state.ontology_registry
+    config = getattr(request.app.state, "config", None)
+
+    workspace_ont_dir = (
+        (config.workspace_dir / "ontologies")
+        if config
+        else Path("./workspace/ontologies")
+    )
+    workspace_ont_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = file.filename or "ontology.json"
+    dest_path = workspace_ont_dir / filename
+    dest_path.write_bytes(content)
+
+    try:
+        from ontocurator.domain.documents import OntologyRef
+        from ontocurator.ontology.service import OntologyService
+
+        digest = registry.register_path(dest_path)
+        if registry.get_service(digest) is None:
+            svc = OntologyService.load(
+                dest_path, OntologyRef(release="uploaded", sha256=digest)
+            )
+            registry.register_service(svc)
+        else:
+            svc = registry.get_service(digest)
+            assert svc is not None
+    except Exception as exc:
+        if dest_path.is_file():
+            dest_path.unlink()
+        raise HTTPException(
+            status_code=400, detail=f"Failed to register ontology: {exc}"
+        ) from exc
+
+    from ontocurator.config_store import (
+        load_persistent_config,
+        save_persistent_config,
+    )
+
+    p_cfg = load_persistent_config()
+    if dest_path.resolve() not in [p.resolve() for p in p_cfg.ontology_paths]:
+        p_cfg.ontology_paths.append(dest_path.resolve())
+        save_persistent_config(p_cfg)
+
+    ont_id = (svc.ontology.dominant_prefix or "unknown").lower()
+    return OntologyInfo(
+        ontology_id=ont_id,
+        release=svc.ontology.release or svc.ref.release,
+        sha256=digest,
+        term_count=len(svc.ontology.terms),
+        path=str(dest_path),
     )
