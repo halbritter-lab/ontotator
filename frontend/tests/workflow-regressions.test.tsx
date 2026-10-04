@@ -204,6 +204,7 @@ it("reviews separate versions and exposes original clinical axes and evidence", 
  view.draft = { ...view.draft, key: view.key, targets: view.targets };
  const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...view.draft, revision: 1 });
  const rendered = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+ fireEvent.click(screen.getByText("HP:1"));
  expect(screen.getByText("absent")).toBeDefined();
  expect(rendered.container.querySelector('.run--marked')!.textContent).toBe("alpha");
  fireEvent.click(screen.getByText("HP:2"));
@@ -236,6 +237,7 @@ it("allows clearing an existing review decision back to offen", async () => {
   decisions: [],
  });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+ fireEvent.click(screen.getByText("HP:1"));
  expect(screen.getByText(/Bestätigt/i)).toBeDefined();
  fireEvent.click(screen.getByRole("button", { name: /Auswahl aufheben/ }));
  await waitFor(() => expect(decide).toHaveBeenCalled());
@@ -268,6 +270,7 @@ it("allows toggling an active review decision button to reset to offen", async (
   decisions: [],
  });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+ fireEvent.click(screen.getByText("HP:1"));
  const confirmBtn = screen.getByRole("button", { name: /Bestätigen/ });
  expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
  fireEvent.click(confirmBtn);
@@ -549,6 +552,9 @@ it("automatically adopts a review proposal as a draft annotation on 'Ändern & B
 
   render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
 
+  // Click target in sidebar to select it:
+  fireEvent.click(screen.getByText("HP:0001"));
+
   // Click on "Ändern & Bearbeiten" button on the target:
   const editBtn = screen.getByRole("button", { name: /Ändern/i });
   fireEvent.click(editBtn);
@@ -706,25 +712,21 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
   });
   expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
 
-  // 3. Header has "Auswahl abwählen" button while an item is selected
-  const deselectBtn = screen.getByRole("button", { name: /Auswahl abwählen/i });
-  expect(deselectBtn).toBeDefined();
-
-  // 4. Clicking "Auswahl abwählen" deselects everything (shows "Keine Annotation ausgewählt")
-  fireEvent.click(deselectBtn);
+  // 3. Clicking the selected annotation in the sidebar again deselects it
+  fireEvent.click(screen.getAllByText("HP:0003")[1]);
   await waitFor(() => {
     expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
   });
   expect(screen.queryByText("Kontext-Achsen")).toBeNull();
   expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
 
-  // 5. Selecting target1 in sidebar, then clicking deselect button deselects it
+  // 4. Selecting target1 in sidebar opens ReviewActions, then clicking it again deselects it
   fireEvent.click(screen.getAllByText("HP:0001")[0]);
   await waitFor(() => {
     expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
   });
-  // Click deselect button in header to deselect
-  fireEvent.click(screen.getByRole("button", { name: /Auswahl abwählen/i }));
+  // Click target1 again to deselect
+  fireEvent.click(screen.getAllByText("HP:0001")[0]);
   await waitFor(() => {
     expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
   });

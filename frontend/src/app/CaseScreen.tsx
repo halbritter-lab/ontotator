@@ -84,22 +84,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
-  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(() => {
-    if (view.key.mode === "review" && view.targets?.targets?.[0]) {
-      const firstTarget = view.targets.targets[0];
-      const snap = (view.available_inputs ?? []).find(
-        (s) => s.annotation.annotation_id === firstTarget.annotation_id && s.version === firstTarget.version
-      );
-      const firstEv = snap?.evidence?.[0];
-      if (firstEv) {
-        return `target:${firstTarget.annotation_id}:${firstTarget.version}:${firstEv.mention.evidence_id}:${firstEv.version}`;
-      }
-    }
-    return null;
-  });
-  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(
-    view.targets?.targets?.[0] ? refKey(view.targets.targets[0]) : null
-  );
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectionIntent, setSelectionIntent] = useState<"new_mention" | "extend_mention">("new_mention");
   const [queueState, setQueueState] = useState<QueueState>("saved");
   const [statusText, setStatusText] = useState<string>("Gespeichert");
@@ -935,24 +921,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </button>
           )}
 
-          {(selectedAnnotationId || selectedTargetId || selectedSourceId) && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={handleDeselectAll}
-              title="Auswahl abwählen (kein Term ausgewählt)"
-            >
-              ✕ Auswahl abwählen
-            </button>
-          )}
+
 
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={handleStartSpanless}
-            title="Spanlose Annotation über Ontologie-Suche anlegen"
+            title="Neue Annotation über Ontologie-Suche anlegen"
           >
-            + Spanlose Annotation
+            + Neue Annotation
           </button>
 
           <button
@@ -1010,6 +987,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       }}
                       onClick={() => {
                         const targetKey = refKey(t);
+                        if (selectedTargetId === targetKey) {
+                          handleDeselectAll();
+                          return;
+                        }
                         setSelectedTargetId(targetKey);
                         setSelectedAnnotationId(null);
                         setSelectedSourceId(null);
@@ -1142,6 +1123,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   key={annSnap.annotation.annotation_id}
                   className={`doc-item ${isSelected ? "selected" : ""}`}
                   onClick={() => {
+                    if (selectedAnnotationId === annSnap.annotation.annotation_id) {
+                      handleDeselectAll();
+                      return;
+                    }
                     setSelectedTargetId(null);
                     setSelectedSourceId(null);
                     cancelPending();
@@ -1239,12 +1224,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               <div className="detail-section">
                 <h2>
                   {pendingAnnotation.isSpanless
-                    ? "Begriff für spanlose Annotation wählen"
+                    ? "Begriff für neue Annotation wählen"
                     : "Begriff für die Markierung wählen"}
                 </h2>
                 <p>
                   {pendingAnnotation.isSpanless
-                    ? "Wählen Sie einen Begriff aus der Ontologie für diese spanlose Annotation."
+                    ? "Wählen Sie einen Begriff aus der Ontologie für die neue Annotation."
                     : "Die Annotation wird nach Auswahl eines Begriffs gespeichert."}
                 </p>
                 <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}

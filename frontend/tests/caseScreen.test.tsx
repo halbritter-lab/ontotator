@@ -187,11 +187,11 @@ describe("CaseScreen integration", () => {
       candidates: [{ term_id: "HP:0001252", label: "Hypotonia", rank: 1 }],
     } as any);
 
-    // Click "+ Spanlose Annotation"
-    fireEvent.click(screen.getByText("+ Spanlose Annotation"));
+    // Click "+ Neue Annotation"
+    fireEvent.click(screen.getByText("+ Neue Annotation"));
 
-    // Shows search panel for spanless annotation
-    expect(screen.getByText("Begriff für spanlose Annotation wählen")).toBeDefined();
+    // Shows search panel for new annotation
+    expect(screen.getByText("Begriff für neue Annotation wählen")).toBeDefined();
     fireEvent.change(screen.getByLabelText("Ontologie-Term suchen"), { target: { value: "Hypotonia" } });
     fireEvent.keyDown((await screen.findByText("Hypotonia")).closest(".candidate-card")!, { key: "Enter" });
 
