@@ -223,12 +223,17 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             borderColor: currentDecision?.outcome === "confirmed" ? "var(--success)" : "#86efac",
             fontWeight: currentDecision?.outcome === "confirmed" ? 700 : "normal",
             boxShadow: currentDecision?.outcome === "confirmed" ? "0 0 0 2px rgba(34, 197, 94, 0.4)" : undefined,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "8px 10px",
           }}
           onClick={() => handleOutcomeClick("confirmed")}
           disabled={target.is_obsolete || target.is_unknown}
-          title={currentDecision?.outcome === "confirmed" ? "Klicken, um Bestätigung aufzuheben (offen)" : "Vorschlag unverändert annehmen"}
+          title={currentDecision?.outcome === "confirmed" ? "Klicken, um Bestätigung aufzuheben (Taste: 1)" : "Vorschlag unverändert annehmen (Taste: 1)"}
         >
-          ✓ Bestätigen
+          <span>✓ Bestätigen</span>
+          <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>1</kbd>
         </button>
 
         <button
@@ -241,11 +246,16 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             borderColor: currentDecision?.outcome === "rejected" ? "var(--danger)" : "#fca5a5",
             fontWeight: currentDecision?.outcome === "rejected" ? 700 : "normal",
             boxShadow: currentDecision?.outcome === "rejected" ? "0 0 0 2px rgba(239, 68, 68, 0.4)" : undefined,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "8px 10px",
           }}
           onClick={() => handleOutcomeClick("rejected")}
-          title={currentDecision?.outcome === "rejected" ? "Klicken, um Ablehnung aufzuheben (offen)" : "Vorschlag ablehnen"}
+          title={currentDecision?.outcome === "rejected" ? "Klicken, um Ablehnung aufzuheben (Taste: 2)" : "Vorschlag ablehnen (Taste: 2)"}
         >
-          ✕ Verwerfen
+          <span>✕ Verwerfen</span>
+          <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>2</kbd>
         </button>
 
         <button
@@ -258,6 +268,10 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             borderColor: currentDecision?.outcome === "changed" ? "var(--primary)" : "#93c5fd",
             fontWeight: currentDecision?.outcome === "changed" ? 700 : "normal",
             boxShadow: currentDecision?.outcome === "changed" ? "0 0 0 2px rgba(59, 130, 246, 0.4)" : undefined,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "8px 10px",
           }}
           onClick={() => {
             if (currentDecision?.outcome === "changed" && currentDecision.replacement?.annotation_id && onEditReplacement) {
@@ -270,11 +284,12 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           }}
           title={
             currentDecision?.outcome === "changed"
-              ? "Gegenfassung im Entwurf weiter bearbeiten"
-              : "Vorschlag übernehmen und im Entwurf bearbeiten"
+              ? "Gegenfassung im Entwurf weiter bearbeiten (Taste: 3)"
+              : "Vorschlag übernehmen und im Entwurf bearbeiten (Taste: 3)"
           }
         >
-          ✎ Ändern & Bearbeiten
+          <span>✎ Ändern & Bearbeiten</span>
+          <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>3</kbd>
         </button>
 
         <button
@@ -287,11 +302,16 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             borderColor: currentDecision?.outcome === "uncertain" ? "var(--warning)" : "#fde68a",
             fontWeight: currentDecision?.outcome === "uncertain" ? 700 : "normal",
             boxShadow: currentDecision?.outcome === "uncertain" ? "0 0 0 2px rgba(245, 158, 11, 0.4)" : undefined,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "8px 10px",
           }}
           onClick={() => handleOutcomeClick("uncertain")}
-          title={currentDecision?.outcome === "uncertain" ? "Klicken, um Unsicher-Status aufzuheben (offen)" : "Klinisch oder textuell unentscheidbar (kein Goldstandard)"}
+          title={currentDecision?.outcome === "uncertain" ? "Klicken, um Unsicher-Status aufzuheben (Taste: 4)" : "Klinisch oder textuell unentscheidbar (Taste: 4)"}
         >
-          ? Unsicher (Kein Gold)
+          <span>? Unsicher (Kein Gold)</span>
+          <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>4</kbd>
         </button>
       </div>
 

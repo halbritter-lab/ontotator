@@ -294,25 +294,45 @@ body {
 }
 
 .axis-options {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
 }
 
 .axis-option {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 9px;
+  gap: 4px;
+  padding: 4px 10px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius);
+  border-radius: 9999px;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-main);
+  background: var(--bg-surface);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.axis-option input[type="radio"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.axis-option:hover {
+  border-color: var(--primary);
+  background: var(--bg-primary);
 }
 
 .axis-option:has(input:checked) {
   border-color: var(--primary);
   background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
 }
 
 .axis-option:has(input:focus-visible) {

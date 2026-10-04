@@ -731,4 +731,77 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
     expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
   });
 });
+
+it("supports review keyboard shortcuts: 1 (confirm), 2 (reject), Escape (deselect) and J/K (navigation)", async () => {
+  const target1 = proposal("t1-v1", "HP:0001");
+  const target2 = proposal("t2-v1", "HP:0002");
+
+  const view = baseView();
+  view.key = { ...key, mode: "review" };
+  view.scope = { ...scope, mode: "review" };
+  view.available_inputs = [target1, target2];
+  view.targets = {
+    target_set_id: "targets",
+    targets: [
+      { annotation_id: "same", version: "t1-v1" },
+      { annotation_id: "same", version: "t2-v1" },
+    ],
+  };
+  view.draft = {
+    ...view.draft,
+    key: view.key,
+    targets: view.targets,
+    annotations: [],
+    decisions: [],
+  };
+
+  const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({
+    ...view.draft,
+    revision: 1,
+  });
+
+  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+
+  // 1. Press 'j' to navigate to first target
+  fireEvent.keyDown(window, { key: "j" });
+  await waitFor(() => {
+    expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
+  });
+
+  // 2. Press '1' to confirm target 1
+  fireEvent.keyDown(window, { key: "1" });
+  await waitFor(() => {
+    expect(decide).toHaveBeenCalledWith(
+      "ws",
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          outcome: "confirmed",
+          target: { annotation_id: "same", version: "t1-v1" },
+        }),
+      })
+    );
+  });
+
+  // 3. Press 'j' to navigate to second target
+  fireEvent.keyDown(window, { key: "j" });
+  // Press '2' to reject target 2
+  fireEvent.keyDown(window, { key: "2" });
+  await waitFor(() => {
+    expect(decide).toHaveBeenCalledWith(
+      "ws",
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          outcome: "rejected",
+          target: { annotation_id: "same", version: "t2-v1" },
+        }),
+      })
+    );
+  });
+
+  // 4. Press Escape to deselect
+  fireEvent.keyDown(window, { key: "Escape" });
+  await waitFor(() => {
+    expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
+  });
+});
 });

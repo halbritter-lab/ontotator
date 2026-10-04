@@ -891,6 +891,67 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     return () => window.removeEventListener("keydown", handleCaseNavShortcuts);
   }, [nextDoc, prevDoc, onNavigateCase, queueState]);
 
+  useEffect(() => {
+    const handleReviewShortcuts = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+      if (e.key === "Escape") {
+        if (selectedAnnotationId || selectedTargetId || selectedSourceId) {
+          e.preventDefault();
+          handleDeselectAll();
+        }
+        return;
+      }
+
+      if (view.key.mode === "review" && reviewTargets.length > 0) {
+        if (e.key === "j" || e.key === "J") {
+          e.preventDefault();
+          const currIdx = reviewTargets.findIndex((t) => refKey(t) === selectedTargetId);
+          const nextIdx = currIdx < reviewTargets.length - 1 ? currIdx + 1 : 0;
+          const nextT = reviewTargets[nextIdx];
+          setSelectedTargetId(refKey(nextT));
+          setSelectedAnnotationId(null);
+          setSelectedSourceId(null);
+          return;
+        } else if (e.key === "k" || e.key === "K") {
+          e.preventDefault();
+          const currIdx = reviewTargets.findIndex((t) => refKey(t) === selectedTargetId);
+          const prevIdx = currIdx > 0 ? currIdx - 1 : reviewTargets.length - 1;
+          const prevT = reviewTargets[prevIdx];
+          setSelectedTargetId(refKey(prevT));
+          setSelectedAnnotationId(null);
+          setSelectedSourceId(null);
+          return;
+        }
+      }
+
+      if (view.key.mode !== "review" || !selectedTarget) return;
+
+      const currDec = decisionsMap[refKey(selectedTarget)];
+      if (e.key === "1") {
+        if (selectedTarget.is_obsolete || selectedTarget.is_unknown) return;
+        e.preventDefault();
+        const nextOutcome = currDec?.outcome === "confirmed" ? null : "confirmed";
+        void handleReviewDecision({ outcome: nextOutcome });
+      } else if (e.key === "2") {
+        e.preventDefault();
+        const nextOutcome = currDec?.outcome === "rejected" ? null : "rejected";
+        void handleReviewDecision({ outcome: nextOutcome });
+      } else if (e.key === "3") {
+        e.preventDefault();
+        void handleAdoptAndEditTarget(selectedTarget);
+      } else if (e.key === "4") {
+        e.preventDefault();
+        const nextOutcome = currDec?.outcome === "uncertain" ? null : "uncertain";
+        void handleReviewDecision({ outcome: nextOutcome });
+      }
+    };
+    window.addEventListener("keydown", handleReviewShortcuts);
+    return () => window.removeEventListener("keydown", handleReviewShortcuts);
+  }, [view.key.mode, reviewTargets, selectedTarget, selectedTargetId, selectedAnnotationId, selectedSourceId, decisionsMap]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
