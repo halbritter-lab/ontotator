@@ -86,27 +86,31 @@ describe("Dynamic Axes and Non-HPO UI", () => {
     expect(screen.getByText(/Schweregrad/)).toBeDefined();
     expect(screen.getByText(/\* \(Pflichtfeld\)/)).toBeDefined();
 
-    // Select current value matches 'severe'
-    const severitySelect = screen.getByLabelText(/Schweregrad/) as HTMLSelectElement;
-    expect(severitySelect.value).toBe("severe");
+    // Small axes expose all choices directly.
+    expect((screen.getByRole("radio", { name: "severe" }) as HTMLInputElement).checked).toBe(true);
 
-    // Change confidence axis value
-    const confidenceSelect = screen.getByLabelText(/Sicherheit/) as HTMLSelectElement;
-    expect(confidenceSelect.value).toBe("");
+    expect((screen.getByRole("radio", { name: "Nicht angegeben" }) as HTMLInputElement).checked).toBe(true);
 
-    fireEvent.change(confidenceSelect, { target: { value: "high" } });
+    fireEvent.click(screen.getByRole("radio", { name: "high" }));
     expect(onUpdateAxes).toHaveBeenCalledWith({
       severity: "severe",
       confidence: "high",
     });
   });
 
-  it("clearing an axis value to empty string sends null", () => {
+  it("clearing an optional axis sends null", () => {
     const onUpdateAxes = vi.fn();
+    const annotated = {
+      ...sampleAnnotation,
+      annotation: {
+        ...sampleAnnotation.annotation,
+        axes_values: { severity: "severe", confidence: "high" },
+      },
+    };
 
     render(
       <AnnotationPanel
-        annotation={sampleAnnotation}
+        annotation={annotated}
         allEvidence={{}}
         workspaceKey={{
           package_id: "pkg-1",
@@ -130,11 +134,11 @@ describe("Dynamic Axes and Non-HPO UI", () => {
       />
     );
 
-    const severitySelect = screen.getByLabelText(/Schweregrad/) as HTMLSelectElement;
-    fireEvent.change(severitySelect, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Nicht angegeben" }));
 
     expect(onUpdateAxes).toHaveBeenCalledWith({
-      severity: null,
+      severity: "severe",
+      confidence: null,
     });
   });
 

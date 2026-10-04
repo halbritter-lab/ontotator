@@ -48,20 +48,15 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001250");
     await expect(page.locator(".sidebar .doc-item")).not.toContainText("HP:0001252");
 
-    // 4. Single-layer check logic: submit blocked without checkmark
-    await page.getByRole("button", { name: /Fall abschließen/ }).click();
-    await expect(page.getByText("Bitte bestätigen Sie zuerst, dass der Fall vollständig durchgesehen wurde.")).toBeVisible();
-
-    // 5. Checking the single checkbox allows submission
-    await page.getByLabel("Dokument vollständig geprüft").click();
-    await expect(page.getByLabel("Dokument vollständig geprüft")).toBeChecked();
+    // 4. A single-layer case is checked as part of submission.
+    await expect(page.getByLabel("Dokument vollständig geprüft")).toHaveCount(0);
     await page.getByRole("button", { name: /Fall abschließen/ }).click();
     await expect(page.getByText(/Erfolgreich abgegeben|Abgabe erfolgreich|Fall erfolgreich/i).first()).toBeVisible();
 
     // Dismiss submission modal to return to workspace
     await page.getByRole("button", { name: "Im Fall bleiben" }).click();
 
-    // 6. Navigate to next case in document order
+    // 5. Navigate to next case in document order
     await page.locator(".case-navigation").getByRole("button", { name: "Nächster Fall" }).click();
     await expect(page.getByText("Fall 2 von 2")).toBeVisible();
     await expect(page.locator(".case-navigation").getByRole("button", { name: "Nächster Fall" })).toBeDisabled();

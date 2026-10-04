@@ -48,6 +48,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terms/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Term Labels
+         * @description Resolve display names against the ontology pinned to each package layer.
+         */
+        post: operations["resolve_term_labels_api_v1_terms_labels_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/review-inputs": {
         parameters: {
             query?: never;
@@ -810,6 +830,29 @@ export interface components {
             /** Reference Layer Ids */
             reference_layer_ids: string[];
         };
+        /** TermLabel */
+        TermLabel: {
+            /** Layer Id */
+            layer_id: string;
+            /** Term Id */
+            term_id: string;
+            /** Label */
+            label: string | null;
+        };
+        /** TermLabelsRequest */
+        TermLabelsRequest: {
+            /** Package Id */
+            package_id: string;
+            /** Terms */
+            terms: components["schemas"]["TermLookup"][];
+        };
+        /** TermLookup */
+        TermLookup: {
+            /** Layer Id */
+            layer_id: string;
+            /** Term Id */
+            term_id: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -971,6 +1014,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_term_labels_api_v1_terms_labels_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TermLabelsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TermLabel"][];
                 };
             };
             /** @description Validation Error */

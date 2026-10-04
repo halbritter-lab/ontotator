@@ -27,11 +27,24 @@ import {
 } from "../editor/ReviewActions";
 import { SearchPanel } from "../editor/SearchPanel";
 import { SearchManager } from "../editor/searchState";
+import { TermName } from "../editor/TermName";
 import { TextPane } from "../editor/TextPane";
+import { useTermLabels } from "../editor/useTermLabels";
 import type { MentionDisplay, SelectionPayload } from "../spans/adapter";
 import { CaseNavigation } from "./CaseNavigation";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
+
+export const initialAxisValues = (
+  axes: { id: string; options: string[] }[],
+  termId: string,
+): Record<string, string | null> => Object.fromEntries(
+  axes.map((axis) => [
+    axis.id,
+    termId.startsWith("HP:") && axis.id === "assertion" && axis.options.includes("present")
+      ? "present" : null,
+  ]),
+);
 
 export type WorkspaceView = components["schemas"]["WorkspaceView"];
 
@@ -80,6 +93,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [completedSubmission, setCompletedSubmission] = useState<Submission | null>(null);
   const [historySubmission, setHistorySubmission] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [mobilePane, setMobilePane] = useState<"list" | "text" | "details">("text");
+
+  const displayedTerms = useMemo(() => [
+    ...(draft.annotations ?? []),
+    ...(view.available_inputs ?? []),
+    ...(view.submissions ?? []).flatMap((submission) => submission.snapshots),
+  ].map((snapshot) => ({
+    layer_id: snapshot.annotation.layer_id,
+    term_id: snapshot.annotation.term_id,
+  })), [draft.annotations, view.available_inputs, view.submissions]);
+  const termLabel = useTermLabels(view.key.package_id, displayedTerms);
 
   const searchManager = useMemo(() => new SearchManager(api), []);
 
@@ -212,6 +236,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   })));
   const selectSource = (id: string) => {
     setSelectedSourceId(id); setSelectedAnnotationId(null); setSelectedEvidenceId(null);
+    setMobilePane("details");
     setSelectionIntent("new_mention"); cancelPending();
   };
 
@@ -249,6 +274,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Text selection handler
   const handleSelection = async (payload: SelectionPayload) => {
     if (!payload.segments || payload.segments.length === 0) return;
+    setMobilePane("details");
 
     setActionError(null);
     try {
@@ -303,7 +329,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       await enqueueMutation({ command: "create_annotation", annotation_id: pending.annotationId,
         evidence_id: pending.evidenceId, layer_id: pending.layerId, type_id: pending.typeId,
         term_id: termId, search_event_id: searchId, segments: pending.segments,
-        axes_values: Object.fromEntries((type?.axes ?? []).map(axis => [axis.id, null])) });
+        axes_values: initialAxisValues(type?.axes ?? [], termId) });
       setPendingAnnotation(null);
       setSelectedAnnotationId(pending.annotationId);
       setSelectedEvidenceId(pending.evidenceId);
@@ -324,6 +350,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     );
     if (owner) {
       setSelectedAnnotationId(owner.annotation.annotation_id);
+      setMobilePane("details");
     }
   };
 
@@ -341,10 +368,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
       const newAnnId = `ann-${Date.now()}`;
       const termId = spanlessHpoId.trim();
-      const initialValues: Record<string, string | null> = {};
-      for (const axis of (activeTypeDef?.axes ?? view.axes_config ?? [])) {
-        initialValues[axis.id] = null;
-      }
+      const initialValues = initialAxisValues(activeTypeDef?.axes ?? view.axes_config ?? [], termId);
       await enqueueMutation({
         command: "create_annotation",
         annotation_id: newAnnId,
@@ -356,6 +380,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       });
       setSelectedSourceId(null); cancelPending();
       setSelectedAnnotationId(newAnnId);
+      setMobilePane("details");
       setSelectedEvidenceId(null);
       setShowSpanlessModal(false);
       setSpanlessHpoId("");
@@ -470,7 +495,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Single-layer check logic vs multi-layer check logic
   const isSingleLayer = (view.layers ?? []).length <= 1;
-  const singleLayerId = view.scope?.editable_layer_ids?.[0] ?? view.layers?.[0]?.layer_id;
   const editableLayerIds = view.scope?.editable_layer_ids ?? (view.layers ? view.layers.map(l => l.layer_id) : []);
 
   // Submit and finalize workspace
@@ -479,15 +503,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
     const checkedIds = latestDraft.current.checked_layer_ids ?? [];
     const unchecked = editableLayerIds.filter((id) => !checkedIds.includes(id));
-    if (unchecked.length > 0) {
-      if (isSingleLayer) {
-        setSubmitError("Bitte bestätigen Sie zuerst, dass der Fall vollständig durchgesehen wurde.");
-      } else {
-        const uncheckedNames = unchecked
-          .map((id) => view.layers?.find((l) => l.layer_id === id)?.label ?? id)
-          .join(", ");
-        setSubmitError(`Bitte markieren Sie alle editierbaren Schichten als geprüft vor der Abgabe: ${uncheckedNames}`);
-      }
+    if (!isSingleLayer && unchecked.length > 0) {
+      const uncheckedNames = unchecked
+        .map((id) => view.layers?.find((l) => l.layer_id === id)?.label ?? id)
+        .join(", ");
+      setSubmitError(`Bitte markieren Sie alle editierbaren Schichten als geprüft vor der Abgabe: ${uncheckedNames}`);
       return;
     }
 
@@ -515,7 +535,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           payload: {
             command: "submit_workspace",
             document_checked: true,
-            checked_layer_ids: latestDraft.current.checked_layer_ids ?? [],
+            checked_layer_ids: isSingleLayer ? editableLayerIds : latestDraft.current.checked_layer_ids ?? [],
           },
         };
         return api.submitWorkspace(workspaceId, envelope);
@@ -550,7 +570,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       <header className="app-header">
         <div className="app-title">
           <button type="button" className="btn btn-secondary btn-sm" onClick={async () => { try { await queueRef.current.flush(); onClose(); } catch (error) { reportError(error); } }}>
-            ← Zurück
+            ← Übersicht
           </button>
           {documentList && documentList.length > 0 && onNavigateCase ? (
             <CaseNavigation
@@ -609,7 +629,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           )}
 
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
-            setSelectedAnnotationId(null); setSelectedEvidenceId(null); setSelectedSourceId(null); cancelPending(); setSelectionIntent("new_mention");
+            setSelectedAnnotationId(null); setSelectedEvidenceId(null); setSelectedSourceId(null); cancelPending(); setSelectionIntent("new_mention"); setMobilePane("text");
           }}>Neue Annotation markieren</button>
           <button
             type="button"
@@ -629,8 +649,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       </header>
 
       {actionError && <div role="alert" style={{ color: "var(--danger)", padding: 12 }}>{actionError}</div>}
+      <nav className="mobile-pane-tabs" aria-label="Ansicht wählen">
+        {([ ["list", "Liste"], ["text", "Text"], ["details", "Details"] ] as const).map(([pane, label]) => (
+          <button key={pane} type="button" aria-pressed={mobilePane === pane}
+            onClick={() => setMobilePane(pane)}>{label}</button>
+        ))}
+      </nav>
       {/* Main Workspace Layout */}
-      <div className="app-layout">
+      <div className={`app-layout mobile-pane-${mobilePane}`}>
         {/* Left: Sidebar (Annotations & Review Targets) */}
         <aside className="sidebar">
           {/* Multi-layer controls (rendered only if >1 layer) */}
@@ -661,10 +687,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     <li
                       key={refKey(t)}
                       className={`doc-item ${isSelected ? "selected" : ""}`}
-                      onClick={() => setSelectedTargetId(refKey(t))}
+                      onClick={() => { setSelectedTargetId(refKey(t)); setMobilePane("details"); }}
                     >
                       <div className="doc-id" style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span>{t.term_id}</span>
+                        <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
                         {dec ? (
                           <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--primary)" }}>
                             {dec.outcome}
@@ -687,7 +713,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <div className="sidebar-header">Referenzannotationen ({visibleSources.length})</div>
             {visibleSources.map(s => <button type="button" className="btn btn-secondary" key={sourceKey(s)}
               aria-pressed={sourceKey(s) === selectedSourceId} onClick={() => selectSource(sourceKey(s))}>
-              {s.annotation.term_id} · {view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Nur lesen
+              <TermName termId={s.annotation.term_id} label={termLabel(s.annotation.layer_id, s.annotation.term_id)} />
+              <span>{view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Nur lesen</span>
             </button>)}
           </section>}
 
@@ -711,12 +738,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   onClick={() => {
                     setSelectedSourceId(null); cancelPending();
                     setSelectedAnnotationId(annSnap.annotation.annotation_id);
+                    setMobilePane("details");
                     const firstEv = annSnap.annotation.evidence_refs?.[0]?.evidence_id;
                     setSelectedEvidenceId(firstEv ?? null);
                   }}
                 >
                   <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>{termId}</span>
+                    <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
                     {layerName && (view.layers ?? []).length > 1 && (
                       <span className="badge" style={{ fontSize: "0.7rem" }}>{layerName}</span>
                     )}
@@ -740,25 +768,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
           {/* Submission Box at bottom of sidebar */}
           <div style={{ padding: 14, borderTop: "1px solid var(--border-color)", background: "var(--bg-primary)" }}>
-            {isSingleLayer ? (
-              <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: "0.8rem", cursor: "pointer", marginBottom: 10 }}>
-                <input
-                  type="checkbox"
-                  checked={singleLayerId ? (draft.checked_layer_ids ?? []).includes(singleLayerId) : false}
-                  onChange={(e) => {
-                    if (singleLayerId) {
-                      void enqueueMutation({
-                        command: "check_layer",
-                        layer_id: singleLayerId,
-                        checked: e.target.checked,
-                      }).catch(reportError);
-                    }
-                  }}
-                  style={{ marginTop: 2 }}
-                />
-                <span>Dokument vollständig geprüft</span>
-              </label>
-            ) : (
+            {!isSingleLayer && (
               <div style={{ marginBottom: 10, fontSize: "0.8rem", color: "var(--text-muted)" }}>
                 {editableLayerIds.length > 0 && (
                   <div>
@@ -795,10 +805,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         />
 
         {/* Right: Annotation & Search Panel + Review Actions */}
-        <div style={{ display: "flex", flexDirection: "column", width: 380, borderLeft: "1px solid var(--border-color)" }}>
+        <div className="inspector-pane">
           {selectedSource ? <section className="detail-pane" aria-label="Referenzdetails">
             <div className="detail-section">
-              <h2>{selectedSource.annotation.term_id}</h2>
+              <h2><TermName termId={selectedSource.annotation.term_id} label={termLabel(selectedSource.annotation.layer_id, selectedSource.annotation.term_id)} /></h2>
               <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label} · Nur lesen</p>
               <p>{selectedSource.annotation.provenance.actor.actor_id} · {selectedSource.annotation.provenance.method}</p>
               {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Nicht angegeben"}</p>)}
@@ -816,7 +826,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 onSelectCandidate={(candidate, searchId) => { void createPendingAnnotation(candidate.term_id, searchId); }} />
               <button type="button" className="btn btn-secondary" disabled={queueState === "saving"} onClick={cancelPending}>Abbrechen</button>
             </div>
-          </section> : <AnnotationPanel
+          </section> : view.key.mode === "review" && selectedTarget && !selectedAnnotation ? null : <AnnotationPanel
             key={selectedAnnotationId ?? "empty"}
             annotation={selectedAnnotation}
             allEvidence={allEvidenceMap}
@@ -824,6 +834,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             searchManager={searchManager}
             selectedEvidenceId={selectedEvidenceId}
             layerId={selectedAnnotation?.annotation.layer_id}
+            termLabel={selectedAnnotation ? termLabel(selectedAnnotation.annotation.layer_id, selectedAnnotation.annotation.term_id) : null}
             axesConfig={currentAxesConfig}
             onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
             onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
@@ -840,6 +851,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <ReviewActions
               key={refKey(selectedTarget)}
               target={selectedTarget}
+              termLabel={termLabel(selectedTarget.layer_id, selectedTarget.term_id ?? selectedTarget.annotation_id)}
+              resolveTermLabel={termLabel}
               evidence={targetSnapshot?.evidence ?? []}
               documentText={view.document.text}
               currentDecision={decisionsMap[refKey(selectedTarget)] ?? null}
@@ -864,7 +877,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             const axesVal = snap.annotation.axes_values ?? (snap.annotation as any).axes?.values;
             return (
               <div key={refKey({annotation_id:snap.annotation.annotation_id,version:snap.version})}>
-                <strong>{snap.annotation.term_id}</strong>
+                <strong><TermName termId={snap.annotation.term_id} label={termLabel(snap.annotation.layer_id, snap.annotation.term_id)} /></strong>
                 <p>
                   {axesVal && Object.keys(axesVal).length > 0
                     ? Object.entries(axesVal)

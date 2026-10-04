@@ -10,6 +10,8 @@ import {
 } from "./api/client";
 import type { components } from "./api/generated";
 import { CaseScreen } from "./app/CaseScreen";
+import { TermName } from "./editor/TermName";
+import { useTermLabels } from "./editor/useTermLabels";
 
 const snapshotKey = (s: AnnotationSnapshot) => JSON.stringify([s.annotation.annotation_id, s.version]);
 
@@ -29,6 +31,10 @@ export const App: React.FC = () => {
   // Review mode target setup
   const [reviewInputs, setReviewInputs] = useState<AnnotationSnapshot[]>([]);
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
+  const reviewTermLabel = useTermLabels(selectedPackageId ?? "", reviewInputs.map((input) => ({
+    layer_id: input.annotation.layer_id,
+    term_id: input.annotation.term_id,
+  })));
   const [isLoadingInputs, setIsLoadingInputs] = useState<boolean>(false);
 
   // Active workspace view
@@ -497,7 +503,7 @@ export const App: React.FC = () => {
                           }}
                         />
                         <div style={{ flex: 1 }}>
-                          <span style={{ fontWeight: 600 }}>{term}</span>
+                          <span style={{ fontWeight: 600 }}><TermName termId={term} label={reviewTermLabel(ann.layer_id, term)} /></span>
                           <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginLeft: 8 }}>
                             ({ann.evidence_refs?.length ?? 0} Belegstellen • Version: {input.version.slice(0, 8)})
                           </span>

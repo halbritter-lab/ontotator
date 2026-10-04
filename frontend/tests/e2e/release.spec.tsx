@@ -210,14 +210,6 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
         } as any;
       });
 
-    const applyCommandSpy = vi.spyOn(api, "applyCommand").mockImplementation(async () => {
-      return {
-        ...e2eView.draft,
-        decisions: currentDecisions,
-        checked_layer_ids: ["phenotype"],
-      } as any;
-    });
-
     const submitSpy = vi.spyOn(api, "submitWorkspace").mockResolvedValue({
       format_version: "ontocurator-work-package/v2",
       submission_id: "sub-e2e-final-1",
@@ -292,12 +284,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     });
 
     // 5. Complete / Submit workspace
-    // Toggle document checked confirmation
-    const checkbox = screen.getByRole("checkbox", { name: /Dokument vollständig geprüft/i });
-    fireEvent.click(checkbox);
-    await waitFor(() => expect(applyCommandSpy).toHaveBeenCalled());
-
-    // Click confirm submission
+    // Submitting a single-layer case also marks that layer checked.
     const submitBtn = screen.getByRole("button", { name: /Fall abschließen & abgeben/i });
     fireEvent.click(submitBtn);
 

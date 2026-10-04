@@ -67,6 +67,7 @@ body {
   border-radius: 9999px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .badge-independent {
@@ -111,6 +112,10 @@ body {
   overflow: hidden;
 }
 
+.mobile-pane-tabs {
+  display: none;
+}
+
 /* Left Sidebar: Document / Package List */
 .sidebar {
   width: 280px;
@@ -148,12 +153,27 @@ body {
 
 .doc-item.selected {
   background: var(--primary-light);
-  border-left: 4px solid var(--primary);
+  border-left: 1px solid var(--primary);
 }
 
 .doc-id {
   font-weight: 600;
   font-size: 0.95rem;
+}
+
+.term-name {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+.term-name small {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 400;
+  margin-top: 2px;
 }
 
 .doc-meta {
@@ -202,6 +222,34 @@ body {
   flex-shrink: 0;
 }
 
+.inspector-pane {
+  width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-left: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  overflow-wrap: anywhere;
+}
+
+.technical-details {
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.technical-details summary {
+  cursor: pointer;
+}
+
+.inspector-pane .detail-pane {
+  width: 100%;
+  overflow: visible;
+  flex-shrink: 0;
+  border-left: 0;
+}
+
 .detail-section {
   padding: 16px;
   border-bottom: 1px solid var(--border-color);
@@ -225,6 +273,39 @@ body {
   font-weight: 500;
   margin-bottom: 4px;
   color: var(--text-main);
+}
+
+.axis-field {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.axis-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.axis-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.axis-option:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.axis-option:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .form-control, .form-select {
@@ -397,19 +478,92 @@ body {
 
 /* Responsive behavior */
 @media (max-width: 1024px) {
+  .app-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .app-title {
+    flex-wrap: wrap;
+  }
   .app-layout {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: minmax(260px, 1fr) minmax(180px, 38vh);
   }
   .sidebar {
-    width: 100%;
-    max-height: 180px;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
+    width: 220px;
+    grid-row: 1 / 3;
+    min-height: 0;
+  }
+  .center-pane {
+    min-width: 0;
+    min-height: 0;
   }
   .detail-pane {
     width: 100%;
-    max-height: 300px;
-    border-left: none;
+  }
+  .inspector-pane {
+    grid-column: 2;
+    width: 100%;
+    border-left: 0;
     border-top: 1px solid var(--border-color);
+  }
+  .inspector-pane .detail-pane {
+    max-height: none;
+    border-top: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .app-header > div:last-child {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .app-header .btn,
+  .case-navigation .btn {
+    white-space: nowrap;
+  }
+  .case-navigation {
+    flex-wrap: wrap;
+  }
+  .mobile-pane-tabs {
+    display: flex;
+    flex-shrink: 0;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-color);
+  }
+  .mobile-pane-tabs button {
+    flex: 1;
+    padding: 9px;
+    border: 0;
+    background: transparent;
+    color: var(--text-main);
+    font: inherit;
+    cursor: pointer;
+  }
+  .mobile-pane-tabs button[aria-pressed="true"] {
+    color: var(--primary-hover);
+    border-bottom: 2px solid var(--primary);
+    font-weight: 600;
+  }
+  .app-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  .app-layout.mobile-pane-list .center-pane,
+  .app-layout.mobile-pane-list .inspector-pane,
+  .app-layout.mobile-pane-text .sidebar,
+  .app-layout.mobile-pane-text .inspector-pane,
+  .app-layout.mobile-pane-details .sidebar,
+  .app-layout.mobile-pane-details .center-pane {
+    display: none;
+  }
+  .sidebar,
+  .center-pane,
+  .inspector-pane {
+    width: 100%;
+    min-height: 0;
+    max-height: none;
+    flex: 1;
   }
 }

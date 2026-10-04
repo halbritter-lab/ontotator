@@ -24,6 +24,8 @@ export type LayerDefinition = components["schemas"]["LayerDefinition"];
 export type TaskScope = components["schemas"]["TaskScope"];
 export type AnnotationTypeDefinition = components["schemas"]["AnnotationTypeDefinition"];
 export type OntologyDefinition = components["schemas"]["OntologyDefinition"];
+export type TermLookup = { layer_id: string; term_id: string };
+export type TermLabel = TermLookup & { label: string | null };
 
 export class ApiError extends Error {
   readonly status: number;
@@ -308,6 +310,13 @@ export class ApiClient {
     return this.request<SearchResult>("/api/v1/search", {
       method: "POST",
       body: JSON.stringify(req),
+    });
+  }
+
+  async resolveTermLabels(packageId: string, terms: TermLookup[]): Promise<TermLabel[]> {
+    return this.request<TermLabel[]>("/api/v1/terms/labels", {
+      method: "POST",
+      body: JSON.stringify({ package_id: packageId, terms }),
     });
   }
 

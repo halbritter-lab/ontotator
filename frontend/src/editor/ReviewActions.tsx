@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { AnnotationSnapshot } from "../api/client";
 import type { components } from "../api/generated";
+import { TermName } from "./TermName";
 
 export type ReviewDecision = components["schemas"]["ReviewDecision"];
 export type ReviewDecisionOutcome = "confirmed" | "rejected" | "changed" | "uncertain";
@@ -30,6 +31,8 @@ export interface DecisionPayload {
 
 export interface ReviewActionsProps {
   target: TargetProposal;
+  termLabel?: string | null;
+  resolveTermLabel?: (layerId: string, termId: string) => string | null;
   currentDecision: ReviewDecision | null;
   draftAnnotations: AnnotationSnapshot[];
   evidence?: components["schemas"]["EvidenceSnapshot"][];
@@ -39,6 +42,8 @@ export interface ReviewActionsProps {
 
 export const ReviewActions: React.FC<ReviewActionsProps> = ({
   target,
+  termLabel,
+  resolveTermLabel,
   currentDecision,
   draftAnnotations,
   onDecide,
@@ -121,7 +126,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       </div>
 
       <div className="detail-section" aria-label="Vorschlagsdetails">
-        <strong>{target.term_id}</strong>
+        <strong><TermName termId={target.term_id ?? target.annotation_id} label={termLabel} /></strong>
         <dl>
           {(() => {
             const rawAxes = target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
@@ -137,10 +142,13 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             ));
           })()}
         </dl>
-        <p>Version: {target.version}</p>
         {evidence.length ? evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
           {ev.mention.segments.map(seg => Array.from(documentText).slice(seg.start, seg.end).join("")).join(" … ")}
         </p>) : <p>Keine Belegstelle (spanlos)</p>}
+        <details className="technical-details">
+          <summary>Technische Angaben</summary>
+          <p>Version: {target.version}</p>
+        </details>
       </div>
       {/* Origin Info */}
       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 12 }}>
@@ -255,9 +263,10 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
               })
               .map((snap) => {
                 const term = snap.annotation.term_id;
+                const label = resolveTermLabel?.(snap.annotation.layer_id, term);
                 return (
                   <option key={snap.annotation.annotation_id} value={snap.annotation.annotation_id}>
-                    {term} (ID: {snap.annotation.annotation_id.slice(0, 10)})
+                    {label ? `${label} (${term})` : term} · {snap.annotation.annotation_id.slice(0, 10)}
                   </option>
                 );
               })}

@@ -74,6 +74,37 @@ def test_auth_and_host_validation(app_client):
     assert resp.status_code == 403
 
 
+def test_term_labels_resolve_from_package_layer_without_search_event(app_client):
+    client, _ = app_client
+    imported = client.post(
+        "/api/v1/packages",
+        files={
+            "file": (
+                "package.zip",
+                _create_sample_package_bytes("single"),
+                "application/zip",
+            )
+        },
+    )
+    assert imported.status_code == 200
+
+    response = client.post(
+        "/api/v1/terms/labels",
+        json={
+            "package_id": "pkg-scenario-a",
+            "terms": [
+                {"layer_id": "hpo-layer", "term_id": "HP:0001250"},
+                {"layer_id": "hpo-layer", "term_id": "HP:9999999"},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == [
+        {"layer_id": "hpo-layer", "term_id": "HP:0001250", "label": "Seizure"},
+        {"layer_id": "hpo-layer", "term_id": "HP:9999999", "label": None},
+    ]
+
+
 def test_full_package_review_and_export_lifecycle(app_client):
     client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("single")
@@ -423,6 +454,22 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
         files={"file": ("package.zip", buffer.getvalue(), "application/zip")},
     )
     assert imported.status_code == 200, imported.text
+
+    labels = client.post(
+        "/api/v1/terms/labels",
+        json={
+            "package_id": "pkg-scenario-c",
+            "terms": [
+                {"layer_id": "layer-1", "term_id": "HP:0001250"},
+                {"layer_id": "layer-2", "term_id": "HP:0001250"},
+            ],
+        },
+    )
+    assert labels.status_code == 200, labels.text
+    assert [item["label"] for item in labels.json()] == [
+        "Seizure",
+        "Secondary seizure label",
+    ]
 
     open_res = client.post(
         "/api/v1/workspaces/open",

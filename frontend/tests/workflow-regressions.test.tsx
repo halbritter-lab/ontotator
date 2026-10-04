@@ -132,14 +132,7 @@ it("submits the API payload and preserves its envelope through a lost-response r
    targets: view.targets,
  };
  const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(new Error("response lost")).mockResolvedValue(submission as any);
- const applyCommand = vi.spyOn(api, "applyCommand").mockResolvedValue({
-   ...view.draft,
-   revision: 1,
-   checked_layer_ids: ["phenotype"],
- });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
- fireEvent.click(screen.getByRole("checkbox"));
- await waitFor(() => expect(applyCommand).toHaveBeenCalled());
  fireEvent.click(screen.getByRole("button", { name: /Fall abschließen/ }));
  await waitFor(() => expect(screen.getByText(/Erneut versuchen/)).toBeDefined());
  expect(submit.mock.calls[0][1].payload).toEqual({
@@ -248,7 +241,7 @@ it("binds a changed decision to the replacement version after queued edits", asy
  const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...view.draft, revision: 2 });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));
- fireEvent.change(screen.getByLabelText(/Vorhandensein/), { target: { value: "present" } });
+ fireEvent.click(screen.getByRole("radio", { name: "Vorhanden" }));
  await waitFor(() => expect(finish).toBeDefined());
  fireEvent.click(screen.getByRole("button", { name: /Ändern \(Gegenfassung\)/ }));
  fireEvent.click(screen.getByRole("button", { name: "Änderung bestätigen" }));

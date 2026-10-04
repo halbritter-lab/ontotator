@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ontocurator.application.editing import EditorService
 from ontocurator.application.exports import ExportService
@@ -91,6 +91,20 @@ class OpenWorkspaceResponse(BaseModel):
 
     workspace_id: str
     view: WorkspaceView
+
+
+class TermLookup(BaseModel):
+    layer_id: str
+    term_id: str
+
+
+class TermLabelsRequest(BaseModel):
+    package_id: str
+    terms: list[TermLookup] = Field(max_length=200)
+
+
+class TermLabel(TermLookup):
+    label: str | None
 
 
 # --- Dependencies ------------------------------------------------------------- #
@@ -188,6 +202,26 @@ def list_package_documents(
 ) -> list[DocumentSummary]:
     """List documents showing metadata only, without proposal counts."""
     return ws_svc.list_documents(package_id, annotator_id, mode)
+
+
+@router.post("/terms/labels")
+def resolve_term_labels(
+    payload: TermLabelsRequest,
+    repo: RepoDep,
+    ontology: OntologyDep,
+) -> list[TermLabel]:
+    """Resolve display names against the ontology pinned to each package layer."""
+    profile = repo.get_task_profile(payload.package_id)
+    return [
+        TermLabel(
+            layer_id=term.layer_id,
+            term_id=term.term_id,
+            label=ontology.for_layer(profile, term.layer_id)
+            .validate_term(term.term_id)
+            .label,
+        )
+        for term in payload.terms
+    ]
 
 
 @router.post("/workspaces/review-inputs")

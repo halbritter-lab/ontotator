@@ -3,6 +3,7 @@ import type { AnnotationSnapshot, SearchCandidate } from "../api/client";
 import type { components } from "../api/generated";
 import type { CodepointSegment } from "../spans/adapter";
 import { SearchPanel } from "./SearchPanel";
+import { TermName } from "./TermName";
 import type { SearchManager, WorkspaceKey } from "./searchState";
 
 export type AxesValues = Record<string, string | null>;
@@ -19,6 +20,7 @@ export interface AnnotationPanelProps {
   layerId?: string;
   axesConfig?: AxisDefinition[];
   axesDefinition?: string;
+  termLabel?: string | null;
   onSelectEvidence: (evidenceId: string) => void;
   onUpdateTerm: (termId: string, searchId?: string) => void;
   onUpdateAxes: (axes: Partial<Axes>) => void;
@@ -36,6 +38,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   selectedEvidenceId,
   layerId,
   axesConfig,
+  termLabel,
   onSelectEvidence,
   onUpdateTerm,
   onUpdateAxes,
@@ -85,7 +88,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               Ontologie-Term
             </span>
             <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "2px 0 4px" }}>
-              {currentTerm}
+              <TermName termId={currentTerm} label={termLabel} />
             </h2>
           </div>
           <button
@@ -118,34 +121,44 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           {axesConfig.map((axis) => {
             const val = axesValues[axis.id] ?? "";
             const isRequired = !axis.allow_empty;
+            const options = [
+              ...(axis.allow_empty ? [{ value: "", label: "Nicht angegeben" }] : []),
+              ...axis.options.map((option) => ({ value: option, label: ({
+                present: "Vorhanden", absent: "Nicht vorhanden", uncertain: "Unsicher",
+                patient: "Patient:in", other: "Andere Person", current: "Aktuell",
+                historical: "Früher", future: "Zukünftig",
+              } as Record<string, string>)[option] ?? option })),
+            ];
+            const updateAxis = (value: string) => onUpdateAxes({
+              ...axesValues,
+              [axis.id]: value === "" ? null : value,
+            });
 
             return (
-              <div key={axis.id} className="form-group">
-                <label htmlFor={`axis-select-${axis.id}`} className="form-label">
+              <fieldset key={axis.id} className="form-group axis-field">
+                <legend className="form-label">
                   {axis.label} {isRequired && <span style={{ color: "var(--danger)" }}>* (Pflichtfeld)</span>}
-                </label>
-                <select
-                  id={`axis-select-${axis.id}`}
-                  aria-label={axis.label}
-                  className="form-select"
-                  value={val}
-                  onChange={(e) => {
-                    const nextVal = e.target.value === "" ? null : e.target.value;
-                    const updated = {
-                      ...axesValues,
-                      [axis.id]: nextVal,
-                    };
-                    onUpdateAxes(updated);
-                  }}
-                >
-                  <option value="">(Nicht angegeben / keine Auswahl)</option>
-                  {axis.options.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                </legend>
+                {options.length <= 4 ? (
+                  <div className="axis-options">
+                    {options.map((option) => (
+                      <label key={option.value} className="axis-option">
+                        <input type="radio" name={`axis-${ann.annotation_id}-${axis.id}`}
+                          value={option.value} checked={val === option.value}
+                          onChange={() => updateAxis(option.value)} />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <select id={`axis-select-${axis.id}`} aria-label={axis.label}
+                    className="form-select" value={val} onChange={(e) => updateAxis(e.target.value)}>
+                    {axis.allow_empty && <option value="">Nicht angegeben</option>}
+                    {!axis.allow_empty && <option value="" disabled>Bitte auswählen</option>}
+                    {axis.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                )}
+              </fieldset>
             );
           })}
         </div>

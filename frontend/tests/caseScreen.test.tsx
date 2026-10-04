@@ -1,7 +1,21 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
+import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
 import { api } from "../src/api/client";
+
+it("defaults only the assertion for HPO terms", () => {
+  const axes = [
+    { id: "assertion", options: ["present", "absent"] },
+    { id: "experiencer", options: ["patient", "other"] },
+    { id: "temporality", options: ["current", "historical"] },
+  ];
+  expect(initialAxisValues(axes, "HP:0001252")).toEqual({
+    assertion: "present", experiencer: null, temporality: null,
+  });
+  expect(initialAxisValues(axes, "MONDO:0000001")).toEqual({
+    assertion: null, experiencer: null, temporality: null,
+  });
+});
 
 describe("CaseScreen integration", () => {
   const sampleView: WorkspaceView = {
@@ -110,6 +124,18 @@ describe("CaseScreen integration", () => {
     expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
   });
 
+  it("switches the compact view between text, list, and details", () => {
+    const rendered = render(
+      <CaseScreen view={sampleView} workspaceId="ws-test-token" onClose={vi.fn()} />
+    );
+    const layout = rendered.container.querySelector(".app-layout")!;
+    expect(layout.classList.contains("mobile-pane-text")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Liste" }));
+    expect(layout.classList.contains("mobile-pane-list")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(layout.classList.contains("mobile-pane-details")).toBe(true);
+  });
+
   it("creates spanless annotation without text segments", async () => {
     const updatedDraft = {
       ...sampleView.draft,
@@ -173,6 +199,11 @@ describe("CaseScreen integration", () => {
             command: "create_annotation",
             term_id: "HP:0001252",
             segments: [],
+            axes_values: {
+              assertion: "present",
+              experiencer: null,
+              temporality: null,
+            },
           }),
         })
       );
@@ -183,7 +214,7 @@ describe("CaseScreen integration", () => {
     expect(screen.getAllByText(/Spanlos/i).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("updates clinical axes without setting unwarranted defaults", async () => {
+  it("updates clinical axes on an existing annotation", async () => {
     const viewWithAnn = {
       ...sampleView,
       draft: {
@@ -253,12 +284,9 @@ describe("CaseScreen integration", () => {
     // Select the annotation item
     fireEvent.click(screen.getByText("HP:0001252"));
 
-    // Check Assertion select value is initially empty (no default!)
-    const select = screen.getByLabelText(/Vorhandensein/i) as HTMLSelectElement;
-    expect(select.value).toBe("");
+    expect((screen.getAllByRole("radio", { name: "Nicht angegeben" })[0] as HTMLInputElement).checked).toBe(true);
 
-    // Change to 'absent'
-    fireEvent.change(select, { target: { value: "absent" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Nicht vorhanden" }));
 
     await waitFor(() => {
       expect(applyCommandSpy).toHaveBeenCalledWith(

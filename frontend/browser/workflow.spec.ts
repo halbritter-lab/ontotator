@@ -20,15 +20,13 @@ test("real backend: review, resume, reload, submit and authenticated export", as
   await expect(page.getByLabel("Vorschlagsdetails")).toContainText("Hypotonia");
   await page.getByRole("button", { name: "✓ Bestätigen", exact: true }).click();
   await expect(page.locator(".status-badge")).toContainText("Rev 1");
-  await page.getByRole("button", { name: /Zurück/ }).click();
+  await page.getByRole("button", { name: /Übersicht/ }).click();
   await page.getByRole("button", { name: /Aktualisieren/ }).click();
   await expect(page.getByText("Verfügbare Vorschläge zur Prüfung (2)")).toBeVisible();
   await page.getByRole("button", { name: /Arbeitsbereich öffnen/ }).click();
   await expect(page.locator(".doc-item").filter({ hasText: "HP:0001252" })).toContainText("confirmed");
   await page.locator(".doc-item").filter({ hasText: "HP:0001250" }).click();
   await page.getByRole("button", { name: "✓ Bestätigen", exact: true }).click();
-  await page.getByLabel("Dokument vollständig geprüft").click();
-  await expect(page.getByLabel("Dokument vollständig geprüft")).toBeChecked();
   await page.getByRole("button", { name: /Fall abschließen/ }).click();
   await expect(page.getByText(/Erfolgreich abgegeben|Abgabe erfolgreich|Fall erfolgreich/i).first()).toBeVisible();
   const downloadPromise = page.waitForEvent("download");

@@ -158,6 +158,49 @@
         }
       }
     },
+    "/api/v1/terms/labels": {
+      "post": {
+        "summary": "Resolve Term Labels",
+        "description": "Resolve display names against the ontology pinned to each package layer.",
+        "operationId": "resolve_term_labels_api_v1_terms_labels_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TermLabelsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TermLabel"
+                  },
+                  "type": "array",
+                  "title": "Response Resolve Term Labels Api V1 Terms Labels Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workspaces/review-inputs": {
       "post": {
         "summary": "Get Review Inputs",
@@ -1883,6 +1926,76 @@
         ],
         "title": "TaskScope",
         "description": "Execution scope defining active editable and reference layers for a workspace."
+      },
+      "TermLabel": {
+        "properties": {
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "layer_id",
+          "term_id",
+          "label"
+        ],
+        "title": "TermLabel"
+      },
+      "TermLabelsRequest": {
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/TermLookup"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Terms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "package_id",
+          "terms"
+        ],
+        "title": "TermLabelsRequest"
+      },
+      "TermLookup": {
+        "properties": {
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "layer_id",
+          "term_id"
+        ],
+        "title": "TermLookup"
       },
       "ValidationError": {
         "properties": {

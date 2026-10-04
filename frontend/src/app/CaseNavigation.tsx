@@ -63,7 +63,7 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         disabled={!hasPrev || disabled}
         title="Zum vorherigen Fall im Paket wechseln"
       >
-        ‹ Zurück
+        ‹ Vorheriger Fall
       </button>
 
       <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)", whiteSpace: "nowrap" }}>
@@ -78,7 +78,7 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         disabled={!hasNext || disabled}
         title="Zum nächsten Fall im Paket wechseln"
       >
-        Weiter ›
+        Nächster Fall ›
       </button>
 
       {total > 1 && (
