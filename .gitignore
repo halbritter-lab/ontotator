@@ -45,6 +45,7 @@ workspace/
 *.zip
 !tests/fixtures/**
 
-# Git worktrees
+# Git worktrees & tooling
 .worktrees/
 worktrees/
+.superpowers/
