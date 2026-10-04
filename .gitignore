@@ -41,3 +41,7 @@ workspace/
 *.sqlite3
 *.db
 *.zip
+
+# Git worktrees
+.worktrees/
+worktrees/
