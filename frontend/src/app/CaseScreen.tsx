@@ -857,12 +857,58 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
   }, [selectedAnnotation, view.key.mode, draft.decisions, reviewTargets, termLabel]);
 
+  const currentIndex = documentList?.findIndex((d) => d.document_id === view.document.document_id) ?? -1;
+  const prevDoc = currentIndex > 0 && documentList ? documentList[currentIndex - 1] : null;
+  const nextDoc = currentIndex >= 0 && documentList && currentIndex < documentList.length - 1 ? documentList[currentIndex + 1] : null;
+
+  useEffect(() => {
+    const handleCaseNavShortcuts = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (e.altKey && e.key === "ArrowRight") {
+        if (nextDoc && onNavigateCase && queueState !== "saving") {
+          e.preventDefault();
+          void (async () => {
+            try {
+              await queueRef.current.flush();
+              await onNavigateCase(nextDoc.document_id);
+            } catch (err) { reportError(err); }
+          })();
+        }
+      } else if (e.altKey && e.key === "ArrowLeft") {
+        if (prevDoc && onNavigateCase && queueState !== "saving") {
+          e.preventDefault();
+          void (async () => {
+            try {
+              await queueRef.current.flush();
+              await onNavigateCase(prevDoc.document_id);
+            } catch (err) { reportError(err); }
+          })();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleCaseNavShortcuts);
+    return () => window.removeEventListener("keydown", handleCaseNavShortcuts);
+  }, [nextDoc, prevDoc, onNavigateCase, queueState]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
       <header className="app-header">
-        <div className="app-title">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={async () => { try { await queueRef.current.flush(); onClose(); } catch (error) { reportError(error); } }}>
+        <div className="app-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={async () => {
+              try {
+                await queueRef.current.flush();
+                onClose();
+              } catch (error) {
+                reportError(error);
+              }
+            }}
+            title="Zurück zum Dashboard"
+          >
             ← Übersicht
           </button>
           {documentList && documentList.length > 0 && onNavigateCase ? (
@@ -880,7 +926,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               disabled={queueState === "saving"}
             />
           ) : (
-            <span>Fall: {view.document.document_id}</span>
+            <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>Fall: {view.document.document_id}</span>
           )}
           <span
             className={`badge ${
@@ -898,7 +944,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               : "Unabhängige Annotation"}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span
             className={`status-badge ${
               queueState === "saved"
@@ -921,27 +967,31 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </button>
           )}
 
-
-
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={handleStartSpanless}
-            title="Neue Annotation über Ontologie-Suche anlegen"
-          >
-            + Neue Annotation
-          </button>
-
           <button
             onClick={downloadExport}
             className="btn btn-secondary btn-sm"
+            title="Fall-Daten als ZIP exportieren"
           >
             📥 Export (.zip)
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={handleSubmitWorkspace}
+            title="Fall abschließen und abgeben"
+            style={{ fontWeight: 600, padding: "5px 12px" }}
+          >
+            ✓ Fall abgeben
           </button>
         </div>
       </header>
 
-      {actionError && <div role="alert" style={{ color: "var(--danger)", padding: 12 }}>{actionError}</div>}
+      {(actionError || submitError) && (
+        <div role="alert" style={{ color: "var(--danger)", padding: 12, background: "var(--danger-light)", borderBottom: "1px solid var(--border-color)" }}>
+          {actionError ?? submitError}
+        </div>
+      )}
       <nav className="mobile-pane-tabs" aria-label="Ansicht wählen">
         {([ ["list", "Liste"], ["text", "Text"], ["details", "Details"] ] as const).map(([pane, label]) => (
           <button key={pane} type="button" aria-pressed={mobilePane === pane}
@@ -1105,8 +1155,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </button>)}
           </section>}
 
-          <div className="sidebar-header">
-            Eigene Annotationen ({visibleAnnotations.length})
+          <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Eigene Annotationen ({visibleAnnotations.length})</span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleStartSpanless}
+              title="Neue Annotation über Ontologie-Suche anlegen"
+              style={{ fontSize: "0.75rem", padding: "2px 8px" }}
+            >
+              + Neue Annotation
+            </button>
           </div>
           <ul className="doc-list">
             {visibleAnnotations.map((annSnap) => {
@@ -1347,10 +1406,22 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <h2>✓ Fall erfolgreich abgegeben!</h2>
           <p>Abgabe-ID: <code>{completedSubmission.submission_id}</code></p>
           <p>Zeitstempel: {completedSubmission.created_at}</p>
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+            {nextDoc && onNavigateCase && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={async () => {
+                  setCompletedSubmission(null);
+                  await onNavigateCase(nextDoc.document_id);
+                }}
+              >
+                Nächsten Fall bearbeiten (Fall {nextDoc.position}) →
+              </button>
+            )}
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-secondary"
               onClick={downloadExport}
             >
               📥 Export herunterladen

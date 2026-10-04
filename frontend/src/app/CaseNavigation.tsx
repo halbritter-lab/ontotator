@@ -50,36 +50,60 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
       className="case-navigation"
       data-testid="case-navigation"
       style={{
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: 6,
       }}
     >
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        aria-label="Vorheriger Fall"
-        onClick={handlePrev}
-        disabled={!hasPrev || disabled}
-        title="Zum vorherigen Fall im Paket wechseln"
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          border: "1px solid var(--border-color)",
+          borderRadius: "var(--radius)",
+          background: "var(--bg-surface)",
+          overflow: "hidden",
+        }}
       >
-        ‹ Vorheriger Fall
-      </button>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          aria-label="Vorheriger Fall"
+          onClick={handlePrev}
+          disabled={!hasPrev || disabled}
+          title="Vorheriger Fall (Alt + ←)"
+          style={{ border: "none", borderRadius: 0, padding: "3px 8px", fontSize: "0.9rem" }}
+        >
+          ‹ Vorheriger Fall
+        </button>
 
-      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)", whiteSpace: "nowrap" }}>
-        Fall {position} von {total}
-      </span>
+        <span
+          style={{
+            fontSize: "0.82rem",
+            fontWeight: 600,
+            color: "var(--text-main)",
+            padding: "0 10px",
+            whiteSpace: "nowrap",
+            borderLeft: "1px solid var(--border-color)",
+            borderRight: "1px solid var(--border-color)",
+            lineHeight: "26px",
+          }}
+        >
+          Fall {position} von {total}
+        </span>
 
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        aria-label="Nächster Fall"
-        onClick={handleNext}
-        disabled={!hasNext || disabled}
-        title="Zum nächsten Fall im Paket wechseln"
-      >
-        Nächster Fall ›
-      </button>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          aria-label="Nächster Fall"
+          onClick={handleNext}
+          disabled={!hasNext || disabled}
+          title="Nächster Fall (Alt + →)"
+          style={{ border: "none", borderRadius: 0, padding: "3px 8px", fontSize: "0.9rem" }}
+        >
+          Nächster Fall ›
+        </button>
+      </div>
 
       {total > 1 && (
         <select

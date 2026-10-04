@@ -414,4 +414,36 @@ describe("CaseScreen integration", () => {
     expect(screen.queryByLabelText("Referenzannotationen")).toBeNull();
   });
 
+  it("navigates cases using Alt+ArrowRight and Alt+ArrowLeft keyboard shortcuts", async () => {
+    const onNavigate = vi.fn().mockResolvedValue(undefined);
+    const docs = [
+      { document_id: "doc-1", text_length: 100, language: "de", position: 1, status: "completed" as const },
+      { document_id: "doc-test-1", text_length: 100, language: "de", position: 2, status: "in_progress" as const },
+      { document_id: "doc-3", text_length: 100, language: "de", position: 3, status: "not_started" as const },
+    ];
+
+    render(
+      <CaseScreen
+        view={sampleView}
+        workspaceId="ws-test"
+        onClose={vi.fn()}
+        onNavigateCase={onNavigate}
+        documentList={docs}
+      />
+    );
+
+    // Alt + ArrowRight -> next document
+    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    await waitFor(() => {
+      expect(onNavigate).toHaveBeenCalledWith("doc-3");
+    });
+
+    // Alt + ArrowLeft -> previous document
+    fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
+    await waitFor(() => {
+      expect(onNavigate).toHaveBeenCalledWith("doc-1");
+    });
+  });
+
 });
+
