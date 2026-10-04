@@ -439,26 +439,31 @@ async def upload_ontology(
     )
     workspace_ont_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = file.filename or "ontology.json"
-    dest_path = workspace_ont_dir / filename
-    dest_path.write_bytes(content)
+    safe_name = Path(file.filename or "ontology.json").name
+    dest_path = workspace_ont_dir / safe_name
+    tmp_path = workspace_ont_dir / f".upload-{uuid4().hex}.tmp"
+    tmp_path.write_bytes(content)
 
     try:
         from ontocurator.domain.documents import OntologyRef
         from ontocurator.ontology.service import OntologyService
 
-        digest = registry.register_path(dest_path)
+        digest = registry.register_path(tmp_path)
         if registry.get_service(digest) is None:
             svc = OntologyService.load(
-                dest_path, OntologyRef(release="uploaded", sha256=digest)
+                tmp_path, OntologyRef(release="uploaded", sha256=digest)
             )
+            tmp_path.replace(dest_path)
+            registry.register_path(dest_path)
             registry.register_service(svc)
         else:
+            if tmp_path.is_file():
+                tmp_path.unlink()
             svc = registry.get_service(digest)
             assert svc is not None
     except Exception as exc:
-        if dest_path.is_file():
-            dest_path.unlink()
+        if tmp_path.is_file():
+            tmp_path.unlink()
         raise HTTPException(
             status_code=400, detail=f"Failed to register ontology: {exc}"
         ) from exc

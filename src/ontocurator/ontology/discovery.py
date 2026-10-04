@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def is_probable_obo_graph(path: Path) -> bool:
@@ -10,11 +13,11 @@ def is_probable_obo_graph(path: Path) -> bool:
         return False
     try:
         with open(path, encoding="utf-8") as f:
-            head = f.read(1024)
-            if '"graphs"' in head and '"nodes"' in head:
+            head = f.read(65536)
+            if '"graphs"' in head and ('"nodes"' in head or '"id"' in head):
                 return True
-        # For small files or pretty-printed files where nodes might be after 1024 chars
-        if path.stat().st_size < 100 * 1024 * 1024:
+        # For pretty-printed or formatted small files under 5MB where nodes might be after 64KB
+        if path.stat().st_size < 5 * 1024 * 1024:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
                 return isinstance(data, dict) and "graphs" in data
@@ -38,5 +41,9 @@ def discover_ontologies(search_dirs: list[Path]) -> list[Path]:
             if is_probable_obo_graph(resolved):
                 seen_resolved.add(resolved)
                 found.append(resolved)
+            else:
+                logger.warning(
+                    "Skipping incompatible or non-OBO JSON file: %s", resolved
+                )
 
     return found

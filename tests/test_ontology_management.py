@@ -107,3 +107,35 @@ def test_upload_invalid_ontology_returns_400(tmp_path: Path) -> None:
         files={"file": ("broken.json", b"{not valid json", "application/json")},
     )
     assert res_upload.status_code == 400
+
+
+def test_invalid_upload_does_not_overwrite_or_delete_existing_ontology(
+    tmp_path: Path,
+) -> None:
+    ws = tmp_path / "workspace"
+    ont_dir = ws / "ontologies"
+    ont_dir.mkdir(parents=True)
+    existing_ont = ont_dir / "hp.json"
+    original_content = json.dumps(SAMPLE_OBO_JSON)
+    existing_ont.write_text(original_content, encoding="utf-8")
+
+    config = AppConfig(
+        workspace_dir=ws,
+        database_path=ws / "editor.db",
+        session_token="test-token",
+        port=8000,
+        host="127.0.0.1",
+    )
+    app = create_app(config)
+    client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+
+    # Attempt to upload an invalid file with the same filename
+    res_upload = client.post(
+        "/api/v1/ontologies",
+        files={"file": ("hp.json", b"{corrupted content...", "application/json")},
+    )
+    assert res_upload.status_code == 400
+
+    # The original file must still exist and be completely intact!
+    assert existing_ont.is_file()
+    assert existing_ont.read_text(encoding="utf-8") == original_content
