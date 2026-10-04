@@ -38,7 +38,7 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    expect(screen.getByText(/Fall 1 von 3/i)).toBeTruthy();
+    expect(screen.getByText(/Case 1 of 3|Fall 1 von 3/i)).toBeTruthy();
   });
 
   it("disables previous button on first case and allows next button", () => {
@@ -51,8 +51,8 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    const prevBtn = screen.getByRole("button", { name: /Vorheriger Fall/i });
-    const nextBtn = screen.getByRole("button", { name: /Nächster Fall/i });
+    const prevBtn = screen.getByRole("button", { name: /Previous Case|Vorheriger Fall/i });
+    const nextBtn = screen.getByRole("button", { name: /Next Case|Nächster Fall/i });
 
     expect((prevBtn as HTMLButtonElement).disabled).toBe(true);
     expect((nextBtn as HTMLButtonElement).disabled).toBe(false);
@@ -71,8 +71,8 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    const prevBtn = screen.getByRole("button", { name: /Vorheriger Fall/i });
-    const nextBtn = screen.getByRole("button", { name: /Nächster Fall/i });
+    const prevBtn = screen.getByRole("button", { name: /Previous Case|Vorheriger Fall/i });
+    const nextBtn = screen.getByRole("button", { name: /Next Case|Nächster Fall/i });
 
     expect((prevBtn as HTMLButtonElement).disabled).toBe(false);
     expect((nextBtn as HTMLButtonElement).disabled).toBe(true);
@@ -91,7 +91,7 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    const select = screen.getByRole("combobox", { name: /Fall auswählen/i });
+    const select = screen.getByRole("combobox", { name: /Select case|Fall auswählen/i });
     fireEvent.change(select, { target: { value: "doc-gamma" } });
 
     expect(onNavigate).toHaveBeenCalledWith("doc-gamma");
@@ -106,9 +106,9 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    expect(screen.getByText(/doc-beta.*Abgeschlossen/i)).toBeTruthy();
-    expect(screen.getByText(/doc-alpha.*In Bearbeitung/i)).toBeTruthy();
-    expect(screen.getByText(/doc-gamma.*Nicht begonnen/i)).toBeTruthy();
+    expect(screen.getByText(/doc-beta.*(Completed|Abgeschlossen)/i)).toBeTruthy();
+    expect(screen.getByText(/doc-alpha.*(In Progress|In Bearbeitung)/i)).toBeTruthy();
+    expect(screen.getByText(/doc-gamma.*(Open|Nicht begonnen)/i)).toBeTruthy();
   });
 
   it("disables all controls when disabled prop is true (e.g. saving/flushing)", () => {
@@ -121,9 +121,9 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    const prevBtn = screen.getByRole("button", { name: /Vorheriger Fall/i });
-    const nextBtn = screen.getByRole("button", { name: /Nächster Fall/i });
-    const select = screen.getByRole("combobox", { name: /Fall auswählen/i });
+    const prevBtn = screen.getByRole("button", { name: /Previous Case|Vorheriger Fall/i });
+    const nextBtn = screen.getByRole("button", { name: /Next Case|Nächster Fall/i });
+    const select = screen.getByRole("combobox", { name: /Select case|Fall auswählen/i });
 
     expect((prevBtn as HTMLButtonElement).disabled).toBe(true);
     expect((nextBtn as HTMLButtonElement).disabled).toBe(true);

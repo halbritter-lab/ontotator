@@ -119,9 +119,9 @@ describe("CaseScreen integration", () => {
       />
     );
 
-    expect(screen.getByText("Fall: doc-test-1")).toBeDefined();
-    expect(screen.getByText("Unabhängige Annotation")).toBeDefined();
-    expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
+    expect(screen.getByText(/Case: doc-test-1|Fall: doc-test-1/i)).toBeDefined();
+    expect(screen.getByText(/Independent Mode|Unabhängige Annotation/i)).toBeDefined();
+    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
   });
 
   it("switches the compact view between text, list, and details", () => {
@@ -130,7 +130,7 @@ describe("CaseScreen integration", () => {
     );
     const layout = rendered.container.querySelector(".app-layout")!;
     expect(layout.classList.contains("mobile-pane-text")).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Liste" }));
+    fireEvent.click(screen.getByRole("button", { name: /List|Liste/i }));
     expect(layout.classList.contains("mobile-pane-list")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
     expect(layout.classList.contains("mobile-pane-details")).toBe(true);
@@ -187,12 +187,12 @@ describe("CaseScreen integration", () => {
       candidates: [{ term_id: "HP:0001252", label: "Hypotonia", rank: 1 }],
     } as any);
 
-    // Click "+ Neue Annotation"
-    fireEvent.click(screen.getByText("+ Neue Annotation"));
+    // Click "+ New Annotation" / "+ Neue Annotation"
+    fireEvent.click(screen.getByText(/\+ (New Annotation|Neue Annotation)/i));
 
     // Shows search panel for new annotation
-    expect(screen.getByText("Begriff für neue Annotation wählen")).toBeDefined();
-    fireEvent.change(screen.getByLabelText("Ontologie-Term suchen"), { target: { value: "Hypotonia" } });
+    expect(screen.getByText(/Select term for new annotation|Begriff für neue Annotation wählen/i)).toBeDefined();
+    fireEvent.change(screen.getByLabelText(/Search ontology term|Ontologie-Term suchen/i), { target: { value: "Hypotonia" } });
     fireEvent.keyDown((await screen.findByText("Hypotonia")).closest(".candidate-card")!, { key: "Enter" });
 
     await waitFor(() => {
@@ -216,7 +216,7 @@ describe("CaseScreen integration", () => {
 
     // Check that the annotation appears in the list
     expect(screen.getByText("HP:0001252")).toBeDefined();
-    expect(screen.getAllByText(/Spanlos/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Spanless|Spanlos/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it("updates clinical axes on an existing annotation", async () => {
@@ -289,9 +289,9 @@ describe("CaseScreen integration", () => {
     // Select the annotation item
     fireEvent.click(screen.getByText("HP:0001252"));
 
-    expect((screen.getAllByRole("radio", { name: "Nicht angegeben" })[0] as HTMLInputElement).checked).toBe(true);
+    expect((screen.getAllByRole("radio", { name: /Not specified|Nicht angegeben/i })[0] as HTMLInputElement).checked).toBe(true);
 
-    fireEvent.click(screen.getByRole("radio", { name: "Nicht vorhanden" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Absent|Nicht vorhanden/i }));
 
     await waitFor(() => {
       expect(applyCommandSpy).toHaveBeenCalledWith(
@@ -365,7 +365,7 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByText("HP:0001252"));
 
     // Click delete
-    fireEvent.click(screen.getByText(/Annotation löschen/i));
+    fireEvent.click(screen.getByText(/Delete Annotation|Annotation löschen/i));
 
     await waitFor(() => {
       expect(applyCommandSpy).toHaveBeenCalledWith(
@@ -393,9 +393,9 @@ describe("CaseScreen integration", () => {
     const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 3);
     window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
     fireEvent.mouseUp(text);
-    expect(screen.getByLabelText("Neue Annotation")).toBeDefined();
+    expect(screen.getByLabelText(/New Annotation|Neue Annotation/i)).toBeDefined();
     expect(mutate).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("Ontologie-Term suchen"), { target: { value: "Custom" } });
+    fireEvent.change(screen.getByLabelText(/Search ontology term|Ontologie-Term suchen/i), { target: { value: "Custom" } });
     fireEvent.keyDown((await screen.findByText("Custom finding")).closest(".candidate-card")!, { key: "Enter" });
     await waitFor(() => expect(mutate).toHaveBeenCalledWith("ws-custom", expect.objectContaining({
       expected_revision: 0,
@@ -411,7 +411,7 @@ describe("CaseScreen integration", () => {
     view.available_inputs = [{ annotation: { annotation_id: "private", layer_id: "phenotype", term_id: "SECRET:42" }, evidence: [], version: "v" }] as any;
     render(<CaseScreen view={view} workspaceId="ws-independent" onClose={vi.fn()} />);
     expect(screen.queryByText(/SECRET:42/)).toBeNull();
-    expect(screen.queryByLabelText("Referenzannotationen")).toBeNull();
+    expect(screen.queryByLabelText(/Reference annotations|Referenzannotationen/i)).toBeNull();
   });
 
   it("navigates cases using Alt+ArrowRight and Alt+ArrowLeft keyboard shortcuts", async () => {

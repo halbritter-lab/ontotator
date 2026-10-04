@@ -130,7 +130,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       {/* Current Decision Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h4 style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-muted)", margin: 0 }}>
-          Review-Entscheidung für diesen Vorschlag
+          Review decision for this proposal
         </h4>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {currentDecision ? (
@@ -146,7 +146,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             </span>
           ) : (
             <span className="badge" style={{ backgroundColor: "#f1f5f9", color: "#64748b" }}>
-              Ausstehend
+              Pending
             </span>
           )}
           {onDeselect && (
@@ -155,7 +155,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
               className="btn btn-secondary btn-sm"
               style={{ padding: "2px 8px", fontSize: "0.75rem", lineHeight: 1 }}
               onClick={onDeselect}
-              title="Auswahl aufheben"
+              title="Clear selection"
             >
               ✕
             </button>
@@ -163,35 +163,35 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </div>
       </div>
 
-      <div className="detail-section" aria-label="Vorschlagsdetails">
+      <div className="detail-section" aria-label="Proposal details">
         <strong><TermName termId={target.term_id ?? target.annotation_id} label={termLabel} /></strong>
         <dl>
           {(() => {
             const rawAxes = target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
             const entries = Object.entries(rawAxes);
             if (entries.length === 0) {
-              return <dd style={{ marginLeft: 0, color: "var(--text-muted)" }}>Keine Achsen definiert</dd>;
+              return <dd style={{ marginLeft: 0, color: "var(--text-muted)" }}>No axes defined</dd>;
             }
             return entries.map(([k, v]) => (
               <React.Fragment key={k}>
                 <dt style={{ textTransform: "capitalize" }}>{k}</dt>
-                <dd>{typeof v === "string" ? v : (v !== null && v !== undefined ? String(v) : "Nicht angegeben")}</dd>
+                <dd>{typeof v === "string" ? v : (v !== null && v !== undefined ? String(v) : "Not specified")}</dd>
               </React.Fragment>
             ));
           })()}
         </dl>
         {evidence.length ? evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
           {ev.mention.segments.map(seg => Array.from(documentText).slice(seg.start, seg.end).join("")).join(" … ")}
-        </p>) : <p>Keine Belegstelle (spanlos)</p>}
+        </p>) : <p>No text mention (spanless)</p>}
         <details className="technical-details">
-          <summary>Technische Angaben</summary>
+          <summary>Technical details</summary>
           <p>Version: {target.version}</p>
         </details>
       </div>
       {/* Origin Info */}
       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 12 }}>
-        Quelle: <strong>{target.provenance.actor.kind}</strong> ({target.provenance.actor.actor_id}) •
-        Methode: {target.provenance.method}
+        Source: <strong>{target.provenance.actor.kind}</strong> ({target.provenance.actor.actor_id}) •
+        Method: {target.provenance.method}
       </div>
 
       {/* Obsolete warning */}
@@ -206,11 +206,11 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             marginBottom: 10,
           }}
         >
-          ⚠️ Veralteter Begriff kann nicht bestätigt werden. Bitte verwerfen, als unsicher markieren oder durch gültigen Term ersetzen.
+          ⚠️ Obsolete term cannot be confirmed. Please reject, mark as uncertain, or replace with a valid term.
         </div>
       )}
 
-      {target.is_unknown && <p role="alert">Unbekannter Begriff kann nicht bestätigt werden.</p>}
+      {target.is_unknown && <p role="alert">Unknown term cannot be confirmed.</p>}
       {/* 4 Action Buttons */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
         <button
@@ -230,9 +230,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           }}
           onClick={() => handleOutcomeClick("confirmed")}
           disabled={target.is_obsolete || target.is_unknown}
-          title={currentDecision?.outcome === "confirmed" ? "Klicken, um Bestätigung aufzuheben (Taste: 1)" : "Vorschlag unverändert annehmen (Taste: 1)"}
+          title={currentDecision?.outcome === "confirmed" ? "Click to clear confirmation (Key: 1)" : "Accept proposal as-is (Key: 1)"}
         >
-          <span>✓ Bestätigen</span>
+          <span>✓ Confirm</span>
           <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>1</kbd>
         </button>
 
@@ -252,9 +252,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             padding: "8px 10px",
           }}
           onClick={() => handleOutcomeClick("rejected")}
-          title={currentDecision?.outcome === "rejected" ? "Klicken, um Ablehnung aufzuheben (Taste: 2)" : "Vorschlag ablehnen (Taste: 2)"}
+          title={currentDecision?.outcome === "rejected" ? "Click to clear rejection (Key: 2)" : "Reject proposal (Key: 2)"}
         >
-          <span>✕ Verwerfen</span>
+          <span>✕ Reject</span>
           <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>2</kbd>
         </button>
 
@@ -284,11 +284,11 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           }}
           title={
             currentDecision?.outcome === "changed"
-              ? "Gegenfassung im Entwurf weiter bearbeiten (Taste: 3)"
-              : "Vorschlag übernehmen und im Entwurf bearbeiten (Taste: 3)"
+              ? "Continue editing replacement in draft (Key: 3)"
+              : "Adopt proposal and edit in draft (Key: 3)"
           }
         >
-          <span>✎ Ändern & Bearbeiten</span>
+          <span>✎ Edit & Replace</span>
           <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>3</kbd>
         </button>
 
@@ -308,9 +308,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             padding: "8px 10px",
           }}
           onClick={() => handleOutcomeClick("uncertain")}
-          title={currentDecision?.outcome === "uncertain" ? "Klicken, um Unsicher-Status aufzuheben (Taste: 4)" : "Klinisch oder textuell unentscheidbar (Taste: 4)"}
+          title={currentDecision?.outcome === "uncertain" ? "Click to clear uncertain status (Key: 4)" : "Clinically or textually undecidable (Key: 4)"}
         >
-          <span>? Unsicher (Kein Gold)</span>
+          <span>? Uncertain</span>
           <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>4</kbd>
         </button>
       </div>
@@ -330,9 +330,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
               padding: "6px 12px",
               fontWeight: 500,
             }}
-            title="Entscheidung für diesen Vorschlag aufheben (wieder auf offen setzen)"
+            title="Reset decision for this proposal (back to open)"
           >
-            ↩ Auswahl aufheben (offen)
+            ↩ Reset decision (open)
           </button>
         </div>
       )}
@@ -349,7 +349,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           }}
         >
           <div style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--primary)", marginBottom: 4 }}>
-            ✎ Dieser Vorschlag wird durch eine Gegenfassung ersetzt.
+            ✎ This proposal is replaced by an alternative annotation.
           </div>
           {currentDecision.replacement && (() => {
             const replSnap = draftAnnotations.find(
@@ -359,7 +359,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             const replLabel = replSnap ? resolveTermLabel?.(replSnap.annotation.layer_id, replTermId) : null;
             return (
               <div style={{ fontSize: "0.85rem", color: "var(--text-main)", marginBottom: 8 }}>
-                Ersetzt durch:{" "}
+                Replaced by:{" "}
                 <strong>
                   <TermName termId={replTermId} label={replLabel} />
                 </strong>
@@ -372,7 +372,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
               className="btn btn-primary btn-sm"
               onClick={() => onEditReplacement(currentDecision.replacement!.annotation_id)}
             >
-              ✎ Gegenfassung weiter bearbeiten
+              ✎ Edit replacement annotation
             </button>
           )}
         </div>
@@ -396,7 +396,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
                 }
               }}
             >
-              Gegenfassung aus Entwurf zuordnen...
+              Assign replacement from draft...
             </button>
           ) : (
             <div
@@ -409,7 +409,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <label htmlFor="replacement-select" className="form-label" style={{ fontWeight: 600, margin: 0 }}>
-                  Ersatzfassung (Gegenfassung) auswählen:
+                  Select replacement annotation:
                 </label>
                 <button
                   type="button"
@@ -417,18 +417,18 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
                   style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}
                   onClick={() => setShowReplacementSelect(false)}
                 >
-                  ✕ Schließen
+                  ✕ Close
                 </button>
               </div>
               <select
                 id="replacement-select"
-                aria-label="Ersatzfassung (Gegenfassung) auswählen"
+                aria-label="Select replacement annotation"
                 className="form-select"
                 value={selectedReplacementId}
                 onChange={(e) => setSelectedReplacementId(e.target.value)}
                 style={{ marginBottom: 8 }}
               >
-                <option value="">(Wählen Sie eine Annotation aus dem Entwurf)</option>
+                <option value="">(Select an annotation from draft)</option>
                 {draftAnnotations
                   .filter((snap) => {
                     if (target.layer_id && snap.annotation.layer_id !== target.layer_id) return false;
@@ -451,7 +451,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
                 onClick={handleConfirmChanged}
                 disabled={!selectedReplacementId}
               >
-                Änderung bestätigen
+                Confirm replacement
               </button>
             </div>
           )}
@@ -463,7 +463,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <input
           type="text"
           className="form-control"
-          placeholder="Optionale Begründung / Notiz zum Review..."
+          placeholder="Optional reviewer note / justification..."
           value={note}
           onChange={(e) => setNote(e.target.value)}
           style={{ fontSize: "0.8rem" }}

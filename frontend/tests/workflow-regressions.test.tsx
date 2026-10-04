@@ -133,15 +133,15 @@ it("submits the API payload and preserves its envelope through a lost-response r
  };
  const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(new Error("response lost")).mockResolvedValue(submission as any);
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
- fireEvent.click(screen.getByRole("button", { name: /Fall abschließen/ }));
- await waitFor(() => expect(screen.getByText(/Erneut versuchen/)).toBeDefined());
+ fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case|Fall abschließen/i }));
+ await waitFor(() => expect(screen.getByText(/Retry|Erneut versuchen/i)).toBeDefined());
  expect(submit.mock.calls[0][1].payload).toEqual({
    command: "submit_workspace",
    document_checked: true,
    checked_layer_ids: ["phenotype"],
  });
- fireEvent.click(screen.getByText(/Erneut versuchen/));
- await waitFor(() => expect(screen.getByText(/Fall erfolgreich abgegeben/)).toBeDefined());
+ fireEvent.click(screen.getByText(/Retry|Erneut versuchen/i));
+ await waitFor(() => expect(screen.getByText(/Case successfully submitted|Fall erfolgreich abgegeben/i)).toBeDefined());
  expect(submit.mock.calls[1][1]).toEqual(submit.mock.calls[0][1]);
 });
 
@@ -208,7 +208,7 @@ it("reviews separate versions and exposes original clinical axes and evidence", 
  expect(screen.getByText("absent")).toBeDefined();
  expect(rendered.container.querySelector('.run--marked')!.textContent).toBe("alpha");
  fireEvent.click(screen.getByText("HP:2"));
- fireEvent.click(screen.getByRole("button", { name: /Verwerfen/ }));
+ fireEvent.click(screen.getByRole("button", { name: /Reject|Verwerfen/i }));
  await waitFor(() => expect(decide).toHaveBeenCalled());
  expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v2" });
 });
@@ -238,12 +238,12 @@ it("allows clearing an existing review decision back to offen", async () => {
  });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:1"));
- expect(screen.getByText(/Bestätigt/i)).toBeDefined();
- fireEvent.click(screen.getByRole("button", { name: /Auswahl aufheben/ }));
+ expect(screen.getAllByText(/Confirmed|Bestätigt/i)[0]).toBeDefined();
+ fireEvent.click(screen.getByRole("button", { name: /Reset decision|Auswahl aufheben/i }));
  await waitFor(() => expect(decide).toHaveBeenCalled());
  expect(decide.mock.calls[0][1].payload.outcome).toBeNull();
  expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v1" });
- await waitFor(() => expect(screen.getByText("offen")).toBeDefined());
+ await waitFor(() => expect(screen.getByText(/open|offen/i)).toBeDefined());
 });
 
 it("allows toggling an active review decision button to reset to offen", async () => {
@@ -271,7 +271,7 @@ it("allows toggling an active review decision button to reset to offen", async (
  });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:1"));
- const confirmBtn = screen.getByRole("button", { name: /Bestätigen/ });
+ const confirmBtn = screen.getByRole("button", { name: /Confirm|Bestätigen/ });
  expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
  fireEvent.click(confirmBtn);
  await waitFor(() => expect(decide).toHaveBeenCalled());
@@ -295,19 +295,19 @@ it("strictly separates selection between review targets and own annotations in s
  // Click Review Target HP:1:
  fireEvent.click(screen.getAllByText("HP:1")[0]);
  // Should show Review-Entscheidung, but NOT AnnotationPanel
- expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
- expect(screen.queryByText("Kontext-Achsen")).toBeNull();
+ expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
+ expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
 
  // Click own annotation HP:2:
  fireEvent.click(screen.getAllByText("HP:2")[0]);
  // Should show AnnotationPanel, but NOT ReviewActions!
- expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
- expect(screen.getByText("Kontext-Achsen")).toBeDefined();
+ expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
+ expect(screen.getByText(/Context Axes|Kontext-Achsen/i)).toBeDefined();
 
  // Click back on HP:1:
  fireEvent.click(screen.getAllByText("HP:1")[0]);
- expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
- expect(screen.queryByText("Kontext-Achsen")).toBeNull();
+ expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
+ expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
 });
 
 it("requests canonical target identity and selects versions independently", async () => {
@@ -316,11 +316,11 @@ it("requests canonical target identity and selects versions independently", asyn
  vi.spyOn(api, "getReviewInputs").mockResolvedValue([proposal("v1", "HP:1"), proposal("v2", "HP:2")]);
  const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: baseView() });
  render(<App/>);
- await waitFor(() => expect(screen.getByRole("button", { name: /Arbeitsbereich öffnen/ }).hasAttribute("disabled")).toBe(false));
- fireEvent.change(screen.getByLabelText("Arbeitsmodus"), { target: { value: "review" } });
+ await waitFor(() => expect(screen.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }).hasAttribute("disabled")).toBe(false));
+ fireEvent.change(screen.getByLabelText(/Working Mode|Arbeitsmodus/i), { target: { value: "review" } });
  await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(2));
  fireEvent.click(screen.getAllByRole("checkbox")[0]);
- fireEvent.click(screen.getByRole("button", { name: /Arbeitsbereich öffnen/ }));
+ fireEvent.click(screen.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }));
  await waitFor(() => expect(open).toHaveBeenCalled());
  expect(open.mock.calls[0][0].targets).toEqual({ target_set_id: "", targets: [{ annotation_id: "same", version: "v2" }] });
 });
@@ -339,11 +339,11 @@ it("binds a changed decision to the replacement version after queued edits", asy
  const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...view.draft, revision: 2 });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));
- fireEvent.click(screen.getByRole("radio", { name: "Vorhanden" }));
+ fireEvent.click(screen.getByRole("radio", { name: /Present|Vorhanden/i }));
  await waitFor(() => expect(finish).toBeDefined());
  fireEvent.click(screen.getByText("HP:1"));
- fireEvent.click(screen.getByRole("button", { name: /Gegenfassung aus Entwurf zuordnen/i }));
- fireEvent.click(screen.getByRole("button", { name: "Änderung bestätigen" }));
+ fireEvent.click(screen.getByRole("button", { name: /Assign replacement from draft|Gegenfassung aus Entwurf zuordnen/i }));
+ fireEvent.click(screen.getByRole("button", { name: /Confirm replacement|Änderung bestätigen/i }));
  expect(decide).not.toHaveBeenCalled();
  await act(async () => finish({ ...view.draft, revision: 1, annotations: [{ ...own, version: "own-v2" }] }));
  await waitFor(() => expect(decide).toHaveBeenCalled());
@@ -358,8 +358,8 @@ it("uses the search event when assigning a candidate and trusts obsolete metadat
  const edit = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));
- fireEvent.click(screen.getByRole("button", { name: "Begriff ändern" }));
- fireEvent.change(screen.getByLabelText("Ontologie-Term suchen"), { target: { value: "Candidate" } });
+ fireEvent.click(screen.getByRole("button", { name: /Change term|Begriff ändern/i }));
+ fireEvent.change(screen.getByLabelText(/Search ontology term|Ontologie-Term suchen/i), { target: { value: "Candidate" } });
  await waitFor(() => expect(screen.getByText("Candidate")).toBeDefined());
  fireEvent.click(screen.getByText("Candidate"));
  await waitFor(() => expect(edit).toHaveBeenCalled());
@@ -383,7 +383,7 @@ it("exposes an immutable historical submission", () => {
  }];
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByRole("button", { name: /yesterday/ }));
- expect(screen.getByRole("dialog", { name: "Historische Abgabe" })).toBeDefined();
+ expect(screen.getByRole("dialog", { name: /Historical submission|Historische Abgabe/i })).toBeDefined();
  expect(screen.getByText("HP:old")).toBeDefined();
 });
 
@@ -402,7 +402,7 @@ it("merges rapid span extensions against the latest saved evidence", async () =>
  const edit = vi.spyOn(api, "applyCommand").mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })).mockResolvedValue({ ...view.draft, revision: 2 });
  const rendered = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));
- fireEvent.click(screen.getByRole("button", { name: /Auf »Weiteres Segment«/ }));
+ fireEvent.click(screen.getByRole("button", { name: /Switch to »Additional segment«|Auf »Weiteres Segment«/i }));
  const drag = (start: number, end: number) => {
    const node = rendered.container.querySelector('.text-container .run[data-start="5"]')!.firstChild!;
    const range = document.createRange();
@@ -481,13 +481,13 @@ it("renders all review targets and own annotations in text with distinct styling
 
   // Clicking the own mention in the text selects the own annotation:
   fireEvent.click(ownRuns[0]);
-  expect(screen.getByText("Kontext-Achsen")).toBeDefined();
-  expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
+  expect(screen.getByText(/Context Axes|Kontext-Achsen/i)).toBeDefined();
+  expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
 
   // Clicking a target mention in the text selects that review target:
   fireEvent.click(rendered.container.querySelectorAll(".run--target")[1]);
-  expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
-  expect(screen.queryByText("Kontext-Achsen")).toBeNull();
+  expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
+  expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
 });
 
 it("automatically adopts a review proposal as a draft annotation on 'Ändern & Bearbeiten' and switches to editing it", async () => {
@@ -556,7 +556,7 @@ it("automatically adopts a review proposal as a draft annotation on 'Ändern & B
   fireEvent.click(screen.getByText("HP:0001"));
 
   // Click on "Ändern & Bearbeiten" button on the target:
-  const editBtn = screen.getByRole("button", { name: /Ändern/i });
+  const editBtn = screen.getByRole("button", { name: /Edit|Ändern/i });
   fireEvent.click(editBtn);
 
   // 1. Should have called applyCommand to create draft annotation from target
@@ -572,26 +572,26 @@ it("automatically adopts a review proposal as a draft annotation on 'Ändern & B
   expect(decideSpy.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "target-v1" });
 
   // 3. Inspector should immediately switch to AnnotationPanel (showing Kontext-Achsen for the new annotation)!
-  await waitFor(() => expect(screen.getByText("Kontext-Achsen")).toBeDefined());
-  expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
+  await waitFor(() => expect(screen.getByText(/Context Axes|Kontext-Achsen/i)).toBeDefined());
+  expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
 
   // 4. AnnotationPanel shows counter-annotation banner with link back to review target
-  expect(screen.getByText(/Gegenfassung für Vorschlag/i)).toBeDefined();
-  const toTargetBtn = screen.getByRole("button", { name: "Zum Review-Ziel" });
+  expect(screen.getByText(/Replacement for proposal|Gegenfassung für Vorschlag/i)).toBeDefined();
+  const toTargetBtn = screen.getByRole("button", { name: /View review target|Zum Review-Ziel/i });
   fireEvent.click(toTargetBtn);
 
   // 5. Back in ReviewActions: shows that proposal is replaced, and has edit button
-  await waitFor(() => expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined());
-  expect(screen.getByText(/Dieser Vorschlag wird durch eine Gegenfassung ersetzt/i)).toBeDefined();
-  const continueEditBtn = screen.getByRole("button", { name: "✎ Gegenfassung weiter bearbeiten" });
+  await waitFor(() => expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined());
+  expect(screen.getByText(/This proposal is replaced|Dieser Vorschlag wird durch eine Gegenfassung ersetzt/i)).toBeDefined();
+  const continueEditBtn = screen.getByRole("button", { name: /✎ Edit replacement annotation|✎ Gegenfassung weiter bearbeiten/i });
   fireEvent.click(continueEditBtn);
 
   // 6. Back in AnnotationPanel:
-  await waitFor(() => expect(screen.getByText("Kontext-Achsen")).toBeDefined());
+  await waitFor(() => expect(screen.getByText(/Context Axes|Kontext-Achsen/i)).toBeDefined());
 
   // 7. Modifying axes on the replacement synchronizes the review decision
   const initialDecideCalls = decideSpy.mock.calls.length;
-  fireEvent.click(screen.getByRole("radio", { name: "Vorhanden" }));
+  fireEvent.click(screen.getByRole("radio", { name: /Present|Vorhanden/i }));
   await waitFor(() => expect(decideSpy.mock.calls.length).toBeGreaterThan(initialDecideCalls));
   const latestCall = decideSpy.mock.calls[decideSpy.mock.calls.length - 1];
   expect(latestCall[1].payload.outcome).toBe("changed");
@@ -655,17 +655,17 @@ it("hides markings of replaced or rejected review targets in text and grays them
   expect(ownRuns.length).toBeGreaterThan(0);
 
   // 3. In sidebar: target1 has badge '✎ Ersetzt' and resolved styling
-  expect(screen.getByText("✎ Ersetzt")).toBeDefined();
-  expect(screen.getByRole("button", { name: /Ersetzt durch:.*HP:0003/i })).toBeDefined();
+  expect(screen.getByText(/✎ Replaced|✎ Ersetzt/i)).toBeDefined();
+  expect(screen.getByRole("button", { name: /Replaced by:.*HP:0003|Ersetzt durch:.*HP:0003/i })).toBeDefined();
 
   // 4. In sidebar: target2 has badge '✕ Verworfen' and resolved styling
-  expect(screen.getByText("✕ Verworfen")).toBeDefined();
-  expect(screen.getByText("✕ Vorschlag verworfen")).toBeDefined();
+  expect(screen.getByText(/✕ Rejected|✕ Verworfen/i)).toBeDefined();
+  expect(screen.getByText(/✕ Proposal rejected|✕ Vorschlag verworfen/i)).toBeDefined();
 
   // 5. Selecting target1 in sidebar opens ReviewActions in inspector while markings remain completely hidden from text
   fireEvent.click(screen.getAllByText("HP:0001")[0]);
   await waitFor(() => {
-    expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
+    expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
   });
   expect(rendered.container.querySelectorAll(".run--target").length).toBe(0);
 });
@@ -702,33 +702,33 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
   render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
 
   // 1. Sidebar shows "Ersetzt durch: HP:0003" with link
-  const replLink = screen.getByRole("button", { name: /Ersetzt durch:.*HP:0003/i });
+  const replLink = screen.getByRole("button", { name: /Replaced by:.*HP:0003|Ersetzt durch:.*HP:0003/i });
   expect(replLink).toBeDefined();
 
   // 2. Clicking the replacement link in the sidebar selects the replacement annotation (AnnotationPanel opens)
   fireEvent.click(replLink);
   await waitFor(() => {
-    expect(screen.getByText("Kontext-Achsen")).toBeDefined();
+    expect(screen.getByText(/Context Axes|Kontext-Achsen/i)).toBeDefined();
   });
-  expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
+  expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
 
   // 3. Clicking the selected annotation in the sidebar again deselects it
   fireEvent.click(screen.getAllByText("HP:0003")[1]);
   await waitFor(() => {
-    expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
+    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
   });
-  expect(screen.queryByText("Kontext-Achsen")).toBeNull();
-  expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
+  expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
+  expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
 
   // 4. Selecting target1 in sidebar opens ReviewActions, then clicking it again deselects it
   fireEvent.click(screen.getAllByText("HP:0001")[0]);
   await waitFor(() => {
-    expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
+    expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
   });
   // Click target1 again to deselect
   fireEvent.click(screen.getAllByText("HP:0001")[0]);
   await waitFor(() => {
-    expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
+    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
   });
 });
 
@@ -765,7 +765,7 @@ it("supports review keyboard shortcuts: 1 (confirm), 2 (reject), Escape (deselec
   // 1. Press 'j' to navigate to first target
   fireEvent.keyDown(window, { key: "j" });
   await waitFor(() => {
-    expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
+    expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
   });
 
   // 2. Press '1' to confirm target 1
@@ -801,7 +801,7 @@ it("supports review keyboard shortcuts: 1 (confirm), 2 (reject), Escape (deselec
   // 4. Press Escape to deselect
   fireEvent.keyDown(window, { key: "Escape" });
   await waitFor(() => {
-    expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
+    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
   });
 });
 });

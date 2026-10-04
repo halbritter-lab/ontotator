@@ -33,10 +33,10 @@ describe("ReviewActions", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: /Bestätigen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Verwerfen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Ändern/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Unsicher/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Uncertain|Unsicher/i })).toBeDefined();
 
     // Rerender with human provenance
     const humanTarget: TargetProposal = {
@@ -56,13 +56,13 @@ describe("ReviewActions", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: /Bestätigen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Verwerfen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Ändern/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Unsicher/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Uncertain|Unsicher/i })).toBeDefined();
   });
 
-  it("calls onDecide with confirmed when clicking Bestätigen", () => {
+  it("calls onDecide with confirmed when clicking Bestätigen/Confirm", () => {
     const onDecide = vi.fn();
 
     render(
@@ -74,7 +74,7 @@ describe("ReviewActions", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Bestätigen/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Confirm|Bestätigen/i }));
 
     expect(onDecide).toHaveBeenCalledWith({
       outcome: "confirmed",
@@ -83,7 +83,7 @@ describe("ReviewActions", () => {
     });
   });
 
-  it("disables Bestätigen when proposal term is obsolete", () => {
+  it("disables Bestätigen/Confirm when proposal term is obsolete", () => {
     const obsoleteTarget: TargetProposal = {
       ...sampleTarget,
       is_obsolete: true,
@@ -98,9 +98,9 @@ describe("ReviewActions", () => {
       />
     );
 
-    const confirmBtn = screen.getByRole("button", { name: /Bestätigen/i });
+    const confirmBtn = screen.getByRole("button", { name: /Confirm|Bestätigen/i });
     expect(confirmBtn.hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(/Veralteter Begriff kann nicht bestätigt werden/i)).toBeDefined();
+    expect(screen.getByText(/Obsolete term|Veralteter Begriff/i)).toBeDefined();
   });
 
   it("indicates active state with aria-pressed on chosen decision button and toggles off to null when clicked again", () => {
@@ -121,8 +121,8 @@ describe("ReviewActions", () => {
       />
     );
 
-    const confirmBtn = screen.getByRole("button", { name: /Bestätigen/i });
-    const rejectBtn = screen.getByRole("button", { name: /Verwerfen/i });
+    const confirmBtn = screen.getByRole("button", { name: /Confirm|Bestätigen/i });
+    const rejectBtn = screen.getByRole("button", { name: /Reject|Verwerfen/i });
 
     expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
     expect(rejectBtn.getAttribute("aria-pressed")).toBe("false");
@@ -137,7 +137,7 @@ describe("ReviewActions", () => {
     });
   });
 
-  it("renders 'Auswahl aufheben' button when a decision is present and clicking it calls onDecide with outcome null", () => {
+  it("renders 'Reset decision' button when a decision is present and clicking it calls onDecide with outcome null", () => {
     const onDecide = vi.fn();
     const rejectedDecision = {
       decision_id: "dec-2",
@@ -156,7 +156,7 @@ describe("ReviewActions", () => {
     );
 
     // When there is no decision, reset button should not be present
-    expect(screen.queryByRole("button", { name: /Auswahl aufheben/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reset decision|Auswahl aufheben/i })).toBeNull();
 
     // Rerender with decision
     rerender(
@@ -168,7 +168,7 @@ describe("ReviewActions", () => {
       />
     );
 
-    const resetBtn = screen.getByRole("button", { name: /Auswahl aufheben/i });
+    const resetBtn = screen.getByRole("button", { name: /Reset decision|Auswahl aufheben/i });
     expect(resetBtn).toBeDefined();
 
     fireEvent.click(resetBtn);

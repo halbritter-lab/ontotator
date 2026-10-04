@@ -154,7 +154,7 @@ describe("LayerControls Component", () => {
     );
 
     // Reference badge exists
-    expect(screen.getByText(/^Referenz$/)).toBeTruthy();
+    expect(screen.getByText(/^Reference$|^Referenz$/)).toBeTruthy();
 
     // Reference layer activation radio/button is disabled or absent
     const refRadio = screen.queryByRole("radio", { name: /Referenzbefunde/ });
@@ -179,7 +179,7 @@ describe("LayerControls Component", () => {
       />
     );
 
-    const visCheckbox = screen.getByRole("checkbox", { name: /Sichtbarkeit für Phänotyp/i });
+    const visCheckbox = screen.getByRole("checkbox", { name: /(Visibility for|Sichtbarkeit für) Phänotyp/i });
     expect((visCheckbox as HTMLInputElement).checked).toBe(true);
     fireEvent.click(visCheckbox);
     expect(onToggle).toHaveBeenCalledWith("phenotype");
@@ -219,7 +219,7 @@ describe("LayerControls Component", () => {
     );
 
     // Phenotype has 2 types: primary, secondary
-    const typeSelect = screen.getByRole("combobox", { name: /Annotationstyp/i });
+    const typeSelect = screen.getByRole("combobox", { name: /Annotation type|Annotationstyp/i });
     expect(typeSelect).toBeTruthy();
     fireEvent.change(typeSelect, { target: { value: "secondary" } });
     expect(onSetType).toHaveBeenCalledWith("secondary");
@@ -242,7 +242,7 @@ describe("LayerControls Component", () => {
     );
 
     // Disease has only 1 type -> type selector should NOT be rendered
-    expect(screen.queryByRole("combobox", { name: /Annotationstyp/i })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /Annotation type|Annotationstyp/i })).toBeNull();
   });
 
   it("displays layer checked status badge and allows active layer check action", () => {
@@ -264,7 +264,7 @@ describe("LayerControls Component", () => {
     expect(screen.getByTestId("badge-checked-disease")).toBeTruthy();
 
     // Phenotype is not checked yet; check button/checkbox for active layer exists
-    const checkBtn = screen.getByRole("button", { name: /Phänotyp als geprüft markieren/i });
+    const checkBtn = screen.getByRole("button", { name: /Mark Phänotyp as verified|Phänotyp als geprüft markieren/i });
     fireEvent.click(checkBtn);
     expect(onCheck).toHaveBeenCalledWith("phenotype", true);
   });
