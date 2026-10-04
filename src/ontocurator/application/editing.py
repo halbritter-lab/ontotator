@@ -448,7 +448,8 @@ class EditingService:
 
         type_def = resolve_type(profile, target_layer, target_type)
 
-        self._validate_term_for_layer(profile, target_layer, cmd.term_id)
+        if not cmd.source_annotation_id:
+            self._validate_term_for_layer(profile, target_layer, cmd.term_id)
 
         if any(
             a.annotation.annotation_id == cmd.annotation_id for a in draft.annotations

@@ -21,6 +21,12 @@ export interface AnnotationPanelProps {
   axesConfig?: AxisDefinition[];
   axesDefinition?: string;
   termLabel?: string | null;
+  linkedTarget?: {
+    targetId: string;
+    termId: string;
+    termLabel?: string | null;
+  } | null;
+  onNavigateTarget?: () => void;
   onSelectEvidence: (evidenceId: string) => void;
   onUpdateTerm: (termId: string, searchId?: string) => void;
   onUpdateAxes: (axes: Partial<Axes>) => void;
@@ -39,6 +45,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   layerId,
   axesConfig,
   termLabel,
+  linkedTarget,
+  onNavigateTarget,
   onSelectEvidence,
   onUpdateTerm,
   onUpdateAxes,
@@ -80,6 +88,38 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
   return (
     <div className="detail-pane">
+      {/* Target Proposal Counter-Annotation Banner */}
+      {linkedTarget && (
+        <div
+          style={{
+            padding: "8px 12px",
+            background: "var(--primary-light)",
+            borderBottom: "1px solid #93c5fd",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontSize: "0.82rem",
+          }}
+        >
+          <div>
+            <span style={{ fontWeight: 600, color: "var(--primary)" }}>↳ Gegenfassung für Vorschlag: </span>
+            <span style={{ color: "var(--text-main)", fontWeight: 500 }}>
+              {linkedTarget.termLabel ? `${linkedTarget.termLabel} (${linkedTarget.termId})` : linkedTarget.termId}
+            </span>
+          </div>
+          {onNavigateTarget && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ padding: "2px 8px", fontSize: "0.75rem", background: "var(--bg-primary)" }}
+              onClick={onNavigateTarget}
+            >
+              Zum Review-Ziel
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 1. Header with Ontology Term */}
       <div className="detail-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>

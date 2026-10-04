@@ -311,6 +311,62 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     });
   };
 
+  // Helper to mutate an annotation and synchronize any linked review decision
+  const mutateAnnotationAndSyncDecision = async (
+    annotationId: string,
+    mutationAction: () => Promise<Draft>
+  ): Promise<Draft> => {
+    // Check if this annotation was acting as a replacement for any target
+    const prevDecision = (latestDraft.current.decisions ?? []).find(
+      (d) => d.replacement?.annotation_id === annotationId && d.outcome === "changed"
+    );
+    let targetToSync = prevDecision?.target;
+    if (!targetToSync) {
+      const annSnap = (latestDraft.current.annotations ?? []).find(
+        (a) => a.annotation.annotation_id === annotationId
+      );
+      const sourceRef = annSnap?.annotation.provenance.source_refs?.[0];
+      if (sourceRef) {
+        const [targetAnnId, targetVer] = sourceRef.split(":");
+        if (targetAnnId && targetVer) {
+          targetToSync = { annotation_id: targetAnnId, version: targetVer };
+        }
+      }
+    }
+
+    const updatedDraft = await mutationAction();
+
+    if (targetToSync) {
+      const updatedAnn = (latestDraft.current.annotations ?? []).find(
+        (a) => a.annotation.annotation_id === annotationId
+      );
+      if (updatedAnn) {
+        const mutationId = crypto.randomUUID();
+        let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
+        await queueRef.current.enqueue(async (expectedRevision) => {
+          envelope ??= {
+            mutation_id: mutationId,
+            expected_revision: expectedRevision,
+            payload: {
+              target: targetToSync!,
+              outcome: "changed",
+              replacement: {
+                annotation_id: updatedAnn.annotation.annotation_id,
+                version: updatedAnn.version,
+              },
+              note: prevDecision?.note,
+            },
+          };
+          const nextDraft = await api.recordDecision(workspaceId, envelope);
+          latestDraft.current = nextDraft;
+          setDraft(nextDraft);
+          return nextDraft;
+        });
+      }
+    }
+    return updatedDraft;
+  };
+
   // Text selection handler
   const handleSelection = async (payload: SelectionPayload) => {
     if (!payload.segments || payload.segments.length === 0) return;
@@ -321,26 +377,44 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       if (payload.intent === "extend_mention" && selectedEvidenceId) {
         const evidenceId = selectedEvidenceId;
         const annotationId = selectedAnnotationId;
-        await enqueueMutation(current => {
-          const existingEv = (current.evidence ?? []).find(ev => ev.mention.evidence_id === evidenceId);
-          if (!existingEv) throw new ValidationError("Belegstelle ist nicht mehr vorhanden");
-          return {
-            command: "edit_mention",
-            evidence_id: evidenceId,
-            annotation_id: annotationId,
-            segments: [...existingEv.mention.segments, ...payload.segments].sort((a, b) => a.start - b.start),
-          };
-        });
+        if (annotationId) {
+          await mutateAnnotationAndSyncDecision(annotationId, () =>
+            enqueueMutation(current => {
+              const existingEv = (current.evidence ?? []).find(ev => ev.mention.evidence_id === evidenceId);
+              if (!existingEv) throw new ValidationError("Belegstelle ist nicht mehr vorhanden");
+              return {
+                command: "edit_mention",
+                evidence_id: evidenceId,
+                annotation_id: annotationId,
+                segments: [...existingEv.mention.segments, ...payload.segments].sort((a, b) => a.start - b.start),
+              };
+            })
+          );
+        } else {
+          await enqueueMutation(current => {
+            const existingEv = (current.evidence ?? []).find(ev => ev.mention.evidence_id === evidenceId);
+            if (!existingEv) throw new ValidationError("Belegstelle ist nicht mehr vorhanden");
+            return {
+              command: "edit_mention",
+              evidence_id: evidenceId,
+              annotation_id: annotationId,
+              segments: [...existingEv.mention.segments, ...payload.segments].sort((a, b) => a.start - b.start),
+            };
+          });
+        }
         setSelectionIntent("new_mention");
       } else {
         const evidenceId = `ev-${Date.now()}`;
         if (selectedAnnotationId) {
-          await enqueueMutation({
-            command: "attach_mention",
-            annotation_id: selectedAnnotationId,
-            evidence_id: evidenceId,
-            segments: payload.segments,
-          });
+          const annId = selectedAnnotationId;
+          await mutateAnnotationAndSyncDecision(annId, () =>
+            enqueueMutation({
+              command: "attach_mention",
+              annotation_id: annId,
+              evidence_id: evidenceId,
+              segments: payload.segments,
+            })
+          );
           setSelectedEvidenceId(evidenceId);
         } else {
           if (!layerSelection.activeLayerId) {
@@ -455,31 +529,39 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const handleUpdateTerm = async (termId: string, searchId?: string) => {
     if (!selectedAnnotationId) return;
-    await enqueueMutation({
-      command: "set_term",
-      annotation_id: selectedAnnotationId,
-      term_id: termId,
-      search_event_id: searchId,
-    });
+    const annId = selectedAnnotationId;
+    await mutateAnnotationAndSyncDecision(annId, () =>
+      enqueueMutation({
+        command: "set_term",
+        annotation_id: annId,
+        term_id: termId,
+        search_event_id: searchId,
+      })
+    );
   };
 
   const handleUpdateAxes = async (axesValues: Partial<AxesValues>) => {
     if (!selectedAnnotationId || !selectedAnnotation) return;
     const annotationId = selectedAnnotationId;
-    await enqueueMutation({
-      command: "set_axes",
-      annotation_id: annotationId,
-      axes_values: axesValues as Record<string, string | null>,
-    });
+    await mutateAnnotationAndSyncDecision(annotationId, () =>
+      enqueueMutation({
+        command: "set_axes",
+        annotation_id: annotationId,
+        axes_values: axesValues as Record<string, string | null>,
+      })
+    );
   };
 
   const handleDetachMention = async (evidenceId: string) => {
     if (!selectedAnnotationId) return;
-    await enqueueMutation({
-      command: "detach_mention",
-      annotation_id: selectedAnnotationId,
-      evidence_id: evidenceId,
-    });
+    const annId = selectedAnnotationId;
+    await mutateAnnotationAndSyncDecision(annId, () =>
+      enqueueMutation({
+        command: "detach_mention",
+        annotation_id: annId,
+        evidence_id: evidenceId,
+      })
+    );
     if (selectedEvidenceId === evidenceId) {
       setSelectedEvidenceId(null);
     }
@@ -525,6 +607,120 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         return updatedDraft;
       });
     } catch (error) { reportError(error); }
+  };
+
+  // Adopt a review target into draft annotations and activate editing immediately
+  const handleAdoptAndEditTarget = async (target: TargetProposal) => {
+    setActionError(null);
+    try {
+      // 1. If target already has a changed decision with replacement in draft, jump to it
+      const existingDecision = decisionsMap[refKey(target)];
+      if (existingDecision?.outcome === "changed" && existingDecision.replacement?.annotation_id) {
+        const repl = (latestDraft.current.annotations ?? []).find(
+          (a) => a.annotation.annotation_id === existingDecision.replacement!.annotation_id
+        );
+        if (repl) {
+          setSelectedTargetId(null);
+          setSelectedSourceId(null);
+          setSelectedAnnotationId(repl.annotation.annotation_id);
+          setSelectedEvidenceId(repl.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+          setMobilePane("details");
+          return;
+        }
+      }
+
+      // 2. Clone the target proposal into draft annotations
+      const snap = (view.available_inputs ?? []).find(
+        (s) => s.annotation.annotation_id === target.annotation_id && s.version === target.version
+      );
+
+      const targetLayer = target.layer_id ?? snap?.annotation.layer_id ?? layerSelection.activeLayerId;
+      if (!targetLayer) {
+        setActionError("Keine Schicht für Vorschlag gefunden.");
+        return;
+      }
+      const layerDef = (view.layers ?? []).find((l) => l.layer_id === targetLayer);
+      const targetType = target.type_id ?? snap?.annotation.type_id ?? layerSelection.activeTypeId ?? layerDef?.annotation_types?.[0]?.type_id ?? "default";
+      const typeDef = layerDef?.annotation_types?.find((t) => t.type_id === targetType);
+      const targetTerm = target.term_id ?? snap?.annotation.term_id ?? target.annotation_id;
+
+      const rawAxes = snap?.annotation.axes_values ?? (snap?.annotation as any)?.axes?.values ?? target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
+      const initialAxes = Object.keys(rawAxes).length > 0
+        ? (rawAxes as Record<string, string | null>)
+        : initialAxisValues(typeDef?.axes ?? view.axes_config ?? [], targetTerm);
+
+      const newAnnId = `ann-${crypto.randomUUID()}`;
+      const evidenceList = snap?.evidence ?? [];
+      const firstEvidence = evidenceList[0];
+      const firstEvidenceId = firstEvidence ? `ev-${Date.now()}` : undefined;
+      const initialSegments = firstEvidence ? firstEvidence.mention.segments : [];
+
+      // Create new annotation in draft
+      await enqueueMutation({
+        command: "create_annotation",
+        annotation_id: newAnnId,
+        evidence_id: firstEvidenceId,
+        layer_id: targetLayer,
+        type_id: targetType,
+        term_id: targetTerm,
+        axes_values: initialAxes,
+        segments: initialSegments,
+        source_annotation_id: target.annotation_id,
+        source_version: target.version,
+      });
+
+      // Attach any additional mentions
+      for (let i = 1; i < evidenceList.length; i++) {
+        const extraEv = evidenceList[i];
+        await enqueueMutation({
+          command: "attach_mention",
+          annotation_id: newAnnId,
+          evidence_id: `ev-${Date.now()}-${i}`,
+          segments: extraEv.mention.segments,
+        });
+      }
+
+      // Find created annotation version
+      const createdAnn = (latestDraft.current.annotations ?? []).find(
+        (a) => a.annotation.annotation_id === newAnnId
+      );
+      const createdVersion = createdAnn?.version ?? "v1";
+
+      // Record review decision as changed with new annotation as replacement
+      const mutationId = crypto.randomUUID();
+      let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
+      await queueRef.current.enqueue(async (expectedRevision) => {
+        envelope ??= {
+          mutation_id: mutationId,
+          expected_revision: expectedRevision,
+          payload: {
+            target: {
+              annotation_id: target.annotation_id,
+              version: target.version,
+            },
+            outcome: "changed",
+            replacement: {
+              annotation_id: newAnnId,
+              version: createdVersion,
+            },
+            note: existingDecision?.note,
+          },
+        };
+        const updatedDraft = await api.recordDecision(workspaceId, envelope);
+        latestDraft.current = updatedDraft;
+        setDraft(updatedDraft);
+        return updatedDraft;
+      });
+
+      // Switch inspector to this new annotation
+      setSelectedTargetId(null);
+      setSelectedSourceId(null);
+      setSelectedAnnotationId(newAnnId);
+      setSelectedEvidenceId(firstEvidenceId ?? null);
+      setMobilePane("details");
+    } catch (error) {
+      reportError(error);
+    }
   };
 
   // Layer state handlers
@@ -629,6 +825,36 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const currentAxesConfig = useMemo(() => {
     return selectedAnnotationTypeDef?.axes ?? view.axes_config ?? [];
   }, [selectedAnnotationTypeDef, view.axes_config]);
+
+  const linkedTargetForSelectedAnnotation = useMemo(() => {
+    if (!selectedAnnotation || view.key.mode !== "review") return null;
+    const annId = selectedAnnotation.annotation.annotation_id;
+    // 1. Check decisions
+    const dec = (draft.decisions ?? []).find(
+      (d) => d.replacement?.annotation_id === annId && d.outcome === "changed"
+    );
+    let targetObj: TargetProposal | undefined;
+    if (dec) {
+      targetObj = reviewTargets.find(
+        (t) => t.annotation_id === dec.target.annotation_id && t.version === dec.target.version
+      );
+    }
+    // 2. Check source_refs
+    if (!targetObj) {
+      const sourceRef = selectedAnnotation.annotation.provenance.source_refs?.[0];
+      if (sourceRef) {
+        const [tId, tVer] = sourceRef.split(":");
+        targetObj = reviewTargets.find((t) => t.annotation_id === tId && t.version === tVer);
+      }
+    }
+    if (!targetObj) return null;
+    return {
+      target: targetObj,
+      targetKey: refKey(targetObj),
+      termId: targetObj.term_id ?? targetObj.annotation_id,
+      termLabel: termLabel(targetObj.layer_id, targetObj.term_id ?? targetObj.annotation_id),
+    };
+  }, [selectedAnnotation, view.key.mode, draft.decisions, reviewTargets, termLabel]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -925,6 +1151,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               currentDecision={decisionsMap[refKey(selectedTarget)] ?? null}
               draftAnnotations={draft.annotations ?? []}
               onDecide={handleReviewDecision}
+              onAdoptAndEdit={() => { void handleAdoptAndEditTarget(selectedTarget); }}
+              onEditReplacement={(repId) => {
+                setSelectedTargetId(null);
+                setSelectedSourceId(null);
+                setSelectedAnnotationId(repId);
+                setSelectedEvidenceId(null);
+                setMobilePane("details");
+              }}
             />
           ) : (
             <AnnotationPanel
@@ -937,6 +1171,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               layerId={selectedAnnotation?.annotation.layer_id}
               termLabel={selectedAnnotation ? termLabel(selectedAnnotation.annotation.layer_id, selectedAnnotation.annotation.term_id) : null}
               axesConfig={currentAxesConfig}
+              linkedTarget={linkedTargetForSelectedAnnotation ? {
+                targetId: linkedTargetForSelectedAnnotation.targetKey,
+                termId: linkedTargetForSelectedAnnotation.termId,
+                termLabel: linkedTargetForSelectedAnnotation.termLabel,
+              } : null}
+              onNavigateTarget={linkedTargetForSelectedAnnotation ? () => {
+                setSelectedAnnotationId(null);
+                setSelectedSourceId(null);
+                setSelectedEvidenceId(null);
+                setSelectedTargetId(linkedTargetForSelectedAnnotation.targetKey);
+                setMobilePane("details");
+              } : undefined}
               onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
               onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
               onUpdateAxes={(axesValues) => { void handleUpdateAxes(axesValues).catch(reportError); }}

@@ -339,7 +339,7 @@ it("binds a changed decision to the replacement version after queued edits", asy
  fireEvent.click(screen.getByRole("radio", { name: "Vorhanden" }));
  await waitFor(() => expect(finish).toBeDefined());
  fireEvent.click(screen.getByText("HP:1"));
- fireEvent.click(screen.getByRole("button", { name: /Ändern \(Gegenfassung\)/ }));
+ fireEvent.click(screen.getByRole("button", { name: /Gegenfassung aus Entwurf zuordnen/i }));
  fireEvent.click(screen.getByRole("button", { name: "Änderung bestätigen" }));
  expect(decide).not.toHaveBeenCalled();
  await act(async () => finish({ ...view.draft, revision: 1, annotations: [{ ...own, version: "own-v2" }] }));
@@ -485,5 +485,110 @@ it("renders all review targets and own annotations in text with distinct styling
   fireEvent.click(rendered.container.querySelectorAll(".run--target")[1]);
   expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
   expect(screen.queryByText("Kontext-Achsen")).toBeNull();
+});
+
+it("automatically adopts a review proposal as a draft annotation on 'Ändern & Bearbeiten' and switches to editing it", async () => {
+  const target = proposal("target-v1", "HP:0001");
+  const view = baseView();
+  view.key = { ...key, mode: "review" };
+  view.scope = { ...scope, mode: "review" };
+  view.available_inputs = [target];
+  view.targets = { target_set_id: "targets", targets: [{ annotation_id: "same", version: "target-v1" }] };
+  view.draft = { ...view.draft, key: view.key, targets: view.targets, annotations: [], evidence: [] };
+
+  let appliedCommand: any = null;
+  let currentDraft = view.draft;
+  vi.spyOn(api, "applyCommand").mockImplementation(async (_wsId, envelope) => {
+    appliedCommand = envelope.payload;
+    const newSnap = {
+      schema_version: "ontocurator-annotation/v3" as const,
+      annotation: {
+        annotation_id: appliedCommand.annotation_id,
+        document_id: "doc",
+        layer_id: appliedCommand.layer_id,
+        type_id: appliedCommand.type_id,
+        term_id: appliedCommand.term_id,
+        axes_values: appliedCommand.axes_values,
+        evidence_refs: appliedCommand.evidence_id ? [{ evidence_id: appliedCommand.evidence_id, version: "v-ev1" }] : [],
+        provenance: {
+          actor: { actor_id: "annotator", kind: "human" as const },
+          method: "manual",
+          source_refs: [appliedCommand.source_annotation_id + ":" + appliedCommand.source_version],
+        },
+      },
+      evidence: [],
+      version: "rep-v1",
+      document_id: "doc",
+      text_sha256: "text",
+      ontology_sha256: "ontology",
+      layer_config_sha256: "layer-sha",
+    };
+    currentDraft = {
+      ...currentDraft,
+      revision: currentDraft.revision + 1,
+      annotations: [newSnap],
+      evidence: [],
+    };
+    return currentDraft;
+  });
+
+  const decideSpy = vi.spyOn(api, "recordDecision").mockImplementation(async (_wsId, envelope) => {
+    currentDraft = {
+      ...currentDraft,
+      revision: currentDraft.revision + 1,
+      decisions: [{
+        decision_id: "dec-1",
+        target: envelope.payload.target,
+        outcome: envelope.payload.outcome,
+        replacement: envelope.payload.replacement,
+        reviewer_id: "annotator",
+      }],
+    };
+    return currentDraft;
+  });
+
+  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+
+  // Click on "Ändern & Bearbeiten" button on the target:
+  const editBtn = screen.getByRole("button", { name: /Ändern/i });
+  fireEvent.click(editBtn);
+
+  // 1. Should have called applyCommand to create draft annotation from target
+  await waitFor(() => expect(appliedCommand).not.toBeNull());
+  expect(appliedCommand.command).toBe("create_annotation");
+  expect(appliedCommand.term_id).toBe("HP:0001");
+  expect(appliedCommand.source_annotation_id).toBe("same");
+  expect(appliedCommand.source_version).toBe("target-v1");
+
+  // 2. Should have recorded review decision as changed with the new replacement
+  await waitFor(() => expect(decideSpy).toHaveBeenCalled());
+  expect(decideSpy.mock.calls[0][1].payload.outcome).toBe("changed");
+  expect(decideSpy.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "target-v1" });
+
+  // 3. Inspector should immediately switch to AnnotationPanel (showing Kontext-Achsen for the new annotation)!
+  await waitFor(() => expect(screen.getByText("Kontext-Achsen")).toBeDefined());
+  expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
+
+  // 4. AnnotationPanel shows counter-annotation banner with link back to review target
+  expect(screen.getByText(/Gegenfassung für Vorschlag/i)).toBeDefined();
+  const toTargetBtn = screen.getByRole("button", { name: "Zum Review-Ziel" });
+  fireEvent.click(toTargetBtn);
+
+  // 5. Back in ReviewActions: shows that proposal is replaced, and has edit button
+  await waitFor(() => expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined());
+  expect(screen.getByText(/Dieser Vorschlag wird durch eine Gegenfassung ersetzt/i)).toBeDefined();
+  const continueEditBtn = screen.getByRole("button", { name: "✎ Gegenfassung weiter bearbeiten" });
+  fireEvent.click(continueEditBtn);
+
+  // 6. Back in AnnotationPanel:
+  await waitFor(() => expect(screen.getByText("Kontext-Achsen")).toBeDefined());
+
+  // 7. Modifying axes on the replacement synchronizes the review decision
+  const initialDecideCalls = decideSpy.mock.calls.length;
+  fireEvent.click(screen.getByRole("radio", { name: "Vorhanden" }));
+  await waitFor(() => expect(decideSpy.mock.calls.length).toBeGreaterThan(initialDecideCalls));
+  const latestCall = decideSpy.mock.calls[decideSpy.mock.calls.length - 1];
+  expect(latestCall[1].payload.outcome).toBe("changed");
+  expect(latestCall[1].payload.target).toEqual({ annotation_id: "same", version: "target-v1" });
 });
 });

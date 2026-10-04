@@ -38,6 +38,8 @@ export interface ReviewActionsProps {
   evidence?: components["schemas"]["EvidenceSnapshot"][];
   documentText?: string;
   onDecide: (payload: DecisionPayload) => void;
+  onAdoptAndEdit?: () => void;
+  onEditReplacement?: (annotationId: string) => void;
 }
 
 export const ReviewActions: React.FC<ReviewActionsProps> = ({
@@ -47,6 +49,8 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   currentDecision,
   draftAnnotations,
   onDecide,
+  onAdoptAndEdit,
+  onEditReplacement,
   evidence = [],
   documentText = "",
 }) => {
@@ -240,10 +244,22 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             fontWeight: currentDecision?.outcome === "changed" ? 700 : "normal",
             boxShadow: currentDecision?.outcome === "changed" ? "0 0 0 2px rgba(59, 130, 246, 0.4)" : undefined,
           }}
-          onClick={() => handleOutcomeClick("changed")}
-          title={currentDecision?.outcome === "changed" ? "Klicken, um Änderung aufzuheben (offen)" : "Vorschlag durch korrigierte Gegenfassung ersetzen"}
+          onClick={() => {
+            if (currentDecision?.outcome === "changed" && currentDecision.replacement?.annotation_id && onEditReplacement) {
+              onEditReplacement(currentDecision.replacement.annotation_id);
+            } else if (onAdoptAndEdit) {
+              onAdoptAndEdit();
+            } else {
+              handleOutcomeClick("changed");
+            }
+          }}
+          title={
+            currentDecision?.outcome === "changed"
+              ? "Gegenfassung im Entwurf weiter bearbeiten"
+              : "Vorschlag übernehmen und im Entwurf bearbeiten"
+          }
         >
-          ✎ Ändern (Gegenfassung)
+          ✎ Ändern & Bearbeiten
         </button>
 
         <button
@@ -286,52 +302,115 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </div>
       )}
 
-      {/* Replacement Selection when outcome === "changed" */}
-      {showReplacementSelect && (
+      {/* Changed Outcome Card with Direct Edit Shortcut */}
+      {currentDecision?.outcome === "changed" && (
         <div
           style={{
             padding: 12,
             background: "var(--bg-primary)",
             borderRadius: "var(--radius)",
-            border: "1px solid var(--border-color)",
+            border: "1px solid #93c5fd",
             marginBottom: 12,
           }}
         >
-          <label htmlFor="replacement-select" className="form-label" style={{ fontWeight: 600 }}>
-            Ersatzfassung (Gegenfassung) auswählen:
-          </label>
-          <select
-            id="replacement-select"
-            className="form-select"
-            value={selectedReplacementId}
-            onChange={(e) => setSelectedReplacementId(e.target.value)}
-            style={{ marginBottom: 8 }}
-          >
-            <option value="">(Wählen Sie eine Annotation aus dem Entwurf)</option>
-            {draftAnnotations
-              .filter((snap) => {
-                if (target.layer_id && snap.annotation.layer_id !== target.layer_id) return false;
-                if (target.type_id && snap.annotation.type_id !== target.type_id) return false;
-                return true;
-              })
-              .map((snap) => {
-                const term = snap.annotation.term_id;
-                const label = resolveTermLabel?.(snap.annotation.layer_id, term);
-                return (
-                  <option key={snap.annotation.annotation_id} value={snap.annotation.annotation_id}>
-                    {label ? `${label} (${term})` : term} · {snap.annotation.annotation_id.slice(0, 10)}
-                  </option>
+          <div style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--primary)", marginBottom: 4 }}>
+            ✎ Dieser Vorschlag wird durch eine Gegenfassung ersetzt.
+          </div>
+          {currentDecision.replacement && (
+            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 8 }}>
+              Zugeordnete Annotation:{" "}
+              <code>{currentDecision.replacement.annotation_id.slice(0, 14)}</code>
+            </div>
+          )}
+          {currentDecision.replacement && onEditReplacement && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => onEditReplacement(currentDecision.replacement!.annotation_id)}
+            >
+              ✎ Gegenfassung weiter bearbeiten
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Manual Replacement Selection (Fallback / Existing Annotations) */}
+      {draftAnnotations.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          {!showReplacementSelect ? (
+            <button
+              type="button"
+              className="btn btn-link btn-sm"
+              style={{ fontSize: "0.8rem", color: "var(--text-muted)", textDecoration: "underline", padding: 0 }}
+              onClick={() => {
+                setShowReplacementSelect(true);
+                const repl = draftAnnotations.find(
+                  (a) => a.annotation.annotation_id !== target.annotation_id
                 );
-              })}
-          </select>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={handleConfirmChanged}
-            disabled={!selectedReplacementId}
-          >
-            Änderung bestätigen
-          </button>
+                if (repl && !selectedReplacementId) {
+                  setSelectedReplacementId(repl.annotation.annotation_id);
+                }
+              }}
+            >
+              Gegenfassung aus Entwurf zuordnen...
+            </button>
+          ) : (
+            <div
+              style={{
+                padding: 12,
+                background: "var(--bg-primary)",
+                borderRadius: "var(--radius)",
+                border: "1px solid var(--border-color)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <label htmlFor="replacement-select" className="form-label" style={{ fontWeight: 600, margin: 0 }}>
+                  Ersatzfassung (Gegenfassung) auswählen:
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm"
+                  style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}
+                  onClick={() => setShowReplacementSelect(false)}
+                >
+                  ✕ Schließen
+                </button>
+              </div>
+              <select
+                id="replacement-select"
+                aria-label="Ersatzfassung (Gegenfassung) auswählen"
+                className="form-select"
+                value={selectedReplacementId}
+                onChange={(e) => setSelectedReplacementId(e.target.value)}
+                style={{ marginBottom: 8 }}
+              >
+                <option value="">(Wählen Sie eine Annotation aus dem Entwurf)</option>
+                {draftAnnotations
+                  .filter((snap) => {
+                    if (target.layer_id && snap.annotation.layer_id !== target.layer_id) return false;
+                    if (target.type_id && snap.annotation.type_id !== target.type_id) return false;
+                    return true;
+                  })
+                  .map((snap) => {
+                    const term = snap.annotation.term_id;
+                    const label = resolveTermLabel?.(snap.annotation.layer_id, term);
+                    return (
+                      <option key={snap.annotation.annotation_id} value={snap.annotation.annotation_id}>
+                        {label ? `${label} (${term})` : term} · {snap.annotation.annotation_id.slice(0, 10)}
+                      </option>
+                    );
+                  })}
+              </select>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleConfirmChanged}
+                disabled={!selectedReplacementId}
+              >
+                Änderung bestätigen
+              </button>
+            </div>
+          )}
         </div>
       )}
 
