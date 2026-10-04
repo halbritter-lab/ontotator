@@ -3,10 +3,12 @@ import {
   api,
   initSessionToken,
   setActiveSessionToken,
+  ApiError,
   type AnnotationSnapshot,
   type DocumentSummary,
   type OpenWorkspaceResponse,
   type PackageManifest,
+  type OntologyInfo,
 } from "./api/client";
 import type { components } from "./api/generated";
 import { CaseScreen } from "./app/CaseScreen";
@@ -54,9 +56,27 @@ export const App: React.FC = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [tokenInput, setTokenInput] = useState<string>("");
 
+  // In-app ontology state
+  const [ontologies, setOntologies] = useState<OntologyInfo[]>([]);
+  const [missingOntologyPrompt, setMissingOntologyPrompt] = useState<{
+    message: string;
+    pendingPackageFile?: File;
+  } | null>(null);
+  const [isUploadingOntology, setIsUploadingOntology] = useState<boolean>(false);
+
+  const loadOntologies = async () => {
+    try {
+      const list = await api.listOntologies();
+      setOntologies(list);
+    } catch {
+      // Ignored if API not ready
+    }
+  };
+
   useEffect(() => {
     initSessionToken();
     loadPackages();
+    loadOntologies();
   }, []);
 
   const loadPackages = async () => {
@@ -122,8 +142,41 @@ export const App: React.FC = () => {
       await loadPackages();
       handleSelectPackage(res.package_id);
     } catch (err: unknown) {
-      setError(`Package upload error: ${err instanceof Error ? err.message : String(err)}`);
+      if (err instanceof ApiError && err.code === "ONTOLOGY_NOT_FOUND") {
+        setMissingOntologyPrompt({
+          message: err.message,
+          pendingPackageFile: file,
+        });
+      } else {
+        setError(`Package upload error: ${err instanceof Error ? err.message : String(err)}`);
+      }
     } finally {
+      setIsUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleUploadMissingOntology = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingOntology(true);
+    setError(null);
+    try {
+      await api.uploadOntology(file);
+      await loadOntologies();
+      const pending = missingOntologyPrompt?.pendingPackageFile;
+      setMissingOntologyPrompt(null);
+      if (pending) {
+        setIsUploading(true);
+        const res = await api.uploadPackage(pending);
+        await loadPackages();
+        handleSelectPackage(res.package_id);
+      }
+    } catch (err: unknown) {
+      setError(`Ontology upload error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsUploadingOntology(false);
       setIsUploading(false);
       e.target.value = "";
     }
@@ -306,11 +359,36 @@ export const App: React.FC = () => {
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {ontologies.length > 0 && (
+            <span
+              style={{
+                fontSize: "0.78rem",
+                color: "var(--text-muted)",
+                background: "var(--bg-secondary)",
+                padding: "3px 8px",
+                borderRadius: 4,
+              }}
+            >
+              Ontologies: {ontologies.map((o) => o.ontology_id.toUpperCase()).join(", ")}
+            </span>
+          )}
+          <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
+            {isUploadingOntology ? "Uploading..." : "🧬 Add Ontology (.json)"}
+            <input
+              type="file"
+              accept=".json"
+              aria-label="Add Ontology"
+              style={{ display: "none" }}
+              onChange={handleUploadMissingOntology}
+              disabled={isUploadingOntology}
+            />
+          </label>
           <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
             {isUploading ? "Importing..." : "📦 Import Package (.zip)"}
             <input
               type="file"
               accept=".zip"
+              aria-label="Import Package"
               style={{ display: "none" }}
               onChange={handleUploadPackage}
               disabled={isUploading}
@@ -321,6 +399,53 @@ export const App: React.FC = () => {
 
       {/* Main Dashboard View */}
       <div className="dashboard-container">
+        {missingOntologyPrompt && (
+          <div
+            role="alert"
+            style={{
+              background: "rgba(234, 88, 12, 0.12)",
+              border: "1px solid #ea580c",
+              borderRadius: 8,
+              padding: "16px 20px",
+              marginBottom: 20,
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontWeight: 600, color: "#ea580c", fontSize: "1rem" }}>
+                ⚠️ Missing Ontology
+              </span>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setMissingOntologyPrompt(null)}
+              >
+                ✕ Dismiss
+              </button>
+            </div>
+            <p style={{ margin: 0, fontSize: "0.9rem" }}>{missingOntologyPrompt.message}</p>
+            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
+              This package requires an ontology that is not loaded yet. Select the corresponding OBO Graph JSON file to register it.
+            </p>
+            <div>
+              <label
+                className="btn btn-primary btn-sm"
+                style={{ cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center" }}
+              >
+                {isUploadingOntology ? "Uploading..." : "🧬 Upload missing ontology (.json)"}
+                <input
+                  type="file"
+                  accept=".json"
+                  aria-label="Upload missing ontology"
+                  style={{ display: "none" }}
+                  onChange={handleUploadMissingOntology}
+                  disabled={isUploadingOntology}
+                />
+              </label>
+            </div>
+          </div>
+        )}
         {error && (
           <div
             style={{

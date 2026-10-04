@@ -27,6 +27,14 @@ export type OntologyDefinition = components["schemas"]["OntologyDefinition"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
+export interface OntologyInfo {
+  ontology_id: string;
+  release: string;
+  sha256: string;
+  term_count: number;
+  path?: string | null;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
@@ -340,6 +348,20 @@ export class ApiClient {
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
+  async listOntologies(): Promise<OntologyInfo[]> {
+    return this.request<OntologyInfo[]>("/api/v1/ontologies", {
+      method: "GET",
+    });
+  }
+
+  async uploadOntology(file: File): Promise<OntologyInfo> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.request<OntologyInfo>("/api/v1/ontologies", {
+      method: "POST",
+      body: formData,
+    });
+  }
 }
 
 export const api = new ApiClient();
