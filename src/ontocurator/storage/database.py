@@ -1,4 +1,5 @@
 import sqlite3
+import sys
 import threading
 from pathlib import Path
 from typing import cast
@@ -6,6 +7,15 @@ from typing import cast
 from ontocurator.domain.errors import DomainError
 
 CURRENT_SCHEMA_VERSION = 4
+
+
+def _get_sql_schema_path(filename: str) -> Path:
+    p = Path(__file__).parent / filename
+    if not p.is_file() and hasattr(sys, "_MEIPASS"):
+        meipass_p = Path(sys._MEIPASS) / "ontocurator" / "storage" / filename
+        if meipass_p.is_file():
+            return meipass_p
+    return p
 
 
 class Database:
@@ -19,7 +29,7 @@ class Database:
         self.migration_warnings: list[str] = []
         self._ensure_migrated()
         # Add the resource store only after accepting the current workspace format.
-        resource_schema = Path(__file__).parent / "ontology_resources.sql"
+        resource_schema = _get_sql_schema_path("ontology_resources.sql")
         self.get_connection().executescript(resource_schema.read_text(encoding="utf-8"))
 
     def run_migrations(self) -> None:
@@ -103,7 +113,7 @@ class Database:
             "SELECT name FROM sqlite_master WHERE type='table' AND name='workspace_metadata';"
         )
         if cursor.fetchone() is None:
-            schema_path = Path(__file__).parent / "schema_v4.sql"
+            schema_path = _get_sql_schema_path("schema_v4.sql")
             sql = schema_path.read_text(encoding="utf-8")
             cursor.executescript(sql)
 

@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.spec
 .Python
 env/
 build/
@@ -29,6 +30,7 @@ htmlcov/
 
 # Node / Frontend
 node_modules/
+.vite/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
