@@ -45,7 +45,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
       }}
     >
       <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: 8 }}>
-        Schichten & Ontologien
+        Layers & Ontologies
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -79,7 +79,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                 >
                   <input
                     type="checkbox"
-                    aria-label={`Sichtbarkeit für ${layerName}`}
+                    aria-label={`Visibility for ${layerName}`}
                     checked={isVisible}
                     onChange={() => onToggleVisibility(layer.layer_id)}
                     disabled={disabled}
@@ -99,7 +99,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                       padding: "2px 6px",
                     }}
                   >
-                    Referenz
+                    Reference
                   </span>
                 )}
 
@@ -109,7 +109,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     className="badge badge-success"
                     style={{ fontSize: "0.7rem", padding: "2px 6px" }}
                   >
-                    ✓ geprüft
+                    ✓ verified
                   </span>
                 )}
               </div>
@@ -129,12 +129,12 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     <input
                       type="radio"
                       name="active-layer-radio"
-                      aria-label={`Aktive Schicht: ${layerName}`}
+                      aria-label={`Active layer: ${layerName}`}
                       checked={isActive}
                       onChange={() => onSetActiveLayer(layer.layer_id)}
                       disabled={disabled}
                     />
-                    <span>{isActive ? "Aktiv" : "Aktivieren"}</span>
+                    <span>{isActive ? "Active" : "Activate"}</span>
                   </label>
                 ) : (
                   <label
@@ -150,11 +150,11 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     <input
                       type="radio"
                       name="active-layer-radio"
-                      aria-label={`Aktive Schicht: ${layerName}`}
+                      aria-label={`Active layer: ${layerName}`}
                       checked={false}
                       disabled={true}
                     />
-                    <span>Gesperrt</span>
+                    <span>Locked</span>
                   </label>
                 )}
               </div>
@@ -173,11 +173,11 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                 htmlFor="active-type-select"
                 style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}
               >
-                Annotationstyp für {activeLayer.label ?? (activeLayer as any).name ?? activeLayer.layer_id}
+                Annotation type for {activeLayer.label ?? (activeLayer as any).name ?? activeLayer.layer_id}
               </label>
               <select
                 id="active-type-select"
-                aria-label="Annotationstyp"
+                aria-label="Annotation type"
                 className="form-select form-select-sm"
                 value={selection.activeTypeId ?? ""}
                 onChange={(e) => onSetActiveType(e.target.value)}
@@ -206,11 +206,11 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     onClick={() => onCheckLayer(activeLayer.layer_id, !isChecked)}
                     disabled={disabled}
                     style={{ width: "100%", fontSize: "0.8rem", padding: "4px 8px" }}
-                    aria-label={`${activeName} als geprüft markieren`}
+                    aria-label={`Mark ${activeName} as verified`}
                   >
                     {isChecked
-                      ? `✓ ${activeName} geprüft (Zurücksetzen)`
-                      : `${activeName} als geprüft markieren`}
+                      ? `✓ ${activeName} verified (Reset)`
+                      : `Mark ${activeName} as verified`}
                   </button>
                 );
               })()}

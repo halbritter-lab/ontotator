@@ -50,9 +50,9 @@ describe("Curation Dashboard Start Screen", () => {
     });
 
     const table = screen.getByRole("table");
-    expect(within(table).getByText("Abgeschlossen")).toBeDefined();
-    expect(within(table).getByText("In Bearbeitung")).toBeDefined();
-    expect(within(table).getByText("Offen")).toBeDefined();
+    expect(within(table).getByText(/Completed|Abgeschlossen/i)).toBeDefined();
+    expect(within(table).getByText(/In Progress|In Bearbeitung/i)).toBeDefined();
+    expect(within(table).getByText(/^Open$|^Offen$/i)).toBeDefined();
   });
 
   it("filters documents by status tabs", async () => {
@@ -62,25 +62,25 @@ describe("Curation Dashboard Start Screen", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("Alle (3)")).toBeDefined();
+      expect(screen.getByText(/All \(3\)|Alle \(3\)/i)).toBeDefined();
     });
 
     const table = screen.getByRole("table");
 
-    // Click "Offen (1)"
-    fireEvent.click(screen.getByText("Offen (1)"));
+    // Click "Open (1)"
+    fireEvent.click(screen.getByText(/Open \(1\)|Offen \(1\)/i));
     expect(within(table).queryByText("doc-001")).toBeNull();
     expect(within(table).queryByText("doc-002")).toBeNull();
     expect(within(table).getByText("doc-003")).toBeDefined();
 
-    // Click "In Bearbeitung (1)"
-    fireEvent.click(screen.getByText("In Bearbeitung (1)"));
+    // Click "In Progress (1)"
+    fireEvent.click(screen.getByText(/In Progress \(1\)|In Bearbeitung \(1\)/i));
     expect(within(table).queryByText("doc-001")).toBeNull();
     expect(within(table).getByText("doc-002")).toBeDefined();
     expect(within(table).queryByText("doc-003")).toBeNull();
 
-    // Click "Abgeschlossen (1)"
-    fireEvent.click(screen.getByText("Abgeschlossen (1)"));
+    // Click "Completed (1)"
+    fireEvent.click(screen.getByText(/Completed \(1\)|Abgeschlossen \(1\)/i));
     expect(within(table).getByText("doc-001")).toBeDefined();
     expect(within(table).queryByText("doc-002")).toBeNull();
     expect(within(table).queryByText("doc-003")).toBeNull();
@@ -97,7 +97,7 @@ describe("Curation Dashboard Start Screen", () => {
       expect(within(table).getByText("doc-001")).toBeDefined();
     });
 
-    const searchInput = screen.getByPlaceholderText("Fall nach ID filtern...");
+    const searchInput = screen.getByPlaceholderText(/Filter cases by ID\.\.\.|Fall nach ID filtern\.\.\./i);
     fireEvent.change(searchInput, { target: { value: "doc-002" } });
 
     const table = screen.getByRole("table");
@@ -123,11 +123,11 @@ describe("Curation Dashboard Start Screen", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("Zuletzt bearbeiteter Fall")).toBeDefined();
+      expect(screen.getByText(/Recent Case|Zuletzt bearbeiteter Fall/i)).toBeDefined();
       expect(screen.getAllByText(/doc-002/).length).toBeGreaterThanOrEqual(1);
     });
 
-    const resumeBtn = screen.getByRole("button", { name: /Weiterarbeiten/i });
+    const resumeBtn = screen.getByRole("button", { name: /Continue|Weiterarbeiten/i });
     fireEvent.click(resumeBtn);
 
     await waitFor(() => {

@@ -88,7 +88,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectionIntent, setSelectionIntent] = useState<"new_mention" | "extend_mention">("new_mention");
   const [queueState, setQueueState] = useState<QueueState>("saved");
-  const [statusText, setStatusText] = useState<string>("Gespeichert");
+  const [statusText, setStatusText] = useState<string>("Saved");
 
   // Modals
   const [completedSubmission, setCompletedSubmission] = useState<Submission | null>(null);
@@ -118,10 +118,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       initialRevision: view.draft.revision,
       onState: (state) => {
         setQueueState(state);
-        if (state === "saved") setStatusText("Gespeichert");
-        else if (state === "saving") setStatusText("Speichert...");
-        else if (state === "conflict") setStatusText("Revisionskonflikt");
-        else if (state === "error") setStatusText("Speicherfehler");
+        if (state === "saved") setStatusText("Saved");
+        else if (state === "saving") setStatusText("Saving...");
+        else if (state === "conflict") setStatusText("Revision conflict");
+        else if (state === "error") setStatusText("Save error");
       },
     })
   );
@@ -384,7 +384,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           await mutateAnnotationAndSyncDecision(annotationId, () =>
             enqueueMutation(current => {
               const existingEv = (current.evidence ?? []).find(ev => ev.mention.evidence_id === evidenceId);
-              if (!existingEv) throw new ValidationError("Belegstelle ist nicht mehr vorhanden");
+              if (!existingEv) throw new ValidationError("Mention evidence is no longer present");
               return {
                 command: "edit_mention",
                 evidence_id: evidenceId,
@@ -396,7 +396,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         } else {
           await enqueueMutation(current => {
             const existingEv = (current.evidence ?? []).find(ev => ev.mention.evidence_id === evidenceId);
-            if (!existingEv) throw new ValidationError("Belegstelle ist nicht mehr vorhanden");
+            if (!existingEv) throw new ValidationError("Mention evidence is no longer present");
             return {
               command: "edit_mention",
               evidence_id: evidenceId,
@@ -421,7 +421,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         setIsAttachingMention(false);
       } else {
         if (!layerSelection.activeLayerId) {
-          setActionError("Keine aktive editierbare Schicht ausgewählt. Bitte Schicht aktivieren.");
+          setActionError("No active editable layer selected. Please activate a layer.");
           return;
         }
         const activeLayerId = layerSelection.activeLayerId;
@@ -510,7 +510,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const handleStartSpanless = () => {
     if (!layerSelection.activeLayerId) {
-      setActionError("Keine aktive editierbare Schicht ausgewählt. Bitte Schicht aktivieren.");
+      setActionError("No active editable layer selected. Please activate a layer.");
       return;
     }
     const activeLayerId = layerSelection.activeLayerId;
@@ -637,7 +637,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
       const targetLayer = target.layer_id ?? snap?.annotation.layer_id ?? layerSelection.activeLayerId;
       if (!targetLayer) {
-        setActionError("Keine Schicht für Vorschlag gefunden.");
+        setActionError("No layer found for proposal.");
         return;
       }
       const layerDef = (view.layers ?? []).find((l) => l.layer_id === targetLayer);
@@ -770,7 +770,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const uncheckedNames = unchecked
         .map((id) => view.layers?.find((l) => l.layer_id === id)?.label ?? id)
         .join(", ");
-      setSubmitError(`Bitte markieren Sie alle editierbaren Schichten als geprüft vor der Abgabe: ${uncheckedNames}`);
+      setSubmitError(`Please mark all editable layers as verified before submitting: ${uncheckedNames}`);
       return;
     }
 
@@ -782,7 +782,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
       if (missingTargets.length > 0) {
         setSubmitError(
-          `Es sind noch ${missingTargets.length} unentschiedene Review-Ziele offen. Bitte treffen Sie für jeden Vorschlag eine Entscheidung.`
+          `There are still ${missingTargets.length} undecided review proposals. Please make a decision for each proposal before submitting.`
         );
         return;
       }
@@ -806,7 +806,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       setCompletedSubmission(submission);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setSubmitError(`Abgabe fehlgeschlagen: ${msg}`);
+      setSubmitError(`Submission failed: ${msg}`);
     }
   };
 
@@ -968,9 +968,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 reportError(error);
               }
             }}
-            title="Zurück zum Dashboard"
+            title="Back to dashboard"
           >
-            ← Übersicht
+            ← Dashboard
           </button>
           {documentList && documentList.length > 0 && onNavigateCase ? (
             <CaseNavigation
@@ -987,7 +987,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               disabled={queueState === "saving"}
             />
           ) : (
-            <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>Fall: {view.document.document_id}</span>
+            <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>Case: {view.document.document_id}</span>
           )}
           <span
             className={`badge ${
@@ -999,10 +999,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             }`}
           >
             {view.key.mode === "review"
-              ? "Review-Modus"
+              ? "Review Mode"
               : view.key.mode === "assisted"
-              ? "Assisted-Modus"
-              : "Unabhängige Annotation"}
+              ? "Assisted Mode"
+              : "Independent Mode"}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1024,14 +1024,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               className="btn btn-secondary btn-sm"
               onClick={() => queueRef.current.retry()}
             >
-              🔄 Erneut versuchen
+              🔄 Retry
             </button>
           )}
 
           <button
             onClick={downloadExport}
             className="btn btn-secondary btn-sm"
-            title="Fall-Daten als ZIP exportieren"
+            title="Export case data as ZIP"
           >
             📥 Export (.zip)
           </button>
@@ -1040,10 +1040,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             type="button"
             className="btn btn-primary btn-sm"
             onClick={handleSubmitWorkspace}
-            title="Fall abschließen und abgeben"
+            title="Finish and submit case"
             style={{ fontWeight: 600, padding: "5px 12px" }}
           >
-            ✓ Fall abgeben
+            ✓ Submit Case
           </button>
         </div>
       </header>
@@ -1053,8 +1053,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           {actionError ?? submitError}
         </div>
       )}
-      <nav className="mobile-pane-tabs" aria-label="Ansicht wählen">
-        {([ ["list", "Liste"], ["text", "Text"], ["details", "Details"] ] as const).map(([pane, label]) => (
+      <nav className="mobile-pane-tabs" aria-label="Select view">
+        {([ ["list", "List"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
           <button key={pane} type="button" aria-pressed={mobilePane === pane}
             onClick={() => setMobilePane(pane)}>{label}</button>
         ))}
@@ -1081,7 +1081,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           {view.key.mode === "review" && (
             <>
               <div className="sidebar-header">
-                Review-Ziele ({reviewTargets.length})
+                Review Proposals ({reviewTargets.length})
               </div>
               <ul className="doc-list" style={{ maxHeight: "40%", borderBottom: "2px solid var(--border-color)" }}>
                 {reviewTargets.map((t) => {
@@ -1141,13 +1141,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                 : "var(--warning)",
                             }}
                           >
-                            {dec.outcome === "confirmed" ? "✓ Bestätigt"
-                             : dec.outcome === "rejected" ? "✕ Verworfen"
-                             : dec.outcome === "changed" ? "✎ Ersetzt"
-                             : "? Unsicher"}
+                            {dec.outcome === "confirmed" ? "✓ Confirmed"
+                             : dec.outcome === "rejected" ? "✕ Rejected"
+                             : dec.outcome === "changed" ? "✎ Replaced"
+                             : "? Uncertain"}
                           </span>
                         ) : (
-                          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>offen</span>
+                          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>open</span>
                         )}
                       </div>
                       <div className="doc-meta" style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
@@ -1185,19 +1185,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                       setMobilePane("details");
                                     }
                                   }}
-                                  title="Zur Gegenfassung im Entwurf springen"
+                                  title="Jump to replacement annotation in draft"
                                 >
-                                  ↳ Ersetzt durch: <strong>{displayText}</strong> ↗
+                                  ↳ Replaced by: <strong>{displayText}</strong> ↗
                                 </button>
                               </div>
                             );
                           })()
                         ) : dec?.outcome === "rejected" ? (
                           <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
-                            ✕ Vorschlag verworfen
+                            ✕ Proposal rejected
                           </span>
                         ) : (
-                          <>{t.evidence_count} Belegstelle(n) • {t.provenance.actor.kind}</>
+                          <>{t.evidence_count} mention(s) • {t.provenance.actor.kind}</>
                         )}
                       </div>
                     </li>
@@ -1207,25 +1207,25 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </>
           )}
 
-          {visibleSources.length > 0 && <section aria-label="Referenzannotationen">
-            <div className="sidebar-header">Referenzannotationen ({visibleSources.length})</div>
+          {visibleSources.length > 0 && <section aria-label="Reference annotations">
+            <div className="sidebar-header">Reference Annotations ({visibleSources.length})</div>
             {visibleSources.map(s => <button type="button" className="btn btn-secondary" key={sourceKey(s)}
               aria-pressed={sourceKey(s) === selectedSourceId} onClick={() => selectSource(sourceKey(s))}>
               <TermName termId={s.annotation.term_id} label={termLabel(s.annotation.layer_id, s.annotation.term_id)} />
-              <span>{view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Nur lesen</span>
+              <span>{view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Read-only</span>
             </button>)}
           </section>}
 
           <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Eigene Annotationen ({visibleAnnotations.length})</span>
+            <span>Curated Annotations ({visibleAnnotations.length})</span>
             <button
               type="button"
               className="btn btn-secondary btn-sm"
               onClick={handleStartSpanless}
-              title="Neue Annotation über Ontologie-Suche anlegen"
+              title="Create new annotation via ontology search"
               style={{ fontSize: "0.75rem", padding: "2px 8px" }}
             >
-              + Neue Annotation
+              + New Annotation
             </button>
           </div>
           <ul className="doc-list">
@@ -1263,7 +1263,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     )}
                   </div>
                   <div className="doc-meta">
-                    {evCount === 0 ? "Spanlos" : `${evCount} Belegstelle(n)`}
+                    {evCount === 0 ? "Spanless" : `${evCount} mention(s)`}
                     {firstAxisVal && ` • ${firstAxisVal}`}
                   </div>
                 </li>
@@ -1272,7 +1272,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           </ul>
 
           {(view.submissions ?? []).length > 0 && <div className="detail-section">
-            <h3>Bisherige Abgaben</h3>
+            <h3>Previous Submissions</h3>
             {view.submissions!.map(submission => <button type="button" className="btn btn-secondary btn-sm"
               key={submission.submission_id} onClick={() => setHistorySubmission(submission)}>
               {submission.created_at} · {submission.submission_id}
@@ -1285,7 +1285,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               <div style={{ marginBottom: 10, fontSize: "0.8rem", color: "var(--text-muted)" }}>
                 {editableLayerIds.length > 0 && (
                   <div>
-                    Geprüft: {(draft.checked_layer_ids ?? []).filter(id => editableLayerIds.includes(id)).length} von {editableLayerIds.length} Schichten
+                    Verified: {(draft.checked_layer_ids ?? []).filter(id => editableLayerIds.includes(id)).length} of {editableLayerIds.length} layers
                   </div>
                 )}
               </div>
@@ -1296,7 +1296,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               style={{ width: "100%", padding: "8px 0" }}
               onClick={handleSubmitWorkspace}
             >
-              ✓ Fall abschließen & abgeben
+              ✓ Finish & Submit Case
             </button>
             {submitError && (
               <div style={{ fontSize: "0.75rem", color: "var(--danger)", marginTop: 6 }}>
@@ -1327,35 +1327,35 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         {/* Right: Annotation & Search Panel + Review Actions */}
         <div className="inspector-pane">
           {selectedSource ? (
-            <section className="detail-pane" aria-label="Referenzdetails">
+            <section className="detail-pane" aria-label="Reference details">
               <div className="detail-section">
                 <h2><TermName termId={selectedSource.annotation.term_id} label={termLabel(selectedSource.annotation.layer_id, selectedSource.annotation.term_id)} /></h2>
-                <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label} · Nur lesen</p>
+                <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label} · Read-only</p>
                 <p>{selectedSource.annotation.provenance.actor.actor_id} · {selectedSource.annotation.provenance.method}</p>
-                {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Nicht angegeben"}</p>)}
-                <h3>Belegstellen ({selectedSource.evidence.length})</h3>
+                {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Not specified"}</p>)}
+                <h3>Mentions ({selectedSource.evidence.length})</h3>
                 {selectedSource.evidence.map(ev => <p key={ev.version}>
                   {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
                 </p>)}
               </div>
             </section>
           ) : pendingAnnotation ? (
-            <section className="detail-pane" aria-label="Neue Annotation">
+            <section className="detail-pane" aria-label="New Annotation">
               <div className="detail-section">
                 <h2>
                   {pendingAnnotation.isSpanless
-                    ? "Begriff für neue Annotation wählen"
-                    : "Begriff für die Markierung wählen"}
+                    ? "Select term for new annotation"
+                    : "Select term for highlighted text"}
                 </h2>
                 <p>
                   {pendingAnnotation.isSpanless
-                    ? "Wählen Sie einen Begriff aus der Ontologie für die neue Annotation."
-                    : "Die Annotation wird nach Auswahl eines Begriffs gespeichert."}
+                    ? "Select a term from the ontology for the new annotation."
+                    : "The annotation will be saved upon selecting a term."}
                 </p>
                 <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
                   onSelectCandidate={(candidate, searchId) => { void createPendingAnnotation(candidate.term_id, searchId); }} />
-                <button type="button" className="btn btn-secondary" disabled={queueState === "saving"} onClick={cancelPending}>Abbrechen</button>
+                <button type="button" className="btn btn-secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</button>
               </div>
             </section>
           ) : view.key.mode === "review" && selectedTarget ? (
@@ -1426,14 +1426,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       </div>
 
       {historySubmission && <div className="modal-overlay">
-        <div className="modal-content" role="dialog" aria-label="Historische Abgabe">
-          <h2>Abgabe {historySubmission.submission_id}</h2>
+        <div className="modal-content" role="dialog" aria-label="Historical submission">
+          <h2>Submission {historySubmission.submission_id}</h2>
           <p>{historySubmission.created_at}</p>
           <p>
-            Geprüfte Schichten:{" "}
+            Verified layers:{" "}
             {historySubmission.checked_layer_ids && historySubmission.checked_layer_ids.length > 0
               ? historySubmission.checked_layer_ids.join(", ")
-              : (historySubmission.document_checked ? "Dokument geprüft" : "Keine")}
+              : (historySubmission.document_checked ? "Document verified" : "None")}
           </p>
           {historySubmission.snapshots.map(snap => {
             const axesVal = snap.annotation.axes_values ?? (snap.annotation as any).axes?.values;
@@ -1443,9 +1443,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 <p>
                   {axesVal && Object.keys(axesVal).length > 0
                     ? Object.entries(axesVal)
-                        .map(([k, v]) => `${k}: ${v ?? "Nicht angegeben"}`)
+                        .map(([k, v]) => `${k}: ${v ?? "Not specified"}`)
                         .join(" · ")
-                    : "Keine Achsen"}
+                    : "No axes"}
                 </p>
                 {snap.evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
                   {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
@@ -1457,16 +1457,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             {decision.target.annotation_id} ({decision.target.version}): {decision.outcome} {decision.note}
           </p>)}
           <button type="button" className="btn btn-secondary" onClick={() => setHistorySubmission(null)}>
-            Schließen
+            Close
           </button>
         </div>
       </div>}
 
       {completedSubmission && <div className="modal-overlay">
-        <div className="modal-content" role="dialog" aria-label="Abgabe abgeschlossen">
-          <h2>✓ Fall erfolgreich abgegeben!</h2>
-          <p>Abgabe-ID: <code>{completedSubmission.submission_id}</code></p>
-          <p>Zeitstempel: {completedSubmission.created_at}</p>
+        <div className="modal-content" role="dialog" aria-label="Case submitted">
+          <h2>✓ Case successfully submitted!</h2>
+          <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>
+          <p>Timestamp: {completedSubmission.created_at}</p>
           <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
             {nextDoc && onNavigateCase && (
               <button
@@ -1477,7 +1477,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   await onNavigateCase(nextDoc.document_id);
                 }}
               >
-                Nächsten Fall bearbeiten (Fall {nextDoc.position}) →
+                Review next case (Case {nextDoc.position}) →
               </button>
             )}
             <button
@@ -1485,21 +1485,21 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               className="btn btn-secondary"
               onClick={downloadExport}
             >
-              📥 Export herunterladen
+              📥 Download export
             </button>
             <button
               type="button"
               className="btn btn-secondary"
               onClick={() => setCompletedSubmission(null)}
             >
-              Im Fall bleiben
+              Stay in case
             </button>
             <button
               type="button"
               className="btn btn-secondary"
               onClick={onClose}
             >
-              Zurück zur Übersicht
+              Back to dashboard
             </button>
           </div>
         </div>

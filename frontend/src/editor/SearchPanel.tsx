@@ -21,6 +21,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 }) => {
   const [state, setState] = useState<SearchState>(searchManager.getState());
   const [route, setRoute] = useState<"lexical" | "exact" | "id" | "browse">("lexical");
+  const [userSelectedRoute, setUserSelectedRoute] = useState<boolean>(false);
   const [queryInput, setQueryInput] = useState<string>("");
 
   useEffect(() => {
@@ -32,14 +33,39 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   useEffect(() => {
     searchManager.clear();
     setQueryInput("");
+    setUserSelectedRoute(false);
+    setRoute("lexical");
   }, [annotationId, workspaceKey, layerId, searchManager]);
+
+  const isIdLike = (q: string): boolean => {
+    const trimmed = q.trim();
+    return /^\d+$/.test(trimmed) || /^[A-Za-z]+:\d+$/i.test(trimmed);
+  };
 
   const handleQueryChange = (val: string) => {
     setQueryInput(val);
-    searchManager.search(val, annotationId, workspaceKey, route, 10, layerId);
+    let effectiveRoute = route;
+    if (!userSelectedRoute) {
+      if (isIdLike(val)) {
+        effectiveRoute = "id";
+        setRoute("id");
+      } else if (route === "id" && !isIdLike(val)) {
+        effectiveRoute = "lexical";
+        setRoute("lexical");
+      }
+    }
+    searchManager.search(val, annotationId, workspaceKey, effectiveRoute, 10, layerId);
+  };
+
+  const handleClear = () => {
+    setQueryInput("");
+    setUserSelectedRoute(false);
+    setRoute("lexical");
+    searchManager.clear();
   };
 
   const handleRouteChange = (newRoute: "lexical" | "exact" | "id" | "browse") => {
+    setUserSelectedRoute(true);
     setRoute(newRoute);
     if (queryInput) {
       searchManager.search(queryInput, annotationId, workspaceKey, newRoute, 10, layerId);
@@ -52,14 +78,14 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     <div className="search-panel">
       <div className="form-group">
         <label htmlFor="search-input" className="form-label">
-          Ontologie-Term suchen
+          Search ontology term
         </label>
         <div style={{ display: "flex", gap: 6 }}>
           <input
             id="search-input"
             type="text"
             className="form-control"
-            placeholder="Suchbegriff oder Kennung (z.B. 1250, HP:0001250, MONDO:0001250)"
+            placeholder="Search term or identifier (e.g. 1250, HP:0001250, MONDO:0001250)"
             value={queryInput}
             onChange={(e) => handleQueryChange(e.target.value)}
             autoComplete="off"
@@ -68,21 +94,21 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              onClick={() => handleQueryChange("")}
-              title="Suche zurücksetzen"
+              onClick={handleClear}
+              title="Clear search"
             >
               ✕
             </button>
           )}
         </div>
         <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
-          Reine Ziffern durchsuchen die Hauptontologie. Für andere Präfixe vollständige Kennung (z.B. MONDO:0001250) angeben.
+          Pure digits search the main ontology. For other prefixes, provide the full identifier (e.g. MONDO:0001250).
         </div>
       </div>
 
       <div className="form-group">
         <label htmlFor="search-route-select" className="form-label">
-          Suchweg
+          Search Strategy
         </label>
         <select
           id="search-route-select"
@@ -92,16 +118,16 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             handleRouteChange(e.target.value as "lexical" | "exact" | "id" | "browse")
           }
         >
-          <option value="lexical">Lexikalische Ähnlichkeit</option>
-          <option value="exact">Exakter Begriff</option>
-          <option value="id">Kennung (z.B. HP:..., MONDO:...)</option>
-          <option value="browse">Hierarchie (Eltern/Kinder)</option>
+          <option value="lexical">Lexical similarity</option>
+          <option value="exact">Exact term</option>
+          <option value="id">Identifier (e.g. HP:..., MONDO:...)</option>
+          <option value="browse">Hierarchy (Parents/Children)</option>
         </select>
       </div>
 
       {state.isLoading && (
         <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", padding: "8px 0" }}>
-          Suche läuft...
+          Searching...
         </div>
       )}
 
@@ -116,7 +142,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             marginBottom: 8,
           }}
         >
-          Fehler: {state.error}
+          Error: {state.error}
         </div>
       )}
 
@@ -158,13 +184,13 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 </div>
                 {cand.matched_term && cand.matched_term !== cand.label && (
                   <div style={{ fontSize: "0.8rem", color: "var(--primary)", marginBottom: 2 }}>
-                    Treffer: »{cand.matched_term}« ({cand.match_kind})
+                    Match: »{cand.matched_term}« ({cand.match_kind})
                   </div>
                 )}
                 {cand.definition && <div className="candidate-def">{cand.definition}</div>}
                 {obsolete && (
                   <span className="warning-badge">
-                    Veralteter Begriff (obsolet - Zuweisung nicht zulässig)
+                    Obsolete term (assignment not allowed)
                   </span>
                 )}
                 {isSelected && (
@@ -177,7 +203,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                       color: "var(--primary)",
                     }}
                   >
-                    ✓ Aktuell ausgewählt
+                    ✓ Currently selected
                   </span>
                 )}
               </li>

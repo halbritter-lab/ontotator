@@ -19,14 +19,15 @@ export type WorkspaceMode = "independent" | "review" | "assisted";
 export type ReviewTargetSet = components["schemas"]["ReviewTargetSet"];
 
 const statusLabels: Record<string, string> = {
-  not_started: "Offen",
-  in_progress: "In Bearbeitung",
-  completed: "Abgeschlossen",
+  not_started: "Open",
+  in_progress: "In Progress",
+  completed: "Completed",
 };
 
 export const App: React.FC = () => {
   const documentRequest = useRef(0);
   const reviewRequest = useRef(0);
+  const userManuallySetMode = useRef(false);
   const [packages, setPackages] = useState<PackageManifest[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
@@ -67,7 +68,7 @@ export const App: React.FC = () => {
         handleSelectPackage(list[0].package_id);
       }
     } catch (err: unknown) {
-      setError(`Fehler beim Laden der Pakete: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Error loading packages: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -84,9 +85,29 @@ export const App: React.FC = () => {
       setDocuments(docs);
       if (docs.length > 0) {
         setSelectedDocId(docs[0].document_id);
+        // Auto-detect mode if not explicitly set by the user
+        if (!userManuallySetMode.current) {
+          try {
+            const inputs = await api.getReviewInputs({
+              package_id: pkgId,
+              document_id: docs[0].document_id,
+              annotator_id: annotatorId.trim() || "reviewer-1",
+              mode: "review",
+            });
+            if (inputs.length > 0) {
+              setMode("review");
+              setReviewInputs(inputs);
+              setSelectedTargetIds(new Set(inputs.map(snapshotKey)));
+            } else {
+              setMode("independent");
+            }
+          } catch {
+            // Keep default mode
+          }
+        }
       }
     } catch (err: unknown) {
-      setError(`Fehler beim Laden der Dokumente: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Error loading documents: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -101,7 +122,7 @@ export const App: React.FC = () => {
       await loadPackages();
       handleSelectPackage(res.package_id);
     } catch (err: unknown) {
-      setError(`Fehler beim Paket-Upload: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Package upload error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsUploading(false);
       e.target.value = "";
@@ -127,7 +148,7 @@ export const App: React.FC = () => {
       const allIds = new Set(inputs.map(snapshotKey));
       setSelectedTargetIds(allIds);
     } catch (err: unknown) {
-      setError(`Fehler beim Abrufen der Review-Vorschläge: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Error fetching review proposals: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       if (requestId === reviewRequest.current) setIsLoadingInputs(false);
     }
@@ -173,7 +194,7 @@ export const App: React.FC = () => {
       );
 
       if (chosenSnapshots.length === 0 && snapshotsToUse.length > 0) {
-        setError("Bitte wählen Sie mindestens einen Vorschlag für die Review-Runde aus.");
+        setError("Please select at least one proposal for the review round.");
         return;
       }
       targets = {
@@ -196,7 +217,7 @@ export const App: React.FC = () => {
       setSelectedDocId(targetDoc);
       setActiveWorkspace(res);
     } catch (err: unknown) {
-      setError(`Fehler beim Öffnen des Arbeitsbereichs: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Error opening workspace: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -281,12 +302,12 @@ export const App: React.FC = () => {
         <div className="app-title" style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
           <span>ontocurator</span>
           <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontWeight: 400 }}>
-            Klinische Curation Workbench
+            Clinical Curation Workbench
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
-            {isUploading ? "Wird importiert..." : "📦 Arbeitspaket (.zip) importieren"}
+            {isUploading ? "Importing..." : "📦 Import Package (.zip)"}
             <input
               type="file"
               accept=".zip"
@@ -327,10 +348,10 @@ export const App: React.FC = () => {
             }}
           >
             <h3 style={{ fontSize: "1.05rem", marginBottom: 8, color: "var(--text-main)" }}>
-              🔑 Session-Token eingeben
+              🔑 Enter Session Token
             </h3>
             <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: 16 }}>
-              Die lokale API erfordert ein Sicherheits-Token. Bitte geben Sie das Session-Token ein oder öffnen Sie die URL mit dem Parameter <code>#token=...</code> im Browser.
+              The local API requires a security token. Please enter the session token or open the URL with the parameter <code>#token=...</code> in your browser.
             </p>
             <form
               onSubmit={(e) => {
@@ -346,13 +367,13 @@ export const App: React.FC = () => {
               <input
                 type="text"
                 className="form-control"
-                placeholder="Session-Token einfügen..."
+                placeholder="Paste session token..."
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
                 style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}
               />
               <button type="submit" className="btn btn-primary" disabled={!tokenInput.trim()}>
-                Verbinden
+                Connect
               </button>
             </form>
           </div>
@@ -374,7 +395,7 @@ export const App: React.FC = () => {
         >
           <div className="form-group" style={{ margin: 0 }}>
             <label htmlFor="package-select" className="form-label" style={{ marginBottom: 4 }}>
-              Arbeitspaket
+              Work Package
             </label>
             <select
               id="package-select"
@@ -382,7 +403,7 @@ export const App: React.FC = () => {
               value={selectedPackageId ?? ""}
               onChange={(e) => handleSelectPackage(e.target.value)}
             >
-              {packages.length === 0 && <option value="">Keine Pakete gefunden</option>}
+              {packages.length === 0 && <option value="">No packages found</option>}
               {packages.map((pkg) => (
                 <option key={pkg.package_id} value={pkg.package_id}>
                   {pkg.package_id} {pkg.ontology?.release ? `(Release: ${pkg.ontology.release})` : ""}
@@ -393,7 +414,7 @@ export const App: React.FC = () => {
 
           <div className="form-group" style={{ margin: 0 }}>
             <label htmlFor="annotator-input" className="form-label" style={{ marginBottom: 4 }}>
-              Annotator-Kennung
+              Annotator ID
             </label>
             <input
               id="annotator-input"
@@ -401,23 +422,26 @@ export const App: React.FC = () => {
               className="form-control"
               value={annotatorId}
               onChange={(e) => setAnnotatorId(e.target.value)}
-              placeholder="z. B. dr-mueller"
+              placeholder="e.g. annotator-1"
             />
           </div>
 
           <div className="form-group" style={{ margin: 0 }}>
             <label htmlFor="mode-select" className="form-label" style={{ marginBottom: 4 }}>
-              Arbeitsmodus
+              Working Mode
             </label>
             <select
               id="mode-select"
               className="form-select"
               value={mode}
-              onChange={(e) => setMode(e.target.value as WorkspaceMode)}
+              onChange={(e) => {
+                userManuallySetMode.current = true;
+                setMode(e.target.value as WorkspaceMode);
+              }}
             >
-              <option value="independent">Unabhängig (Neu-Annotation)</option>
-              <option value="review">Review-Modus (Vorschläge prüfen)</option>
-              <option value="assisted">Assisted-Modus (Mit Referenzen)</option>
+              <option value="review">Review Mode (validate proposals)</option>
+              <option value="independent">Independent Mode (manual annotation)</option>
+              <option value="assisted" style={{ display: "none" }}>Assisted Mode</option>
             </select>
           </div>
         </div>
@@ -426,13 +450,13 @@ export const App: React.FC = () => {
         <div style={{ display: "none" }}>
           <select
             id="doc-select"
-            aria-label="Klinischer Fall (Dokument)"
+            aria-label="Clinical Case (Document)"
             value={selectedDocId ?? ""}
             onChange={(e) => { setSelectedDocId(e.target.value); setReviewInputs([]); setSelectedTargetIds(new Set()); }}
           >
             {documents.map((doc) => (
               <option key={doc.document_id} value={doc.document_id}>
-                Fall {doc.position}: {doc.document_id}
+                Case {doc.position}: {doc.document_id}
               </option>
             ))}
           </select>
@@ -443,13 +467,13 @@ export const App: React.FC = () => {
           <div className="dashboard-hero">
             <div>
               <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)", fontWeight: 700 }}>
-                Zuletzt bearbeiteter Fall
+                Recent Case
               </div>
               <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text-main)", marginTop: 2 }}>
-                Fall {resumeDoc.position}: <span style={{ fontFamily: "var(--font-mono)" }}>{resumeDoc.document_id}</span>
+                Case {resumeDoc.position}: <span style={{ fontFamily: "var(--font-mono)" }}>{resumeDoc.document_id}</span>
               </div>
               <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: 3 }}>
-                {resumeDoc.language.toUpperCase()} • {resumeDoc.text_length} Zeichen • Status: <strong>{statusLabels[resumeDoc.status] ?? resumeDoc.status}</strong>
+                {resumeDoc.language.toUpperCase()} • {resumeDoc.text_length} chars • Status: <strong>{statusLabels[resumeDoc.status] ?? resumeDoc.status}</strong>
               </div>
             </div>
             <button
@@ -461,7 +485,7 @@ export const App: React.FC = () => {
                 void handleOpenWorkspace(resumeDoc.document_id);
               }}
             >
-              Weiterarbeiten ▶
+              Continue ▶
             </button>
           </div>
         )}
@@ -480,10 +504,10 @@ export const App: React.FC = () => {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div>
                 <h3 style={{ fontSize: "0.95rem", fontWeight: 600, margin: 0 }}>
-                  Review-Vorschläge für ausgewählten Fall ({reviewInputs.length})
+                  Review Proposals for Selected Case ({reviewInputs.length})
                 </h3>
                 <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "2px 0 0" }}>
-                  Alle ausgewählten Vorschläge werden automatisch als herkunftsunabhängige Review-Ziele in den Fall geladen.
+                  All selected proposals are loaded into the case as origin-neutral review targets.
                 </p>
               </div>
               <button
@@ -492,13 +516,13 @@ export const App: React.FC = () => {
                 onClick={() => void handleFetchReviewInputs()}
                 disabled={isLoadingInputs}
               >
-                {isLoadingInputs ? "Lädt..." : "Aktualisieren"}
+                {isLoadingInputs ? "Loading..." : "Refresh"}
               </button>
             </div>
 
             {reviewInputs.length === 0 ? (
               <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
-                Keine externen Vorschläge für Fall {selectedDocId ?? ""} vorhanden.
+                No external proposals available for case {selectedDocId ?? ""}.
               </p>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 8, marginTop: 8 }}>
@@ -537,7 +561,7 @@ export const App: React.FC = () => {
                           <TermName termId={term} label={reviewTermLabel(ann.layer_id, term)} />
                         </span>
                         <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                          {ann.evidence_refs?.length ?? 0} Belegstellen • {input.version.slice(0, 8)}
+                          {ann.evidence_refs?.length ?? 0} mention(s) • {input.version.slice(0, 8)}
                         </div>
                       </div>
                     </label>
@@ -556,35 +580,35 @@ export const App: React.FC = () => {
               className={`dashboard-tab ${statusFilter === "all" ? "active" : ""}`}
               onClick={() => setStatusFilter("all")}
             >
-              Alle ({documents.length})
+              All ({documents.length})
             </button>
             <button
               type="button"
               className={`dashboard-tab ${statusFilter === "not_started" ? "active" : ""}`}
               onClick={() => setStatusFilter("not_started")}
             >
-              Offen ({openCount})
+              Open ({openCount})
             </button>
             <button
               type="button"
               className={`dashboard-tab ${statusFilter === "in_progress" ? "active" : ""}`}
               onClick={() => setStatusFilter("in_progress")}
             >
-              In Bearbeitung ({inProgressCount})
+              In Progress ({inProgressCount})
             </button>
             <button
               type="button"
               className={`dashboard-tab ${statusFilter === "completed" ? "active" : ""}`}
               onClick={() => setStatusFilter("completed")}
             >
-              Abgeschlossen ({completedCount})
+              Completed ({completedCount})
             </button>
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <input
               type="search"
-              placeholder="Fall nach ID filtern..."
+              placeholder="Filter cases by ID..."
               className="form-control"
               style={{ width: 220, fontSize: "0.82rem", padding: "5px 10px" }}
               value={searchFilter}
@@ -597,28 +621,28 @@ export const App: React.FC = () => {
               disabled={!selectedPackageId || !selectedDocId}
               style={{ padding: "6px 14px", fontWeight: 600 }}
             >
-              Arbeitsbereich öffnen →
+              Open Workspace →
             </button>
           </div>
         </div>
 
         {/* Cases Table */}
-        <table className="dashboard-table" aria-label="Klinische Fälle">
+        <table className="dashboard-table" aria-label="Clinical Cases">
           <thead>
             <tr>
               <th style={{ width: 48 }}>#</th>
-              <th>Fall-ID</th>
-              <th>Sprache</th>
-              <th>Textumfang</th>
+              <th>Case ID</th>
+              <th>Language</th>
+              <th>Length</th>
               <th>Status</th>
-              <th style={{ textAlign: "right" }}>Aktion</th>
+              <th style={{ textAlign: "right" }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {filteredDocuments.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: "center", color: "var(--text-muted)", padding: 24 }}>
-                  Keine Fälle für den gewählten Filter gefunden.
+                  No cases found for the selected filter.
                 </td>
               </tr>
             ) : (
@@ -638,7 +662,7 @@ export const App: React.FC = () => {
                     <td style={{ fontWeight: 600, color: "var(--text-muted)" }}>{doc.position}</td>
                     <td style={{ fontWeight: 600, fontFamily: "var(--font-mono)" }}>{doc.document_id}</td>
                     <td>{doc.language.toUpperCase()}</td>
-                    <td>{doc.text_length.toLocaleString("de-DE")} Zeichen</td>
+                    <td>{doc.text_length.toLocaleString("en-US")} chars</td>
                     <td>
                       <span
                         className="badge"
@@ -673,7 +697,7 @@ export const App: React.FC = () => {
                           void handleOpenWorkspace(doc.document_id);
                         }}
                       >
-                        Fall öffnen →
+                        Open Case →
                       </button>
                     </td>
                   </tr>

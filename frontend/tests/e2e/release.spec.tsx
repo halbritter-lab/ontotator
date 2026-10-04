@@ -242,13 +242,13 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // 3. Select Human proposal: verify all 4 review actions are rendered identically
     fireEvent.click(screen.getAllByText("prop-human")[0]);
-    expect(screen.getByRole("button", { name: /Bestätigen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Verwerfen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Ändern/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Unsicher/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Uncertain|Unsicher/i })).toBeDefined();
 
     // Confirm human proposal
-    fireEvent.click(screen.getByRole("button", { name: /Bestätigen/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Confirm|Bestätigen/i }));
     await waitFor(() => {
       expect(recordDecisionSpy).toHaveBeenCalledWith(
         "ws-e2e-token",
@@ -264,13 +264,13 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // 4. Select Tool proposal: verify the exact same 4 actions are present
     fireEvent.click(screen.getAllByText("prop-tool")[0]);
-    expect(screen.getByRole("button", { name: /Bestätigen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Verwerfen/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Ändern/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Unsicher/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Uncertain|Unsicher/i })).toBeDefined();
 
     // Reject tool proposal so all targets are decided
-    fireEvent.click(screen.getByRole("button", { name: /Verwerfen/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Reject|Verwerfen/i }));
     await waitFor(() => {
       expect(recordDecisionSpy).toHaveBeenCalledWith(
         "ws-e2e-token",
@@ -285,7 +285,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // 5. Complete / Submit workspace
     // Submitting a single-layer case also marks that layer checked.
-    const submitBtn = screen.getByRole("button", { name: /Fall abschließen & abgeben/i });
+    const submitBtn = screen.getByRole("button", { name: /Finish & Submit Case|Fall abschließen & abgeben/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -299,8 +299,8 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // Verification of export link availability after submission
     await waitFor(() => {
-      expect(screen.getByText(/Fall erfolgreich abgegeben/i)).toBeDefined();
-      expect(screen.getByRole("button", { name: /Export herunterladen/i })).toBeDefined();
+      expect(screen.getByText(/Case successfully submitted|Fall erfolgreich abgegeben/i)).toBeDefined();
+      expect(screen.getByRole("button", { name: /Download Export|Export herunterladen/i })).toBeDefined();
     });
   });
 });

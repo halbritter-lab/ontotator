@@ -79,7 +79,7 @@ export const TextPane: React.FC<TextPaneProps> = ({
       <div className="pane-toolbar">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-muted)" }}>
-            Auswahlabsicht:
+            Selection intent:
           </span>
           <span
             className="badge"
@@ -91,8 +91,8 @@ export const TextPane: React.FC<TextPaneProps> = ({
             }}
           >
             {selectionIntent === "extend_mention"
-              ? "Weiteres Segment (unterbrochene Markierung)"
-              : "Neue Belegstelle"}
+              ? "Additional segment (discontinuous mention)"
+              : "New mention"}
           </span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -107,8 +107,8 @@ export const TextPane: React.FC<TextPaneProps> = ({
               }
             >
               {selectionIntent === "new_mention"
-                ? "Auf »Weiteres Segment« umschalten"
-                : "Auf »Neue Belegstelle« umschalten"}
+                ? "Switch to »Additional segment«"
+                : "Switch to »New mention«"}
             </button>
           )}
         </div>

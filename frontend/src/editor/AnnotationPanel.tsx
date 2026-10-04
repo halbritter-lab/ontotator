@@ -63,10 +63,10 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
       <div className="detail-pane">
         <div className="detail-section" style={{ textAlign: "center", padding: "40px 20px" }}>
           <div style={{ fontSize: "1.5rem", marginBottom: 8 }}>📝</div>
-          <h3 style={{ marginBottom: 6 }}>Keine Annotation ausgewählt</h3>
+          <h3 style={{ marginBottom: 6 }}>No annotation selected</h3>
           <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-            Wählen Sie eine vorhandene Annotation oder Markierung im Text aus,
-            oder markieren Sie eine Textstelle, um eine neue Annotation anzulegen.
+            Select an existing annotation or mention in the text,
+            or highlight text to create a new annotation.
           </p>
         </div>
       </div>
@@ -104,7 +104,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           }}
         >
           <div>
-            <span style={{ fontWeight: 600, color: "var(--primary)" }}>↳ Gegenfassung für Vorschlag: </span>
+            <span style={{ fontWeight: 600, color: "var(--primary)" }}>↳ Replacement for proposal: </span>
             <span style={{ color: "var(--text-main)", fontWeight: 500 }}>
               {linkedTarget.termLabel ? `${linkedTarget.termLabel} (${linkedTarget.termId})` : linkedTarget.termId}
             </span>
@@ -116,7 +116,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               style={{ padding: "2px 8px", fontSize: "0.75rem", background: "var(--bg-primary)" }}
               onClick={onNavigateTarget}
             >
-              Zum Review-Ziel
+              View review target
             </button>
           )}
         </div>
@@ -127,7 +127,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase" }}>
-              Ontologie-Term
+              Ontology Term
             </span>
             <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "2px 0 4px" }}>
               <TermName termId={currentTerm} label={termLabel} />
@@ -139,14 +139,14 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               className="btn btn-secondary btn-sm"
               onClick={() => setShowSearch(!showSearch)}
             >
-              {showSearch ? "Suche schließen" : "Begriff ändern"}
+              {showSearch ? "Close search" : "Change term"}
             </button>
             {onDeselect && (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={onDeselect}
-                title="Auswahl aufheben"
+                title="Clear selection"
               >
                 ✕
               </button>
@@ -171,16 +171,16 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
       {/* 2. Dynamic Context Axes (hidden if empty or undefined) */}
       {axesConfig && axesConfig.length > 0 && (
         <div className="detail-section" data-testid="axes-section">
-          <h3>Kontext-Achsen</h3>
+          <h3>Context Axes</h3>
           {axesConfig.map((axis) => {
             const val = axesValues[axis.id] ?? "";
             const isRequired = !axis.allow_empty;
             const options = [
-              ...(axis.allow_empty ? [{ value: "", label: "Nicht angegeben" }] : []),
+              ...(axis.allow_empty ? [{ value: "", label: "Not specified" }] : []),
               ...axis.options.map((option) => ({ value: option, label: ({
-                present: "Vorhanden", absent: "Nicht vorhanden", uncertain: "Unsicher",
-                patient: "Patient:in", other: "Andere Person", current: "Aktuell",
-                historical: "Früher", future: "Zukünftig",
+                present: "Present", absent: "Absent", uncertain: "Uncertain",
+                patient: "Patient", other: "Other person", current: "Current",
+                historical: "Historical", future: "Future",
               } as Record<string, string>)[option] ?? option })),
             ];
             const updateAxis = (value: string) => onUpdateAxes({
@@ -191,7 +191,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             return (
               <fieldset key={axis.id} className="form-group axis-field">
                 <legend className="form-label">
-                  {axis.label} {isRequired && <span style={{ color: "var(--danger)" }}>* (Pflichtfeld)</span>}
+                  {axis.label} {isRequired && <span style={{ color: "var(--danger)" }}>* (Required)</span>}
                 </legend>
                 {options.length <= 4 ? (
                   <div className="axis-options">
@@ -207,8 +207,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                 ) : (
                   <select id={`axis-select-${axis.id}`} aria-label={axis.label}
                     className="form-select" value={val} onChange={(e) => updateAxis(e.target.value)}>
-                    {axis.allow_empty && <option value="">Nicht angegeben</option>}
-                    {!axis.allow_empty && <option value="" disabled>Bitte auswählen</option>}
+                    {axis.allow_empty && <option value="">Not specified</option>}
+                    {!axis.allow_empty && <option value="" disabled>Please select</option>}
                     {axis.options.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
                 )}
@@ -221,14 +221,14 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
       {/* 3. Evidence Mentions */}
       <div className="detail-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <h3>Belegstellen ({linkedEvidence.length})</h3>
+          <h3>Mentions ({linkedEvidence.length})</h3>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => onSetIntent("new_mention")}
-            title="Markieren Sie Text für eine weitere Erwähnung dieses Begriffs"
+            title="Highlight text to add an additional mention for this term"
           >
-            + Weitere Belegstelle
+            + Add Mention
           </button>
         </div>
 
@@ -243,7 +243,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               color: "var(--text-muted)",
             }}
           >
-            ℹ️ <strong>Spanlose Annotation:</strong> Dieser Befund hat aktuell keine verknüpften Textbelegstellen.
+            ℹ️ <strong>Spanless Annotation:</strong> This finding currently has no linked text mentions.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -270,7 +270,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     onClick={() => onSelectEvidence(ev.mention.evidence_id)}
                   >
                     <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>
-                      Belegstelle #{idx + 1}
+                      Mention #{idx + 1}
                     </div>
                     <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                       Offsets: {ranges}
@@ -284,7 +284,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                         onSelectEvidence(ev.mention.evidence_id);
                         onSetIntent("extend_mention");
                       }}
-                      title="Ausgewählte Belegstelle um weiteres Segment im Text ergänzen"
+                      title="Add another text segment to this mention"
                     >
                       + Segment
                     </button>
@@ -292,9 +292,9 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                       type="button"
                       className="btn btn-danger btn-sm"
                       onClick={() => onDetachMention(ev.mention.evidence_id)}
-                      title="Belegstelle von dieser Annotation trennen"
+                      title="Detach mention from this annotation"
                     >
-                      Entfernen
+                      Remove
                     </button>
                   </div>
                 </div>
@@ -312,7 +312,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           style={{ width: "100%" }}
           onClick={() => onDeleteAnnotation(ann.annotation_id)}
         >
-          🗑️ Annotation löschen
+          🗑️ Delete Annotation
         </button>
       </div>
     </div>

@@ -80,16 +80,16 @@ describe("Dynamic Axes and Non-HPO UI", () => {
 
     // Non-HPO CURIE displayed in header
     expect(screen.getByText("MONDO:0001250")).toBeDefined();
-    expect(screen.getByText("Ontologie-Term")).toBeDefined();
+    expect(screen.getByText(/Ontology Term|Ontologie-Term/i)).toBeDefined();
 
     // Required indicator on severity
     expect(screen.getByText(/Schweregrad/)).toBeDefined();
-    expect(screen.getByText(/\* \(Pflichtfeld\)/)).toBeDefined();
+    expect(screen.getByText(/\* \((Required|Pflichtfeld)\)/i)).toBeDefined();
 
     // Small axes expose all choices directly.
     expect((screen.getByRole("radio", { name: "severe" }) as HTMLInputElement).checked).toBe(true);
 
-    expect((screen.getByRole("radio", { name: "Nicht angegeben" }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("radio", { name: /Not specified|Nicht angegeben/i }) as HTMLInputElement).checked).toBe(true);
 
     fireEvent.click(screen.getByRole("radio", { name: "high" }));
     expect(onUpdateAxes).toHaveBeenCalledWith({
@@ -134,7 +134,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("radio", { name: "Nicht angegeben" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Not specified|Nicht angegeben/i }));
 
     expect(onUpdateAxes).toHaveBeenCalledWith({
       severity: "severe",
@@ -170,6 +170,6 @@ describe("Dynamic Axes and Non-HPO UI", () => {
     );
 
     expect(container.querySelector('[data-testid="axes-section"]')).toBeNull();
-    expect(screen.queryByText("Kontext-Achsen")).toBeNull();
+    expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
   });
 });

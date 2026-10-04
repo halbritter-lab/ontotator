@@ -9,9 +9,9 @@ export interface CaseNavigationProps {
 }
 
 const statusLabels: Record<string, string> = {
-  not_started: "Nicht begonnen",
-  in_progress: "In Bearbeitung",
-  completed: "Abgeschlossen",
+  not_started: "Open",
+  in_progress: "In Progress",
+  completed: "Completed",
 };
 
 export const CaseNavigation: React.FC<CaseNavigationProps> = ({
@@ -52,31 +52,55 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
+        border: "1px solid var(--border-color)",
+        borderRadius: "var(--radius)",
+        background: "var(--bg-surface)",
+        overflow: "hidden",
       }}
     >
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          border: "1px solid var(--border-color)",
-          borderRadius: "var(--radius)",
-          background: "var(--bg-surface)",
-          overflow: "hidden",
-        }}
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        aria-label="Previous Case"
+        onClick={handlePrev}
+        disabled={!hasPrev || disabled}
+        title="Previous Case (Alt + ←)"
+        style={{ border: "none", borderRadius: 0, padding: "4px 10px", fontSize: "0.95rem" }}
       >
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          aria-label="Vorheriger Fall"
-          onClick={handlePrev}
-          disabled={!hasPrev || disabled}
-          title="Vorheriger Fall (Alt + ←)"
-          style={{ border: "none", borderRadius: 0, padding: "3px 8px", fontSize: "0.9rem" }}
-        >
-          ‹ Vorheriger Fall
-        </button>
+        ‹
+      </button>
 
+      {total > 1 ? (
+        <select
+          aria-label="Select case"
+          className="form-select form-select-sm"
+          value={currentDocumentId}
+          onChange={handleSelect}
+          disabled={disabled}
+          style={{
+            borderTop: "none",
+            borderBottom: "none",
+            borderLeft: "1px solid var(--border-color)",
+            borderRight: "1px solid var(--border-color)",
+            borderRadius: 0,
+            background: "transparent",
+            fontWeight: 600,
+            fontSize: "0.82rem",
+            padding: "4px 24px 4px 10px",
+            cursor: "pointer",
+            maxWidth: 280,
+          }}
+        >
+          {documents.map((doc) => {
+            const statusLabel = statusLabels[doc.status] ?? doc.status;
+            return (
+              <option key={doc.document_id} value={doc.document_id}>
+                Case {doc.position} of {total}: {doc.document_id} ({statusLabel})
+              </option>
+            );
+          })}
+        </select>
+      ) : (
         <span
           style={{
             fontSize: "0.82rem",
@@ -89,41 +113,21 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
             lineHeight: "26px",
           }}
         >
-          Fall {position} von {total}
+          Case {position} of {total}: {currentDocumentId}
         </span>
-
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          aria-label="Nächster Fall"
-          onClick={handleNext}
-          disabled={!hasNext || disabled}
-          title="Nächster Fall (Alt + →)"
-          style={{ border: "none", borderRadius: 0, padding: "3px 8px", fontSize: "0.9rem" }}
-        >
-          Nächster Fall ›
-        </button>
-      </div>
-
-      {total > 1 && (
-        <select
-          aria-label="Fall auswählen"
-          className="form-select form-select-sm"
-          value={currentDocumentId}
-          onChange={handleSelect}
-          disabled={disabled}
-          style={{ maxWidth: 220, fontSize: "0.8rem", padding: "3px 6px" }}
-        >
-          {documents.map((doc) => {
-            const label = `Fall ${doc.position}: ${doc.document_id} (${statusLabels[doc.status] ?? doc.status})`;
-            return (
-              <option key={doc.document_id} value={doc.document_id}>
-                {label}
-              </option>
-            );
-          })}
-        </select>
       )}
+
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        aria-label="Next Case"
+        onClick={handleNext}
+        disabled={!hasNext || disabled}
+        title="Next Case (Alt + →)"
+        style={{ border: "none", borderRadius: 0, padding: "4px 10px", fontSize: "0.95rem" }}
+      >
+        ›
+      </button>
     </div>
   );
 };
