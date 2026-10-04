@@ -212,6 +212,101 @@ it("reviews separate versions and exposes original clinical axes and evidence", 
  expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v2" });
 });
 
+it("allows clearing an existing review decision back to offen", async () => {
+ const target = proposal("v1", "HP:1");
+ const view = baseView();
+ view.key = { ...key, mode: "review" };
+ view.scope = { ...scope, mode: "review" };
+ view.available_inputs = [target];
+ view.targets = { target_set_id: "targets", targets: [{ annotation_id: "same", version: "v1" }] };
+ view.draft = {
+  ...view.draft,
+  key: view.key,
+  targets: view.targets,
+  decisions: [{
+   decision_id: "dec-1",
+   target: { annotation_id: "same", version: "v1" },
+   outcome: "confirmed",
+   reviewer_id: "annotator",
+  }],
+ };
+ const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({
+  ...view.draft,
+  revision: 1,
+  decisions: [],
+ });
+ render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+ expect(screen.getByText("confirmed")).toBeDefined();
+ fireEvent.click(screen.getByRole("button", { name: /Auswahl aufheben/ }));
+ await waitFor(() => expect(decide).toHaveBeenCalled());
+ expect(decide.mock.calls[0][1].payload.outcome).toBeNull();
+ expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v1" });
+ await waitFor(() => expect(screen.getByText("offen")).toBeDefined());
+});
+
+it("allows toggling an active review decision button to reset to offen", async () => {
+ const target = proposal("v1", "HP:1");
+ const view = baseView();
+ view.key = { ...key, mode: "review" };
+ view.scope = { ...scope, mode: "review" };
+ view.available_inputs = [target];
+ view.targets = { target_set_id: "targets", targets: [{ annotation_id: "same", version: "v1" }] };
+ view.draft = {
+  ...view.draft,
+  key: view.key,
+  targets: view.targets,
+  decisions: [{
+   decision_id: "dec-1",
+   target: { annotation_id: "same", version: "v1" },
+   outcome: "confirmed",
+   reviewer_id: "annotator",
+  }],
+ };
+ const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({
+  ...view.draft,
+  revision: 1,
+  decisions: [],
+ });
+ render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+ const confirmBtn = screen.getByRole("button", { name: /Bestätigen/ });
+ expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
+ fireEvent.click(confirmBtn);
+ await waitFor(() => expect(decide).toHaveBeenCalled());
+ expect(decide.mock.calls[0][1].payload.outcome).toBeNull();
+ expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v1" });
+});
+
+it("strictly separates selection between review targets and own annotations in sidebar and inspector", async () => {
+ const target = proposal("target-v1", "HP:1");
+ const own = proposal("own-v1", "HP:2");
+ own.annotation.annotation_id = "own-ann";
+ const view = baseView();
+ view.key = { ...key, mode: "review" };
+ view.scope = { ...scope, mode: "review" };
+ view.available_inputs = [target];
+ view.targets = { target_set_id: "targets", targets: [{ annotation_id: "same", version: "target-v1" }] };
+ view.draft = { ...view.draft, key: view.key, targets: view.targets, annotations: [own] };
+
+ render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+
+ // Click Review Target HP:1:
+ fireEvent.click(screen.getAllByText("HP:1")[0]);
+ // Should show Review-Entscheidung, but NOT AnnotationPanel
+ expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
+ expect(screen.queryByText("Kontext-Achsen")).toBeNull();
+
+ // Click own annotation HP:2:
+ fireEvent.click(screen.getAllByText("HP:2")[0]);
+ // Should show AnnotationPanel, but NOT ReviewActions!
+ expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
+ expect(screen.getByText("Kontext-Achsen")).toBeDefined();
+
+ // Click back on HP:1:
+ fireEvent.click(screen.getAllByText("HP:1")[0]);
+ expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
+ expect(screen.queryByText("Kontext-Achsen")).toBeNull();
+});
+
 it("requests canonical target identity and selects versions independently", async () => {
  vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", ontology: { release: "test" } }] as any);
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
@@ -243,6 +338,7 @@ it("binds a changed decision to the replacement version after queued edits", asy
  fireEvent.click(screen.getByText("HP:3"));
  fireEvent.click(screen.getByRole("radio", { name: "Vorhanden" }));
  await waitFor(() => expect(finish).toBeDefined());
+ fireEvent.click(screen.getByText("HP:1"));
  fireEvent.click(screen.getByRole("button", { name: /Ändern \(Gegenfassung\)/ }));
  fireEvent.click(screen.getByRole("button", { name: "Änderung bestätigen" }));
  expect(decide).not.toHaveBeenCalled();
@@ -327,5 +423,67 @@ it("merges rapid span extensions against the latest saved evidence", async () =>
  }));
  await waitFor(() => expect(edit).toHaveBeenCalledTimes(2));
  expect(edit.mock.calls[1][1].payload.segments).toEqual([{ start: 0, end: 5 }, { start: 6, end: 10 }, { start: 11, end: 16 }]);
+});
+
+it("renders all review targets and own annotations in text with distinct styling and allows picking", async () => {
+  const target1 = proposal("target-v1", "HP:0001");
+  const target2 = proposal("target-v2", "HP:0002");
+  target2.evidence = [{
+    mention: { evidence_id: "ev-t2", segments: [{ start: 6, end: 10 }], cue_segments: [] },
+    version: "ev-t2-ver",
+    document_id: "doc",
+    text_sha256: "text",
+  }];
+  const own = proposal("own-v1", "HP:0003");
+  own.annotation.annotation_id = "own-ann";
+  own.annotation.evidence_refs = [{ evidence_id: "ev-own", version: "ev-own-ver" }];
+  own.evidence = [{
+    mention: { evidence_id: "ev-own", segments: [{ start: 11, end: 16 }], cue_segments: [] },
+    version: "ev-own-ver",
+    document_id: "doc",
+    text_sha256: "text",
+  }];
+
+  const view = baseView();
+  view.document.text = "alpha beta gamma";
+  view.key = { ...key, mode: "review" };
+  view.scope = { ...scope, mode: "review" };
+  view.available_inputs = [target1, target2];
+  view.targets = {
+    target_set_id: "targets",
+    targets: [
+      { annotation_id: "same", version: "target-v1" },
+      { annotation_id: "same", version: "target-v2" },
+    ],
+  };
+  view.draft = {
+    ...view.draft,
+    key: view.key,
+    targets: view.targets,
+    annotations: [own],
+    evidence: own.evidence,
+  };
+
+  const rendered = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+
+  // Both targets and the own annotation should have rendered spans in the text!
+  const targetRuns = rendered.container.querySelectorAll(".run--target");
+  expect(targetRuns.length).toBe(2);
+  expect(targetRuns[0].textContent).toBe("alpha");
+  expect(targetRuns[1].textContent).toBe("beta");
+
+  const ownRuns = rendered.container.querySelectorAll(".run--own");
+  expect(ownRuns.length).toBe(1);
+  expect(ownRuns[0].textContent).toBe("gamma");
+
+  // Clicking the own mention in the text selects the own annotation:
+  fireEvent.click(ownRuns[0]);
+  expect(screen.getByText("Kontext-Achsen")).toBeDefined();
+  expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
+
+  // Clicking a target mention in the text selects that review target:
+  fireEvent.click(rendered.container.querySelectorAll(".run--target")[1]);
+  expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
+  expect(screen.queryByText("Kontext-Achsen")).toBeNull();
 });
 });

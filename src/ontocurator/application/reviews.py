@@ -23,7 +23,7 @@ class DecisionCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target: AnnotationRef
-    outcome: ReviewOutcome
+    outcome: ReviewOutcome | None = None
     replacement: AnnotationRef | None = None
     note: str | None = None
 
@@ -90,6 +90,19 @@ class ReviewService:
             raise DomainError(
                 "TARGET_NOT_FOUND", "Target is unavailable in this document"
             )
+
+        if cmd.outcome is None:
+            if cmd.replacement is not None:
+                raise DomainError(
+                    "UNEXPECTED_REPLACEMENT",
+                    "Replacement must be None when clearing a decision",
+                )
+            draft.decisions = [d for d in draft.decisions if d.target != cmd.target]
+            target_layer = target_snap.annotation.layer_id
+            draft.checked_layer_ids = [
+                lid for lid in draft.checked_layer_ids if lid != target_layer
+            ]
+            return draft
 
         if cmd.outcome == "confirmed":
             ont_svc = None

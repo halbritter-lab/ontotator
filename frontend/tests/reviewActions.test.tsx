@@ -102,4 +102,81 @@ describe("ReviewActions", () => {
     expect(confirmBtn.hasAttribute("disabled")).toBe(true);
     expect(screen.getByText(/Veralteter Begriff kann nicht bestätigt werden/i)).toBeDefined();
   });
+
+  it("indicates active state with aria-pressed on chosen decision button and toggles off to null when clicked again", () => {
+    const onDecide = vi.fn();
+    const confirmedDecision = {
+      decision_id: "dec-1",
+      target: { annotation_id: sampleTarget.annotation_id, version: sampleTarget.version },
+      outcome: "confirmed",
+      reviewer_id: "rev-1",
+    };
+
+    render(
+      <ReviewActions
+        target={sampleTarget}
+        currentDecision={confirmedDecision as any}
+        draftAnnotations={[]}
+        onDecide={onDecide}
+      />
+    );
+
+    const confirmBtn = screen.getByRole("button", { name: /Bestätigen/i });
+    const rejectBtn = screen.getByRole("button", { name: /Verwerfen/i });
+
+    expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(rejectBtn.getAttribute("aria-pressed")).toBe("false");
+
+    // Clicking already active confirm button toggles it off
+    fireEvent.click(confirmBtn);
+
+    expect(onDecide).toHaveBeenCalledWith({
+      outcome: null,
+      replacement: undefined,
+      note: undefined,
+    });
+  });
+
+  it("renders 'Auswahl aufheben' button when a decision is present and clicking it calls onDecide with outcome null", () => {
+    const onDecide = vi.fn();
+    const rejectedDecision = {
+      decision_id: "dec-2",
+      target: { annotation_id: sampleTarget.annotation_id, version: sampleTarget.version },
+      outcome: "rejected",
+      reviewer_id: "rev-1",
+    };
+
+    const { rerender } = render(
+      <ReviewActions
+        target={sampleTarget}
+        currentDecision={null}
+        draftAnnotations={[]}
+        onDecide={onDecide}
+      />
+    );
+
+    // When there is no decision, reset button should not be present
+    expect(screen.queryByRole("button", { name: /Auswahl aufheben/i })).toBeNull();
+
+    // Rerender with decision
+    rerender(
+      <ReviewActions
+        target={sampleTarget}
+        currentDecision={rejectedDecision as any}
+        draftAnnotations={[]}
+        onDecide={onDecide}
+      />
+    );
+
+    const resetBtn = screen.getByRole("button", { name: /Auswahl aufheben/i });
+    expect(resetBtn).toBeDefined();
+
+    fireEvent.click(resetBtn);
+
+    expect(onDecide).toHaveBeenCalledWith({
+      outcome: null,
+      replacement: undefined,
+      note: undefined,
+    });
+  });
 });

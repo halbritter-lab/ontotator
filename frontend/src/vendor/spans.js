@@ -124,7 +124,19 @@ export class SpanEditor {
     this.activeIds = new Set(mentionIds || []);
     for (const node of this.container.querySelectorAll(".run")) {
       const ids = (node.dataset.mentions || "").split(",").filter(Boolean);
-      node.classList.toggle("run--hot", ids.some((id) => this.activeIds.has(id)));
+      const isHot = ids.some((id) => this.activeIds.has(id));
+      node.classList.toggle("run--hot", isHot);
+      if (ids.length > 1) {
+        const runMentions = ids
+          .map((id) => this.mentions.find((m) => m.mention_id === id))
+          .filter(Boolean);
+        const activeMention = runMentions.find((m) => this.activeIds.has(m.mention_id));
+        const primary = activeMention || runMentions[0];
+        for (let i = 0; i < 6; i += 1) node.classList.remove(`run--color-${i}`);
+        if (primary && typeof primary.colorIndex === "number") {
+          node.classList.add(`run--color-${primary.colorIndex}`);
+        }
+      }
     }
   }
 
@@ -154,6 +166,21 @@ export class SpanEditor {
       if (run.mentionIds.some((id) => this.activeIds.has(id))) {
         node.classList.add("run--hot");
       }
+
+      if (run.mentionIds.length > 0) {
+        const runMentions = run.mentionIds
+          .map((id) => this.mentions.find((m) => m.mention_id === id))
+          .filter(Boolean);
+        for (const m of runMentions) {
+          if (m.kind) node.classList.add(`run--${m.kind}`);
+        }
+        const activeMention = runMentions.find((m) => this.activeIds.has(m.mention_id));
+        const primaryMention = activeMention || runMentions[0];
+        if (primaryMention && typeof primaryMention.colorIndex === "number") {
+          node.classList.add(`run--color-${primaryMention.colorIndex}`);
+        }
+      }
+
       node.appendChild(document.createTextNode(this.text.slice(run.start, run.end)));
       fragment.appendChild(node);
     }

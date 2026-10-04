@@ -14,11 +14,23 @@ export interface CodepointSegment {
   end: number;
 }
 
+export function termColorIndex(termId: string): number {
+  if (!termId) return 0;
+  let hash = 0;
+  for (let i = 0; i < termId.length; i++) {
+    hash = (hash << 5) - hash + termId.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) % 6;
+}
+
 export interface MentionDisplay {
   evidence_id: string;
   label?: string;
   segments: CodepointSegment[];
   is_suggestion?: boolean;
+  kind?: "own" | "target" | "source";
+  colorIndex?: number;
 }
 
 export interface SelectionPayload {
@@ -48,6 +60,8 @@ interface VendorSpan {
 interface VendorMention {
   mention_id: string;
   spans: VendorSpan[];
+  kind?: "own" | "target" | "source";
+  colorIndex?: number;
 }
 
 function mentionsToVendor(
@@ -67,6 +81,8 @@ function mentionsToVendor(
     result.push({
       mention_id: mention.evidence_id,
       spans,
+      kind: mention.kind,
+      colorIndex: mention.colorIndex,
     });
   }
   return result;

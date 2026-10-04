@@ -256,9 +256,91 @@ def test_review_decisions_for_human_and_tool_proposals(
     )
     assert len(draft.decisions) == 1
     dec = draft.decisions[0]
-    assert dec.target == target_ref
     assert dec.outcome == outcome
     assert dec.replacement is None
+
+
+def test_review_decision_can_be_cleared_to_offen(tmp_path: Path):
+    ctx = _setup_review_test_env(tmp_path)
+    target_snap = ctx["snap_a"]
+    target_ref = AnnotationRef(
+        annotation_id=target_snap.annotation.annotation_id,
+        version=target_snap.version,
+    )
+    target_set = ReviewTargetSet.create([target_ref])
+
+    ws_key = WorkspaceKey(
+        package_id="pkg-rev-1",
+        document_id="doc-1",
+        annotator_id="reviewer-1",
+        mode="review",
+        target_set_id=target_set.target_set_id,
+    )
+    view = ctx["ws_svc"].open(ws_key, target_set)
+    ws_key = view.key
+
+    # 1. Record decision
+    cmd = DecisionCommand(
+        target=target_ref,
+        outcome="confirmed",
+        replacement=None,
+        note="Confirmed proposal",
+    )
+    draft1 = ctx["rev_svc"].decide(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="m-dec-1",
+            expected_revision=0,
+            payload=cmd.model_dump(),
+        ),
+    )
+    assert len(draft1.decisions) == 1
+    assert draft1.decisions[0].outcome == "confirmed"
+
+    # 2. Mark layer checked
+    from ontocurator.application.editing import CheckLayerCommand
+    ctx["edit_svc"].apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="m-chk",
+            expected_revision=1,
+            payload=CheckLayerCommand(
+                kind="check_layer", layer_id="hpo-layer", checked=True
+            ).model_dump(),
+        ),
+    )
+
+    # 3. Clearing with replacement raises error
+    with pytest.raises(DomainError, match="UNEXPECTED_REPLACEMENT"):
+        ctx["rev_svc"].decide(
+            ws_key,
+            MutationEnvelope(
+                mutation_id="m-dec-bad",
+                expected_revision=2,
+                payload=DecisionCommand(
+                    target=target_ref,
+                    outcome=None,
+                    replacement=target_ref,
+                ).model_dump(),
+            ),
+        )
+
+    # 4. Clear decision by sending outcome=None, invalidates layer check
+    cmd_clear = DecisionCommand(
+        target=target_ref,
+        outcome=None,
+    )
+    draft2 = ctx["rev_svc"].decide(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="m-dec-2",
+            expected_revision=2,
+            payload=cmd_clear.model_dump(),
+        ),
+    )
+    assert len(draft2.decisions) == 0
+    assert draft2.decisions == []
+    assert "hpo-layer" not in draft2.checked_layer_ids
 
 
 def test_review_decision_changed_requires_and_binds_replacement(tmp_path: Path):

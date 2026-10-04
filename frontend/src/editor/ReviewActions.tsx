@@ -21,7 +21,7 @@ export interface TargetProposal {
 }
 
 export interface DecisionPayload {
-  outcome: ReviewDecisionOutcome;
+  outcome: ReviewDecisionOutcome | null;
   replacement?: {
     annotation_id: string;
     version: string;
@@ -57,6 +57,16 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   );
 
   const handleOutcomeClick = (outcome: ReviewDecisionOutcome) => {
+    if (currentDecision?.outcome === outcome) {
+      setShowReplacementSelect(false);
+      onDecide({
+        outcome: null,
+        replacement: undefined,
+        note: undefined,
+      });
+      return;
+    }
+
     if (outcome === "changed") {
       setShowReplacementSelect(true);
       // If there's an existing draft replacement or first draft annotation
@@ -74,6 +84,15 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       outcome,
       replacement: undefined,
       note: note.trim() || undefined,
+    });
+  };
+
+  const handleClearDecision = () => {
+    setShowReplacementSelect(false);
+    onDecide({
+      outcome: null,
+      replacement: undefined,
+      note: undefined,
     });
   };
 
@@ -104,7 +123,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
     <div style={{ background: "var(--bg-surface)", padding: 16, borderTop: "1px solid var(--border-color)" }}>
       {/* Current Decision Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h4 style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-muted)" }}>
+        <h4 style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-muted)", margin: 0 }}>
           Review-Entscheidung für diesen Vorschlag
         </h4>
         {currentDecision ? (
@@ -178,14 +197,17 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <button
           type="button"
           className="btn"
+          aria-pressed={currentDecision?.outcome === "confirmed"}
           style={{
-            backgroundColor: "var(--success-light)",
-            color: "var(--success)",
-            borderColor: "#86efac",
+            backgroundColor: currentDecision?.outcome === "confirmed" ? "var(--success)" : "var(--success-light)",
+            color: currentDecision?.outcome === "confirmed" ? "#ffffff" : "var(--success)",
+            borderColor: currentDecision?.outcome === "confirmed" ? "var(--success)" : "#86efac",
+            fontWeight: currentDecision?.outcome === "confirmed" ? 700 : "normal",
+            boxShadow: currentDecision?.outcome === "confirmed" ? "0 0 0 2px rgba(34, 197, 94, 0.4)" : undefined,
           }}
           onClick={() => handleOutcomeClick("confirmed")}
           disabled={target.is_obsolete || target.is_unknown}
-          title="Vorschlag unverändert annehmen"
+          title={currentDecision?.outcome === "confirmed" ? "Klicken, um Bestätigung aufzuheben (offen)" : "Vorschlag unverändert annehmen"}
         >
           ✓ Bestätigen
         </button>
@@ -193,13 +215,16 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <button
           type="button"
           className="btn"
+          aria-pressed={currentDecision?.outcome === "rejected"}
           style={{
-            backgroundColor: "var(--danger-light)",
-            color: "var(--danger)",
-            borderColor: "#fca5a5",
+            backgroundColor: currentDecision?.outcome === "rejected" ? "var(--danger)" : "var(--danger-light)",
+            color: currentDecision?.outcome === "rejected" ? "#ffffff" : "var(--danger)",
+            borderColor: currentDecision?.outcome === "rejected" ? "var(--danger)" : "#fca5a5",
+            fontWeight: currentDecision?.outcome === "rejected" ? 700 : "normal",
+            boxShadow: currentDecision?.outcome === "rejected" ? "0 0 0 2px rgba(239, 68, 68, 0.4)" : undefined,
           }}
           onClick={() => handleOutcomeClick("rejected")}
-          title="Vorschlag ablehnen"
+          title={currentDecision?.outcome === "rejected" ? "Klicken, um Ablehnung aufzuheben (offen)" : "Vorschlag ablehnen"}
         >
           ✕ Verwerfen
         </button>
@@ -207,13 +232,16 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <button
           type="button"
           className="btn"
+          aria-pressed={currentDecision?.outcome === "changed"}
           style={{
-            backgroundColor: "var(--primary-light)",
-            color: "var(--primary)",
-            borderColor: "#93c5fd",
+            backgroundColor: currentDecision?.outcome === "changed" ? "var(--primary)" : "var(--primary-light)",
+            color: currentDecision?.outcome === "changed" ? "#ffffff" : "var(--primary)",
+            borderColor: currentDecision?.outcome === "changed" ? "var(--primary)" : "#93c5fd",
+            fontWeight: currentDecision?.outcome === "changed" ? 700 : "normal",
+            boxShadow: currentDecision?.outcome === "changed" ? "0 0 0 2px rgba(59, 130, 246, 0.4)" : undefined,
           }}
           onClick={() => handleOutcomeClick("changed")}
-          title="Vorschlag durch korrigierte Gegenfassung ersetzen"
+          title={currentDecision?.outcome === "changed" ? "Klicken, um Änderung aufzuheben (offen)" : "Vorschlag durch korrigierte Gegenfassung ersetzen"}
         >
           ✎ Ändern (Gegenfassung)
         </button>
@@ -221,17 +249,42 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <button
           type="button"
           className="btn"
+          aria-pressed={currentDecision?.outcome === "uncertain"}
           style={{
-            backgroundColor: "var(--warning-light)",
-            color: "var(--warning)",
-            borderColor: "#fde68a",
+            backgroundColor: currentDecision?.outcome === "uncertain" ? "var(--warning)" : "var(--warning-light)",
+            color: currentDecision?.outcome === "uncertain" ? "#ffffff" : "var(--warning)",
+            borderColor: currentDecision?.outcome === "uncertain" ? "var(--warning)" : "#fde68a",
+            fontWeight: currentDecision?.outcome === "uncertain" ? 700 : "normal",
+            boxShadow: currentDecision?.outcome === "uncertain" ? "0 0 0 2px rgba(245, 158, 11, 0.4)" : undefined,
           }}
           onClick={() => handleOutcomeClick("uncertain")}
-          title="Klinisch oder textuell unentscheidbar (kein Goldstandard)"
+          title={currentDecision?.outcome === "uncertain" ? "Klicken, um Unsicher-Status aufzuheben (offen)" : "Klinisch oder textuell unentscheidbar (kein Goldstandard)"}
         >
           ? Unsicher (Kein Gold)
         </button>
       </div>
+
+      {/* Reset Decision Button */}
+      {currentDecision && (
+        <div style={{ marginBottom: 12 }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleClearDecision}
+            style={{
+              width: "100%",
+              color: "var(--text-muted)",
+              borderColor: "var(--border-color)",
+              background: "var(--bg-primary)",
+              padding: "6px 12px",
+              fontWeight: 500,
+            }}
+            title="Entscheidung für diesen Vorschlag aufheben (wieder auf offen setzen)"
+          >
+            ↩ Auswahl aufheben (offen)
+          </button>
+        </div>
+      )}
 
       {/* Replacement Selection when outcome === "changed" */}
       {showReplacementSelect && (

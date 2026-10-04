@@ -15,6 +15,18 @@
   --danger-light: #fee2e2;
   --span-highlight: #fef08a;
   --span-selected: #bae6fd;
+  --span-color-0: #fef08a;
+  --span-color-0-border: #eab308;
+  --span-color-1: #bbf7d0;
+  --span-color-1-border: #22c55e;
+  --span-color-2: #fed7aa;
+  --span-color-2-border: #f97316;
+  --span-color-3: #e9d5ff;
+  --span-color-3-border: #a855f7;
+  --span-color-4: #fbcfe8;
+  --span-color-4-border: #ec4899;
+  --span-color-5: #bfdbfe;
+  --span-color-5-border: #3b82f6;
   --radius: 6px;
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -440,6 +452,7 @@ body {
   padding: 0;
   margin: 0;
   border-radius: 0;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .mention-span,
@@ -448,12 +461,57 @@ body {
   cursor: pointer;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  border-radius: 3px;
+  padding: 1px 2px;
+  margin: 0 1px;
 }
 
+/* 6-color pastel palette */
+.run--color-0 {
+  background-color: var(--span-color-0);
+}
+.run--color-1 {
+  background-color: var(--span-color-1);
+}
+.run--color-2 {
+  background-color: var(--span-color-2);
+}
+.run--color-3 {
+  background-color: var(--span-color-3);
+}
+.run--color-4 {
+  background-color: var(--span-color-4);
+}
+.run--color-5 {
+  background-color: var(--span-color-5);
+}
+
+/* Structural distinction: own vs target vs source */
+.run--own {
+  border-bottom: 2px solid #0284c7;
+}
+
+.run--target {
+  border-bottom: 2px dashed #9333ea;
+}
+
+.run--source {
+  border-bottom: 2px dotted #64748b;
+}
+
+.run--multi {
+  border-bottom-width: 3px;
+}
+
+/* Active / Selected mention */
 .mention-span.selected,
 .run--hot {
-  background-color: var(--span-selected);
-  box-shadow: 0 0 0 1px var(--primary);
+  outline: 2px solid #0284c7;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.35);
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
 }
 
 /* Modal / Setup dialog */
