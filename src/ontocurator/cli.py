@@ -10,7 +10,9 @@ import uvicorn
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
+from ontocurator.config_store import load_persistent_config, save_persistent_config
 from ontocurator.domain.errors import DomainError
+from ontocurator.ontology.discovery import discover_ontologies
 
 app = typer.Typer(
     name="ontocurator",
@@ -102,6 +104,13 @@ def serve(
             help="Custom session token (generated or restored automatically if omitted).",
         ),
     ] = None,
+    package: Annotated[
+        Path | None,
+        typer.Option(
+            "--package",
+            help="Path to initial work package ZIP file to import on startup.",
+        ),
+    ] = None,
 ) -> None:
     """Start local secured HPO annotation editor server."""
     if host not in {"127.0.0.1", "localhost", "::1"}:
@@ -111,14 +120,40 @@ def serve(
         )
         raise typer.Exit(code=1)
 
-    ontology_list = [p.resolve() for p in (ontology or [])]
-    for ont_p in ontology_list:
-        if not ont_p.exists():
+    persistent_cfg = load_persistent_config()
+
+    if workspace == Path("./workspace") and persistent_cfg.workspace_dir != Path(
+        "./workspace"
+    ):
+        workspace = persistent_cfg.workspace_dir
+
+    workspace = workspace.resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "ontologies").mkdir(parents=True, exist_ok=True)
+
+    persistent_cfg.workspace_dir = workspace
+    save_persistent_config(persistent_cfg)
+
+    # Discovered ontologies from workspace/ontologies and ./ontologies
+    discovered = discover_ontologies([workspace / "ontologies", Path("./ontologies")])
+    combined_ontologies: list[Path] = []
+    seen: set[Path] = set()
+
+    for p in (ontology or []) + persistent_cfg.ontology_paths + discovered:
+        res = p.resolve()
+        if res.is_file() and res not in seen:
+            seen.add(res)
+            combined_ontologies.append(res)
+
+    for ont_p in ontology or []:
+        if not ont_p.resolve().exists():
             typer.echo(
                 f"Error: Ontology file not found at: {ont_p}",
                 err=True,
             )
             raise typer.Exit(code=1)
+
+    ontology_list = combined_ontologies
 
     if port != 0 and _is_port_in_use(host, port):
         typer.echo(
@@ -213,6 +248,27 @@ def serve(
 
     url = f"http://{host}:{actual_port}/#token={effective_token}"
 
+    if package is not None and package.resolve().is_file():
+        try:
+            repo = api_app.state.repo
+            registry = api_app.state.ontology_registry
+            from ontocurator.packages.reader import PackageReader
+
+            with open(package.resolve(), "rb") as f:
+                pkg = PackageReader.read_from_stream(f, registry=registry)
+                if pkg.manifest.task_profile is not None:
+                    services = registry.prepare_package(
+                        pkg.manifest.task_profile, pkg.embedded_files
+                    )
+                    repo.import_package(pkg)
+                    for s in services:
+                        registry.register_service(s)
+            url += f"&package_id={pkg.manifest.package_id}"
+        except Exception as exc:
+            typer.echo(
+                f"Warning: Failed to import initial package {package}: {exc}", err=True
+            )
+
     typer.echo("==================================================")
     typer.echo(f"  Ontocurator running on port {actual_port}")
     typer.echo(f"  Workspace: {workspace}")
@@ -227,7 +283,25 @@ def serve(
 
 
 def main() -> None:
-    """CLI script entrypoint."""
+    """CLI script entrypoint with safe single argument interpretation."""
+    import sys
+
+    if len(sys.argv) == 1:
+        sys.argv.append("serve")
+    elif len(sys.argv) == 2 and sys.argv[1] not in {"serve", "version", "--help", "-h"}:
+        arg_path = Path(sys.argv[1])
+        if arg_path.exists():
+            if arg_path.is_dir():
+                sys.argv = [sys.argv[0], "serve", "--workspace", str(arg_path)]
+            elif arg_path.suffix.lower() == ".json":
+                sys.argv = [sys.argv[0], "serve", "--ontology", str(arg_path)]
+            elif arg_path.suffix.lower() == ".zip":
+                sys.argv = [sys.argv[0], "serve", "--package", str(arg_path)]
+            else:
+                sys.argv = [sys.argv[0], "serve"]
+        else:
+            sys.argv = [sys.argv[0], "serve"]
+
     app()
 
 
