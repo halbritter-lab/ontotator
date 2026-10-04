@@ -40,6 +40,7 @@ export interface ReviewActionsProps {
   onDecide: (payload: DecisionPayload) => void;
   onAdoptAndEdit?: () => void;
   onEditReplacement?: (annotationId: string) => void;
+  onDeselect?: () => void;
 }
 
 export const ReviewActions: React.FC<ReviewActionsProps> = ({
@@ -51,6 +52,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   onDecide,
   onAdoptAndEdit,
   onEditReplacement,
+  onDeselect,
   evidence = [],
   documentText = "",
 }) => {
@@ -130,22 +132,35 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <h4 style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-muted)", margin: 0 }}>
           Review-Entscheidung für diesen Vorschlag
         </h4>
-        {currentDecision ? (
-          <span
-            className="badge"
-            style={{
-              backgroundColor: outcomeColors[currentDecision.outcome as ReviewDecisionOutcome]?.bg,
-              color: outcomeColors[currentDecision.outcome as ReviewDecisionOutcome]?.text,
-              fontSize: "0.8rem",
-            }}
-          >
-            ● {currentDecision.outcome.toUpperCase()}
-          </span>
-        ) : (
-          <span className="badge" style={{ backgroundColor: "#f1f5f9", color: "#64748b" }}>
-            Ausstehend
-          </span>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {currentDecision ? (
+            <span
+              className="badge"
+              style={{
+                backgroundColor: outcomeColors[currentDecision.outcome as ReviewDecisionOutcome]?.bg,
+                color: outcomeColors[currentDecision.outcome as ReviewDecisionOutcome]?.text,
+                fontSize: "0.8rem",
+              }}
+            >
+              ● {currentDecision.outcome.toUpperCase()}
+            </span>
+          ) : (
+            <span className="badge" style={{ backgroundColor: "#f1f5f9", color: "#64748b" }}>
+              Ausstehend
+            </span>
+          )}
+          {onDeselect && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ padding: "2px 8px", fontSize: "0.75rem", lineHeight: 1 }}
+              onClick={onDeselect}
+              title="Auswahl aufheben"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="detail-section" aria-label="Vorschlagsdetails">
@@ -316,12 +331,21 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           <div style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--primary)", marginBottom: 4 }}>
             ✎ Dieser Vorschlag wird durch eine Gegenfassung ersetzt.
           </div>
-          {currentDecision.replacement && (
-            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 8 }}>
-              Zugeordnete Annotation:{" "}
-              <code>{currentDecision.replacement.annotation_id.slice(0, 14)}</code>
-            </div>
-          )}
+          {currentDecision.replacement && (() => {
+            const replSnap = draftAnnotations.find(
+              (a) => a.annotation.annotation_id === currentDecision.replacement?.annotation_id
+            );
+            const replTermId = replSnap?.annotation.term_id ?? currentDecision.replacement.annotation_id;
+            const replLabel = replSnap ? resolveTermLabel?.(replSnap.annotation.layer_id, replTermId) : null;
+            return (
+              <div style={{ fontSize: "0.85rem", color: "var(--text-main)", marginBottom: 8 }}>
+                Ersetzt durch:{" "}
+                <strong>
+                  <TermName termId={replTermId} label={replLabel} />
+                </strong>
+              </div>
+            );
+          })()}
           {currentDecision.replacement && onEditReplacement && (
             <button
               type="button"

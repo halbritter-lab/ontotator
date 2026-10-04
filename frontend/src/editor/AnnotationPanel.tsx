@@ -27,6 +27,7 @@ export interface AnnotationPanelProps {
     termLabel?: string | null;
   } | null;
   onNavigateTarget?: () => void;
+  onDeselect?: () => void;
   onSelectEvidence: (evidenceId: string) => void;
   onUpdateTerm: (termId: string, searchId?: string) => void;
   onUpdateAxes: (axes: Partial<Axes>) => void;
@@ -47,6 +48,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   termLabel,
   linkedTarget,
   onNavigateTarget,
+  onDeselect,
   onSelectEvidence,
   onUpdateTerm,
   onUpdateAxes,
@@ -131,13 +133,25 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               <TermName termId={currentTerm} label={termLabel} />
             </h2>
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowSearch(!showSearch)}
-          >
-            {showSearch ? "Suche schließen" : "Begriff ändern"}
-          </button>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowSearch(!showSearch)}
+            >
+              {showSearch ? "Suche schließen" : "Begriff ändern"}
+            </button>
+            {onDeselect && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={onDeselect}
+                title="Auswahl aufheben"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {showSearch && (

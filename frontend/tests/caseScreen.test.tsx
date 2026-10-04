@@ -182,13 +182,18 @@ describe("CaseScreen integration", () => {
       />
     );
 
+    vi.spyOn(api, "searchOntology").mockResolvedValue({
+      search_id: "search-spanless",
+      candidates: [{ term_id: "HP:0001252", label: "Hypotonia", rank: 1 }],
+    } as any);
+
     // Click "+ Spanlose Annotation"
     fireEvent.click(screen.getByText("+ Spanlose Annotation"));
 
-    // Enter ID and submit modal
-    const input = screen.getByPlaceholderText("HP:0001250");
-    fireEvent.change(input, { target: { value: "HP:0001252" } });
-    fireEvent.click(screen.getByText("Hinzufügen"));
+    // Shows search panel for spanless annotation
+    expect(screen.getByText("Begriff für spanlose Annotation wählen")).toBeDefined();
+    fireEvent.change(screen.getByLabelText("Ontologie-Term suchen"), { target: { value: "Hypotonia" } });
+    fireEvent.keyDown((await screen.findByText("Hypotonia")).closest(".candidate-card")!, { key: "Enter" });
 
     await waitFor(() => {
       expect(applyCommandSpy).toHaveBeenCalledWith(

@@ -64,9 +64,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   documentList,
 }) => {
   const [pendingAnnotation, setPendingAnnotation] = useState<{
-    annotationId: string; evidenceId: string; layerId: string; typeId: string;
+    annotationId: string;
+    evidenceId?: string;
+    layerId: string;
+    typeId: string;
     segments: SelectionPayload["segments"];
+    isSpanless?: boolean;
   } | null>(null);
+  const [isAttachingMention, setIsAttachingMention] = useState(false);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const creatingPending = useRef(false);
   const [draft, setDraft] = useState<Draft>(view.draft);
@@ -100,8 +105,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [statusText, setStatusText] = useState<string>("Gespeichert");
 
   // Modals
-  const [showSpanlessModal, setShowSpanlessModal] = useState<boolean>(false);
-  const [spanlessHpoId, setSpanlessHpoId] = useState<string>("");
   const [completedSubmission, setCompletedSubmission] = useState<Submission | null>(null);
   const [historySubmission, setHistorySubmission] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -316,6 +319,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     });
   };
 
+  const handleDeselectAll = () => {
+    setSelectedAnnotationId(null);
+    setSelectedTargetId(null);
+    setSelectedSourceId(null);
+    setSelectedEvidenceId(null);
+    setIsAttachingMention(false);
+    cancelPending();
+  };
+
   // Helper to mutate an annotation and synchronize any linked review decision
   const mutateAnnotationAndSyncDecision = async (
     annotationId: string,
@@ -408,32 +420,37 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           });
         }
         setSelectionIntent("new_mention");
-      } else {
+      } else if (isAttachingMention && selectedAnnotationId) {
         const evidenceId = `ev-${Date.now()}`;
-        if (selectedAnnotationId) {
-          const annId = selectedAnnotationId;
-          await mutateAnnotationAndSyncDecision(annId, () =>
-            enqueueMutation({
-              command: "attach_mention",
-              annotation_id: annId,
-              evidence_id: evidenceId,
-              segments: payload.segments,
-            })
-          );
-          setSelectedEvidenceId(evidenceId);
-        } else {
-          if (!layerSelection.activeLayerId) {
-            setActionError("Keine aktive editierbare Schicht ausgewählt. Bitte Schicht aktivieren.");
-            return;
-          }
-          const activeLayerId = layerSelection.activeLayerId;
-          const activeLayerDef = (view.layers ?? []).find(l => l.layer_id === activeLayerId);
-          const activeTypeId = layerSelection.activeTypeId ?? activeLayerDef?.annotation_types?.[0]?.type_id ?? "default";
-          setSelectedSourceId(null);
-          setSelectedTargetId(null);
-          setPendingAnnotation({ annotationId: `ann-${crypto.randomUUID()}`, evidenceId,
-            layerId: activeLayerId, typeId: activeTypeId, segments: payload.segments });
+        const annId = selectedAnnotationId;
+        await mutateAnnotationAndSyncDecision(annId, () =>
+          enqueueMutation({
+            command: "attach_mention",
+            annotation_id: annId,
+            evidence_id: evidenceId,
+            segments: payload.segments,
+          })
+        );
+        setSelectedEvidenceId(evidenceId);
+        setIsAttachingMention(false);
+      } else {
+        if (!layerSelection.activeLayerId) {
+          setActionError("Keine aktive editierbare Schicht ausgewählt. Bitte Schicht aktivieren.");
+          return;
         }
+        const activeLayerId = layerSelection.activeLayerId;
+        const activeLayerDef = (view.layers ?? []).find(l => l.layer_id === activeLayerId);
+        const activeTypeId = layerSelection.activeTypeId ?? activeLayerDef?.annotation_types?.[0]?.type_id ?? "default";
+        const evidenceId = `ev-${Date.now()}`;
+        handleDeselectAll();
+        setPendingAnnotation({
+          annotationId: `ann-${crypto.randomUUID()}`,
+          evidenceId,
+          layerId: activeLayerId,
+          typeId: activeTypeId,
+          segments: payload.segments,
+          isSpanless: false,
+        });
       }
     } catch (error) { reportError(error); }
   };
@@ -446,14 +463,22 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const pending = pendingAnnotation;
     try {
       const type = view.layers?.find(l => l.layer_id === pending.layerId)?.annotation_types.find(t => t.type_id === pending.typeId);
-      await enqueueMutation({ command: "create_annotation", annotation_id: pending.annotationId,
-        evidence_id: pending.evidenceId, layer_id: pending.layerId, type_id: pending.typeId,
-        term_id: termId, search_event_id: searchId, segments: pending.segments,
-        axes_values: initialAxisValues(type?.axes ?? [], termId) });
+      await enqueueMutation({
+        command: "create_annotation",
+        annotation_id: pending.annotationId,
+        evidence_id: pending.evidenceId,
+        layer_id: pending.layerId,
+        type_id: pending.typeId,
+        term_id: termId,
+        search_event_id: searchId,
+        segments: pending.segments,
+        axes_values: initialAxisValues(type?.axes ?? [], termId),
+      });
       setPendingAnnotation(null);
       setSelectedTargetId(null);
+      setSelectedSourceId(null);
       setSelectedAnnotationId(pending.annotationId);
-      setSelectedEvidenceId(pending.evidenceId);
+      setSelectedEvidenceId(pending.evidenceId ?? null);
       searchManager.clear();
     } catch (error) { reportError(error); }
     finally { creatingPending.current = false; }
@@ -463,7 +488,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (evidenceId === pendingAnnotation?.evidenceId) return;
 
     const source = sourceMentions.find(mention => mention.evidence_id === evidenceId);
-    if (source) {
+    if (source && source.sourceId) {
       selectSource(source.sourceId);
       setSelectedEvidenceId(evidenceId);
       return;
@@ -497,39 +522,24 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
 
-  const handleCreateSpanless = async () => {
-    try {
-      if (!spanlessHpoId.trim()) return;
-      if (!layerSelection.activeLayerId) {
-        setActionError("Keine aktive editierbare Schicht ausgewählt. Bitte Schicht aktivieren.");
-        return;
-      }
-      const activeLayerId = layerSelection.activeLayerId;
-      const activeLayerDef = (view.layers ?? []).find(l => l.layer_id === activeLayerId);
-      const activeTypeId = layerSelection.activeTypeId ?? activeLayerDef?.annotation_types?.[0]?.type_id ?? "default";
-      const activeTypeDef = activeLayerDef?.annotation_types?.find(t => t.type_id === activeTypeId);
+  const handleStartSpanless = () => {
+    if (!layerSelection.activeLayerId) {
+      setActionError("Keine aktive editierbare Schicht ausgewählt. Bitte Schicht aktivieren.");
+      return;
+    }
+    const activeLayerId = layerSelection.activeLayerId;
+    const activeLayerDef = (view.layers ?? []).find(l => l.layer_id === activeLayerId);
+    const activeTypeId = layerSelection.activeTypeId ?? activeLayerDef?.annotation_types?.[0]?.type_id ?? "default";
 
-      const newAnnId = `ann-${Date.now()}`;
-      const termId = spanlessHpoId.trim();
-      const initialValues = initialAxisValues(activeTypeDef?.axes ?? view.axes_config ?? [], termId);
-      await enqueueMutation({
-        command: "create_annotation",
-        annotation_id: newAnnId,
-        layer_id: activeLayerId,
-        type_id: activeTypeId,
-        term_id: termId,
-        segments: [],
-        axes_values: initialValues,
-      });
-      setSelectedSourceId(null);
-      setSelectedTargetId(null);
-      cancelPending();
-      setSelectedAnnotationId(newAnnId);
-      setMobilePane("details");
-      setSelectedEvidenceId(null);
-      setShowSpanlessModal(false);
-      setSpanlessHpoId("");
-    } catch (error) { reportError(error); }
+    handleDeselectAll();
+    setPendingAnnotation({
+      annotationId: `ann-${crypto.randomUUID()}`,
+      layerId: activeLayerId,
+      typeId: activeTypeId,
+      segments: [],
+      isSpanless: true,
+    });
+    setMobilePane("details");
   };
 
   const handleUpdateTerm = async (termId: string, searchId?: string) => {
@@ -925,13 +935,22 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </button>
           )}
 
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
-            setSelectedAnnotationId(null); setSelectedEvidenceId(null); setSelectedSourceId(null); cancelPending(); setSelectionIntent("new_mention"); setMobilePane("text");
-          }}>Neue Annotation markieren</button>
+          {(selectedAnnotationId || selectedTargetId || selectedSourceId) && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleDeselectAll}
+              title="Auswahl abwählen (kein Term ausgewählt)"
+            >
+              ✕ Auswahl abwählen
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={() => setShowSpanlessModal(true)}
+            onClick={handleStartSpanless}
+            title="Spanlose Annotation über Ontologie-Suche anlegen"
           >
             + Spanlose Annotation
           </button>
@@ -1041,9 +1060,46 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       </div>
                       <div className="doc-meta" style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
                         {dec?.outcome === "changed" ? (
-                          <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
-                            ↳ durch Gegenfassung ersetzt
-                          </span>
+                          (() => {
+                            const replSnap = (draft.annotations ?? []).find(
+                              (a) => a.annotation.annotation_id === dec.replacement?.annotation_id
+                            );
+                            const replTermId = replSnap?.annotation.term_id ?? dec.replacement?.annotation_id ?? "";
+                            const replLabel = replSnap ? termLabel(replSnap.annotation.layer_id, replTermId) : null;
+                            const displayText = replLabel ? `${replLabel} (${replTermId})` : replTermId;
+                            return (
+                              <div style={{ marginTop: 2 }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-sm"
+                                  style={{
+                                    padding: 0,
+                                    fontSize: "0.75rem",
+                                    color: "var(--primary)",
+                                    textDecoration: "underline",
+                                    cursor: "pointer",
+                                    textAlign: "left",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (dec.replacement?.annotation_id) {
+                                      setSelectedTargetId(null);
+                                      setSelectedSourceId(null);
+                                      setSelectedAnnotationId(dec.replacement.annotation_id);
+                                      setSelectedEvidenceId(replSnap?.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+                                      setMobilePane("details");
+                                    }
+                                  }}
+                                  title="Zur Gegenfassung im Entwurf springen"
+                                >
+                                  ↳ Ersetzt durch: <strong>{displayText}</strong> ↗
+                                </button>
+                              </div>
+                            );
+                          })()
                         ) : dec?.outcome === "rejected" ? (
                           <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
                             ✕ Vorschlag verworfen
@@ -1148,7 +1204,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         {/* Center: Text View */}
         <TextPane
           text={view.document.text}
-          mentions={[...mentionsDisplay, ...targetMentions, ...sourceMentions, ...(pendingAnnotation ? [{ evidence_id: pendingAnnotation.evidenceId, segments: pendingAnnotation.segments }] : [])]}
+          mentions={[
+            ...mentionsDisplay,
+            ...targetMentions,
+            ...sourceMentions,
+            ...(pendingAnnotation && !pendingAnnotation.isSpanless && pendingAnnotation.evidenceId
+              ? [{ evidence_id: pendingAnnotation.evidenceId, segments: pendingAnnotation.segments }]
+              : []),
+          ]}
           selectedEvidenceId={selectedEvidenceId}
           selectionIntent={selectionIntent}
           onSelection={handleSelection}
@@ -1174,8 +1237,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           ) : pendingAnnotation ? (
             <section className="detail-pane" aria-label="Neue Annotation">
               <div className="detail-section">
-                <h2>Begriff für die Markierung wählen</h2>
-                <p>Die Annotation wird nach Auswahl eines Begriffs gespeichert.</p>
+                <h2>
+                  {pendingAnnotation.isSpanless
+                    ? "Begriff für spanlose Annotation wählen"
+                    : "Begriff für die Markierung wählen"}
+                </h2>
+                <p>
+                  {pendingAnnotation.isSpanless
+                    ? "Wählen Sie einen Begriff aus der Ontologie für diese spanlose Annotation."
+                    : "Die Annotation wird nach Auswahl eines Begriffs gespeichert."}
+                </p>
                 <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
                   onSelectCandidate={(candidate, searchId) => { void createPendingAnnotation(candidate.term_id, searchId); }} />
@@ -1201,6 +1272,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 setSelectedEvidenceId(null);
                 setMobilePane("details");
               }}
+              onDeselect={handleDeselectAll}
             />
           ) : (
             <AnnotationPanel
@@ -1225,6 +1297,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 setSelectedTargetId(linkedTargetForSelectedAnnotation.targetKey);
                 setMobilePane("details");
               } : undefined}
+              onDeselect={handleDeselectAll}
               onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
               onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
               onUpdateAxes={(axesValues) => { void handleUpdateAxes(axesValues).catch(reportError); }}
@@ -1233,7 +1306,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               }
               onDetachMention={(id) => { void handleDetachMention(id).catch(reportError); }}
               onDeleteAnnotation={(id) => { void handleDeleteAnnotation(id).catch(reportError); }}
-              onSetIntent={setSelectionIntent}
+              onSetIntent={(intent) => {
+                if (intent === "new_mention") {
+                  setIsAttachingMention(true);
+                  setMobilePane("text");
+                } else {
+                  setSelectionIntent(intent);
+                  setMobilePane("text");
+                }
+              }}
             />
           )}
         </div>
@@ -1306,49 +1387,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           </div>
         </div>
       </div>}
-
-      {showSpanlessModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" role="dialog" aria-label="Spanlose Annotation erstellen">
-            <h2>Spanlose Annotation hinzufügen</h2>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-              Geben Sie die Kennung des Begriffs ein (z. B. <code>HP:0001250</code> oder <code>1250</code>):
-            </p>
-            <div className="form-group">
-              <input
-                id="spanless-hpo-id"
-                type="text"
-                className="form-control"
-                placeholder="HP:0001250"
-                value={spanlessHpoId}
-                onChange={(e) => setSpanlessHpoId(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setShowSpanlessModal(false);
-                  setSpanlessHpoId("");
-                }}
-              >
-                Abbrechen
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleCreateSpanless}
-                disabled={!spanlessHpoId.trim()}
-                aria-label="Annotation anlegen"
-              >
-                Hinzufügen
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

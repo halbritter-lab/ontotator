@@ -26,6 +26,7 @@ export function termColorIndex(termId: string): number {
 
 export interface MentionDisplay {
   evidence_id: string;
+  sourceId?: string;
   label?: string;
   segments: CodepointSegment[];
   is_suggestion?: boolean;

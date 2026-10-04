@@ -532,7 +532,7 @@ it("automatically adopts a review proposal as a draft annotation on 'Ändern & B
     return currentDraft;
   });
 
-  const decideSpy = vi.spyOn(api, "recordDecision").mockImplementation(async (_wsId, envelope) => {
+  const decideSpy = vi.spyOn(api, "recordDecision").mockImplementation(async (_wsId, envelope: any) => {
     currentDraft = {
       ...currentDraft,
       revision: currentDraft.revision + 1,
@@ -594,15 +594,15 @@ it("automatically adopts a review proposal as a draft annotation on 'Ändern & B
 
 it("hides markings of replaced or rejected review targets in text and grays them out in the sidebar list", async () => {
   const target1 = proposal("t1-v1", "HP:0001");
-  target1.evidence = [{ mention: { evidence_id: "ev1", segments: [{ start: 0, end: 5 }] }, version: "ev1-v" }];
+  target1.evidence = [{ mention: { evidence_id: "ev1", segments: [{ start: 0, end: 5 }], cue_segments: [] }, version: "ev1-v", document_id: "doc", text_sha256: "text" }];
   const target2 = proposal("t2-v1", "HP:0002");
   target2.annotation.annotation_id = "t2";
-  target2.evidence = [{ mention: { evidence_id: "ev2", segments: [{ start: 6, end: 10 }] }, version: "ev2-v" }];
+  target2.evidence = [{ mention: { evidence_id: "ev2", segments: [{ start: 6, end: 10 }], cue_segments: [] }, version: "ev2-v", document_id: "doc", text_sha256: "text" }];
 
   const ownSnap = proposal("rep-v1", "HP:0003");
   ownSnap.annotation.annotation_id = "rep-ann";
   ownSnap.annotation.evidence_refs = [{ evidence_id: "rep-ev", version: "v1" }];
-  const ownEv = { mention: { evidence_id: "rep-ev", segments: [{ start: 0, end: 5 }] }, version: "v1" };
+  const ownEv = { mention: { evidence_id: "rep-ev", segments: [{ start: 0, end: 5 }], cue_segments: [] }, version: "v1", document_id: "doc", text_sha256: "text" };
 
   const view = baseView();
   view.key = { ...key, mode: "review" };
@@ -650,7 +650,7 @@ it("hides markings of replaced or rejected review targets in text and grays them
 
   // 3. In sidebar: target1 has badge '✎ Ersetzt' and resolved styling
   expect(screen.getByText("✎ Ersetzt")).toBeDefined();
-  expect(screen.getByText("↳ durch Gegenfassung ersetzt")).toBeDefined();
+  expect(screen.getByRole("button", { name: /Ersetzt durch:.*HP:0003/i })).toBeDefined();
 
   // 4. In sidebar: target2 has badge '✕ Verworfen' and resolved styling
   expect(screen.getByText("✕ Verworfen")).toBeDefined();
@@ -662,5 +662,71 @@ it("hides markings of replaced or rejected review targets in text and grays them
     expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
   });
   expect(rendered.container.querySelectorAll(".run--target").length).toBe(0);
+});
+
+it("displays replacement term link in sidebar and allows deselecting so no term is selected", async () => {
+  const target1 = proposal("t1-v1", "HP:0001");
+  const ownSnap = proposal("rep-v1", "HP:0003");
+  ownSnap.annotation.annotation_id = "rep-ann";
+
+  const view = baseView();
+  view.key = { ...key, mode: "review" };
+  view.scope = { ...scope, mode: "review" };
+  view.available_inputs = [target1];
+  view.targets = {
+    target_set_id: "targets",
+    targets: [{ annotation_id: "same", version: "t1-v1" }],
+  };
+  view.draft = {
+    ...view.draft,
+    key: view.key,
+    targets: view.targets,
+    annotations: [ownSnap],
+    decisions: [
+      {
+        decision_id: "d1",
+        target: { annotation_id: "same", version: "t1-v1" },
+        outcome: "changed",
+        replacement: { annotation_id: "rep-ann", version: "rep-v1" },
+        reviewer_id: "annotator",
+      },
+    ],
+  };
+
+  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
+
+  // 1. Sidebar shows "Ersetzt durch: HP:0003" with link
+  const replLink = screen.getByRole("button", { name: /Ersetzt durch:.*HP:0003/i });
+  expect(replLink).toBeDefined();
+
+  // 2. Clicking the replacement link in the sidebar selects the replacement annotation (AnnotationPanel opens)
+  fireEvent.click(replLink);
+  await waitFor(() => {
+    expect(screen.getByText("Kontext-Achsen")).toBeDefined();
+  });
+  expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
+
+  // 3. Header has "Auswahl abwählen" button while an item is selected
+  const deselectBtn = screen.getByRole("button", { name: /Auswahl abwählen/i });
+  expect(deselectBtn).toBeDefined();
+
+  // 4. Clicking "Auswahl abwählen" deselects everything (shows "Keine Annotation ausgewählt")
+  fireEvent.click(deselectBtn);
+  await waitFor(() => {
+    expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
+  });
+  expect(screen.queryByText("Kontext-Achsen")).toBeNull();
+  expect(screen.queryByText("Review-Entscheidung für diesen Vorschlag")).toBeNull();
+
+  // 5. Selecting target1 in sidebar, then clicking deselect button deselects it
+  fireEvent.click(screen.getAllByText("HP:0001")[0]);
+  await waitFor(() => {
+    expect(screen.getByText("Review-Entscheidung für diesen Vorschlag")).toBeDefined();
+  });
+  // Click deselect button in header to deselect
+  fireEvent.click(screen.getByRole("button", { name: /Auswahl abwählen/i }));
+  await waitFor(() => {
+    expect(screen.getByText("Keine Annotation ausgewählt")).toBeDefined();
+  });
 });
 });

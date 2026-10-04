@@ -14,7 +14,7 @@ Der bestehende Ablauf für Ein-Schicht-Pakete (HPO) definiert die Obergrenze fü
    - Textabschnitt mit der Maus/Tastatur im Textbereich markieren
    - Term im Suchfeld eingeben und Ergebnis auswählen
    - Optionale Achsenwerte setzen (oder Standard belassen)
-   - *Alternative (spanlos):* Klick auf `Spanlose Annotation`, Eingabe der Term-ID, Klick auf `Annotation anlegen`
+   - *Alternative (spanlos):* Klick auf `+ Spanlose Annotation`, Begriff in Ontologie suchen und auswählen
 3. **Abschluss:**
    - Checkbox `Dokument vollständig geprüft` aktivieren
    - Klick auf `Fall abschließen`
