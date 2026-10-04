@@ -45,9 +45,12 @@
       host: str = "127.0.0.1"
       auto_open_browser: bool = True
 
+
   def get_default_config_path() -> Path: ...
   def load_persistent_config(custom_path: Path | None = None) -> PersistentConfig: ...
-  def save_persistent_config(config: PersistentConfig, custom_path: Path | None = None) -> None: ...
+  def save_persistent_config(
+      config: PersistentConfig, custom_path: Path | None = None
+  ) -> None: ...
   ```
 
 - [ ] **Step 1: Write the failing tests for PersistentConfig loading, saving, and corruption handling**
@@ -64,11 +67,13 @@ from ontocurator.config_store import (
     save_persistent_config,
 )
 
+
 def test_default_config_values(tmp_path: Path) -> None:
     cfg = PersistentConfig()
     assert cfg.port == 8000
     assert cfg.host == "127.0.0.1"
     assert cfg.auto_open_browser is True
+
 
 def test_save_and_load_persistent_config(tmp_path: Path) -> None:
     config_file = tmp_path / "config.json"
@@ -87,6 +92,7 @@ def test_save_and_load_persistent_config(tmp_path: Path) -> None:
     assert loaded.ontology_paths == [(tmp_path / "hp.json").resolve()]
     assert loaded.port == 8080
     assert loaded.auto_open_browser is False
+
 
 def test_corrupted_config_falls_back_to_defaults(tmp_path: Path) -> None:
     config_file = tmp_path / "corrupt.json"
@@ -149,7 +155,9 @@ def load_persistent_config(custom_path: Path | None = None) -> PersistentConfig:
         return PersistentConfig()
 
 
-def save_persistent_config(config: PersistentConfig, custom_path: Path | None = None) -> None:
+def save_persistent_config(
+    config: PersistentConfig, custom_path: Path | None = None
+) -> None:
     """Save persistent configuration atomically."""
     target = custom_path or get_default_config_path()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -213,13 +221,22 @@ SAMPLE_OBO_JSON = {
             "id": "http://purl.obolibrary.org/obo/hp.json",
             "meta": {"version": "2024-06-01"},
             "nodes": [
-                {"id": "http://purl.obolibrary.org/obo/HP_0000001", "lbl": "All", "type": "CLASS"},
-                {"id": "http://purl.obolibrary.org/obo/HP_0000118", "lbl": "Phenotypic abnormality", "type": "CLASS"}
+                {
+                    "id": "http://purl.obolibrary.org/obo/HP_0000001",
+                    "lbl": "All",
+                    "type": "CLASS",
+                },
+                {
+                    "id": "http://purl.obolibrary.org/obo/HP_0000118",
+                    "lbl": "Phenotypic abnormality",
+                    "type": "CLASS",
+                },
             ],
-            "edges": []
+            "edges": [],
         }
     ]
 }
+
 
 def test_discover_ontologies(tmp_path: Path) -> None:
     ont_dir = tmp_path / "ontologies"
@@ -231,6 +248,7 @@ def test_discover_ontologies(tmp_path: Path) -> None:
 
     discovered = discover_ontologies([ont_dir])
     assert valid_ont.resolve() in discovered
+
 
 def test_get_and_post_ontologies_endpoint(tmp_path: Path) -> None:
     config = AppConfig(
@@ -252,7 +270,7 @@ def test_get_and_post_ontologies_endpoint(tmp_path: Path) -> None:
     file_bytes = json.dumps(SAMPLE_OBO_JSON).encode("utf-8")
     res_upload = client.post(
         "/api/v1/ontologies",
-        files={"file": ("hp.json", file_bytes, "application/json")}
+        files={"file": ("hp.json", file_bytes, "application/json")},
     )
     assert res_upload.status_code == 200
     data = res_upload.json()
@@ -322,6 +340,7 @@ class OntologyInfo(BaseModel):
     term_count: int
     path: str | None = None
 
+
 @router.get("/ontologies")
 def list_ontologies(request: Request) -> list[OntologyInfo]:
     """List loaded ontologies in memory registry."""
@@ -338,6 +357,7 @@ def list_ontologies(request: Request) -> list[OntologyInfo]:
         )
     return results
 
+
 @router.post("/ontologies")
 async def upload_ontology(
     file: UploadFile,
@@ -347,10 +367,14 @@ async def upload_ontology(
     content = await file.read()
     registry = request.app.state.ontology_registry
     config = getattr(request.app.state, "config", None)
-    
-    workspace_ont_dir = (config.workspace_dir / "ontologies") if config else Path("./workspace/ontologies")
+
+    workspace_ont_dir = (
+        (config.workspace_dir / "ontologies")
+        if config
+        else Path("./workspace/ontologies")
+    )
     workspace_ont_dir.mkdir(parents=True, exist_ok=True)
-    
+
     filename = file.filename or "ontology.json"
     dest_path = workspace_ont_dir / filename
     dest_path.write_bytes(content)
@@ -358,11 +382,15 @@ async def upload_ontology(
     digest = registry.register_path(dest_path)
     from ontocurator.ontology.service import OntologyService
     from ontocurator.domain.annotations import OntologyRef
-    svc = OntologyService.load(dest_path, OntologyRef(release="uploaded", sha256=digest))
+
+    svc = OntologyService.load(
+        dest_path, OntologyRef(release="uploaded", sha256=digest)
+    )
     registry.register_service(svc)
 
     # Persist in configuration
     from ontocurator.config_store import load_persistent_config, save_persistent_config
+
     p_cfg = load_persistent_config()
     if dest_path.resolve() not in [p.resolve() for p in p_cfg.ontology_paths]:
         p_cfg.ontology_paths.append(dest_path.resolve())
@@ -421,7 +449,10 @@ from ontocurator.config_store import PersistentConfig
 
 runner = CliRunner()
 
-def test_cli_default_launch_loads_config_and_discovers_ontologies(tmp_path: Path) -> None:
+
+def test_cli_default_launch_loads_config_and_discovers_ontologies(
+    tmp_path: Path,
+) -> None:
     ws = tmp_path / "my_workspace"
     ont_dir = ws / "ontologies"
     ont_dir.mkdir(parents=True)
@@ -429,9 +460,11 @@ def test_cli_default_launch_loads_config_and_discovers_ontologies(tmp_path: Path
 
     fake_config = PersistentConfig(workspace_dir=ws)
 
-    with patch("ontocurator.cli.load_persistent_config", return_value=fake_config), \
-         patch("ontocurator.cli.uvicorn.run") as mock_run, \
-         patch("ontocurator.cli.webbrowser.open"):
+    with (
+        patch("ontocurator.cli.load_persistent_config", return_value=fake_config),
+        patch("ontocurator.cli.uvicorn.run") as mock_run,
+        patch("ontocurator.cli.webbrowser.open"),
+    ):
         result = runner.invoke(app, ["serve", "--no-browser", "--port", "0"])
         assert result.exit_code == 0
         mock_run.assert_called_once()
@@ -550,6 +583,7 @@ Run `uv sync` to install PyInstaller.
 
 ```python
 """Standalone portable release packager for Ontocurator."""
+
 import os
 import shutil
 import subprocess
@@ -561,6 +595,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = REPO_ROOT / "frontend"
 WEB_DIR = REPO_ROOT / "src" / "ontocurator" / "web"
 DIST_DIR = REPO_ROOT / "dist"
+
 
 def main() -> None:
     # 1. Build frontend and copy assets
@@ -577,6 +612,7 @@ def main() -> None:
 import subprocess
 import sys
 from pathlib import Path
+
 
 def test_standalone_distribution_bundle(tmp_path: Path) -> None:
     # Verify build_standalone generates valid portable directory with executable

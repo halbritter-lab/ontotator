@@ -299,6 +299,7 @@ def test_review_decision_can_be_cleared_to_offen(tmp_path: Path):
 
     # 2. Mark layer checked
     from ontocurator.application.editing import CheckLayerCommand
+
     ctx["edit_svc"].apply(
         ws_key,
         MutationEnvelope(
