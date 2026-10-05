@@ -26,6 +26,9 @@ export type AnnotationTypeDefinition = components["schemas"]["AnnotationTypeDefi
 export type OntologyDefinition = components["schemas"]["OntologyDefinition"];
 export type Preferences = components["schemas"]["Preferences"];
 export type PreferencesUpdate = components["schemas"]["PreferencesUpdate"];
+export type EffectiveSettings = components["schemas"]["EffectiveSettings"];
+export type ProvisioningStatus = components["schemas"]["ProvisioningStatus"];
+export type ProvisioningNotice = components["schemas"]["ProvisioningNotice"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
@@ -325,6 +328,16 @@ export class ApiClient {
         body: formData,
       }
     );
+  }
+
+  /** Presets of this installation (ontocurator-settings.json). */
+  async getSettings(): Promise<EffectiveSettings> {
+    return this.request<EffectiveSettings>("/api/v1/settings", { method: "GET" });
+  }
+
+  /** Notices from importing the ontologies/ and packages/ folders at start. */
+  async getProvisioning(): Promise<ProvisioningStatus> {
+    return this.request<ProvisioningStatus>("/api/v1/provisioning", { method: "GET" });
   }
 
   async getPreferences(): Promise<Preferences> {

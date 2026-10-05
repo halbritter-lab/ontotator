@@ -799,6 +799,28 @@ body {
   border: 1px solid #86efac;
 }
 
+/* Notices about the preloaded ontologies/ and packages/ folders */
+.notice-warning {
+  background: #fef9c3;
+  color: #854d0e;
+  border: 1px solid #facc15;
+}
+
+.notice-info {
+  background: #e0f2fe;
+  color: #075985;
+  border: 1px solid #7dd3fc;
+}
+
+/* Working mode fixed by the installation (only one mode allowed) */
+.fixed-mode {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+
 /* First-run guide shown while no work package is imported */
 .getting-started {
   background: var(--bg-surface);

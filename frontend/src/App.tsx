@@ -12,6 +12,7 @@ import {
   type OpenWorkspaceResponse,
   type PackageManifest,
   type OntologyInfo,
+  type ProvisioningNotice,
   type SessionLostReason,
 } from "./api/client";
 import type { components } from "./api/generated";
@@ -75,6 +76,22 @@ const clearLegacyStorage = () => {
 const isMode = (value: unknown): value is WorkspaceMode =>
   value === "independent" || value === "review" || value === "assisted";
 
+const ALL_MODES: WorkspaceMode[] = ["independent", "review", "assisted"];
+
+/** Presets of a preconfigured installation (ontocurator-settings.json). */
+export interface AppSettings {
+  allowedModes: WorkspaceMode[];
+  defaultMode: WorkspaceMode;
+  annotatorId: string | null;
+  openPackage: string | null;
+}
+const DEFAULT_SETTINGS: AppSettings = {
+  allowedModes: ALL_MODES,
+  defaultMode: "independent",
+  annotatorId: null,
+  openPackage: null,
+};
+
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const casesText = (n: number) => `${n} ${n === 1 ? "case" : "cases"}`;
 
@@ -97,11 +114,14 @@ export const App: React.FC = () => {
   const [confirmedAnnotator, setConfirmedAnnotator] = useState<string | null>(null);
   const [pendingOpen, setPendingOpen] = useState<{ docId: string; identity: string } | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("independent");
+  const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [provisioningNotices, setProvisioningNotices] = useState<ProvisioningNotice[]>([]);
 
   // Async flows (start-up, reconnect) must see current values, not stale closures.
   const annotatorRef = useRef("");
   const selectedPackageRef = useRef<string | null>(null);
   const modeByPackageRef = useRef<Record<string, WorkspaceMode>>({});
+  const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS);
   const setAnnotatorId = (id: string) => {
     annotatorRef.current = id;
     setAnnotatorIdState(id);
@@ -152,13 +172,45 @@ export const App: React.FC = () => {
     }
   };
 
+  /** Installation presets; older servers without the endpoint keep the defaults. */
+  const loadSettings = async () => {
+    try {
+      const raw = await api.getSettings();
+      const allowed = (raw?.allowed_modes ?? []).filter(isMode);
+      const allowedModes = allowed.length > 0 ? allowed : ALL_MODES;
+      const next: AppSettings = {
+        allowedModes,
+        defaultMode: isMode(raw?.default_mode) && allowedModes.includes(raw.default_mode)
+          ? raw.default_mode
+          : allowedModes[0],
+        annotatorId: raw?.annotator_id && !identityProblem(raw.annotator_id) ? raw.annotator_id.trim() : null,
+        openPackage: raw?.open_package || null,
+      };
+      settingsRef.current = next;
+      setSettingsState(next);
+    } catch {
+      // Keep the defaults (session problems are reported by the other requests).
+    }
+  };
+
+  const loadProvisioning = async () => {
+    try {
+      const status = await api.getProvisioning();
+      setProvisioningNotices(status?.notices ?? []);
+    } catch {
+      // Older server or not available: nothing to show.
+    }
+  };
+
   const loadPreferences = async () => {
     try {
       const prefs = await api.getPreferences();
       const modes: Record<string, WorkspaceMode> = {};
       for (const [pkg, m] of Object.entries(prefs?.mode_by_package ?? {})) if (isMode(m)) modes[pkg] = m;
       modeByPackageRef.current = modes;
-      const last = prefs?.last_annotator_id?.trim();
+      // A preset identity (personalised installation) wins over the last one used;
+      // either way the person still confirms it before the first case opens.
+      const last = settingsRef.current.annotatorId ?? prefs?.last_annotator_id?.trim();
       if (!annotatorRef.current && last && !identityProblem(last)) {
         setAnnotatorId(last);
         setAnnotatorInput(last);
@@ -167,6 +219,11 @@ export const App: React.FC = () => {
       const reason = sessionLostReasonOf(err);
       if (reason) setSessionLost(reason);
       // Otherwise start without preferences.
+      const preset = settingsRef.current.annotatorId;
+      if (!annotatorRef.current && preset) {
+        setAnnotatorId(preset);
+        setAnnotatorInput(preset);
+      }
     }
   };
 
@@ -194,7 +251,8 @@ export const App: React.FC = () => {
   // Selecting a package never touches review inputs (blinding): it only lists cases.
   const handleSelectPackage = async (pkgId: string) => {
     const stored = modeByPackageRef.current[pkgId];
-    const nextMode: WorkspaceMode = isMode(stored) ? stored : "independent";
+    const { allowedModes, defaultMode } = settingsRef.current;
+    const nextMode: WorkspaceMode = isMode(stored) && allowedModes.includes(stored) ? stored : defaultMode;
     setDocuments([]);
     setSelectedPackageId(pkgId);
     setSelectedDocId(null);
@@ -213,8 +271,10 @@ export const App: React.FC = () => {
         setError(`Package "${preferredPackageId}" from the launch link was not found.`);
       }
       const current = selectedPackageRef.current;
+      const preset = settingsRef.current.openPackage;
       const next = preferred
         ?? (current && list.some((p) => p.package_id === current) ? current : null)
+        ?? (preset && list.some((p) => p.package_id === preset) ? preset : null)
         ?? list[0]?.package_id
         ?? null;
       return next ? await handleSelectPackage(next) : null;
@@ -225,6 +285,7 @@ export const App: React.FC = () => {
   };
 
   const bootstrap = async (launchPackageId: string | null) => {
+    await Promise.all([loadSettings(), loadProvisioning()]);
     await loadPreferences();
     await loadPackages(launchPackageId);
     void loadOntologies();
@@ -260,6 +321,7 @@ export const App: React.FC = () => {
   }, []);
 
   const handleChangeMode = (nextMode: WorkspaceMode) => {
+    if (!settingsRef.current.allowedModes.includes(nextMode)) return;
     setMode(nextMode);
     if (selectedPackageId) {
       modeByPackageRef.current = { ...modeByPackageRef.current, [selectedPackageId]: nextMode };
@@ -629,6 +691,24 @@ export const App: React.FC = () => {
             </div>
           </div>
         )}
+        {provisioningNotices.map((item, index) => (
+          <div
+            key={`${item.code}:${item.file ?? ""}:${index}`}
+            role={item.level === "warning" ? "alert" : "status"}
+            aria-label={item.level === "warning" ? "Delivery notice" : "Delivery information"}
+            className={`notice ${item.level === "warning" ? "notice-warning" : "notice-info"}`}
+          >
+            <span>{item.message}</span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setProvisioningNotices((all) => all.filter((n) => n !== item))}
+              aria-label="Dismiss notice"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
         {notice && (
           <div role="status" aria-label="Import result" className="notice notice-success">
             <span>{notice}</span>
@@ -758,20 +838,36 @@ export const App: React.FC = () => {
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
-                <label htmlFor="mode-select" className="form-label" style={{ marginBottom: 4 }}>
-                  Working mode
-                </label>
-                <select
-                  id="mode-select"
-                  className="form-select"
-                  value={mode}
-                  onChange={(e) => handleChangeMode(e.target.value as WorkspaceMode)}
-                >
-                  <option value="independent">{modeLabels.independent}</option>
-                  <option value="review">{modeLabels.review}</option>
-                  <option value="assisted" style={{ display: "none" }}>{modeLabels.assisted}</option>
-                </select>
-                <div className="field-hint">{modeExplanations[mode]}</div>
+                {settings.allowedModes.length === 1 ? (
+                  <>
+                    <div className="form-label" style={{ marginBottom: 4 }}>
+                      Working mode
+                    </div>
+                    <div className="fixed-mode" data-testid="fixed-mode">
+                      {modeLabels[mode]}
+                    </div>
+                    <div className="field-hint">{modeExplanations[mode]} Set for this installation.</div>
+                  </>
+                ) : (
+                  <>
+                    <label htmlFor="mode-select" className="form-label" style={{ marginBottom: 4 }}>
+                      Working mode
+                    </label>
+                    <select
+                      id="mode-select"
+                      className="form-select"
+                      value={mode}
+                      onChange={(e) => handleChangeMode(e.target.value as WorkspaceMode)}
+                    >
+                      {settings.allowedModes.map((m) => (
+                        <option key={m} value={m} style={m === "assisted" ? { display: "none" } : undefined}>
+                          {modeLabels[m]}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="field-hint">{modeExplanations[mode]}</div>
+                  </>
+                )}
               </div>
             </div>
 
