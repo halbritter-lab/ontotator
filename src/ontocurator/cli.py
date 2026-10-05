@@ -19,7 +19,13 @@ from urllib.parse import urlencode
 import typer
 import uvicorn
 
+from ontocurator import file_manager
 from ontocurator.api.app import create_app
+from ontocurator.application.legacy_config import (
+    LegacyConfigInUse,
+    LegacyConfigNotFound,
+    delete_legacy_config,
+)
 from ontocurator.application.provisioning import (
     ProvisioningLedger,
     ProvisioningStatus,
@@ -30,17 +36,16 @@ from ontocurator.application.provisioning import (
 from ontocurator.application.uploads import PackageImportService
 from ontocurator.config import AppConfig
 from ontocurator.config_store import (
-    CONFIG_FILENAME,
     app_dir,
     cloud_sync_provider,
     default_provision_dir,
     default_workspace_dir,
     detect_portable_root,
     get_default_config_path,
+    legacy_config_path,
     load_persistent_config,
+    same_path,
     save_persistent_config,
-    seed_from_legacy_config,
-    user_config_dir,
 )
 from ontocurator.distribution_settings import (
     SETTINGS_FILENAME,
@@ -518,24 +523,14 @@ def serve(
             raise typer.Exit(code=1) from exc
 
     # ---- resolve workspace (never silently) --------------------------------
+    # Settings of an earlier per-user installation are never imported here:
+    # the web UI offers that (and nothing at all for a preconfigured bundle).
     config_path = get_default_config_path()
     portable_root = detect_portable_root()
-    imported_settings: list[str] = []
-    if (
-        portable_root is not None
-        and config_path == portable_root / CONFIG_FILENAME
-        and not config_path.exists()
-    ):
-        # First start of a portable copy: carry over the settings of an older
-        # per-user installation (but never its workspace).
-        legacy_config = user_config_dir() / CONFIG_FILENAME
-        persistent_cfg, imported_settings = seed_from_legacy_config(legacy_config)
-        if imported_settings:
-            typer.echo(f"Imported settings from {legacy_config}:")
-            for note in imported_settings:
-                typer.echo(f"  - {note}")
-    else:
-        persistent_cfg = load_persistent_config(config_path)
+    persistent_cfg = load_persistent_config(config_path)
+    preconfigured = (
+        source_dir is not None and (source_dir / SETTINGS_FILENAME).is_file()
+    )
 
     if workspace is not None:
         ws = workspace.resolve()
@@ -673,6 +668,9 @@ def serve(
             web_dir=resolved_web_dir,
             axes_config=parsed_axes_config,
             distribution=settings,
+            config_path=config_path,
+            legacy_config_path=legacy_config_path(),
+            preconfigured=preconfigured,
         )
 
         try:
@@ -788,12 +786,119 @@ def serve(
 
 
 # --------------------------------------------------------------------------- #
+# Settings locations (for administrators)
+# --------------------------------------------------------------------------- #
+
+
+def _saved_workspace(config_path: Path) -> Path:
+    """The workspace ``serve`` would use without --workspace."""
+    saved = load_persistent_config(config_path)
+    if "workspace_dir" in saved.model_fields_set and saved.workspace_dir.is_dir():
+        return saved.workspace_dir.resolve()
+    return default_workspace_dir()
+
+
+@app.command("config")
+def config_command(
+    path: Annotated[
+        bool,
+        typer.Option(
+            "--path",
+            help=(
+                "Show the settings file in use, the settings file of an earlier "
+                "installation (if any) and the data folder (default action)."
+            ),
+        ),
+    ] = False,
+    open_folder: Annotated[
+        bool,
+        typer.Option("--open", help="Open the folder of the settings file in use."),
+    ] = False,
+    delete_legacy: Annotated[
+        bool,
+        typer.Option(
+            "--delete-legacy",
+            help=(
+                "Delete the settings file of an earlier installation. Workspaces "
+                "and annotations are not affected."
+            ),
+        ),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Do not ask before deleting."),
+    ] = False,
+) -> None:
+    """Show or manage where Ontocurator keeps its settings."""
+    config_path = get_default_config_path()
+    legacy = legacy_config_path()
+    is_active = same_path(legacy, config_path)
+
+    if path or not (open_folder or delete_legacy):
+        typer.echo(f"Settings file in use: {config_path}")
+        if is_active:
+            typer.echo(
+                "Settings from an earlier installation: none (this installation "
+                "uses the per-user settings file)"
+            )
+        elif legacy.is_file():
+            typer.echo(f"Settings from an earlier installation: {legacy}")
+        else:
+            typer.echo("Settings from an earlier installation: none found")
+        typer.echo(f"Data folder (workspace): {_saved_workspace(config_path)}")
+
+    if open_folder:
+        folder = config_path.parent
+        if not folder.is_dir():
+            typer.echo(
+                f"The settings folder {folder} does not exist yet; it is created "
+                "when Ontocurator starts for the first time.",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+        try:
+            file_manager.open_folder(folder)
+        except OSError as exc:
+            typer.echo(f"Error: Could not open {folder}: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"Opened {folder}")
+
+    if delete_legacy:
+        if is_active:
+            typer.echo(
+                f"Error: {legacy} is the settings file this installation uses; "
+                "it is not deleted.",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+        if not legacy.is_file():
+            typer.echo("No settings file from an earlier installation was found.")
+            return
+        typer.echo(f"This deletes only the file {legacy}")
+        typer.echo("(and its folder, if it is then empty).")
+        typer.echo("No workspace, annotation or ontology data is affected.")
+        if not yes and not typer.confirm("Delete it?", default=False):
+            typer.echo("Nothing was deleted.")
+            raise typer.Exit(code=1)
+        try:
+            delete_legacy_config(legacy, config_path)
+        except (LegacyConfigInUse, LegacyConfigNotFound) as exc:
+            typer.echo(f"Error: {exc.details}", err=True)
+            raise typer.Exit(code=1) from exc
+        except OSError as exc:
+            typer.echo(f"Error: Could not delete {legacy}: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"Deleted {legacy}")
+
+
+# --------------------------------------------------------------------------- #
 # Zero-CLI entry point (double click / drag & drop / "Open with")
 # --------------------------------------------------------------------------- #
 
 PASSTHROUGH_FIRST_ARGS = {
     "serve",
     "version",
+    "config",
     "--help",
     "-h",
     "--install-completion",

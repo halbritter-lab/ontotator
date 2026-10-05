@@ -68,6 +68,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/legacy-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Legacy Config
+         * @description Settings of an earlier installation that could be imported (never
+         *     imported automatically). ``found`` is false when there is nothing to show.
+         */
+        get: operations["get_legacy_config_api_v1_legacy_config_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Legacy Config
+         * @description Delete only the old settings file (never workspace or annotation data).
+         */
+        delete: operations["delete_legacy_config_api_v1_legacy_config_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/legacy-config/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Legacy Config
+         * @description Copy the old ontology files into the workspace and take over port and
+         *     auto-open-browser (effective at the next start).
+         */
+        post: operations["import_legacy_config_api_v1_legacy_config_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/legacy-config/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Legacy Config
+         * @description Hide the notice for this version of the old settings file.
+         */
+        post: operations["dismiss_legacy_config_api_v1_legacy_config_dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/legacy-config/open-folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Legacy Config Folder
+         * @description Show the old settings file's folder in the file manager (fixed path only).
+         */
+        post: operations["open_legacy_config_folder_api_v1_legacy_config_open_folder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/packages": {
         parameters: {
             query?: never;
@@ -622,6 +708,69 @@ export interface components {
             /** Annotation Types */
             annotation_types: components["schemas"]["AnnotationTypeDefinition"][];
         };
+        /** LegacyConfigDeleted */
+        LegacyConfigDeleted: {
+            /** Deleted */
+            deleted: string;
+        };
+        /**
+         * LegacyConfigStatus
+         * @description ``GET /api/v1/legacy-config``: whether to show the notice, and details.
+         */
+        LegacyConfigStatus: {
+            /**
+             * Found
+             * @default false
+             */
+            found: boolean;
+            /** Path */
+            path?: string | null;
+            /** Folder */
+            folder?: string | null;
+            /** Ontologies */
+            ontologies?: components["schemas"]["LegacyOntology"][];
+            /** Port */
+            port?: number | null;
+            /** Auto Open Browser */
+            auto_open_browser?: boolean | null;
+        };
+        /** LegacyFolderOpened */
+        LegacyFolderOpened: {
+            /** Folder */
+            folder: string;
+        };
+        /**
+         * LegacyImportResult
+         * @description What ``POST /api/v1/legacy-config/import`` took over.
+         */
+        LegacyImportResult: {
+            /** Imported Ontologies */
+            imported_ontologies?: string[];
+            /** Skipped Ontologies */
+            skipped_ontologies?: components["schemas"]["SkippedOntology"][];
+            /** Port */
+            port?: number | null;
+            /** Auto Open Browser */
+            auto_open_browser?: boolean | null;
+            /**
+             * Restart Required
+             * @default false
+             */
+            restart_required: boolean;
+        };
+        /**
+         * LegacyOntology
+         * @description An ontology file named in the old settings.
+         */
+        LegacyOntology: {
+            /** Path */
+            path: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "found" | "missing" | "in_use";
+        };
         /**
          * MutationEnvelope
          * @description Request envelope identifying a write attempt across retries.
@@ -973,6 +1122,13 @@ export interface components {
             /** End */
             end: number;
         };
+        /** SkippedOntology */
+        SkippedOntology: {
+            /** Path */
+            path: string;
+            /** Reason */
+            reason: string;
+        };
         /**
          * Submission
          * @description Immutable local submission record.
@@ -1262,6 +1418,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_legacy_config_api_v1_legacy_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyConfigStatus"];
+                };
+            };
+        };
+    };
+    delete_legacy_config_api_v1_legacy_config_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyConfigDeleted"];
+                };
+            };
+        };
+    };
+    import_legacy_config_api_v1_legacy_config_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyImportResult"];
+                };
+            };
+        };
+    };
+    dismiss_legacy_config_api_v1_legacy_config_dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyConfigStatus"];
+                };
+            };
+        };
+    };
+    open_legacy_config_folder_api_v1_legacy_config_open_folder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyFolderOpened"];
                 };
             };
         };

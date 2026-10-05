@@ -15,8 +15,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from ontocurator import file_manager
 from ontocurator.application.editing import EditorService
 from ontocurator.application.exports import ExportService
+from ontocurator.application.legacy_config import (
+    LegacyConfigDeleted,
+    LegacyConfigNotFound,
+    LegacyConfigService,
+    LegacyConfigStatus,
+    LegacyImportResult,
+)
 from ontocurator.application.preferences import (
     PREFERENCES_FILENAME,
     Preferences,
@@ -248,6 +256,62 @@ def get_preferences(request: Request) -> Preferences:
 def update_preferences(change: PreferencesUpdate, request: Request) -> Preferences:
     """Update preferences; omitted fields are kept, modes merge per package."""
     return _preferences_store(request).update(change)
+
+
+# --- Settings of an earlier installation ------------------------------------- #
+
+
+class LegacyFolderOpened(BaseModel):
+    folder: str
+
+
+def _legacy_config(request: Request) -> LegacyConfigService:
+    service = getattr(request.app.state, "legacy_config", None)
+    if service is None:
+        raise LegacyConfigNotFound()
+    return cast(LegacyConfigService, service)
+
+
+@router.get("/legacy-config")
+def get_legacy_config(request: Request) -> LegacyConfigStatus:
+    """Settings of an earlier installation that could be imported (never
+    imported automatically). ``found`` is false when there is nothing to show."""
+    service = getattr(request.app.state, "legacy_config", None)
+    if service is None:
+        return LegacyConfigStatus()
+    return cast(LegacyConfigService, service).status()
+
+
+@router.post("/legacy-config/import")
+def import_legacy_config(request: Request) -> LegacyImportResult:
+    """Copy the old ontology files into the workspace and take over port and
+    auto-open-browser (effective at the next start)."""
+    return _legacy_config(request).import_settings()
+
+
+@router.post("/legacy-config/dismiss")
+def dismiss_legacy_config(request: Request) -> LegacyConfigStatus:
+    """Hide the notice for this version of the old settings file."""
+    return _legacy_config(request).dismiss()
+
+
+@router.post("/legacy-config/open-folder")
+def open_legacy_config_folder(request: Request) -> LegacyFolderOpened:
+    """Show the old settings file's folder in the file manager (fixed path only)."""
+    folder = _legacy_config(request).folder()
+    try:
+        file_manager.open_folder(folder)
+    except OSError as exc:
+        raise DomainError(
+            "OPEN_FOLDER_FAILED", f"Could not open the folder {folder}: {exc}"
+        ) from exc
+    return LegacyFolderOpened(folder=str(folder))
+
+
+@router.delete("/legacy-config")
+def delete_legacy_config(request: Request) -> LegacyConfigDeleted:
+    """Delete only the old settings file (never workspace or annotation data)."""
+    return _legacy_config(request).delete()
 
 
 @router.post("/packages")

@@ -99,6 +99,99 @@
         }
       }
     },
+    "/api/v1/legacy-config": {
+      "get": {
+        "summary": "Get Legacy Config",
+        "description": "Settings of an earlier installation that could be imported (never\nimported automatically). ``found`` is false when there is nothing to show.",
+        "operationId": "get_legacy_config_api_v1_legacy_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyConfigStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Legacy Config",
+        "description": "Delete only the old settings file (never workspace or annotation data).",
+        "operationId": "delete_legacy_config_api_v1_legacy_config_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyConfigDeleted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legacy-config/import": {
+      "post": {
+        "summary": "Import Legacy Config",
+        "description": "Copy the old ontology files into the workspace and take over port and\nauto-open-browser (effective at the next start).",
+        "operationId": "import_legacy_config_api_v1_legacy_config_import_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyImportResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legacy-config/dismiss": {
+      "post": {
+        "summary": "Dismiss Legacy Config",
+        "description": "Hide the notice for this version of the old settings file.",
+        "operationId": "dismiss_legacy_config_api_v1_legacy_config_dismiss_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyConfigStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legacy-config/open-folder": {
+      "post": {
+        "summary": "Open Legacy Config Folder",
+        "description": "Show the old settings file's folder in the file manager (fixed path only).",
+        "operationId": "open_legacy_config_folder_api_v1_legacy_config_open_folder_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyFolderOpened"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/packages": {
       "get": {
         "summary": "List Packages",
@@ -1379,6 +1472,167 @@
         "title": "LayerDefinition",
         "description": "Definition of an annotation layer binding an ontology and types."
       },
+      "LegacyConfigDeleted": {
+        "properties": {
+          "deleted": {
+            "type": "string",
+            "title": "Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "title": "LegacyConfigDeleted"
+      },
+      "LegacyConfigStatus": {
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "title": "Found",
+            "default": false
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "ontologies": {
+            "items": {
+              "$ref": "#/components/schemas/LegacyOntology"
+            },
+            "type": "array",
+            "title": "Ontologies"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "auto_open_browser": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Open Browser"
+          }
+        },
+        "type": "object",
+        "title": "LegacyConfigStatus",
+        "description": "``GET /api/v1/legacy-config``: whether to show the notice, and details."
+      },
+      "LegacyFolderOpened": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder"
+        ],
+        "title": "LegacyFolderOpened"
+      },
+      "LegacyImportResult": {
+        "properties": {
+          "imported_ontologies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Imported Ontologies"
+          },
+          "skipped_ontologies": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedOntology"
+            },
+            "type": "array",
+            "title": "Skipped Ontologies"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "auto_open_browser": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Open Browser"
+          },
+          "restart_required": {
+            "type": "boolean",
+            "title": "Restart Required",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "LegacyImportResult",
+        "description": "What ``POST /api/v1/legacy-config/import`` took over."
+      },
+      "LegacyOntology": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "found",
+              "missing",
+              "in_use"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "status"
+        ],
+        "title": "LegacyOntology",
+        "description": "An ontology file named in the old settings."
+      },
       "MutationEnvelope": {
         "properties": {
           "mutation_id": {
@@ -2225,6 +2479,24 @@
         ],
         "title": "Segment",
         "description": "Zero-based Unicode codepoint interval [start, end)."
+      },
+      "SkippedOntology": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "reason"
+        ],
+        "title": "SkippedOntology"
       },
       "Submission": {
         "properties": {

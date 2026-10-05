@@ -28,3 +28,10 @@ class AppConfig(BaseModel):
     axes_config: AxesConfig | None = None
     # Presets of a preconfigured distribution (ontocurator-settings.json).
     distribution: DistributionSettings = Field(default_factory=DistributionSettings)
+    # Active settings file (config.json) and the settings file of an earlier
+    # per-user installation; both None disables the "earlier installation" notice.
+    config_path: Path | None = None
+    legacy_config_path: Path | None = None
+    # True when the bundle ships ontocurator-settings.json: then the settings
+    # of an earlier installation are ignored entirely.
+    preconfigured: bool = False

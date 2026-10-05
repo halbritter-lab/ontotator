@@ -8,6 +8,10 @@ def isolate_test_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     """Isolate ontocurator persistent config to a temporary directory for each test."""
     test_cfg = tmp_path / "ontocurator" / "config.json"
     monkeypatch.setenv("ONTOCURATOR_CONFIG_PATH", str(test_cfg))
+    # Never look at (or offer to import) the real per-user settings file.
+    monkeypatch.setenv(
+        "ONTOCURATOR_LEGACY_CONFIG_PATH", str(tmp_path / "legacy-none" / "config.json")
+    )
 
 
 @pytest.fixture(autouse=True)

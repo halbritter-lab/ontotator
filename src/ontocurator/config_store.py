@@ -16,6 +16,11 @@ Location rules (see README "Where your data lives"):
   directory. Pass ``--workspace`` explicitly for anything but local hacking.
 
 ``ONTOCURATOR_CONFIG_PATH`` overrides the config file location in every mode.
+
+Settings of an earlier per-user installation (``legacy_config_path``) are never
+imported automatically; see ``ontocurator.application.legacy_config``.
+``ONTOCURATOR_LEGACY_CONFIG_PATH`` overrides where that file is looked for
+(for tests and administrators).
 """
 
 from __future__ import annotations
@@ -94,6 +99,28 @@ def user_config_dir() -> Path:
     return Path(platformdirs.user_config_dir(APP_NAME, appauthor=False, roaming=True))
 
 
+def legacy_config_path() -> Path:
+    """Settings file of a per-user installation (e.g. ``%APPDATA%/ontocurator``).
+
+    For a portable copy this is the settings file of an *earlier* installation.
+    ``ONTOCURATOR_LEGACY_CONFIG_PATH`` overrides the location.
+    """
+    override = os.environ.get("ONTOCURATOR_LEGACY_CONFIG_PATH")
+    if override:
+        return Path(override)
+    return user_config_dir() / CONFIG_FILENAME
+
+
+def same_path(a: Path, b: Path) -> bool:
+    """True if both paths name the same file (case-insensitive on Windows)."""
+    try:
+        if a.exists() and b.exists():
+            return os.path.samefile(a, b)
+    except OSError:
+        pass
+    return os.path.normcase(str(a.resolve())) == os.path.normcase(str(b.resolve()))
+
+
 def get_default_config_path() -> Path:
     """Resolve the configuration file path for the current runtime mode."""
     config_env = os.environ.get("ONTOCURATOR_CONFIG_PATH")
@@ -141,34 +168,6 @@ def cloud_sync_provider(path: PurePath) -> str | None:
             if name == marker or name.startswith(marker + " -"):
                 return provider
     return None
-
-
-def seed_from_legacy_config(
-    legacy_path: Path,
-) -> tuple[PersistentConfig, list[str]]:
-    """Initial portable settings taken over from a legacy per-user config file.
-
-    Imports the ontology list (only files that still exist), the port and the
-    auto-open-browser flag. The workspace is deliberately *not* imported: a
-    portable installation keeps its data in its own folder. Returns the new
-    configuration and human-readable notes on what was imported.
-    """
-    if not legacy_path.is_file():
-        return PersistentConfig(), []
-    legacy = load_persistent_config(legacy_path)
-    fields: dict[str, Any] = {}
-    notes: list[str] = []
-    ontologies = [p for p in legacy.ontology_paths if p.is_file()]
-    if ontologies:
-        fields["ontology_paths"] = ontologies
-        notes.extend(f"ontology {p}" for p in ontologies)
-    if "port" in legacy.model_fields_set:
-        fields["port"] = legacy.port
-        notes.append(f"port {legacy.port}")
-    if "auto_open_browser" in legacy.model_fields_set:
-        fields["auto_open_browser"] = legacy.auto_open_browser
-        notes.append(f"open browser on start: {legacy.auto_open_browser}")
-    return PersistentConfig(**fields), notes
 
 
 def _to_stored(path: Path, base: Path) -> str:

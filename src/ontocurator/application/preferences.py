@@ -44,6 +44,19 @@ def _check_annotator(value: str | None) -> str | None:
     return None if value is None else normalize_annotator_id(value)
 
 
+class LegacyConfigDecision(BaseModel):
+    """What was decided about the settings file of an earlier installation.
+
+    Bound to the file's SHA-256: if that file changes later, the notice is
+    shown again.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    action: Literal["dismissed", "imported"]
+
+
 class Preferences(BaseModel):
     """Workspace preferences returned by ``GET /api/v1/preferences``."""
 
@@ -53,6 +66,15 @@ class Preferences(BaseModel):
     mode_by_package: dict[str, PreferenceMode] = Field(default_factory=dict)
 
     validate_annotator = field_validator("last_annotator_id")(_check_annotator)
+
+
+class _StoredPreferences(Preferences):
+    """File content: the public preferences plus internal bookkeeping."""
+
+    legacy_config: LegacyConfigDecision | None = None
+
+    def public(self) -> Preferences:
+        return Preferences.model_validate(self.model_dump(exclude={"legacy_config"}))
 
 
 class PreferencesUpdate(BaseModel):
@@ -73,22 +95,22 @@ class PreferencesStore:
         self.path = path
         self._lock = threading.Lock()
 
-    def _read(self) -> Preferences:
+    def _read(self) -> _StoredPreferences:
         try:
             raw = self.path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return Preferences()
+            return _StoredPreferences()
         except OSError as exc:
             logger.warning("Cannot read %s: %s", self.path, exc)
-            return Preferences()
+            return _StoredPreferences()
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
             logger.warning("Ignoring unreadable preferences file %s", self.path)
-            return Preferences()
+            return _StoredPreferences()
         if not isinstance(data, dict):
-            return Preferences()
-        prefs = Preferences()
+            return _StoredPreferences()
+        prefs = _StoredPreferences()
         with contextlib.suppress(ValidationError):
             prefs.last_annotator_id = Preferences.model_validate(
                 {"last_annotator_id": data.get("last_annotator_id")}
@@ -102,11 +124,21 @@ class PreferencesStore:
                     "assisted",
                 ):
                     prefs.mode_by_package[package_id] = mode
+        with contextlib.suppress(ValidationError):
+            if isinstance(data.get("legacy_config"), dict):
+                prefs.legacy_config = LegacyConfigDecision.model_validate(
+                    data["legacy_config"]
+                )
         return prefs
 
     def load(self) -> Preferences:
         with self._lock:
-            return self._read()
+            return self._read().public()
+
+    def legacy_decision(self) -> LegacyConfigDecision | None:
+        """Decision about an earlier installation's settings file, if any."""
+        with self._lock:
+            return self._read().legacy_config
 
     def update(self, change: PreferencesUpdate) -> Preferences:
         with self._lock:
@@ -116,9 +148,18 @@ class PreferencesStore:
             if change.mode_by_package:
                 prefs.mode_by_package.update(change.mode_by_package)
             self._write(prefs)
-            return prefs
+            return prefs.public()
 
-    def _write(self, prefs: Preferences) -> None:
+    def record_legacy_config(
+        self, sha256: str, action: Literal["dismissed", "imported"]
+    ) -> None:
+        """Remember the decision about an earlier installation's settings file."""
+        with self._lock:
+            prefs = self._read()
+            prefs.legacy_config = LegacyConfigDecision(sha256=sha256, action=action)
+            self._write(prefs)
+
+    def _write(self, prefs: _StoredPreferences) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_name(f".preferences.{secrets.token_hex(4)}.tmp")
         try:
