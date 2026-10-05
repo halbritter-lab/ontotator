@@ -5,7 +5,7 @@ A standalone, secure, offline web-based editor for annotating and reviewing biom
 Designed specifically for clinical curation workflows, Ontocurator supports:
 - **Configured Annotation Layers & Task Profiles**: Fine-grained task configuration via `TaskProfile`: customizable layers (`layers`), annotation types (`annotation_types`), and required ontologies (`ontologies`). Multi-layer workflows allow annotating distinct aspects (e.g. phenotypes, diseases, therapies) independently or jointly.
 - **Zero-Extra-Click Single-Layer Simplicity**: Work packages with a single layer present zero superfluous layer controls, maintaining the exact streamlined ergonomics of dedicated single-ontology curation.
-- **Multi-Ontology Loading & Registry**: Load pinned OBO Graph JSON ontologies via repeatable `--ontology PATH` or `--ontology NAME=PATH` CLI flags. Local in-memory exact and prefix lexical search with instant results.
+- **Multi-Ontology Loading & Registry**: Load pinned OBO Graph JSON ontologies via repeatable `--ontology PATH` flags, auto-discovery in `<workspace>/ontologies/`, or upload in the web UI. Local in-memory exact and prefix lexical search with instant results.
 - **Layer-Scoped Case Navigation & Checkmarks**: Fast document navigation respecting package document order (`document_order`), with layer-specific completion validation and explicit verification checkmarks (`checked_layer_ids`).
 - **Independent Annotation**: Clean-slate annotation without proposal bias, external prediction leakage, or term count exposure.
 - **Origin-Neutral Review**: Identical treatment, actions, validation rules, and status transitions for human proposals and machine/tool predictions.
@@ -70,28 +70,119 @@ Start the local server with your workspace directory and ontology file(s):
 ontocurator serve --workspace ./workspace --ontology ./hp.json
 
 # Launch with multiple ontologies (repeatable --ontology)
-ontocurator serve --workspace ./workspace --ontology ./hp.json --ontology mondo=./mondo.json
+ontocurator serve --workspace ./workspace --ontology ./hp.json --ontology ./mondo.json
 ```
 
 The CLI will:
-1. Initialize SQLite database at `./workspace/editor.db` with schema version `ontocurator-workspace/v4`.
-2. Verify integrity and load ontology files into the in-memory registry.
-3. Generate a secure 32-byte cryptographic session token.
-4. Bind to `127.0.0.1` on a free port (default 8000).
-5. Automatically open the default browser to `http://127.0.0.1:8000/#token=<session_token>`.
+1. Initialize SQLite database at `<workspace>/editor.db` with schema version `ontocurator-workspace/v4`.
+2. Load ontologies given via `--ontology`, remembered in the settings file, and found in `<workspace>/ontologies/`.
+3. Generate a fresh random session token for this launch (never reused; pass `--token` to fix one).
+4. Bind `127.0.0.1` on the saved port (default 8000) or the next free port.
+5. Once the server accepts connections, open the browser at `http://127.0.0.1:<port>/#token=<token>` (unless `--no-browser` or `"auto_open_browser": false` in the settings file).
+
+Stop the server with `Ctrl+C`; it shuts down gracefully and closes the database.
+
+When run from source without `--workspace`, the workspace is the last one used
+(saved in the settings file) or `./workspace` relative to the current directory.
+Pass `--workspace` explicitly for anything beyond local development.
 
 ### CLI Options
 
 | Option | Flag | Default | Description |
 |---|---|---|---|
-| `--workspace` | `-w` | `./workspace` | Directory for SQLite database, uploaded packages, and exports |
-| `--ontology` | `-o` | `None` | Path to ontology JSON file (repeatable, optional `name=path` alias) |
-| `--port` | `-p` | `8000` | Port to bind (use `0` for random free port) |
+| `--workspace` | `-w` | saved / see below | Directory for SQLite database, uploaded packages, and exports |
+| `--ontology` | `-o` | `None` | Path to ontology JSON file, used in place (repeatable) |
+| `--import-ontology` | | `None` | Copy an ontology JSON into `<workspace>/ontologies/` and remember it (repeatable) |
+| `--package` | | `None` | Work package ZIP to import on startup and open in the UI |
+| `--port` | `-p` | saved (`8000`) | Port to bind; `0` = random free port; omitted = saved port or next free one |
 | `--host` | | `127.0.0.1` | Loopback address (must be `127.0.0.1`, `localhost`, or `::1`) |
 | `--no-browser` | | `false` | Do not automatically open default web browser |
 | `--web-dir` | | `None` | Custom directory containing built web assets (defaults to embedded) |
 | `--axes-config` | | `None` | Path to JSON file defining fallback `AxesConfig` profile |
-| `--token` | `-t` | `None` | Custom session token (generated automatically if omitted) |
+| `--token` | `-t` | `None` | Custom session token (a new one is generated on every start if omitted) |
+
+`ontocurator <file-or-folder>` (also: drag & drop onto the executable, "Open with")
+routes `.zip` to `--package`, `.json` to `--import-ontology` and a folder to
+`--workspace`. Anything else is reported as ignored and the editor starts normally.
+
+---
+
+## Standalone Portable Distribution (no Python, no admin rights)
+
+`scripts/build_standalone.py` produces `ontocurator-portable-<os>-<arch>.zip`
+(and on macOS additionally `ontocurator-macos-<arch>-app.zip` with
+`Ontocurator.app`).
+
+**Start:** extract the ZIP anywhere you can write (e.g. your Documents folder,
+not `C:\Program Files`) and double-click `ontocurator.exe` / `ontocurator`.
+A console window opens and the browser shows the editor. Dropping a work
+package `.zip`, an ontology `.json` or a workspace folder onto the executable
+opens it; dropped ontologies are copied into `workspace/ontologies/` as
+`<name>-<sha256 prefix>.json`, so the original file can be deleted afterwards.
+
+**Windows SmartScreen:** builds without an Authenticode signature trigger an
+"unknown publisher" warning; choose *More info -> Run anyway* only for ZIPs from
+a trusted source. **macOS Gatekeeper:** for unsigned builds right-click the app
+and choose *Open* the first time.
+
+**Quit:** press `Ctrl+C` in the console window. Do not close the window while a
+save or import is running (closing the window triggers a best-effort graceful
+shutdown on Windows; `Ctrl+C` is the safe way). For `Ontocurator.app`, quit via
+the Dock (Force Quit if it does not react).
+
+**One instance per workspace:** starting Ontocurator again (or dropping another
+file onto it) while it is running does not start a second server on the same
+database; it opens the browser for the running instance and forwards dropped
+packages/ontologies to it. The lock (`<workspace>/.ontocurator.lock`) is released
+by the operating system even after a crash, so stale locks never block a start.
+
+**Where data lives** (printed at every start, together with the settings file):
+
+| Mode | Settings file | Default workspace |
+|---|---|---|
+| Portable ZIP (folder writable, contains `portable.txt`) | `<app folder>/config.json` (paths stored relative to the folder) | `<app folder>/workspace` |
+| `Ontocurator.app`, read-only location, or `portable.txt` deleted | per-user config dir (`%APPDATA%\ontocurator`, `~/Library/Application Support/ontocurator`, `~/.config/ontocurator`) | `Documents/Ontocurator/workspace` |
+| From source / wheel | per-user config dir | last used workspace, else `./workspace` |
+
+`ONTOCURATOR_CONFIG_PATH` overrides the settings file location. Moving or
+re-extracting the portable folder keeps working because paths inside it are
+stored relatively. To update, extract the new version and copy `workspace/` (and
+`config.json`) from the old folder. If a saved workspace no longer exists the
+default is used and a notice is printed: Ontocurator never switches workspace
+silently.
+
+**Session token:** a fresh token is generated on every start. While running it
+is stored (owner-only permissions) in `<workspace>/.ontocurator-instance.json`
+so that a second launch can reopen the browser; the file is deleted on shutdown.
+
+### Building
+
+```bash
+# Reproducible: environment from uv.lock, npm ci, artifacts outside the repo
+uv run --locked python scripts/build_standalone.py --out-dir ../ontocurator-dist
+uv run python scripts/build_standalone.py --help   # all options
+```
+
+- `--skip-frontend` bundles the committed `src/ontocurator/web` assets;
+  `--skip-npm-ci` reuses `frontend/node_modules` (development only).
+- The source tree is only modified with `--update-embedded-web`.
+- `scripts/build_release.py` (wheel) refreshes `src/ontocurator/web`, because
+  the wheel embeds the UI from there (use `--skip-frontend` to avoid that).
+- Optional code signing runs only when configured: `WINDOWS_SIGN_CERT`,
+  `WINDOWS_SIGN_PASSWORD`, `WINDOWS_SIGN_TIMESTAMP_URL` (signtool) and
+  `MACOS_CODESIGN_IDENTITY`, `MACOS_NOTARY_PROFILE` (codesign/notarytool).
+  Unsigned builds are the default (TODO: obtain certificates).
+- The archive includes `THIRD_PARTY_NOTICES.md` and `LICENSES/` with generated
+  license texts for all bundled Python and npm packages.
+
+---
+
+## Ontology Licensing
+
+Ontocurator does not bundle ontology releases. The Human Phenotype Ontology is
+subject to the HPO license and citation requirements:
+https://hpo.jax.org/license. Third-party code and bundled dependencies are
+listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 
@@ -134,9 +225,9 @@ workspace/
 
 ## Work Package Interchange Formats
 
-Ontocurator uses the **V2 Work Package** format (`ontocurator-work-package/v2`). For complete specification and schema examples, see [docs/work-package-v2.md](file:///C:/Users/jan-p/Development/hpo-annotation-editor/docs/work-package-v2.md).
+Ontocurator uses the **V2 Work Package** format (`ontocurator-work-package/v2`). For complete specification and schema examples, see [docs/work-package-v2.md](docs/work-package-v2.md).
 
-*(Note: The previous V1 format documentation is archived at [docs/work-package-v1.md](file:///C:/Users/jan-p/Development/hpo-annotation-editor/docs/work-package-v1.md) for historical reference.)*
+*(Note: The previous V1 format documentation is archived at [docs/work-package-v1.md](docs/work-package-v1.md) for historical reference.)*
 
 Package contents:
 - `manifest.json`: Package ID, format version `ontocurator-work-package/v2`, `task_profile` definition, `task_profile_sha256`, and file checksums.
@@ -172,5 +263,8 @@ npm run build
 cd ..
 
 # Build release bundle (Frontend -> Web Assets -> Wheel Packaging -> Verification)
-uv run python scripts/build_release.py
+uv run --locked python scripts/build_release.py --out-dir dist
+
+# Regenerate the demo work package fixture
+uv run python scripts/create_demo_package.py --output tests/fixtures/demo_package.zip
 ```

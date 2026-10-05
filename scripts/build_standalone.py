@@ -1,136 +1,226 @@
-"""Standalone portable release packager for Ontocurator using PyInstaller.
+"""Build the portable standalone distribution of Ontocurator with PyInstaller.
 
-Automates:
-1. Frontend compilation via npm build
-2. Bundling built static web assets into src/ontocurator/web/
-3. Packaging Python application into portable standalone distribution via PyInstaller
-4. Setting up portable directories (ontologies/, workspace/) and documentation
-5. Compressing into a clean portable distribution ZIP archive
+Steps:
+1. ``uv lock --check`` (run the script via ``uv run --locked`` so the build
+   environment matches ``uv.lock`` exactly).
+2. Frontend: ``npm ci`` + ``npm run build`` into ``frontend/dist`` (skip with
+   ``--skip-frontend`` to use the committed ``src/ontocurator/web`` assets).
+   The source tree is only modified with ``--update-embedded-web``.
+3. PyInstaller ``--onedir`` build (no UPX) into ``<out-dir>/standalone``;
+   all intermediate files go to ``<out-dir>/build``.
+4. Portable layout (portable.txt marker, ontologies/, workspace/, README.txt,
+   license notices) and a deterministic ZIP
+   ``<out-dir>/ontocurator-portable-<os>-<arch>.zip``.
+5. macOS additionally: ``Ontocurator.app`` (windowed bundle, per-user data in
+   ~/Documents/Ontocurator) zipped as ``ontocurator-macos-<arch>-app.zip``.
+
+Code signing is optional and only runs when the corresponding environment
+variables are present (nothing is signed otherwise):
+
+* Windows Authenticode: ``WINDOWS_SIGN_CERT`` (path to a .pfx),
+  ``WINDOWS_SIGN_PASSWORD``, optional ``WINDOWS_SIGN_TIMESTAMP_URL``
+  (default ``http://timestamp.digicert.com``); requires ``signtool`` on PATH.
+* macOS: ``MACOS_CODESIGN_IDENTITY`` ("Developer ID Application: ...") for
+  codesign with hardened runtime; additionally ``MACOS_NOTARY_PROFILE`` (a
+  ``xcrun notarytool store-credentials`` keychain profile) to notarize and
+  staple the .app.
+
+Usage:
+    uv run --locked python scripts/build_standalone.py --help
+    uv run --locked python scripts/build_standalone.py --out-dir ../oc-dist
 """
 
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import os
 import platform
 import shutil
-import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-FRONTEND_DIR = REPO_ROOT / "frontend"
-WEB_DIR = REPO_ROOT / "src" / "ontocurator" / "web"
-DIST_DIR = REPO_ROOT / "dist"
-BUILD_DIR = REPO_ROOT / "build" / "pyinstaller"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from build_common import (
+    DEFAULT_OUT_DIR,
+    REPO_ROOT,
+    WEB_DIR,
+    build_frontend,
+    check_uv_lock,
+    run_command,
+    sync_embedded_web_assets,
+    write_deterministic_zip,
+)
+from license_notices import write_notices
+
+APP_NAME = "ontocurator"
+MAC_APP_NAME = "Ontocurator"
+STORAGE_DIR = REPO_ROOT / "src" / "ontocurator" / "storage"
+ENTRY_POINT = REPO_ROOT / "src" / "ontocurator" / "__main__.py"
+
+HIDDEN_IMPORTS = [
+    "uvicorn.logging",
+    "uvicorn.loops",
+    "uvicorn.loops.auto",
+    "uvicorn.protocols",
+    "uvicorn.protocols.http",
+    "uvicorn.protocols.http.auto",
+    "uvicorn.lifespan",
+    "uvicorn.lifespan.on",
+    "sklearn.utils._typedefs",
+]
+# Note: PyInstaller's bundled hook for scipy.special._ufuncs requests
+# 'scipy.special._cdflib', which no longer exists in recent SciPy releases; the
+# resulting "Hidden import not found" warning is harmless.
+
+PORTABLE_MARKER_TEXT = (
+    "This file marks Ontocurator as a PORTABLE installation.\n\n"
+    "While it exists (and this folder is writable), settings are stored in\n"
+    "config.json and all data in the 'workspace' folder right here, next to\n"
+    "the program. Delete this file to store data in your user profile instead\n"
+    "(Documents/Ontocurator/workspace).\n"
+)
+
+PORTABLE_README = """\
+Ontocurator - portable edition
+==============================
+
+Start
+-----
+Double-click "{exe}". A console window opens and your web browser shows
+Ontocurator. You can also drag a work package (.zip), an ontology (.json)
+or a workspace folder onto "{exe}".
+
+Windows SmartScreen may warn about an unknown publisher when the build is not
+code-signed: choose "More info" -> "Run anyway" only if you obtained this ZIP
+from a trusted source.
+
+Quit
+----
+Press Ctrl+C in the console window. Do not close the window while a save or
+import is still running. (Closing the window also shuts down cleanly in most
+cases, but Ctrl+C is the safe way.)
+
+Only one Ontocurator runs per workspace: starting it again just opens the
+browser for the running instance.
+
+Where your data lives
+---------------------
+Everything is stored inside this folder:
+  workspace/            database, imported packages and drafts
+  workspace/ontologies/ ontology files (.json) - auto-loaded on start
+  ontologies/           you may also drop ontology .json files here
+  config.json           settings (created on first start)
+
+To update to a new version, extract the new ZIP and copy the "workspace"
+folder (and config.json) from the old folder into the new one.
+Back up the "workspace" folder regularly.
+
+Licenses
+--------
+See THIRD_PARTY_NOTICES.md and the LICENSES/ folder. The Human Phenotype
+Ontology (HPO) is not bundled; when you use it, follow its license and
+citation requirements: https://hpo.jax.org/license
+"""
 
 
-def run_command(cmd: list[str], cwd: Path) -> None:
-    """Run a subprocess command and stream output, failing on error."""
-    print(f"--> Running: {' '.join(cmd)} in {cwd}")
-    result = subprocess.run(cmd, cwd=cwd)
-    if result.returncode != 0:
-        print(
-            f"Error: Command failed with exit code {result.returncode}",
-            file=sys.stderr,
-        )
-        sys.exit(result.returncode)
+def _platform_tag() -> tuple[str, str]:
+    os_name = {"win32": "windows", "darwin": "macos"}.get(sys.platform, sys.platform)
+    arch = platform.machine().lower().replace("amd64", "x86_64")
+    return os_name, arch
 
 
-def build_frontend() -> None:
-    """Build frontend production bundle."""
-    npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
-
-    if not (FRONTEND_DIR / "node_modules").is_dir():
-        run_command([npm_cmd, "ci"], cwd=FRONTEND_DIR)
-
-    run_command([npm_cmd, "run", "build"], cwd=FRONTEND_DIR)
-
-    dist_index = FRONTEND_DIR / "dist" / "index.html"
-    if not dist_index.is_file():
-        print(
-            f"Error: Build succeeded but {dist_index} not found!",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-
-def copy_web_assets() -> None:
-    """Sync built frontend assets into src/ontocurator/web."""
-    if WEB_DIR.exists():
-        shutil.rmtree(WEB_DIR)
-    WEB_DIR.mkdir(parents=True, exist_ok=True)
-
-    src_dist = FRONTEND_DIR / "dist"
-    for item in src_dist.iterdir():
-        dest = WEB_DIR / item.name
-        if item.is_dir():
-            shutil.copytree(item, dest)
-        else:
-            shutil.copy2(item, dest)
-
-    print(f"--> Bundled static assets into {WEB_DIR}")
-
-
-def run_pyinstaller() -> Path:
-    """Invoke PyInstaller to create standalone onedir distribution."""
+def pyinstaller_args(
+    *,
+    web_src: Path,
+    dist_path: Path,
+    work_path: Path,
+    windowed: bool = False,
+    name: str = APP_NAME,
+) -> list[str]:
+    """Command line for PyInstaller (kept separate for testing)."""
     sep = os.pathsep
-    web_src = REPO_ROOT / "src" / "ontocurator" / "web"
-    schema_v4 = REPO_ROOT / "src" / "ontocurator" / "storage" / "schema_v4.sql"
-    onto_res = REPO_ROOT / "src" / "ontocurator" / "storage" / "ontology_resources.sql"
-
-    data_args = [
-        f"--add-data={web_src}{sep}ontocurator/web",
-        f"--add-data={schema_v4}{sep}ontocurator/storage",
-        f"--add-data={onto_res}{sep}ontocurator/storage",
-    ]
-
-    hidden_imports = [
-        "--hidden-import=uvicorn.logging",
-        "--hidden-import=uvicorn.loops",
-        "--hidden-import=uvicorn.loops.auto",
-        "--hidden-import=uvicorn.protocols",
-        "--hidden-import=uvicorn.protocols.http",
-        "--hidden-import=uvicorn.protocols.http.auto",
-        "--hidden-import=uvicorn.lifespans",
-        "--hidden-import=uvicorn.lifespans.on",
-        "--hidden-import=sklearn.utils._typedefs",
-    ]
-
-    out_dist = DIST_DIR / "standalone"
-    if out_dist.exists():
-        shutil.rmtree(out_dist)
-
-    pyinstaller_cmd = [
-        "pyinstaller",
-        "--name=ontocurator",
+    args = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        f"--name={name}",
         "--onedir",
         "--clean",
         "--noconfirm",
-        f"--distpath={out_dist}",
-        f"--workpath={BUILD_DIR}",
-        *data_args,
-        *hidden_imports,
-        str(REPO_ROOT / "src" / "ontocurator" / "__main__.py"),
+        "--noupx",
+        f"--distpath={dist_path}",
+        f"--workpath={work_path}",
+        f"--specpath={work_path}",
+        f"--add-data={web_src}{sep}ontocurator/web",
+        f"--add-data={STORAGE_DIR / 'schema_v4.sql'}{sep}ontocurator/storage",
+        f"--add-data={STORAGE_DIR / 'ontology_resources.sql'}{sep}ontocurator/storage",
+        # importlib.metadata.version("ontocurator") must work when frozen.
+        "--copy-metadata=ontocurator",
+        *(f"--hidden-import={h}" for h in HIDDEN_IMPORTS),
     ]
+    if importlib.util.find_spec("tzdata") is not None:
+        args.append("--collect-data=tzdata")
+    else:
+        # zoneinfo's hook asks for tzdata on Windows; the app never needs IANA
+        # time zone data, so exclude it instead of warning about it.
+        args.append("--exclude-module=tzdata")
+    if windowed:
+        args.append("--windowed")
+    args.append(str(ENTRY_POINT))
+    return args
 
-    run_command(pyinstaller_cmd, cwd=REPO_ROOT)
 
-    bundle_dir = out_dist / "ontocurator"
-    exe_name = "ontocurator.exe" if sys.platform == "win32" else "ontocurator"
-    target_exe = bundle_dir / exe_name
-    if not target_exe.is_file():
-        print(
-            f"Error: Expected executable {target_exe} not found after PyInstaller build!",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
+def run_pyinstaller(
+    web_src: Path, out_dir: Path, *, windowed: bool = False, name: str = APP_NAME
+) -> Path:
+    dist_path = out_dir / ("macos-app" if windowed else "standalone")
+    work_path = out_dir / "build" / ("pyinstaller-app" if windowed else "pyinstaller")
+    if dist_path.exists():
+        shutil.rmtree(dist_path)
+    run_command(
+        pyinstaller_args(
+            web_src=web_src,
+            dist_path=dist_path,
+            work_path=work_path,
+            windowed=windowed,
+            name=name,
+        ),
+        cwd=REPO_ROOT,
+    )
+    if windowed:
+        bundle = dist_path / f"{name}.app"
+        if not bundle.is_dir():
+            sys.exit(f"Error: Expected {bundle} after PyInstaller build!")
+        return bundle
+    bundle_dir = dist_path / name
+    exe = bundle_dir / (f"{name}.exe" if sys.platform == "win32" else name)
+    if not exe.is_file():
+        sys.exit(f"Error: Expected executable {exe} not found after PyInstaller build!")
     return bundle_dir
 
 
-def prepare_portable_bundle(bundle_dir: Path) -> Path:
-    """Set up portable distribution layout with ontologies/, workspace/, and README."""
+def add_license_files(target: Path, generated_licenses: Path | None) -> None:
+    shutil.copy2(
+        REPO_ROOT / "THIRD_PARTY_NOTICES.md", target / "THIRD_PARTY_NOTICES.md"
+    )
+    licenses = target / "LICENSES"
+    if licenses.exists():
+        shutil.rmtree(licenses)
+    shutil.copytree(REPO_ROOT / "LICENSES", licenses)
+    if generated_licenses is not None:
+        for f in sorted(generated_licenses.iterdir()):
+            shutil.copy2(f, licenses / f.name)
+
+
+def prepare_portable_bundle(
+    bundle_dir: Path, out_dir: Path, generated_licenses: Path | None = None
+) -> Path:
+    """Create the portable layout inside ``bundle_dir`` and zip it."""
+    exe_name = f"{APP_NAME}.exe" if sys.platform == "win32" else APP_NAME
+
+    (bundle_dir / "portable.txt").write_text(PORTABLE_MARKER_TEXT, encoding="utf-8")
     ontologies_dir = bundle_dir / "ontologies"
     ontologies_dir.mkdir(exist_ok=True)
     (ontologies_dir / "README.txt").write_text(
@@ -138,53 +228,209 @@ def prepare_portable_bundle(bundle_dir: Path) -> Path:
         "Ontocurator will automatically discover and load them on startup.\n",
         encoding="utf-8",
     )
-
     workspace_dir = bundle_dir / "workspace"
     workspace_dir.mkdir(exist_ok=True)
-    (workspace_dir / ".gitkeep").write_text("", encoding="utf-8")
-
-    (bundle_dir / "README.txt").write_text(
-        "Ontocurator Portable Distribution\n"
-        "==================================\n\n"
-        "Quick Start:\n"
-        "1. (Optional) Place any ontology files (e.g. hp.json) into the 'ontologies' folder.\n"
-        "2. Double-click the ontocurator application to launch the editor.\n"
-        "3. The editor starts a local secured server and opens your web browser automatically.\n\n"
-        "No installation or administrator privileges required.\n",
+    (workspace_dir / "README.txt").write_text(
+        "Ontocurator stores its database and imported work packages here.\n"
+        "Back up this folder; copy it into new versions when updating.\n",
         encoding="utf-8",
     )
+    (bundle_dir / "README.txt").write_text(
+        PORTABLE_README.format(exe=exe_name), encoding="utf-8"
+    )
+    add_license_files(bundle_dir, generated_licenses)
 
-    # Package into ZIP archive
-    os_name = sys.platform
-    arch = platform.machine().lower()
-    zip_name = f"ontocurator-portable-{os_name}-{arch}.zip"
-    zip_path = DIST_DIR / zip_name
-
+    os_name, arch = _platform_tag()
+    zip_path = out_dir / f"ontocurator-portable-{os_name}-{arch}.zip"
     print(f"--> Compressing portable bundle into {zip_path}")
-    if zip_path.exists():
-        zip_path.unlink()
-
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-        for file_path in bundle_dir.rglob("*"):
-            rel = file_path.relative_to(bundle_dir.parent)
-            z.write(file_path, arcname=str(rel))
-
-    size_mb = zip_path.stat().st_size / (1024 * 1024)
-    print("==================================================")
-    print("  Standalone Portable Build Successful!")
-    print(f"  Distribution Archive: {zip_path.name}")
-    print(f"  Size:                 {size_mb:.2f} MB")
-    print(f"  Location:             {zip_path}")
-    print("==================================================")
+    write_deterministic_zip(bundle_dir, zip_path, prefix=APP_NAME)
+    _report(zip_path)
     return zip_path
 
 
-def main() -> None:
-    """Execute complete standalone build pipeline."""
-    build_frontend()
-    copy_web_assets()
-    bundle_dir = run_pyinstaller()
-    prepare_portable_bundle(bundle_dir)
+def sign_windows(exe: Path) -> None:
+    cert = os.environ.get("WINDOWS_SIGN_CERT")
+    if not cert:
+        print("--> WINDOWS_SIGN_CERT not set: executable stays unsigned.")
+        return
+    cmd = [
+        "signtool",
+        "sign",
+        "/fd",
+        "SHA256",
+        "/f",
+        cert,
+        "/tr",
+        os.environ.get("WINDOWS_SIGN_TIMESTAMP_URL", "http://timestamp.digicert.com"),
+        "/td",
+        "SHA256",
+    ]
+    if os.environ.get("WINDOWS_SIGN_PASSWORD"):
+        cmd += ["/p", os.environ["WINDOWS_SIGN_PASSWORD"]]
+    run_command([*cmd, str(exe)], cwd=REPO_ROOT)
+
+
+def sign_and_notarize_macos(target: Path, out_dir: Path) -> None:
+    identity = os.environ.get("MACOS_CODESIGN_IDENTITY")
+    if not identity:
+        print("--> MACOS_CODESIGN_IDENTITY not set: bundle stays unsigned.")
+        return
+    run_command(
+        [
+            "codesign",
+            "--force",
+            "--deep",
+            "--options",
+            "runtime",
+            "--timestamp",
+            "--sign",
+            identity,
+            str(target),
+        ],
+        cwd=REPO_ROOT,
+    )
+    profile = os.environ.get("MACOS_NOTARY_PROFILE")
+    if not profile or target.suffix != ".app":
+        return
+    submission = out_dir / "build" / f"{target.stem}-notarize.zip"
+    run_command(
+        ["ditto", "-c", "-k", "--keepParent", str(target), str(submission)],
+        cwd=REPO_ROOT,
+    )
+    run_command(
+        [
+            "xcrun",
+            "notarytool",
+            "submit",
+            str(submission),
+            "--keychain-profile",
+            profile,
+            "--wait",
+        ],
+        cwd=REPO_ROOT,
+    )
+    run_command(["xcrun", "stapler", "staple", str(target)], cwd=REPO_ROOT)
+
+
+def package_macos_app(
+    app_bundle: Path, out_dir: Path, generated_licenses: Path | None
+) -> Path:
+    """Zip ``Ontocurator.app`` together with README and license notices."""
+    staging = app_bundle.parent / "Ontocurator"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir()
+    shutil.move(str(app_bundle), staging / app_bundle.name)
+    (staging / "README.txt").write_text(
+        "Ontocurator for macOS\n"
+        "=====================\n\n"
+        "Move Ontocurator.app to Applications (or anywhere) and open it. Your\n"
+        "browser shows Ontocurator. Data is stored in ~/Documents/Ontocurator/\n"
+        "workspace, settings in ~/Library/Application Support/ontocurator.\n\n"
+        "Unsigned builds: right-click the app -> Open the first time.\n"
+        "Quit: right-click the Dock icon -> Quit (or Force Quit if it does not\n"
+        "react); the database is transactional, but avoid quitting while saving.\n\n"
+        "Licenses: see THIRD_PARTY_NOTICES.md and LICENSES/. HPO license and\n"
+        "citation requirements: https://hpo.jax.org/license\n",
+        encoding="utf-8",
+    )
+    add_license_files(staging, generated_licenses)
+    _, arch = _platform_tag()
+    zip_path = out_dir / f"ontocurator-macos-{arch}-app.zip"
+    write_deterministic_zip(staging, zip_path, prefix="Ontocurator")
+    _report(zip_path)
+    return zip_path
+
+
+def _report(zip_path: Path) -> None:
+    size_mb = zip_path.stat().st_size / (1024 * 1024)
+    print("==================================================")
+    print(f"  Archive:  {zip_path}")
+    print(f"  Size:     {size_mb:.2f} MB")
+    print("==================================================")
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Build the portable Ontocurator distribution with PyInstaller.",
+        epilog="Signing env vars: WINDOWS_SIGN_CERT, WINDOWS_SIGN_PASSWORD, "
+        "WINDOWS_SIGN_TIMESTAMP_URL, MACOS_CODESIGN_IDENTITY, MACOS_NOTARY_PROFILE.",
+    )
+    parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=DEFAULT_OUT_DIR,
+        help="Directory for artifacts and intermediate build files "
+        "(default: <repo>/dist). May be outside the source tree.",
+    )
+    parser.add_argument(
+        "--skip-frontend",
+        action="store_true",
+        help="Do not build the frontend; bundle the committed src/ontocurator/web.",
+    )
+    parser.add_argument(
+        "--skip-npm-ci",
+        action="store_true",
+        help="Developer shortcut: reuse existing frontend/node_modules.",
+    )
+    parser.add_argument(
+        "--update-embedded-web",
+        action="store_true",
+        help="Also copy the fresh frontend build into src/ontocurator/web (git-tracked).",
+    )
+    parser.add_argument(
+        "--skip-lock-check", action="store_true", help="Skip 'uv lock --check'."
+    )
+    parser.add_argument(
+        "--macos-app",
+        action=argparse.BooleanOptionalAction,
+        default=sys.platform == "darwin",
+        help="Also build a windowed Ontocurator.app (macOS only; default on macOS).",
+    )
+    args = parser.parse_args(argv)
+    if args.skip_frontend and args.update_embedded_web:
+        parser.error("--update-embedded-web requires building the frontend")
+    if args.macos_app and sys.platform != "darwin":
+        parser.error("--macos-app is only supported on macOS")
+    args.out_dir = args.out_dir.resolve()
+    return args
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    out_dir: Path = args.out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if not args.skip_lock_check:
+        check_uv_lock()
+
+    if args.skip_frontend:
+        web_src = WEB_DIR
+        if not (web_src / "index.html").is_file():
+            sys.exit(f"Error: {web_src / 'index.html'} missing; build the frontend.")
+        include_npm = (REPO_ROOT / "frontend" / "package-lock.json").is_file()
+    else:
+        web_src = build_frontend(npm_ci=not args.skip_npm_ci)
+        include_npm = True
+        if args.update_embedded_web:
+            sync_embedded_web_assets(web_src)
+
+    licenses_dir = out_dir / "build" / "licenses"
+    if licenses_dir.exists():
+        shutil.rmtree(licenses_dir)
+    write_notices(licenses_dir, include_npm=include_npm)
+
+    bundle_dir = run_pyinstaller(web_src, out_dir)
+    if sys.platform == "win32":
+        sign_windows(bundle_dir / f"{APP_NAME}.exe")
+    elif sys.platform == "darwin":
+        sign_and_notarize_macos(bundle_dir / APP_NAME, out_dir)
+    prepare_portable_bundle(bundle_dir, out_dir, licenses_dir)
+
+    if args.macos_app:
+        app_bundle = run_pyinstaller(web_src, out_dir, windowed=True, name=MAC_APP_NAME)
+        sign_and_notarize_macos(app_bundle, out_dir)
+        package_macos_app(app_bundle, out_dir, licenses_dir)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110,<1",
     "numpy>=1.26,<3",
+    "platformdirs>=4,<5",
     "pydantic>=2,<3",
     "python-multipart>=0.0.9",
     "rfc8785>=0.1,<1",

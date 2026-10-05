@@ -1,5 +1,16 @@
-"""Script to generate a rich demo work package for Ontocurator using hp.json fixtures."""
+"""Generate the demo work package (format ontocurator-work-package/v2).
 
+The HPO fixture is embedded into the package (line endings normalized to LF so
+the result is identical on every platform/checkout), which makes the demo
+self-contained: it imports without any ontology being installed.
+
+Usage:
+    uv run python scripts/create_demo_package.py --output tests/fixtures/demo_package.zip
+"""
+
+from __future__ import annotations
+
+import argparse
 import hashlib
 from pathlib import Path
 
@@ -22,12 +33,16 @@ from ontocurator.domain.profiles import (
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
 from ontocurator.packages.writer import PackageWriter
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_HP = REPO_ROOT / "tests" / "fixtures" / "hp.json"
+DEFAULT_OUTPUT = REPO_ROOT / "tests" / "fixtures" / "demo_package.zip"
+
 
 def generate_demo_package(
-    hp_path: Path = Path("tests/fixtures/hp.json"),
-    output_path: Path = Path("demo_package.zip"),
-) -> None:
-    raw = hp_path.read_bytes()
+    hp_path: Path = DEFAULT_HP,
+    output_path: Path = DEFAULT_OUTPUT,
+) -> Path:
+    raw = hp_path.read_bytes().replace(b"\r\n", b"\n")
     digest = hashlib.sha256(raw).hexdigest()
 
     hp_ont = OntologyDefinition(
@@ -236,15 +251,37 @@ def generate_demo_package(
             (ev3.mention.evidence_id, ev3.version): ev3,
             (ev4.mention.evidence_id, ev4.version): ev4,
         },
+        embedded_files={"ontologies/hp.json": raw},
     )
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "wb") as f:
         PackageWriter.write_to_stream(package, f)
 
     print(
         f"Successfully generated demo package at '{output_path}' ({output_path.stat().st_size} bytes)"
     )
+    return output_path
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=DEFAULT_OUTPUT,
+        help=f"Output ZIP path (default: {DEFAULT_OUTPUT.relative_to(REPO_ROOT)})",
+    )
+    parser.add_argument(
+        "--hp",
+        type=Path,
+        default=DEFAULT_HP,
+        help="OBO Graph JSON to embed as the 'hp' ontology.",
+    )
+    args = parser.parse_args(argv)
+    generate_demo_package(args.hp, args.output)
 
 
 if __name__ == "__main__":
-    generate_demo_package()
+    main()

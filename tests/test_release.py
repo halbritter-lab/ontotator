@@ -534,6 +534,7 @@ def test_cli_port_conflict(tmp_path: Path):
     # Bind a port to simulate conflict
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 0))
+    sock.listen(1)
     port = sock.getsockname()[1]
 
     runner = CliRunner()
@@ -565,7 +566,10 @@ def test_cli_workspace_path_with_spaces(tmp_path: Path):
     spaced_dir = tmp_path / "Directory With Spaces"
     spaced_dir.mkdir()
 
-    with patch("uvicorn.run") as mock_uvicorn_run, patch("webbrowser.open"):
+    with (
+        patch("ontocurator.cli.run_server") as mock_run_server,
+        patch("ontocurator.cli._open_browser"),
+    ):
         runner = CliRunner()
         result = runner.invoke(
             cli_app,
@@ -581,4 +585,7 @@ def test_cli_workspace_path_with_spaces(tmp_path: Path):
             ],
         )
         assert result.exit_code == 0
-        assert mock_uvicorn_run.called
+        assert mock_run_server.called
+        assert mock_run_server.call_args[0][0].state.config.workspace_dir == (
+            spaced_dir.resolve()
+        )
