@@ -151,6 +151,27 @@ To update to a new version, extract the new ZIP and copy the "workspace"
 folder (and config.json) from the old folder into the new one.
 Back up the "workspace" folder regularly.
 
+Settings from an earlier installation
+-------------------------------------
+An older Ontocurator installation may have left settings in your user
+profile (for example %APPDATA%\\ontocurator\\config.json). They are never
+taken over automatically. If they differ from this copy's settings, the start
+page shows "Settings from an earlier Ontocurator installation were found"
+and lists them. Choose:
+  Import settings      copies the listed ontology files into this copy's
+                       workspace; port and browser setting apply at the next
+                       start. Files that no longer exist are skipped.
+  Ignore               hides the notice (until the old file changes).
+  Open folder          shows the folder of the old settings file.
+  Delete old settings  deletes only that one file, after asking. Workspaces
+                       and annotations are not affected.
+A copy with ontocurator-settings.json ignores old settings entirely.
+
+On the command line (in this folder):
+  {exe} config --path            show where settings and data are stored
+  {exe} config --open            open the folder of the settings file in use
+  {exe} config --delete-legacy   delete the old settings file (asks first)
+
 Licenses
 --------
 See THIRD_PARTY_NOTICES.md and the LICENSES/ folder. The Human Phenotype

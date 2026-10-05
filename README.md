@@ -109,6 +109,10 @@ Pass `--workspace` explicitly for anything beyond local development.
 | `--verbose` | `-v` | `false` | Show technical details in the startup banner and log every HTTP request |
 | `--provision-dir` | | app folder (standalone) | Folder with `ontologies/`, `packages/` and `ontocurator-settings.json` to register/import at start (see [Preconfigured distribution](#preconfigured-distribution)); not used implicitly when run from source |
 
+`ontocurator config [--path | --open | --delete-legacy [--yes]]` shows or manages
+the settings locations (see
+[Settings from an earlier installation](#settings-from-an-earlier-installation)).
+
 `ontocurator <file-or-folder>` (also: drag & drop onto the executable, "Open with")
 routes `.zip` to `--package`, `.json` to `--import-ontology` and a folder to
 `--workspace`. Anything else is reported as ignored and the editor starts normally.
@@ -169,13 +173,11 @@ kept as they are and never moved. If the workspace lies inside a OneDrive,
 Dropbox, iCloud Drive or Google Drive folder, a warning is printed at start;
 move it to a local folder (`--workspace`) or pause syncing while you work.
 
-**Switching to the portable ZIP:** on its first start a portable copy has no
-`config.json` yet. If an older per-user installation left settings in the
-per-user config dir, its ontology list (files that still exist), port and
-auto-open-browser setting are imported and listed in the console. Its workspace
-is *not* taken over: the portable copy uses `<app folder>/workspace`; copy the
-old workspace folder there (or start with `--workspace <old path>`) to keep
-working on it.
+**Switching to the portable ZIP:** the portable copy uses its own
+`config.json` and `<app folder>/workspace`. Settings of an older per-user
+installation are never taken over automatically (see below). To keep working on
+an old workspace, copy that folder into the app folder (or start with
+`--workspace <old path>`).
 
 **Session token:** a fresh token is generated on every start. While running it
 is stored in `<workspace>/.ontocurator-instance.json` so that a second launch
@@ -186,6 +188,40 @@ sent to loopback addresses; an instance file naming any other host is ignored.
 A second launch waits up to two minutes for a still-starting first instance
 (printing progress every ~10 s); if it gives up, it says which dropped files
 were *not* imported so they can be imported in the web UI.
+
+### Settings from an earlier installation
+
+An older Ontocurator installation may have left a settings file in the per-user
+config folder (e.g. `%APPDATA%\ontocurator\config.json`). Ontocurator never
+imports it silently. If it lists ontology files, a port or a browser setting
+that differ from the current ones, the start page shows the notice
+**"Settings from an earlier Ontocurator installation were found"** with the
+file's location and its content (ontology files that no longer exist are marked
+"file not found, will be skipped"). You can:
+
+- **Import settings** - the ontology files are copied into
+  `workspace/ontologies/` (so the workspace keeps working without the old
+  files) and loaded right away; the port and the browser setting take effect the
+  next time Ontocurator starts. The old workspace is never taken over.
+- **Ignore** - hides the notice. It comes back only if the old file changes.
+- **Open folder** - shows the folder of the old settings file.
+- **Delete old settings** - after a confirmation, deletes only that one file
+  (and its folder if it is then empty). Workspaces, work packages, annotations
+  and ontology files are not affected.
+
+A preconfigured bundle (one with `ontocurator-settings.json`) ignores old
+settings entirely and shows no notice.
+
+Administrators can do the same on the command line:
+
+```bash
+ontocurator config --path            # settings file in use, old settings file (if any), data folder
+ontocurator config --open            # open the folder of the settings file in use
+ontocurator config --delete-legacy   # delete the old settings file (asks first; --yes skips the question)
+```
+
+`ONTOCURATOR_LEGACY_CONFIG_PATH` overrides where the old settings file is
+looked for (intended for tests and administrators).
 
 ### Building
 
