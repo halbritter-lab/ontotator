@@ -429,6 +429,44 @@ describe("Submit", () => {
   });
 });
 
+describe("Review cases", () => {
+  const confirmed = { decision_id: "d", target: { annotation_id: "prop", version: "p-v1" }, outcome: "confirmed" as const, reviewer_id: "dr-a" };
+  const submitCase = async () => {
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
+  };
+
+  it("offers the next case that has proposals after submitting a review", async () => {
+    vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s", created_at: "now", snapshots: [], decisions: [] } as any);
+    const onNavigate = vi.fn().mockResolvedValue(undefined);
+    const documentList = [
+      { ...docs[0], document_id: "doc", has_review_inputs: true },
+      { ...docs[1], document_id: "doc-de", position: 2, has_review_inputs: false },
+      { ...docs[1], document_id: "doc-3", position: 3, has_review_inputs: true },
+    ];
+    render(<CaseScreen view={reviewView([confirmed])} workspaceId="ws" onClose={vi.fn()}
+      onNavigateCase={onNavigate} documentList={documentList} />);
+    await submitCase();
+    fireEvent.click(await screen.findByRole("button", { name: /Review next case \(Case 3\)/i }));
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("doc-3"));
+  });
+
+  it("offers no next case when no later case has proposals", async () => {
+    vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s", created_at: "now", snapshots: [], decisions: [] } as any);
+    const documentList = [
+      { ...docs[0], document_id: "doc", has_review_inputs: true },
+      { ...docs[1], document_id: "doc-de", has_review_inputs: false },
+    ];
+    render(<CaseScreen view={reviewView([confirmed])} workspaceId="ws" onClose={vi.fn()}
+      onNavigateCase={vi.fn()} documentList={documentList} />);
+    await submitCase();
+    await screen.findByRole("dialog", { name: /Case submitted/i });
+    expect(screen.queryByRole("button", { name: /Review next case/i })).toBeNull();
+  });
+});
+
 describe("Search", () => {
   it("debounces typing into a single request and aborts superseded requests", async () => {
     vi.useFakeTimers();

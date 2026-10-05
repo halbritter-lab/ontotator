@@ -115,11 +115,11 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
 
-    // Case 2 has no review proposals: review mode explains this and stays on case 1.
-    await page.locator(".case-navigation").getByRole("button", { name: /Next Case/i }).click();
-    await expect(page.getByRole("alert")).toContainText(
-      'No review proposals are available for case doc-alpha. Switch to "Annotate from scratch" to annotate this case.',
-    );
+    // Case 2 has no review proposals: review navigation does not offer it.
+    await expect(page.locator(".case-navigation").getByRole("button", { name: /Next Case/i })).toBeDisabled();
+    const caseTwo = page.locator(".case-navigation select option").filter({ hasText: /Case 2 of 2/i });
+    await expect(caseTwo).toBeDisabled();
+    await expect(caseTwo).toHaveText(/no proposals/i);
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
 

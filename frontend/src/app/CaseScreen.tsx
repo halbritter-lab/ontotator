@@ -41,6 +41,7 @@ import { TextPane } from "../editor/TextPane";
 import { useTermLabels } from "../editor/useTermLabels";
 import { termColorIndex, type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { CaseNavigation } from "./CaseNavigation";
+import { adjacentCase } from "./caseOrder";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
@@ -1060,9 +1061,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
   }, [selectedAnnotation, view.key.mode, draft.decisions, reviewTargets, termLabel]);
 
-  const currentIndex = documentList?.findIndex((d) => d.document_id === view.document.document_id) ?? -1;
-  const prevDoc = currentIndex > 0 && documentList ? documentList[currentIndex - 1] : null;
-  const nextDoc = currentIndex >= 0 && documentList && currentIndex < documentList.length - 1 ? documentList[currentIndex + 1] : null;
+  // In review mode, cases without proposals are skipped.
+  const prevDoc = documentList ? adjacentCase(documentList, view.document.document_id, -1) : null;
+  const nextDoc = documentList ? adjacentCase(documentList, view.document.document_id, 1) : null;
 
   const modalOpen = !!(confirmRequest || completedSubmission || historySubmission || submitDialogOpen || showShortcutHelp);
   const navigateTo = (docId: string) => {

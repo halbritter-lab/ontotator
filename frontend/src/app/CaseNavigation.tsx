@@ -1,5 +1,6 @@
 import React from "react";
 import type { DocumentSummary } from "../api/client";
+import { adjacentCase, canOpenCase } from "./caseOrder";
 
 export interface CaseNavigationProps {
   documents: DocumentSummary[];
@@ -25,17 +26,20 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
   const currentDoc = currentIndex >= 0 ? documents[currentIndex] : null;
   const position = currentDoc?.position ?? (currentIndex >= 0 ? currentIndex + 1 : 1);
 
-  const hasPrev = currentIndex > 0;
-  const hasNext = currentIndex >= 0 && currentIndex < total - 1;
+  // In review mode, cases without proposals are skipped.
+  const prevDoc = adjacentCase(documents, currentDocumentId, -1);
+  const nextDoc = adjacentCase(documents, currentDocumentId, 1);
+  const hasPrev = prevDoc !== null;
+  const hasNext = nextDoc !== null;
 
   const handlePrev = async () => {
-    if (!hasPrev || disabled) return;
-    await onNavigate(documents[currentIndex - 1].document_id);
+    if (!prevDoc || disabled) return;
+    await onNavigate(prevDoc.document_id);
   };
 
   const handleNext = async () => {
-    if (!hasNext || disabled) return;
-    await onNavigate(documents[currentIndex + 1].document_id);
+    if (!nextDoc || disabled) return;
+    await onNavigate(nextDoc.document_id);
   };
 
   const handleSelect = async (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -93,9 +97,10 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         >
           {documents.map((doc) => {
             const statusLabel = statusLabels[doc.status] ?? doc.status;
+            const openable = canOpenCase(doc);
             return (
-              <option key={doc.document_id} value={doc.document_id}>
-                Case {doc.position} of {total}: {doc.document_id} ({statusLabel})
+              <option key={doc.document_id} value={doc.document_id} disabled={!openable}>
+                Case {doc.position} of {total}: {doc.document_id} ({statusLabel}){!openable && " – no proposals"}
               </option>
             );
           })}
