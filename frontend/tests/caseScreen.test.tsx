@@ -120,7 +120,7 @@ describe("CaseScreen integration", () => {
     );
 
     expect(screen.getByText(/Case: doc-test-1|Fall: doc-test-1/i)).toBeDefined();
-    expect(screen.getByText(/Independent Mode|Unabhängige Annotation/i)).toBeDefined();
+    expect(screen.getByText(/Annotate from scratch/i)).toBeDefined();
     expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
   });
 

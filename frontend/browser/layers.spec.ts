@@ -1,10 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
 
+/** Click the single "Open case" action and confirm the identity if asked. */
+async function openCase(page: Page) {
+  await page.getByRole("button", { name: /^Open case$/i }).click();
+  const confirm = page.getByRole("button", { name: /Yes, continue/i });
+  await confirm.waitFor({ state: "visible", timeout: 2000 }).then(() => confirm.click(), () => undefined);
+}
+
 async function importScenario(page: Page, scenario: string, annotator: string) {
   await page.goto("/#token=browser-test-token");
   const fixture = await page.request.get(`/__synthetic_fixture__?scenario=${scenario}`);
   expect(fixture.ok()).toBeTruthy();
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
     name: `${scenario}.zip`,
     mimeType: "application/zip",
     buffer: await fixture.body(),
@@ -13,14 +20,14 @@ async function importScenario(page: Page, scenario: string, annotator: string) {
     scenario === "review_references" ? "pkg-review-references" :
       scenario === "single" ? "pkg-scenario-a" : scenario === "multi_editable" ? "pkg-scenario-c" : "pkg-scenario-b"
   );
-  await page.getByLabel(/Annotator ID|Ihre Annotator-Kennung/i).fill(annotator);
+  await page.getByLabel(/Your initials \/ ID/i).fill(annotator);
 }
 
 test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)", () => {
   test("Scenario A: Single-layer baseline has zero extra interaction controls and preserves document order", async ({ page }) => {
     await importScenario(page, "single", "user-scenario-a");
     await page.locator("#mode-select").selectOption("independent");
-    await page.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }).click();
+    await openCase(page);
 
     // 1. Zero extra layer controls rendered
     await expect(page.locator(".layer-controls")).toHaveCount(0);
@@ -39,7 +46,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
 
     await page.locator(".case-navigation").getByRole("button", { name: /Next Case|Nächster Fall/i }).click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
-    await expect(page.locator(".status-badge")).toContainText("Rev 0");
+    await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 0");
     await page.getByRole("button", { name: "+ New Annotation" }).click();
     await page.getByLabel("Search ontology term").fill("HP:0001252");
     await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
@@ -66,7 +73,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   test("Scenario B: Assisted mode with reference layer (cannot activate reference, visibility toggle)", async ({ page }) => {
     await importScenario(page, "assisted", "user-scenario-b");
     await page.locator("#mode-select").selectOption("assisted");
-    await page.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }).click();
+    await openCase(page);
 
     // 1. Layer controls visible because package has 2 layers
     await expect(page.locator(".layer-controls")).toBeVisible();
@@ -116,7 +123,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await importScenario(page, "review_references", "review-reference-navigation");
     await page.locator("#mode-select").selectOption("review");
     await expect(page.getByRole("heading", { name: /Review Proposals.*\(1\)|Verfügbare Vorschläge.*\(1\)/i })).toBeVisible();
-    await page.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }).click();
+    await openCase(page);
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
 
@@ -130,7 +137,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   test("Scenario C: Multi-editable layers require both layers checked before completion", async ({ page }) => {
     await importScenario(page, "multi_editable", "user-scenario-c");
     await page.locator("#mode-select").selectOption("independent");
-    await page.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }).click();
+    await openCase(page);
 
     // 1. Both layers are visible in layer controls
     await expect(page.locator(".layer-controls")).toBeVisible();

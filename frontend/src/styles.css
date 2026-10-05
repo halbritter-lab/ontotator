@@ -405,6 +405,33 @@ body {
   font-size: 0.8rem;
 }
 
+/* Disabled buttons must look disabled (and not react to hover). */
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-primary:disabled,
+.btn-primary:disabled:hover {
+  background: #94a3b8;
+}
+
+.btn-secondary:disabled:hover {
+  background: var(--bg-surface);
+}
+
+.btn-danger:disabled:hover {
+  background: var(--danger-light);
+}
+
+.btn:focus-visible,
+.dashboard-table tr:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 /* Search Candidates */
 .candidate-list {
   list-style: none;
@@ -734,3 +761,163 @@ body {
   background: #f8fafc;
 }
 
+
+.dashboard-table tr.is-selected td {
+  background: var(--primary-light);
+}
+
+/* Small helper text under form fields */
+.field-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.field-hint-error {
+  color: var(--danger);
+}
+
+.form-control.is-invalid {
+  border-color: var(--danger);
+}
+
+/* Success messages (e.g. after importing a package) */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.notice-success {
+  background: var(--success-light);
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+/* First-run guide shown while no work package is imported */
+.getting-started {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  max-width: 720px;
+  margin: 24px auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.getting-started h2 {
+  font-size: 1.25rem;
+  margin-bottom: 16px;
+}
+
+.getting-started-steps {
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.getting-started-steps li {
+  counter-increment: step;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-left: 44px;
+  position: relative;
+  min-height: 32px;
+}
+
+.getting-started-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.getting-started-steps strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.getting-started-steps span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Full-page notice when the page's access key is no longer valid */
+.session-lost {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
+}
+
+.session-lost-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 32px 36px;
+  max-width: 600px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+}
+
+.session-lost-card h1 {
+  font-size: 1.4rem;
+  margin-bottom: 12px;
+}
+
+.session-lost-card p {
+  font-size: 0.98rem;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.session-lost-muted {
+  color: var(--text-muted);
+  font-size: 0.9rem !important;
+}
+
+.session-lost-advanced {
+  margin-top: 16px;
+  font-size: 0.85rem;
+}
+
+.session-lost-advanced summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.session-lost-advanced form {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-lost-advanced input {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}

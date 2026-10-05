@@ -24,6 +24,8 @@ export type LayerDefinition = components["schemas"]["LayerDefinition"];
 export type TaskScope = components["schemas"]["TaskScope"];
 export type AnnotationTypeDefinition = components["schemas"]["AnnotationTypeDefinition"];
 export type OntologyDefinition = components["schemas"]["OntologyDefinition"];
+export type Preferences = components["schemas"]["Preferences"];
+export type PreferencesUpdate = components["schemas"]["PreferencesUpdate"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
@@ -50,9 +52,56 @@ export class ApiError extends Error {
 }
 
 export class AuthError extends ApiError {
-  constructor(message = "Unauthorized or invalid session token", details?: string) {
-    super(403, message, "FORBIDDEN", details);
+  constructor(message = "Unauthorized or invalid session token", details?: string, code = "FORBIDDEN") {
+    super(403, message, code, details);
     this.name = "AuthError";
+  }
+}
+
+/** Why the browser lost its session: the server restarted (new key) or none was given. */
+export type SessionLostReason = "invalid" | "missing";
+
+const SESSION_CODES: Record<string, SessionLostReason> = {
+  SESSION_TOKEN_INVALID: "invalid",
+  SESSION_TOKEN_MISSING: "missing",
+};
+
+function sessionLostReason(code: string | undefined, message: string): SessionLostReason | null {
+  if (code && SESSION_CODES[code]) return SESSION_CODES[code];
+  // Older servers sent no code; recognise their messages.
+  if (/Invalid session token/i.test(message)) return "invalid";
+  if (/Missing Bearer/i.test(message)) return "missing";
+  return null;
+}
+
+/** Why the error means the page's access key is no longer accepted, or null. */
+export function sessionLostReasonOf(err: unknown): SessionLostReason | null {
+  return err instanceof AuthError ? sessionLostReason(err.code, err.message) : null;
+}
+
+/** True if the error means the page's access key is no longer accepted. */
+export function isSessionLostError(err: unknown): boolean {
+  return sessionLostReasonOf(err) !== null;
+}
+
+type SessionLostListener = (reason: SessionLostReason) => void;
+const sessionLostListeners = new Set<SessionLostListener>();
+
+/** Subscribe to "session lost" notifications from any API call. Returns an unsubscribe function. */
+export function onSessionLost(listener: SessionLostListener): () => void {
+  sessionLostListeners.add(listener);
+  return () => {
+    sessionLostListeners.delete(listener);
+  };
+}
+
+function notifySessionLost(reason: SessionLostReason): void {
+  for (const listener of [...sessionLostListeners]) {
+    try {
+      listener(reason);
+    } catch {
+      // a broken listener must not break the API call
+    }
   }
 }
 
@@ -125,6 +174,20 @@ export function initSessionToken(): string | null {
     // storage unavailable
   }
   return activeSessionToken;
+}
+
+/**
+ * Interpret what a user pasted to reconnect: a full Ontocurator link
+ * (`http://127.0.0.1:8000/#token=...`), just the fragment, or a bare access key.
+ */
+export function parseTokenInput(text: string): { token: string | null; packageId: string | null } {
+  const value = text.trim();
+  if (!value) return { token: null, packageId: null };
+  const hashIndex = value.indexOf("#");
+  if (hashIndex >= 0) return parseLaunchHash(value.slice(hashIndex));
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return { token: null, packageId: null };
+  if (value.includes("=")) return parseLaunchHash(value);
+  return { token: value, packageId: null };
 }
 
 /** Package id passed via the launch URL (`#...&package_id=P`), consumed once. */
@@ -232,7 +295,9 @@ export class ApiClient {
       }
 
       if (response.status === 403) {
-        throw new AuthError(message, details);
+        const reason = sessionLostReason(code, message);
+        if (reason) notifySessionLost(reason);
+        throw new AuthError(message, details, code);
       }
       if (response.status === 409) {
         throw new ConflictError(message, code, details);
@@ -260,6 +325,18 @@ export class ApiClient {
         body: formData,
       }
     );
+  }
+
+  async getPreferences(): Promise<Preferences> {
+    return this.request<Preferences>("/api/v1/preferences", { method: "GET" });
+  }
+
+  /** Partial update: omitted fields are kept on the server, modes merge per package. */
+  async updatePreferences(change: PreferencesUpdate): Promise<Preferences> {
+    return this.request<Preferences>("/api/v1/preferences", {
+      method: "PUT",
+      body: JSON.stringify(change),
+    });
   }
 
   async listPackages(): Promise<PackageManifest[]> {
@@ -393,11 +470,20 @@ export class ApiClient {
     });
     if (!response.ok) {
       let detail = "";
+      let code: string | undefined;
       try {
         const body = await response.json();
         detail = body?.details || body?.detail || "";
+        code = body?.code || undefined;
       } catch {
         // not JSON
+      }
+      if (response.status === 403) {
+        const reason = sessionLostReason(code, detail);
+        if (reason) {
+          notifySessionLost(reason);
+          throw new AuthError(detail, detail, code);
+        }
       }
       throw new ApiError(
         response.status,

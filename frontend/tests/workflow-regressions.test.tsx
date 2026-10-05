@@ -7,7 +7,16 @@ import { createMutationQueue } from "../src/editor/autosave";
 import { TextPane } from "../src/editor/TextPane";
 
 describe("Workflow Regressions", () => {
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.getSelection()?.removeAllRanges(); });
+
+// Identity now comes from the workspace preferences and is confirmed once per page.
+const asAnnotator = (id: string) => {
+  vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
+  vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
+};
+const confirmIdentity = async () => {
+  fireEvent.click(await screen.findByRole("button", { name: /Yes, continue/i }));
+};
 
 it("uses current span callbacks after selecting an annotation", () => {
   const initial = vi.fn(), current = vi.fn();
@@ -315,22 +324,24 @@ it("strictly separates selection between review targets and own annotations in s
 
 it("loads review proposals only when opening a case in explicitly chosen review mode (blinding)", async () => {
  window.localStorage.clear();
+ asAnnotator("dr-a");
  vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", ontology: { release: "test" } }] as any);
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([proposal("v1", "HP:1"), proposal("v2", "HP:2")]);
  const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: baseView() });
  render(<App/>);
- await waitFor(() => expect(screen.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }).hasAttribute("disabled")).toBe(false));
+ await waitFor(() => expect(screen.getByRole("button", { name: /Open case/i }).hasAttribute("disabled")).toBe(false));
  // No auto mode detection and no proposal prefetch on package selection.
- expect((screen.getByLabelText(/Working Mode|Arbeitsmodus/i) as HTMLSelectElement).value).toBe("independent");
+ expect((screen.getByLabelText(/Working mode/i) as HTMLSelectElement).value).toBe("independent");
  expect(inputs).not.toHaveBeenCalled();
- fireEvent.change(screen.getByLabelText(/Working Mode|Arbeitsmodus/i), { target: { value: "review" } });
+ fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });
  // The dashboard never lists proposal contents.
  await new Promise((resolve) => setTimeout(resolve, 0));
  expect(inputs).not.toHaveBeenCalled();
  expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
  expect(screen.queryByText("HP:1")).toBeNull();
- fireEvent.click(screen.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }));
+ fireEvent.click(screen.getByRole("button", { name: /Open case/i }));
+ await confirmIdentity();
  await waitFor(() => expect(open).toHaveBeenCalled());
  expect(inputs).toHaveBeenCalledTimes(1);
  expect(open.mock.calls[0][0].targets).toEqual({
@@ -344,11 +355,13 @@ it("refuses to open a review workspace without any review targets", async () => 
  vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", ontology: { release: "test" } }] as any);
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
+ asAnnotator("dr-a");
  const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: baseView() });
  render(<App/>);
- await waitFor(() => expect(screen.getByRole("button", { name: /Open Workspace/i }).hasAttribute("disabled")).toBe(false));
- fireEvent.change(screen.getByLabelText(/Working Mode/i), { target: { value: "review" } });
- fireEvent.click(screen.getByRole("button", { name: /Open Workspace/i }));
+ await waitFor(() => expect(screen.getByRole("button", { name: /Open case/i }).hasAttribute("disabled")).toBe(false));
+ fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });
+ fireEvent.click(screen.getByRole("button", { name: /Open case/i }));
+ await confirmIdentity();
  await waitFor(() => expect(screen.getByText(/No review proposals are available for case doc/i)).toBeDefined());
  expect(open).not.toHaveBeenCalled();
 });

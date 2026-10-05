@@ -3,6 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { api } from "../src/api/client";
 
+// Identity now comes from the workspace preferences and is confirmed once per page.
+const asAnnotator = (id: string) => {
+  vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
+  vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
+};
+const confirmIdentity = async () => {
+  fireEvent.click(await screen.findByRole("button", { name: /Yes, continue/i }));
+};
+
 describe("Curation Dashboard Start Screen", () => {
   const samplePackages = [
     {
@@ -106,7 +115,8 @@ describe("Curation Dashboard Start Screen", () => {
     expect(within(table).queryByText("doc-003")).toBeNull();
   });
 
-  it("renders Continue Working hero card for in-progress case and opens it", async () => {
+  it("renders the continue hero card for the in-progress case and opens it", async () => {
+    asAnnotator("annotator-1");
     vi.spyOn(api, "listPackages").mockResolvedValue(samplePackages as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(sampleDocuments as any);
     const openSpy = vi.spyOn(api, "openWorkspace").mockResolvedValue({
@@ -123,12 +133,13 @@ describe("Curation Dashboard Start Screen", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Recent Case|Zuletzt bearbeiteter Fall/i)).toBeDefined();
+      expect(screen.getByText(/Continue where you left off/i)).toBeDefined();
       expect(screen.getAllByText(/doc-002/).length).toBeGreaterThanOrEqual(1);
     });
 
-    const resumeBtn = screen.getByRole("button", { name: /Continue|Weiterarbeiten/i });
+    const resumeBtn = screen.getByRole("button", { name: /Open case/i });
     fireEvent.click(resumeBtn);
+    await confirmIdentity();
 
     await waitFor(() => {
       expect(openSpy).toHaveBeenCalledWith(

@@ -10,7 +10,7 @@ import {
   setActiveSessionToken,
   takeLaunchPackageId,
 } from "../src/api/client";
-import { App, ANNOTATOR_STORAGE_KEY, modeStorageKey } from "../src/App";
+import { App } from "../src/App";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
 import { CaseErrorBoundary } from "../src/app/ErrorBoundary";
 import { createMutationQueue, UnsavedChangesError } from "../src/editor/autosave";
@@ -92,6 +92,15 @@ const reviewView = (decisions: any[] = [], annotations: any[] = [], evidence: an
   return view;
 };
 
+// Identity now comes from the workspace preferences and is confirmed once per page.
+const asAnnotator = (id: string) => {
+  vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
+  vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
+};
+const confirmIdentity = async () => {
+  fireEvent.click(await screen.findByRole("button", { name: /Yes, continue/i }));
+};
+
 const docs = [
   { document_id: "doc-1", text_length: 10, language: "en", position: 1, status: "completed" as const },
   { document_id: "doc-2", text_length: 10, language: "en", position: 2, status: "in_progress" as const },
@@ -131,18 +140,20 @@ describe("A2/token: launch hash and token storage", () => {
     render(<App />);
     await waitFor(() => expect(list).toHaveBeenCalled());
     expect(list.mock.calls[0][0]).toBe("pkg-b");
-    expect((screen.getByLabelText(/Work Package/i) as HTMLSelectElement).value).toBe("pkg-b");
+    expect((screen.getByLabelText("Work package") as HTMLSelectElement).value).toBe("pkg-b");
   });
 });
 
 describe("A1/A7: dashboard blinding, identity and persistence", () => {
-  it("does not refetch on every keystroke, applies the annotator on blur and persists identity and mode", async () => {
+  it("does not refetch on every keystroke, applies the identity on blur and keeps it out of the browser", async () => {
+    vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
+    const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
     vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
     const list = vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
-    const first = render(<App />);
+    render(<App />);
     await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
-    const field = screen.getByLabelText(/Annotator ID/i);
+    const field = screen.getByLabelText(/Your initials \/ ID/i);
     fireEvent.change(field, { target: { value: "d" } });
     fireEvent.change(field, { target: { value: "dr" } });
     fireEvent.change(field, { target: { value: "dr-x" } });
@@ -150,19 +161,15 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     fireEvent.blur(field);
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
     expect(list.mock.calls[1][1]).toEqual({ annotator_id: "dr-x", mode: "independent" });
-    expect(window.localStorage.getItem(ANNOTATOR_STORAGE_KEY)).toBe("dr-x");
-    fireEvent.change(screen.getByLabelText(/Working Mode/i), { target: { value: "review" } });
-    expect(window.localStorage.getItem(modeStorageKey("pkg"))).toBe("review");
-    expect(inputs).not.toHaveBeenCalled();
-    first.unmount();
-
-    render(<App />);
-    await waitFor(() => expect((screen.getByLabelText(/Annotator ID/i) as HTMLInputElement).value).toBe("dr-x"));
-    await waitFor(() => expect((screen.getByLabelText(/Working Mode/i) as HTMLSelectElement).value).toBe("review"));
+    expect(window.localStorage.length).toBe(0);
+    fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });
+    expect(save).toHaveBeenCalledWith({ mode_by_package: { pkg: "review" } });
+    expect(window.localStorage.length).toBe(0);
     expect(inputs).not.toHaveBeenCalled();
   });
 
   it("dedupes ontology badges, keeps hero and selection consistent and disables open while loading", async () => {
+    asAnnotator("dr-a");
     vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
     vi.spyOn(api, "listOntologies").mockResolvedValue([
       { ontology_id: "hp", release: "a", sha256: "1", term_count: 1 },
@@ -178,8 +185,9 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     await waitFor(() => expect(within(hero).getByText("doc-2")).toBeDefined());
     fireEvent.click(within(screen.getByRole("table")).getByText("doc-1"));
     await waitFor(() => expect(within(document.querySelector(".dashboard-hero") as HTMLElement).getByText("doc-1")).toBeDefined());
-    const openBtn = screen.getByRole("button", { name: /Open Workspace/i });
+    const openBtn = screen.getByRole("button", { name: /Open case/i });
     fireEvent.click(openBtn);
+    await confirmIdentity();
     await waitFor(() => expect(screen.getAllByRole("button", { name: /Opening/i }).length).toBeGreaterThan(0));
     for (const b of screen.getAllByRole("button", { name: /Opening/i })) expect((b as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getAllByRole("button", { name: /Opening/i })[0]);
@@ -219,6 +227,7 @@ describe("Export", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
     await expect(new ApiClient().downloadExport("ws")).rejects.toThrow(/Export failed \(500\)/);
     vi.unstubAllGlobals();
+    asAnnotator("annotator-1");
     vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     const exportSpy = vi.spyOn(api, "downloadPackageExport").mockResolvedValue("x.zip");
@@ -566,12 +575,14 @@ describe("Shortcuts and error handling", () => {
   });
 
   it("shows navigation errors from the dashboard open flow", async () => {
+    asAnnotator("dr-a");
     vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     vi.spyOn(api, "openWorkspace").mockRejectedValue(new Error("boom"));
     render(<App />);
     await waitFor(() => expect(screen.getByRole("table")).toBeDefined());
-    fireEvent.click(screen.getByRole("button", { name: /Open Workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Open case/i }));
+    await confirmIdentity();
     await waitFor(() => expect(screen.getByText(/Error opening case: boom/)).toBeDefined());
   });
 });

@@ -25,7 +25,7 @@ describe("In-App Ontology Management and Recovery", () => {
     });
 
     // Attempt to upload a package
-    const pkgInput = screen.getByLabelText(/Import Package/i);
+    const pkgInput = screen.getByLabelText(/Work package file/i);
     const fakeZip = new File(["dummy zip"], "test.zip", { type: "application/zip" });
     fireEvent.change(pkgInput, { target: { files: [fakeZip] } });
 

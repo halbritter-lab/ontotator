@@ -1203,23 +1203,24 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             }`}
           >
             {view.key.mode === "review"
-              ? "Review Mode"
+              ? "Review proposals"
               : view.key.mode === "assisted"
-              ? "Assisted Mode"
-              : "Independent Mode"}
+              ? "Assisted annotation"
+              : "Annotate from scratch"}
           </span>
           <span
             className="badge"
             data-testid="annotator-identity"
-            title="Annotations and decisions are saved under this annotator ID"
+            title="Your annotations and decisions are saved under these initials"
             style={{ background: "var(--bg-secondary)", color: "var(--text-main)", fontSize: "0.78rem" }}
           >
-            Annotator: <strong>{view.key.annotator_id}</strong>
+            Annotating as <strong>{view.key.annotator_id}</strong>
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span
             role="status"
+            title={`Revision ${draft.revision}`}
             className={`status-badge ${
               statusIsError
                 ? "status-error"
@@ -1228,7 +1229,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 : "status-saving"
             }`}
           >
-            ● {statusText} (Rev {draft.revision})
+            ● {statusText}
           </span>
 
           <button

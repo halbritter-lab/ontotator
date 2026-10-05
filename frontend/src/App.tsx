@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   initSessionToken,
+  onSessionLost,
+  parseLaunchHash,
+  sessionLostReasonOf,
   setActiveSessionToken,
   takeLaunchPackageId,
   ApiError,
@@ -9,10 +12,12 @@ import {
   type OpenWorkspaceResponse,
   type PackageManifest,
   type OntologyInfo,
+  type SessionLostReason,
 } from "./api/client";
 import type { components } from "./api/generated";
 import { CaseScreen } from "./app/CaseScreen";
 import { CaseErrorBoundary } from "./app/ErrorBoundary";
+import { SessionLostScreen } from "./app/SessionLostScreen";
 
 export type WorkspaceMode = "independent" | "review" | "assisted";
 export type ReviewTargetSet = components["schemas"]["ReviewTargetSet"];
@@ -23,56 +28,102 @@ const statusLabels: Record<string, string> = {
   completed: "Completed",
 };
 
-export const ANNOTATOR_STORAGE_KEY = "ontocurator.annotatorId";
-export const modeStorageKey = (packageId: string) => `ontocurator.mode.${packageId}`;
-const DEFAULT_ANNOTATOR = "annotator-1";
-
-const readStorage = (key: string): string | null => {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
+/** Plain-language names for the working modes (API values stay unchanged). */
+export const modeLabels: Record<WorkspaceMode, string> = {
+  independent: "Annotate from scratch",
+  review: "Review proposals",
+  assisted: "Assisted annotation",
 };
-const writeStorage = (key: string, value: string) => {
+export const modeExplanations: Record<WorkspaceMode, string> = {
+  independent: "You won't see any proposals.",
+  review: "Check suggested terms one by one: confirm, reject or change.",
+  assisted: "Suggested terms are shown while you annotate.",
+};
+
+export const MAX_IDENTITY_LENGTH = 64;
+
+/** Why an identity cannot be used (mirrors the server rules), or null if it is fine. */
+export function identityProblem(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return "Enter your initials or a short ID.";
+  if ([...trimmed].length > MAX_IDENTITY_LENGTH) return `Use at most ${MAX_IDENTITY_LENGTH} characters.`;
+  if (/\p{C}/u.test(trimmed)) return "Remove invisible or control characters.";
+  return null;
+}
+
+/**
+ * Older builds kept the identity and mode in the browser, so a new copy on a
+ * shared computer silently inherited the previous person's name. Those values
+ * are never adopted; they are only removed.
+ */
+const LEGACY_ANNOTATOR_KEY = "ontocurator.annotatorId";
+const LEGACY_MODE_PREFIX = "ontocurator.mode.";
+const clearLegacyStorage = () => {
   try {
-    window.localStorage.setItem(key, value);
+    const storage = window.localStorage;
+    const stale: string[] = [];
+    for (let i = 0; i < storage.length; i++) {
+      const k = storage.key(i);
+      if (k && (k === LEGACY_ANNOTATOR_KEY || k.startsWith(LEGACY_MODE_PREFIX))) stale.push(k);
+    }
+    stale.forEach((k) => storage.removeItem(k));
   } catch {
     // storage unavailable
   }
 };
-const isMode = (value: string | null): value is WorkspaceMode =>
+
+const isMode = (value: unknown): value is WorkspaceMode =>
   value === "independent" || value === "review" || value === "assisted";
-const storedModeFor = (packageId: string): WorkspaceMode => {
-  const stored = readStorage(modeStorageKey(packageId));
-  return isMode(stored) ? stored : "independent";
-};
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+const casesText = (n: number) => `${n} ${n === 1 ? "case" : "cases"}`;
 
 export const App: React.FC = () => {
   const documentRequest = useRef(0);
+  const packageInputRef = useRef<HTMLInputElement>(null);
+  const ontologyInputRef = useRef<HTMLInputElement>(null);
+  const missingOntologyInputRef = useRef<HTMLInputElement>(null);
+  const annotatorFieldRef = useRef<HTMLInputElement>(null);
+
   const [packages, setPackages] = useState<PackageManifest[]>([]);
-  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [packagesLoaded, setPackagesLoaded] = useState(false);
+  const [selectedPackageId, setSelectedPackageIdState] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-  // Committed annotator identity (persisted); the input field is edited separately.
-  const [annotatorId, setAnnotatorId] = useState<string>(() => readStorage(ANNOTATOR_STORAGE_KEY) || DEFAULT_ANNOTATOR);
-  const [annotatorInput, setAnnotatorInput] = useState<string>(annotatorId);
+  // Committed identity (used for API calls); the input field is edited separately.
+  const [annotatorId, setAnnotatorIdState] = useState<string>("");
+  const [annotatorInput, setAnnotatorInput] = useState<string>("");
+  // Identity the person confirmed ("You are annotating as ...") in this page session.
+  const [confirmedAnnotator, setConfirmedAnnotator] = useState<string | null>(null);
+  const [pendingOpen, setPendingOpen] = useState<{ docId: string; identity: string } | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("independent");
+
+  // Async flows (start-up, reconnect) must see current values, not stale closures.
+  const annotatorRef = useRef("");
+  const selectedPackageRef = useRef<string | null>(null);
+  const modeByPackageRef = useRef<Record<string, WorkspaceMode>>({});
+  const setAnnotatorId = (id: string) => {
+    annotatorRef.current = id;
+    setAnnotatorIdState(id);
+  };
+  const setSelectedPackageId = (id: string | null) => {
+    selectedPackageRef.current = id;
+    setSelectedPackageIdState(id);
+  };
 
   // Dashboard filter & search
   const [statusFilter, setStatusFilter] = useState<"all" | "not_started" | "in_progress" | "completed">("all");
   const [searchFilter, setSearchFilter] = useState<string>("");
 
-  // Active workspace view
+  // Active case view
   const [activeWorkspace, setActiveWorkspace] = useState<OpenWorkspaceResponse | null>(null);
   const [workspaceNonce, setWorkspaceNonce] = useState(0);
   const [isOpening, setIsOpening] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [tokenInput, setTokenInput] = useState<string>("");
+  const [sessionLost, setSessionLost] = useState<SessionLostReason | null>(null);
 
   // In-app ontology state
   const [ontologies, setOntologies] = useState<OntologyInfo[]>([]);
@@ -82,7 +133,15 @@ export const App: React.FC = () => {
   } | null>(null);
   const [isUploadingOntology, setIsUploadingOntology] = useState<boolean>(false);
 
-  const effectiveAnnotator = annotatorId.trim() || DEFAULT_ANNOTATOR;
+  /** Show an error, unless it only means the access key expired (then show the reopen page). */
+  const reportError = (prefix: string, err: unknown) => {
+    const reason = sessionLostReasonOf(err);
+    if (reason) {
+      setSessionLost(reason);
+      return;
+    }
+    setError(`${prefix}: ${errorText(err)}`);
+  };
 
   const loadOntologies = async () => {
     try {
@@ -93,13 +152,25 @@ export const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    initSessionToken();
-    void loadPackages(takeLaunchPackageId());
-    void loadOntologies();
-  }, []);
+  const loadPreferences = async () => {
+    try {
+      const prefs = await api.getPreferences();
+      const modes: Record<string, WorkspaceMode> = {};
+      for (const [pkg, m] of Object.entries(prefs?.mode_by_package ?? {})) if (isMode(m)) modes[pkg] = m;
+      modeByPackageRef.current = modes;
+      const last = prefs?.last_annotator_id?.trim();
+      if (!annotatorRef.current && last && !identityProblem(last)) {
+        setAnnotatorId(last);
+        setAnnotatorInput(last);
+      }
+    } catch (err: unknown) {
+      const reason = sessionLostReasonOf(err);
+      if (reason) setSessionLost(reason);
+      // Otherwise start without preferences.
+    }
+  };
 
-  /** Pick the case to highlight: continue in-progress work first, then the next open case. */
+  // Pick the case to highlight: continue in-progress work first, then the next open case.
   const pickResumeDoc = (docs: DocumentSummary[]) =>
     docs.find((d) => d.status === "in_progress") ?? docs.find((d) => d.status === "not_started") ?? docs[0] ?? null;
 
@@ -115,60 +186,104 @@ export const App: React.FC = () => {
       });
       return docs;
     } catch (err: unknown) {
-      if (requestId === documentRequest.current) setError(`Error loading documents: ${errorText(err)}`);
+      if (requestId === documentRequest.current) reportError("Error loading cases", err);
       return null;
-    }
-  };
-
-  const loadPackages = async (preferredPackageId?: string | null) => {
-    try {
-      setError(null);
-      const list = await api.listPackages();
-      setPackages(list);
-      const preferred = preferredPackageId && list.some((p) => p.package_id === preferredPackageId) ? preferredPackageId : null;
-      if (preferredPackageId && !preferred && list.length > 0) {
-        setError(`Package "${preferredPackageId}" from the launch link was not found.`);
-      }
-      if (preferred) {
-        void handleSelectPackage(preferred);
-      } else if (list.length > 0 && !selectedPackageId) {
-        void handleSelectPackage(list[0].package_id);
-      }
-    } catch (err: unknown) {
-      setError(`Error loading packages: ${errorText(err)}`);
     }
   };
 
   // Selecting a package never touches review inputs (blinding): it only lists cases.
   const handleSelectPackage = async (pkgId: string) => {
-    const nextMode = storedModeFor(pkgId);
+    const stored = modeByPackageRef.current[pkgId];
+    const nextMode: WorkspaceMode = isMode(stored) ? stored : "independent";
     setDocuments([]);
     setSelectedPackageId(pkgId);
     setSelectedDocId(null);
     setMode(nextMode);
-    await refreshDocuments(pkgId, { annotator: effectiveAnnotator, mode: nextMode, resetSelection: true });
+    return refreshDocuments(pkgId, { annotator: annotatorRef.current, mode: nextMode, resetSelection: true });
   };
+
+  const loadPackages = async (preferredPackageId?: string | null): Promise<DocumentSummary[] | null> => {
+    try {
+      setError(null);
+      const list = await api.listPackages();
+      setPackages(list);
+      setPackagesLoaded(true);
+      const preferred = preferredPackageId && list.some((p) => p.package_id === preferredPackageId) ? preferredPackageId : null;
+      if (preferredPackageId && !preferred && list.length > 0) {
+        setError(`Package "${preferredPackageId}" from the launch link was not found.`);
+      }
+      const current = selectedPackageRef.current;
+      const next = preferred
+        ?? (current && list.some((p) => p.package_id === current) ? current : null)
+        ?? list[0]?.package_id
+        ?? null;
+      return next ? await handleSelectPackage(next) : null;
+    } catch (err: unknown) {
+      reportError("Error loading packages", err);
+      return null;
+    }
+  };
+
+  const bootstrap = async (launchPackageId: string | null) => {
+    await loadPreferences();
+    await loadPackages(launchPackageId);
+    void loadOntologies();
+  };
+
+  /** Use a new access key (from the address bar or a pasted link) and reload everything. */
+  const reconnect = (packageId: string | null) => {
+    setSessionLost(null);
+    setError(null);
+    void bootstrap(packageId);
+  };
+  const reconnectRef = useRef(reconnect);
+  reconnectRef.current = reconnect;
+
+  useEffect(() => {
+    clearLegacyStorage();
+    initSessionToken();
+    const unsubscribe = onSessionLost((reason) => setSessionLost(reason));
+    void bootstrap(takeLaunchPackageId());
+    // Pasting a fresh link into this tab only changes the fragment: no page reload happens.
+    const onHashChange = () => {
+      const launch = parseLaunchHash(window.location.hash);
+      if (!launch.token && !launch.packageId) return;
+      initSessionToken();
+      reconnectRef.current(takeLaunchPackageId());
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("hashchange", onHashChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleChangeMode = (nextMode: WorkspaceMode) => {
     setMode(nextMode);
     if (selectedPackageId) {
-      writeStorage(modeStorageKey(selectedPackageId), nextMode);
-      void refreshDocuments(selectedPackageId, { annotator: effectiveAnnotator, mode: nextMode });
+      modeByPackageRef.current = { ...modeByPackageRef.current, [selectedPackageId]: nextMode };
+      void api.updatePreferences({ mode_by_package: { [selectedPackageId]: nextMode } }).catch(() => undefined);
+      void refreshDocuments(selectedPackageId, { annotator: annotatorRef.current, mode: nextMode });
     }
   };
 
-  // Annotator identity is applied on blur/Enter only (not on every keystroke).
-  const commitAnnotator = () => {
+  // Identity is applied on blur/Enter only (not on every keystroke). Returns the committed value.
+  const commitAnnotator = (): string => {
     const next = annotatorInput.trim();
-    if (!next) {
-      setAnnotatorInput(annotatorId);
-      return;
-    }
-    if (next === annotatorId) return;
+    if (next && identityProblem(next)) return annotatorRef.current;
+    if (next !== annotatorInput) setAnnotatorInput(next);
+    if (next === annotatorRef.current) return next;
     setAnnotatorId(next);
-    setAnnotatorInput(next);
-    writeStorage(ANNOTATOR_STORAGE_KEY, next);
     if (selectedPackageId) void refreshDocuments(selectedPackageId, { annotator: next, mode });
+    return next;
+  };
+
+  const importPackageFile = async (file: File) => {
+    const res = await api.uploadPackage(file);
+    const docs = await loadPackages(res.package_id);
+    const count = res.manifest?.document_order?.length || docs?.length || 0;
+    setNotice(`Package '${res.package_id}' imported – ${casesText(count)}.`);
   };
 
   const handleUploadPackage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,9 +292,9 @@ export const App: React.FC = () => {
 
     setIsUploading(true);
     setError(null);
+    setNotice(null);
     try {
-      const res = await api.uploadPackage(file);
-      await loadPackages(res.package_id);
+      await importPackageFile(file);
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === "ONTOLOGY_NOT_FOUND") {
         setMissingOntologyPrompt({
@@ -187,7 +302,7 @@ export const App: React.FC = () => {
           pendingPackageFile: file,
         });
       } else {
-        setError(`Package upload error: ${errorText(err)}`);
+        reportError("Package import failed", err);
       }
     } finally {
       setIsUploading(false);
@@ -208,11 +323,10 @@ export const App: React.FC = () => {
       setMissingOntologyPrompt(null);
       if (pending) {
         setIsUploading(true);
-        const res = await api.uploadPackage(pending);
-        await loadPackages(res.package_id);
+        await importPackageFile(pending);
       }
     } catch (err: unknown) {
-      setError(`Ontology upload error: ${errorText(err)}`);
+      reportError("Ontology upload failed", err);
     } finally {
       setIsUploadingOntology(false);
       setIsUploading(false);
@@ -222,21 +336,23 @@ export const App: React.FC = () => {
 
   /**
    * Open a case. In review mode, all review proposals for the case are loaded here
-   * (and only here) as origin-neutral targets. Throws on failure.
+   * (and only here). Throws on failure.
    */
-  const openCase = async (docId: string, opts: { forceRemount?: boolean } = {}) => {
+  const openCase = async (docId: string, opts: { forceRemount?: boolean; identity?: string } = {}) => {
     if (!selectedPackageId) throw new Error("No work package selected.");
+    const identity = opts.identity ?? annotatorRef.current;
+    if (identityProblem(identity)) throw new Error("Enter your initials before opening a case.");
     let targets: ReviewTargetSet | null = null;
     if (mode === "review") {
       const inputs = await api.getReviewInputs({
         package_id: selectedPackageId,
         document_id: docId,
-        annotator_id: effectiveAnnotator,
+        annotator_id: identity,
         mode: "review",
       });
       if (inputs.length === 0) {
         throw new Error(
-          `No review proposals are available for case ${docId}. Review mode needs at least one proposal; switch to Independent Mode to annotate this case.`,
+          `No review proposals are available for case ${docId}. Switch to "${modeLabels.independent}" to annotate this case.`,
         );
       }
       targets = {
@@ -247,40 +363,71 @@ export const App: React.FC = () => {
     const res = await api.openWorkspace({
       package_id: selectedPackageId,
       document_id: docId,
-      annotator_id: effectiveAnnotator,
+      annotator_id: identity,
       mode,
       targets,
     });
     setSelectedDocId(docId);
     if (opts.forceRemount) setWorkspaceNonce((n) => n + 1);
     setActiveWorkspace(res);
-    void refreshDocuments(selectedPackageId, { annotator: effectiveAnnotator, mode });
+    void refreshDocuments(selectedPackageId, { annotator: identity, mode });
   };
 
   /** Dashboard entry point: errors are shown on the dashboard. */
-  const handleOpenWorkspace = async (docIdToOpen?: string) => {
-    const targetDoc = docIdToOpen ?? selectedDocId;
-    if (!selectedPackageId || !targetDoc || isOpening) return;
+  const handleOpenWorkspace = async (docId: string, identity: string) => {
+    if (!selectedPackageId || isOpening) return;
     setError(null);
-    setSelectedDocId(targetDoc);
+    setSelectedDocId(docId);
     setIsOpening(true);
     try {
-      await openCase(targetDoc);
+      await openCase(docId, { identity });
     } catch (err: unknown) {
-      setError(`Error opening case: ${errorText(err)}`);
+      reportError("Error opening case", err);
     } finally {
       setIsOpening(false);
     }
   };
 
+  /** "Open case": requires an identity and asks once per page session to confirm it. */
+  const requestOpen = (docIdToOpen?: string) => {
+    const targetDoc = docIdToOpen ?? selectedDocId;
+    if (!selectedPackageId || !targetDoc || isOpening) return;
+    if (identityProblem(annotatorInput)) {
+      annotatorFieldRef.current?.focus();
+      return;
+    }
+    const identity = commitAnnotator();
+    setSelectedDocId(targetDoc);
+    if (identity !== confirmedAnnotator) {
+      setPendingOpen({ docId: targetDoc, identity });
+      return;
+    }
+    void handleOpenWorkspace(targetDoc, identity);
+  };
+
+  const confirmIdentity = () => {
+    if (!pendingOpen) return;
+    const { docId, identity } = pendingOpen;
+    setPendingOpen(null);
+    setConfirmedAnnotator(identity);
+    void api.updatePreferences({ last_annotator_id: identity }).catch(() => undefined);
+    void handleOpenWorkspace(docId, identity);
+  };
+
+  const changeIdentity = () => {
+    setPendingOpen(null);
+    annotatorFieldRef.current?.focus();
+    annotatorFieldRef.current?.select();
+  };
+
   const handleExportPackage = async () => {
-    if (!selectedPackageId) return;
+    if (!selectedPackageId || !annotatorId) return;
     setError(null);
     setIsExporting(true);
     try {
-      await api.downloadPackageExport(selectedPackageId, { annotator_id: effectiveAnnotator, mode });
+      await api.downloadPackageExport(selectedPackageId, { annotator_id: annotatorId, mode });
     } catch (err: unknown) {
-      setError(`Package export failed: ${errorText(err)}`);
+      reportError("Package export failed", err);
     } finally {
       setIsExporting(false);
     }
@@ -288,7 +435,7 @@ export const App: React.FC = () => {
 
   const closeWorkspace = async () => {
     setActiveWorkspace(null);
-    if (selectedPackageId) await refreshDocuments(selectedPackageId, { annotator: effectiveAnnotator, mode });
+    if (selectedPackageId) await refreshDocuments(selectedPackageId, { annotator: annotatorRef.current, mode });
   };
 
   // Filtered documents for dashboard table
@@ -315,33 +462,86 @@ export const App: React.FC = () => {
   const inProgressCount = documents.filter((d) => d.status === "in_progress").length;
   const completedCount = documents.filter((d) => d.status === "completed").length;
 
+  const identityIssue = identityProblem(annotatorInput);
+  const identityMissing = !annotatorInput.trim();
+  const hasPackages = packages.length > 0;
+  const showGuide = packagesLoaded && !hasPackages;
+
+  const sessionScreen = sessionLost && (
+    <SessionLostScreen
+      reason={sessionLost}
+      onConnect={(token, packageId) => {
+        setActiveSessionToken(token);
+        reconnect(packageId);
+      }}
+    />
+  );
+
   if (activeWorkspace) {
     const currentDocId = activeWorkspace.view.document.document_id;
     const reload = () => openCase(currentDocId, { forceRemount: true });
     return (
-      <CaseErrorBoundary
-        key={`${activeWorkspace.workspace_id}:${workspaceNonce}`}
-        onBackToDashboard={() => { void closeWorkspace(); }}
-        onReload={() => { void reload().catch((err) => setError(`Error reloading case: ${errorText(err)}`)); }}
-      >
-        <CaseScreen
+      <>
+        <CaseErrorBoundary
           key={`${activeWorkspace.workspace_id}:${workspaceNonce}`}
-          view={activeWorkspace.view}
-          workspaceId={activeWorkspace.workspace_id}
-          documentList={documents}
-          onNavigateCase={(docId) => openCase(docId)}
-          onReload={reload}
-          onSubmitted={async () => {
-            if (selectedPackageId) await refreshDocuments(selectedPackageId, { annotator: effectiveAnnotator, mode });
-          }}
-          onClose={() => { void closeWorkspace(); }}
-        />
-      </CaseErrorBoundary>
+          onBackToDashboard={() => { void closeWorkspace(); }}
+          onReload={() => { void reload().catch((err) => reportError("Error reloading case", err)); }}
+        >
+          <CaseScreen
+            key={`${activeWorkspace.workspace_id}:${workspaceNonce}`}
+            view={activeWorkspace.view}
+            workspaceId={activeWorkspace.workspace_id}
+            documentList={documents}
+            onNavigateCase={(docId) => openCase(docId)}
+            onReload={reload}
+            onSubmitted={async () => {
+              if (selectedPackageId) await refreshDocuments(selectedPackageId, { annotator: annotatorRef.current, mode });
+            }}
+            onClose={() => { void closeWorkspace(); }}
+          />
+        </CaseErrorBoundary>
+        {sessionScreen}
+      </>
     );
   }
 
+  const fileInputs = (
+    <>
+      <input
+        ref={packageInputRef}
+        type="file"
+        accept=".zip"
+        aria-label="Work package file (.zip)"
+        style={{ display: "none" }}
+        onChange={handleUploadPackage}
+        disabled={isUploading}
+      />
+      <input
+        ref={ontologyInputRef}
+        type="file"
+        accept=".json"
+        aria-label="Ontology file (.json)"
+        style={{ display: "none" }}
+        onChange={handleUploadMissingOntology}
+        disabled={isUploadingOntology}
+      />
+    </>
+  );
+
+  const importButton = (primary: boolean) => (
+    <button
+      type="button"
+      className={`btn ${primary ? "btn-primary" : "btn-secondary btn-sm"}`}
+      onClick={() => packageInputRef.current?.click()}
+      disabled={isUploading}
+    >
+      {isUploading ? "Importing..." : primary ? "Import work package" : "Import work package (.zip)"}
+    </button>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-primary)" }}>
+      {fileInputs}
       {/* App Header */}
       <header className="app-header">
         <div className="app-title" style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
@@ -364,28 +564,15 @@ export const App: React.FC = () => {
               Ontologies: {ontologyLabels.join(", ")}
             </span>
           )}
-          <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
-            {isUploadingOntology ? "Uploading..." : "🧬 Add Ontology (.json)"}
-            <input
-              type="file"
-              accept=".json"
-              aria-label="Add Ontology"
-              style={{ display: "none" }}
-              onChange={handleUploadMissingOntology}
-              disabled={isUploadingOntology}
-            />
-          </label>
-          <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
-            {isUploading ? "Importing..." : "📦 Import Package (.zip)"}
-            <input
-              type="file"
-              accept=".zip"
-              aria-label="Import Package"
-              style={{ display: "none" }}
-              onChange={handleUploadPackage}
-              disabled={isUploading}
-            />
-          </label>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => ontologyInputRef.current?.click()}
+            disabled={isUploadingOntology}
+          >
+            {isUploadingOntology ? "Uploading..." : "Add ontology (.json)"}
+          </button>
+          {hasPackages && importButton(false)}
         </div>
       </header>
 
@@ -407,35 +594,47 @@ export const App: React.FC = () => {
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontWeight: 600, color: "#ea580c", fontSize: "1rem" }}>
-                ⚠️ Missing Ontology
+                Missing ontology
               </span>
               <button
+                type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => setMissingOntologyPrompt(null)}
               >
-                ✕ Dismiss
+                Dismiss
               </button>
             </div>
             <p style={{ margin: 0, fontSize: "0.9rem" }}>{missingOntologyPrompt.message}</p>
             <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
-              This package requires an ontology that is not loaded yet. Select the corresponding OBO Graph JSON file to register it.
+              This package needs an ontology file that is not loaded yet. Select the matching ontology file (.json) to add it.
             </p>
             <div>
-              <label
+              <input
+                ref={missingOntologyInputRef}
+                type="file"
+                accept=".json"
+                aria-label="Upload missing ontology"
+                style={{ display: "none" }}
+                onChange={handleUploadMissingOntology}
+                disabled={isUploadingOntology}
+              />
+              <button
+                type="button"
                 className="btn btn-primary btn-sm"
-                style={{ cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center" }}
+                onClick={() => missingOntologyInputRef.current?.click()}
+                disabled={isUploadingOntology}
               >
-                {isUploadingOntology ? "Uploading..." : "🧬 Upload missing ontology (.json)"}
-                <input
-                  type="file"
-                  accept=".json"
-                  aria-label="Upload missing ontology"
-                  style={{ display: "none" }}
-                  onChange={handleUploadMissingOntology}
-                  disabled={isUploadingOntology}
-                />
-              </label>
+                {isUploadingOntology ? "Uploading..." : "Upload missing ontology (.json)"}
+              </button>
             </div>
+          </div>
+        )}
+        {notice && (
+          <div role="status" aria-label="Import result" className="notice notice-success">
+            <span>{notice}</span>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setNotice(null)} aria-label="Dismiss message">
+              ✕
+            </button>
           </div>
         )}
         {error && (
@@ -453,320 +652,338 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {error && (error.includes("Forbidden") || error.includes("Missing Bearer") || error.includes("token")) && (
-          <div
-            style={{
-              padding: "20px 24px",
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-color)",
-              borderRadius: "var(--radius)",
-              marginBottom: 24,
-              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
-            }}
-          >
-            <h3 style={{ fontSize: "1.05rem", marginBottom: 8, color: "var(--text-main)" }}>
-              🔑 Enter Session Token
-            </h3>
-            <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: 16 }}>
-              The local API requires a security token. Please enter the session token or open the URL with the parameter <code>#token=...</code> in your browser.
-            </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (tokenInput.trim()) {
-                  setActiveSessionToken(tokenInput.trim());
-                  setError(null);
-                  void loadPackages();
-                }
-              }}
-              style={{ display: "flex", gap: 10 }}
-            >
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Paste session token..."
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-                style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}
-              />
-              <button type="submit" className="btn btn-primary" disabled={!tokenInput.trim()}>
-                Connect
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Workspace Configuration Bar */}
-        <div
-          style={{
-            background: "var(--bg-surface)",
-            padding: "16px 20px",
-            borderRadius: "var(--radius)",
-            border: "1px solid var(--border-color)",
-            marginBottom: 20,
-            display: "grid",
-            gridTemplateColumns: "1.2fr 1fr 1fr",
-            gap: 16,
-            alignItems: "end",
-          }}
-        >
-          <div className="form-group" style={{ margin: 0 }}>
-            <label htmlFor="package-select" className="form-label" style={{ marginBottom: 4 }}>
-              Work Package
-            </label>
-            <select
-              id="package-select"
-              className="form-select"
-              value={selectedPackageId ?? ""}
-              onChange={(e) => { void handleSelectPackage(e.target.value); }}
-            >
-              {packages.length === 0 && <option value="">No packages found</option>}
-              {packages.map((pkg) => (
-                <option key={pkg.package_id} value={pkg.package_id}>
-                  {pkg.package_id} {pkg.ontology?.release ? `(Release: ${pkg.ontology.release})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group" style={{ margin: 0 }}>
-            <label htmlFor="annotator-input" className="form-label" style={{ marginBottom: 4 }}>
-              Annotator ID
-            </label>
-            <input
-              id="annotator-input"
-              type="text"
-              className="form-control"
-              value={annotatorInput}
-              onChange={(e) => setAnnotatorInput(e.target.value)}
-              onBlur={commitAnnotator}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  commitAnnotator();
-                } else if (e.key === "Escape") {
-                  setAnnotatorInput(annotatorId);
-                }
-              }}
-              placeholder="e.g. annotator-1"
-            />
-            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 3 }}>
-              Working as <strong data-testid="dashboard-identity">{effectiveAnnotator}</strong>
-              {annotatorInput.trim() !== annotatorId && " – press Enter to apply"}
-            </div>
-          </div>
-
-          <div className="form-group" style={{ margin: 0 }}>
-            <label htmlFor="mode-select" className="form-label" style={{ marginBottom: 4 }}>
-              Working Mode
-            </label>
-            <select
-              id="mode-select"
-              className="form-select"
-              value={mode}
-              onChange={(e) => handleChangeMode(e.target.value as WorkspaceMode)}
-            >
-              <option value="review">Review Mode (validate proposals)</option>
-              <option value="independent">Independent Mode (manual annotation)</option>
-              <option value="assisted" style={{ display: "none" }}>Assisted Mode</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Hidden fallback select for strict document test compatibility */}
-        <div style={{ display: "none" }}>
-          <select
-            id="doc-select"
-            aria-label="Clinical Case (Document)"
-            value={selectedDocId ?? ""}
-            onChange={(e) => setSelectedDocId(e.target.value)}
-          >
-            {documents.map((doc) => (
-              <option key={doc.document_id} value={doc.document_id}>
-                Case {doc.position}: {doc.document_id}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Hero: selected case (defaults to the case to continue) */}
-        {heroDoc && (
-          <div className="dashboard-hero">
-            <div>
-              <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)", fontWeight: 700 }}>
-                {heroDoc.status === "in_progress" ? "Recent Case" : "Selected Case"}
-              </div>
-              <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text-main)", marginTop: 2 }}>
-                Case {heroDoc.position}: <span style={{ fontFamily: "var(--font-mono)" }}>{heroDoc.document_id}</span>
-              </div>
-              <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: 3 }}>
-                {heroDoc.language.toUpperCase()} • {heroDoc.text_length} chars • Status: <strong>{statusLabels[heroDoc.status] ?? heroDoc.status}</strong>
-                {" • "}{mode === "review" ? "Review Mode" : mode === "assisted" ? "Assisted Mode" : "Independent Mode"}
-              </div>
-              {mode === "review" && (
-                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 3 }}>
-                  All review proposals for this case are loaded as origin-neutral targets when you open it.
+        {showGuide && (
+          <section className="getting-started" aria-labelledby="getting-started-title">
+            <h2 id="getting-started-title">Get started</h2>
+            <ol className="getting-started-steps">
+              <li>
+                <div>
+                  <strong>Import work package (.zip)</strong>
+                  <span>The .zip file you received for this annotation project.</span>
                 </div>
-              )}
-            </div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ padding: "8px 18px", fontWeight: 600 }}
-              disabled={isOpening}
-              onClick={() => { void handleOpenWorkspace(heroDoc.document_id); }}
-            >
-              {isOpening ? "Opening..." : "Continue ▶"}
-            </button>
-          </div>
+                {importButton(true)}
+              </li>
+              <li>
+                <div>
+                  <strong>Enter your initials</strong>
+                  <span>Your annotations are saved under them.</span>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <strong>Open a case</strong>
+                  <span>Pick a case from the list and click “Open case”.</span>
+                </div>
+              </li>
+            </ol>
+          </section>
         )}
 
-        {/* Cases Data Table Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div className="dashboard-tabs">
-            <button
-              type="button"
-              className={`dashboard-tab ${statusFilter === "all" ? "active" : ""}`}
-              onClick={() => setStatusFilter("all")}
+        {hasPackages && (
+          <>
+            {/* Package, identity and mode */}
+            <div
+              style={{
+                background: "var(--bg-surface)",
+                padding: "16px 20px",
+                borderRadius: "var(--radius)",
+                border: "1px solid var(--border-color)",
+                marginBottom: 20,
+                display: "grid",
+                gridTemplateColumns: "1.2fr 1fr 1fr",
+                gap: 16,
+                alignItems: "start",
+              }}
             >
-              All ({documents.length})
-            </button>
-            <button
-              type="button"
-              className={`dashboard-tab ${statusFilter === "not_started" ? "active" : ""}`}
-              onClick={() => setStatusFilter("not_started")}
-            >
-              Open ({openCount})
-            </button>
-            <button
-              type="button"
-              className={`dashboard-tab ${statusFilter === "in_progress" ? "active" : ""}`}
-              onClick={() => setStatusFilter("in_progress")}
-            >
-              In Progress ({inProgressCount})
-            </button>
-            <button
-              type="button"
-              className={`dashboard-tab ${statusFilter === "completed" ? "active" : ""}`}
-              onClick={() => setStatusFilter("completed")}
-            >
-              Completed ({completedCount})
-            </button>
-          </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label htmlFor="package-select" className="form-label" style={{ marginBottom: 4 }}>
+                  Work package
+                </label>
+                <select
+                  id="package-select"
+                  className="form-select"
+                  value={selectedPackageId ?? ""}
+                  onChange={(e) => { void handleSelectPackage(e.target.value); }}
+                >
+                  {packages.map((pkg) => (
+                    <option key={pkg.package_id} value={pkg.package_id}>
+                      {pkg.package_id} {pkg.ontology?.release ? `(Release: ${pkg.ontology.release})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <input
-              type="search"
-              placeholder="Filter cases by ID..."
-              className="form-control"
-              style={{ width: 220, fontSize: "0.82rem", padding: "5px 10px" }}
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => { void handleExportPackage(); }}
-              disabled={!selectedPackageId || isExporting}
-              title={`Export all submissions of ${effectiveAnnotator} (${mode} mode) in this package as ZIP`}
-              style={{ padding: "6px 14px" }}
-            >
-              {isExporting ? "Exporting..." : "📥 Export package (.zip)"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => void handleOpenWorkspace()}
-              disabled={!selectedPackageId || !selectedDocId || isOpening}
-              style={{ padding: "6px 14px", fontWeight: 600 }}
-            >
-              {isOpening ? "Opening..." : "Open Workspace →"}
-            </button>
-          </div>
-        </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label htmlFor="annotator-input" className="form-label" style={{ marginBottom: 4 }}>
+                  Your initials / ID
+                </label>
+                <input
+                  id="annotator-input"
+                  ref={annotatorFieldRef}
+                  type="text"
+                  className={`form-control${identityIssue && !identityMissing ? " is-invalid" : ""}`}
+                  required
+                  aria-required="true"
+                  aria-invalid={identityIssue ? true : undefined}
+                  aria-describedby="annotator-hint"
+                  maxLength={MAX_IDENTITY_LENGTH * 2}
+                  autoComplete="off"
+                  value={annotatorInput}
+                  onChange={(e) => setAnnotatorInput(e.target.value)}
+                  onBlur={() => { commitAnnotator(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitAnnotator();
+                    } else if (e.key === "Escape") {
+                      setAnnotatorInput(annotatorId);
+                    }
+                  }}
+                  placeholder="e.g. JPL"
+                />
+                <div
+                  id="annotator-hint"
+                  className={`field-hint${identityIssue && !identityMissing ? " field-hint-error" : ""}`}
+                >
+                  {identityMissing ? (
+                    "Required. Your annotations are saved under this name."
+                  ) : identityIssue ? (
+                    identityIssue
+                  ) : (
+                    <>
+                      Working as <strong data-testid="dashboard-identity">{annotatorInput.trim()}</strong>
+                    </>
+                  )}
+                </div>
+              </div>
 
-        {/* Cases Table */}
-        <table className="dashboard-table" aria-label="Clinical Cases">
-          <thead>
-            <tr>
-              <th style={{ width: 48 }}>#</th>
-              <th>Case ID</th>
-              <th>Language</th>
-              <th>Length</th>
-              <th>Status</th>
-              <th style={{ textAlign: "right" }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredDocuments.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", color: "var(--text-muted)", padding: 24 }}>
-                  No cases found for the selected filter.
-                </td>
-              </tr>
-            ) : (
-              filteredDocuments.map((doc) => {
-                const isSelected = doc.document_id === selectedDocId;
-                return (
-                  <tr
-                    key={doc.document_id}
-                    style={{
-                      background: isSelected ? "var(--bg-primary)" : undefined,
-                      cursor: "pointer",
-                    }}
-                    aria-selected={isSelected}
-                    onClick={() => {
-                      setSelectedDocId(doc.document_id);
-                    }}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label htmlFor="mode-select" className="form-label" style={{ marginBottom: 4 }}>
+                  Working mode
+                </label>
+                <select
+                  id="mode-select"
+                  className="form-select"
+                  value={mode}
+                  onChange={(e) => handleChangeMode(e.target.value as WorkspaceMode)}
+                >
+                  <option value="independent">{modeLabels.independent}</option>
+                  <option value="review">{modeLabels.review}</option>
+                  <option value="assisted" style={{ display: "none" }}>{modeLabels.assisted}</option>
+                </select>
+                <div className="field-hint">{modeExplanations[mode]}</div>
+              </div>
+            </div>
+
+            {/* Hidden fallback select for strict document test compatibility */}
+            <div style={{ display: "none" }}>
+              <select
+                id="doc-select"
+                aria-label="Clinical Case (Document)"
+                value={selectedDocId ?? ""}
+                onChange={(e) => setSelectedDocId(e.target.value)}
+              >
+                {documents.map((doc) => (
+                  <option key={doc.document_id} value={doc.document_id}>
+                    Case {doc.position}: {doc.document_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Hero: selected case (defaults to the case to continue) with the one primary action */}
+            {heroDoc && (
+              <div className="dashboard-hero">
+                <div>
+                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)", fontWeight: 700 }}>
+                    {heroDoc.status === "in_progress" ? "Continue where you left off" : "Selected case"}
+                  </div>
+                  <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text-main)", marginTop: 2 }}>
+                    Case {heroDoc.position}: <span style={{ fontFamily: "var(--font-mono)" }}>{heroDoc.document_id}</span>
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: 3 }}>
+                    {heroDoc.language.toUpperCase()} • {heroDoc.text_length} chars • Status: <strong>{statusLabels[heroDoc.status] ?? heroDoc.status}</strong>
+                    {" • "}{modeLabels[mode]}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ padding: "8px 18px", fontWeight: 600 }}
+                    disabled={isOpening || !!identityIssue}
+                    onClick={() => requestOpen(heroDoc.document_id)}
                   >
-                    <td style={{ fontWeight: 600, color: "var(--text-muted)" }}>{doc.position}</td>
-                    <td style={{ fontWeight: 600, fontFamily: "var(--font-mono)" }}>{doc.document_id}</td>
-                    <td>{doc.language.toUpperCase()}</td>
-                    <td>{doc.text_length.toLocaleString("en-US")} chars</td>
-                    <td>
-                      <span
-                        className="badge"
-                        style={{
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          backgroundColor:
-                            doc.status === "completed"
-                              ? "var(--success-light)"
-                              : doc.status === "in_progress"
-                              ? "var(--primary-light)"
-                              : "#f1f5f9",
-                          color:
-                            doc.status === "completed"
-                              ? "var(--success)"
-                              : doc.status === "in_progress"
-                              ? "var(--primary)"
-                              : "#64748b",
-                        }}
-                      >
-                        {statusLabels[doc.status] ?? doc.status}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        style={{ padding: "4px 10px", fontSize: "0.8rem" }}
-                        disabled={isOpening}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleOpenWorkspace(doc.document_id);
-                        }}
-                      >
-                        Open Case →
-                      </button>
+                    {isOpening ? "Opening..." : "Open case"}
+                  </button>
+                  {identityIssue && (
+                    <span className="field-hint">Enter your initials first.</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Cases Data Table Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div className="dashboard-tabs">
+                <button
+                  type="button"
+                  className={`dashboard-tab ${statusFilter === "all" ? "active" : ""}`}
+                  onClick={() => setStatusFilter("all")}
+                >
+                  All ({documents.length})
+                </button>
+                <button
+                  type="button"
+                  className={`dashboard-tab ${statusFilter === "not_started" ? "active" : ""}`}
+                  onClick={() => setStatusFilter("not_started")}
+                >
+                  Open ({openCount})
+                </button>
+                <button
+                  type="button"
+                  className={`dashboard-tab ${statusFilter === "in_progress" ? "active" : ""}`}
+                  onClick={() => setStatusFilter("in_progress")}
+                >
+                  In Progress ({inProgressCount})
+                </button>
+                <button
+                  type="button"
+                  className={`dashboard-tab ${statusFilter === "completed" ? "active" : ""}`}
+                  onClick={() => setStatusFilter("completed")}
+                >
+                  Completed ({completedCount})
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <input
+                  type="search"
+                  placeholder="Filter cases by ID..."
+                  className="form-control"
+                  style={{ width: 220, fontSize: "0.82rem", padding: "5px 10px" }}
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { void handleExportPackage(); }}
+                  disabled={!selectedPackageId || !annotatorId || isExporting}
+                  title={annotatorId
+                    ? `Export all finished cases of ${annotatorId} (${modeLabels[mode]}) in this package as ZIP`
+                    : "Enter your initials first"}
+                  style={{ padding: "6px 14px" }}
+                >
+                  {isExporting ? "Exporting..." : "Export package (.zip)"}
+                </button>
+              </div>
+            </div>
+
+            {/* Cases Table: click selects, double-click or Enter opens */}
+            <table className="dashboard-table" aria-label="Clinical Cases">
+              <thead>
+                <tr>
+                  <th style={{ width: 48 }}>#</th>
+                  <th>Case ID</th>
+                  <th>Language</th>
+                  <th>Length</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDocuments.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: "center", color: "var(--text-muted)", padding: 24 }}>
+                      No cases found for the selected filter.
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                ) : (
+                  filteredDocuments.map((doc) => {
+                    const isSelected = doc.document_id === selectedDocId;
+                    return (
+                      <tr
+                        key={doc.document_id}
+                        className={isSelected ? "is-selected" : undefined}
+                        style={{ cursor: "pointer" }}
+                        tabIndex={0}
+                        aria-selected={isSelected}
+                        title="Click to select, double-click to open"
+                        onClick={() => setSelectedDocId(doc.document_id)}
+                        onDoubleClick={() => requestOpen(doc.document_id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            requestOpen(doc.document_id);
+                          } else if (e.key === " ") {
+                            e.preventDefault();
+                            setSelectedDocId(doc.document_id);
+                          }
+                        }}
+                      >
+                        <td style={{ fontWeight: 600, color: "var(--text-muted)" }}>{doc.position}</td>
+                        <td style={{ fontWeight: 600, fontFamily: "var(--font-mono)" }}>{doc.document_id}</td>
+                        <td>{doc.language.toUpperCase()}</td>
+                        <td>{doc.text_length.toLocaleString("en-US")} chars</td>
+                        <td>
+                          <span
+                            className="badge"
+                            style={{
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              backgroundColor:
+                                doc.status === "completed"
+                                  ? "var(--success-light)"
+                                  : doc.status === "in_progress"
+                                  ? "var(--primary-light)"
+                                  : "#f1f5f9",
+                              color:
+                                doc.status === "completed"
+                                  ? "var(--success)"
+                                  : doc.status === "in_progress"
+                                  ? "var(--primary)"
+                                  : "#64748b",
+                            }}
+                          >
+                            {statusLabels[doc.status] ?? doc.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </>
+        )}
       </div>
+
+      {pendingOpen && (
+        <div className="modal-overlay">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-identity-title"
+            className="modal-content"
+          >
+            <h2 id="confirm-identity-title" style={{ fontSize: "1.1rem", margin: "0 0 8px" }}>
+              You are annotating as {pendingOpen.identity}
+            </h2>
+            <p style={{ margin: "0 0 16px", color: "var(--text-muted)", fontSize: "0.9rem" }}>
+              Your annotations and decisions are saved under these initials. If this is not you, change them first.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn btn-secondary" onClick={changeIdentity}>
+                Change initials
+              </button>
+              <button type="button" className="btn btn-primary" onClick={confirmIdentity} autoFocus>
+                Yes, continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {sessionScreen}
     </div>
   );
 };

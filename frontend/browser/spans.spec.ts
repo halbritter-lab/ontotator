@@ -1,16 +1,23 @@
 import { expect, test, type Page } from "@playwright/test";
 
+/** Click the single "Open case" action and confirm the identity if asked. */
+async function openCase(page: Page) {
+  await page.getByRole("button", { name: /^Open case$/i }).click();
+  const confirm = page.getByRole("button", { name: /Yes, continue/i });
+  await confirm.waitFor({ state: "visible", timeout: 2000 }).then(() => confirm.click(), () => undefined);
+}
+
 async function importFixture(page: Page, annotator: string) {
   await page.goto("/#token=browser-test-token");
   const fixture = await page.request.get("/__synthetic_fixture__");
   expect(fixture.ok()).toBeTruthy();
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
     name: "synthetic.zip",
     mimeType: "application/zip",
     buffer: await fixture.body(),
   });
   await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
-  await page.getByLabel(/Annotator ID|Ihre Annotator-Kennung/i).fill(annotator);
+  await page.getByLabel(/Your initials \/ ID/i).fill(annotator);
 }
 
 async function selectText(page: Page, start: number, end: number) {
@@ -43,7 +50,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
     await importFixture(page, "reviewer-spans-proof");
     await page.locator("#mode-select").selectOption("review");
     await expect(page.getByText(/Review Proposals.*\(2\)|Verfügbare Vorschläge.*\(2\)/i)).toBeVisible();
-    await page.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }).click();
+    await openCase(page);
 
     // 1. Select and verify that first proposal (HP:0001252 Hypotonia, span [0:9]) is active
     await page.locator(".doc-item").filter({ hasText: "HP:0001252" }).click();
@@ -84,19 +91,19 @@ test.describe("Evidence Spans Proof & Verification", () => {
   test("independent mode: selecting text creates marked evidence spans with active highlight and handles picking", async ({ page }) => {
     await importFixture(page, "curator-spans-proof");
     await page.locator("#mode-select").selectOption("independent");
-    await page.getByRole("button", { name: /Open Workspace|Arbeitsbereich öffnen/i }).click();
+    await openCase(page);
 
     // Text is "Hypotonia and seizure. A😀é\r\nB"
     // Select "Hypotonia" (offsets 0 to 9)
     await selectText(page, 0, 9);
-    await expect(page.locator(".status-badge")).toContainText("Rev 0");
+    await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 0");
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
     await page.getByRole("button", { name: /Cancel|Abbrechen/i, exact: true }).click();
     await expect(page.locator(".text-container .run--marked")).toHaveCount(0);
     await selectText(page, 0, 9);
     await page.getByLabel(/Search ontology term|Ontologie-Term suchen/i).fill("Hypotonia");
     await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
-    await expect(page.locator(".status-badge")).toContainText("Rev 1");
+    await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
 
     // The span must now be marked
     const markedSpan = page.locator('.text-container .run--marked').filter({ hasText: "Hypotonia" });
@@ -116,7 +123,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
     // Extend mention: switch intent to discontinuous segment
     await page.getByRole("button", { name: "+ Segment", exact: true }).click();
     await selectText(page, 14, 21); // "seizure"
-    await expect(page.locator(".status-badge")).toContainText("Rev 2");
+    await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 2");
     await expect(page.getByText("Offsets: [0:9], [14:21]")).toBeVisible();
 
     // Now both "Hypotonia" and "seizure" are marked as evidence segments of the same mention
