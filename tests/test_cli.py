@@ -132,7 +132,7 @@ def test_cli_serve_auto_finds_next_port_when_saved_port_occupied(
 
     seen: dict[str, int] = {}
 
-    def fake_run_server(api_app, sock, on_started=None, finished=None):
+    def fake_run_server(api_app, sock, on_started=None, finished=None, **_kwargs):
         # The socket is already bound and listening before the server starts.
         seen["port"] = sock.getsockname()[1]
         assert api_app.state.config.port == seen["port"]

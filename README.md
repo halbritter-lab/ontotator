@@ -82,6 +82,11 @@ The CLI will:
 
 Stop the server with `Ctrl+C`; it shuts down gracefully and closes the database.
 
+The console stays quiet by default (no per-request log); the banner shows the
+address without the token. Because each start creates a new token, a browser tab
+left open from an earlier start shows a "Please reopen Ontocurator" page:
+starting Ontocurator again simply opens a fresh tab for the running instance.
+
 When run from source without `--workspace`, the workspace is the last one used
 (saved in the settings file) or `./workspace` relative to the current directory.
 Pass `--workspace` explicitly for anything beyond local development.
@@ -100,6 +105,8 @@ Pass `--workspace` explicitly for anything beyond local development.
 | `--web-dir` | | `None` | Custom directory containing built web assets (defaults to embedded) |
 | `--axes-config` | | `None` | Path to JSON file defining fallback `AxesConfig` profile |
 | `--token` | `-t` | `None` | Custom session token (a new one is generated on every start if omitted) |
+| `--print-url` | | `false` | Also print the full link including the session token (always printed with `--no-browser`) |
+| `--verbose` | `-v` | `false` | Show technical details in the startup banner and log every HTTP request |
 
 `ontocurator <file-or-folder>` (also: drag & drop onto the executable, "Open with")
 routes `.zip` to `--package`, `.json` to `--import-ontology` and a folder to

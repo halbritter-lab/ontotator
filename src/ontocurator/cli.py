@@ -158,13 +158,20 @@ def run_server(
     sock: socket.socket,
     on_started: Callable[[], None] | None = None,
     finished: threading.Event | None = None,
+    verbose: bool = False,
 ) -> None:
     """Serve ``api_app`` on an already bound socket until interrupted.
 
     uvicorn handles SIGINT/SIGTERM (and SIGBREAK on Windows) gracefully;
-    ``on_started`` runs once the server accepts connections.
+    ``on_started`` runs once the server accepts connections. Without
+    ``verbose`` the console stays quiet: no per-request access log and only
+    warnings/errors from uvicorn.
     """
-    config = uvicorn.Config(api_app, log_level="info")
+    config = uvicorn.Config(
+        api_app,
+        log_level="info" if verbose else "warning",
+        access_log=verbose,
+    )
     server = uvicorn.Server(config)
     finished = finished or threading.Event()
     _keepalive = _install_windows_close_handler(server, finished)
@@ -205,6 +212,13 @@ def run_server(
 def _open_browser(url: str) -> None:
     with contextlib.suppress(Exception):
         webbrowser.open(url)
+
+
+def relaunch_hint() -> str:
+    """How to get a fresh browser tab for the running instance."""
+    if getattr(sys, "frozen", False):
+        return f"double-click {Path(sys.executable).name} again"
+    return "start Ontocurator again"
 
 
 def build_app_url(base_url: str, token: str, package_id: str | None = None) -> str:
@@ -275,7 +289,7 @@ def _handoff_to_running_instance(
             not_imported.append(package)
         for path in not_imported:
             how = (
-                "use 'Import Package' in the web UI"
+                "use 'Import work package' in the web UI"
                 if package is not None and path == package
                 else "drop it onto Ontocurator again (or use 'Upload missing "
                 "ontology' in the web UI)"
@@ -399,6 +413,24 @@ def serve(
             help="Path to initial work package ZIP file to import on startup.",
         ),
     ] = None,
+    print_url: Annotated[
+        bool,
+        typer.Option(
+            "--print-url",
+            help=(
+                "Also print the full link including the private access key "
+                "(always printed with --no-browser)."
+            ),
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Show technical details and log every request in this window.",
+        ),
+    ] = False,
 ) -> None:
     """Start local secured HPO annotation editor server."""
     # ---- validate inputs before touching any workspace ----------------------
@@ -634,27 +666,44 @@ def serve(
         write_instance_info(ws, info)
         url = build_app_url(info.base_url, effective_token, package_id)
 
-        typer.echo("==================================================")
-        typer.echo(f"  Ontocurator {get_version()} running on port {actual_port}")
-        typer.echo(f"  Workspace: {ws}")
-        typer.echo(f"             ({ws_source})")
-        typer.echo(f"  Settings:  {config_path}")
-        typer.echo(f"  URL:       {url}")
+        rule = "=" * 66
+        typer.echo(rule)
+        if open_browser:
+            typer.echo(
+                "  Ontocurator is running. Your browser should open automatically."
+            )
+        else:
+            typer.echo("  Ontocurator is running.")
+        typer.echo("  Keep this window open while you work; to quit, press Ctrl+C")
+        typer.echo("  or close this window.")
+        typer.echo("")
+        typer.echo(f"  Address:     {info.base_url}/")
+        if open_browser:
+            typer.echo(f"  If the browser did not open, {relaunch_hint()}.")
+        if not open_browser or print_url:
+            typer.echo("  Open this link in your browser (it contains a private key):")
+            typer.echo(f"  {url}")
+        typer.echo(f"  Data folder: {ws}")
+        if verbose:
+            typer.echo(f"               ({ws_source})")
+            typer.echo(f"  Settings:    {config_path}")
+            typer.echo(f"  Version:     {get_version()}")
         if sync_provider is not None:
             typer.echo("")
-            typer.echo(f"  Warning: the workspace is inside a {sync_provider} folder.")
+            typer.echo(
+                f"  Warning: the data folder is inside a {sync_provider} folder."
+            )
             typer.echo("  Cloud sync can corrupt the open database. Prefer a local")
             typer.echo("  folder (see README 'Where data lives') or pause syncing.")
-        typer.echo("")
-        typer.echo("  Press Ctrl+C in this window to quit.")
-        typer.echo("  Do not close this window while a save or import is running.")
-        typer.echo("==================================================")
+        typer.echo(rule)
 
         def _on_started() -> None:
             if open_browser:
                 _open_browser(url)
 
-        run_server(api_app, sock, on_started=_on_started, finished=finished)
+        run_server(
+            api_app, sock, on_started=_on_started, finished=finished, verbose=verbose
+        )
     finally:
         if api_app is not None:
             repo = getattr(api_app.state, "repo", None)

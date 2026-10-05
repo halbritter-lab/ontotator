@@ -37,11 +37,11 @@ runner = CliRunner()
 HP_FIXTURE = Path(__file__).parent / "fixtures" / "hp.json"
 
 
-def _noop_run_server(api_app, sock, on_started=None, finished=None):
+def _noop_run_server(api_app, sock, on_started=None, finished=None, **_kwargs):
     return None
 
 
-def _started_run_server(api_app, sock, on_started=None, finished=None):
+def _started_run_server(api_app, sock, on_started=None, finished=None, **_kwargs):
     if on_started is not None:
         on_started()
 
@@ -69,7 +69,9 @@ def test_cli_serve_discovers_ontologies_and_loads_persistent_config(
         patch("ontocurator.cli.load_persistent_config", return_value=fake_config),
         patch("ontocurator.cli.run_server") as mock_run,
     ):
-        result = runner.invoke(app, ["serve", "--no-browser", "--port", "0"])
+        result = runner.invoke(
+            app, ["serve", "--no-browser", "--port", "0", "--verbose"]
+        )
         assert result.exit_code == 0, result.output
         mock_run.assert_called_once()
         api_app = mock_run.call_args[0][0]
@@ -176,7 +178,7 @@ def test_token_rotates_per_start_and_is_not_persisted(tmp_path: Path) -> None:
     tokens: list[str] = []
     info_seen: list[InstanceInfo | None] = []
 
-    def capture(api_app, sock, on_started=None, finished=None):
+    def capture(api_app, sock, on_started=None, finished=None, **_kwargs):
         tokens.append(api_app.state.config.session_token)
         info_seen.append(read_instance_info(ws))
 
@@ -244,14 +246,14 @@ def test_startup_banner_explains_how_to_quit(tmp_path: Path) -> None:
             app, ["serve", "-w", str(tmp_path), "--no-browser", "--port", "0"]
         )
     assert "Ctrl+C" in result.output
-    assert "Do not close" in result.output
-    assert f"Workspace: {tmp_path.resolve()}" in result.output
+    assert "Keep this window open" in result.output
+    assert f"Data folder: {tmp_path.resolve()}" in result.output
 
 
 def test_database_closed_after_server_stops(tmp_path: Path) -> None:
     captured = {}
 
-    def capture(api_app, sock, on_started=None, finished=None):
+    def capture(api_app, sock, on_started=None, finished=None, **_kwargs):
         captured["db"] = api_app.state.repo.db
 
     with patch("ontocurator.cli.run_server", side_effect=capture):
