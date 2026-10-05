@@ -70,3 +70,35 @@ def test_cli_serve_nonexistent_ontology_rejected(tmp_path) -> None:
     )
     assert result.exit_code == 1
     assert "not found" in result.output.lower() or "error" in result.output.lower()
+
+
+def test_cli_serve_auto_finds_next_port_when_default_occupied(tmp_path) -> None:
+    import socket
+    from unittest.mock import patch
+
+    from ontocurator.cli import app
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 8000))
+
+    try:
+        runner = CliRunner()
+        with (
+            patch("uvicorn.run") as mock_run,
+            patch("webbrowser.open"),
+        ):
+            # No --port flag provided; default 8000 is occupied by sock
+            result = runner.invoke(
+                app,
+                ["serve", "--workspace", str(tmp_path), "--no-browser"],
+            )
+            assert result.exit_code == 0
+            assert mock_run.called
+            called_port = mock_run.call_args[1]["port"]
+            assert called_port != 8000
+            assert (
+                "already in use" in result.output
+                or "using available port" in result.output
+            )
+    finally:
+        sock.close()

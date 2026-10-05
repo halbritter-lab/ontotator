@@ -36,6 +36,15 @@ def _is_port_in_use(host: str, port: int) -> bool:
             return True
 
 
+def _find_next_free_port(
+    host: str, start_port: int = 8000, max_attempts: int = 20
+) -> int:
+    for candidate in range(start_port, start_port + max_attempts):
+        if not _is_port_in_use(host, candidate):
+            return candidate
+    return _find_free_port(host)
+
+
 @app.command()
 def version() -> None:
     """Print current version of Ontocurator."""
@@ -61,13 +70,13 @@ def serve(
         ),
     ] = None,
     port: Annotated[
-        int,
+        int | None,
         typer.Option(
             "--port",
             "-p",
-            help="Port to bind the local server (0 for random free port).",
+            help="Port to bind the local server (0 or omitted for automatic available port).",
         ),
-    ] = 8000,
+    ] = None,
     host: Annotated[
         str,
         typer.Option(
@@ -157,12 +166,24 @@ def serve(
 
     ontology_list = combined_ontologies
 
-    if port != 0 and _is_port_in_use(host, port):
-        typer.echo(
-            f"Error: Port {port} is already in use on {host}.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
+    if port is not None:
+        if port != 0 and _is_port_in_use(host, port):
+            typer.echo(
+                f"Error: Port {port} is already in use on {host}.",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+        actual_port = port if port != 0 else _find_free_port(host)
+    else:
+        preferred_port = persistent_cfg.port
+        if not _is_port_in_use(host, preferred_port):
+            actual_port = preferred_port
+        else:
+            actual_port = _find_next_free_port(host, start_port=preferred_port + 1)
+            typer.echo(
+                f"Notice: Port {preferred_port} is already in use on {host}; "
+                f"using available port {actual_port}."
+            )
 
     resolved_web_dir: Path | None = None
     if web_dir is not None:
@@ -185,8 +206,6 @@ def serve(
     workspace = workspace.resolve()
     workspace.mkdir(parents=True, exist_ok=True)
     db_path = workspace / "editor.db"
-
-    actual_port = port if port != 0 else _find_free_port(host)
     token_file = workspace / ".session_token"
     if token:
         effective_token = token
