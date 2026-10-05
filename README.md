@@ -107,6 +107,7 @@ Pass `--workspace` explicitly for anything beyond local development.
 | `--token` | `-t` | `None` | Custom session token (a new one is generated on every start if omitted) |
 | `--print-url` | | `false` | Also print the full link including the session token (always printed with `--no-browser`) |
 | `--verbose` | `-v` | `false` | Show technical details in the startup banner and log every HTTP request |
+| `--provision-dir` | | app folder (standalone) | Folder with `ontologies/`, `packages/` and `ontocurator-settings.json` to register/import at start (see [Preconfigured distribution](#preconfigured-distribution)); not used implicitly when run from source |
 
 `ontocurator <file-or-folder>` (also: drag & drop onto the executable, "Open with")
 routes `.zip` to `--package`, `.json` to `--import-ontology` and a folder to
@@ -205,6 +206,98 @@ uv run python scripts/build_standalone.py --help   # all options
   Unsigned builds are the default (TODO: obtain certificates).
 - The archive includes `THIRD_PARTY_NOTICES.md` and `LICENSES/` with generated
   license texts for all bundled Python and npm packages.
+
+---
+
+## Preconfigured distribution
+
+A portable copy can ship everything an annotator needs, so they only extract
+the ZIP and double-click the executable:
+
+```
+Ontocurator/
+├── ontocurator.exe
+├── ontologies/                 ← *.json registered at startup
+├── packages/                   ← *.zip work packages imported at startup
+├── ontocurator-settings.json   ← optional presets
+└── workspace/
+```
+
+**At every start** (before the browser opens) Ontocurator first registers each
+`ontologies/*.json` (copied content-addressed into `workspace/ontologies/` and
+remembered in `config.json`), then imports each `packages/*.zip` (packages may
+need those ontologies or embed their own). Packages that are already imported
+unchanged are skipped silently, so starting again is safe. Invalid files are
+skipped with a message in the console; they never block the start.
+
+**These folders are for the initial delivery only.** Imported packages are
+immutable and pinned by hash, so replacing or editing files there later does
+NOT change data already in the workspace:
+
+- A package in `packages/` whose package ID is already imported but whose
+  content differs is **not** imported. The console and the dashboard show a
+  yellow warning: *"Package 'X' in the packages folder differs from the already
+  imported version. The changed version was NOT imported. To ship changed
+  content, use a new package ID."*
+- An ontology file with the same name as a previously provisioned one but
+  different content is registered as a **new version**; the old one stays for
+  existing packages. The dashboard shows a one-time notice.
+- To ship changed content, create a new work package with a new package ID, or
+  add the new ontology version. Never edit `workspace/` by hand.
+
+`workspace/provisioning.json` records which file was provisioned with which
+SHA-256 to detect such changes. `GET /api/v1/provisioning` returns the notices
+of the current start. `ontologies/README.txt` and `packages/README.txt` in the
+bundle repeat these rules.
+
+### `ontocurator-settings.json`
+
+Optional, next to the executable (every key is optional):
+
+```json
+{ "default_mode": "independent", "allowed_modes": ["independent"], "annotator_id": null,
+  "open_package": "study-xy-round1", "auto_open_browser": true }
+```
+
+| Key | Effect |
+|---|---|
+| `default_mode` | Working mode used when the person has not chosen one for a package (`independent`, `review`, `assisted`); must be in `allowed_modes` |
+| `allowed_modes` | Modes that may be used. With a single mode the dashboard shows it as a fixed label instead of a chooser. Enforced by the server too (other modes → HTTP 403 `MODE_NOT_ALLOWED`), because blinding is the point |
+| `annotator_id` | Suggested identity for personalised copies (same rules as the identity field); the person still confirms "You are annotating as …" |
+| `open_package` | Package preselected on the dashboard and included in the opened link |
+| `auto_open_browser` | Open the browser at start |
+
+Unknown keys are reported and ignored; an invalid file is reported and the
+defaults are used. **Precedence:** command line flags (e.g. `--no-browser`,
+`--package`) > `ontocurator-settings.json` > saved settings (`config.json`) >
+built-in defaults. `GET /api/v1/settings` returns the effective presets.
+
+### Building a preconfigured bundle
+
+Automatically, as part of the standalone build (all preloads are validated
+before the build starts: packages must be readable v2 work packages,
+ontologies must parse, settings must validate):
+
+```bash
+uv run --locked python scripts/build_standalone.py --out-dir ../oc-dist     --package study-xy-round1.zip --ontology hp.json     --settings ontocurator-settings.json --bundle-name study-xy
+```
+
+`--package` and `--ontology` are repeatable. `--bundle-name NAME` produces
+`NAME.zip` with the top-level folder `NAME/` (so two studies never extract
+into the same folder). Without the dev toolchain (no Node.js/PyInstaller),
+preconfigure an already built ZIP with the same validation:
+
+```bash
+uv run python scripts/provision_bundle.py ontocurator-portable-windows-x86_64.zip     --package study-xy-round1.zip --ontology hp.json     --settings ontocurator-settings.json --bundle-name study-xy
+```
+
+Manually (gives the same layout):
+
+1. Extract the standard portable ZIP.
+2. Copy work packages (`.zip`) into `packages/` and ontologies (`.json`) into
+   `ontologies/`.
+3. Optionally add `ontocurator-settings.json` next to the executable.
+4. Zip the folder again (keep `workspace/` empty: never ship a used workspace).
 
 ---
 
