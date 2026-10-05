@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -55,6 +56,50 @@ def _key_str(key: WorkspaceKey) -> str:
     return _ESCAPED_KEY_PREFIX + "|".join(quote(part, safe="") for part in parts)
 
 
+def _legacy_key_str(key: WorkspaceKey) -> str:
+    """The ':'-joined form every v4 build before the escaped encoding stored.
+
+    Identical to ``_key_str`` unless a component contains ':'; such legacy rows
+    are rewritten by ``Repository.migrate_legacy_workspace_keys``.
+    """
+    return ":".join(
+        [
+            key.package_id,
+            key.document_id,
+            key.annotator_id,
+            key.mode,
+            key.scope_id,
+            key.target_set_id,
+        ]
+    )
+
+
+def _has_component_colon(column: str) -> str:
+    """SQL predicate: a ':'-joined key whose components contain ':'.
+
+    Legacy keys without ':' in a component have exactly five separators and
+    escaped keys have none, so only affected legacy rows match.
+    """
+    return f"(length({column}) - length(replace({column}, ':', ''))) > 5"
+
+
+# (table, column) pairs that persist a workspace identity string.
+_KEY_COLUMNS = (
+    ("workspaces", "workspace_key"),
+    ("mutation_receipts", "workspace_key"),
+    ("submissions", "origin_key"),
+    ("imported_submission_bindings", "local_key"),
+    ("search_events", "workspace_key"),
+    ("package_search_events", "local_key"),
+)
+_WORKSPACE_CHILD_TABLES = (
+    "workspace_annotations",
+    "workspace_evidence",
+    "workspace_decisions",
+    "mutation_receipts",
+)
+
+
 def _local_import_key(
     origin: WorkspaceKey, package_id: str, profile: TaskProfile
 ) -> WorkspaceKey:
@@ -84,6 +129,185 @@ class Repository:
 
     def __init__(self, db: Database) -> None:
         self.db = db
+        self.migrate_legacy_workspace_keys()
+
+    def migrate_legacy_workspace_keys(self) -> int:
+        """Rewrite legacy ':'-joined identities of keys whose components contain ':'.
+
+        Older v4 builds joined key components with ':'; the current encoding
+        escapes such keys (see ``_key_str``). Without this rewrite their drafts,
+        receipts, submissions and search events would be unreachable and the
+        next open would create a second, empty workspace. Every identity is
+        recomputed from structured data (workspace columns or JSON payloads)
+        and only rewritten when its legacy string matches exactly, so keys that
+        collided under the old encoding are never cross-assigned. Runs in one
+        transaction, is idempotent and needs no schema change
+        (``workspace_key`` already is the primary key of ``workspaces``).
+        Returns the number of rewritten rows.
+        """
+        conn = self.db.get_connection()
+        if not any(
+            conn.execute(
+                f"SELECT 1 FROM {table} WHERE {_has_component_colon(column)} LIMIT 1"
+            ).fetchone()
+            for table, column in _KEY_COLUMNS
+        ):
+            return 0
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            # Parent and child keys are renamed one after another.
+            conn.execute("PRAGMA defer_foreign_keys = ON")
+            changed = self._rewrite_legacy_keys(conn)
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        return changed
+
+    def _rewrite_legacy_keys(self, conn: sqlite3.Connection) -> int:
+        changed = 0
+        profiles: dict[str, TaskProfile | None] = {}
+
+        def profile_of(package_id: str) -> TaskProfile | None:
+            if package_id not in profiles:
+                try:
+                    profiles[package_id] = self.get_task_profile(package_id)
+                except DomainError:
+                    profiles[package_id] = None
+            return profiles[package_id]
+
+        def local_candidates(
+            origin: WorkspaceKey, package_id: str
+        ) -> list[WorkspaceKey]:
+            candidates = [origin]
+            profile = profile_of(package_id)
+            if profile is not None:
+                candidates.append(_local_import_key(origin, package_id, profile))
+            return candidates
+
+        def rewrite(
+            table: str, column: str, where: str, args: tuple[str, ...], new: str
+        ) -> None:
+            nonlocal changed
+            changed += conn.execute(
+                f"UPDATE {table} SET {column} = ? WHERE {where}", (new, *args)
+            ).rowcount
+
+        rows = conn.execute(
+            "SELECT workspace_key, package_id, document_id, annotator_id, mode, "
+            "scope_id, target_set_id FROM workspaces "
+            f"WHERE {_has_component_colon('workspace_key')}"
+        ).fetchall()
+        for row in rows:
+            key = WorkspaceKey(
+                package_id=row[1],
+                document_id=row[2],
+                annotator_id=row[3],
+                mode=row[4],
+                scope_id=row[5],
+                target_set_id=row[6],
+            )
+            old, new = row[0], _key_str(key)
+            if old == new or old != _legacy_key_str(key):
+                continue
+            if conn.execute(
+                "SELECT 1 FROM workspaces WHERE workspace_key = ?", (new,)
+            ).fetchone():
+                if not self._is_pristine_workspace(conn, new):
+                    continue  # both carry work: never merge or drop silently
+                # Empty row created by a build that missed the legacy row.
+                conn.execute("DELETE FROM workspaces WHERE workspace_key = ?", (new,))
+            rewrite("workspaces", "workspace_key", "workspace_key = ?", (old,), new)
+            for table in _WORKSPACE_CHILD_TABLES:
+                rewrite(table, "workspace_key", "workspace_key = ?", (old,), new)
+
+        rows = conn.execute(
+            "SELECT submission_id, origin_key, payload_json FROM submissions "
+            f"WHERE {_has_component_colon('origin_key')}"
+        ).fetchall()
+        for sub_id, old, payload in rows:
+            origin = WorkspaceKey.model_validate(json.loads(payload)["origin_key"])
+            if old == _legacy_key_str(origin):
+                rewrite(
+                    "submissions",
+                    "origin_key",
+                    "submission_id = ?",
+                    (sub_id,),
+                    _key_str(origin),
+                )
+
+        rows = conn.execute(
+            "SELECT b.local_package_id, b.submission_id, b.local_key, s.payload_json "
+            "FROM imported_submission_bindings b JOIN submissions s "
+            f"USING(submission_id) WHERE {_has_component_colon('b.local_key')}"
+        ).fetchall()
+        for package_id, sub_id, old, payload in rows:
+            origin = WorkspaceKey.model_validate(json.loads(payload)["origin_key"])
+            for candidate in local_candidates(origin, package_id):
+                if old == _legacy_key_str(candidate):
+                    rewrite(
+                        "imported_submission_bindings",
+                        "local_key",
+                        "local_package_id = ? AND submission_id = ?",
+                        (package_id, sub_id),
+                        _key_str(candidate),
+                    )
+                    break
+
+        rows = conn.execute(
+            "SELECT event_id, workspace_key, payload_json FROM search_events "
+            f"WHERE {_has_component_colon('workspace_key')}"
+        ).fetchall()
+        for event_id, old, payload in rows:
+            event_key = WorkspaceKey.model_validate(
+                json.loads(payload)["workspace_key"]
+            )
+            if old == _legacy_key_str(event_key):
+                rewrite(
+                    "search_events",
+                    "workspace_key",
+                    "event_id = ?",
+                    (event_id,),
+                    _key_str(event_key),
+                )
+
+        rows = conn.execute(
+            "SELECT p.package_id, p.event_id, p.local_key, e.payload_json "
+            "FROM package_search_events p JOIN search_events e USING(event_id) "
+            f"WHERE {_has_component_colon('p.local_key')}"
+        ).fetchall()
+        for package_id, event_id, old, payload in rows:
+            event_key = WorkspaceKey.model_validate(
+                json.loads(payload)["workspace_key"]
+            )
+            for candidate in local_candidates(event_key, package_id):
+                if old == _legacy_key_str(candidate):
+                    rewrite(
+                        "package_search_events",
+                        "local_key",
+                        "package_id = ? AND event_id = ?",
+                        (package_id, event_id),
+                        _key_str(candidate),
+                    )
+                    break
+        return changed
+
+    @staticmethod
+    def _is_pristine_workspace(conn: sqlite3.Connection, key_str: str) -> bool:
+        """True for a workspace row that never received any work."""
+        row = conn.execute(
+            "SELECT revision, checked_layer_ids_json FROM workspaces "
+            "WHERE workspace_key = ?",
+            (key_str,),
+        ).fetchone()
+        if row is None or row[0] != 0 or json.loads(row[1] or "[]"):
+            return False
+        return not any(
+            conn.execute(
+                f"SELECT 1 FROM {table} WHERE workspace_key = ? LIMIT 1", (key_str,)
+            ).fetchone()
+            for table in _WORKSPACE_CHILD_TABLES
+        )
 
     def import_package(
         self,

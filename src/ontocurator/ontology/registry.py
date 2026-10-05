@@ -35,8 +35,10 @@ class OntologyRegistry:
     """Manages and caches loaded ontology services bound to TaskProfiles and SHA-256 digests.
 
     Request handlers run in a thread pool, so every access to the shared maps
-    goes through one re-entrant lock. Loading happens under the lock as well,
-    which also prevents two threads from parsing the same file twice.
+    goes through one re-entrant lock. Parsing an ontology can take seconds, so
+    it happens outside that lock under a per-digest load lock: other requests
+    keep being served while a file loads, and two threads never parse the same
+    digest twice (double-checked insert).
     """
 
     def __init__(self, base_dir: Path | str | None = None) -> None:
@@ -44,6 +46,7 @@ class OntologyRegistry:
         self._registered_paths: dict[str, Path] = {}
         self._failures: dict[str, OntologyLoadFailure] = {}
         self._lock = threading.RLock()
+        self._load_locks: dict[str, threading.Lock] = {}
         # Relative ``resource_path`` entries resolve against this directory
         # (the workspace), never against the process working directory.
         self.base_dir = Path(base_dir).resolve() if base_dir is not None else None
@@ -74,10 +77,33 @@ class OntologyRegistry:
 
         with self._lock:
             self._registered_paths[expected_sha] = p
-            if expected_sha not in self._services:
-                ref = OntologyRef(release=expected.release, sha256=expected.sha256)
-                self._services[expected_sha] = OntologyService.load(p, ref)
-                self._failures.pop(expected_sha, None)
+        self._load_once(
+            expected_sha,
+            p,
+            OntologyRef(release=expected.release, sha256=expected.sha256),
+        )
+
+    def _load_once(self, sha: str, path: Path, ref: OntologyRef) -> OntologyService:
+        """Return the cached service for ``sha`` or parse ``path`` exactly once.
+
+        The shared lock is only held for map access, never while parsing.
+        """
+        with self._lock:
+            cached = self._services.get(sha)
+            if cached is not None:
+                return cached
+            load_lock = self._load_locks.setdefault(sha, threading.Lock())
+        with load_lock:
+            with self._lock:
+                cached = self._services.get(sha)
+            if cached is not None:
+                return cached
+            service = OntologyService.load(path, ref)
+            with self._lock:
+                service = self._services.setdefault(sha, service)
+                self._failures.pop(sha, None)
+                self._load_locks.pop(sha, None)
+            return service
 
     def register_service(self, service: OntologyService) -> None:
         """Register an already-instantiated OntologyService."""
@@ -198,20 +224,18 @@ class OntologyRegistry:
         sha = ont_def.sha256.lower()
 
         with self._lock:
-            if sha in self._services:
-                return self._bind_release(self._services[sha], ont_def)
-
-            if sha in self._registered_paths:
-                ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
-                svc = OntologyService.load(self._registered_paths[sha], ref)
-                self._services[sha] = svc
-                self._failures.pop(sha, None)
-                return svc
-
-            if ont_def.resource_path:
-                res_p = self._resource_file(ont_def.resource_path)
-                if res_p is not None:
-                    self.register(res_p, ont_def)
+            cached = self._services.get(sha)
+            registered = self._registered_paths.get(sha)
+        if cached is not None:
+            return self._bind_release(cached, ont_def)
+        if registered is not None:
+            ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
+            return self._bind_release(self._load_once(sha, registered, ref), ont_def)
+        if ont_def.resource_path:
+            res_p = self._resource_file(ont_def.resource_path)
+            if res_p is not None:
+                self.register(res_p, ont_def)
+                with self._lock:
                     return self._services[sha]
 
         raise DomainError(
@@ -230,12 +254,12 @@ class OntologyRegistry:
         """Return cached or registered OntologyService by SHA-256, if available."""
         sha = sha256.lower()
         with self._lock:
-            if sha in self._services:
-                return self._services[sha]
-            if sha in self._registered_paths:
-                ref = OntologyRef(release="unknown", sha256=sha256)
-                svc = OntologyService.load(self._registered_paths[sha], ref)
-                self._services[sha] = svc
-                self._failures.pop(sha, None)
-                return svc
+            cached = self._services.get(sha)
+            registered = self._registered_paths.get(sha)
+        if cached is not None:
+            return cached
+        if registered is None:
             return None
+        return self._load_once(
+            sha, registered, OntologyRef(release="unknown", sha256=sha256)
+        )

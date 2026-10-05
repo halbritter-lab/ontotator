@@ -31,6 +31,32 @@ A valid v2 work package ZIP archive contains:
 6. `search-events.jsonl`: Audit log of search operations with `layer_id`, `query`, candidates, ranking, and selections.
 7. Optional embedded ontology files declared in `task_profile.ontologies[*].resource_path` (e.g. `ontologies/hp.json`).
 
+## Exports and Resubmissions
+
+Two export flavours produce v2 packages with `origin_package_id` / `origin_manifest_hash` set:
+
+- **Workspace export** (`GET /api/v1/workspaces/{id}/export`): one document, one annotator, one mode.
+- **Package export** (`GET /api/v1/packages/{package_id}/export?annotator_id=...[&mode=...]`): every workspace of one annotator in the package, all documents in package order. Exports of different annotators share documents, task profile and `origin_manifest_hash`, so they can be compared for inter-annotator agreement.
+
+`submissions.jsonl` is an **append-only audit trail**: when an annotator submits a document, reopens it and submits again, *every* submission is exported, not only the last one. Consumers that want the current result must select the latest submission themselves:
+
+1. Group submissions by their full `origin_key` (`package_id`, `document_id`, `annotator_id`, `mode`, `scope_id`, `target_set_id`). One group is one workspace; its `scope` names the editable layers the submission covers (`scope.editable_layer_ids`), so the latest submission of a group is the latest result for each of those layers of that document and annotator.
+2. Within a group, the latest submission is the one with the highest `draft_revision`. It is a strictly increasing integer per workspace: every edit and every submit bumps the workspace revision, and a submission records the revision it created. Use `created_at` (ISO-8601 UTC timestamp) only as a tie-breaker / for display; it is not guaranteed to be monotonic across machines with skewed clocks.
+3. To get one result per *(document, annotator, layer)*, take the latest submission of each group whose `scope.editable_layer_ids` contains the layer and keep only its snapshots with that `layer_id`. If several groups qualify (e.g. different modes, or work continued after re-importing an export, which keeps the original `origin_key.package_id`), `draft_revision` is not comparable across groups; pick by `created_at` and report the ambiguity rather than merging.
+
+```python
+latest = {}
+for sub in submissions:
+    k = tuple(sub["origin_key"][f] for f in
+              ("package_id", "document_id", "annotator_id", "mode", "scope_id", "target_set_id"))
+    if k not in latest or (sub["draft_revision"], sub["created_at"]) > (
+        latest[k]["draft_revision"], latest[k]["created_at"]
+    ):
+        latest[k] = sub
+```
+
+Earlier submissions are never needed to interpret the latest one: each submission carries the complete set of snapshots and decisions of the workspace at that revision.
+
 ## TaskProfile Schema
 
 ```json

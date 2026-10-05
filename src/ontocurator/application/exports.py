@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import EvidenceSnapshot
+from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile, profile_hash
 from ontocurator.domain.scopes import build_scope
@@ -52,13 +52,18 @@ class ExportService:
             )
 
         documents = {d.document_id: d for d in self.repo.list_documents(package_id)}
+        # Load the installed package and its profile once for all workspaces.
+        orig_pkg = self.repo.export_package(package_id)
+        package_profile = self.repo.get_task_profile(package_id)
         annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
         evidence: dict[tuple[str, str], EvidenceSnapshot] = {}
         submissions = {}
         search_events: dict[str, SearchEventRecord] = {}
         profile: TaskProfile | None = None
         for key in keys:
-            part = self.for_workspace(key)
+            part = self._export_workspace(
+                key, orig_pkg, package_profile, documents.get(key.document_id)
+            )
             annotations.update(part.annotations)
             evidence.update(part.evidence)
             submissions.update(part.submissions)
@@ -69,8 +74,8 @@ class ExportService:
                 profile = part.manifest.task_profile
         if profile is None:
             # Mixed modes: the full package profile covers every layer.
-            profile = self.repo.get_task_profile(package_id)
-        stored_resources = self.repo.get_embedded_files(package_id)
+            profile = package_profile
+        stored_resources = orig_pkg.embedded_files
         embedded = {
             ont.resource_path: stored_resources[ont.resource_path]
             for ont in profile.ontologies
@@ -85,9 +90,7 @@ class ExportService:
             task_profile=profile,
             task_profile_sha256=profile_hash(profile),
             origin_package_id=package_id,
-            origin_manifest_hash=canonical_hash(
-                self.repo.get_manifest(package_id).model_dump()
-            ),
+            origin_manifest_hash=canonical_hash(orig_pkg.manifest.model_dump()),
         )
         return ValidatedPackage(
             manifest=manifest,
@@ -103,17 +106,26 @@ class ExportService:
 
     def for_workspace(self, key: WorkspaceKey) -> ValidatedPackage:
         """Produce a scoped ValidatedPackage containing only workspace data."""
-        doc = self.repo.get_document(key.package_id, key.document_id)
+        return self._export_workspace(
+            key,
+            self.repo.export_package(key.package_id),
+            self.repo.get_task_profile(key.package_id),
+            self.repo.get_document(key.package_id, key.document_id),
+        )
+
+    def _export_workspace(
+        self,
+        key: WorkspaceKey,
+        orig_pkg: ValidatedPackage,
+        task_profile: TaskProfile,
+        doc: Document | None,
+    ) -> ValidatedPackage:
+        """Export one workspace against an already loaded installed package."""
         if doc is None:
             raise DomainError(
                 "DOCUMENT_NOT_FOUND",
                 f"Document '{key.document_id}' not found for export",
             )
-
-        orig_pkg = self.repo.export_package(key.package_id)
-
-        # Load task profile and scope
-        task_profile = self.repo.get_task_profile(key.package_id)
         scope = build_scope(task_profile, key.mode)
 
         # Load submissions for this workspace key

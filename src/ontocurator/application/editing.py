@@ -412,6 +412,19 @@ class EditingService:
             )
         return status.term_id
 
+    def _primary_term_id(
+        self, profile: TaskProfile, layer_id: str, term_id: str
+    ) -> str:
+        """Primary ID for an alternative ID or case variant, without rejecting
+        obsolete or unknown terms (adopted proposals may carry those)."""
+        try:
+            status = self._get_service_for_layer(profile, layer_id).validate_term(
+                term_id
+            )
+        except DomainError:
+            return term_id
+        return term_id if status.status == "unknown" else status.term_id
+
     def _is_verified_adoption(
         self,
         draft: Draft,
@@ -498,8 +511,11 @@ class EditingService:
 
         type_def = resolve_type(profile, target_layer, target_type)
 
-        term_id = cmd.term_id
-        if not self._is_verified_adoption(draft, cmd, doc, target_layer):
+        if self._is_verified_adoption(draft, cmd, doc, target_layer):
+            # Store the primary ID like a normal creation; provenance still
+            # points at the adopted source annotation.
+            term_id = self._primary_term_id(profile, target_layer, cmd.term_id)
+        else:
             term_id = self._validate_term_for_layer(profile, target_layer, cmd.term_id)
 
         if any(
