@@ -20,6 +20,9 @@ class TermStatus(BaseModel):
     label: str | None = None
     definition: str | None = None
     synonyms: list[str] = Field(default_factory=list)
+    alt_ids: list[str] = Field(default_factory=list)
+    replaced_by: str | None = None
+    consider: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

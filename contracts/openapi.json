@@ -29,7 +29,7 @@
       },
       "post": {
         "summary": "Upload Package",
-        "description": "Upload and atomically import a work package archive.",
+        "description": "Upload and atomically import a work package archive.\n\nRuns in the thread pool (plain ``def``); the body is copied with a size cap.",
         "operationId": "upload_package_api_v1_packages_post",
         "requestBody": {
           "content": {
@@ -524,7 +524,7 @@
     "/api/v1/workspaces/{workspace_id}/export": {
       "get": {
         "summary": "Export Workspace",
-        "description": "Export scoped workspace package as downloadable ZIP.",
+        "description": "Export scoped workspace package as downloadable ZIP.\n\nFilename: ``<package_id>__<annotator_id>__<document_id>__<YYYYMMDD-HHMMSS>.zip``.",
         "operationId": "export_workspace_api_v1_workspaces__workspace_id__export_get",
         "parameters": [
           {
@@ -543,6 +543,132 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/packages/{package_id}/export": {
+      "get": {
+        "summary": "Export Package For Annotator",
+        "description": "Export all work of one annotator on a package as one v2 work package.\n\nIncludes every document of the package and all of the annotator's\nsubmissions, submitted annotations and search events in ``mode`` (all\nmodes if omitted). Filename:\n``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.",
+        "operationId": "export_package_for_annotator_api_v1_packages__package_id__export_get",
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package Id"
+            }
+          },
+          {
+            "name": "annotator_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Annotator Id"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "independent",
+                    "review",
+                    "assisted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/zip": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ontologies": {
+      "get": {
+        "summary": "List Ontologies",
+        "description": "List loaded ontologies plus registered files that failed to load.",
+        "operationId": "list_ontologies_api_v1_ontologies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OntologyInfo"
+                  },
+                  "type": "array",
+                  "title": "Response List Ontologies Api V1 Ontologies Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload Ontology",
+        "description": "Upload and register an ontology file into the active workspace.\n\nStored immutably as ``<stem>-<sha256[:12]>.json`` and remembered in the\npersistent configuration so it is registered again after a restart.",
+        "operationId": "upload_ontology_api_v1_ontologies_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_ontology_api_v1_ontologies_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OntologyInfo"
+                }
               }
             }
           },
@@ -809,6 +935,20 @@
         ],
         "title": "AxisDefinition",
         "description": "Definition of an individual annotation contextual axis."
+      },
+      "Body_upload_ontology_api_v1_ontologies_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_ontology_api_v1_ontologies_post"
       },
       "Body_upload_package_api_v1_packages_post": {
         "properties": {
@@ -1162,6 +1302,65 @@
         ],
         "title": "OntologyDefinition",
         "description": "Definition of an ontology artifact bound to a task profile."
+      },
+      "OntologyInfo": {
+        "properties": {
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "release": {
+            "type": "string",
+            "title": "Release"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "term_count": {
+            "type": "integer",
+            "title": "Term Count"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "loaded",
+              "failed"
+            ],
+            "title": "Status",
+            "default": "loaded"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ontology_id",
+          "release",
+          "sha256",
+          "term_count"
+        ],
+        "title": "OntologyInfo"
       },
       "OntologyRef": {
         "properties": {
@@ -1947,6 +2146,52 @@
               }
             ],
             "title": "Label"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "obsolete",
+              "unknown"
+            ],
+            "title": "Status",
+            "default": "unknown"
+          },
+          "primary_term_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Term Id"
+          },
+          "replaced_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced By"
+          },
+          "consider": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Consider"
+          },
+          "alt_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Alt Ids"
           }
         },
         "type": "object",
@@ -1955,7 +2200,8 @@
           "term_id",
           "label"
         ],
-        "title": "TermLabel"
+        "title": "TermLabel",
+        "description": "Display data for a term, resolved against the layer's pinned ontology.\n\n``primary_term_id`` differs from ``term_id`` when the requested id is an\nalternative (merged) id or differs in case. For obsolete terms,\n``replaced_by`` names the designated successor and ``consider`` lists\nlooser suggestions, so the UI can offer a replacement."
       },
       "TermLabelsRequest": {
         "properties": {

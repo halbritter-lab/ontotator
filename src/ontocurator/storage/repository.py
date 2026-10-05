@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Literal
+from urllib.parse import quote
 
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import (
@@ -27,8 +28,20 @@ from ontocurator.packages.models import (
 )
 from ontocurator.storage.database import Database
 
+_ESCAPED_KEY_PREFIX = "wk2|"
+
 
 def _key_str(key: WorkspaceKey) -> str:
+    """Encode a WorkspaceKey as the persisted workspace identity string.
+
+    Keys whose components contain no ':' keep the historical ':'-joined form,
+    so every persisted v4 workspace, submission binding, receipt and search
+    event stays addressable without a migration. That form is unambiguous only
+    when no component contains ':'. Any other key is percent-encoded per
+    component and joined with '|' behind a prefix. The escaped form contains no
+    ':' at all, so it can never equal a legacy key (which always has exactly
+    five), and percent-encoding keeps it injective.
+    """
     parts = [
         key.package_id,
         key.document_id,
@@ -37,7 +50,9 @@ def _key_str(key: WorkspaceKey) -> str:
         key.scope_id,
         key.target_set_id,
     ]
-    return ":".join(parts)
+    if not any(":" in part for part in parts):
+        return ":".join(parts)
+    return _ESCAPED_KEY_PREFIX + "|".join(quote(part, safe="") for part in parts)
 
 
 def _local_import_key(
@@ -111,6 +126,7 @@ class Repository:
                     raise InvalidPackage(
                         "Conflicting task profile resolution for existing package"
                     )
+                self._verify_existing_package_content(package)
                 self._store_ontology_resources(package)
                 self._store_package_membership(package)
                 cursor.execute("COMMIT;")
@@ -242,6 +258,65 @@ class Repository:
             cursor.execute("ROLLBACK;")
             raise
 
+    def _verify_existing_package_content(self, package: ValidatedPackage) -> None:
+        """Re-import is idempotent only if the datasets equal the installed ones.
+
+        Archives read from disk carry mandatory per-file digests inside the
+        manifest, so a changed dataset already changes the manifest hash. This
+        check also covers in-memory packages whose manifest has no digests.
+        """
+        conn = self.db.get_connection()
+        package_id = package.manifest.package_id
+        stored_docs = {
+            row[0]: row[1]
+            for row in conn.execute(
+                "SELECT document_id, text_sha256 FROM documents WHERE package_id=?",
+                (package_id,),
+            )
+        }
+        stored_annotations = {
+            (row[0], row[1])
+            for row in conn.execute(
+                "SELECT annotation_id, version FROM package_annotations "
+                "WHERE package_id=?",
+                (package_id,),
+            )
+        }
+        stored_evidence = {
+            (row[0], row[1])
+            for row in conn.execute(
+                "SELECT evidence_id, version FROM package_evidence WHERE package_id=?",
+                (package_id,),
+            )
+        }
+        stored_events = {
+            row[0]
+            for row in conn.execute(
+                "SELECT event_id FROM package_search_events WHERE package_id=?",
+                (package_id,),
+            )
+        }
+        bound_submissions = {
+            row[0]
+            for row in conn.execute(
+                "SELECT submission_id FROM imported_submission_bindings "
+                "WHERE local_package_id=?",
+                (package_id,),
+            )
+        }
+        if (
+            stored_docs
+            != {d.document_id: d.text_sha256 for d in package.documents.values()}
+            or stored_annotations != set(package.annotations)
+            or stored_evidence != set(package.evidence)
+            or stored_events != {e.event_id for e in package.search_events}
+            or not set(package.submissions) <= bound_submissions
+        ):
+            raise InvalidPackage(
+                f"Package '{package_id}' exists with identical manifest but "
+                "different dataset content"
+            )
+
     def _store_ontology_resources(self, package: ValidatedPackage) -> None:
         """Persist resources inside the same transaction as their package."""
         self.db.get_connection().executemany(
@@ -282,6 +357,82 @@ class Repository:
                 if ont.resource_path == row[1]:
                     result.append((ont, bytes(row[2])))
         return result
+
+    def get_manifest(self, package_id: str) -> PackageManifest:
+        """Return the stored manifest of an installed package."""
+        row = (
+            self.db.get_connection()
+            .execute(
+                "SELECT manifest_json FROM packages WHERE package_id = ?;",
+                (package_id,),
+            )
+            .fetchone()
+        )
+        if row is None:
+            raise DomainError(
+                "PACKAGE_NOT_FOUND", f"No package found for package '{package_id}'"
+            )
+        return PackageManifest.model_validate_json(row[0])
+
+    def list_manifests(self) -> list[PackageManifest]:
+        """Return manifests of all installed packages, newest first."""
+        rows = self.db.get_connection().execute(
+            "SELECT manifest_json FROM packages ORDER BY created_at DESC;"
+        )
+        return [PackageManifest.model_validate_json(row[0]) for row in rows]
+
+    def list_workspace_keys(
+        self,
+        package_id: str,
+        annotator_id: str,
+        mode: str | None = None,
+    ) -> list[WorkspaceKey]:
+        """Return local workspace identities of one annotator, matched exactly.
+
+        Includes opened workspaces and the local bindings of submissions
+        (local or imported) whose origin belongs to this annotator.
+        """
+        conn = self.db.get_connection()
+        keys: dict[str, WorkspaceKey] = {}
+        rows = conn.execute(
+            "SELECT package_id, document_id, annotator_id, mode, scope_id, "
+            "target_set_id FROM workspaces "
+            "WHERE package_id = ? AND annotator_id = ? "
+            "AND (? IS NULL OR mode = ?);",
+            (package_id, annotator_id, mode, mode),
+        )
+        for row in rows:
+            key = WorkspaceKey(
+                package_id=row[0],
+                document_id=row[1],
+                annotator_id=row[2],
+                mode=row[3],
+                scope_id=row[4],
+                target_set_id=row[5],
+            )
+            keys[_key_str(key)] = key
+
+        profile = self.get_task_profile(package_id)
+        rows = conn.execute(
+            "SELECT s.payload_json FROM submissions s "
+            "JOIN imported_submission_bindings b USING(submission_id) "
+            "WHERE b.local_package_id = ? "
+            "AND json_extract(s.payload_json, '$.origin_key.annotator_id') = ? "
+            "AND (? IS NULL OR json_extract(s.payload_json, '$.origin_key.mode') = ?);",
+            (package_id, annotator_id, mode, mode),
+        )
+        for row in rows:
+            origin = WorkspaceKey.model_validate(json.loads(row[0])["origin_key"])
+            key = (
+                origin
+                if origin.package_id == package_id
+                else _local_import_key(origin, package_id, profile)
+            )
+            keys.setdefault(_key_str(key), key)
+        return sorted(
+            keys.values(),
+            key=lambda k: (k.document_id, k.mode, k.scope_id, k.target_set_id),
+        )
 
     def get_task_profile(self, package_id: str) -> TaskProfile:
         """Return the resolved TaskProfile for an installed package."""
@@ -826,24 +977,21 @@ class Repository:
     ) -> Literal["not_started", "in_progress", "completed"]:
         """Compute document progress status strictly isolated to annotator and mode."""
         conn = self.db.get_connection()
-        prefix = f"{package_id}:{document_id}:{annotator_id}:{mode}:%"
 
-        # Check for any submissions for this user/mode/document
+        # Submissions bound to this local package, matched exactly (binary,
+        # case-sensitive) on the structured origin identity. Local and imported
+        # submissions both carry a binding; imports keep document, annotator
+        # and mode of their origin key.
         sub_row = conn.execute(
             "SELECT s.draft_revision FROM submissions s "
             "JOIN imported_submission_bindings b USING(submission_id) "
-            "WHERE b.local_package_id = ? AND b.local_key LIKE ? "
+            "WHERE b.local_package_id = ? "
+            "AND json_extract(s.payload_json, '$.origin_key.document_id') = ? "
+            "AND json_extract(s.payload_json, '$.origin_key.annotator_id') = ? "
+            "AND json_extract(s.payload_json, '$.origin_key.mode') = ? "
             "ORDER BY s.created_at DESC LIMIT 1;",
-            (package_id, prefix),
+            (package_id, document_id, annotator_id, mode),
         ).fetchone()
-
-        if sub_row is None:
-            # Also check if origin_key directly matches
-            sub_row = conn.execute(
-                "SELECT draft_revision FROM submissions WHERE origin_key LIKE ? "
-                "ORDER BY created_at DESC LIMIT 1;",
-                (prefix,),
-            ).fetchone()
 
         # Check existing draft workspace
         ws_row = conn.execute(

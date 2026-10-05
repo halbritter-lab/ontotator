@@ -9,6 +9,19 @@ from fastapi import HTTPException, Request
 
 ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
+# Starlette's in-process TestClient sends ``Host: testserver`` from client
+# ``testclient``. Production never trusts that transport; the test suite opts in
+# explicitly by setting this flag (see tests/conftest.py).
+ALLOW_TEST_CLIENT_HOST = False
+
+
+def _token_bytes(value: str) -> bytes:
+    """Header values arrive latin-1 decoded; recover their raw bytes."""
+    try:
+        return value.encode("latin-1")
+    except UnicodeEncodeError:
+        return value.encode("utf-8")
+
 
 def verify_security(request: Request, expected_token: str, port: int = 8000) -> None:
     """Validate host header against DNS rebinding and verify session token."""
@@ -21,7 +34,8 @@ def verify_security(request: Request, expected_token: str, port: int = 8000) -> 
     except ValueError:
         raise HTTPException(status_code=403, detail="Invalid Host header") from None
     is_test_transport = (
-        request.client is not None
+        ALLOW_TEST_CLIENT_HOST
+        and request.client is not None
         and request.client.host == "testclient"
         and host_name == "testserver"
     )
@@ -71,7 +85,8 @@ def verify_security(request: Request, expected_token: str, port: int = 8000) -> 
         )
 
     token = auth_header[len("Bearer ") :].strip()
-    if not secrets.compare_digest(token, expected_token):
+    # Compare bytes: compare_digest raises TypeError for non-ASCII str input.
+    if not secrets.compare_digest(_token_bytes(token), expected_token.encode("utf-8")):
         raise HTTPException(
             status_code=403,
             detail="Forbidden: Invalid session token",

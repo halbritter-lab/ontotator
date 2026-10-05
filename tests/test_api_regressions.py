@@ -1,5 +1,6 @@
 import io
 import json
+import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,18 +33,19 @@ def test_same_origin_is_allowed(app_client):
 
 def _open(client, config, mode="independent", targets=None, scenario=None):
     pkg_scenario = scenario or ("assisted" if mode == "review" else "single")
-    response = client.post(
-        "/api/v1/packages",
-        files={
-            "file": (
-                "fixture.zip",
-                _create_sample_package_bytes(pkg_scenario),
-                "application/zip",
-            )
-        },
-    )
-    assert response.status_code == 200
-    pkg_id = response.json()["package_id"]
+    archive = _create_sample_package_bytes(pkg_scenario)
+    with zipfile.ZipFile(io.BytesIO(archive)) as z:
+        pkg_id = json.loads(z.read("manifest.json"))["package_id"]
+    installed = {p["package_id"] for p in client.get("/api/v1/packages").json()}
+    if pkg_id not in installed:
+        # Re-importing is only idempotent for identical content; some tests
+        # extend the installed package directly in the database.
+        response = client.post(
+            "/api/v1/packages",
+            files={"file": ("fixture.zip", archive, "application/zip")},
+        )
+        assert response.status_code == 200
+        assert response.json()["package_id"] == pkg_id
     doc_id = "doc-beta"
     response = client.post(
         "/api/v1/workspaces/open",

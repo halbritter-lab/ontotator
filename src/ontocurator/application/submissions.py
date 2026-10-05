@@ -19,6 +19,8 @@ from ontocurator.domain.workspace import (
     Submission,
     WorkspaceKey,
 )
+from ontocurator.ontology.registry import OntologyRegistry
+from ontocurator.ontology.service import OntologyService
 from ontocurator.storage.repository import Repository
 
 
@@ -60,11 +62,46 @@ def validate_annotation_completion(
         raise DomainError("INVALID_AXES", str(exc)) from exc
 
 
+def validate_draft_terms(
+    draft: Draft,
+    profile: TaskProfile,
+    ontology: OntologyService | OntologyRegistry,
+) -> None:
+    """Every annotation authored in this draft must use a currently valid term.
+
+    The design allows obsolete or unknown imported terms to stay visible, and an
+    adopted copy may sit in a draft so the annotator can fix it, but such a term
+    can never be submitted as a new valid annotation. Confirmed review targets
+    are not part of the draft and were checked when they were confirmed.
+    """
+    for snap in draft.annotations:
+        layer_id = snap.annotation.layer_id
+        service = (
+            ontology.for_layer(profile, layer_id)
+            if isinstance(ontology, OntologyRegistry)
+            else ontology
+        )
+        status = service.validate_term(snap.annotation.term_id)
+        if status.status in {"obsolete", "unknown"}:
+            hint = ""
+            if status.replaced_by:
+                hint = f"; replaced by '{status.replaced_by}'"
+            elif status.consider:
+                hint = f"; consider {', '.join(status.consider)}"
+            raise DomainError(
+                f"{status.status.upper()}_TERM",
+                f"Annotation '{snap.annotation.annotation_id}' in layer '{layer_id}' "
+                f"uses {status.status} term '{snap.annotation.term_id}'{hint}. "
+                "Change the term or delete the annotation before submitting.",
+            )
+
+
 def validate_completion(
     draft: Draft,
     profile: TaskProfile,
     scope: TaskScope,
     repo: Repository | None = None,
+    ontology: OntologyService | OntologyRegistry | None = None,
 ) -> None:
     """Validate that draft is completely ready for submission under task scope and profile."""
     # 1. All editable layers in scope must be marked as checked
@@ -78,6 +115,10 @@ def validate_completion(
     # 2. Check draft annotations for required axes and evidence policies
     for snap in draft.annotations:
         validate_annotation_completion(snap, profile)
+
+    # 2b. Re-check term status against the pinned ontology at submit time
+    if ontology is not None:
+        validate_draft_terms(draft, profile, ontology)
 
     # 3. If in review mode, validate review completeness
     if scope.mode == "review":
@@ -106,8 +147,13 @@ def validate_completion(
 class SubmissionService:
     """Coordinates workspace completion, validation, and submission persistence."""
 
-    def __init__(self, repo: Repository) -> None:
+    def __init__(
+        self,
+        repo: Repository,
+        ontology: OntologyService | OntologyRegistry | None = None,
+    ) -> None:
         self.repo = repo
+        self.ontology = ontology
 
     def parse_command(self, payload: dict[str, Any]) -> SubmitCommand:
         return SubmitCommand.model_validate(payload)
@@ -157,7 +203,7 @@ class SubmissionService:
         scope = build_scope(task_profile, key.mode)
 
         # Validate completion against profile and scope
-        validate_completion(draft, task_profile, scope, self.repo)
+        validate_completion(draft, task_profile, scope, self.repo, self.ontology)
 
         snapshots: list[AnnotationSnapshot] = []
         decisions = list(draft.decisions)

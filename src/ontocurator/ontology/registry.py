@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import copy
 import hashlib
+import logging
+import threading
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -15,13 +19,34 @@ from ontocurator.domain.profiles import (
 from ontocurator.ontology.service import OntologyService
 from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
 
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class OntologyLoadFailure:
+    """A registered ontology file that could not be parsed."""
+
+    sha256: str
+    path: Path
+    error: str
+
 
 class OntologyRegistry:
-    """Manages and caches loaded ontology services bound to TaskProfiles and SHA-256 digests."""
+    """Manages and caches loaded ontology services bound to TaskProfiles and SHA-256 digests.
 
-    def __init__(self) -> None:
+    Request handlers run in a thread pool, so every access to the shared maps
+    goes through one re-entrant lock. Loading happens under the lock as well,
+    which also prevents two threads from parsing the same file twice.
+    """
+
+    def __init__(self, base_dir: Path | str | None = None) -> None:
         self._services: dict[str, OntologyService] = {}
         self._registered_paths: dict[str, Path] = {}
+        self._failures: dict[str, OntologyLoadFailure] = {}
+        self._lock = threading.RLock()
+        # Relative ``resource_path`` entries resolve against this directory
+        # (the workspace), never against the process working directory.
+        self.base_dir = Path(base_dir).resolve() if base_dir is not None else None
 
     def register(self, path: Path | str, expected: OntologyDefinition) -> None:
         """Register and validate an ontology artifact against an expected OntologyDefinition."""
@@ -47,14 +72,19 @@ class OntologyRegistry:
                 f"Unsupported ontology format '{expected.format}'. Only 'obo-graph-json' is supported.",
             )
 
-        self._registered_paths[expected_sha] = p
-        if expected_sha not in self._services:
-            ref = OntologyRef(release=expected.release, sha256=expected.sha256)
-            self._services[expected_sha] = OntologyService.load(p, ref)
+        with self._lock:
+            self._registered_paths[expected_sha] = p
+            if expected_sha not in self._services:
+                ref = OntologyRef(release=expected.release, sha256=expected.sha256)
+                self._services[expected_sha] = OntologyService.load(p, ref)
+                self._failures.pop(expected_sha, None)
 
     def register_service(self, service: OntologyService) -> None:
         """Register an already-instantiated OntologyService."""
-        self._services[service.ref.sha256.lower()] = service
+        sha = service.ref.sha256.lower()
+        with self._lock:
+            self._services[sha] = service
+            self._failures.pop(sha, None)
 
     @staticmethod
     def load_resource(data: bytes, expected: OntologyDefinition) -> OntologyService:
@@ -93,10 +123,73 @@ class OntologyRegistry:
         p = Path(path)
         if not p.is_file():
             raise DomainError("ONTOLOGY_NOT_FOUND", f"Ontology file not found at: {p}")
-        raw = p.read_bytes()
-        digest = hashlib.sha256(raw).hexdigest().lower()
-        self._registered_paths[digest] = p
+        digest = hashlib.sha256(p.read_bytes()).hexdigest().lower()
+        with self._lock:
+            self._registered_paths[digest] = p
         return digest
+
+    def registered_path(self, sha256: str) -> Path | None:
+        """Return the file registered for a digest, if any."""
+        with self._lock:
+            return self._registered_paths.get(sha256.lower())
+
+    def load_registered(self) -> list[OntologyLoadFailure]:
+        """Eagerly parse every registered file; record and log failures."""
+        with self._lock:
+            pending = [
+                (sha, path)
+                for sha, path in self._registered_paths.items()
+                # A failed digest stays failed: fixed content has a new digest.
+                if sha not in self._services and sha not in self._failures
+            ]
+        for sha, path in pending:
+            try:
+                self.get_service(sha)
+            except (DomainError, OntologyError, OSError, ValueError, KeyError) as exc:
+                failure = OntologyLoadFailure(sha256=sha, path=path, error=str(exc))
+                with self._lock:
+                    self._failures[sha] = failure
+                logger.warning(
+                    "Could not load ontology %s (sha256 %s): %s", path, sha, exc
+                )
+        return self.failures()
+
+    def failures(self) -> list[OntologyLoadFailure]:
+        """Registered ontologies that failed to load, in registration order."""
+        with self._lock:
+            return list(self._failures.values())
+
+    def services(self) -> list[tuple[str, OntologyService]]:
+        """Snapshot of loaded services keyed by SHA-256."""
+        with self._lock:
+            return list(self._services.items())
+
+    @staticmethod
+    def _bind_release(
+        svc: OntologyService, ont_def: OntologyDefinition
+    ) -> OntologyService:
+        """Return a view carrying the pinned release label without mutating the
+        shared cached service, which other profiles may pin differently."""
+        if svc.ref.release in ("unknown", "pinned") and ont_def.release:
+            bound = copy.copy(svc)
+            bound.ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
+            return bound
+        return svc
+
+    def _resource_file(self, resource_path: str) -> Path | None:
+        """Resolve a profile resource path inside the workspace directory."""
+        candidate = Path(resource_path)
+        if candidate.is_absolute():
+            return candidate if candidate.is_file() else None
+        if self.base_dir is None:
+            return None
+        resolved = (self.base_dir / candidate).resolve()
+        if not resolved.is_relative_to(self.base_dir):
+            raise DomainError(
+                "INVALID_RESOURCE_PATH",
+                f"Ontology resource path '{resource_path}' escapes the workspace",
+            )
+        return resolved if resolved.is_file() else None
 
     def for_layer(self, profile: TaskProfile, layer_id: str) -> OntologyService:
         """Retrieve or load the exact OntologyService bound to the specified layer of a TaskProfile."""
@@ -104,23 +197,22 @@ class OntologyRegistry:
         ont_def = resolve_ontology(profile, layer.ontology_id)
         sha = ont_def.sha256.lower()
 
-        if sha in self._services:
-            svc = self._services[sha]
-            if svc.ref.release in ("unknown", "pinned") and ont_def.release:
-                svc.ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
-            return svc
+        with self._lock:
+            if sha in self._services:
+                return self._bind_release(self._services[sha], ont_def)
 
-        if sha in self._registered_paths:
-            ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
-            svc = OntologyService.load(self._registered_paths[sha], ref)
-            self._services[sha] = svc
-            return svc
+            if sha in self._registered_paths:
+                ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
+                svc = OntologyService.load(self._registered_paths[sha], ref)
+                self._services[sha] = svc
+                self._failures.pop(sha, None)
+                return svc
 
-        if ont_def.resource_path:
-            res_p = Path(ont_def.resource_path)
-            if res_p.is_file():
-                self.register(res_p, ont_def)
-                return self._services[sha]
+            if ont_def.resource_path:
+                res_p = self._resource_file(ont_def.resource_path)
+                if res_p is not None:
+                    self.register(res_p, ont_def)
+                    return self._services[sha]
 
         raise DomainError(
             "ONTOLOGY_NOT_FOUND",
@@ -131,16 +223,19 @@ class OntologyRegistry:
     def has_ontology(self, sha256: str) -> bool:
         """Check if an ontology with the given SHA-256 is registered or loaded."""
         sha = sha256.lower()
-        return sha in self._services or sha in self._registered_paths
+        with self._lock:
+            return sha in self._services or sha in self._registered_paths
 
     def get_service(self, sha256: str) -> OntologyService | None:
         """Return cached or registered OntologyService by SHA-256, if available."""
         sha = sha256.lower()
-        if sha in self._services:
-            return self._services[sha]
-        if sha in self._registered_paths:
-            ref = OntologyRef(release="unknown", sha256=sha256)
-            svc = OntologyService.load(self._registered_paths[sha], ref)
-            self._services[sha] = svc
-            return svc
-        return None
+        with self._lock:
+            if sha in self._services:
+                return self._services[sha]
+            if sha in self._registered_paths:
+                ref = OntologyRef(release="unknown", sha256=sha256)
+                svc = OntologyService.load(self._registered_paths[sha], ref)
+                self._services[sha] = svc
+                self._failures.pop(sha, None)
+                return svc
+            return None

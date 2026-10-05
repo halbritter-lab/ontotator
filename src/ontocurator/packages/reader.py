@@ -46,6 +46,23 @@ MAX_DOCUMENTS = 10_000
 MAX_DOCUMENT_TEXT_BYTES = 2 * 1024 * 1024  # 2 MiB
 
 
+def _jsonl_records(data: bytes) -> list[str]:
+    """Split a JSONL dataset into records on LF only.
+
+    ``str.splitlines`` also breaks on U+2028, U+2029, U+0085 and other Unicode
+    separators, which the writer emits verbatim inside JSON strings
+    (``ensure_ascii=False``). JSONL records are delimited by ``\n`` alone; an
+    optional trailing ``\r`` from CRLF files is tolerated.
+    """
+    records: list[str] = []
+    for raw in data.decode("utf-8").split("\n"):
+        line = raw[:-1] if raw.endswith("\r") else raw
+        if not line.strip(" \t"):
+            continue
+        records.append(line)
+    return records
+
+
 def _read_package(
     source: Path | BinaryIO,
     registry: OntologyRegistry | None = None,
@@ -157,7 +174,11 @@ def _read_package(
             data = file_contents[filename]
             actual_hash = hashlib.sha256(data).hexdigest()
             expected_hash = manifest.file_hashes.get(filename)
-            if expected_hash is not None and expected_hash != actual_hash:
+            if expected_hash is None:
+                raise InvalidPackage(
+                    f"Manifest is missing the required SHA-256 entry for '{filename}'"
+                )
+            if expected_hash.lower() != actual_hash:
                 raise InvalidPackage(
                     f"File SHA-256 mismatch for '{filename}': "
                     f"expected {expected_hash}, got {actual_hash}"
@@ -203,10 +224,7 @@ def _read_package(
 
     # Parse documents.jsonl
     documents: dict[str, Document] = {}
-    for line in file_contents["documents.jsonl"].decode("utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    for line in _jsonl_records(file_contents["documents.jsonl"]):
         if len(documents) >= MAX_DOCUMENTS:
             raise InvalidPackage(f"Document count exceeds limit ({MAX_DOCUMENTS})")
         doc = Document.model_validate_json(line)
@@ -230,10 +248,7 @@ def _read_package(
 
     # Parse evidence.jsonl
     evidence: dict[tuple[str, str], EvidenceSnapshot] = {}
-    for line in file_contents["evidence.jsonl"].decode("utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    for line in _jsonl_records(file_contents["evidence.jsonl"]):
         ev = EvidenceSnapshot.model_validate_json(line)
         expected_v = canonical_hash(
             {
@@ -255,10 +270,7 @@ def _read_package(
 
     # Parse annotations.jsonl
     annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
-    for line in file_contents["annotations.jsonl"].decode("utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    for line in _jsonl_records(file_contents["annotations.jsonl"]):
         try:
             snap_data = json.loads(line)
             snap = decode_snapshot(snap_data)
@@ -276,10 +288,7 @@ def _read_package(
 
     # Parse submissions.jsonl
     submissions: dict[str, Submission] = {}
-    for line in file_contents["submissions.jsonl"].decode("utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    for line in _jsonl_records(file_contents["submissions.jsonl"]):
         sub = Submission.model_validate_json(line)
         if sub.submission_id in submissions and submissions[sub.submission_id] != sub:
             raise InvalidPackage(f"Conflicting submission: {sub.submission_id}")
@@ -287,10 +296,7 @@ def _read_package(
 
     # Parse search-events.jsonl
     search_events: list[SearchEventRecord] = []
-    for line in file_contents["search-events.jsonl"].decode("utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    for line in _jsonl_records(file_contents["search-events.jsonl"]):
         search_events.append(SearchEventRecord.model_validate_json(line))
 
     # Cross-dataset integrity checks

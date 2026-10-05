@@ -137,7 +137,6 @@ def test_export_fails_on_missing_decision_dependency(tmp_path):
 
 def test_legacy_database_rejected_byte_identically(tmp_path):
     import sqlite3
-    from pathlib import Path
 
     import pytest
 
@@ -145,10 +144,12 @@ def test_legacy_database_rejected_byte_identically(tmp_path):
 
     db_path = tmp_path / "legacy.sqlite"
     conn = sqlite3.connect(db_path)
+    # Minimal legacy (pre-v4) layout: migration bookkeeping without metadata.
     conn.executescript(
-        Path("src/ontocurator/storage/migrations/001_initial.sql").read_text(
-            encoding="utf-8"
-        )
+        "CREATE TABLE schema_migrations ("
+        "version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);"
+        "CREATE TABLE packages (package_id TEXT PRIMARY KEY, "
+        "manifest_hash TEXT NOT NULL, manifest_json TEXT NOT NULL);"
     )
     conn.execute("INSERT INTO schema_migrations VALUES (1, 'now')")
     conn.commit()

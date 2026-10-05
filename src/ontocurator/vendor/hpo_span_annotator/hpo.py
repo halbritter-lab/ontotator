@@ -45,6 +45,32 @@ SYNONYM_RANK = {
     "hasRelatedSynonym": 3,
 }
 
+# basicPropertyValues predicates carrying identity history. OBO Graph JSON
+# writes them as full IRIs; the short forms are accepted for hand-made files.
+ALT_ID_PREDICATES = frozenset(
+    {
+        "http://www.geneontology.org/formats/oboInOwl#hasAlternativeId",
+        "oboInOwl:hasAlternativeId",
+        "hasAlternativeId",
+    }
+)
+REPLACED_BY_PREDICATES = frozenset(
+    {
+        "http://purl.obolibrary.org/obo/IAO_0100001",
+        "IAO:0100001",
+        "http://www.geneontology.org/formats/oboInOwl#replacedBy",
+        "term_replaced_by",
+        "replaced_by",
+    }
+)
+CONSIDER_PREDICATES = frozenset(
+    {
+        "http://www.geneontology.org/formats/oboInOwl#consider",
+        "oboInOwl:consider",
+        "consider",
+    }
+)
+
 
 class OntologyError(RuntimeError):
     """The ontology file is missing, unreadable or not an HPO release."""
@@ -90,6 +116,12 @@ class Term:
     synonyms: list[tuple[str, str]] = field(default_factory=list)  # (pred, value)
     parents: list[str] = field(default_factory=list)
     obsolete: bool = False
+    # Retired identifiers merged into this term (``hasAlternativeId``).
+    alt_ids: list[str] = field(default_factory=list)
+    # For obsolete terms: the single designated successor, if any
+    # (IAO:0100001 ``term replaced by``), and looser suggestions (``consider``).
+    replaced_by: str | None = None
+    consider: list[str] = field(default_factory=list)
     # Official translations, keyed by language code. Empty unless a babelon
     # file was loaded. These are additional names for the same class, never a
     # second class, so nothing downstream has to know a hit came from one.
@@ -155,8 +187,33 @@ class Ontology:
         self.terms = terms
         self.release = release
         self.dominant_prefix = dominant_prefix
+
+        # Alternative id -> primary id. An alt id that is itself a class, or
+        # that two classes both claim, cannot be resolved and is left out.
+        claimed: dict[str, set[str]] = {}
+        for term in terms.values():
+            for alt in term.alt_ids:
+                if alt not in terms:
+                    claimed.setdefault(alt, set()).add(term.hpo_id)
+        self._alt_ids: dict[str, str] = {
+            alt: next(iter(owners))
+            for alt, owners in claimed.items()
+            if len(owners) == 1
+        }
+
+        # Case-insensitive fallback over primary and alternative ids. Only keys
+        # that resolve to exactly one primary term are kept: "HP:00000AB" and
+        # "HP:00000ab" must not silently resolve "hp:00000Ab" to whichever
+        # happened to be indexed last.
+        ci_targets: dict[str, set[str]] = {}
+        for term in terms.values():
+            ci_targets.setdefault(term.hpo_id.casefold(), set()).add(term.hpo_id)
+        for alt, primary in self._alt_ids.items():
+            ci_targets.setdefault(alt.casefold(), set()).add(primary)
         self._ci_terms: dict[str, Term] = {
-            t.hpo_id.casefold(): t for t in terms.values()
+            key: terms[next(iter(ids))]
+            for key, ids in ci_targets.items()
+            if len(ids) == 1
         }
         self._children: dict[str, list[str]] = {}
         for term in terms.values():
@@ -193,7 +250,11 @@ class Ontology:
         term = self.terms.get(trimmed)
         if term is not None:
             return term
-        # 2. Case-insensitive match if unambiguous
+        # 2. Alternative (merged) id resolves to its primary term
+        primary = self._alt_ids.get(trimmed)
+        if primary is not None:
+            return self.terms[primary]
+        # 3. Case-insensitive match, only if unambiguous
         return self._ci_terms.get(trimmed.casefold())
 
     def label_of(self, hpo_id: str) -> str:
@@ -221,8 +282,16 @@ class Ontology:
             hits,
             key=lambda h: 0 if h[2] == "label" else 1 + SYNONYM_RANK.get(h[2], 9),
         )
+        # A label and its synonyms often normalise to the same string; keep
+        # each term once, at its best-ranked match.
+        unique: list[tuple[str, str, str]] = []
+        seen: set[str] = set()
+        for hit in ordered:
+            if hit[0] not in seen:
+                seen.add(hit[0])
+                unique.append(hit)
         out = []
-        for hpo_id, matched, pred in ordered[:limit]:
+        for hpo_id, matched, pred in unique[:limit]:
             term = self.terms[hpo_id]
             out.append(
                 {
@@ -311,6 +380,9 @@ class Ontology:
         return {
             **term.as_dict(),
             "obsolete": term.obsolete,
+            "alt_ids": list(term.alt_ids),
+            "replaced_by": term.replaced_by,
+            "consider": list(term.consider),
             "parents": brief(term.parents),
             "children": brief(self.children_of(term.hpo_id)),
             "siblings": brief(self.siblings_of(term.hpo_id)),
@@ -357,12 +429,29 @@ def load(path: Path, prefix: str | None = None) -> Ontology:
             for s in meta.get("synonyms") or []
             if s.get("val")
         ]
+        alt_ids: list[str] = []
+        replaced_by: str | None = None
+        consider: list[str] = []
+        for prop in meta.get("basicPropertyValues") or []:
+            pred = str(prop.get("pred") or "")
+            value = curie(str(prop.get("val") or ""))
+            if not value:
+                continue
+            if pred in ALT_ID_PREDICATES and value not in alt_ids:
+                alt_ids.append(value)
+            elif pred in REPLACED_BY_PREDICATES and replaced_by is None:
+                replaced_by = value
+            elif pred in CONSIDER_PREDICATES and value not in consider:
+                consider.append(value)
         terms[term_id] = Term(
             hpo_id=term_id,
             label=str(node.get("lbl") or term_id),
             definition=str((meta.get("definition") or {}).get("val") or ""),
             synonyms=synonyms,
             obsolete=bool(meta.get("deprecated")),
+            alt_ids=alt_ids,
+            replaced_by=replaced_by,
+            consider=consider,
         )
 
     for edge in graph.get("edges") or []:

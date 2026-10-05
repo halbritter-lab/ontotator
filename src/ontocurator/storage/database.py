@@ -8,6 +8,30 @@ from ontocurator.domain.errors import DomainError
 
 CURRENT_SCHEMA_VERSION = 4
 
+REQUIRED_TABLES = frozenset(
+    {
+        "workspace_metadata",
+        "schema_migrations",
+        "packages",
+        "package_task_profiles",
+        "documents",
+        "evidence_snapshots",
+        "package_evidence",
+        "annotation_snapshots",
+        "package_annotations",
+        "workspaces",
+        "workspace_annotations",
+        "workspace_evidence",
+        "workspace_decisions",
+        "submissions",
+        "imported_submission_bindings",
+        "search_events",
+        "package_search_events",
+        "mutation_receipts",
+        "package_ontology_resources",
+    }
+)
+
 
 def _get_sql_schema_path(filename: str) -> Path:
     p = Path(__file__).parent / filename
@@ -28,9 +52,6 @@ class Database:
         self._lock = threading.Lock()
         self.migration_warnings: list[str] = []
         self._ensure_migrated()
-        # Add the resource store only after accepting the current workspace format.
-        resource_schema = _get_sql_schema_path("ontology_resources.sql")
-        self.get_connection().executescript(resource_schema.read_text(encoding="utf-8"))
 
     def run_migrations(self) -> None:
         """Run pending schema migrations."""
@@ -56,7 +77,8 @@ class Database:
     def _ensure_migrated(self) -> None:
         # Pre-DDL version check if file already exists with non-zero size
         if self.path.exists() and self.path.stat().st_size > 0:
-            ro_uri = f"file:{self.path.resolve().as_posix()}?mode=ro"
+            # as_uri() percent-encodes '#', '?', '%' and spaces in the path.
+            ro_uri = f"{self.path.resolve().as_uri()}?mode=ro"
             try:
                 ro_conn = sqlite3.connect(ro_uri, uri=True)
             except Exception as exc:
@@ -103,19 +125,46 @@ class Database:
             finally:
                 ro_conn.close()
 
-            # Format confirmed as v4
+            # Format confirmed as v4. Older v4 workspaces predate the embedded
+            # ontology resource table; add it idempotently and atomically.
+            self._run_script_atomically(_get_sql_schema_path("ontology_resources.sql"))
+            self._verify_required_tables()
             return
 
-        # Fresh database: initialize schema_v4.sql
+        # Fresh database: initialize schema_v4.sql in a single transaction so a
+        # crash cannot leave a partially created but v4-tagged workspace.
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='workspace_metadata';"
         )
         if cursor.fetchone() is None:
-            schema_path = _get_sql_schema_path("schema_v4.sql")
-            sql = schema_path.read_text(encoding="utf-8")
-            cursor.executescript(sql)
+            self._run_script_atomically(_get_sql_schema_path("schema_v4.sql"))
+        self._verify_required_tables()
+
+    def _run_script_atomically(self, schema_path: Path) -> None:
+        """Execute a DDL script inside one explicit transaction."""
+        sql = schema_path.read_text(encoding="utf-8")
+        conn = self.get_connection()
+        try:
+            conn.executescript("BEGIN IMMEDIATE;\n" + sql + "\nCOMMIT;")
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK;")
+            raise
+
+    def _verify_required_tables(self) -> None:
+        """Reject workspaces whose v4 tag is not backed by the full schema."""
+        rows = self.get_connection().execute(
+            "SELECT name FROM sqlite_master WHERE type='table';"
+        )
+        missing = REQUIRED_TABLES - {row[0] for row in rows}
+        if missing:
+            raise DomainError(
+                "UNSUPPORTED_WORKSPACE_VERSION",
+                "Workspace database is incomplete; missing tables: "
+                + ", ".join(sorted(missing)),
+            )
 
     def close(self) -> None:
         """Close connections after request workers have stopped."""

@@ -105,6 +105,9 @@ class OntologyService:
             label=term.label,
             definition=term.definition or None,
             synonyms=[s for _, s in term.synonyms],
+            alt_ids=list(term.alt_ids),
+            replaced_by=term.replaced_by,
+            consider=list(term.consider),
         )
 
     def search(self, request: SearchRequest) -> SearchResult:

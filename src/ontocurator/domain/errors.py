@@ -31,6 +31,13 @@ class InvalidAnnotation(DomainError):
         super().__init__("INVALID_ANNOTATION", details)
 
 
+class PayloadTooLarge(DomainError):
+    """Raised when an uploaded body exceeds its configured size limit."""
+
+    def __init__(self, details: str | dict[str, Any] | None = None) -> None:
+        super().__init__("PAYLOAD_TOO_LARGE", details)
+
+
 class IncompleteReview(DomainError):
     """Raised when attempting to submit a review without all required decisions."""
 

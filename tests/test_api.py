@@ -100,8 +100,26 @@ def test_term_labels_resolve_from_package_layer_without_search_event(app_client)
     )
     assert response.status_code == 200, response.text
     assert response.json() == [
-        {"layer_id": "hpo-layer", "term_id": "HP:0001250", "label": "Seizure"},
-        {"layer_id": "hpo-layer", "term_id": "HP:9999999", "label": None},
+        {
+            "layer_id": "hpo-layer",
+            "term_id": "HP:0001250",
+            "label": "Seizure",
+            "status": "valid",
+            "primary_term_id": "HP:0001250",
+            "replaced_by": None,
+            "consider": [],
+            "alt_ids": [],
+        },
+        {
+            "layer_id": "hpo-layer",
+            "term_id": "HP:9999999",
+            "label": None,
+            "status": "unknown",
+            "primary_term_id": None,
+            "replaced_by": None,
+            "consider": [],
+            "alt_ids": [],
+        },
     ]
 
 

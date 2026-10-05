@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
@@ -390,19 +391,68 @@ class EditingService:
         profile: TaskProfile,
         layer_id: str,
         term_id: str,
-    ) -> None:
+    ) -> str:
+        """Reject obsolete/unknown terms; return the primary term ID.
+
+        Alternative (merged) IDs and case variants resolve to the primary ID,
+        which is what gets stored.
+        """
         service = self._get_service_for_layer(profile, layer_id)
         status = service.validate_term(term_id)
         if status.status == "obsolete":
+            hint = f"; use '{status.replaced_by}' instead" if status.replaced_by else ""
             raise DomainError(
                 "OBSOLETE_TERM",
-                f"Term '{term_id}' is obsolete and cannot be newly created",
+                f"Term '{term_id}' is obsolete and cannot be newly created{hint}",
             )
         if status.status == "unknown":
             raise DomainError(
                 "UNKNOWN_TERM",
                 f"Term '{term_id}' is not present in the current ontology release",
             )
+        return status.term_id
+
+    def _is_verified_adoption(
+        self,
+        draft: Draft,
+        cmd: CreateAnnotationCommand,
+        doc: Document,
+        layer_id: str,
+    ) -> bool:
+        """True only if the cited source is an existing package proposal for this
+        document, layer and exact term. Only then may an obsolete or unknown
+        imported term be copied into the draft (it still blocks submission)."""
+        if not cmd.source_annotation_id:
+            return False
+        for source in self.repo.list_annotations_for_document(
+            draft.key.package_id, doc.document_id
+        ):
+            if (
+                source.annotation.annotation_id == cmd.source_annotation_id
+                and (cmd.source_version is None or source.version == cmd.source_version)
+                and source.annotation.term_id == cmd.term_id
+                and source.annotation.layer_id == layer_id
+                and source.document_id == doc.document_id
+            ):
+                return True
+        return False
+
+    @staticmethod
+    def _ensure_evidence_identity(
+        draft: Draft, evidence_id: str, segments: list[Segment]
+    ) -> EvidenceSnapshot | None:
+        """An evidence ID names exactly one mention within a draft."""
+        existing = next(
+            (e for e in draft.evidence if e.mention.evidence_id == evidence_id),
+            None,
+        )
+        if existing is not None and list(existing.mention.segments) != list(segments):
+            raise DomainError(
+                "EVIDENCE_ID_CONFLICT",
+                f"Evidence '{evidence_id}' already exists with different segments; "
+                "use edit_mention to change it or choose a new evidence_id",
+            )
+        return existing
 
     def _create_annotation(
         self,
@@ -448,8 +498,9 @@ class EditingService:
 
         type_def = resolve_type(profile, target_layer, target_type)
 
-        if not cmd.source_annotation_id:
-            self._validate_term_for_layer(profile, target_layer, cmd.term_id)
+        term_id = cmd.term_id
+        if not self._is_verified_adoption(draft, cmd, doc, target_layer):
+            term_id = self._validate_term_for_layer(profile, target_layer, cmd.term_id)
 
         if any(
             a.annotation.annotation_id == cmd.annotation_id for a in draft.annotations
@@ -470,6 +521,7 @@ class EditingService:
         if cmd.segments:
             validate_segments(doc.text, cmd.segments)
             mention_id = cmd.evidence_id or f"ev-{cmd.annotation_id}"
+            self._ensure_evidence_identity(draft, mention_id, cmd.segments)
             mention = EvidenceMention(
                 evidence_id=mention_id,
                 segments=cmd.segments,
@@ -497,7 +549,7 @@ class EditingService:
             document_id=doc.document_id,
             layer_id=target_layer,
             type_id=target_type,
-            term_id=cmd.term_id,
+            term_id=term_id,
             axes_values=cmd.axes_values,
             evidence_refs=evidence_refs,
             provenance=prov,
@@ -543,8 +595,8 @@ class EditingService:
                 f"Annotation '{cmd.annotation_id}' belongs to reference layer '{layer_id}'",
             )
 
-        self._validate_term_for_layer(profile, layer_id, cmd.term_id)
-        updated_ann = existing.annotation.model_copy(update={"term_id": cmd.term_id})
+        term_id = self._validate_term_for_layer(profile, layer_id, cmd.term_id)
+        updated_ann = existing.annotation.model_copy(update={"term_id": term_id})
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap
@@ -634,10 +686,7 @@ class EditingService:
                 f"Annotation '{cmd.annotation_id}' belongs to reference layer '{layer_id}'",
             )
 
-        ev_snap = next(
-            (e for e in draft.evidence if e.mention.evidence_id == cmd.evidence_id),
-            None,
-        )
+        ev_snap = self._ensure_evidence_identity(draft, cmd.evidence_id, cmd.segments)
         if ev_snap is None:
             mention = EvidenceMention(
                 evidence_id=cmd.evidence_id,
@@ -684,9 +733,26 @@ class EditingService:
             if any(r.evidence_id == cmd.evidence_id for r in a.annotation.evidence_refs)
         ]
 
+        if cmd.annotation_id and not any(
+            a.annotation.annotation_id == cmd.annotation_id for a in referencing
+        ):
+            raise DomainError(
+                "EVIDENCE_NOT_ATTACHED",
+                f"Evidence '{cmd.evidence_id}' is not attached to annotation "
+                f"'{cmd.annotation_id}'",
+            )
+        if not cmd.annotation_id and len(referencing) > 1:
+            raise DomainError(
+                "SHARED_EVIDENCE_REQUIRES_ANNOTATION",
+                f"Evidence '{cmd.evidence_id}' is shared by "
+                f"{len(referencing)} annotations; specify annotation_id to edit it "
+                "for one annotation (copy-on-write)",
+            )
+
         if cmd.annotation_id and len(referencing) > 1:
-            # Copy-on-write for the selected target annotation
-            new_ev_id = f"{cmd.evidence_id}-cow-{len(draft.evidence) + 1}"
+            # Copy-on-write for the selected target annotation. A random ID
+            # cannot collide with any evidence ID already in the draft.
+            new_ev_id = f"{cmd.evidence_id}-cow-{uuid4().hex}"
             mention = EvidenceMention(
                 evidence_id=new_ev_id,
                 segments=cmd.segments,

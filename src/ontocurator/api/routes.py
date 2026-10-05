@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import base64
-import contextlib
 import io
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal, cast
@@ -19,13 +19,17 @@ from ontocurator.application.editing import EditorService
 from ontocurator.application.exports import ExportService
 from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
+from ontocurator.application.uploads import (
+    OntologyUploadService,
+    PackageImportService,
+)
 from ontocurator.application.workspaces import (
     DocumentSummary,
     WorkspaceService,
     WorkspaceView,
 )
 from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.errors import DomainError
+from ontocurator.domain.errors import DomainError, PayloadTooLarge
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import (
@@ -37,8 +41,12 @@ from ontocurator.domain.workspace import (
 )
 from ontocurator.ontology.provenance import SearchRequest, SearchResult
 from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.packages.models import PackageManifest, SearchEventRecord
-from ontocurator.packages.reader import PackageReader
+from ontocurator.ontology.service import OntologyService
+from ontocurator.packages.models import (
+    PackageManifest,
+    SearchEventRecord,
+    ValidatedPackage,
+)
 from ontocurator.packages.writer import PackageWriter
 from ontocurator.storage.repository import Repository
 
@@ -106,7 +114,20 @@ class TermLabelsRequest(BaseModel):
 
 
 class TermLabel(TermLookup):
+    """Display data for a term, resolved against the layer's pinned ontology.
+
+    ``primary_term_id`` differs from ``term_id`` when the requested id is an
+    alternative (merged) id or differs in case. For obsolete terms,
+    ``replaced_by`` names the designated successor and ``consider`` lists
+    looser suggestions, so the UI can offer a replacement.
+    """
+
     label: str | None
+    status: Literal["valid", "obsolete", "unknown"] = "unknown"
+    primary_term_id: str | None = None
+    replaced_by: str | None = None
+    consider: list[str] = Field(default_factory=list)
+    alt_ids: list[str] = Field(default_factory=list)
 
 
 # --- Dependencies ------------------------------------------------------------- #
@@ -147,8 +168,9 @@ def get_review_service(
 
 def get_submission_service(
     repo: RepoDep,
+    ontology: OntologyDep,
 ) -> SubmissionService:
-    return SubmissionService(repo)
+    return SubmissionService(repo, ontology)
 
 
 def get_export_service(
@@ -168,31 +190,23 @@ ExportSvcDep = Annotated[ExportService, Depends(get_export_service)]
 
 
 @router.post("/packages")
-async def upload_package(
+def upload_package(
     file: UploadFile,
     repo: RepoDep,
-    request: Request,
+    ontology: OntologyDep,
 ) -> dict[str, str | dict[str, object]]:
-    """Upload and atomically import a work package archive."""
-    registry = request.app.state.ontology_registry
-    content = await file.read()
-    stream = io.BytesIO(content)
-    pkg = PackageReader.read_from_stream(stream, registry=registry)
-    assert pkg.manifest.task_profile is not None
-    services = registry.prepare_package(pkg.manifest.task_profile, pkg.embedded_files)
-    package_id = repo.import_package(pkg)
-    for service in services:
-        registry.register_service(service)
-    return {"package_id": package_id, "manifest": pkg.manifest.model_dump()}
+    """Upload and atomically import a work package archive.
+
+    Runs in the thread pool (plain ``def``); the body is copied with a size cap.
+    """
+    manifest = PackageImportService(repo, ontology).import_upload(file.file)
+    return {"package_id": manifest.package_id, "manifest": manifest.model_dump()}
 
 
 @router.get("/packages")
 def list_packages(repo: RepoDep) -> list[PackageManifest]:
     """List installed packages with metadata and ontology reference."""
-    conn = repo.db.get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT manifest_json FROM packages ORDER BY created_at DESC;")
-    return [PackageManifest.model_validate_json(r[0]) for r in cursor.fetchall()]
+    return repo.list_manifests()
 
 
 @router.get("/packages/{package_id}/documents")
@@ -214,16 +228,22 @@ def resolve_term_labels(
 ) -> list[TermLabel]:
     """Resolve display names against the ontology pinned to each package layer."""
     profile = repo.get_task_profile(payload.package_id)
-    return [
-        TermLabel(
-            layer_id=term.layer_id,
-            term_id=term.term_id,
-            label=ontology.for_layer(profile, term.layer_id)
-            .validate_term(term.term_id)
-            .label,
+    labels: list[TermLabel] = []
+    for term in payload.terms:
+        status = ontology.for_layer(profile, term.layer_id).validate_term(term.term_id)
+        labels.append(
+            TermLabel(
+                layer_id=term.layer_id,
+                term_id=term.term_id,
+                label=status.label,
+                status=status.status,
+                primary_term_id=status.term_id if status.status != "unknown" else None,
+                replaced_by=status.replaced_by,
+                consider=status.consider,
+                alt_ids=status.alt_ids,
+            )
         )
-        for term in payload.terms
-    ]
+    return labels
 
 
 @router.post("/workspaces/review-inputs")
@@ -377,24 +397,62 @@ def search_ontology(
     return result
 
 
+_UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]")
+
+
+def _export_filename(*parts: str) -> str:
+    """``part1__part2__..__YYYYMMDD-HHMMSS.zip`` restricted to [A-Za-z0-9._-]."""
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    safe = [_UNSAFE_FILENAME_CHARS.sub("_", part) or "_" for part in parts]
+    return "__".join([*safe, stamp]) + ".zip"
+
+
+def _zip_response(pkg: ValidatedPackage, filename: str) -> Response:
+    buf = io.BytesIO()
+    PackageWriter.write_to_stream(pkg, buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/workspaces/{workspace_id}/export")
 def export_workspace(
     workspace_id: str,
     exp_svc: ExportSvcDep,
 ) -> Response:
-    """Export scoped workspace package as downloadable ZIP."""
+    """Export scoped workspace package as downloadable ZIP.
+
+    Filename: ``<package_id>__<annotator_id>__<document_id>__<YYYYMMDD-HHMMSS>.zip``.
+    """
     key = decode_workspace_id(workspace_id)
     pkg = exp_svc.for_workspace(key)
-    buf = io.BytesIO()
-    PackageWriter.write_to_stream(pkg, buf)
-    zip_bytes = buf.getvalue()
-
-    filename = f"{pkg.manifest.package_id}.zip"
-    return Response(
-        content=zip_bytes,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    return _zip_response(
+        pkg, _export_filename(key.package_id, key.annotator_id, key.document_id)
     )
+
+
+@router.get(
+    "/packages/{package_id}/export",
+    response_class=Response,
+    responses={200: {"content": {"application/zip": {}}}},
+)
+def export_package_for_annotator(
+    package_id: str,
+    annotator_id: str,
+    exp_svc: ExportSvcDep,
+    mode: WorkspaceMode | None = None,
+) -> Response:
+    """Export all work of one annotator on a package as one v2 work package.
+
+    Includes every document of the package and all of the annotator's
+    submissions, submitted annotations and search events in ``mode`` (all
+    modes if omitted). Filename:
+    ``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.
+    """
+    pkg = exp_svc.for_package(package_id, annotator_id, mode)
+    return _zip_response(pkg, _export_filename(package_id, annotator_id))
 
 
 class OntologyInfo(BaseModel):
@@ -403,100 +461,68 @@ class OntologyInfo(BaseModel):
     sha256: str
     term_count: int
     path: str | None = None
+    status: Literal["loaded", "failed"] = "loaded"
+    error: str | None = None
+
+
+def _ontology_info(sha: str, svc: OntologyService, path: Path | None) -> OntologyInfo:
+    return OntologyInfo(
+        ontology_id=(svc.ontology.dominant_prefix or "unknown").lower(),
+        release=svc.ontology.release or svc.ref.release,
+        sha256=sha,
+        term_count=len(svc.ontology.terms),
+        path=str(path) if path is not None else None,
+    )
 
 
 @router.get("/ontologies")
-def list_ontologies(request: Request) -> list[OntologyInfo]:
-    """List loaded ontologies in memory registry."""
-    registry = request.app.state.ontology_registry
-    for sha in list(registry._registered_paths.keys()):
-        if sha not in registry._services:
-            with contextlib.suppress(Exception):
-                registry.get_service(sha)
-    results: list[OntologyInfo] = []
-    for sha, svc in registry._services.items():
-        ont_id = (svc.ontology.dominant_prefix or "unknown").lower()
-        results.append(
-            OntologyInfo(
-                ontology_id=ont_id,
-                release=svc.ontology.release or svc.ref.release,
-                sha256=sha,
-                term_count=len(svc.ontology.terms),
-            )
+def list_ontologies(ontology: OntologyDep) -> list[OntologyInfo]:
+    """List loaded ontologies plus registered files that failed to load."""
+    ontology.load_registered()
+    results = [
+        _ontology_info(sha, svc, ontology.registered_path(sha))
+        for sha, svc in ontology.services()
+    ]
+    results.extend(
+        OntologyInfo(
+            ontology_id="unknown",
+            release="",
+            sha256=failure.sha256,
+            term_count=0,
+            path=str(failure.path),
+            status="failed",
+            error=failure.error,
         )
+        for failure in ontology.failures()
+    )
     return results
 
 
 @router.post("/ontologies")
-async def upload_ontology(
+def upload_ontology(
     file: UploadFile,
     request: Request,
+    ontology: OntologyDep,
 ) -> OntologyInfo:
-    """Upload and register an ontology file into the active workspace."""
-    content = await file.read()
-    registry = request.app.state.ontology_registry
-    config = getattr(request.app.state, "config", None)
+    """Upload and register an ontology file into the active workspace.
 
-    workspace_ont_dir = (
+    Stored immutably as ``<stem>-<sha256[:12]>.json`` and remembered in the
+    persistent configuration so it is registered again after a restart.
+    """
+    config = getattr(request.app.state, "config", None)
+    directory = (
         (config.workspace_dir / "ontologies")
         if config
         else Path("./workspace/ontologies")
     )
-    workspace_ont_dir.mkdir(parents=True, exist_ok=True)
-
-    safe_name = Path(file.filename or "ontology.json").name
-    dest_path = workspace_ont_dir / safe_name
-    tmp_path = workspace_ont_dir / f".upload-{uuid4().hex}.tmp"
-    tmp_path.write_bytes(content)
-
-    import hashlib
-
-    digest = hashlib.sha256(content).hexdigest().lower()
-
+    uploads = OntologyUploadService(ontology, directory)
     try:
-        from ontocurator.domain.documents import OntologyRef
-        from ontocurator.ontology.service import OntologyService
-
-        if digest in registry._services:
-            svc = registry._services[digest]
-            if tmp_path.is_file():
-                tmp_path.unlink()
-            dest_path = registry._registered_paths.get(digest, dest_path)
-        elif digest in registry._registered_paths:
-            svc = registry.get_service(digest)
-            assert svc is not None
-            if tmp_path.is_file():
-                tmp_path.unlink()
-            dest_path = registry._registered_paths.get(digest, dest_path)
-        else:
-            svc = OntologyService.load(
-                tmp_path, OntologyRef(release="uploaded", sha256=digest)
-            )
-            tmp_path.replace(dest_path)
-            registry.register_path(dest_path)
-            registry.register_service(svc)
-    except Exception as exc:
-        if tmp_path.is_file():
-            tmp_path.unlink()
+        stored = uploads.store(file.file, file.filename)
+    except PayloadTooLarge:
+        raise
+    except DomainError as exc:
         raise HTTPException(
             status_code=400, detail=f"Failed to register ontology: {exc}"
         ) from exc
-
-    from ontocurator.config_store import (
-        load_persistent_config,
-        save_persistent_config,
-    )
-
-    p_cfg = load_persistent_config()
-    if dest_path.resolve() not in [p.resolve() for p in p_cfg.ontology_paths]:
-        p_cfg.ontology_paths.append(dest_path.resolve())
-        save_persistent_config(p_cfg)
-
-    ont_id = (svc.ontology.dominant_prefix or "unknown").lower()
-    return OntologyInfo(
-        ontology_id=ont_id,
-        release=svc.ontology.release or svc.ref.release,
-        sha256=digest,
-        term_count=len(svc.ontology.terms),
-        path=str(dest_path),
-    )
+    uploads.persist(stored.path)
+    return _ontology_info(stored.sha256, stored.service, stored.path)

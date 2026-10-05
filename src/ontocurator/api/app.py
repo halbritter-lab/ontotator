@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import contextlib
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -17,10 +17,13 @@ from ontocurator.domain.errors import (
     DomainError,
     IncompleteReview,
     InvalidPackage,
+    PayloadTooLarge,
     RevisionConflict,
 )
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import Repository
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -40,12 +43,12 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
         from ontocurator.ontology.registry import OntologyRegistry
 
-        registry = OntologyRegistry()
+        registry = OntologyRegistry(base_dir=config.workspace_dir)
         for p in config.ontology_paths:
             if p.is_file():
-                digest = registry.register_path(p)
-                with contextlib.suppress(Exception):
-                    registry.get_service(digest)
+                registry.register_path(p)
+            else:
+                logger.warning("Configured ontology file not found: %s", p)
         if config.ontology_path and config.ontology_path.is_file():
             if config.expected_ontology_ref is not None:
                 from ontocurator.ontology.service import OntologyService
@@ -56,9 +59,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                     )
                 )
             else:
-                digest = registry.register_path(config.ontology_path)
-                with contextlib.suppress(Exception):
-                    registry.get_service(digest)
+                registry.register_path(config.ontology_path)
+        # Eagerly parse registered files; failures are logged and reported by
+        # GET /api/v1/ontologies instead of being silently dropped.
+        registry.load_registered()
 
         for definition, data in repo.ontology_resources():
             if registry.get_service(definition.sha256) is None:
@@ -107,6 +111,15 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=409,
+            content={"code": exc.code, "details": exc.details or str(exc)},
+        )
+
+    @app.exception_handler(PayloadTooLarge)
+    async def payload_too_large_handler(
+        _req: Request, exc: PayloadTooLarge
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=413,
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 

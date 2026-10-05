@@ -20,6 +20,8 @@ export interface paths {
         /**
          * Upload Package
          * @description Upload and atomically import a work package archive.
+         *
+         *     Runs in the thread pool (plain ``def``); the body is copied with a size cap.
          */
         post: operations["upload_package_api_v1_packages_post"];
         delete?: never;
@@ -218,10 +220,64 @@ export interface paths {
         /**
          * Export Workspace
          * @description Export scoped workspace package as downloadable ZIP.
+         *
+         *     Filename: ``<package_id>__<annotator_id>__<document_id>__<YYYYMMDD-HHMMSS>.zip``.
          */
         get: operations["export_workspace_api_v1_workspaces__workspace_id__export_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/packages/{package_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Package For Annotator
+         * @description Export all work of one annotator on a package as one v2 work package.
+         *
+         *     Includes every document of the package and all of the annotator's
+         *     submissions, submitted annotations and search events in ``mode`` (all
+         *     modes if omitted). Filename:
+         *     ``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.
+         */
+        get: operations["export_package_for_annotator_api_v1_packages__package_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ontologies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Ontologies
+         * @description List loaded ontologies plus registered files that failed to load.
+         */
+        get: operations["list_ontologies_api_v1_ontologies_get"];
+        put?: never;
+        /**
+         * Upload Ontology
+         * @description Upload and register an ontology file into the active workspace.
+         *
+         *     Stored immutably as ``<stem>-<sha256[:12]>.json`` and remembered in the
+         *     persistent configuration so it is registered again after a restart.
+         */
+        post: operations["upload_ontology_api_v1_ontologies_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -353,6 +409,11 @@ export interface components {
              * @default true
              */
             allow_empty: boolean;
+        };
+        /** Body_upload_ontology_api_v1_ontologies_post */
+        Body_upload_ontology_api_v1_ontologies_post: {
+            /** File */
+            file: string;
         };
         /** Body_upload_package_api_v1_packages_post */
         Body_upload_package_api_v1_packages_post: {
@@ -515,6 +576,27 @@ export interface components {
             format: "obo-graph-json";
             /** Resource Path */
             resource_path?: string | null;
+        };
+        /** OntologyInfo */
+        OntologyInfo: {
+            /** Ontology Id */
+            ontology_id: string;
+            /** Release */
+            release: string;
+            /** Sha256 */
+            sha256: string;
+            /** Term Count */
+            term_count: number;
+            /** Path */
+            path?: string | null;
+            /**
+             * Status
+             * @default loaded
+             * @enum {string}
+             */
+            status: "loaded" | "failed";
+            /** Error */
+            error?: string | null;
         };
         /**
          * OntologyRef
@@ -830,7 +912,15 @@ export interface components {
             /** Reference Layer Ids */
             reference_layer_ids: string[];
         };
-        /** TermLabel */
+        /**
+         * TermLabel
+         * @description Display data for a term, resolved against the layer's pinned ontology.
+         *
+         *     ``primary_term_id`` differs from ``term_id`` when the requested id is an
+         *     alternative (merged) id or differs in case. For obsolete terms,
+         *     ``replaced_by`` names the designated successor and ``consider`` lists
+         *     looser suggestions, so the UI can offer a replacement.
+         */
         TermLabel: {
             /** Layer Id */
             layer_id: string;
@@ -838,6 +928,20 @@ export interface components {
             term_id: string;
             /** Label */
             label: string | null;
+            /**
+             * Status
+             * @default unknown
+             * @enum {string}
+             */
+            status: "valid" | "obsolete" | "unknown";
+            /** Primary Term Id */
+            primary_term_id?: string | null;
+            /** Replaced By */
+            replaced_by?: string | null;
+            /** Consider */
+            consider?: string[];
+            /** Alt Ids */
+            alt_ids?: string[];
         };
         /** TermLabelsRequest */
         TermLabelsRequest: {
@@ -1314,6 +1418,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_package_for_annotator_api_v1_packages__package_id__export_get: {
+        parameters: {
+            query: {
+                annotator_id: string;
+                mode?: ("independent" | "review" | "assisted") | null;
+            };
+            header?: never;
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ontologies_api_v1_ontologies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OntologyInfo"][];
+                };
+            };
+        };
+    };
+    upload_ontology_api_v1_ontologies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_ontology_api_v1_ontologies_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OntologyInfo"];
                 };
             };
             /** @description Validation Error */

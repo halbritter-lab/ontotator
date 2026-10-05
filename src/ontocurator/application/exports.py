@@ -9,19 +9,97 @@ from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import EvidenceSnapshot
 from ontocurator.domain.errors import DomainError
-from ontocurator.domain.workspace import WorkspaceKey
+from ontocurator.domain.profiles import TaskProfile, profile_hash
+from ontocurator.domain.scopes import build_scope
+from ontocurator.domain.workspace import WorkspaceKey, WorkspaceMode
 from ontocurator.packages.models import (
     PackageManifest,
+    SearchEventRecord,
     ValidatedPackage,
 )
 from ontocurator.storage.repository import Repository
 
 
 class ExportService:
-    """Exports a single workspace and its transitive dependencies."""
+    """Exports workspaces and their transitive dependencies as v2 packages."""
 
     def __init__(self, repo: Repository) -> None:
         self.repo = repo
+
+    def for_package(
+        self,
+        package_id: str,
+        annotator_id: str,
+        mode: WorkspaceMode | None = None,
+    ) -> ValidatedPackage:
+        """Export all work of one annotator on one package as one v2 package.
+
+        Merges the per-workspace exports of every workspace (opened drafts and
+        local or imported submission bindings) of ``annotator_id`` in
+        ``package_id``; ``mode=None`` includes all modes. Every document of the
+        package is included in package order, so exports of different
+        annotators share the same document set, task profile and
+        ``origin_manifest_hash`` and can be compared for inter-annotator
+        agreement. Only submitted annotations are exported (as with the
+        per-workspace export); search events are included for every workspace.
+        """
+        keys = self.repo.list_workspace_keys(package_id, annotator_id, mode)
+        if not keys:
+            raise DomainError(
+                "NO_ANNOTATOR_WORK",
+                f"Annotator '{annotator_id}' has no workspaces in package "
+                f"'{package_id}'" + (f" for mode '{mode}'" if mode else ""),
+            )
+
+        documents = {d.document_id: d for d in self.repo.list_documents(package_id)}
+        annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
+        evidence: dict[tuple[str, str], EvidenceSnapshot] = {}
+        submissions = {}
+        search_events: dict[str, SearchEventRecord] = {}
+        profile: TaskProfile | None = None
+        for key in keys:
+            part = self.for_workspace(key)
+            annotations.update(part.annotations)
+            evidence.update(part.evidence)
+            submissions.update(part.submissions)
+            for event in part.search_events:
+                search_events.setdefault(event.event_id, event)
+            if mode is not None:
+                # One mode => one (possibly layer-projected) profile for all.
+                profile = part.manifest.task_profile
+        if profile is None:
+            # Mixed modes: the full package profile covers every layer.
+            profile = self.repo.get_task_profile(package_id)
+        stored_resources = self.repo.get_embedded_files(package_id)
+        embedded = {
+            ont.resource_path: stored_resources[ont.resource_path]
+            for ont in profile.ontologies
+            if ont.resource_path and ont.resource_path in stored_resources
+        }
+
+        manifest = PackageManifest(
+            format_version="ontocurator-work-package/v2",
+            package_id=f"export-{uuid4()}",
+            created_at=datetime.now(UTC).isoformat(),
+            document_order=list(documents),
+            task_profile=profile,
+            task_profile_sha256=profile_hash(profile),
+            origin_package_id=package_id,
+            origin_manifest_hash=canonical_hash(
+                self.repo.get_manifest(package_id).model_dump()
+            ),
+        )
+        return ValidatedPackage(
+            manifest=manifest,
+            documents=documents,
+            annotations=annotations,
+            evidence=evidence,
+            submissions=submissions,
+            search_events=sorted(
+                search_events.values(), key=lambda e: (e.timestamp, e.event_id)
+            ),
+            embedded_files=embedded,
+        )
 
     def for_workspace(self, key: WorkspaceKey) -> ValidatedPackage:
         """Produce a scoped ValidatedPackage containing only workspace data."""
@@ -36,9 +114,6 @@ class ExportService:
 
         # Load task profile and scope
         task_profile = self.repo.get_task_profile(key.package_id)
-        from ontocurator.domain.profiles import TaskProfile, profile_hash
-        from ontocurator.domain.scopes import build_scope
-
         scope = build_scope(task_profile, key.mode)
 
         # Load submissions for this workspace key
