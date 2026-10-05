@@ -106,4 +106,39 @@ describe("createMutationQueue", () => {
     queue.setRevision(10);
     expect(queue.getRevision()).toBe(10);
   });
+
+  it("adopts the revision of an in-flight request that succeeds after discardPending", async () => {
+    const queue = createMutationQueue({ initialRevision: 4 });
+    let release!: (value: { revision: number }) => void;
+    const inFlight = queue.enqueue(
+      (rev) => new Promise<{ revision: number }>((resolve) => {
+        expect(rev).toBe(4);
+        release = resolve;
+      }),
+    );
+    inFlight.catch(() => undefined);
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    expect(queue.discardPending()).toBe(1);
+    await expect(inFlight).rejects.toThrow(/discarded/i);
+    // The server applied the discarded mutation anyway.
+    release({ revision: 5 });
+    const seen: number[] = [];
+    await queue.enqueue(async (rev) => { seen.push(rev); return { revision: rev + 1 }; });
+    expect(seen).toEqual([5]);
+    expect(queue.getRevision()).toBe(6);
+  });
+
+  it("never moves the revision backwards for a late discarded response", async () => {
+    const queue = createMutationQueue({ initialRevision: 1 });
+    let release!: (value: { revision: number }) => void;
+    const inFlight = queue.enqueue(
+      () => new Promise<{ revision: number }>((resolve) => { release = resolve; }),
+    );
+    inFlight.catch(() => undefined);
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    queue.discardPending(9); // reload already fetched a newer server revision
+    release({ revision: 2 });
+    await queue.flush();
+    expect(queue.getRevision()).toBe(9);
+  });
 });

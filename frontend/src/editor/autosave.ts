@@ -69,6 +69,13 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
   const updateState = (next: QueueState) => {
     if (state !== next) { state = next; options.onState?.(next); }
   };
+  const adoptRevision = (result: unknown, onlyNewer: boolean) => {
+    if (!result || typeof result !== "object") return;
+    const r = result as { revision?: number; draft_revision?: number };
+    const returned = r.revision ?? r.draft_revision;
+    if (typeof returned !== "number") return;
+    if (!onlyNewer || returned > revision) revision = returned;
+  };
   const process = (): Promise<void> => {
     if (processing) return processing;
     if (disposed || state === "error" || state === "conflict") return Promise.resolve();
@@ -78,12 +85,15 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
         const operation = queue[0];
         try {
           const result = await operation.fn(revision);
-          if (queue[0] !== operation) continue; // discarded while in flight
+          if (queue[0] !== operation) {
+            // Discarded while in flight, but the server applied it anyway: adopt
+            // its (newer) revision so the next edit is not rejected as stale.
+            adoptRevision(result, true);
+            continue;
+          }
           lastError = null;
           queue.shift();
-          if (result && typeof result === "object") {
-            revision = result.revision ?? result.draft_revision ?? revision;
-          }
+          adoptRevision(result, false);
           operation.resolve(result);
         } catch (error) {
           if (queue[0] !== operation) continue; // discarded while in flight

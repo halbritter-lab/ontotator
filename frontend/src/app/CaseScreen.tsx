@@ -18,6 +18,7 @@ import {
   type MutationQueue,
   type QueueState,
 } from "../editor/autosave";
+import { newEvidenceId } from "../editor/ids";
 import { LayerControls } from "../editor/LayerControls";
 import {
   initLayerSelection,
@@ -600,7 +601,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         }
         setSelectionIntent("new_mention");
       } else if (isAttachingMention && selectedAnnotationId) {
-        const evidenceId = `ev-${Date.now()}`;
+        const evidenceId = newEvidenceId();
         const annId = selectedAnnotationId;
         await mutateAnnotationAndSyncDecision(annId, () =>
           enqueueMutation({
@@ -620,7 +621,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         const activeLayerId = layerSelection.activeLayerId;
         const activeLayerDef = (view.layers ?? []).find(l => l.layer_id === activeLayerId);
         const activeTypeId = layerSelection.activeTypeId ?? activeLayerDef?.annotation_types?.[0]?.type_id ?? "default";
-        const evidenceId = `ev-${Date.now()}`;
+        const evidenceId = newEvidenceId();
         handleDeselectAll();
         setPendingAnnotation({
           annotationId: `ann-${crypto.randomUUID()}`,
@@ -864,8 +865,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const newAnnId = `ann-${crypto.randomUUID()}`;
     const evidenceList = snap?.evidence ?? [];
     const firstEvidence = evidenceList[0];
-    const stamp = Date.now();
-    const firstEvidenceId = firstEvidence ? `ev-${stamp}` : undefined;
+    const firstEvidenceId = firstEvidence ? newEvidenceId() : undefined;
     let created = false;
     try {
       await enqueueMutation({
@@ -885,7 +885,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         await enqueueMutation({
           command: "attach_mention",
           annotation_id: newAnnId,
-          evidence_id: `ev-${stamp}-${i}`,
+          evidence_id: newEvidenceId(),
           segments: evidenceList[i].mention.segments,
         });
       }
