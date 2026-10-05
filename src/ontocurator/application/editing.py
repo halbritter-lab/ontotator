@@ -56,7 +56,8 @@ class CreateAnnotationCommand(BaseModel):
     segments: list[Segment] = Field(default_factory=list)
     label: str | None = None
     actor_kind: ActorKind = "human"
-    actor_id: str = "annotator"
+    # None: attributed to the annotator of the workspace the command is applied to.
+    actor_id: str | None = None
     method: str = "manual"
     source_annotation_id: str | None = None
     source_version: str | None = None
@@ -279,6 +280,8 @@ class EditingService:
     def apply(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
         """Transactionally execute an edit command against a workspace draft."""
         cmd = self.parse_command(envelope.payload)
+        if isinstance(cmd, CreateAnnotationCommand) and cmd.actor_id is None:
+            cmd = cmd.model_copy(update={"actor_id": key.annotator_id})
         doc = self.repo.get_document(key.package_id, key.document_id)
         if doc is None:
             raise DomainError(
@@ -555,6 +558,7 @@ class EditingService:
         if cmd.source_annotation_id and cmd.source_version:
             source_refs = [f"{cmd.source_annotation_id}:{cmd.source_version}"]
 
+        assert cmd.actor_id is not None  # defaulted to the annotator by apply()
         prov = Provenance(
             actor=ActorRef(actor_id=cmd.actor_id, kind=cmd.actor_kind),
             method=cmd.method,

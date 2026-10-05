@@ -146,6 +146,37 @@ def test_create_annotation_and_provenance_equivalence(tmp_path: Path, actor_kind
     assert snap.annotation.provenance.actor.actor_id == f"agent-{actor_kind}"
 
 
+def test_create_annotation_attributes_workspace_annotator_by_default(tmp_path: Path):
+    _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
+    ws_key = ws_svc.open(
+        WorkspaceKey(
+            package_id="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    ).key
+
+    draft = edit_svc.apply(
+        ws_key,
+        MutationEnvelope(
+            mutation_id="mut-1",
+            expected_revision=0,
+            payload={
+                "command": "create_annotation",
+                "annotation_id": "ann-1",
+                "term_id": "HP:0001252",
+                "segments": [{"start": 27, "end": 36}],
+            },
+        ),
+    )
+
+    actor = draft.annotations[0].annotation.provenance.actor
+    assert actor.actor_id == "annotator-1"
+    assert actor.kind == "human"
+
+
 def test_spanless_annotation_and_subsequent_evidence_addition(tmp_path: Path):
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = WorkspaceKey(
