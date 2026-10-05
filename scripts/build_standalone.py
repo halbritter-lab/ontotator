@@ -8,9 +8,14 @@ Steps:
    The source tree is only modified with ``--update-embedded-web``.
 3. PyInstaller ``--onedir`` build (no UPX) into ``<out-dir>/standalone``;
    all intermediate files go to ``<out-dir>/build``.
-4. Portable layout (portable.txt marker, ontologies/, workspace/, README.txt,
-   license notices) and a deterministic ZIP
+4. Portable layout (portable.txt marker, ontologies/, packages/, workspace/,
+   README.txt, license notices) and a deterministic ZIP
    ``<out-dir>/ontocurator-portable-<os>-<arch>.zip``.
+   Optional preloads (``--package``, ``--ontology``, ``--settings``) are
+   validated before the build and copied into packages/, ontologies/ and
+   ontocurator-settings.json; ``--bundle-name NAME`` names the ZIP and its
+   top-level folder ``NAME``. ``scripts/provision_bundle.py`` does the same
+   for an already built ZIP.
 5. macOS additionally: ``Ontocurator.app`` (windowed bundle, per-user data in
    ~/Documents/Ontocurator) zipped as ``ontocurator-macos-<arch>-app.zip``.
 
@@ -28,6 +33,9 @@ variables are present (nothing is signed otherwise):
 Usage:
     uv run --locked python scripts/build_standalone.py --help
     uv run --locked python scripts/build_standalone.py --out-dir ../oc-dist
+    uv run --locked python scripts/build_standalone.py --out-dir ../oc-dist \
+        --package study-xy-round1.zip --ontology hp.json \
+        --settings ontocurator-settings.json --bundle-name study-xy
 """
 
 from __future__ import annotations
@@ -46,10 +54,15 @@ from build_common import (
     DEFAULT_OUT_DIR,
     REPO_ROOT,
     WEB_DIR,
+    Preload,
+    PreloadError,
+    apply_preload,
     build_frontend,
+    check_bundle_name,
     check_uv_lock,
     run_command,
     sync_embedded_web_assets,
+    validate_preload,
     write_deterministic_zip,
 )
 from license_notices import write_notices
@@ -110,8 +123,29 @@ Where your data lives
 Everything is stored inside this folder:
   workspace/            database, imported packages and drafts
   workspace/ontologies/ ontology files (.json) - auto-loaded on start
-  ontologies/           you may also drop ontology .json files here
+  ontologies/           ontology .json files registered on every start
+  packages/             work package .zip files imported on every start
+  ontocurator-settings.json   optional presets (see below)
   config.json           settings (created on first start)
+
+Preconfigured copies
+--------------------
+Files in "ontologies" and "packages" are registered/imported when
+Ontocurator starts; already imported, unchanged packages are skipped. These
+folders are for the INITIAL DELIVERY only: imported data is immutable, so
+replacing or editing a file there later does NOT change data that was already
+imported. To ship changed content, create a new work package with a new
+package ID (a changed package with an already imported ID is NOT imported and
+a warning is shown), or add a new ontology file (registered as a new version;
+existing packages keep their version). Never edit "workspace" by hand.
+
+The optional ontocurator-settings.json can preset, for example:
+  {{ "default_mode": "independent", "allowed_modes": ["independent"],
+    "annotator_id": null, "open_package": "study-xy-round1",
+    "auto_open_browser": true }}
+With a single allowed mode, the working mode cannot be changed. A preset
+annotator_id is only suggested: each person still confirms who is annotating.
+Command line options override this file, which overrides config.json.
 
 To update to a new version, extract the new ZIP and copy the "workspace"
 folder (and config.json) from the old folder into the new one.
@@ -215,19 +249,23 @@ def add_license_files(target: Path, generated_licenses: Path | None) -> None:
 
 
 def prepare_portable_bundle(
-    bundle_dir: Path, out_dir: Path, generated_licenses: Path | None = None
+    bundle_dir: Path,
+    out_dir: Path,
+    generated_licenses: Path | None = None,
+    *,
+    preload: Preload | None = None,
+    bundle_name: str | None = None,
 ) -> Path:
-    """Create the portable layout inside ``bundle_dir`` and zip it."""
+    """Create the portable layout inside ``bundle_dir`` and zip it.
+
+    ``preload`` files (validated beforehand) are copied into packages/,
+    ontologies/ and ontocurator-settings.json. ``bundle_name`` names the ZIP
+    and its top-level folder (default: ontocurator-portable-<os>-<arch>.zip
+    containing ontocurator/).
+    """
     exe_name = f"{APP_NAME}.exe" if sys.platform == "win32" else APP_NAME
 
     (bundle_dir / "portable.txt").write_text(PORTABLE_MARKER_TEXT, encoding="utf-8")
-    ontologies_dir = bundle_dir / "ontologies"
-    ontologies_dir.mkdir(exist_ok=True)
-    (ontologies_dir / "README.txt").write_text(
-        "Place your OBO Graph JSON ontology files (such as hp.json, mondo.json) in this folder.\n"
-        "Ontocurator will automatically discover and load them on startup.\n",
-        encoding="utf-8",
-    )
     workspace_dir = bundle_dir / "workspace"
     workspace_dir.mkdir(exist_ok=True)
     (workspace_dir / "README.txt").write_text(
@@ -239,11 +277,17 @@ def prepare_portable_bundle(
         PORTABLE_README.format(exe=exe_name), encoding="utf-8"
     )
     add_license_files(bundle_dir, generated_licenses)
+    apply_preload(bundle_dir, preload or Preload())
 
-    os_name, arch = _platform_tag()
-    zip_path = out_dir / f"ontocurator-portable-{os_name}-{arch}.zip"
+    if bundle_name:
+        zip_path = out_dir / f"{bundle_name}.zip"
+        prefix = bundle_name
+    else:
+        os_name, arch = _platform_tag()
+        zip_path = out_dir / f"ontocurator-portable-{os_name}-{arch}.zip"
+        prefix = APP_NAME
     print(f"--> Compressing portable bundle into {zip_path}")
-    write_deterministic_zip(bundle_dir, zip_path, prefix=APP_NAME)
+    write_deterministic_zip(bundle_dir, zip_path, prefix=prefix)
     _report(zip_path)
     return zip_path
 
@@ -387,7 +431,48 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=sys.platform == "darwin",
         help="Also build a windowed Ontocurator.app (macOS only; default on macOS).",
     )
+    parser.add_argument(
+        "--package",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="ZIP",
+        help="Work package to ship in packages/ (imported on start; repeatable).",
+    )
+    parser.add_argument(
+        "--ontology",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="JSON",
+        help="Ontology to ship in ontologies/ (registered on start; repeatable).",
+    )
+    parser.add_argument(
+        "--settings",
+        type=Path,
+        default=None,
+        metavar="JSON",
+        help="Presets to ship as ontocurator-settings.json.",
+    )
+    parser.add_argument(
+        "--bundle-name",
+        default=None,
+        metavar="NAME",
+        help="Name of the ZIP (NAME.zip) and of its top-level folder.",
+    )
     args = parser.parse_args(argv)
+    args.preload = Preload(
+        packages=tuple(p.resolve() for p in args.package),
+        ontologies=tuple(p.resolve() for p in args.ontology),
+        settings=args.settings.resolve() if args.settings else None,
+    )
+    try:
+        if args.bundle_name is not None:
+            check_bundle_name(args.bundle_name)
+        for warning in validate_preload(args.preload):
+            print(f"Warning: {warning}")
+    except PreloadError as exc:
+        parser.error(str(exc))
     if args.skip_frontend and args.update_embedded_web:
         parser.error("--update-embedded-web requires building the frontend")
     if args.macos_app and sys.platform != "darwin":
@@ -425,7 +510,13 @@ def main(argv: list[str] | None = None) -> None:
         sign_windows(bundle_dir / f"{APP_NAME}.exe")
     elif sys.platform == "darwin":
         sign_and_notarize_macos(bundle_dir / APP_NAME, out_dir)
-    prepare_portable_bundle(bundle_dir, out_dir, licenses_dir)
+    prepare_portable_bundle(
+        bundle_dir,
+        out_dir,
+        licenses_dir,
+        preload=args.preload,
+        bundle_name=args.bundle_name,
+    )
 
     if args.macos_app:
         app_bundle = run_pyinstaller(web_src, out_dir, windowed=True, name=MAC_APP_NAME)
