@@ -149,18 +149,18 @@ def test_frozen_non_portable_defaults_use_per_user_dirs(
 ) -> None:
     exe_dir = tmp_path / "Ontocurator.app" / "Contents" / "MacOS"
     exe_dir.mkdir(parents=True)
-    docs = tmp_path / "Documents"
+    local = tmp_path / "LocalAppData" / "Ontocurator"
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(exe_dir / "ontocurator"))
     monkeypatch.delenv("ONTOCURATOR_CONFIG_PATH", raising=False)
     monkeypatch.setattr(
-        config_store.platformdirs, "user_documents_dir", lambda: str(docs)
+        config_store.platformdirs, "user_data_dir", lambda *a, **k: str(local)
     )
     monkeypatch.setattr(
         config_store, "user_config_dir", lambda: tmp_path / "userconfig"
     )
 
-    assert config_store.default_workspace_dir() == docs / "Ontocurator" / "workspace"
+    assert config_store.default_workspace_dir() == local / "workspace"
     assert config_store.get_default_config_path() == (
         tmp_path / "userconfig" / "config.json"
     )

@@ -113,8 +113,8 @@ routes `.zip` to `--package`, `.json` to `--import-ontology` and a folder to
 (and on macOS additionally `ontocurator-macos-<arch>-app.zip` with
 `Ontocurator.app`).
 
-**Start:** extract the ZIP anywhere you can write (e.g. your Documents folder,
-not `C:\Program Files`) and double-click `ontocurator.exe` / `ontocurator`.
+**Start:** extract the ZIP to a local folder you can write (e.g. `C:\Ontocurator`;
+not `C:\Program Files`, and not a OneDrive/Dropbox-synced folder) and double-click `ontocurator.exe` / `ontocurator`.
 A console window opens and the browser shows the editor. Dropping a work
 package `.zip`, an ontology `.json` or a workspace folder onto the executable
 opens it; dropped ontologies are copied into `workspace/ontologies/` as
@@ -141,7 +141,7 @@ by the operating system even after a crash, so stale locks never block a start.
 | Mode | Settings file | Default workspace |
 |---|---|---|
 | Portable ZIP (folder writable, contains `portable.txt`) | `<app folder>/config.json` (paths stored relative to the folder) | `<app folder>/workspace` |
-| `Ontocurator.app`, read-only location, or `portable.txt` deleted | per-user config dir (`%APPDATA%\ontocurator`, `~/Library/Application Support/ontocurator`, `~/.config/ontocurator`) | `Documents/Ontocurator/workspace` |
+| `Ontocurator.app`, read-only location, or `portable.txt` deleted | per-user config dir (`%APPDATA%\ontocurator`, `~/Library/Application Support/ontocurator`, `~/.config/ontocurator`) | local user data dir: `%LOCALAPPDATA%\Ontocurator\workspace`, `~/Library/Application Support/Ontocurator/workspace`, `~/.local/share/Ontocurator/workspace` |
 | From source / wheel | per-user config dir | last used workspace, else `./workspace` |
 
 `ONTOCURATOR_CONFIG_PATH` overrides the settings file location. Moving or
@@ -151,9 +151,33 @@ stored relatively. To update, extract the new version and copy `workspace/` (and
 default is used and a notice is printed: Ontocurator never switches workspace
 silently.
 
+The full workspace path is printed in the console at every start (`Workspace:`)
+and again on exit. To **back it up**, quit Ontocurator and copy that folder (see
+[Safe Backup Procedure](#safe-backup-procedure)). The per-user default is a
+local, non-roaming folder on purpose: `Documents` is often synchronised by
+OneDrive, and cloud sync tools can corrupt a SQLite database that is open.
+Workspaces saved by older versions (e.g. `Documents/Ontocurator/workspace`) are
+kept as they are and never moved. If the workspace lies inside a OneDrive,
+Dropbox, iCloud Drive or Google Drive folder, a warning is printed at start;
+move it to a local folder (`--workspace`) or pause syncing while you work.
+
+**Switching to the portable ZIP:** on its first start a portable copy has no
+`config.json` yet. If an older per-user installation left settings in the
+per-user config dir, its ontology list (files that still exist), port and
+auto-open-browser setting are imported and listed in the console. Its workspace
+is *not* taken over: the portable copy uses `<app folder>/workspace`; copy the
+old workspace folder there (or start with `--workspace <old path>`) to keep
+working on it.
+
 **Session token:** a fresh token is generated on every start. While running it
-is stored (owner-only permissions) in `<workspace>/.ontocurator-instance.json`
-so that a second launch can reopen the browser; the file is deleted on shutdown.
+is stored in `<workspace>/.ontocurator-instance.json` so that a second launch
+can reopen the browser; the file is deleted on shutdown. It is owner-only
+(mode 0600 on macOS/Linux; on Windows its inherited ACL is replaced by one that
+grants only the current user, best effort via `icacls`). The token is only ever
+sent to loopback addresses; an instance file naming any other host is ignored.
+A second launch waits up to two minutes for a still-starting first instance
+(printing progress every ~10 s); if it gives up, it says which dropped files
+were *not* imported so they can be imported in the web UI.
 
 ### Building
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +18,7 @@ from uuid import uuid4
 
 from ontocurator.domain.documents import OntologyRef
 from ontocurator.domain.errors import DomainError, PayloadTooLarge
+from ontocurator.ontology.naming import content_addressed_name
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
 from ontocurator.packages.models import PackageManifest
@@ -30,7 +30,6 @@ MAX_ONTOLOGY_UPLOAD_BYTES = 512 * 1024 * 1024  # 512 MiB
 MAX_PACKAGE_UPLOAD_BYTES = MAX_COMPRESSED_BYTES
 _CHUNK_BYTES = 1024 * 1024
 _SPOOL_IN_MEMORY_BYTES = 8 * 1024 * 1024
-_UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 
 
 def copy_limited(source: BinaryIO, target: BinaryIO, limit: int, what: str) -> str:
@@ -47,16 +46,6 @@ def copy_limited(source: BinaryIO, target: BinaryIO, limit: int, what: str) -> s
         digest.update(chunk)
         target.write(chunk)
     return digest.hexdigest()
-
-
-def content_addressed_name(filename: str | None, sha256: str) -> str:
-    """``<stem>-<sha256[:12]>.json`` with the stem reduced to [A-Za-z0-9._-]."""
-    stem = Path(filename or "ontology.json").stem
-    suffix = f"-{sha256[:12]}"
-    if stem.endswith(suffix):
-        stem = stem[: -len(suffix)]
-    stem = _UNSAFE_NAME_CHARS.sub("_", stem).strip("._") or "ontology"
-    return f"{stem}{suffix}.json"
 
 
 def _file_sha256(path: Path) -> str:

@@ -24,15 +24,20 @@ import uvicorn
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
 from ontocurator.config_store import (
+    CONFIG_FILENAME,
     app_dir,
+    cloud_sync_provider,
     default_workspace_dir,
     detect_portable_root,
     get_default_config_path,
     load_persistent_config,
     save_persistent_config,
+    seed_from_legacy_config,
+    user_config_dir,
 )
 from ontocurator.domain.errors import DomainError
 from ontocurator.instance import (
+    LOOPBACK_HOSTS,
     InstanceInfo,
     WorkspaceLock,
     remove_instance_info,
@@ -41,6 +46,7 @@ from ontocurator.instance import (
     write_instance_info,
 )
 from ontocurator.ontology.discovery import discover_ontologies, is_probable_obo_graph
+from ontocurator.ontology.naming import content_addressed_name
 
 app = typer.Typer(
     name="ontocurator",
@@ -48,7 +54,6 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 PORT_SEARCH_ATTEMPTS = 20
 
 
@@ -214,21 +219,13 @@ def build_app_url(base_url: str, token: str, package_id: str | None = None) -> s
 # --------------------------------------------------------------------------- #
 
 
-def content_addressed_name(source: Path, digest: str) -> str:
-    """``<stem>-<sha256[:12]>.json`` - same scheme as the upload endpoint."""
-    short = digest[:12]
-    stem = source.stem
-    if stem.endswith(f"-{short}"):
-        stem = stem[: -(len(short) + 1)]
-    return f"{stem}-{short}.json"
-
-
 def import_ontology_file(source: Path, ontologies_dir: Path) -> Path:
     """Copy a validated OBO Graph JSON into the workspace (idempotent)."""
     if not is_probable_obo_graph(source):
         raise ValueError("not an OBO Graph JSON ontology file")
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     ontologies_dir.mkdir(parents=True, exist_ok=True)
+    # Same (sanitised) scheme as the upload endpoint.
     dest = ontologies_dir / content_addressed_name(source, digest)
     if dest.resolve() == source.resolve():
         return dest
@@ -258,7 +255,14 @@ def _handoff_to_running_instance(
     open_browser: bool,
 ) -> None:
     typer.echo(f"Ontocurator is already running for workspace: {workspace}")
-    info = wait_for_running_instance(workspace)
+
+    def _progress(elapsed: float) -> None:
+        typer.echo(
+            f"Waiting for the running Ontocurator instance to respond "
+            f"({elapsed:.0f}s; it may still be loading ontologies)..."
+        )
+
+    info = wait_for_running_instance(workspace, on_progress=_progress)
     if info is None:
         typer.echo(
             "Error: The workspace is locked by another Ontocurator process that "
@@ -266,6 +270,20 @@ def _handoff_to_running_instance(
             "process) and try again.",
             err=True,
         )
+        not_imported = [*import_ontology]
+        if package is not None:
+            not_imported.append(package)
+        for path in not_imported:
+            how = (
+                "use 'Import Package' in the web UI"
+                if package is not None and path == package
+                else "drop it onto Ontocurator again (or use 'Upload missing "
+                "ontology' in the web UI)"
+            )
+            typer.echo(
+                f"The file {path} was NOT imported. Once Ontocurator responds, {how}.",
+                err=True,
+            )
         raise typer.Exit(code=1)
 
     for src in import_ontology:
@@ -303,7 +321,8 @@ def serve(
                 "Directory where packages, drafts, and database are stored. "
                 "Default: the saved workspace, else ./workspace when run from "
                 "source, the app folder's workspace/ for the portable build, or "
-                "Documents/Ontocurator/workspace otherwise."
+                "the local user data folder (e.g. %LOCALAPPDATA%\\Ontocurator\\"
+                "workspace) otherwise."
             ),
             show_default=False,
         ),
@@ -434,8 +453,23 @@ def serve(
 
     # ---- resolve workspace (never silently) --------------------------------
     config_path = get_default_config_path()
-    persistent_cfg = load_persistent_config(config_path)
     portable_root = detect_portable_root()
+    imported_settings: list[str] = []
+    if (
+        portable_root is not None
+        and config_path == portable_root / CONFIG_FILENAME
+        and not config_path.exists()
+    ):
+        # First start of a portable copy: carry over the settings of an older
+        # per-user installation (but never its workspace).
+        legacy_config = user_config_dir() / CONFIG_FILENAME
+        persistent_cfg, imported_settings = seed_from_legacy_config(legacy_config)
+        if imported_settings:
+            typer.echo(f"Imported settings from {legacy_config}:")
+            for note in imported_settings:
+                typer.echo(f"  - {note}")
+    else:
+        persistent_cfg = load_persistent_config(config_path)
 
     if workspace is not None:
         ws = workspace.resolve()
@@ -465,6 +499,14 @@ def serve(
         raise typer.Exit(code=1) from exc
 
     open_browser = not no_browser and persistent_cfg.auto_open_browser
+    sync_provider = cloud_sync_provider(ws)
+    if sync_provider is not None:
+        typer.echo(
+            f"Warning: Workspace {ws} is inside a {sync_provider} folder. Cloud "
+            "synchronisation can corrupt the SQLite database while Ontocurator is "
+            "running; use a local folder or pause syncing.",
+            err=True,
+        )
 
     # ---- single instance per workspace -------------------------------------
     lock = WorkspaceLock(ws)
@@ -598,6 +640,11 @@ def serve(
         typer.echo(f"             ({ws_source})")
         typer.echo(f"  Settings:  {config_path}")
         typer.echo(f"  URL:       {url}")
+        if sync_provider is not None:
+            typer.echo("")
+            typer.echo(f"  Warning: the workspace is inside a {sync_provider} folder.")
+            typer.echo("  Cloud sync can corrupt the open database. Prefer a local")
+            typer.echo("  folder (see README 'Where data lives') or pause syncing.")
         typer.echo("")
         typer.echo("  Press Ctrl+C in this window to quit.")
         typer.echo("  Do not close this window while a save or import is running.")

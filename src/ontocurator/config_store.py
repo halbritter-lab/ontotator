@@ -8,7 +8,9 @@ Location rules (see README "Where your data lives"):
   stored *relative* to it, so the whole folder can be moved or re-extracted.
 * **Per-user mode** - any other frozen build (e.g. a macOS ``.app`` or a read-only
   install location). Config goes to the OS user config dir, the default
-  workspace to ``<Documents>/Ontocurator/workspace``.
+  workspace to the local (non-roaming) user data dir, e.g.
+  ``%LOCALAPPDATA%\\Ontocurator\\workspace``. ``Documents`` is avoided because it
+  is frequently synced by OneDrive & co., which can corrupt a live SQLite file.
 * **Development mode** - running from source. Config goes to the OS user config
   dir, the default workspace is ``./workspace`` relative to the current
   directory. Pass ``--workspace`` explicitly for anything but local hacking.
@@ -23,7 +25,7 @@ import json
 import os
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 import platformdirs
@@ -102,8 +104,64 @@ def default_workspace_dir() -> Path:
     if portable is not None:
         return portable / "workspace"
     if is_frozen():
-        return Path(platformdirs.user_documents_dir()) / "Ontocurator" / "workspace"
+        # Local, non-roaming app data: not synced by OneDrive/iCloud & co.
+        data_dir = platformdirs.user_data_dir("Ontocurator", appauthor=False)
+        return Path(data_dir) / "workspace"
     return (Path.cwd() / "workspace").resolve()
+
+
+# Folder names that mark a cloud-synchronised tree (compared case-insensitively).
+_CLOUD_SYNC_MARKERS: tuple[tuple[str, str], ...] = (
+    ("onedrive", "OneDrive"),
+    ("dropbox", "Dropbox"),
+    ("icloud drive", "iCloud Drive"),
+    ("iclouddrive", "iCloud Drive"),
+    ("mobile documents", "iCloud Drive"),
+    ("google drive", "Google Drive"),
+    ("googledrive", "Google Drive"),
+)
+
+
+def cloud_sync_provider(path: PurePath) -> str | None:
+    """Name of the sync service if ``path`` lies inside a known cloud-sync folder.
+
+    Detection is by folder name (``OneDrive``/``OneDrive - <org>``, ``Dropbox``,
+    ``iCloud Drive``/``Mobile Documents``, ``Google Drive``) and is best effort.
+    """
+    for part in path.parts:
+        name = part.lower()
+        for marker, provider in _CLOUD_SYNC_MARKERS:
+            if name == marker or name.startswith(marker + " -"):
+                return provider
+    return None
+
+
+def seed_from_legacy_config(
+    legacy_path: Path,
+) -> tuple[PersistentConfig, list[str]]:
+    """Initial portable settings taken over from a legacy per-user config file.
+
+    Imports the ontology list (only files that still exist), the port and the
+    auto-open-browser flag. The workspace is deliberately *not* imported: a
+    portable installation keeps its data in its own folder. Returns the new
+    configuration and human-readable notes on what was imported.
+    """
+    if not legacy_path.is_file():
+        return PersistentConfig(), []
+    legacy = load_persistent_config(legacy_path)
+    fields: dict[str, Any] = {}
+    notes: list[str] = []
+    ontologies = [p for p in legacy.ontology_paths if p.is_file()]
+    if ontologies:
+        fields["ontology_paths"] = ontologies
+        notes.extend(f"ontology {p}" for p in ontologies)
+    if "port" in legacy.model_fields_set:
+        fields["port"] = legacy.port
+        notes.append(f"port {legacy.port}")
+    if "auto_open_browser" in legacy.model_fields_set:
+        fields["auto_open_browser"] = legacy.auto_open_browser
+        notes.append(f"open browser on start: {legacy.auto_open_browser}")
+    return PersistentConfig(**fields), notes
 
 
 def _to_stored(path: Path, base: Path) -> str:

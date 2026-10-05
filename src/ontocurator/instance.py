@@ -3,8 +3,9 @@
 One server per workspace: the first process takes an OS-level exclusive lock on
 ``<workspace>/.ontocurator.lock`` (released automatically by the OS if the
 process dies) and records how to reach it in ``<workspace>/.ontocurator-instance.json``
-(pid, host, port and the per-launch session token; owner-only permissions,
-rewritten on every start, removed on clean shutdown).
+(pid, host, port and the per-launch session token; owner-only permissions -
+mode 0600 on POSIX, an ACL granting only the current user on Windows - rewritten
+on every start, removed on clean shutdown).
 
 A second launch that cannot take the lock reads the instance file, verifies the
 running server answers an authenticated request, and then just hands over
@@ -15,13 +16,16 @@ server on the same SQLite database.
 from __future__ import annotations
 
 import contextlib
+import getpass
 import json
 import os
+import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import IO, Any
@@ -29,6 +33,10 @@ from typing import IO, Any
 LOCK_FILENAME = ".ontocurator.lock"
 INFO_FILENAME = ".ontocurator-instance.json"
 LEGACY_TOKEN_FILENAME = ".session_token"
+# The session token is only ever sent to a server on this machine.
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+DEFAULT_HANDOFF_TIMEOUT = 120.0
+PROGRESS_INTERVAL = 10.0
 
 
 @dataclass(frozen=True)
@@ -101,7 +109,30 @@ def _write_private(path: Path, text: str) -> None:
         os.close(fd)
     with contextlib.suppress(OSError):
         os.chmod(tmp, 0o600)
+    if sys.platform == "win32":
+        _restrict_windows_acl(tmp)
     os.replace(tmp, path)
+
+
+def _restrict_windows_acl(path: Path) -> None:
+    """Best effort: drop inherited ACEs and grant only the current user.
+
+    ``os.chmod(0o600)`` only toggles the read-only flag on Windows, so the file
+    would otherwise inherit the folder ACL (often readable by other local
+    users). Failures (no ``icacls``, unusual account names) are ignored: the
+    token is per launch and only accepted from loopback clients.
+    """
+    try:
+        user = getpass.getuser()
+        subprocess.run(
+            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
+            check=False,
+            capture_output=True,
+            timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except Exception:  # hardening must never block a start
+        return
 
 
 def write_instance_info(workspace: Path, info: InstanceInfo) -> None:
@@ -154,7 +185,13 @@ def _request(
 
 
 def is_instance_alive(info: InstanceInfo, timeout: float = 2.0) -> bool:
-    """True if a server answers an authenticated API request with our token."""
+    """True if a server answers an authenticated API request with our token.
+
+    An instance file naming a non-loopback host is treated as stale: the token
+    is never sent off this machine.
+    """
+    if info.host not in LOOPBACK_HOSTS:
+        return False
     try:
         status, _ = _request(info, "GET", "/api/v1/ontologies", timeout=timeout)
     except OSError:
@@ -163,16 +200,30 @@ def is_instance_alive(info: InstanceInfo, timeout: float = 2.0) -> bool:
 
 
 def wait_for_running_instance(
-    workspace: Path, timeout: float = 20.0, interval: float = 0.25
+    workspace: Path,
+    timeout: float = DEFAULT_HANDOFF_TIMEOUT,
+    interval: float = 0.25,
+    on_progress: Callable[[float], None] | None = None,
 ) -> InstanceInfo | None:
-    """Wait for the lock owner to publish a reachable instance (it may be starting)."""
-    deadline = time.monotonic() + timeout
+    """Wait for the lock owner to publish a reachable instance (it may be starting).
+
+    The first instance may still be loading large ontologies, so the default
+    wait is generous. ``on_progress`` is called with the elapsed seconds about
+    every ``PROGRESS_INTERVAL`` seconds while waiting.
+    """
+    start = time.monotonic()
+    deadline = start + timeout
+    next_progress = start + PROGRESS_INTERVAL
     while True:
         info = read_instance_info(workspace)
         if info is not None and is_instance_alive(info):
             return info
-        if time.monotonic() >= deadline:
+        now = time.monotonic()
+        if now >= deadline:
             return None
+        if on_progress is not None and now >= next_progress:
+            on_progress(now - start)
+            next_progress += PROGRESS_INTERVAL
         time.sleep(interval)
 
 
