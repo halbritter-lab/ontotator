@@ -29,6 +29,10 @@ export type PreferencesUpdate = components["schemas"]["PreferencesUpdate"];
 export type EffectiveSettings = components["schemas"]["EffectiveSettings"];
 export type ProvisioningStatus = components["schemas"]["ProvisioningStatus"];
 export type ProvisioningNotice = components["schemas"]["ProvisioningNotice"];
+export type LegacyConfigStatus = components["schemas"]["LegacyConfigStatus"];
+export type LegacyImportResult = components["schemas"]["LegacyImportResult"];
+export type LegacyFolderOpened = components["schemas"]["LegacyFolderOpened"];
+export type LegacyConfigDeleted = components["schemas"]["LegacyConfigDeleted"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
@@ -338,6 +342,30 @@ export class ApiClient {
   /** Notices from importing the ontologies/ and packages/ folders at start. */
   async getProvisioning(): Promise<ProvisioningStatus> {
     return this.request<ProvisioningStatus>("/api/v1/provisioning", { method: "GET" });
+  }
+
+  /** Settings of an earlier installation that could be imported (never automatic). */
+  async getLegacyConfig(): Promise<LegacyConfigStatus> {
+    return this.request<LegacyConfigStatus>("/api/v1/legacy-config", { method: "GET" });
+  }
+
+  async importLegacyConfig(): Promise<LegacyImportResult> {
+    return this.request<LegacyImportResult>("/api/v1/legacy-config/import", { method: "POST" });
+  }
+
+  /** Hide the notice for this version of the old settings file. */
+  async dismissLegacyConfig(): Promise<LegacyConfigStatus> {
+    return this.request<LegacyConfigStatus>("/api/v1/legacy-config/dismiss", { method: "POST" });
+  }
+
+  /** The server opens the old settings folder (a fixed path; nothing is sent). */
+  async openLegacyConfigFolder(): Promise<LegacyFolderOpened> {
+    return this.request<LegacyFolderOpened>("/api/v1/legacy-config/open-folder", { method: "POST" });
+  }
+
+  /** Delete only the old settings file. */
+  async deleteLegacyConfig(): Promise<LegacyConfigDeleted> {
+    return this.request<LegacyConfigDeleted>("/api/v1/legacy-config", { method: "DELETE" });
   }
 
   async getPreferences(): Promise<Preferences> {

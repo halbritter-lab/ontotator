@@ -943,3 +943,24 @@ body {
   font-family: var(--font-mono);
   font-size: 0.82rem;
 }
+
+/* Settings from an earlier installation */
+.legacy-config-notice {
+  align-items: flex-start;
+}
+.legacy-config-notice p {
+  margin: 6px 0;
+}
+.legacy-config-notice ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+.legacy-config-notice code {
+  word-break: break-all;
+}
+.legacy-config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}

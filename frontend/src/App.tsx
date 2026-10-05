@@ -9,6 +9,7 @@ import {
   takeLaunchPackageId,
   ApiError,
   type DocumentSummary,
+  type LegacyConfigStatus,
   type OpenWorkspaceResponse,
   type PackageManifest,
   type OntologyInfo,
@@ -18,6 +19,7 @@ import {
 import type { components } from "./api/generated";
 import { CaseScreen } from "./app/CaseScreen";
 import { CaseErrorBoundary } from "./app/ErrorBoundary";
+import { LegacyConfigNotice } from "./app/LegacyConfigNotice";
 import { SessionLostScreen } from "./app/SessionLostScreen";
 
 export type WorkspaceMode = "independent" | "review" | "assisted";
@@ -116,6 +118,7 @@ export const App: React.FC = () => {
   const [mode, setMode] = useState<WorkspaceMode>("independent");
   const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [provisioningNotices, setProvisioningNotices] = useState<ProvisioningNotice[]>([]);
+  const [legacyConfig, setLegacyConfig] = useState<LegacyConfigStatus | null>(null);
 
   // Async flows (start-up, reconnect) must see current values, not stale closures.
   const annotatorRef = useRef("");
@@ -197,6 +200,16 @@ export const App: React.FC = () => {
     try {
       const status = await api.getProvisioning();
       setProvisioningNotices(status?.notices ?? []);
+    } catch {
+      // Older server or not available: nothing to show.
+    }
+  };
+
+  /** Settings of an earlier installation: only offered, never imported automatically. */
+  const loadLegacyConfig = async () => {
+    try {
+      const status = await api.getLegacyConfig();
+      setLegacyConfig(status?.found ? status : null);
     } catch {
       // Older server or not available: nothing to show.
     }
@@ -285,7 +298,7 @@ export const App: React.FC = () => {
   };
 
   const bootstrap = async (launchPackageId: string | null) => {
-    await Promise.all([loadSettings(), loadProvisioning()]);
+    await Promise.all([loadSettings(), loadProvisioning(), loadLegacyConfig()]);
     await loadPreferences();
     await loadPackages(launchPackageId);
     void loadOntologies();
@@ -709,6 +722,18 @@ export const App: React.FC = () => {
             </button>
           </div>
         ))}
+        {legacyConfig && (
+          <LegacyConfigNotice
+            status={legacyConfig}
+            onClosed={(message) => {
+              setLegacyConfig(null);
+              setError(null);
+              if (message) setNotice(message);
+            }}
+            onImported={() => { void loadOntologies(); }}
+            onError={(message) => setError(message)}
+          />
+        )}
         {notice && (
           <div role="status" aria-label="Import result" className="notice notice-success">
             <span>{notice}</span>
