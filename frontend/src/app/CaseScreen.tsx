@@ -9,7 +9,7 @@ import {
   type Submission,
 } from "../api/client";
 import type { components } from "../api/generated";
-import { AnnotationPanel, type EvidenceSnapshot } from "../editor/AnnotationPanel";
+import { AnnotationPanel, quoteSegments, type EvidenceSnapshot } from "../editor/AnnotationPanel";
 import {
   createMutationQueue,
   DiscardedChangesError,
@@ -269,11 +269,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           method: "automated",
         },
         evidence_count: snap?.annotation.evidence_refs?.length ?? 0,
+        quote: snap?.evidence?.[0] ? quoteSegments(view.document.text, snap.evidence[0].mention.segments, 40) : undefined,
         is_obsolete: (view.term_statuses?.[statusKey] ?? view.term_statuses?.[termId]) === "obsolete",
         is_unknown: (view.term_statuses?.[statusKey] ?? view.term_statuses?.[termId]) === "unknown",
       };
     });
-  }, [view.key.mode, view.targets, view.available_inputs, view.term_statuses]);
+  }, [view.key.mode, view.targets, view.available_inputs, view.term_statuses, view.document.text]);
 
   const decisionsMap = useMemo(() => {
     const map: Record<string, ReviewDecision> = {};
@@ -1446,7 +1447,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                             ✕ Proposal rejected
                           </span>
                         ) : (
-                          <>{t.evidence_count} mention(s) • {t.provenance.actor.kind}</>
+                          <>
+                            {t.evidence_count === 0 ? "Spanless" : `“${t.quote ?? ""}”`}
+                            {t.evidence_count > 1 && ` +${t.evidence_count - 1} more`}
+                            {` • ${t.provenance.actor.kind}`}
+                          </>
                         )}
                       </div>
                     </li>

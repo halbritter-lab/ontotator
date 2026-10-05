@@ -473,6 +473,26 @@ describe("Review cases", () => {
     await screen.findByRole("dialog", { name: /Case submitted/i });
     expect(screen.queryByRole("button", { name: /Review next case/i })).toBeNull();
   });
+
+  it("quotes each proposal's text so equally named proposals can be told apart", () => {
+    const view = reviewView();
+    const second = proposal("prop-2", "p2-v1", "HP:0001", [{ start: 11, end: 16 }]);
+    const spanless = { ...proposal("prop-3", "p3-v1", "HP:0002"), evidence: [] };
+    spanless.annotation = { ...spanless.annotation, evidence_refs: [] };
+    view.available_inputs = [...view.available_inputs!, second, spanless];
+    view.targets = { target_set_id: "targets", targets: [
+      { annotation_id: "prop", version: "p-v1" },
+      { annotation_id: "prop-2", version: "p2-v1" },
+      { annotation_id: "prop-3", version: "p3-v1" },
+    ] };
+    view.draft = { ...view.draft, targets: view.targets };
+    render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+    const list = screen.getByText(/Review Proposals \(3\)/).nextElementSibling as HTMLElement;
+    const items = within(list).getAllByRole("listitem").map((li) => li.textContent);
+    expect(items[0]).toMatch(/“alpha”/);
+    expect(items[1]).toMatch(/“gamma”/);
+    expect(items[2]).toMatch(/Spanless/);
+  });
 });
 
 describe("Search", () => {

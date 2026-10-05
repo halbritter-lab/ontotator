@@ -16,6 +16,8 @@ export interface TargetProposal {
   axes_values?: Record<string, string | null> | null;
   provenance: components["schemas"]["Provenance"];
   evidence_count: number;
+  /** Text of the first mention, for telling equally named proposals apart. */
+  quote?: string;
   is_obsolete?: boolean;
   is_unknown?: boolean;
 }
