@@ -58,6 +58,13 @@ def app_dir() -> Path:
     return Path.cwd()
 
 
+def default_provision_dir() -> Path | None:
+    """Folder whose ``ontologies/``, ``packages/`` and settings file are
+    provisioned at start: the executable's folder of a frozen build. Running
+    from source never provisions implicitly (use ``--provision-dir``)."""
+    return app_dir() if is_frozen() else None
+
+
 def _is_writable_dir(path: Path) -> bool:
     if not path.is_dir():
         return False

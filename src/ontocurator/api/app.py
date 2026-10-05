@@ -13,11 +13,13 @@ from pydantic import ValidationError
 from ontocurator.api.routes import router
 from ontocurator.api.security import verify_security
 from ontocurator.application.preferences import PREFERENCES_FILENAME, PreferencesStore
+from ontocurator.application.provisioning import ProvisioningStatus
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import (
     DomainError,
     IncompleteReview,
     InvalidPackage,
+    ModeNotAllowed,
     PayloadTooLarge,
     RevisionConflict,
 )
@@ -72,6 +74,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         app.state.config = config
         app.state.repo = repo
         app.state.ontology_registry = registry
+        app.state.provisioning = ProvisioningStatus()
         app.state.preferences = PreferencesStore(
             config.workspace_dir / PREFERENCES_FILENAME
         )
@@ -134,6 +137,15 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=422,
+            content={"code": exc.code, "details": exc.details or str(exc)},
+        )
+
+    @app.exception_handler(ModeNotAllowed)
+    async def mode_not_allowed_handler(
+        _req: Request, exc: ModeNotAllowed
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=403,
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 

@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Settings
+         * @description Effective presets of this installation (ontocurator-settings.json).
+         */
+        get: operations["get_settings_api_v1_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/provisioning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Provisioning
+         * @description Notices from importing the ontologies/ and packages/ folders at start.
+         */
+        get: operations["get_provisioning_api_v1_provisioning_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/preferences": {
         parameters: {
             query?: never;
@@ -497,6 +537,23 @@ export interface components {
             checked_layer_ids?: string[];
         };
         /**
+         * EffectiveSettings
+         * @description Settings the web UI applies (``GET /api/v1/settings``).
+         */
+        EffectiveSettings: {
+            /** Allowed Modes */
+            allowed_modes: ("independent" | "review" | "assisted")[];
+            /**
+             * Default Mode
+             * @enum {string}
+             */
+            default_mode: "independent" | "review" | "assisted";
+            /** Annotator Id */
+            annotator_id?: string | null;
+            /** Open Package */
+            open_package?: string | null;
+        };
+        /**
          * EvidenceMention
          * @description Evidence mention spanning one or more ordered, non-overlapping segments.
          */
@@ -731,6 +788,34 @@ export interface components {
             source_refs?: string[];
             /** Assessment */
             assessment?: string | null;
+        };
+        /**
+         * ProvisioningNotice
+         * @description Something the people using this copy should know about the delivery.
+         */
+        ProvisioningNotice: {
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "warning" | "info";
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "PACKAGE_CHANGED" | "PACKAGE_INVALID" | "ONTOLOGY_NEW_VERSION";
+            /** Message */
+            message: string;
+            /** File */
+            file?: string | null;
+        };
+        /**
+         * ProvisioningStatus
+         * @description Result of this start's provisioning (``GET /api/v1/provisioning``).
+         */
+        ProvisioningStatus: {
+            /** Notices */
+            notices?: components["schemas"]["ProvisioningNotice"][];
         };
         /**
          * ReviewDecision
@@ -1088,6 +1173,46 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_settings_api_v1_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveSettings"];
+                };
+            };
+        };
+    };
+    get_provisioning_api_v1_provisioning_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvisioningStatus"];
+                };
+            };
+        };
+    };
     get_preferences_api_v1_preferences_get: {
         parameters: {
             query?: never;

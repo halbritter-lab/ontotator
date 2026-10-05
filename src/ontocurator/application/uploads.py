@@ -21,7 +21,7 @@ from ontocurator.domain.errors import DomainError, PayloadTooLarge
 from ontocurator.ontology.naming import content_addressed_name
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
-from ontocurator.packages.models import PackageManifest
+from ontocurator.packages.models import PackageManifest, ValidatedPackage
 from ontocurator.packages.reader import MAX_COMPRESSED_BYTES, PackageReader
 from ontocurator.storage.repository import Repository
 from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
@@ -164,6 +164,10 @@ class PackageImportService:
             copy_limited(source, stream, MAX_PACKAGE_UPLOAD_BYTES, "Package upload")
             stream.seek(0)
             pkg = PackageReader.read_from_stream(stream, registry=self.registry)
+        return self.import_package(pkg)
+
+    def import_package(self, pkg: ValidatedPackage) -> PackageManifest:
+        """Import an already validated package (ontologies are parsed first)."""
         assert pkg.manifest.task_profile is not None
         services = self.registry.prepare_package(
             pkg.manifest.task_profile, pkg.embedded_files

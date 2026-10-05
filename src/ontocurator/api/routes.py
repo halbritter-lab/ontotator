@@ -23,6 +23,7 @@ from ontocurator.application.preferences import (
     PreferencesStore,
     PreferencesUpdate,
 )
+from ontocurator.application.provisioning import ProvisioningStatus
 from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.uploads import (
@@ -34,8 +35,12 @@ from ontocurator.application.workspaces import (
     WorkspaceService,
     WorkspaceView,
 )
+from ontocurator.distribution_settings import (
+    DistributionSettings,
+    EffectiveSettings,
+)
 from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.errors import DomainError, PayloadTooLarge
+from ontocurator.domain.errors import DomainError, ModeNotAllowed, PayloadTooLarge
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import (
@@ -205,6 +210,34 @@ def _preferences_store(request: Request) -> PreferencesStore:
     return cast(PreferencesStore, store)
 
 
+def _distribution(request: Request) -> DistributionSettings:
+    config = getattr(request.app.state, "config", None)
+    return config.distribution if config is not None else DistributionSettings()
+
+
+def require_mode_allowed(request: Request, mode: WorkspaceMode) -> None:
+    """Enforce ``allowed_modes`` of the distribution settings (blinding)."""
+    allowed = _distribution(request).effective_allowed_modes()
+    if mode not in allowed:
+        raise ModeNotAllowed(
+            f"The working mode '{mode}' is not available in this installation "
+            f"(allowed: {', '.join(allowed)})."
+        )
+
+
+@router.get("/settings")
+def get_settings(request: Request) -> EffectiveSettings:
+    """Effective presets of this installation (ontocurator-settings.json)."""
+    return EffectiveSettings.from_settings(_distribution(request))
+
+
+@router.get("/provisioning")
+def get_provisioning(request: Request) -> ProvisioningStatus:
+    """Notices from importing the ontologies/ and packages/ folders at start."""
+    status = getattr(request.app.state, "provisioning", None)
+    return status if isinstance(status, ProvisioningStatus) else ProvisioningStatus()
+
+
 @router.get("/preferences")
 def get_preferences(request: Request) -> Preferences:
     """Workspace-level preferences (last identity, working mode per package)."""
@@ -277,9 +310,11 @@ def resolve_term_labels(
 @router.post("/workspaces/review-inputs")
 def get_review_inputs(
     req: ReviewInputsRequest,
+    request: Request,
     ws_svc: WorkspaceSvcDep,
 ) -> list[AnnotationSnapshot]:
     """Get selectable proposal versions for setting up a review round."""
+    require_mode_allowed(request, req.mode)
     if req.mode != "review":
         raise DomainError(
             "REVIEW_MODE_REQUIRED",
@@ -291,9 +326,11 @@ def get_review_inputs(
 @router.post("/workspaces/open")
 def open_workspace(
     req: OpenWorkspaceRequest,
+    request: Request,
     ws_svc: WorkspaceSvcDep,
 ) -> OpenWorkspaceResponse:
     """Open or initialize a workspace view."""
+    require_mode_allowed(request, req.mode)
     targets = req.targets
     if targets is not None and not targets.target_set_id:
         targets = ReviewTargetSet.create(targets.targets)
@@ -316,10 +353,12 @@ def open_workspace(
 def apply_command(
     workspace_id: str,
     envelope: MutationEnvelope,
+    request: Request,
     edit_svc: EditorSvcDep,
 ) -> Draft:
     """Execute an edit command against a workspace draft."""
     key = decode_workspace_id(workspace_id)
+    require_mode_allowed(request, key.mode)
     return edit_svc.apply(key, envelope)
 
 
@@ -327,10 +366,12 @@ def apply_command(
 def record_decision(
     workspace_id: str,
     envelope: MutationEnvelope,
+    request: Request,
     rev_svc: ReviewSvcDep,
 ) -> Draft:
     """Record a reviewer decision against a targeted proposal."""
     key = decode_workspace_id(workspace_id)
+    require_mode_allowed(request, key.mode)
     return rev_svc.decide(key, envelope)
 
 
@@ -338,10 +379,12 @@ def record_decision(
 def submit_workspace(
     workspace_id: str,
     envelope: MutationEnvelope,
+    request: Request,
     sub_svc: SubmissionSvcDep,
 ) -> Submission:
     """Commit workspace submission upon verification."""
     key = decode_workspace_id(workspace_id)
+    require_mode_allowed(request, key.mode)
     return sub_svc.submit(key, envelope)
 
 
@@ -364,6 +407,7 @@ def search_ontology(
     ws_svc: WorkspaceSvcDep,
 ) -> SearchResult:
     """Execute ontology search with deterministic provenance shuffling and layer scoping."""
+    require_mode_allowed(request, req.workspace_key.mode)
     ws_svc.get_document(req.workspace_key.package_id, req.workspace_key.document_id)
     profile = repo.get_task_profile(req.workspace_key.package_id)
     scope = build_scope(profile, req.workspace_key.mode)

@@ -315,7 +315,7 @@ class Repository:
         fallback_axes_config: AxesConfig | None = None,
     ) -> str:
         """Atomically import package into database or verify idempotency."""
-        manifest_hash = canonical_hash(package.manifest.model_dump())
+        manifest_hash = self.package_manifest_hash(package)
         conn = self.db.get_connection()
         cursor = conn.cursor()
 
@@ -597,6 +597,23 @@ class Repository:
                 "PACKAGE_NOT_FOUND", f"No package found for package '{package_id}'"
             )
         return PackageManifest.model_validate_json(row[0])
+
+    def manifest_hash(self, package_id: str) -> str | None:
+        """Canonical manifest hash of an installed package, or None if absent."""
+        row = (
+            self.db.get_connection()
+            .execute(
+                "SELECT manifest_hash FROM packages WHERE package_id = ?;",
+                (package_id,),
+            )
+            .fetchone()
+        )
+        return None if row is None else str(row[0])
+
+    @staticmethod
+    def package_manifest_hash(package: ValidatedPackage) -> str:
+        """The hash :meth:`import_package` stores for ``package``."""
+        return canonical_hash(package.manifest.model_dump())
 
     def list_manifests(self) -> list[PackageManifest]:
         """Return manifests of all installed packages, newest first."""

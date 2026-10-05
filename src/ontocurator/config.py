@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
+from ontocurator.distribution_settings import DistributionSettings
 from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.documents import OntologyRef
 
@@ -25,3 +26,5 @@ class AppConfig(BaseModel):
     port: int = 8000
     web_dir: Path | None = None
     axes_config: AxesConfig | None = None
+    # Presets of a preconfigured distribution (ontocurator-settings.json).
+    distribution: DistributionSettings = Field(default_factory=DistributionSettings)

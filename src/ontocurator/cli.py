@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import os
 import secrets
-import shutil
 import signal
 import socket
 import sys
@@ -22,11 +20,20 @@ import typer
 import uvicorn
 
 from ontocurator.api.app import create_app
+from ontocurator.application.provisioning import (
+    ProvisioningLedger,
+    ProvisioningStatus,
+    provision_ontologies,
+    provision_packages,
+    store_ontology_copy,
+)
+from ontocurator.application.uploads import PackageImportService
 from ontocurator.config import AppConfig
 from ontocurator.config_store import (
     CONFIG_FILENAME,
     app_dir,
     cloud_sync_provider,
+    default_provision_dir,
     default_workspace_dir,
     detect_portable_root,
     get_default_config_path,
@@ -34,6 +41,11 @@ from ontocurator.config_store import (
     save_persistent_config,
     seed_from_legacy_config,
     user_config_dir,
+)
+from ontocurator.distribution_settings import (
+    SETTINGS_FILENAME,
+    DistributionSettings,
+    load_settings_file,
 )
 from ontocurator.domain.errors import DomainError
 from ontocurator.instance import (
@@ -45,8 +57,10 @@ from ontocurator.instance import (
     wait_for_running_instance,
     write_instance_info,
 )
-from ontocurator.ontology.discovery import discover_ontologies, is_probable_obo_graph
-from ontocurator.ontology.naming import content_addressed_name
+from ontocurator.ontology.discovery import discover_ontologies
+from ontocurator.ontology.naming import (  # re-exported for callers/tests
+    content_addressed_name as content_addressed_name,
+)
 
 app = typer.Typer(
     name="ontocurator",
@@ -235,19 +249,11 @@ def build_app_url(base_url: str, token: str, package_id: str | None = None) -> s
 
 def import_ontology_file(source: Path, ontologies_dir: Path) -> Path:
     """Copy a validated OBO Graph JSON into the workspace (idempotent)."""
-    if not is_probable_obo_graph(source):
-        raise ValueError("not an OBO Graph JSON ontology file")
-    digest = hashlib.sha256(source.read_bytes()).hexdigest()
-    ontologies_dir.mkdir(parents=True, exist_ok=True)
-    # Same (sanitised) scheme as the upload endpoint.
-    dest = ontologies_dir / content_addressed_name(source, digest)
-    if dest.resolve() == source.resolve():
-        return dest
-    if not dest.is_file():
-        tmp = dest.with_name(f".{dest.name}.{secrets.token_hex(4)}.tmp")
-        shutil.copyfile(source, tmp)
-        tmp.replace(dest)
-    return dest
+    return store_ontology_copy(source, ontologies_dir)[0]
+
+
+def _report(message: str, warning: bool) -> None:
+    typer.echo(message, err=warning)
 
 
 # --------------------------------------------------------------------------- #
@@ -423,6 +429,17 @@ def serve(
             ),
         ),
     ] = False,
+    provision_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--provision-dir",
+            help=(
+                "Folder with ontologies/*.json, packages/*.zip and an optional "
+                f"{SETTINGS_FILENAME} to register/import at start. Default: the "
+                "folder of the standalone executable (none when run from source)."
+            ),
+        ),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option(
@@ -445,6 +462,23 @@ def serve(
         if not ont_p.resolve().is_file():
             typer.echo(f"Error: Ontology file not found at: {ont_p}", err=True)
             raise typer.Exit(code=1)
+
+    source_dir: Path | None
+    if provision_dir is not None:
+        source_dir = provision_dir.resolve()
+        if not source_dir.is_dir():
+            typer.echo(
+                f"Error: Provisioning folder not found at: {source_dir}", err=True
+            )
+            raise typer.Exit(code=1)
+    else:
+        source_dir = default_provision_dir()
+
+    settings = DistributionSettings()
+    if source_dir is not None:
+        settings, settings_warnings = load_settings_file(source_dir / SETTINGS_FILENAME)
+        for warning in settings_warnings:
+            typer.echo(f"Warning: {warning}", err=True)
 
     resolved_web_dir: Path | None = None
     if web_dir is not None:
@@ -530,7 +564,13 @@ def serve(
         typer.echo(f"Error: Cannot create workspace {ws}: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    open_browser = not no_browser and persistent_cfg.auto_open_browser
+    # Precedence: command line > ontocurator-settings.json > config.json.
+    auto_open = (
+        settings.auto_open_browser
+        if settings.auto_open_browser is not None
+        else persistent_cfg.auto_open_browser
+    )
+    open_browser = not no_browser and auto_open
     sync_provider = cloud_sync_provider(ws)
     if sync_provider is not None:
         typer.echo(
@@ -576,6 +616,18 @@ def serve(
             ]:
                 persistent_cfg.ontology_paths.append(dest.resolve())
 
+        # ---- preconfigured distribution: ontologies/ (before packages) ------
+        ledger = ProvisioningLedger(ws)
+        provisioning = ProvisioningStatus()
+        if source_dir is not None:
+            for dest in provision_ontologies(
+                source_dir, ws / "ontologies", ledger, provisioning, _report
+            ):
+                if dest.resolve() not in [
+                    p.resolve() for p in persistent_cfg.ontology_paths
+                ]:
+                    persistent_cfg.ontology_paths.append(dest.resolve())
+
         persistent_cfg.workspace_dir = ws
         try:
             save_persistent_config(persistent_cfg, config_path)
@@ -620,6 +672,7 @@ def serve(
             port=actual_port,
             web_dir=resolved_web_dir,
             axes_config=parsed_axes_config,
+            distribution=settings,
         )
 
         try:
@@ -637,26 +690,38 @@ def serve(
             typer.echo(f"Error: Failed to initialize editor: {exc}", err=True)
             raise typer.Exit(code=1) from exc
 
+        repo = api_app.state.repo
+        registry = api_app.state.ontology_registry
+
+        # ---- preconfigured distribution: packages/ ---------------------------
+        if source_dir is not None:
+            provision_packages(
+                source_dir, repo, registry, ledger, provisioning, _report
+            )
+            try:
+                ledger.save()
+            except OSError as exc:
+                typer.echo(f"Warning: Could not save {ledger.path}: {exc}", err=True)
+        api_app.state.provisioning = provisioning
+
         package_id: str | None = None
         if package is not None and package.resolve().is_file():
             try:
-                repo = api_app.state.repo
-                registry = api_app.state.ontology_registry
-                from ontocurator.packages.reader import PackageReader
-
                 with open(package.resolve(), "rb") as f:
-                    pkg = PackageReader.read_from_stream(f, registry=registry)
-                if pkg.manifest.task_profile is not None:
-                    services = registry.prepare_package(
-                        pkg.manifest.task_profile, pkg.embedded_files
-                    )
-                    repo.import_package(pkg)
-                    for s in services:
-                        registry.register_service(s)
-                package_id = pkg.manifest.package_id
+                    manifest = PackageImportService(repo, registry).import_upload(f)
+                package_id = manifest.package_id
             except Exception as exc:
                 typer.echo(
                     f"Warning: Failed to import initial package {package}: {exc}",
+                    err=True,
+                )
+        if package_id is None and settings.open_package:
+            if repo.manifest_hash(settings.open_package) is not None:
+                package_id = settings.open_package
+            else:
+                typer.echo(
+                    f"Warning: open_package '{settings.open_package}' from "
+                    f"{SETTINGS_FILENAME} is not an imported work package.",
                     err=True,
                 )
 
@@ -687,6 +752,8 @@ def serve(
         if verbose:
             typer.echo(f"               ({ws_source})")
             typer.echo(f"  Settings:    {config_path}")
+            if source_dir is not None:
+                typer.echo(f"  Preloads:    {source_dir}")
             typer.echo(f"  Version:     {get_version()}")
         if sync_provider is not None:
             typer.echo("")

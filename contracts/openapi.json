@@ -5,6 +5,44 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v1/settings": {
+      "get": {
+        "summary": "Get Settings",
+        "description": "Effective presets of this installation (ontocurator-settings.json).",
+        "operationId": "get_settings_api_v1_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveSettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provisioning": {
+      "get": {
+        "summary": "Get Provisioning",
+        "description": "Notices from importing the ontologies/ and packages/ folders at start.",
+        "operationId": "get_provisioning_api_v1_provisioning_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvisioningStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/preferences": {
       "get": {
         "summary": "Get Preferences",
@@ -1141,6 +1179,61 @@
         "title": "Draft",
         "description": "Mutable, revisioned working state of a workspace."
       },
+      "EffectiveSettings": {
+        "properties": {
+          "allowed_modes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "independent",
+                "review",
+                "assisted"
+              ]
+            },
+            "type": "array",
+            "title": "Allowed Modes"
+          },
+          "default_mode": {
+            "type": "string",
+            "enum": [
+              "independent",
+              "review",
+              "assisted"
+            ],
+            "title": "Default Mode"
+          },
+          "annotator_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotator Id"
+          },
+          "open_package": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Package"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "allowed_modes",
+          "default_mode"
+        ],
+        "title": "EffectiveSettings",
+        "description": "Settings the web UI applies (``GET /api/v1/settings``)."
+      },
       "EvidenceMention": {
         "properties": {
           "evidence_id": {
@@ -1735,6 +1828,64 @@
         ],
         "title": "Provenance",
         "description": "Origin and extraction details for an annotation or statement."
+      },
+      "ProvisioningNotice": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "info"
+            ],
+            "title": "Level"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "PACKAGE_CHANGED",
+              "PACKAGE_INVALID",
+              "ONTOLOGY_NEW_VERSION"
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "level",
+          "code",
+          "message"
+        ],
+        "title": "ProvisioningNotice",
+        "description": "Something the people using this copy should know about the delivery."
+      },
+      "ProvisioningStatus": {
+        "properties": {
+          "notices": {
+            "items": {
+              "$ref": "#/components/schemas/ProvisioningNotice"
+            },
+            "type": "array",
+            "title": "Notices"
+          }
+        },
+        "type": "object",
+        "title": "ProvisioningStatus",
+        "description": "Result of this start's provisioning (``GET /api/v1/provisioning``)."
       },
       "ReviewDecision": {
         "properties": {
