@@ -438,6 +438,14 @@ describe("Review cases", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
   };
 
+  it("counts confirmed proposals among the annotations that will be submitted", async () => {
+    const own = proposal("own", "o-v1", "HP:0003");
+    render(<CaseScreen view={reviewView([confirmed], [own], own.evidence)} workspaceId="ws" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
+    expect(dialog.textContent).toMatch(/2 annotation\(s\) will be submitted \(1 confirmed proposal\(s\), 1 curated\)/);
+  });
+
   it("offers the next case that has proposals after submitting a review", async () => {
     vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s", created_at: "now", snapshots: [], decisions: [] } as any);
     const onNavigate = vi.fn().mockResolvedValue(undefined);

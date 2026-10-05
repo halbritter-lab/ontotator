@@ -949,6 +949,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const openReviewTargets = reviewTargets.filter(
     (t) => !(draft.decisions ?? []).some((d) => refKey(d.target) === refKey(t)),
   );
+  // Confirmed proposals are submitted as they are, next to the draft's own annotations.
+  const confirmedCount = (draft.decisions ?? []).filter((d) => d.outcome === "confirmed").length;
 
   // Step 1: validate, save pending edits and open the confirmation dialog.
   const handleSubmitWorkspace = async () => {
@@ -1751,7 +1753,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <div className="modal-content" role="dialog" aria-modal="true" aria-label="Submit case">
           <h2>Submit case {view.document.document_id}?</h2>
           <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
-            <li>{(draft.annotations ?? []).length} annotation(s) in this case</li>
+            {view.key.mode === "review" ? (
+              <li>
+                {confirmedCount + (draft.annotations ?? []).length} annotation(s) will be submitted
+                ({confirmedCount} confirmed proposal(s), {(draft.annotations ?? []).length} curated)
+              </li>
+            ) : (
+              <li>{(draft.annotations ?? []).length} annotation(s) in this case</li>
+            )}
             {view.key.mode === "review" && (
               <li>
                 {reviewTargets.length - openReviewTargets.length} of {reviewTargets.length} review proposal(s) decided
