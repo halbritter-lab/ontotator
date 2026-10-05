@@ -22,7 +22,41 @@ export interface MutationQueue {
   setRevision: (rev: number) => void;
   retry: () => Promise<void>;
   flush: () => Promise<void>;
+  /** Number of operations not yet acknowledged by the server. */
+  pendingCount: () => number;
+  /** Last transport/server error that stopped the queue (null when healthy). */
+  getLastError: () => unknown;
+  /**
+   * Drop every pending operation (their callers are rejected with DiscardedChangesError)
+   * and leave the error/conflict state. Optionally adopt a new server revision.
+   */
+  discardPending: (nextRevision?: number) => number;
   dispose: () => void;
+}
+
+export class DiscardedChangesError extends Error {
+  constructor(message = "Unsaved changes were discarded") {
+    super(message);
+    this.name = "DiscardedChangesError";
+  }
+}
+
+export class UnsavedChangesError extends Error {
+  readonly state: QueueState;
+  constructor(state: QueueState) {
+    super(
+      state === "conflict"
+        ? "The case was changed elsewhere. Reload the case to continue."
+        : "Pending changes could not be saved (server unreachable?).",
+    );
+    this.name = "UnsavedChangesError";
+    this.state = state;
+  }
+}
+
+/** True when an error is a network failure rather than a server response. */
+export function isNetworkError(error: unknown): boolean {
+  return !!error && !(error instanceof ApiError) && (error instanceof TypeError || (error as Error).name === "TypeError");
 }
 
 export function createMutationQueue(options: MutationQueueOptions): MutationQueue {
@@ -30,6 +64,7 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
   let state: QueueState = "saved";
   let disposed = false;
   let processing: Promise<void> | null = null;
+  let lastError: unknown = null;
   const queue: QueuedOperation<any>[] = [];
   const updateState = (next: QueueState) => {
     if (state !== next) { state = next; options.onState?.(next); }
@@ -43,13 +78,17 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
         const operation = queue[0];
         try {
           const result = await operation.fn(revision);
+          if (queue[0] !== operation) continue; // discarded while in flight
+          lastError = null;
           queue.shift();
           if (result && typeof result === "object") {
             revision = result.revision ?? result.draft_revision ?? revision;
           }
           operation.resolve(result);
         } catch (error) {
+          if (queue[0] !== operation) continue; // discarded while in flight
           if (error instanceof ConflictError) {
+            lastError = error;
             updateState("conflict");
             operation.reject(error);
           } else if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) {
@@ -57,6 +96,7 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
             queue.shift();
             operation.reject(error);
           } else {
+            lastError = error;
             // Keep both the operation and its caller pending until an explicit retry.
             updateState("error");
           }
@@ -90,9 +130,20 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
     },
     async flush() {
       while (queue.length) {
-        if (state === "error" || state === "conflict") throw new Error("Pending changes could not be saved");
+        if (state === "error" || state === "conflict") throw new UnsavedChangesError(state);
         await process();
       }
+      if (state === "error" || state === "conflict") throw new UnsavedChangesError(state);
+    },
+    pendingCount: () => queue.length,
+    getLastError: () => lastError,
+    discardPending(nextRevision) {
+      const dropped = queue.splice(0);
+      for (const operation of dropped) operation.reject(new DiscardedChangesError());
+      if (nextRevision !== undefined) revision = nextRevision;
+      lastError = null;
+      updateState("saved");
+      return dropped.length;
     },
     dispose() {
       disposed = true;

@@ -65,20 +65,32 @@ interface VendorMention {
   colorIndex?: number;
 }
 
-function mentionsToVendor(
+/**
+ * Converts codepoint mentions to vendor spans. Segments with invalid offsets are
+ * skipped (and reported) instead of throwing, so one bad mention cannot blank the screen.
+ */
+export function mentionsToVendor(
   mentions: MentionDisplay[],
   text: string,
+  invalidIds?: string[],
 ): VendorMention[] {
   const result: VendorMention[] = [];
   for (const mention of mentions) {
     const spans: VendorSpan[] = [];
+    let invalid = false;
     for (const seg of mention.segments) {
-      validateCodepointRange(text, seg.start, seg.end);
-      spans.push({
-        char_start: toUtf16(text, seg.start),
-        char_end: toUtf16(text, seg.end),
-      });
+      try {
+        validateCodepointRange(text, seg.start, seg.end);
+        spans.push({
+          char_start: toUtf16(text, seg.start),
+          char_end: toUtf16(text, seg.end),
+        });
+      } catch {
+        invalid = true;
+      }
     }
+    if (invalid) invalidIds?.push(mention.evidence_id);
+    if (spans.length === 0) continue;
     result.push({
       mention_id: mention.evidence_id,
       spans,
@@ -98,22 +110,34 @@ export function mountSpanEditor(
   mentions: MentionDisplay[],
   onSelection: SelectionCallback,
   onPick: PickCallback,
+  onInvalidMentions?: (evidenceIds: string[]) => void,
 ): SpanEditorHandle {
+  const convert = (items: MentionDisplay[]): VendorMention[] => {
+    const invalid: string[] = [];
+    const converted = mentionsToVendor(items, text, invalid);
+    if (invalid.length) console.warn("Skipping mentions with invalid offsets", invalid);
+    onInvalidMentions?.(invalid);
+    return converted;
+  };
   let currentIntent: "new_mention" | "extend_mention" = "new_mention";
   let currentEvidenceId: string | undefined = undefined;
 
   // Validate initial mentions
-  const initialVendorMentions = mentionsToVendor(mentions, text);
+  const initialVendorMentions = convert(mentions);
 
   // Vendor SpanEditor instance
   const editor = new SpanEditor(container, {
     onPaint: (spans: Array<{ start: number; end: number }>) => {
       const segments: CodepointSegment[] = [];
       for (const span of spans) {
-        segments.push({
-          start: toCodepoint(text, span.start),
-          end: toCodepoint(text, span.end),
-        });
+        try {
+          segments.push({
+            start: toCodepoint(text, span.start),
+            end: toCodepoint(text, span.end),
+          });
+        } catch {
+          // selection boundary inside a surrogate pair: ignore this span
+        }
       }
       if (segments.length > 0) {
         onSelection({
@@ -135,7 +159,7 @@ export function mountSpanEditor(
 
   return {
     setMentions: (updatedMentions: MentionDisplay[]) => {
-      const vendorMentions = mentionsToVendor(updatedMentions, text);
+      const vendorMentions = convert(updatedMentions);
       editor.setMentions(vendorMentions);
     },
     setSelected: (evidenceId: string | null) => {

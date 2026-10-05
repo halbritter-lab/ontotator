@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, type WorkspaceView } from "../../src/app/CaseScreen";
 import { api } from "../../src/api/client";
@@ -284,9 +284,12 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     });
 
     // 5. Complete / Submit workspace
-    // Submitting a single-layer case also marks that layer checked.
+    // Submitting requires the explicit "entire text checked" confirmation.
     const submitBtn = screen.getByRole("button", { name: /Finish & Submit Case|Fall abschließen & abgeben/i });
     fireEvent.click(submitBtn);
+    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Entire text checked for further findings/i }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
 
     await waitFor(() => {
       expect(submitSpy).toHaveBeenCalledWith(

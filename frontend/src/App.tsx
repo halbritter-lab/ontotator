@@ -3,8 +3,8 @@ import {
   api,
   initSessionToken,
   setActiveSessionToken,
+  takeLaunchPackageId,
   ApiError,
-  type AnnotationSnapshot,
   type DocumentSummary,
   type OpenWorkspaceResponse,
   type PackageManifest,
@@ -12,10 +12,7 @@ import {
 } from "./api/client";
 import type { components } from "./api/generated";
 import { CaseScreen } from "./app/CaseScreen";
-import { TermName } from "./editor/TermName";
-import { useTermLabels } from "./editor/useTermLabels";
-
-const snapshotKey = (s: AnnotationSnapshot) => JSON.stringify([s.annotation.annotation_id, s.version]);
+import { CaseErrorBoundary } from "./app/ErrorBoundary";
 
 export type WorkspaceMode = "independent" | "review" | "assisted";
 export type ReviewTargetSet = components["schemas"]["ReviewTargetSet"];
@@ -26,32 +23,53 @@ const statusLabels: Record<string, string> = {
   completed: "Completed",
 };
 
+export const ANNOTATOR_STORAGE_KEY = "ontocurator.annotatorId";
+export const modeStorageKey = (packageId: string) => `ontocurator.mode.${packageId}`;
+const DEFAULT_ANNOTATOR = "annotator-1";
+
+const readStorage = (key: string): string | null => {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const writeStorage = (key: string, value: string) => {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // storage unavailable
+  }
+};
+const isMode = (value: string | null): value is WorkspaceMode =>
+  value === "independent" || value === "review" || value === "assisted";
+const storedModeFor = (packageId: string): WorkspaceMode => {
+  const stored = readStorage(modeStorageKey(packageId));
+  return isMode(stored) ? stored : "independent";
+};
+
+const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
 export const App: React.FC = () => {
   const documentRequest = useRef(0);
-  const reviewRequest = useRef(0);
-  const userManuallySetMode = useRef(false);
   const [packages, setPackages] = useState<PackageManifest[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-  const [annotatorId, setAnnotatorId] = useState<string>("annotator-1");
+  // Committed annotator identity (persisted); the input field is edited separately.
+  const [annotatorId, setAnnotatorId] = useState<string>(() => readStorage(ANNOTATOR_STORAGE_KEY) || DEFAULT_ANNOTATOR);
+  const [annotatorInput, setAnnotatorInput] = useState<string>(annotatorId);
   const [mode, setMode] = useState<WorkspaceMode>("independent");
 
   // Dashboard filter & search
   const [statusFilter, setStatusFilter] = useState<"all" | "not_started" | "in_progress" | "completed">("all");
   const [searchFilter, setSearchFilter] = useState<string>("");
 
-  // Review mode target setup
-  const [reviewInputs, setReviewInputs] = useState<AnnotationSnapshot[]>([]);
-  const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
-  const reviewTermLabel = useTermLabels(selectedPackageId ?? "", reviewInputs.map((input) => ({
-    layer_id: input.annotation.layer_id,
-    term_id: input.annotation.term_id,
-  })));
-  const [isLoadingInputs, setIsLoadingInputs] = useState<boolean>(false);
-
   // Active workspace view
   const [activeWorkspace, setActiveWorkspace] = useState<OpenWorkspaceResponse | null>(null);
+  const [workspaceNonce, setWorkspaceNonce] = useState(0);
+  const [isOpening, setIsOpening] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [tokenInput, setTokenInput] = useState<string>("");
@@ -64,6 +82,8 @@ export const App: React.FC = () => {
   } | null>(null);
   const [isUploadingOntology, setIsUploadingOntology] = useState<boolean>(false);
 
+  const effectiveAnnotator = annotatorId.trim() || DEFAULT_ANNOTATOR;
+
   const loadOntologies = async () => {
     try {
       const list = await api.listOntologies();
@@ -75,60 +95,80 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     initSessionToken();
-    loadPackages();
-    loadOntologies();
+    void loadPackages(takeLaunchPackageId());
+    void loadOntologies();
   }, []);
 
-  const loadPackages = async () => {
+  /** Pick the case to highlight: continue in-progress work first, then the next open case. */
+  const pickResumeDoc = (docs: DocumentSummary[]) =>
+    docs.find((d) => d.status === "in_progress") ?? docs.find((d) => d.status === "not_started") ?? docs[0] ?? null;
+
+  const refreshDocuments = async (pkgId: string, opts: { annotator: string; mode: WorkspaceMode; resetSelection?: boolean }) => {
+    const requestId = ++documentRequest.current;
+    try {
+      const docs = await api.listDocuments(pkgId, { annotator_id: opts.annotator, mode: opts.mode });
+      if (requestId !== documentRequest.current) return docs;
+      setDocuments(docs);
+      setSelectedDocId((current) => {
+        if (!opts.resetSelection && current && docs.some((d) => d.document_id === current)) return current;
+        return pickResumeDoc(docs)?.document_id ?? null;
+      });
+      return docs;
+    } catch (err: unknown) {
+      if (requestId === documentRequest.current) setError(`Error loading documents: ${errorText(err)}`);
+      return null;
+    }
+  };
+
+  const loadPackages = async (preferredPackageId?: string | null) => {
     try {
       setError(null);
       const list = await api.listPackages();
       setPackages(list);
-      if (list.length > 0 && !selectedPackageId) {
-        handleSelectPackage(list[0].package_id);
+      const preferred = preferredPackageId && list.some((p) => p.package_id === preferredPackageId) ? preferredPackageId : null;
+      if (preferredPackageId && !preferred && list.length > 0) {
+        setError(`Package "${preferredPackageId}" from the launch link was not found.`);
+      }
+      if (preferred) {
+        void handleSelectPackage(preferred);
+      } else if (list.length > 0 && !selectedPackageId) {
+        void handleSelectPackage(list[0].package_id);
       }
     } catch (err: unknown) {
-      setError(`Error loading packages: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Error loading packages: ${errorText(err)}`);
     }
   };
 
+  // Selecting a package never touches review inputs (blinding): it only lists cases.
   const handleSelectPackage = async (pkgId: string) => {
-    const requestId = ++documentRequest.current;
-    ++reviewRequest.current;
+    const nextMode = storedModeFor(pkgId);
     setDocuments([]);
     setSelectedPackageId(pkgId);
     setSelectedDocId(null);
-    setReviewInputs([]);
-    try {
-      const docs = await api.listDocuments(pkgId, { annotator_id: annotatorId.trim() || undefined, mode });
-      if (requestId !== documentRequest.current) return;
-      setDocuments(docs);
-      if (docs.length > 0) {
-        setSelectedDocId(docs[0].document_id);
-        // Auto-detect mode if not explicitly set by the user
-        if (!userManuallySetMode.current) {
-          try {
-            const inputs = await api.getReviewInputs({
-              package_id: pkgId,
-              document_id: docs[0].document_id,
-              annotator_id: annotatorId.trim() || "reviewer-1",
-              mode: "review",
-            });
-            if (inputs.length > 0) {
-              setMode("review");
-              setReviewInputs(inputs);
-              setSelectedTargetIds(new Set(inputs.map(snapshotKey)));
-            } else {
-              setMode("independent");
-            }
-          } catch {
-            // Keep default mode
-          }
-        }
-      }
-    } catch (err: unknown) {
-      setError(`Error loading documents: ${err instanceof Error ? err.message : String(err)}`);
+    setMode(nextMode);
+    await refreshDocuments(pkgId, { annotator: effectiveAnnotator, mode: nextMode, resetSelection: true });
+  };
+
+  const handleChangeMode = (nextMode: WorkspaceMode) => {
+    setMode(nextMode);
+    if (selectedPackageId) {
+      writeStorage(modeStorageKey(selectedPackageId), nextMode);
+      void refreshDocuments(selectedPackageId, { annotator: effectiveAnnotator, mode: nextMode });
     }
+  };
+
+  // Annotator identity is applied on blur/Enter only (not on every keystroke).
+  const commitAnnotator = () => {
+    const next = annotatorInput.trim();
+    if (!next) {
+      setAnnotatorInput(annotatorId);
+      return;
+    }
+    if (next === annotatorId) return;
+    setAnnotatorId(next);
+    setAnnotatorInput(next);
+    writeStorage(ANNOTATOR_STORAGE_KEY, next);
+    if (selectedPackageId) void refreshDocuments(selectedPackageId, { annotator: next, mode });
   };
 
   const handleUploadPackage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,8 +179,7 @@ export const App: React.FC = () => {
     setError(null);
     try {
       const res = await api.uploadPackage(file);
-      await loadPackages();
-      handleSelectPackage(res.package_id);
+      await loadPackages(res.package_id);
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === "ONTOLOGY_NOT_FOUND") {
         setMissingOntologyPrompt({
@@ -148,7 +187,7 @@ export const App: React.FC = () => {
           pendingPackageFile: file,
         });
       } else {
-        setError(`Package upload error: ${err instanceof Error ? err.message : String(err)}`);
+        setError(`Package upload error: ${errorText(err)}`);
       }
     } finally {
       setIsUploading(false);
@@ -170,11 +209,10 @@ export const App: React.FC = () => {
       if (pending) {
         setIsUploading(true);
         const res = await api.uploadPackage(pending);
-        await loadPackages();
-        handleSelectPackage(res.package_id);
+        await loadPackages(res.package_id);
       }
     } catch (err: unknown) {
-      setError(`Ontology upload error: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Ontology upload error: ${errorText(err)}`);
     } finally {
       setIsUploadingOntology(false);
       setIsUploading(false);
@@ -182,128 +220,75 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleFetchReviewInputs = async (docId?: string) => {
-    const targetDocId = docId ?? selectedDocId;
-    if (!selectedPackageId || !targetDocId) return;
-    const requestId = ++reviewRequest.current;
-    setIsLoadingInputs(true);
-    setError(null);
-    try {
-      const inputs = await api.getReviewInputs({
-        package_id: selectedPackageId,
-        document_id: targetDocId,
-        annotator_id: annotatorId.trim() || "reviewer-1",
-        mode: "review",
-      });
-      if (requestId !== reviewRequest.current) return;
-      setReviewInputs(inputs);
-      // Select all by default
-      const allIds = new Set(inputs.map(snapshotKey));
-      setSelectedTargetIds(allIds);
-    } catch (err: unknown) {
-      setError(`Error fetching review proposals: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      if (requestId === reviewRequest.current) setIsLoadingInputs(false);
-    }
-  };
-
-  useEffect(() => {
-    ++reviewRequest.current;
-    setReviewInputs([]);
-    setSelectedTargetIds(new Set());
-    if (mode === "review" && selectedPackageId && selectedDocId) void handleFetchReviewInputs(selectedDocId);
-  }, [mode, selectedPackageId, selectedDocId, annotatorId]);
-
-  useEffect(() => {
-    if (selectedPackageId) {
-      void api
-        .listDocuments(selectedPackageId, { annotator_id: annotatorId.trim() || undefined, mode })
-        .then((docs) => setDocuments(docs))
-        .catch(() => {});
-    }
-  }, [annotatorId, mode, selectedPackageId]);
-
-  const handleOpenWorkspace = async (docIdToOpen?: string) => {
-    const targetDoc = docIdToOpen ?? selectedDocId;
-    if (!selectedPackageId || !targetDoc) return;
-    setError(null);
-
-    let targets: ReviewTargetSet | null = null;
-
-    if (mode === "review") {
-      let snapshotsToUse = reviewInputs;
-      if (docIdToOpen && docIdToOpen !== selectedDocId) {
-        const fetched = await api.getReviewInputs({
-          package_id: selectedPackageId,
-          document_id: docIdToOpen,
-          annotator_id: annotatorId.trim() || "reviewer-1",
-          mode: "review",
-        });
-        snapshotsToUse = fetched;
-      }
-
-      const chosenSnapshots = snapshotsToUse.filter((i) =>
-        docIdToOpen && docIdToOpen !== selectedDocId ? true : selectedTargetIds.has(snapshotKey(i))
-      );
-
-      if (chosenSnapshots.length === 0 && snapshotsToUse.length > 0) {
-        setError("Please select at least one proposal for the review round.");
-        return;
-      }
-      targets = {
-        target_set_id: "",
-        targets: chosenSnapshots.map((s) => ({
-          annotation_id: s.annotation.annotation_id,
-          version: s.version,
-        })),
-      };
-    }
-
-    try {
-      const res = await api.openWorkspace({
-        package_id: selectedPackageId,
-        document_id: targetDoc,
-        annotator_id: annotatorId.trim() || "annotator-1",
-        mode,
-        targets,
-      });
-      setSelectedDocId(targetDoc);
-      setActiveWorkspace(res);
-    } catch (err: unknown) {
-      setError(`Error opening workspace: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
-
-  const handleNavigateCase = async (docId: string) => {
-    if (!selectedPackageId) return;
-    setError(null);
+  /**
+   * Open a case. In review mode, all review proposals for the case are loaded here
+   * (and only here) as origin-neutral targets. Throws on failure.
+   */
+  const openCase = async (docId: string, opts: { forceRemount?: boolean } = {}) => {
+    if (!selectedPackageId) throw new Error("No work package selected.");
     let targets: ReviewTargetSet | null = null;
     if (mode === "review") {
       const inputs = await api.getReviewInputs({
         package_id: selectedPackageId,
         document_id: docId,
-        annotator_id: annotatorId.trim() || "reviewer-1",
+        annotator_id: effectiveAnnotator,
         mode: "review",
       });
+      if (inputs.length === 0) {
+        throw new Error(
+          `No review proposals are available for case ${docId}. Review mode needs at least one proposal; switch to Independent Mode to annotate this case.`,
+        );
+      }
       targets = {
         target_set_id: "",
-        targets: inputs.map((s) => ({
-          annotation_id: s.annotation.annotation_id,
-          version: s.version,
-        })),
+        targets: inputs.map((s) => ({ annotation_id: s.annotation.annotation_id, version: s.version })),
       };
     }
     const res = await api.openWorkspace({
       package_id: selectedPackageId,
       document_id: docId,
-      annotator_id: annotatorId.trim() || "annotator-1",
+      annotator_id: effectiveAnnotator,
       mode,
       targets,
     });
     setSelectedDocId(docId);
+    if (opts.forceRemount) setWorkspaceNonce((n) => n + 1);
     setActiveWorkspace(res);
-    const docs = await api.listDocuments(selectedPackageId, { annotator_id: annotatorId.trim() || undefined, mode });
-    setDocuments(docs);
+    void refreshDocuments(selectedPackageId, { annotator: effectiveAnnotator, mode });
+  };
+
+  /** Dashboard entry point: errors are shown on the dashboard. */
+  const handleOpenWorkspace = async (docIdToOpen?: string) => {
+    const targetDoc = docIdToOpen ?? selectedDocId;
+    if (!selectedPackageId || !targetDoc || isOpening) return;
+    setError(null);
+    setSelectedDocId(targetDoc);
+    setIsOpening(true);
+    try {
+      await openCase(targetDoc);
+    } catch (err: unknown) {
+      setError(`Error opening case: ${errorText(err)}`);
+    } finally {
+      setIsOpening(false);
+    }
+  };
+
+  const handleExportPackage = async () => {
+    if (!selectedPackageId) return;
+    setError(null);
+    setIsExporting(true);
+    try {
+      await api.downloadPackageExport(selectedPackageId, { annotator_id: effectiveAnnotator, mode });
+    } catch (err: unknown) {
+      setError(`Package export failed: ${errorText(err)}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const closeWorkspace = async () => {
+    setActiveWorkspace(null);
+    if (selectedPackageId) await refreshDocuments(selectedPackageId, { annotator: effectiveAnnotator, mode });
   };
 
   // Filtered documents for dashboard table
@@ -315,36 +300,43 @@ export const App: React.FC = () => {
     });
   }, [documents, statusFilter, searchFilter]);
 
-  // Next document to resume
-  const resumeDoc = useMemo(() => {
-    return (
-      documents.find((d) => d.status === "in_progress") ??
-      documents.find((d) => d.status === "not_started") ??
-      documents[0] ??
-      null
-    );
-  }, [documents]);
+  // The hero card always shows the currently selected case.
+  const heroDoc = useMemo(
+    () => documents.find((d) => d.document_id === selectedDocId) ?? pickResumeDoc(documents),
+    [documents, selectedDocId],
+  );
+
+  const ontologyLabels = useMemo(
+    () => Array.from(new Set(ontologies.map((o) => o.ontology_id.toUpperCase()))),
+    [ontologies],
+  );
 
   const openCount = documents.filter((d) => d.status === "not_started").length;
   const inProgressCount = documents.filter((d) => d.status === "in_progress").length;
   const completedCount = documents.filter((d) => d.status === "completed").length;
 
   if (activeWorkspace) {
+    const currentDocId = activeWorkspace.view.document.document_id;
+    const reload = () => openCase(currentDocId, { forceRemount: true });
     return (
-      <CaseScreen
-        key={activeWorkspace.workspace_id}
-        view={activeWorkspace.view}
-        workspaceId={activeWorkspace.workspace_id}
-        documentList={documents}
-        onNavigateCase={handleNavigateCase}
-        onClose={async () => {
-          setActiveWorkspace(null);
-          if (selectedPackageId) {
-            const docs = await api.listDocuments(selectedPackageId, { annotator_id: annotatorId.trim() || undefined, mode });
-            setDocuments(docs);
-          }
-        }}
-      />
+      <CaseErrorBoundary
+        key={`${activeWorkspace.workspace_id}:${workspaceNonce}`}
+        onBackToDashboard={() => { void closeWorkspace(); }}
+        onReload={() => { void reload().catch((err) => setError(`Error reloading case: ${errorText(err)}`)); }}
+      >
+        <CaseScreen
+          key={`${activeWorkspace.workspace_id}:${workspaceNonce}`}
+          view={activeWorkspace.view}
+          workspaceId={activeWorkspace.workspace_id}
+          documentList={documents}
+          onNavigateCase={(docId) => openCase(docId)}
+          onReload={reload}
+          onSubmitted={async () => {
+            if (selectedPackageId) await refreshDocuments(selectedPackageId, { annotator: effectiveAnnotator, mode });
+          }}
+          onClose={() => { void closeWorkspace(); }}
+        />
+      </CaseErrorBoundary>
     );
   }
 
@@ -359,7 +351,7 @@ export const App: React.FC = () => {
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {ontologies.length > 0 && (
+          {ontologyLabels.length > 0 && (
             <span
               style={{
                 fontSize: "0.78rem",
@@ -369,7 +361,7 @@ export const App: React.FC = () => {
                 borderRadius: 4,
               }}
             >
-              Ontologies: {ontologies.map((o) => o.ontology_id.toUpperCase()).join(", ")}
+              Ontologies: {ontologyLabels.join(", ")}
             </span>
           )}
           <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
@@ -484,7 +476,7 @@ export const App: React.FC = () => {
                 if (tokenInput.trim()) {
                   setActiveSessionToken(tokenInput.trim());
                   setError(null);
-                  loadPackages();
+                  void loadPackages();
                 }
               }}
               style={{ display: "flex", gap: 10 }}
@@ -526,7 +518,7 @@ export const App: React.FC = () => {
               id="package-select"
               className="form-select"
               value={selectedPackageId ?? ""}
-              onChange={(e) => handleSelectPackage(e.target.value)}
+              onChange={(e) => { void handleSelectPackage(e.target.value); }}
             >
               {packages.length === 0 && <option value="">No packages found</option>}
               {packages.map((pkg) => (
@@ -545,10 +537,23 @@ export const App: React.FC = () => {
               id="annotator-input"
               type="text"
               className="form-control"
-              value={annotatorId}
-              onChange={(e) => setAnnotatorId(e.target.value)}
+              value={annotatorInput}
+              onChange={(e) => setAnnotatorInput(e.target.value)}
+              onBlur={commitAnnotator}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitAnnotator();
+                } else if (e.key === "Escape") {
+                  setAnnotatorInput(annotatorId);
+                }
+              }}
               placeholder="e.g. annotator-1"
             />
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 3 }}>
+              Working as <strong data-testid="dashboard-identity">{effectiveAnnotator}</strong>
+              {annotatorInput.trim() !== annotatorId && " – press Enter to apply"}
+            </div>
           </div>
 
           <div className="form-group" style={{ margin: 0 }}>
@@ -559,10 +564,7 @@ export const App: React.FC = () => {
               id="mode-select"
               className="form-select"
               value={mode}
-              onChange={(e) => {
-                userManuallySetMode.current = true;
-                setMode(e.target.value as WorkspaceMode);
-              }}
+              onChange={(e) => handleChangeMode(e.target.value as WorkspaceMode)}
             >
               <option value="review">Review Mode (validate proposals)</option>
               <option value="independent">Independent Mode (manual annotation)</option>
@@ -577,7 +579,7 @@ export const App: React.FC = () => {
             id="doc-select"
             aria-label="Clinical Case (Document)"
             value={selectedDocId ?? ""}
-            onChange={(e) => { setSelectedDocId(e.target.value); setReviewInputs([]); setSelectedTargetIds(new Set()); }}
+            onChange={(e) => setSelectedDocId(e.target.value)}
           >
             {documents.map((doc) => (
               <option key={doc.document_id} value={doc.document_id}>
@@ -587,113 +589,35 @@ export const App: React.FC = () => {
           </select>
         </div>
 
-        {/* Hero: Continue Working */}
-        {resumeDoc && (
+        {/* Hero: selected case (defaults to the case to continue) */}
+        {heroDoc && (
           <div className="dashboard-hero">
             <div>
               <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)", fontWeight: 700 }}>
-                Recent Case
+                {heroDoc.status === "in_progress" ? "Recent Case" : "Selected Case"}
               </div>
               <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text-main)", marginTop: 2 }}>
-                Case {resumeDoc.position}: <span style={{ fontFamily: "var(--font-mono)" }}>{resumeDoc.document_id}</span>
+                Case {heroDoc.position}: <span style={{ fontFamily: "var(--font-mono)" }}>{heroDoc.document_id}</span>
               </div>
               <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: 3 }}>
-                {resumeDoc.language.toUpperCase()} • {resumeDoc.text_length} chars • Status: <strong>{statusLabels[resumeDoc.status] ?? resumeDoc.status}</strong>
+                {heroDoc.language.toUpperCase()} • {heroDoc.text_length} chars • Status: <strong>{statusLabels[heroDoc.status] ?? heroDoc.status}</strong>
+                {" • "}{mode === "review" ? "Review Mode" : mode === "assisted" ? "Assisted Mode" : "Independent Mode"}
               </div>
+              {mode === "review" && (
+                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 3 }}>
+                  All review proposals for this case are loaded as origin-neutral targets when you open it.
+                </div>
+              )}
             </div>
             <button
               type="button"
               className="btn btn-primary"
               style={{ padding: "8px 18px", fontWeight: 600 }}
-              onClick={() => {
-                setSelectedDocId(resumeDoc.document_id);
-                void handleOpenWorkspace(resumeDoc.document_id);
-              }}
+              disabled={isOpening}
+              onClick={() => { void handleOpenWorkspace(heroDoc.document_id); }}
             >
-              Continue ▶
+              {isOpening ? "Opening..." : "Continue ▶"}
             </button>
-          </div>
-        )}
-
-        {/* Review Mode Target Setup (if in review mode) */}
-        {mode === "review" && (
-          <div
-            style={{
-              background: "var(--bg-surface)",
-              padding: "16px 20px",
-              borderRadius: "var(--radius)",
-              border: "1px solid var(--border-color)",
-              marginBottom: 20,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div>
-                <h3 style={{ fontSize: "0.95rem", fontWeight: 600, margin: 0 }}>
-                  Review Proposals for Selected Case ({reviewInputs.length})
-                </h3>
-                <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "2px 0 0" }}>
-                  All selected proposals are loaded into the case as origin-neutral review targets.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => void handleFetchReviewInputs()}
-                disabled={isLoadingInputs}
-              >
-                {isLoadingInputs ? "Loading..." : "Refresh"}
-              </button>
-            </div>
-
-            {reviewInputs.length === 0 ? (
-              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
-                No external proposals available for case {selectedDocId ?? ""}.
-              </p>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 8, marginTop: 8 }}>
-                {reviewInputs.map((input) => {
-                  const ann = input.annotation;
-                  const isChecked = selectedTargetIds.has(snapshotKey(input));
-                  const term = ann.term_id;
-
-                  return (
-                    <label
-                      key={snapshotKey(input)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "8px 12px",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "var(--radius)",
-                        cursor: "pointer",
-                        background: isChecked ? "var(--bg-primary)" : "var(--bg-surface)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
-                          const next = new Set(selectedTargetIds);
-                          if (e.target.checked) next.add(snapshotKey(input));
-                          else next.delete(snapshotKey(input));
-                          setSelectedTargetIds(next);
-                        }}
-                      />
-                      <div style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-                        <span style={{ fontWeight: 600 }}>
-                          <TermName termId={term} label={reviewTermLabel(ann.layer_id, term)} />
-                        </span>
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                          {ann.evidence_refs?.length ?? 0} mention(s) • {input.version.slice(0, 8)}
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
 
@@ -741,12 +665,22 @@ export const App: React.FC = () => {
             />
             <button
               type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => { void handleExportPackage(); }}
+              disabled={!selectedPackageId || isExporting}
+              title={`Export all submissions of ${effectiveAnnotator} (${mode} mode) in this package as ZIP`}
+              style={{ padding: "6px 14px" }}
+            >
+              {isExporting ? "Exporting..." : "📥 Export package (.zip)"}
+            </button>
+            <button
+              type="button"
               className="btn btn-primary btn-sm"
               onClick={() => void handleOpenWorkspace()}
-              disabled={!selectedPackageId || !selectedDocId}
+              disabled={!selectedPackageId || !selectedDocId || isOpening}
               style={{ padding: "6px 14px", fontWeight: 600 }}
             >
-              Open Workspace →
+              {isOpening ? "Opening..." : "Open Workspace →"}
             </button>
           </div>
         </div>
@@ -780,6 +714,7 @@ export const App: React.FC = () => {
                       background: isSelected ? "var(--bg-primary)" : undefined,
                       cursor: "pointer",
                     }}
+                    aria-selected={isSelected}
                     onClick={() => {
                       setSelectedDocId(doc.document_id);
                     }}
@@ -816,9 +751,9 @@ export const App: React.FC = () => {
                         type="button"
                         className="btn btn-secondary btn-sm"
                         style={{ padding: "4px 10px", fontSize: "0.8rem" }}
+                        disabled={isOpening}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedDocId(doc.document_id);
                           void handleOpenWorkspace(doc.document_id);
                         }}
                       >

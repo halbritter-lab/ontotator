@@ -81,8 +81,13 @@ export class SpanEditor {
     this._onMouseOverBound = (e) => this._onHover(e, true);
     this._onMouseOutBound = (e) => this._onHover(e, false);
     this._onClickBound = (e) => this._onClick(e);
+    this._keySelecting = false;
+    this._onKeyDownBound = (e) => this._onKeyDown(e);
+    this._onKeyUpBound = (e) => this._onKeyUp(e);
 
     container.addEventListener("mouseup", this._onMouseUpBound);
+    container.addEventListener("keydown", this._onKeyDownBound);
+    container.addEventListener("keyup", this._onKeyUpBound);
     container.addEventListener("mouseover", this._onMouseOverBound);
     container.addEventListener("mouseout", this._onMouseOutBound);
     container.addEventListener("click", this._onClickBound);
@@ -90,6 +95,8 @@ export class SpanEditor {
 
   destroy() {
     this.container.removeEventListener("mouseup", this._onMouseUpBound);
+    this.container.removeEventListener("keydown", this._onKeyDownBound);
+    this.container.removeEventListener("keyup", this._onKeyUpBound);
     this.container.removeEventListener("mouseover", this._onMouseOverBound);
     this.container.removeEventListener("mouseout", this._onMouseOutBound);
     this.container.removeEventListener("click", this._onClickBound);
@@ -223,6 +230,21 @@ export class SpanEditor {
     this.handlers.onPaint(spans, {
       additive: Boolean(event?.metaKey || event?.ctrlKey),
     });
+  }
+
+  // Keyboard selection (Shift + arrows/Home/End, or caret browsing): commit the
+  // selection when Shift is released or Enter is pressed.
+  _onKeyDown(event) {
+    if (event.shiftKey && /^(Arrow|Home$|End$|PageUp$|PageDown$)/.test(event.key)) {
+      this._keySelecting = true;
+    }
+  }
+
+  _onKeyUp(event) {
+    if (!(event.key === "Shift" || event.key === "Enter")) return;
+    if (event.key === "Shift" && !this._keySelecting) return;
+    this._keySelecting = false;
+    this._onMouseUp(event);
   }
 
   _runIds(target) {

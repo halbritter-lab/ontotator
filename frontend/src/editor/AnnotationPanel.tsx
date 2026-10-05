@@ -35,6 +35,19 @@ export interface AnnotationPanelProps {
   onDetachMention: (evidenceId: string) => void;
   onDeleteAnnotation: (annotationId: string) => void;
   onSetIntent: (intent: "new_mention" | "extend_mention") => void;
+  /** Document text, used to quote mention snippets. */
+  documentText?: string;
+  /** True while "+ Add Mention" mode waits for a text selection. */
+  isAttachingMention?: boolean;
+}
+
+/** Quote the text covered by codepoint segments; discontinuous parts are joined with " … ". */
+export function quoteSegments(text: string, segments: { start: number; end: number }[], maxLength = 160): string {
+  const chars = Array.from(text);
+  const quoted = segments
+    .map((seg) => chars.slice(Math.max(0, seg.start), Math.min(chars.length, seg.end)).join(""))
+    .join(" … ");
+  return quoted.length > maxLength ? `${quoted.slice(0, maxLength - 1)}…` : quoted;
 }
 
 export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
@@ -55,8 +68,12 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   onDetachMention,
   onDeleteAnnotation,
   onSetIntent,
+  documentText = "",
+  isAttachingMention = false,
 }) => {
   const [showSearch, setShowSearch] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDetachId, setConfirmDetachId] = useState<string | null>(null);
 
   if (!annotation) {
     return (
@@ -226,9 +243,10 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => onSetIntent("new_mention")}
+            aria-pressed={isAttachingMention}
             title="Highlight text to add an additional mention for this term"
           >
-            + Add Mention
+            {isAttachingMention ? "Select text…" : "+ Add Mention"}
           </button>
         </div>
 
@@ -251,6 +269,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               const isSelected = ev.mention.evidence_id === selectedEvidenceId;
               const segments = ev.mention.segments ?? [];
               const ranges = segments.map((s) => `[${s.start}:${s.end}]`).join(", ");
+              const snippet = quoteSegments(documentText, segments);
 
               return (
                 <div
@@ -269,13 +288,32 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     style={{ cursor: "pointer", flex: 1 }}
                     onClick={() => onSelectEvidence(ev.mention.evidence_id)}
                   >
-                    <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                       Mention #{idx + 1}
                     </div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                      Offsets: {ranges}
+                    <div
+                      className="mention-snippet"
+                      title={`Offsets: ${ranges}`}
+                      style={{ fontSize: "0.85rem", fontWeight: 600 }}
+                    >
+                      {snippet ? `“${snippet}”` : `Offsets: ${ranges}`}
                     </div>
                   </div>
+                  {confirmDetachId === ev.mention.evidence_id ? (
+                    <div style={{ display: "flex", gap: 4, alignItems: "center" }} role="group" aria-label="Confirm mention removal">
+                      <span style={{ fontSize: "0.75rem" }}>Remove?</span>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={() => { setConfirmDetachId(null); onDetachMention(ev.mention.evidence_id); }}
+                      >
+                        Yes, remove
+                      </button>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setConfirmDetachId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
                   <div style={{ display: "flex", gap: 4 }}>
                     <button
                       type="button"
@@ -291,12 +329,13 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     <button
                       type="button"
                       className="btn btn-danger btn-sm"
-                      onClick={() => onDetachMention(ev.mention.evidence_id)}
+                      onClick={() => setConfirmDetachId(ev.mention.evidence_id)}
                       title="Detach mention from this annotation"
                     >
                       Remove
                     </button>
                   </div>
+                  )}
                 </div>
               );
             })}
@@ -306,14 +345,33 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
       {/* 4. Delete Annotation */}
       <div className="detail-section" style={{ marginTop: "auto" }}>
-        <button
-          type="button"
-          className="btn btn-danger"
-          style={{ width: "100%" }}
-          onClick={() => onDeleteAnnotation(ann.annotation_id)}
-        >
-          🗑️ Delete Annotation
-        </button>
+        {confirmDelete ? (
+          <div role="group" aria-label="Confirm deletion" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: "0.85rem" }}>Delete this annotation and all its mentions?</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{ flex: 1 }}
+                onClick={() => { setConfirmDelete(false); onDeleteAnnotation(ann.annotation_id); }}
+              >
+                Yes, delete
+              </button>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-danger"
+            style={{ width: "100%" }}
+            onClick={() => setConfirmDelete(true)}
+          >
+            🗑️ Delete Annotation
+          </button>
+        )}
       </div>
     </div>
   );

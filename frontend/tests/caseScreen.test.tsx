@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
 import { api } from "../src/api/client";
 
-it("defaults only the assertion for HPO terms", () => {
+it("never pre-fills clinical axis values (no assertion default for HPO terms)", () => {
   const axes = [
     { id: "assertion", options: ["present", "absent"] },
     { id: "experiencer", options: ["patient", "other"] },
     { id: "temporality", options: ["current", "historical"] },
   ];
   expect(initialAxisValues(axes, "HP:0001252")).toEqual({
-    assertion: "present", experiencer: null, temporality: null,
+    assertion: null, experiencer: null, temporality: null,
   });
   expect(initialAxisValues(axes, "MONDO:0000001")).toEqual({
     assertion: null, experiencer: null, temporality: null,
@@ -205,7 +205,7 @@ describe("CaseScreen integration", () => {
             term_id: "HP:0001252",
             segments: [],
             axes_values: {
-              assertion: "present",
+              assertion: null,
               experiencer: null,
               temporality: null,
             },
@@ -366,6 +366,8 @@ describe("CaseScreen integration", () => {
 
     // Click delete
     fireEvent.click(screen.getByText(/Delete Annotation|Annotation löschen/i));
+    // Deletion requires an explicit confirmation
+    fireEvent.click(screen.getByRole("button", { name: /Yes, delete/i }));
 
     await waitFor(() => {
       expect(applyCommandSpy).toHaveBeenCalledWith(
@@ -402,7 +404,7 @@ describe("CaseScreen integration", () => {
       payload: expect.objectContaining({ command: "create_annotation", layer_id: "phenotype",
         type_id: "default", term_id: "CUSTOM:42", segments: [{ start: 0, end: 3 }], search_event_id: "search-custom" }),
     })));
-    expect(search).toHaveBeenCalledWith(expect.objectContaining({ layer_id: "phenotype" }));
+    expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ layer_id: "phenotype" }));
     expect(search.mock.calls[0][0].annotation_id).toBe(mutate.mock.calls[0][1].payload.annotation_id);
   });
 

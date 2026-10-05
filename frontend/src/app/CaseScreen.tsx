@@ -10,7 +10,14 @@ import {
 } from "../api/client";
 import type { components } from "../api/generated";
 import { AnnotationPanel, type EvidenceSnapshot } from "../editor/AnnotationPanel";
-import { createMutationQueue, type QueueState } from "../editor/autosave";
+import {
+  createMutationQueue,
+  DiscardedChangesError,
+  isNetworkError,
+  UnsavedChangesError,
+  type MutationQueue,
+  type QueueState,
+} from "../editor/autosave";
 import { LayerControls } from "../editor/LayerControls";
 import {
   initLayerSelection,
@@ -23,6 +30,7 @@ import {
   ReviewActions,
   type DecisionPayload,
   type ReviewDecision,
+  type ReviewDecisionOutcome,
   type TargetProposal,
 } from "../editor/ReviewActions";
 import { SearchPanel } from "../editor/SearchPanel";
@@ -35,16 +43,58 @@ import { CaseNavigation } from "./CaseNavigation";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
+/**
+ * Initial axis values for a new annotation: every axis starts unspecified (null).
+ * No clinical defaults (e.g. assertion "present") are ever pre-filled.
+ */
 export const initialAxisValues = (
   axes: { id: string; options: string[] }[],
-  termId: string,
-): Record<string, string | null> => Object.fromEntries(
-  axes.map((axis) => [
-    axis.id,
-    termId.startsWith("HP:") && axis.id === "assertion" && axis.options.includes("present")
-      ? "present" : null,
-  ]),
-);
+  _termId?: string,
+): Record<string, string | null> => Object.fromEntries(axes.map((axis) => [axis.id, null]));
+
+const normalizeAxes = (axes: Record<string, string | null | undefined> | null | undefined) =>
+  Object.fromEntries(
+    Object.entries(axes ?? {})
+      .filter(([, v]) => v !== null && v !== undefined && v !== "")
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+
+const segmentsKey = (evidence: { mention: { segments: { start: number; end: number }[] } }[]) =>
+  JSON.stringify(
+    evidence
+      .map((ev) => [...ev.mention.segments].sort((a, b) => a.start - b.start).map((s) => [s.start, s.end]))
+      .map((segs) => JSON.stringify(segs))
+      .sort(),
+  );
+
+const isTypingTarget = (target: EventTarget | null): boolean => {
+  const el = target as HTMLElement | null;
+  if (!el || typeof el !== "object") return false;
+  const tag = el.tagName?.toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (el.isContentEditable) return true;
+  const editable = el.getAttribute?.("contenteditable");
+  return editable !== null && editable !== undefined && editable !== "false";
+};
+
+export const SHORTCUTS: { keys: string; description: string; reviewOnly?: boolean }[] = [
+  { keys: "j / k", description: "Next / previous review proposal", reviewOnly: true },
+  { keys: "1", description: "Confirm selected proposal", reviewOnly: true },
+  { keys: "2", description: "Reject selected proposal", reviewOnly: true },
+  { keys: "3", description: "Adopt proposal as editable copy", reviewOnly: true },
+  { keys: "4", description: "Mark selected proposal as uncertain", reviewOnly: true },
+  { keys: "Esc", description: "Clear selection / cancel adding a mention" },
+  { keys: "Alt + ← / →", description: "Previous / next case" },
+  { keys: "Shift + arrows, then release Shift", description: "Select text with the keyboard to create a mention" },
+  { keys: "?", description: "Show / hide this help" },
+];
+
+interface ConfirmRequest {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  resolve: (ok: boolean) => void;
+}
 
 export type WorkspaceView = components["schemas"]["WorkspaceView"];
 
@@ -54,6 +104,10 @@ export interface CaseScreenProps {
   onClose: () => void;
   onNavigateCase?: (documentId: string) => Promise<void>;
   documentList?: DocumentSummary[];
+  /** Re-open this case from the server (used to resolve revision conflicts). */
+  onReload?: () => Promise<void>;
+  /** Called after a successful submission (e.g. to refresh the case list). */
+  onSubmitted?: () => void | Promise<void>;
 }
 
 export const CaseScreen: React.FC<CaseScreenProps> = ({
@@ -62,6 +116,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onClose,
   onNavigateCase,
   documentList,
+  onReload,
+  onSubmitted,
 }) => {
   const [pendingAnnotation, setPendingAnnotation] = useState<{
     annotationId: string;
@@ -88,7 +144,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectionIntent, setSelectionIntent] = useState<"new_mention" | "extend_mention">("new_mention");
   const [queueState, setQueueState] = useState<QueueState>("saved");
-  const [statusText, setStatusText] = useState<string>("Saved");
+  const [queueError, setQueueError] = useState<unknown>(null);
+  const [isOffline, setIsOffline] = useState<boolean>(
+    typeof navigator !== "undefined" && navigator.onLine === false,
+  );
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [textCheckedConfirmed, setTextCheckedConfirmed] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
+  // Reviewer notes typed in the UI, keyed by target; kept even when a decision is reset.
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const noteDraftsRef = useRef(noteDrafts);
+  noteDraftsRef.current = noteDrafts;
 
   // Modals
   const [completedSubmission, setCompletedSubmission] = useState<Submission | null>(null);
@@ -113,15 +181,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, [layerSelection.activeLayerId, searchManager]);
 
   // Dedicated mutation queue for this workspace
-  const queueRef = useRef(
+  const queueRef = useRef<MutationQueue>(null as unknown as MutationQueue);
+  if (!queueRef.current) queueRef.current = (
     createMutationQueue({
       initialRevision: view.draft.revision,
       onState: (state) => {
         setQueueState(state);
-        if (state === "saved") setStatusText("Saved");
-        else if (state === "saving") setStatusText("Saving...");
-        else if (state === "conflict") setStatusText("Revision conflict");
-        else if (state === "error") setStatusText("Save error");
+        setQueueError(state === "error" || state === "conflict" ? queueRef.current?.getLastError() ?? null : null);
       },
     })
   );
@@ -257,13 +323,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     [view.key.mode, view.available_inputs, view.targets, layerSelection.visibleLayerIds]);
   const sourceKey = (s: AnnotationSnapshot) => refKey({ annotation_id: s.annotation.annotation_id, version: s.version });
   const selectedSource = visibleSources.find(s => sourceKey(s) === selectedSourceId);
-  const sourceMentions: MentionDisplay[] = visibleSources.flatMap(s => s.evidence.map(ev => ({
+  const sourceMentions: MentionDisplay[] = useMemo(() => visibleSources.flatMap(s => s.evidence.map(ev => ({
     evidence_id: `source:${sourceKey(s)}:${ev.mention.evidence_id}:${ev.version}`,
     sourceId: sourceKey(s),
     segments: ev.mention.segments,
     kind: "source" as const,
     colorIndex: termColorIndex(s.annotation.term_id),
-  })));
+  }))), [visibleSources]);
   const selectSource = (id: string) => {
     setSelectedTargetId(null);
     setSelectedAnnotationId(null);
@@ -274,7 +340,92 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     cancelPending();
   };
 
-  const reportError = (error: unknown) => setActionError(error instanceof Error ? error.message : String(error));
+  const reportError = (error: unknown) => {
+    if (error instanceof DiscardedChangesError) return; // user explicitly discarded these edits
+    setActionError(error instanceof Error ? error.message : String(error));
+  };
+
+  /** In-app confirmation dialog (resolves true when confirmed). */
+  const askConfirm = (title: string, message: string, confirmLabel = "Continue") =>
+    new Promise<boolean>((resolve) => setConfirmRequest({ title, message, confirmLabel, resolve }));
+  const closeConfirm = (ok: boolean) => {
+    const request = confirmRequest;
+    setConfirmRequest(null);
+    request?.resolve(ok);
+  };
+
+  /**
+   * Flush pending edits before leaving the case. If they cannot be saved (conflict or
+   * server unreachable) the user may explicitly discard them and leave anyway.
+   */
+  const leaveCase = async (action: () => void | Promise<void>): Promise<void> => {
+    try {
+      await queueRef.current.flush();
+    } catch (error) {
+      if (!(error instanceof UnsavedChangesError)) { reportError(error); return; }
+      const pending = queueRef.current.pendingCount();
+      const ok = await askConfirm(
+        error.state === "conflict" ? "Case was changed elsewhere" : "Changes not saved",
+        error.state === "conflict"
+          ? `This case was changed in another window or session. ${pending} unsaved edit(s) in this window will be discarded.`
+          : `${pending} edit(s) could not be saved because the server is unreachable. Leaving discards them.`,
+        "Discard edits and leave",
+      );
+      if (!ok) return;
+      queueRef.current.discardPending();
+    }
+    try {
+      await action();
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  /** Resolve a revision conflict by reloading the case from the server. */
+  const reloadCase = async () => {
+    if (!onReload) return;
+    const pending = queueRef.current.pendingCount();
+    if (pending > 0) {
+      const ok = await askConfirm(
+        "Reload case",
+        `Reloading loads the current server version. ${pending} unsaved edit(s) in this window will be discarded.`,
+        "Discard edits and reload",
+      );
+      if (!ok) return;
+    }
+    queueRef.current.discardPending();
+    setIsReloading(true);
+    try {
+      await onReload();
+    } catch (error) {
+      reportError(error);
+    } finally {
+      setIsReloading(false);
+    }
+  };
+
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => {
+      setIsOffline(false);
+      if (queueRef.current.getState() === "error") void queueRef.current.retry();
+    };
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, []);
+
+  const statusText =
+    queueState === "conflict" ? "Changed elsewhere – reload required"
+    : queueState === "error" ? (isNetworkError(queueError) || isOffline ? "Offline – changes not saved" : "Save error – changes not saved")
+    : queueState === "saving" ? "Saving..."
+    : queueState === "dirty" ? "Unsaved changes"
+    : isOffline ? "Offline"
+    : "Saved";
+  const statusIsError = queueState === "conflict" || queueState === "error" || isOffline;
 
   const downloadExport = async () => {
     try { await queueRef.current.flush(); await api.downloadExport(workspaceId); }
@@ -314,59 +465,101 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     cancelPending();
   };
 
-  // Helper to mutate an annotation and synchronize any linked review decision
+  const targetKeyOf = (t: { annotation_id: string; version: string }) => refKey(t);
+  const targetSnapshotOf = (t: { annotation_id: string; version: string }) =>
+    (view.available_inputs ?? []).find(
+      (snap) => snap.annotation.annotation_id === t.annotation_id && snap.version === t.version,
+    );
+  /** Review target an annotation was adopted from (via provenance.source_refs). */
+  const sourceTargetOf = (snap: AnnotationSnapshot) => {
+    const refs = snap.annotation.provenance.source_refs ?? [];
+    return reviewTargets.find((t) => refs.includes(`${t.annotation_id}:${t.version}`)) ?? null;
+  };
+  /** Current reviewer note for a target: unsaved UI text wins over the stored decision note. */
+  const currentNoteFor = (targetKey: string): string | undefined => {
+    const draftNote = noteDraftsRef.current[targetKey];
+    const stored = (latestDraft.current.decisions ?? []).find((d) => refKey(d.target) === targetKey)?.note;
+    const value = draftNote ?? stored ?? "";
+    return value.trim() || undefined;
+  };
+  /** Whether an adopted copy differs from its source proposal (term, type, axes or mentions). */
+  const copyDiffersFromTarget = (copy: AnnotationSnapshot, target: { annotation_id: string; version: string }) => {
+    const source = targetSnapshotOf(target);
+    if (!source) return true;
+    if (copy.annotation.term_id !== source.annotation.term_id) return true;
+    if (copy.annotation.type_id !== source.annotation.type_id) return true;
+    if (JSON.stringify(normalizeAxes(copy.annotation.axes_values)) !== JSON.stringify(normalizeAxes(source.annotation.axes_values))) return true;
+    const copyEvidence = (copy.annotation.evidence_refs ?? [])
+      .map((ref) => (latestDraft.current.evidence ?? []).find((ev) => ev.mention.evidence_id === ref.evidence_id))
+      .filter((ev): ev is NonNullable<typeof ev> => !!ev);
+    return segmentsKey(copyEvidence) !== segmentsKey(source.evidence ?? []);
+  };
+
+  const enqueueDecision = (
+    target: { annotation_id: string; version: string },
+    outcome: ReviewDecisionOutcome | null,
+    replacementId?: string,
+    note?: string,
+  ): Promise<Draft> => {
+    const mutationId = crypto.randomUUID();
+    let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
+    return queueRef.current.enqueue(async (expectedRevision) => {
+      if (!envelope) {
+        const replacement = replacementId
+          ? (latestDraft.current.annotations ?? []).find((a) => a.annotation.annotation_id === replacementId)
+          : undefined;
+        envelope = {
+          mutation_id: mutationId,
+          expected_revision: expectedRevision,
+          payload: {
+            target: { annotation_id: target.annotation_id, version: target.version },
+            outcome,
+            replacement: replacement
+              ? { annotation_id: replacement.annotation.annotation_id, version: replacement.version }
+              : undefined,
+            note,
+          },
+        };
+      }
+      const nextDraft = await api.recordDecision(workspaceId, envelope);
+      latestDraft.current = nextDraft;
+      setDraft(nextDraft);
+      return nextDraft;
+    });
+  };
+
+  /**
+   * After an annotation edit, keep a "changed" review decision bound to the latest
+   * replacement version. Explicit confirmed/rejected/uncertain decisions are never
+   * overridden, and an adopted copy only records "changed" once it actually differs.
+   */
+  const syncReplacementDecision = async (annotationId: string) => {
+    if (view.key.mode !== "review") return;
+    const current = latestDraft.current;
+    const ann = (current.annotations ?? []).find((a) => a.annotation.annotation_id === annotationId);
+    if (!ann) return;
+    const decisions = current.decisions ?? [];
+    let decision = decisions.find((d) => d.outcome === "changed" && d.replacement?.annotation_id === annotationId);
+    let target: { annotation_id: string; version: string } | null = decision?.target ?? null;
+    if (!target) {
+      const source = sourceTargetOf(ann);
+      if (!source) return;
+      decision = decisions.find((d) => refKey(d.target) === refKey(source));
+      if (decision) return; // explicit decision exists (or replaced by another annotation): leave it alone
+      if (!copyDiffersFromTarget(ann, source)) return;
+      target = { annotation_id: source.annotation_id, version: source.version };
+    }
+    if (decision?.replacement?.version === ann.version) return; // already bound to this version
+    await enqueueDecision(target, "changed", annotationId, currentNoteFor(refKey(target)));
+  };
+
+  // Mutate an annotation and synchronize any linked review decision
   const mutateAnnotationAndSyncDecision = async (
     annotationId: string,
     mutationAction: () => Promise<Draft>
   ): Promise<Draft> => {
-    // Check if this annotation was acting as a replacement for any target
-    const prevDecision = (latestDraft.current.decisions ?? []).find(
-      (d) => d.replacement?.annotation_id === annotationId && d.outcome === "changed"
-    );
-    let targetToSync = prevDecision?.target;
-    if (!targetToSync) {
-      const annSnap = (latestDraft.current.annotations ?? []).find(
-        (a) => a.annotation.annotation_id === annotationId
-      );
-      const sourceRef = annSnap?.annotation.provenance.source_refs?.[0];
-      if (sourceRef) {
-        const [targetAnnId, targetVer] = sourceRef.split(":");
-        if (targetAnnId && targetVer) {
-          targetToSync = { annotation_id: targetAnnId, version: targetVer };
-        }
-      }
-    }
-
     const updatedDraft = await mutationAction();
-
-    if (targetToSync) {
-      const updatedAnn = (latestDraft.current.annotations ?? []).find(
-        (a) => a.annotation.annotation_id === annotationId
-      );
-      if (updatedAnn) {
-        const mutationId = crypto.randomUUID();
-        let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
-        await queueRef.current.enqueue(async (expectedRevision) => {
-          envelope ??= {
-            mutation_id: mutationId,
-            expected_revision: expectedRevision,
-            payload: {
-              target: targetToSync!,
-              outcome: "changed",
-              replacement: {
-                annotation_id: updatedAnn.annotation.annotation_id,
-                version: updatedAnn.version,
-              },
-              note: prevDecision?.note,
-            },
-          };
-          const nextDraft = await api.recordDecision(workspaceId, envelope);
-          latestDraft.current = nextDraft;
-          setDraft(nextDraft);
-          return nextDraft;
-        });
-      }
-    }
+    await syncReplacementDecision(annotationId);
     return updatedDraft;
   };
 
@@ -579,84 +772,102 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
 
-  // Review Decision Handler
-  const handleReviewDecision = async (payload: DecisionPayload) => {
-    if (!selectedTarget) return;
-
+  // Review Decision Handler: always carries the current reviewer note.
+  const handleReviewDecision = async (payload: DecisionPayload, forTarget?: TargetProposal | null) => {
+    const target = forTarget ?? selectedTarget;
+    if (!target) return;
     setActionError(null);
-    const mutationId = crypto.randomUUID();
-    let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
+    const key = targetKeyOf(target);
+    let note: string | undefined;
+    if (payload.outcome === null) {
+      // Removing a decision must not silently lose the note text: keep it in the editor.
+      const keep = noteDraftsRef.current[key] ?? decisionsMap[key]?.note ?? "";
+      if (keep) setNoteDrafts((prev) => ({ ...prev, [key]: keep }));
+      note = undefined;
+    } else {
+      note = payload.note !== undefined ? (payload.note.trim() || undefined) : currentNoteFor(key);
+    }
     try {
-      await queueRef.current.enqueue(async (expectedRevision) => {
-        const replacement = payload.replacement && (latestDraft.current.annotations ?? []).find(a => a.annotation.annotation_id === payload.replacement!.annotation_id);
-        envelope ??= {
-          mutation_id: mutationId,
-          expected_revision: expectedRevision,
-          payload: {
-            target: {
-              annotation_id: selectedTarget.annotation_id,
-              version: selectedTarget.version,
-            },
-            outcome: payload.outcome,
-            replacement: replacement ? { annotation_id: replacement.annotation.annotation_id, version: replacement.version } : payload.replacement,
-            note: payload.note,
-          },
-        };
-        const updatedDraft = await api.recordDecision(workspaceId, envelope);
-        latestDraft.current = updatedDraft;
-        setDraft(updatedDraft);
-        return updatedDraft;
-      });
+      await enqueueDecision(target, payload.outcome, payload.replacement?.annotation_id, note);
+      if (payload.outcome !== null) {
+        setNoteDrafts((prev) => {
+          if (!(key in prev)) return prev;
+          if ((prev[key].trim() || undefined) !== note) return prev;
+          const rest = { ...prev };
+          delete rest[key];
+          return rest;
+        });
+      }
     } catch (error) { reportError(error); }
   };
 
-  // Adopt a review target into draft annotations and activate editing immediately
+  // Adopt a review target as an editable draft copy and switch to editing it.
+  // The "changed" decision is recorded only once the copy actually differs.
   const handleAdoptAndEditTarget = async (target: TargetProposal) => {
     setActionError(null);
-    try {
-      // 1. If target already has a changed decision with replacement in draft, jump to it
-      const existingDecision = decisionsMap[refKey(target)];
-      if (existingDecision?.outcome === "changed" && existingDecision.replacement?.annotation_id) {
-        const repl = (latestDraft.current.annotations ?? []).find(
-          (a) => a.annotation.annotation_id === existingDecision.replacement!.annotation_id
-        );
-        if (repl) {
-          setSelectedTargetId(null);
-          setSelectedSourceId(null);
-          setSelectedAnnotationId(repl.annotation.annotation_id);
-          setSelectedEvidenceId(repl.annotation.evidence_refs?.[0]?.evidence_id ?? null);
-          setMobilePane("details");
-          return;
-        }
-      }
+    const key = targetKeyOf(target);
+    const existingDecision = (latestDraft.current.decisions ?? []).find((d) => refKey(d.target) === key);
+    const openCopy = (annotationId: string) => {
+      const repl = (latestDraft.current.annotations ?? []).find((a) => a.annotation.annotation_id === annotationId);
+      setSelectedTargetId(null);
+      setSelectedSourceId(null);
+      setSelectedAnnotationId(annotationId);
+      setSelectedEvidenceId(repl?.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+      setMobilePane("details");
+    };
 
-      // 2. Clone the target proposal into draft annotations
-      const snap = (view.available_inputs ?? []).find(
-        (s) => s.annotation.annotation_id === target.annotation_id && s.version === target.version
+    // 1. Already replaced: jump to the replacement.
+    const replacementId = existingDecision?.outcome === "changed" ? existingDecision.replacement?.annotation_id : undefined;
+    if (replacementId && (latestDraft.current.annotations ?? []).some((a) => a.annotation.annotation_id === replacementId)) {
+      openCopy(replacementId);
+      return;
+    }
+    const existingCopy = (latestDraft.current.annotations ?? []).find((a) => {
+      const src = sourceTargetOf(a);
+      return src !== null && refKey(src) === key;
+    });
+
+    // 2. An explicit decision exists: ask before replacing it.
+    if (existingDecision && existingDecision.outcome !== "changed") {
+      const ok = await askConfirm(
+        "Replace existing decision?",
+        `This proposal is already marked as ${existingDecision.outcome}. Editing a copy resets that decision; it becomes "changed" once the copy differs from the proposal.`,
+        "Reset decision and edit copy",
       );
+      if (!ok) return;
+      try {
+        await enqueueDecision(target, null);
+      } catch (error) { reportError(error); return; }
+    }
 
-      const targetLayer = target.layer_id ?? snap?.annotation.layer_id ?? layerSelection.activeLayerId;
-      if (!targetLayer) {
-        setActionError("No layer found for proposal.");
-        return;
-      }
-      const layerDef = (view.layers ?? []).find((l) => l.layer_id === targetLayer);
-      const targetType = target.type_id ?? snap?.annotation.type_id ?? layerSelection.activeTypeId ?? layerDef?.annotation_types?.[0]?.type_id ?? "default";
-      const typeDef = layerDef?.annotation_types?.find((t) => t.type_id === targetType);
-      const targetTerm = target.term_id ?? snap?.annotation.term_id ?? target.annotation_id;
+    if (existingCopy) {
+      openCopy(existingCopy.annotation.annotation_id);
+      return;
+    }
 
-      const rawAxes = snap?.annotation.axes_values ?? (snap?.annotation as any)?.axes?.values ?? target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
-      const initialAxes = Object.keys(rawAxes).length > 0
-        ? (rawAxes as Record<string, string | null>)
-        : initialAxisValues(typeDef?.axes ?? view.axes_config ?? [], targetTerm);
+    // 3. Clone the target proposal into the draft.
+    const snap = targetSnapshotOf(target);
+    const targetLayer = target.layer_id ?? snap?.annotation.layer_id ?? layerSelection.activeLayerId;
+    if (!targetLayer) {
+      setActionError("No layer found for proposal.");
+      return;
+    }
+    const layerDef = (view.layers ?? []).find((l) => l.layer_id === targetLayer);
+    const targetType = target.type_id ?? snap?.annotation.type_id ?? layerSelection.activeTypeId ?? layerDef?.annotation_types?.[0]?.type_id ?? "default";
+    const typeDef = layerDef?.annotation_types?.find((t) => t.type_id === targetType);
+    const targetTerm = target.term_id ?? snap?.annotation.term_id ?? target.annotation_id;
+    const rawAxes = snap?.annotation.axes_values ?? (snap?.annotation as any)?.axes?.values ?? target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
+    const initialAxes = Object.keys(rawAxes).length > 0
+      ? (rawAxes as Record<string, string | null>)
+      : initialAxisValues(typeDef?.axes ?? view.axes_config ?? [], targetTerm);
 
-      const newAnnId = `ann-${crypto.randomUUID()}`;
-      const evidenceList = snap?.evidence ?? [];
-      const firstEvidence = evidenceList[0];
-      const firstEvidenceId = firstEvidence ? `ev-${Date.now()}` : undefined;
-      const initialSegments = firstEvidence ? firstEvidence.mention.segments : [];
-
-      // Create new annotation in draft
+    const newAnnId = `ann-${crypto.randomUUID()}`;
+    const evidenceList = snap?.evidence ?? [];
+    const firstEvidence = evidenceList[0];
+    const stamp = Date.now();
+    const firstEvidenceId = firstEvidence ? `ev-${stamp}` : undefined;
+    let created = false;
+    try {
       await enqueueMutation({
         command: "create_annotation",
         annotation_id: newAnnId,
@@ -665,63 +876,37 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         type_id: targetType,
         term_id: targetTerm,
         axes_values: initialAxes,
-        segments: initialSegments,
+        segments: firstEvidence ? firstEvidence.mention.segments : [],
         source_annotation_id: target.annotation_id,
         source_version: target.version,
       });
-
-      // Attach any additional mentions
+      created = true;
       for (let i = 1; i < evidenceList.length; i++) {
-        const extraEv = evidenceList[i];
         await enqueueMutation({
           command: "attach_mention",
           annotation_id: newAnnId,
-          evidence_id: `ev-${Date.now()}-${i}`,
-          segments: extraEv.mention.segments,
+          evidence_id: `ev-${stamp}-${i}`,
+          segments: evidenceList[i].mention.segments,
         });
       }
-
-      // Find created annotation version
-      const createdAnn = (latestDraft.current.annotations ?? []).find(
-        (a) => a.annotation.annotation_id === newAnnId
-      );
-      const createdVersion = createdAnn?.version ?? "v1";
-
-      // Record review decision as changed with new annotation as replacement
-      const mutationId = crypto.randomUUID();
-      let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
-      await queueRef.current.enqueue(async (expectedRevision) => {
-        envelope ??= {
-          mutation_id: mutationId,
-          expected_revision: expectedRevision,
-          payload: {
-            target: {
-              annotation_id: target.annotation_id,
-              version: target.version,
-            },
-            outcome: "changed",
-            replacement: {
-              annotation_id: newAnnId,
-              version: createdVersion,
-            },
-            note: existingDecision?.note,
-          },
-        };
-        const updatedDraft = await api.recordDecision(workspaceId, envelope);
-        latestDraft.current = updatedDraft;
-        setDraft(updatedDraft);
-        return updatedDraft;
-      });
-
-      // Switch inspector to this new annotation
-      setSelectedTargetId(null);
-      setSelectedSourceId(null);
-      setSelectedAnnotationId(newAnnId);
-      setSelectedEvidenceId(firstEvidenceId ?? null);
-      setMobilePane("details");
     } catch (error) {
-      reportError(error);
+      if (error instanceof DiscardedChangesError) return;
+      let rolledBack = false;
+      if (created && queueRef.current.getState() !== "conflict") {
+        try {
+          await enqueueMutation({ command: "delete_draft_annotation", annotation_id: newAnnId });
+          rolledBack = true;
+        } catch { /* reported below */ }
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      setActionError(
+        created
+          ? `Adopting the proposal failed (${message}). ${rolledBack ? "The incomplete copy was removed." : "An incomplete copy may remain in the draft - please check or delete it."}`
+          : `Adopting the proposal failed: ${message}`,
+      );
+      return;
     }
+    openCopy(newAnnId);
   };
 
   // Layer state handlers
@@ -760,7 +945,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const isSingleLayer = (view.layers ?? []).length <= 1;
   const editableLayerIds = view.scope?.editable_layer_ids ?? (view.layers ? view.layers.map(l => l.layer_id) : []);
 
-  // Submit and finalize workspace
+  const openReviewTargets = reviewTargets.filter(
+    (t) => !(draft.decisions ?? []).some((d) => refKey(d.target) === refKey(t)),
+  );
+
+  // Step 1: validate, save pending edits and open the confirmation dialog.
   const handleSubmitWorkspace = async () => {
     setSubmitError(null);
 
@@ -778,6 +967,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       await queueRef.current.flush();
     } catch (error) { reportError(error); return; }
 
+    setTextCheckedConfirmed(false);
+    setSubmitDialogOpen(true);
+  };
+
+  // Step 2: submit after the explicit "entire text checked" confirmation.
+  const confirmSubmit = async () => {
+    if (!textCheckedConfirmed) return;
     if (view.key.mode === "review") {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
       if (missingTargets.length > 0) {
@@ -787,7 +983,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         return;
       }
     }
-
+    setSubmitDialogOpen(false);
     try {
       const mutationId = crypto.randomUUID();
       let envelope: Parameters<typeof api.submitWorkspace>[1] | undefined;
@@ -797,6 +993,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           expected_revision: expectedRevision,
           payload: {
             command: "submit_workspace",
+            // Explicitly confirmed by the user in the submit dialog.
             document_checked: true,
             checked_layer_ids: isSingleLayer ? editableLayerIds : latestDraft.current.checked_layer_ids ?? [],
           },
@@ -804,7 +1001,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         return api.submitWorkspace(workspaceId, envelope);
       });
       setCompletedSubmission(submission);
+      try {
+        await onSubmitted?.();
+      } catch {
+        // list refresh is best effort
+      }
     } catch (err: unknown) {
+      if (err instanceof DiscardedChangesError) return;
       const msg = err instanceof Error ? err.message : String(err);
       setSubmitError(`Submission failed: ${msg}`);
     }
@@ -861,49 +1064,53 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const prevDoc = currentIndex > 0 && documentList ? documentList[currentIndex - 1] : null;
   const nextDoc = currentIndex >= 0 && documentList && currentIndex < documentList.length - 1 ? documentList[currentIndex + 1] : null;
 
+  const modalOpen = !!(confirmRequest || completedSubmission || historySubmission || submitDialogOpen || showShortcutHelp);
+  const navigateTo = (docId: string) => {
+    if (!onNavigateCase) return;
+    void leaveCase(() => onNavigateCase(docId));
+  };
+
   useEffect(() => {
     const handleCaseNavShortcuts = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (e.repeat || isTypingTarget(e.target) || modalOpen) return;
       if (e.altKey && e.key === "ArrowRight") {
         if (nextDoc && onNavigateCase && queueState !== "saving") {
           e.preventDefault();
-          void (async () => {
-            try {
-              await queueRef.current.flush();
-              await onNavigateCase(nextDoc.document_id);
-            } catch (err) { reportError(err); }
-          })();
+          navigateTo(nextDoc.document_id);
         }
       } else if (e.altKey && e.key === "ArrowLeft") {
         if (prevDoc && onNavigateCase && queueState !== "saving") {
           e.preventDefault();
-          void (async () => {
-            try {
-              await queueRef.current.flush();
-              await onNavigateCase(prevDoc.document_id);
-            } catch (err) { reportError(err); }
-          })();
+          navigateTo(prevDoc.document_id);
         }
       }
     };
     window.addEventListener("keydown", handleCaseNavShortcuts);
     return () => window.removeEventListener("keydown", handleCaseNavShortcuts);
-  }, [nextDoc, prevDoc, onNavigateCase, queueState]);
+  });
 
   useEffect(() => {
     const handleReviewShortcuts = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (isTypingTarget(e.target)) return;
       if (e.altKey || e.ctrlKey || e.metaKey) return;
 
       if (e.key === "Escape") {
+        if (showShortcutHelp) { e.preventDefault(); setShowShortcutHelp(false); return; }
+        if (modalOpen) return;
+        if (isAttachingMention) { e.preventDefault(); setIsAttachingMention(false); return; }
         if (selectedAnnotationId || selectedTargetId || selectedSourceId) {
           e.preventDefault();
           handleDeselectAll();
         }
         return;
       }
+      if (e.key === "?") {
+        if (confirmRequest || completedSubmission || historySubmission || submitDialogOpen) return;
+        e.preventDefault();
+        setShowShortcutHelp((v) => !v);
+        return;
+      }
+      if (e.repeat || modalOpen) return;
 
       if (view.key.mode === "review" && reviewTargets.length > 0) {
         if (e.key === "j" || e.key === "J") {
@@ -950,7 +1157,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
     window.addEventListener("keydown", handleReviewShortcuts);
     return () => window.removeEventListener("keydown", handleReviewShortcuts);
-  }, [view.key.mode, reviewTargets, selectedTarget, selectedTargetId, selectedAnnotationId, selectedSourceId, decisionsMap]);
+  });
+
+  const textMentions: MentionDisplay[] = useMemo(() => [
+    ...mentionsDisplay,
+    ...targetMentions,
+    ...sourceMentions,
+    ...(pendingAnnotation && !pendingAnnotation.isSpanless && pendingAnnotation.evidenceId
+      ? [{ evidence_id: pendingAnnotation.evidenceId, segments: pendingAnnotation.segments }]
+      : []),
+  ], [mentionsDisplay, targetMentions, sourceMentions, pendingAnnotation]);
+
+  const cancelAttach = useMemo(() => () => setIsAttachingMention(false), []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -960,14 +1178,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={async () => {
-              try {
-                await queueRef.current.flush();
-                onClose();
-              } catch (error) {
-                reportError(error);
-              }
-            }}
+            onClick={() => { void leaveCase(onClose); }}
             title="Back to dashboard"
           >
             ← Dashboard
@@ -976,14 +1187,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <CaseNavigation
               documents={documentList}
               currentDocumentId={view.document.document_id}
-              onNavigate={async (docId) => {
-                try {
-                  await queueRef.current.flush();
-                  await onNavigateCase(docId);
-                } catch (err) {
-                  reportError(err);
-                }
-              }}
+              onNavigate={(docId) => leaveCase(() => onNavigateCase(docId))}
               disabled={queueState === "saving"}
             />
           ) : (
@@ -1004,19 +1208,38 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               ? "Assisted Mode"
               : "Independent Mode"}
           </span>
+          <span
+            className="badge"
+            data-testid="annotator-identity"
+            title="Annotations and decisions are saved under this annotator ID"
+            style={{ background: "var(--bg-secondary)", color: "var(--text-main)", fontSize: "0.78rem" }}
+          >
+            Annotator: <strong>{view.key.annotator_id}</strong>
+          </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span
+            role="status"
             className={`status-badge ${
-              queueState === "saved"
-                ? "status-saved"
-                : queueState === "conflict" || queueState === "error"
+              statusIsError
                 ? "status-error"
+                : queueState === "saved"
+                ? "status-saved"
                 : "status-saving"
             }`}
           >
             ● {statusText} (Rev {draft.revision})
           </span>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowShortcutHelp(true)}
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            ⌨ ?
+          </button>
 
           {queueState === "error" && (
             <button
@@ -1043,10 +1266,32 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             title="Finish and submit case"
             style={{ fontWeight: 600, padding: "5px 12px" }}
           >
-            ✓ Submit Case
+            ✓ Finish & Submit Case
           </button>
         </div>
       </header>
+
+      {queueState === "conflict" && (
+        <div
+          role="alert"
+          aria-label="Revision conflict"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", background: "var(--warning-light)", borderBottom: "1px solid var(--border-color)" }}
+        >
+          <span>
+            <strong>Case was changed elsewhere.</strong> Your latest edit was not saved. Reload the case to continue;
+            unsaved edits in this window ({queueRef.current.pendingCount()}) will be discarded.
+          </span>
+          {onReload ? (
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => { void reloadCase(); }} disabled={isReloading}>
+              {isReloading ? "Reloading..." : "Reload case"}
+            </button>
+          ) : (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => { void leaveCase(onClose); }}>
+              Back to dashboard
+            </button>
+          )}
+        </div>
+      )}
 
       {(actionError || submitError) && (
         <div role="alert" style={{ color: "var(--danger)", padding: 12, background: "var(--danger-light)", borderBottom: "1px solid var(--border-color)" }}>
@@ -1290,14 +1535,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 )}
               </div>
             )}
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              style={{ width: "100%", padding: "8px 0" }}
-              onClick={handleSubmitWorkspace}
-            >
-              ✓ Finish & Submit Case
-            </button>
             {submitError && (
               <div style={{ fontSize: "0.75rem", color: "var(--danger)", marginTop: 6 }}>
                 {submitError}
@@ -1309,14 +1546,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         {/* Center: Text View */}
         <TextPane
           text={view.document.text}
-          mentions={[
-            ...mentionsDisplay,
-            ...targetMentions,
-            ...sourceMentions,
-            ...(pendingAnnotation && !pendingAnnotation.isSpanless && pendingAnnotation.evidenceId
-              ? [{ evidence_id: pendingAnnotation.evidenceId, segments: pendingAnnotation.segments }]
-              : []),
-          ]}
+          mentions={textMentions}
+          isAttachingMention={isAttachingMention}
+          onCancelAttach={cancelAttach}
           selectedEvidenceId={selectedEvidenceId}
           selectionIntent={selectionIntent}
           onSelection={handleSelection}
@@ -1368,7 +1600,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               documentText={view.document.text}
               currentDecision={decisionsMap[refKey(selectedTarget)] ?? null}
               draftAnnotations={draft.annotations ?? []}
-              onDecide={handleReviewDecision}
+              onDecide={(payload) => { void handleReviewDecision(payload, selectedTarget); }}
+              note={noteDrafts[refKey(selectedTarget)] ?? decisionsMap[refKey(selectedTarget)]?.note ?? ""}
+              onNoteChange={(value) => {
+                const k = refKey(selectedTarget);
+                noteDraftsRef.current = { ...noteDraftsRef.current, [k]: value };
+                setNoteDrafts((prev) => ({ ...prev, [k]: value }));
+              }}
               onAdoptAndEdit={() => { void handleAdoptAndEditTarget(selectedTarget); }}
               onEditReplacement={(repId) => {
                 setSelectedTargetId(null);
@@ -1387,6 +1625,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               workspaceKey={view.key}
               searchManager={searchManager}
               selectedEvidenceId={selectedEvidenceId}
+              documentText={view.document.text}
+              isAttachingMention={isAttachingMention}
               layerId={selectedAnnotation?.annotation.layer_id}
               termLabel={selectedAnnotation ? termLabel(selectedAnnotation.annotation.layer_id, selectedAnnotation.annotation.term_id) : null}
               axesConfig={currentAxesConfig}
@@ -1472,9 +1712,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={async () => {
+                onClick={() => {
                   setCompletedSubmission(null);
-                  await onNavigateCase(nextDoc.document_id);
+                  void leaveCase(() => onNavigateCase(nextDoc.document_id));
                 }}
               >
                 Review next case (Case {nextDoc.position}) →
@@ -1497,11 +1737,90 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={onClose}
+              onClick={() => { setCompletedSubmission(null); void leaveCase(onClose); }}
             >
               Back to dashboard
             </button>
           </div>
+        </div>
+      </div>}
+
+      {submitDialogOpen && <div className="modal-overlay">
+        <div className="modal-content" role="dialog" aria-modal="true" aria-label="Submit case">
+          <h2>Submit case {view.document.document_id}?</h2>
+          <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
+            <li>{(draft.annotations ?? []).length} annotation(s) in this case</li>
+            {view.key.mode === "review" && (
+              <li>
+                {reviewTargets.length - openReviewTargets.length} of {reviewTargets.length} review proposal(s) decided
+                {openReviewTargets.length > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargets.length} still open</strong>}
+              </li>
+            )}
+            {!isSingleLayer && (
+              <li>
+                Verified layers: {(draft.checked_layer_ids ?? []).filter((id) => editableLayerIds.includes(id)).length} of {editableLayerIds.length}
+              </li>
+            )}
+          </ul>
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
+            <input
+              type="checkbox"
+              checked={textCheckedConfirmed}
+              onChange={(e) => setTextCheckedConfirmed(e.target.checked)}
+            />
+            <span>Entire text checked for further findings</span>
+          </label>
+          {view.key.mode === "review" && openReviewTargets.length > 0 && (
+            <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
+              Decide every review proposal before submitting.
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!textCheckedConfirmed || (view.key.mode === "review" && openReviewTargets.length > 0)}
+              onClick={() => { void confirmSubmit(); }}
+            >
+              Submit case
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setSubmitDialogOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>}
+
+      {confirmRequest && <div className="modal-overlay">
+        <div className="modal-content" role="dialog" aria-modal="true" aria-label={confirmRequest.title}>
+          <h2>{confirmRequest.title}</h2>
+          <p>{confirmRequest.message}</p>
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button type="button" className="btn btn-primary" onClick={() => closeConfirm(true)}>
+              {confirmRequest.confirmLabel}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => closeConfirm(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>}
+
+      {showShortcutHelp && <div className="modal-overlay" onClick={() => setShowShortcutHelp(false)}>
+        <div className="modal-content" role="dialog" aria-label="Keyboard shortcuts" onClick={(e) => e.stopPropagation()}>
+          <h2>Keyboard shortcuts</h2>
+          <table style={{ fontSize: "0.9rem", borderCollapse: "collapse" }}>
+            <tbody>
+              {SHORTCUTS.filter((sc) => !sc.reviewOnly || view.key.mode === "review").map((sc) => (
+                <tr key={sc.keys}>
+                  <td style={{ padding: "3px 12px 3px 0" }}><kbd>{sc.keys}</kbd></td>
+                  <td>{sc.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Shortcuts are disabled while typing in a field or when a dialog is open.</p>
+          <button type="button" className="btn btn-secondary" onClick={() => setShowShortcutHelp(false)}>Close</button>
         </div>
       </div>}
     </div>

@@ -181,7 +181,7 @@ describe("SpanEditor Unicode adapter", () => {
     handle.destroy();
   });
 
-  it("rejects invalid codepoint bounds during mention setup", () => {
+  it("skips and reports invalid codepoint bounds instead of throwing (no blank screen)", () => {
     const text = "short";
     const mentions: MentionDisplay[] = [
       {
@@ -189,10 +189,16 @@ describe("SpanEditor Unicode adapter", () => {
         label: "Err",
         segments: [{ start: 0, end: 20 }], // out of bounds
       },
+      { evidence_id: "ev-ok", segments: [{ start: 0, end: 5 }] },
     ];
+    const onInvalid = vi.fn();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     expect(() =>
-      mountSpanEditor(container, text, mentions, vi.fn(), vi.fn()),
-    ).toThrow(/out of bounds/i);
+      mountSpanEditor(container, text, mentions, vi.fn(), vi.fn(), onInvalid),
+    ).not.toThrow();
+    expect(onInvalid).toHaveBeenCalledWith(["ev-err"]);
+    expect(container.querySelector('[data-mentions*="ev-ok"]')).not.toBeNull();
+    warn.mockRestore();
   });
 });

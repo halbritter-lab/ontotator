@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { AnnotationSnapshot } from "../api/client";
 import type { components } from "../api/generated";
 import { TermName } from "./TermName";
@@ -41,6 +41,11 @@ export interface ReviewActionsProps {
   onAdoptAndEdit?: () => void;
   onEditReplacement?: (annotationId: string) => void;
   onDeselect?: () => void;
+  /** Controlled reviewer note (kept by the parent so it survives re-selection and decision resets). */
+  note?: string;
+  onNoteChange?: (note: string) => void;
+  /** Delay for auto-saving an edited note onto an existing decision. */
+  noteSaveDelayMs?: number;
 }
 
 export const ReviewActions: React.FC<ReviewActionsProps> = ({
@@ -55,15 +60,55 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   onDeselect,
   evidence = [],
   documentText = "",
+  note: controlledNote,
+  onNoteChange,
+  noteSaveDelayMs = 800,
 }) => {
   const [selectedReplacementId, setSelectedReplacementId] = useState<string>(currentDecision?.replacement?.annotation_id ?? "");
-  const [note, setNote] = useState<string>(currentDecision?.note ?? "");
+  const [localNote, setLocalNote] = useState<string>(currentDecision?.note ?? "");
+  const note = controlledNote ?? localNote;
+  const setNote = (value: string) => {
+    if (onNoteChange) onNoteChange(value);
+    else setLocalNote(value);
+  };
   const [showReplacementSelect, setShowReplacementSelect] = useState<boolean>(
     currentDecision?.outcome === "changed"
   );
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef({ note, currentDecision, onDecide });
+  latest.current = { note, currentDecision, onDecide };
+
+  /** Save the note onto the existing decision (no-op if there is no decision or nothing changed). */
+  const commitNote = () => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = null;
+    const { note: current, currentDecision: decision, onDecide: decide } = latest.current;
+    if (!decision) return;
+    const normalized = current.trim() || undefined;
+    if ((decision.note ?? undefined) === normalized) return;
+    decide({
+      outcome: decision.outcome as ReviewDecisionOutcome,
+      replacement: decision.replacement ?? undefined,
+      note: normalized,
+    });
+  };
+  // Flush a pending note save when the panel unmounts (e.g. selecting another target).
+  useEffect(() => () => { if (noteTimer.current) commitNote(); }, []);
+
+  const handleNoteChange = (value: string) => {
+    setNote(value);
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = null;
+    if (currentDecision && noteSaveDelayMs > 0) {
+      noteTimer.current = setTimeout(commitNote, noteSaveDelayMs);
+    }
+  };
 
   const handleOutcomeClick = (outcome: ReviewDecisionOutcome) => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = null;
     if (currentDecision?.outcome === outcome) {
+      // Toggling off removes the decision; the note text stays in the editor.
       setShowReplacementSelect(false);
       onDecide({
         outcome: null,
@@ -94,6 +139,8 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   };
 
   const handleClearDecision = () => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = null;
     setShowReplacementSelect(false);
     onDecide({
       outcome: null,
@@ -463,11 +510,24 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <input
           type="text"
           className="form-control"
+          aria-label="Reviewer note"
           placeholder="Optional reviewer note / justification..."
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={(e) => handleNoteChange(e.target.value)}
+          onBlur={commitNote}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitNote(); } }}
           style={{ fontSize: "0.8rem" }}
         />
+        {!currentDecision && note.trim() && (
+          <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 4 }}>
+            The note is saved together with the next decision.
+          </div>
+        )}
+        {currentDecision && (currentDecision.note ?? "") !== note.trim() && (
+          <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 4 }}>
+            Unsaved note – saved automatically when you leave the field.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -71,25 +71,48 @@ export class ValidationError extends ApiError {
 }
 
 let activeSessionToken: string | null = null;
+let launchPackageId: string | null = null;
+const TOKEN_KEY = "hpo-editor-token";
 
 /**
- * Read session token from URL hash, strip fragment from browser address bar,
- * and cache token in memory.
+ * Parse a launch fragment such as `#token=T&package_id=P` (as emitted by the CLI).
+ */
+export function parseLaunchHash(hash: string): { token: string | null; packageId: string | null } {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!raw) return { token: null, packageId: null };
+  const params = new URLSearchParams(raw);
+  return {
+    token: params.get("token") || null,
+    packageId: params.get("package_id") || null,
+  };
+}
+
+/**
+ * Read session token (and optional package_id) from the URL hash, strip the
+ * fragment from the address bar, and cache the token in memory and in
+ * sessionStorage (tab-scoped, survives reloads, never persisted across sessions).
  */
 export function initSessionToken(): string | null {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const hash = window.location.hash;
-  if (hash.startsWith("#token=")) {
-    const token = hash.slice("#token=".length);
-    // Remove the hash fragment without reloading page
+  try {
+    // Older builds persisted the token in localStorage; never keep it there.
+    window.localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // storage unavailable
+  }
+
+  const { token, packageId } = parseLaunchHash(window.location.hash);
+  if (token || packageId) {
     history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+  if (packageId) launchPackageId = packageId;
+  if (token) {
     activeSessionToken = token;
     try {
-      window.sessionStorage.setItem("hpo-editor-token", token);
-      window.localStorage.setItem("hpo-editor-token", token);
+      window.sessionStorage.setItem(TOKEN_KEY, token);
     } catch {
       // storage unavailable
     }
@@ -97,13 +120,18 @@ export function initSessionToken(): string | null {
   }
 
   try {
-    activeSessionToken ??=
-      window.sessionStorage.getItem("hpo-editor-token") ??
-      window.localStorage.getItem("hpo-editor-token");
+    activeSessionToken ??= window.sessionStorage.getItem(TOKEN_KEY);
   } catch {
     // storage unavailable
   }
   return activeSessionToken;
+}
+
+/** Package id passed via the launch URL (`#...&package_id=P`), consumed once. */
+export function takeLaunchPackageId(): string | null {
+  const id = launchPackageId;
+  launchPackageId = null;
+  return id;
 }
 
 export function getActiveSessionToken(): string | null {
@@ -112,14 +140,34 @@ export function getActiveSessionToken(): string | null {
 
 export function setActiveSessionToken(token: string | null): void {
   activeSessionToken = token;
-  if (token && typeof window !== "undefined") {
+  if (!token || typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    // ignore
+  }
+}
+
+/** Extract a filename from a Content-Disposition header (supports RFC 5987 filename*). */
+export function parseContentDispositionFilename(header: string | null | undefined): string | null {
+  if (!header) return null;
+  const star = /filename\*\s*=\s*([^;]+)/i.exec(header);
+  if (star) {
+    let value = star[1].trim().replace(/^"(.*)"$/, "$1");
+    const parts = /^([^']*)'[^']*'(.*)$/.exec(value);
+    if (parts) value = parts[2];
     try {
-      window.sessionStorage.setItem("hpo-editor-token", token);
-      window.localStorage.setItem("hpo-editor-token", token);
+      return decodeURIComponent(value) || null;
     } catch {
-      // ignore
+      return value || null;
     }
   }
+  const plain = /filename\s*=\s*("((?:\\.|[^"\\])*)"|[^;]+)/i.exec(header);
+  if (plain) {
+    const value = plain[2] !== undefined ? plain[2].replace(/\\(.)/g, "$1") : plain[1].trim();
+    return value || null;
+  }
+  return null;
 }
 
 export interface ApiClientOptions {
@@ -314,10 +362,11 @@ export class ApiClient {
     );
   }
 
-  async searchOntology(req: SearchRequest): Promise<SearchResult> {
+  async searchOntology(req: SearchRequest, signal?: AbortSignal): Promise<SearchResult> {
     return this.request<SearchResult>("/api/v1/search", {
       method: "POST",
       body: JSON.stringify(req),
+      ...(signal ? { signal } : {}),
     });
   }
 
@@ -332,20 +381,54 @@ export class ApiClient {
     return `${this.baseUrl}/api/v1/workspaces/${encodeURIComponent(workspaceId)}/export`;
   }
 
-  async downloadExport(workspaceId: string): Promise<void> {
+  getPackageExportUrl(packageId: string, params: { annotator_id: string; mode: string }): string {
+    const qs = new URLSearchParams({ annotator_id: params.annotator_id, mode: params.mode });
+    return `${this.baseUrl}/api/v1/packages/${encodeURIComponent(packageId)}/export?${qs.toString()}`;
+  }
+
+  private async downloadFile(url: string, fallbackName: string): Promise<string> {
     const token = this.token ?? activeSessionToken;
-    const response = await fetch(this.getExportUrl(workspaceId), {
+    const response = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (!response.ok) throw new ApiError(response.status, `Export fehlgeschlagen (${response.status})`);
-    const url = URL.createObjectURL(await response.blob());
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const body = await response.json();
+        detail = body?.details || body?.detail || "";
+      } catch {
+        // not JSON
+      }
+      throw new ApiError(
+        response.status,
+        `Export failed (${response.status})${detail ? `: ${detail}` : ""}`,
+      );
+    }
+    const filename =
+      parseContentDispositionFilename(response.headers?.get?.("Content-Disposition")) ?? fallbackName;
+    const objectUrl = URL.createObjectURL(await response.blob());
     const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "hpo-export.zip";
+    anchor.href = objectUrl;
+    anchor.download = filename;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    return filename;
+  }
+
+  async downloadExport(workspaceId: string): Promise<string> {
+    return this.downloadFile(this.getExportUrl(workspaceId), "ontocurator-export.zip");
+  }
+
+  async downloadPackageExport(
+    packageId: string,
+    params: { annotator_id: string; mode: string },
+  ): Promise<string> {
+    return this.downloadFile(
+      this.getPackageExportUrl(packageId, params),
+      `${packageId}-export.zip`,
+    );
   }
 
   async listOntologies(): Promise<OntologyInfo[]> {

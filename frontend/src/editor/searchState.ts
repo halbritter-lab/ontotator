@@ -131,6 +131,9 @@ export class SearchManager {
       route,
     });
 
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    this.activeAbortController = controller;
+
     try {
       const searchReq: SearchRequest = {
         workspace_key: workspaceKey,
@@ -142,7 +145,10 @@ export class SearchManager {
       };
 
 
-      const result = await this.client.searchOntology(searchReq);
+      const result = controller
+        ? await this.client.searchOntology(searchReq, controller.signal)
+        : await this.client.searchOntology(searchReq);
+      if (this.activeAbortController === controller) this.activeAbortController = null;
 
       // Only apply if this request is still the latest one AND layer hasn't changed
       if (
@@ -161,6 +167,10 @@ export class SearchManager {
       }
       return this.state.candidates;
     } catch (err: unknown) {
+      if (this.activeAbortController === controller) this.activeAbortController = null;
+      if (controller?.signal.aborted || (err as Error)?.name === "AbortError") {
+        return [];
+      }
       if (
         this.state.requestId === currentRequestId &&
         this.currentLayerId === targetLayerId

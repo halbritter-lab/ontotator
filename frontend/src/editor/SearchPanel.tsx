@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { SearchCandidate } from "../api/client";
 import { SearchManager, type SearchState, type WorkspaceKey } from "./searchState";
 
@@ -9,7 +9,11 @@ export interface SearchPanelProps {
   layerId?: string;
   currentTermId?: string | null;
   onSelectCandidate: (candidate: SearchCandidate, searchId?: string) => void;
+  /** Delay before a typed query is sent; avoids one request (and one logged search event) per keystroke. */
+  debounceMs?: number;
 }
+
+export const SEARCH_DEBOUNCE_MS = 250;
 
 export const SearchPanel: React.FC<SearchPanelProps> = ({
   searchManager,
@@ -18,7 +22,25 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   layerId,
   currentTermId,
   onSelectCandidate,
+  debounceMs = SEARCH_DEBOUNCE_MS,
 }) => {
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelDebounce = () => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = null;
+  };
+  useEffect(() => cancelDebounce, []);
+  const runSearch = (val: string, effectiveRoute: "lexical" | "exact" | "id" | "browse", immediate = false) => {
+    cancelDebounce();
+    if (immediate || debounceMs <= 0 || !val.trim()) {
+      void searchManager.search(val, annotationId, workspaceKey, effectiveRoute, 10, layerId);
+      return;
+    }
+    debounceTimer.current = setTimeout(() => {
+      debounceTimer.current = null;
+      void searchManager.search(val, annotationId, workspaceKey, effectiveRoute, 10, layerId);
+    }, debounceMs);
+  };
   const [state, setState] = useState<SearchState>(searchManager.getState());
   const [route, setRoute] = useState<"lexical" | "exact" | "id" | "browse">("lexical");
   const [userSelectedRoute, setUserSelectedRoute] = useState<boolean>(false);
@@ -31,6 +53,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   }, [searchManager]);
 
   useEffect(() => {
+    cancelDebounce();
     searchManager.clear();
     setQueryInput("");
     setUserSelectedRoute(false);
@@ -54,10 +77,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         setRoute("lexical");
       }
     }
-    searchManager.search(val, annotationId, workspaceKey, effectiveRoute, 10, layerId);
+    runSearch(val, effectiveRoute);
   };
 
   const handleClear = () => {
+    cancelDebounce();
     setQueryInput("");
     setUserSelectedRoute(false);
     setRoute("lexical");
@@ -68,7 +92,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     setUserSelectedRoute(true);
     setRoute(newRoute);
     if (queryInput) {
-      searchManager.search(queryInput, annotationId, workspaceKey, newRoute, 10, layerId);
+      runSearch(queryInput, newRoute, true);
     }
   };
 
@@ -88,6 +112,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             placeholder="Search term or identifier (e.g. 1250, HP:0001250, MONDO:0001250)"
             value={queryInput}
             onChange={(e) => handleQueryChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                runSearch(queryInput, route, true);
+              }
+            }}
             autoComplete="off"
           />
           {queryInput && (
