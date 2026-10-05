@@ -4,6 +4,30 @@
  */
 
 export interface paths {
+    "/api/v1/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preferences
+         * @description Workspace-level preferences (last identity, working mode per package).
+         */
+        get: operations["get_preferences_api_v1_preferences_get"];
+        /**
+         * Update Preferences
+         * @description Update preferences; omitted fields are kept, modes merge per package.
+         */
+        put: operations["update_preferences_api_v1_preferences_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/packages": {
         parameters: {
             query?: never;
@@ -672,6 +696,30 @@ export interface components {
             origin_manifest_hash?: string | null;
         };
         /**
+         * Preferences
+         * @description Workspace preferences returned by ``GET /api/v1/preferences``.
+         */
+        Preferences: {
+            /** Last Annotator Id */
+            last_annotator_id?: string | null;
+            /** Mode By Package */
+            mode_by_package?: {
+                [key: string]: "independent" | "review" | "assisted";
+            };
+        };
+        /**
+         * PreferencesUpdate
+         * @description Partial update: omitted fields are kept, modes are merged per package.
+         */
+        PreferencesUpdate: {
+            /** Last Annotator Id */
+            last_annotator_id?: string | null;
+            /** Mode By Package */
+            mode_by_package?: {
+                [key: string]: "independent" | "review" | "assisted";
+            } | null;
+        };
+        /**
          * Provenance
          * @description Origin and extraction details for an annotation or statement.
          */
@@ -1040,6 +1088,59 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_preferences_api_v1_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preferences"];
+                };
+            };
+        };
+    };
+    update_preferences_api_v1_preferences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferencesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preferences"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_packages_api_v1_packages_get: {
         parameters: {
             query?: never;

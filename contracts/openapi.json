@@ -5,6 +5,62 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v1/preferences": {
+      "get": {
+        "summary": "Get Preferences",
+        "description": "Workspace-level preferences (last identity, working mode per package).",
+        "operationId": "get_preferences_api_v1_preferences_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Preferences",
+        "description": "Update preferences; omitted fields are kept, modes merge per package.",
+        "operationId": "update_preferences_api_v1_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/packages": {
       "get": {
         "summary": "List Packages",
@@ -1574,6 +1630,74 @@
         ],
         "title": "PackageManifest",
         "description": "Manifest describing work package metadata and checksums."
+      },
+      "Preferences": {
+        "properties": {
+          "last_annotator_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Annotator Id"
+          },
+          "mode_by_package": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "independent",
+                "review",
+                "assisted"
+              ]
+            },
+            "type": "object",
+            "title": "Mode By Package"
+          }
+        },
+        "type": "object",
+        "title": "Preferences",
+        "description": "Workspace preferences returned by ``GET /api/v1/preferences``."
+      },
+      "PreferencesUpdate": {
+        "properties": {
+          "last_annotator_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Annotator Id"
+          },
+          "mode_by_package": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "independent",
+                    "review",
+                    "assisted"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode By Package"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PreferencesUpdate",
+        "description": "Partial update: omitted fields are kept, modes are merged per package."
       },
       "Provenance": {
         "properties": {

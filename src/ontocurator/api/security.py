@@ -14,6 +14,20 @@ ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 # explicitly by setting this flag (see tests/conftest.py).
 ALLOW_TEST_CLIENT_HOST = False
 
+# Error codes that tell the browser its session link is no longer valid (e.g.
+# after a restart, which generates a new token) so it can show a friendly
+# "please reopen Ontocurator" page instead of raw errors.
+SESSION_TOKEN_MISSING = "SESSION_TOKEN_MISSING"
+SESSION_TOKEN_INVALID = "SESSION_TOKEN_INVALID"
+
+
+class SecurityError(HTTPException):
+    """403 raised by :func:`verify_security`, optionally with an error code."""
+
+    def __init__(self, detail: str, code: str | None = None) -> None:
+        super().__init__(status_code=403, detail=detail)
+        self.code = code
+
 
 def _token_bytes(value: str) -> bytes:
     """Header values arrive latin-1 decoded; recover their raw bytes."""
@@ -79,15 +93,11 @@ def verify_security(request: Request, expected_token: str, port: int = 8000) -> 
     # 3. Session token authentication
     auth_header = request.headers.get("authorization", "")
     if not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=403,
-            detail="Forbidden: Missing Bearer authorization token",
+        raise SecurityError(
+            "Forbidden: Missing Bearer authorization token", SESSION_TOKEN_MISSING
         )
 
     token = auth_header[len("Bearer ") :].strip()
     # Compare bytes: compare_digest raises TypeError for non-ASCII str input.
     if not secrets.compare_digest(_token_bytes(token), expected_token.encode("utf-8")):
-        raise HTTPException(
-            status_code=403,
-            detail="Forbidden: Invalid session token",
-        )
+        raise SecurityError("Forbidden: Invalid session token", SESSION_TOKEN_INVALID)

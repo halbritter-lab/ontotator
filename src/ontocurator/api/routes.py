@@ -17,6 +17,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ontocurator.application.editing import EditorService
 from ontocurator.application.exports import ExportService
+from ontocurator.application.preferences import (
+    PREFERENCES_FILENAME,
+    Preferences,
+    PreferencesStore,
+    PreferencesUpdate,
+)
 from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.uploads import (
@@ -187,6 +193,28 @@ ExportSvcDep = Annotated[ExportService, Depends(get_export_service)]
 
 
 # --- Routes ------------------------------------------------------------------- #
+
+
+def _preferences_store(request: Request) -> PreferencesStore:
+    store = getattr(request.app.state, "preferences", None)
+    if store is None:
+        config = getattr(request.app.state, "config", None)
+        base = config.workspace_dir if config else Path("./workspace")
+        store = PreferencesStore(base / PREFERENCES_FILENAME)
+        request.app.state.preferences = store
+    return cast(PreferencesStore, store)
+
+
+@router.get("/preferences")
+def get_preferences(request: Request) -> Preferences:
+    """Workspace-level preferences (last identity, working mode per package)."""
+    return _preferences_store(request).load()
+
+
+@router.put("/preferences")
+def update_preferences(change: PreferencesUpdate, request: Request) -> Preferences:
+    """Update preferences; omitted fields are kept, modes merge per package."""
+    return _preferences_store(request).update(change)
 
 
 @router.post("/packages")

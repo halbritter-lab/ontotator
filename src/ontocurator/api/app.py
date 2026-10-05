@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from ontocurator.api.routes import router
 from ontocurator.api.security import verify_security
+from ontocurator.application.preferences import PREFERENCES_FILENAME, PreferencesStore
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import (
     DomainError,
@@ -71,6 +72,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         app.state.config = config
         app.state.repo = repo
         app.state.ontology_registry = registry
+        app.state.preferences = PreferencesStore(
+            config.workspace_dir / PREFERENCES_FILENAME
+        )
 
         # Security middleware for API requests
         @app.middleware("http")
@@ -79,10 +83,11 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 try:
                     verify_security(request, config.session_token, config.port)
                 except HTTPException as exc:
-                    return JSONResponse(
-                        status_code=exc.status_code,
-                        content={"detail": exc.detail},
-                    )
+                    content: dict[str, object] = {"detail": exc.detail}
+                    code = getattr(exc, "code", None)
+                    if code:
+                        content["code"] = code
+                    return JSONResponse(status_code=exc.status_code, content=content)
             return await call_next(request)
 
     # Service-level command parsing must report client validation failures as 422.
