@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import json
 import os
 import sys
 import tempfile
@@ -11,6 +12,7 @@ import uvicorn
 from fastapi import Query
 from fastapi.responses import Response
 
+from ontocurator import file_manager
 from ontocurator.api.app import create_app
 from ontocurator.application.provisioning import (
     ProvisioningLedger,
@@ -18,6 +20,7 @@ from ontocurator.application.provisioning import (
     provision_packages,
 )
 from ontocurator.config import AppConfig
+from ontocurator.config_store import legacy_config_path
 from ontocurator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
 from ontocurator.domain.documents import (
     Document,
@@ -191,11 +194,30 @@ def scenario_package(scenario: str) -> bytes:
     return result.getvalue()
 
 
+def write_legacy_config(path: Path) -> None:
+    """Settings of a fictitious earlier installation (one file no longer exists)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "workspace_dir": str(path.parent / "old-workspace"),
+        "ontology_paths": [str(path.parent / "old-ontologies" / "hp-2024.json")],
+        "port": 8123,
+        "auto_open_browser": False,
+    }
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(
         prefix="hpo-browser-", ignore_cleanup_errors=True
     ) as tmp:
         root = Path(tmp)
+        # Test/admin override: never look at the real per-user settings file.
+        os.environ.setdefault(
+            "ONTOCURATOR_LEGACY_CONFIG_PATH", str(root / "legacy" / "config.json")
+        )
+        legacy_path = legacy_config_path()
+        # Never open a real file manager window from the browser tests.
+        file_manager.open_folder = lambda folder: None
         config = AppConfig(
             workspace_dir=root,
             database_path=root / "editor.db",
@@ -203,6 +225,8 @@ if __name__ == "__main__":
             session_token="browser-test-token",
             port=PORT,
             web_dir=ROOT / "frontend/dist",
+            config_path=root / "config.json",
+            legacy_config_path=legacy_path,
         )
         app = create_app(config)
         provision_changed_package(app, root)
@@ -220,6 +244,12 @@ if __name__ == "__main__":
                 data = fixture_package()
             return Response(data, media_type="application/zip")
 
-        # This explicit test-only route must precede the static catch-all.
+        @app.post("/__legacy_fixture__")
+        def legacy_fixture() -> dict[str, str]:
+            write_legacy_config(legacy_path)
+            return {"path": str(legacy_path)}
+
+        # These explicit test-only routes must precede the static catch-all.
+        app.router.routes.insert(0, app.router.routes.pop())
         app.router.routes.insert(0, app.router.routes.pop())
         uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
