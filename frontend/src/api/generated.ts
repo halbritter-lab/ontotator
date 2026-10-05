@@ -190,6 +190,9 @@ export interface paths {
         /**
          * List Package Documents
          * @description List documents showing metadata only, without proposal counts.
+         *
+         *     In review mode (if allowed) each document says whether it has proposals, so
+         *     review navigation can skip documents there is nothing to review in.
          */
         get: operations["list_package_documents_api_v1_packages__package_id__documents_get"];
         put?: never;
@@ -603,6 +606,8 @@ export interface components {
              * @enum {string}
              */
             status: "not_started" | "in_progress" | "completed";
+            /** Has Review Inputs */
+            has_review_inputs?: boolean | null;
         };
         /**
          * Draft

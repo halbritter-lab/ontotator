@@ -267,7 +267,7 @@
     "/api/v1/packages/{package_id}/documents": {
       "get": {
         "summary": "List Package Documents",
-        "description": "List documents showing metadata only, without proposal counts.",
+        "description": "List documents showing metadata only, without proposal counts.\n\nIn review mode (if allowed) each document says whether it has proposals, so\nreview navigation can skip documents there is nothing to review in.",
         "operationId": "list_package_documents_api_v1_packages__package_id__documents_get",
         "parameters": [
           {
@@ -1208,6 +1208,17 @@
             ],
             "title": "Status",
             "default": "not_started"
+          },
+          "has_review_inputs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Review Inputs"
           }
         },
         "additionalProperties": false,

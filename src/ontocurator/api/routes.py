@@ -337,12 +337,23 @@ def list_packages(repo: RepoDep) -> list[PackageManifest]:
 @router.get("/packages/{package_id}/documents")
 def list_package_documents(
     package_id: str,
+    request: Request,
     ws_svc: WorkspaceSvcDep,
     annotator_id: str | None = None,
     mode: WorkspaceMode | None = None,
 ) -> list[DocumentSummary]:
-    """List documents showing metadata only, without proposal counts."""
-    return ws_svc.list_documents(package_id, annotator_id, mode)
+    """List documents showing metadata only, without proposal counts.
+
+    In review mode (if allowed) each document says whether it has proposals, so
+    review navigation can skip documents there is nothing to review in.
+    """
+    reveal = (
+        mode == "review"
+        and "review" in _distribution(request).effective_allowed_modes()
+    )
+    return ws_svc.list_documents(
+        package_id, annotator_id, mode, reveal_review_inputs=reveal
+    )
 
 
 @router.post("/terms/labels")

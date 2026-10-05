@@ -159,6 +159,18 @@ def test_settings_endpoint_reflects_distribution(tmp_path: Path) -> None:
     assert body["open_package"] == DEMO_ID
 
 
+def test_document_list_does_not_reveal_proposals_when_review_is_disallowed(
+    tmp_path: Path,
+) -> None:
+    client = _client(tmp_path, DistributionSettings(allowed_modes=["independent"]))
+    resp = client.get(
+        f"/api/v1/packages/{DEMO_ID}/documents",
+        params={"annotator_id": "AB", "mode": "review"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert all(d["has_review_inputs"] is None for d in resp.json())
+
+
 def test_disallowed_review_mode_is_rejected_server_side(tmp_path: Path) -> None:
     client = _client(tmp_path, DistributionSettings(allowed_modes=["independent"]))
     doc = _first_doc(client)

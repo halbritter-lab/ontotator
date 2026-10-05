@@ -759,3 +759,29 @@ def test_api_retry_lost_response_before_and_after_restart(tmp_path: Path):
     res3 = client2.post(f"/api/v1/workspaces/{ws_id}/commands", json=mutation_payload)
     assert res3.status_code == 200
     assert res3.json() == res1_data
+
+
+def test_document_list_flags_review_inputs_only_in_review_mode(app_client):
+    """Review navigation can skip documents without proposals; other modes stay blind."""
+    client, _ = app_client
+    demo = (Path(__file__).parent / "fixtures" / "demo_package.zip").read_bytes()
+    for name, data in (
+        ("demo.zip", demo),
+        ("single.zip", _create_sample_package_bytes("single")),
+    ):
+        resp = client.post(
+            "/api/v1/packages", files={"file": (name, data, "application/zip")}
+        )
+        assert resp.status_code == 200, resp.text
+
+    def flags(package_id: str, mode: str | None) -> list[bool | None]:
+        params = {"annotator_id": "AB", "mode": mode} if mode else {}
+        resp = client.get(f"/api/v1/packages/{package_id}/documents", params=params)
+        assert resp.status_code == 200, resp.text
+        return [d["has_review_inputs"] for d in resp.json()]
+
+    assert flags("demo-klinik-pakete-01", "review") == [True, True]
+    # Proposals on read-only reference layers are no review targets.
+    assert flags("pkg-scenario-a", "review") == [False, False]
+    assert flags("demo-klinik-pakete-01", "independent") == [None, None]
+    assert flags("demo-klinik-pakete-01", None) == [None, None]

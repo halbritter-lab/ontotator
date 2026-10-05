@@ -35,6 +35,9 @@ class DocumentSummary(BaseModel):
     text_length: int
     position: int
     status: Literal["not_started", "in_progress", "completed"] = "not_started"
+    # Only set when listing for review mode: whether the document has proposals to
+    # review. A boolean, never a count, and None in the other (blinded) modes.
+    has_review_inputs: bool | None = None
 
 
 class WorkspaceView(BaseModel):
@@ -93,8 +96,13 @@ class WorkspaceService:
         package_id: str,
         annotator_id: str | None = None,
         mode: str | None = None,
+        reveal_review_inputs: bool = False,
     ) -> list[DocumentSummary]:
-        """List documents showing only metadata, without proposal counts."""
+        """List documents showing only metadata, without proposal counts.
+
+        With ``reveal_review_inputs`` each summary tells whether the document has
+        review proposals; callers must only request this for review mode.
+        """
         docs = self.repo.list_documents(package_id)
         summaries: list[DocumentSummary] = []
         for idx, d in enumerate(docs, start=1):
@@ -110,6 +118,11 @@ class WorkspaceService:
                     text_length=len(d.text),
                     position=idx,
                     status=status,
+                    has_review_inputs=(
+                        bool(self.get_review_inputs(package_id, d.document_id))
+                        if reveal_review_inputs
+                        else None
+                    ),
                 )
             )
         return summaries
