@@ -139,3 +139,49 @@ def test_invalid_upload_does_not_overwrite_or_delete_existing_ontology(
     # The original file must still exist and be completely intact!
     assert existing_ont.is_file()
     assert existing_ont.read_text(encoding="utf-8") == original_content
+
+
+def test_ontologies_listed_on_app_startup_from_persistent_config(
+    tmp_path: Path,
+) -> None:
+    from ontocurator.config_store import load_persistent_config
+
+    ws = tmp_path / "workspace"
+    config_1 = AppConfig(
+        workspace_dir=ws,
+        database_path=ws / "editor.db",
+        session_token="test-token",
+        port=8000,
+        host="127.0.0.1",
+    )
+    app_1 = create_app(config_1)
+    client_1 = TestClient(app_1, headers={"Authorization": "Bearer test-token"})
+
+    # Upload ontology to App 1
+    res_upload = client_1.post(
+        "/api/v1/ontologies",
+        files={"file": ("hp.json", json.dumps(SAMPLE_OBO_JSON), "application/json")},
+    )
+    assert res_upload.status_code == 200
+
+    # Restart app: load persistent config and initialize App 2
+    p_cfg = load_persistent_config()
+    assert len(p_cfg.ontology_paths) >= 1
+
+    config_2 = AppConfig(
+        workspace_dir=ws,
+        database_path=ws / "editor.db",
+        ontology_paths=p_cfg.ontology_paths,
+        session_token="test-token-2",
+        port=8001,
+        host="127.0.0.1",
+    )
+    app_2 = create_app(config_2)
+    client_2 = TestClient(app_2, headers={"Authorization": "Bearer test-token-2"})
+
+    res_list = client_2.get("/api/v1/ontologies")
+    assert res_list.status_code == 200
+    ontologies = res_list.json()
+    assert len(ontologies) == 1
+    assert ontologies[0]["ontology_id"] == "hp"
+    assert ontologies[0]["term_count"] == 2

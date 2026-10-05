@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -42,7 +43,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         registry = OntologyRegistry()
         for p in config.ontology_paths:
             if p.is_file():
-                registry.register_path(p)
+                digest = registry.register_path(p)
+                with contextlib.suppress(Exception):
+                    registry.get_service(digest)
         if config.ontology_path and config.ontology_path.is_file():
             if config.expected_ontology_ref is not None:
                 from ontocurator.ontology.service import OntologyService
@@ -53,7 +56,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                     )
                 )
             else:
-                registry.register_path(config.ontology_path)
+                digest = registry.register_path(config.ontology_path)
+                with contextlib.suppress(Exception):
+                    registry.get_service(digest)
 
         for definition, data in repo.ontology_resources():
             if registry.get_service(definition.sha256) is None:

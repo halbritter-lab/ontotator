@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import io
 import json
 from datetime import UTC, datetime
@@ -408,6 +409,10 @@ class OntologyInfo(BaseModel):
 def list_ontologies(request: Request) -> list[OntologyInfo]:
     """List loaded ontologies in memory registry."""
     registry = request.app.state.ontology_registry
+    for sha in list(registry._registered_paths.keys()):
+        if sha not in registry._services:
+            with contextlib.suppress(Exception):
+                registry.get_service(sha)
     results: list[OntologyInfo] = []
     for sha, svc in registry._services.items():
         ont_id = (svc.ontology.dominant_prefix or "unknown").lower()
@@ -444,23 +449,32 @@ async def upload_ontology(
     tmp_path = workspace_ont_dir / f".upload-{uuid4().hex}.tmp"
     tmp_path.write_bytes(content)
 
+    import hashlib
+
+    digest = hashlib.sha256(content).hexdigest().lower()
+
     try:
         from ontocurator.domain.documents import OntologyRef
         from ontocurator.ontology.service import OntologyService
 
-        digest = registry.register_path(tmp_path)
-        if registry.get_service(digest) is None:
+        if digest in registry._services:
+            svc = registry._services[digest]
+            if tmp_path.is_file():
+                tmp_path.unlink()
+            dest_path = registry._registered_paths.get(digest, dest_path)
+        elif digest in registry._registered_paths:
+            svc = registry.get_service(digest)
+            assert svc is not None
+            if tmp_path.is_file():
+                tmp_path.unlink()
+            dest_path = registry._registered_paths.get(digest, dest_path)
+        else:
             svc = OntologyService.load(
                 tmp_path, OntologyRef(release="uploaded", sha256=digest)
             )
             tmp_path.replace(dest_path)
             registry.register_path(dest_path)
             registry.register_service(svc)
-        else:
-            if tmp_path.is_file():
-                tmp_path.unlink()
-            svc = registry.get_service(digest)
-            assert svc is not None
     except Exception as exc:
         if tmp_path.is_file():
             tmp_path.unlink()

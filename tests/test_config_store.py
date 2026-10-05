@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ontocurator.config_store import (
     PersistentConfig,
     get_default_config_path,
@@ -48,8 +50,17 @@ def test_corrupted_config_falls_back_to_defaults(tmp_path: Path) -> None:
     assert loaded.workspace_dir == Path("./workspace")
 
 
-def test_get_default_config_path() -> None:
+def test_get_default_config_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ONTOCURATOR_CONFIG_PATH", raising=False)
     p = get_default_config_path()
     assert isinstance(p, Path)
     assert p.name == "config.json"
     assert "ontocurator" in str(p)
+
+
+def test_get_default_config_path_env_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    custom = tmp_path / "custom_config.json"
+    monkeypatch.setenv("ONTOCURATOR_CONFIG_PATH", str(custom))
+    assert get_default_config_path() == custom

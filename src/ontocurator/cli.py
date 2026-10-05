@@ -122,8 +122,10 @@ def serve(
 
     persistent_cfg = load_persistent_config()
 
-    if workspace == Path("./workspace") and persistent_cfg.workspace_dir != Path(
-        "./workspace"
+    if (
+        workspace == Path("./workspace")
+        and persistent_cfg.workspace_dir != Path("./workspace")
+        and persistent_cfg.workspace_dir.is_dir()
     ):
         workspace = persistent_cfg.workspace_dir
 
@@ -288,19 +290,49 @@ def main() -> None:
 
     if len(sys.argv) == 1:
         sys.argv.append("serve")
-    elif len(sys.argv) == 2 and sys.argv[1] not in {"serve", "version", "--help", "-h"}:
-        arg_path = Path(sys.argv[1])
-        if arg_path.exists():
-            if arg_path.is_dir():
-                sys.argv = [sys.argv[0], "serve", "--workspace", str(arg_path)]
-            elif arg_path.suffix.lower() == ".json":
-                sys.argv = [sys.argv[0], "serve", "--ontology", str(arg_path)]
-            elif arg_path.suffix.lower() == ".zip":
-                sys.argv = [sys.argv[0], "serve", "--package", str(arg_path)]
-            else:
-                sys.argv = [sys.argv[0], "serve"]
+    elif len(sys.argv) >= 2 and sys.argv[1] not in {
+        "serve",
+        "version",
+        "--help",
+        "-h",
+        "--install-completion",
+        "--show-completion",
+    }:
+        if sys.argv[1].startswith("-"):
+            # Option passed directly without command (e.g. ontocurator --port 8080) -> route to serve
+            sys.argv = [sys.argv[0], "serve", *sys.argv[1:]]
         else:
-            sys.argv = [sys.argv[0], "serve"]
+            arg_path = Path(sys.argv[1])
+            remaining = sys.argv[2:]
+            if arg_path.exists():
+                if arg_path.is_dir():
+                    sys.argv = [
+                        sys.argv[0],
+                        "serve",
+                        "--workspace",
+                        str(arg_path),
+                        *remaining,
+                    ]
+                elif arg_path.suffix.lower() == ".json":
+                    sys.argv = [
+                        sys.argv[0],
+                        "serve",
+                        "--ontology",
+                        str(arg_path),
+                        *remaining,
+                    ]
+                elif arg_path.suffix.lower() == ".zip":
+                    sys.argv = [
+                        sys.argv[0],
+                        "serve",
+                        "--package",
+                        str(arg_path),
+                        *remaining,
+                    ]
+                else:
+                    sys.argv = [sys.argv[0], "serve", *remaining]
+            else:
+                sys.argv = [sys.argv[0], "serve", *remaining]
 
     app()
 

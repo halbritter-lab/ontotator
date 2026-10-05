@@ -90,3 +90,39 @@ def test_main_with_single_dir_arg_routes_to_workspace_serve(tmp_path: Path) -> N
         import sys
 
         assert sys.argv == ["ontocurator", "serve", "--workspace", str(fake_dir)]
+
+
+def test_main_with_zip_and_extra_flags_routes_to_package_serve(
+    tmp_path: Path,
+) -> None:
+    fake_zip = tmp_path / "package.zip"
+    fake_zip.write_text("{}", encoding="utf-8")
+
+    with (
+        patch("sys.argv", ["ontocurator", str(fake_zip), "--port", "8765"]),
+        patch("ontocurator.cli.app") as mock_app,
+    ):
+        main()
+        mock_app.assert_called_once()
+        import sys
+
+        assert sys.argv == [
+            "ontocurator",
+            "serve",
+            "--package",
+            str(fake_zip),
+            "--port",
+            "8765",
+        ]
+
+
+def test_main_with_direct_flag_routes_to_serve() -> None:
+    with (
+        patch("sys.argv", ["ontocurator", "--port", "8765", "--no-browser"]),
+        patch("ontocurator.cli.app") as mock_app,
+    ):
+        main()
+        mock_app.assert_called_once()
+        import sys
+
+        assert sys.argv == ["ontocurator", "serve", "--port", "8765", "--no-browser"]

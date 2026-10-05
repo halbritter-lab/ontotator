@@ -20,6 +20,10 @@ class PersistentConfig(BaseModel):
 
 def get_default_config_path() -> Path:
     """Resolve standard OS configuration path for ontocurator."""
+    config_env = os.environ.get("ONTOCURATOR_CONFIG_PATH")
+    if config_env:
+        return Path(config_env)
+
     if sys.platform == "win32":
         app_data = os.environ.get("APPDATA")
         base = Path(app_data) if app_data else Path.home() / "AppData" / "Roaming"
