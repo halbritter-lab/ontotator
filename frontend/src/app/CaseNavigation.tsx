@@ -1,6 +1,6 @@
 import React from "react";
 import type { DocumentSummary } from "../api/client";
-import { adjacentCase, canOpenCase } from "./caseOrder";
+import { adjacentCase, canOpenCase, sharedIdPrefix } from "./caseOrder";
 
 export interface CaseNavigationProps {
   documents: DocumentSummary[];
@@ -31,6 +31,8 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
   const nextDoc = adjacentCase(documents, currentDocumentId, 1);
   const hasPrev = prevDoc !== null;
   const hasNext = nextDoc !== null;
+  // Long IDs often share a prefix (source, release); only the rest tells cases apart.
+  const idPrefix = sharedIdPrefix(documents.map((d) => d.document_id));
 
   const handlePrev = async () => {
     if (!prevDoc || disabled) return;
@@ -81,6 +83,7 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
           value={currentDocumentId}
           onChange={handleSelect}
           disabled={disabled}
+          title={currentDocumentId}
           style={{
             borderTop: "none",
             borderBottom: "none",
@@ -97,10 +100,11 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         >
           {documents.map((doc) => {
             const statusLabel = statusLabels[doc.status] ?? doc.status;
+            const shownId = idPrefix ? `…${doc.document_id.slice(idPrefix.length)}` : doc.document_id;
             const openable = canOpenCase(doc);
             return (
               <option key={doc.document_id} value={doc.document_id} disabled={!openable}>
-                Case {doc.position} of {total}: {doc.document_id} ({statusLabel}){!openable && " – no proposals"}
+                Case {doc.position} of {total}: {shownId} ({statusLabel}){!openable && " – no proposals"}
               </option>
             );
           })}

@@ -170,4 +170,21 @@ describe("CaseNavigation Component", () => {
       expect((screen.getByRole("option", { name: /doc-gamma/ }) as HTMLOptionElement).disabled).toBe(false);
     });
   });
+
+  it("hides the prefix all case IDs share so the distinguishing part stays visible", () => {
+    const prefix = "raghpo:080fc3a04c91ee45c8986076765f4d4b4f14ddd9:gsc:";
+    const documents: DocumentSummary[] = [
+      { ...sampleDocuments[0], document_id: `${prefix}100:12011146:native` },
+      { ...sampleDocuments[1], document_id: `${prefix}114:18177466:native` },
+    ];
+    render(<CaseNavigation documents={documents} currentDocumentId={documents[0].document_id} onNavigate={vi.fn()} />);
+    expect(screen.getByRole("option", { name: /Case 1 of 2/ }).textContent).toBe("Case 1 of 2: …100:12011146:native (Completed)");
+    expect(screen.getByRole("option", { name: /Case 2 of 2/ }).textContent).toBe("Case 2 of 2: …114:18177466:native (In Progress)");
+    expect(screen.getByRole("combobox", { name: /Select case/i }).getAttribute("title")).toBe(documents[0].document_id);
+  });
+
+  it("keeps IDs whole when they share no long prefix", () => {
+    render(<CaseNavigation documents={sampleDocuments} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
+    expect(screen.getByRole("option", { name: /Case 2 of 3/ }).textContent).toBe("Case 2 of 3: doc-alpha (In Progress)");
+  });
 });
