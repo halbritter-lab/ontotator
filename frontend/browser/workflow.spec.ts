@@ -1,107 +1,120 @@
 import { expect, test, type Page } from "@playwright/test";
+import { importPackage, LAUNCH_URL, mentionWithOffsets, openCase, selectText, submitCase } from "./helpers";
 
-/** Click the single "Open case" action and confirm the identity if asked. */
-async function openCase(page: Page) {
-  await page.getByRole("button", { name: /^Open case$/i }).click();
-  const confirm = page.getByRole("button", { name: /Yes, continue/i });
-  await confirm.waitFor({ state: "visible", timeout: 2000 }).then(() => confirm.click(), () => undefined);
-}
+const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
 
-async function importFixture(page: Page, annotator: string) {
-  await page.goto("/#token=browser-test-token");
+test("first run: guide, import from the guide and required identity", async ({ page }) => {
+  // Show the dashboard as a fresh installation sees it (no packages yet).
+  await page.route("**/api/v1/packages", (route) =>
+    route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback(),
+  );
+  await page.goto(LAUNCH_URL);
+  const guide = page.getByRole("region", { name: "Get started" });
+  await expect(guide).toBeVisible();
+  await expect(guide).toContainText("Import work package (.zip)");
+  await expect(guide).toContainText("Enter your initials");
+  await expect(page.locator("#mode-select")).toHaveCount(0);
+  await page.unroute("**/api/v1/packages");
+
   const fixture = await page.request.get("/__synthetic_fixture__");
-  expect(fixture.ok()).toBeTruthy();
-  await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
-    name: "synthetic.zip", mimeType: "application/zip", buffer: await fixture.body(),
-  });
-  await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
-  await page.getByLabel(/Your initials \/ ID/i).fill(annotator);
-}
+  const chooser = page.waitForEvent("filechooser");
+  await guide.getByRole("button", { name: "Import work package" }).click();
+  await (await chooser).setFiles({ name: "synthetic.zip", mimeType: "application/zip", buffer: await fixture.body() });
+  await expect(page.getByRole("status", { name: "Import result" })).toContainText("Package 'browser-fixture' imported");
+  await expect(guide).toHaveCount(0);
+
+  // An identity is required before a case can be opened ...
+  const identity = page.getByLabel(/Your initials \/ ID/i);
+  await identity.fill("");
+  await identity.press("Enter");
+  await expect(page.getByRole("button", { name: /^Open case$/i })).toBeDisabled();
+  await expect(page.getByText("Required. Your annotations are saved under this name.")).toBeVisible();
+  // ... and has to be confirmed once per page session.
+  await identity.fill("first-run");
+  await page.getByRole("button", { name: /^Open case$/i }).click();
+  const dialog = page.getByRole("dialog", { name: "You are annotating as first-run" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Change initials" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(identity).toBeFocused();
+  await openCase(page, { identity: "first-run" });
+  await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 0");
+});
+
+test("provisioning: a changed package in the packages folder is reported on the dashboard", async ({ page }) => {
+  await page.goto(LAUNCH_URL);
+  const warning = page.getByRole("alert", { name: "Delivery notice" });
+  await expect(warning).toContainText(
+    "Package 'provisioned-fixture' in the packages folder (provisioned.zip) differs from the already imported version. "
+      + "The changed version was NOT imported. To ship changed content, use a new package ID.",
+  );
+  await expect(warning).toHaveClass(/notice-warning/);
+  await warning.getByRole("button", { name: "Dismiss notice" }).click();
+  await expect(warning).toHaveCount(0);
+});
 
 test("real backend: review, resume, reload, submit and authenticated export", async ({ page }) => {
   await importFixture(page, "browser-reviewer");
   await page.locator("#mode-select").selectOption("review");
-  await expect(page.getByText(/Review Proposals.*\(2\)|Verfügbare Vorschläge.*\(2\)/i)).toBeVisible();
-  await openCase(page);
+  await openCase(page, { identity: "browser-reviewer" });
+  await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
   await page.locator(".doc-item").filter({ hasText: "HP:0001252" }).click();
-  await expect(page.getByLabel(/Proposal details|Vorschlagsdetails/i)).toContainText("present");
-  await expect(page.getByLabel(/Proposal details|Vorschlagsdetails/i)).toContainText("Hypotonia");
-  await page.getByRole("button", { name: /Confirm|Bestätigen/i }).first().click();
+  await expect(page.getByLabel(/Proposal details/i)).toContainText("present");
+  await expect(page.getByLabel(/Proposal details/i)).toContainText("Hypotonia");
+  await page.getByRole("button", { name: /Confirm/i }).first().click();
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
-  await page.getByRole("button", { name: /Dashboard|Übersicht/i }).click();
-  await page.getByRole("button", { name: /Refresh|Aktualisieren/i }).click();
-  await expect(page.getByText(/Review Proposals.*\(2\)|Verfügbare Vorschläge.*\(2\)/i)).toBeVisible();
+
+  // Back on the dashboard the case is in progress; reopening resumes it without asking again.
+  await page.getByRole("button", { name: "← Dashboard" }).click();
+  await expect(page.getByText("Continue where you left off")).toBeVisible();
   await openCase(page);
-  await expect(page.locator(".doc-item").filter({ hasText: "HP:0001252" })).toContainText(/confirmed|Bestätigt/i);
+  await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
+  await expect(page.locator(".doc-item").filter({ hasText: "HP:0001252" })).toContainText(/confirmed/i);
   await page.locator(".doc-item").filter({ hasText: "HP:0001250" }).click();
-  await page.getByRole("button", { name: /Confirm|Bestätigen/i }).first().click();
-  await page.getByRole("button", { name: /Finish & Submit Case|Submit Case|Fall abschließen/i }).first().click();
-  await expect(page.getByText(/Case successfully submitted|Erfolgreich abgegeben|Abgabe erfolgreich|Fall erfolgreich/i).first()).toBeVisible();
+  await page.getByRole("button", { name: /Confirm/i }).first().click();
+  await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 2");
+  await submitCase(page);
+
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download export|herunterladen/i }).click();
+  await page.getByRole("button", { name: /Download export/i }).click();
   const download = await downloadPromise;
   expect(await download.failure()).toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.zip$/);
   await page.reload();
   await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
-  await expect(page.getByText(/Forbidden|Unauthorized|Fehler beim Laden/)).toHaveCount(0);
+  await expect(page.getByText(/Forbidden|Unauthorized|Error loading/)).toHaveCount(0);
 });
 
 test("real backend: invalid input does not block correction", async ({ page }) => {
   await importFixture(page, "browser-independent");
   await page.locator("#mode-select").selectOption("independent");
-  await openCase(page);
-  await expect(page.getByText(/Review Proposals|Review-Ziele/i)).toHaveCount(0);
-  await page.getByRole("button", { name: /\+ (New Annotation|Neue Annotation)/i }).click();
-  await page.getByLabel(/Search ontology term|Ontologie-Term suchen/i).fill("Hypotonia");
+  await openCase(page, { identity: "browser-independent" });
+  await expect(page.getByText(/Review Proposals/i)).toHaveCount(0);
+  await page.getByRole("button", { name: /\+ New Annotation/i }).click();
+  await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
   // Selected candidate creates annotation
   await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);
   await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001252");
-  await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
 });
-
-async function selectText(page: Page, start: number, end: number) {
-  await page.locator(".text-container").evaluate((container, offsets) => {
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-    const range = document.createRange();
-    let position = 0;
-    let started = false;
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const length = node.textContent?.length ?? 0;
-      if (!started && offsets.start < position + length) {
-        range.setStart(node, offsets.start - position);
-        started = true;
-      }
-      if (started && offsets.end <= position + length) {
-        range.setEnd(node, offsets.end - position);
-        break;
-      }
-      position += length;
-    }
-    const selection = window.getSelection()!;
-    selection.removeAllRanges();
-    selection.addRange(range);
-    container.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-  }, { start, end });
-}
 
 test("real backend: repeated and discontinuous evidence preserves Unicode offsets", async ({ page }) => {
   await importFixture(page, "browser-spans");
   await page.locator("#mode-select").selectOption("independent");
-  await openCase(page);
+  await openCase(page, { identity: "browser-spans" });
   await selectText(page, 0, 9);
-  await page.getByLabel(/Search ontology term|Ontologie-Term suchen/i).fill("Hypotonia");
+  await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
   await page.getByRole("button", { name: "+ Segment", exact: true }).click();
   await selectText(page, 14, 21);
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 2");
-  await expect(page.getByText("Offsets: [0:9], [14:21]", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /\+ (Add Mention|Weitere Belegstelle)/i, exact: true }).click();
+  await expect(mentionWithOffsets(page, "[0:9], [14:21]")).toHaveText("“Hypotonia … seizure”");
+  await page.getByRole("button", { name: /\+ Add Mention/i }).click();
   await selectText(page, 23, 27); // UTF-16: emoji plus e and combining acute.
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 3");
-  await expect(page.getByText("Offsets: [23:26]", { exact: true })).toBeVisible();
+  // Stored offsets count code points: [23:26] covers "😀", "e" and the combining accent.
+  await expect(mentionWithOffsets(page, "[23:26]")).toBeVisible();
   await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);
 });

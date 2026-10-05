@@ -12,6 +12,11 @@ from fastapi import Query
 from fastapi.responses import Response
 
 from ontocurator.api.app import create_app
+from ontocurator.application.provisioning import (
+    ProvisioningLedger,
+    ProvisioningStatus,
+    provision_packages,
+)
 from ontocurator.config import AppConfig
 from ontocurator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
 from ontocurator.domain.documents import (
@@ -43,7 +48,9 @@ MONDO_ONTOLOGY = ROOT / "tests/fixtures/mondo.json"
 PORT = int(os.environ.get("HPO_E2E_PORT", "18765"))
 
 
-def fixture_package() -> bytes:
+def fixture_package(
+    package_id: str = "browser-fixture", created_at: str = "2026-10-01T00:00:00Z"
+) -> bytes:
     hp_ont = OntologyDefinition(
         ontology_id="hp",
         label="Human Phenotype Ontology",
@@ -122,12 +129,12 @@ def fixture_package() -> bytes:
 
     pkg = ValidatedPackage(
         manifest=PackageManifest(
-            package_id="browser-fixture",
+            package_id=package_id,
             format_version="ontocurator-work-package/v2",
             document_order=["browser-doc"],
             task_profile=profile,
             task_profile_sha256=profile_hash(profile),
-            created_at="2026-10-01T00:00:00Z",
+            created_at=created_at,
         ),
         documents={doc.document_id: doc},
         annotations=annotations,
@@ -136,6 +143,26 @@ def fixture_package() -> bytes:
     result = io.BytesIO()
     PackageWriter.write_to_stream(pkg, result)
     return result.getvalue()
+
+
+def provision_changed_package(app, root: Path) -> None:  # type: ignore[no-untyped-def]
+    """Real start-up provisioning: a package, then a changed one with the same ID."""
+    folder = root / "provision" / "packages"
+    folder.mkdir(parents=True)
+    target = folder / "provisioned.zip"
+    ledger = ProvisioningLedger(root)
+    for created_at in ("2026-10-01T00:00:00Z", "2026-10-02T00:00:00Z"):
+        target.write_bytes(fixture_package("provisioned-fixture", created_at))
+        status = ProvisioningStatus()
+        provision_packages(
+            root / "provision",
+            app.state.repo,
+            app.state.ontology_registry,
+            ledger,
+            status,
+            lambda *_: None,
+        )
+    app.state.provisioning = status
 
 
 def scenario_package(scenario: str) -> bytes:
@@ -178,6 +205,7 @@ if __name__ == "__main__":
             web_dir=ROOT / "frontend/dist",
         )
         app = create_app(config)
+        provision_changed_package(app, root)
 
         @app.get("/__synthetic_fixture__")
         def fixture(scenario: str | None = Query(None)) -> Response:

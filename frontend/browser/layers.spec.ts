@@ -1,33 +1,21 @@
 import { expect, test, type Page } from "@playwright/test";
+import { importPackage, openCase, submitCase } from "./helpers";
 
-/** Click the single "Open case" action and confirm the identity if asked. */
-async function openCase(page: Page) {
-  await page.getByRole("button", { name: /^Open case$/i }).click();
-  const confirm = page.getByRole("button", { name: /Yes, continue/i });
-  await confirm.waitFor({ state: "visible", timeout: 2000 }).then(() => confirm.click(), () => undefined);
-}
+const PACKAGE_IDS: Record<string, string> = {
+  review_references: "pkg-review-references",
+  single: "pkg-scenario-a",
+  multi_editable: "pkg-scenario-c",
+  assisted: "pkg-scenario-b",
+};
 
-async function importScenario(page: Page, scenario: string, annotator: string) {
-  await page.goto("/#token=browser-test-token");
-  const fixture = await page.request.get(`/__synthetic_fixture__?scenario=${scenario}`);
-  expect(fixture.ok()).toBeTruthy();
-  await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
-    name: `${scenario}.zip`,
-    mimeType: "application/zip",
-    buffer: await fixture.body(),
-  });
-  await expect(page.locator("#package-select")).toHaveValue(
-    scenario === "review_references" ? "pkg-review-references" :
-      scenario === "single" ? "pkg-scenario-a" : scenario === "multi_editable" ? "pkg-scenario-c" : "pkg-scenario-b"
-  );
-  await page.getByLabel(/Your initials \/ ID/i).fill(annotator);
-}
+const importScenario = (page: Page, scenario: string, annotator: string) =>
+  importPackage(page, `?scenario=${scenario}`, PACKAGE_IDS[scenario], annotator);
 
 test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)", () => {
   test("Scenario A: Single-layer baseline has zero extra interaction controls and preserves document order", async ({ page }) => {
     await importScenario(page, "single", "user-scenario-a");
     await page.locator("#mode-select").selectOption("independent");
-    await openCase(page);
+    await openCase(page, { identity: "user-scenario-a" });
 
     // 1. Zero extra layer controls rendered
     await expect(page.locator(".layer-controls")).toHaveCount(0);
@@ -57,8 +45,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
 
     // 4. A single-layer case is checked as part of submission.
     await expect(page.getByLabel(/Document verified|Dokument vollständig geprüft/i)).toHaveCount(0);
-    await page.getByRole("button", { name: /Finish & Submit Case|Submit Case|Fall abschließen/i }).first().click();
-    await expect(page.getByText(/Case successfully submitted|Erfolgreich abgegeben|Abgabe erfolgreich|Fall erfolgreich/i).first()).toBeVisible();
+    await submitCase(page);
 
     // Dismiss submission modal to return to workspace
     await page.getByRole("button", { name: /Stay in case|Im Fall bleiben/i }).click();
@@ -73,7 +60,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   test("Scenario B: Assisted mode with reference layer (cannot activate reference, visibility toggle)", async ({ page }) => {
     await importScenario(page, "assisted", "user-scenario-b");
     await page.locator("#mode-select").selectOption("assisted");
-    await openCase(page);
+    await openCase(page, { identity: "user-scenario-b" });
 
     // 1. Layer controls visible because package has 2 layers
     await expect(page.locator(".layer-controls")).toBeVisible();
@@ -122,22 +109,32 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   test("Review excludes reference targets and permits returning to a case with references", async ({ page }) => {
     await importScenario(page, "review_references", "review-reference-navigation");
     await page.locator("#mode-select").selectOption("review");
-    await expect(page.getByRole("heading", { name: /Review Proposals.*\(1\)|Verfügbare Vorschläge.*\(1\)/i })).toBeVisible();
-    await openCase(page);
+    await openCase(page, { identity: "review-reference-navigation" });
+    // Reference annotations are not review targets: only the one proposal is listed.
+    await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (1)" })).toBeVisible();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
 
-    await page.locator(".case-navigation").getByRole("button", { name: /Next Case|Nächster Fall/i }).click();
-    await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2/i);
-    await page.locator(".case-navigation").getByRole("button", { name: /Previous Case|Vorheriger Fall/i }).click();
+    // Case 2 has no review proposals: review mode explains this and stays on case 1.
+    await page.locator(".case-navigation").getByRole("button", { name: /Next Case/i }).click();
+    await expect(page.getByRole("alert")).toContainText(
+      'No review proposals are available for case doc-alpha. Switch to "Annotate from scratch" to annotate this case.',
+    );
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
+    await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
+
+    // Returning to the case with references from the dashboard works (no second identity prompt).
+    await page.getByRole("button", { name: "← Dashboard" }).click();
+    await openCase(page);
+    await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
+    await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (1)" })).toBeVisible();
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
   });
 
   test("Scenario C: Multi-editable layers require both layers checked before completion", async ({ page }) => {
     await importScenario(page, "multi_editable", "user-scenario-c");
     await page.locator("#mode-select").selectOption("independent");
-    await openCase(page);
+    await openCase(page, { identity: "user-scenario-c" });
 
     // 1. Both layers are visible in layer controls
     await expect(page.locator(".layer-controls")).toBeVisible();
@@ -163,7 +160,6 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await checkAction.click();
 
     // 5. Now both layers are checked -> submit succeeds
-    await page.getByRole("button", { name: /Finish & Submit Case|Submit Case|Fall abschließen/i }).first().click();
-    await expect(page.getByText(/Case successfully submitted|Erfolgreich abgegeben|Abgabe erfolgreich|Fall erfolgreich/i).first()).toBeVisible();
+    await submitCase(page);
   });
 });

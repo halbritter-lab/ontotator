@@ -1,56 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
+import { importPackage, mentionWithOffsets, openCase, selectText } from "./helpers";
 
-/** Click the single "Open case" action and confirm the identity if asked. */
-async function openCase(page: Page) {
-  await page.getByRole("button", { name: /^Open case$/i }).click();
-  const confirm = page.getByRole("button", { name: /Yes, continue/i });
-  await confirm.waitFor({ state: "visible", timeout: 2000 }).then(() => confirm.click(), () => undefined);
-}
-
-async function importFixture(page: Page, annotator: string) {
-  await page.goto("/#token=browser-test-token");
-  const fixture = await page.request.get("/__synthetic_fixture__");
-  expect(fixture.ok()).toBeTruthy();
-  await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
-    name: "synthetic.zip",
-    mimeType: "application/zip",
-    buffer: await fixture.body(),
-  });
-  await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
-  await page.getByLabel(/Your initials \/ ID/i).fill(annotator);
-}
-
-async function selectText(page: Page, start: number, end: number) {
-  await page.locator(".text-container").evaluate((container, offsets) => {
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-    const range = document.createRange();
-    let position = 0;
-    let started = false;
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const length = node.textContent?.length ?? 0;
-      if (!started && offsets.start < position + length) {
-        range.setStart(node, offsets.start - position);
-        started = true;
-      }
-      if (started && offsets.end <= position + length) {
-        range.setEnd(node, offsets.end - position);
-        break;
-      }
-      position += length;
-    }
-    const selection = window.getSelection()!;
-    selection.removeAllRanges();
-    selection.addRange(range);
-    container.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-  }, { start, end });
-}
+const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
 
 test.describe("Evidence Spans Proof & Verification", () => {
   test("review mode: proposal evidence spans are precisely marked with DOM metadata and visual highlights", async ({ page }) => {
     await importFixture(page, "reviewer-spans-proof");
     await page.locator("#mode-select").selectOption("review");
-    await expect(page.getByText(/Review Proposals.*\(2\)|Verfügbare Vorschläge.*\(2\)/i)).toBeVisible();
-    await openCase(page);
+    await openCase(page, { identity: "reviewer-spans-proof" });
+    await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
 
     // 1. Select and verify that first proposal (HP:0001252 Hypotonia, span [0:9]) is active
     await page.locator(".doc-item").filter({ hasText: "HP:0001252" }).click();
@@ -91,7 +49,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
   test("independent mode: selecting text creates marked evidence spans with active highlight and handles picking", async ({ page }) => {
     await importFixture(page, "curator-spans-proof");
     await page.locator("#mode-select").selectOption("independent");
-    await openCase(page);
+    await openCase(page, { identity: "curator-spans-proof" });
 
     // Text is "Hypotonia and seizure. A😀é\r\nB"
     // Select "Hypotonia" (offsets 0 to 9)
@@ -117,14 +75,14 @@ test.describe("Evidence Spans Proof & Verification", () => {
     const selectedBgColor = await markedSpan.evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(["rgb(186, 230, 253)", "rgb(251, 207, 232)"]).toContain(selectedBgColor);
 
-    // Verify evidence offsets are displayed in sidebar
-    await expect(page.getByText("Offsets: [0:9]")).toBeVisible();
+    // The mention shows the quoted text; its exact offsets are in the tooltip
+    await expect(mentionWithOffsets(page, "[0:9]")).toHaveText("“Hypotonia”");
 
     // Extend mention: switch intent to discontinuous segment
     await page.getByRole("button", { name: "+ Segment", exact: true }).click();
     await selectText(page, 14, 21); // "seizure"
     await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 2");
-    await expect(page.getByText("Offsets: [0:9], [14:21]")).toBeVisible();
+    await expect(mentionWithOffsets(page, "[0:9], [14:21]")).toHaveText("“Hypotonia … seizure”");
 
     // Now both "Hypotonia" and "seizure" are marked as evidence segments of the same mention
     const allMarked = page.locator('.text-container .run--marked');
