@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Eigenständiges Repository `C:/Users/jan-p/Development/hpo-annotation-editor`; vorhandene gleichnamige Verzeichnisse vor Anlage prüfen, nicht überschreiben.
+- Eigenständiges Repository `C:/Users/jan-p/Development/ontocurator`; vorhandene gleichnamige Verzeichnisse vor Anlage prüfen, nicht überschreiben.
 - Menschliche und maschinelle Eingaben verwenden dasselbe Annotationsmodell, dieselben Import-, Bearbeitungs-, Validierungs-, Review- und Exportregeln.
 - Zunächst genügt eine ärztliche Prüfung pro Fall; getrennte Datensätze für weitere Prüfende, keine Zusammenführungsoberfläche.
 - Der primäre Einstieg ist das Markieren von Text. Annotationen ohne Belegstelle sind ausdrücklich möglich.

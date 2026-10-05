@@ -454,7 +454,7 @@ def serve(
         ),
     ] = False,
 ) -> None:
-    """Start local secured HPO annotation editor server."""
+    """Start the local, secured Ontocurator server."""
     # ---- validate inputs before touching any workspace ----------------------
     if host not in LOOPBACK_HOSTS:
         typer.echo(

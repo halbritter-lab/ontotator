@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 def create_app(config: AppConfig | None = None) -> FastAPI:
     """Instantiate configured FastAPI application for local editor."""
     app = FastAPI(
-        title="Local HPO Annotation Editor API",
+        title="Ontocurator Local API",
         version="0.1.0",
         docs_url="/docs",
         openapi_url="/openapi.json",

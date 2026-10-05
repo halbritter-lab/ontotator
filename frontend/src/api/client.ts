@@ -1,5 +1,5 @@
 /**
- * Typed client for HPO Annotation Editor local API.
+ * Typed client for the Ontocurator local API.
  */
 
 import type { components } from "./generated";
