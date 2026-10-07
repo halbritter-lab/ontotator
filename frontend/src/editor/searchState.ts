@@ -2,6 +2,7 @@ import type { ApiClient, SearchCandidate, SearchRequest } from "../api/client";
 import type { components } from "../api/generated";
 
 export type WorkspaceKey = components["schemas"]["WorkspaceKey"];
+export type SearchRoute = NonNullable<SearchRequest["route"]>;
 
 export interface SearchContext {
   workspaceId: string;
@@ -15,7 +16,7 @@ export interface SearchState {
   searchId: string | null;
   query: string;
   layerId: string | null;
-  route: "lexical" | "exact" | "id" | "browse";
+  route: SearchRoute;
   candidates: SearchCandidate[];
   isLoading: boolean;
   error: string | null;
@@ -29,7 +30,7 @@ export class SearchManager {
     searchId: null,
     query: "",
     layerId: null,
-    route: "lexical",
+    route: "auto",
     candidates: [],
     isLoading: false,
     error: null,
@@ -90,7 +91,7 @@ export class SearchManager {
     rawQuery: string,
     annotationId: string,
     workspaceKey: WorkspaceKey,
-    route: "lexical" | "exact" | "id" | "browse" = "lexical",
+    route: SearchRoute = "auto",
     k = 10,
     layerId?: string | null
   ): Promise<SearchCandidate[]> {

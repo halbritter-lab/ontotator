@@ -33,6 +33,19 @@ describe("SearchManager", () => {
     expect(manager.getState().isLoading).toBe(false);
   });
 
+  it("sends the auto route unless a route is named", async () => {
+    searchOntologySpy.mockResolvedValue({ route: "auto", query: "seizure", candidates: [] });
+    const manager = new SearchManager(mockClient);
+
+    expect(manager.getState().route).toBe("auto");
+    await manager.search("seizure", "ann-1", sampleKey);
+    expect(searchOntologySpy.mock.calls[0][0].route).toBe("auto");
+    expect(manager.getState().route).toBe("auto");
+
+    await manager.search("seizure", "ann-1", sampleKey, "exact");
+    expect(searchOntologySpy.mock.calls[1][0].route).toBe("exact");
+  });
+
   it("updates state with candidates upon successful search", async () => {
     const candidate: SearchCandidate = {
       term_id: "HP:0001252",
@@ -41,6 +54,7 @@ describe("SearchManager", () => {
       definition: "Muscular hypotonia",
       matched_term: "hypotonia",
       match_kind: "exact_label",
+      route: "lexical",
       rank: 1,
       display_pos: 0,
     };
@@ -90,6 +104,7 @@ describe("SearchManager", () => {
       definition: "",
       matched_term: "term a",
       match_kind: "synonym",
+      route: "lexical",
       rank: 1,
       display_pos: 0,
     };
@@ -100,6 +115,7 @@ describe("SearchManager", () => {
       definition: "",
       matched_term: "term b",
       match_kind: "exact_label",
+      route: "lexical",
       rank: 1,
       display_pos: 0,
     };
@@ -145,6 +161,7 @@ describe("SearchManager", () => {
       definition: "",
       matched_term: "hypotonia",
       match_kind: "exact_label",
+      route: "lexical",
       rank: 1,
       display_pos: 0,
     };
@@ -228,6 +245,7 @@ describe("SearchManager", () => {
           matched_term: "seizure",
           match_kind: "exact_label",
           obsolete: false,
+          route: "lexical",
           rank: 1,
           display_pos: 0,
         },
