@@ -782,8 +782,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // A mention edge was dragged (or moved by keyboard) in the text.
   const handleResizeMention = async (evidenceId: string, segments: Array<{ start: number; end: number }>) => {
-    const annId = selectedAnnotationId;
-    if (!annId) return;
+    // A keyboard resize is reported after a pause, so the selection may have moved on:
+    // save to the annotation the mention belongs to, preferring the selected one.
+    const owners = (latestDraft.current.annotations ?? [])
+      .filter((a) => (a.annotation.evidence_refs ?? []).some((r) => r.evidence_id === evidenceId))
+      .map((a) => a.annotation.annotation_id);
+    const annId = owners.find((id) => id === selectedAnnotationId) ?? (owners.length === 1 ? owners[0] : null);
+    if (!annId) {
+      setTextResyncToken((token) => token + 1);
+      return;
+    }
     try {
       const updated = await mutateAnnotationAndSyncDecision(annId, () =>
         enqueueMutation({

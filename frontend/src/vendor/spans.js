@@ -451,6 +451,9 @@ export class SpanEditor {
       this._onHandleKey(event, handle);
       return;
     }
+    // Any other key on a handle (Escape, a shortcut) first reports the pending change,
+    // while the selection it belongs to is still current.
+    if (handle && !["Control", "Shift", "Alt", "Meta"].includes(event.key)) this._flushKeyResize();
     if (event.shiftKey && /^(Arrow|Home$|End$|PageUp$|PageDown$)/.test(event.key)) {
       this._keySelecting = true;
     }

@@ -141,4 +141,24 @@ describe("resizing mentions in the case screen", () => {
     await waitFor(() => expect(marked()).toBe("muscular"));
     expect(await screen.findByText(/boom/)).toBeTruthy();
   });
+
+
+  it("saves a late keyboard resize to the annotation that owns the mention, not to the current selection", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const view = makeView("independent", [own, other]);
+    const apply = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 } as any);
+    const { container } = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+    fireEvent.click(entry(container, "annotation:a1"));
+    const end = container.querySelector<HTMLElement>(".resize-handle--end")!;
+    end.focus();
+    fireEvent.keyDown(end, { key: "ArrowLeft" });
+    // The selection moves on before the pause has elapsed (no focus change in between).
+    fireEvent.click(entry(container, "annotation:a2"));
+    vi.advanceTimersByTime(400);
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    expect(apply).toHaveBeenCalledWith("ws", expect.objectContaining({
+      payload: { command: "edit_mention", annotation_id: "a1", evidence_id: "ev-a1", segments: [{ start: 7, end: 14 }] },
+    }));
+  });
+
 });

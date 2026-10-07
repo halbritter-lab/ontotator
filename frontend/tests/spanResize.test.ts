@@ -277,4 +277,27 @@ describe("span editor resize handles", () => {
     expect(onPick).toHaveBeenCalledTimes(1);
   });
 
+
+
+  it("reports a pending keyboard change before any other key on the handle reaches global shortcuts", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setResizable(["ev-a"]);
+    handles()[1].focus();
+    press(focused(), "ArrowLeft");
+    const order: string[] = [];
+    onResize.mockImplementation(() => { order.push("resize"); });
+    const shortcut = () => { order.push("shortcut"); };
+    window.addEventListener("keydown", shortcut);
+    try {
+      press(focused(), "Control"); // a modifier on its way to Ctrl+Arrow is not "another key"
+      expect(order).toEqual(["shortcut"]);
+      press(focused(), "Escape");
+      expect(order).toEqual(["shortcut", "resize", "shortcut"]);
+      expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 14 }]);
+    } finally {
+      window.removeEventListener("keydown", shortcut);
+    }
+  });
+
 });
