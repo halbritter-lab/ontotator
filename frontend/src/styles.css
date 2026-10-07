@@ -645,13 +645,13 @@ body {
   z-index: 1;
 }
 
-/* Drag handles at the edges of the selected annotation's mention segments. */
+/* Drag handles at the edges of the selected annotation's mention segments.
+   An empty inline box: it takes no room and, unlike an inline-block, adds no line-break
+   opportunity, so the start handle of a segment at the beginning of a wrapped line stays
+   with its segment instead of hanging at the end of the previous line. */
 .resize-handle {
   position: relative;
-  display: inline-block;
-  width: 0;
-  height: 1em;
-  vertical-align: baseline;
+  display: inline;
   user-select: none;
   cursor: ew-resize;
   z-index: 2;
@@ -663,7 +663,7 @@ body {
   content: "";
   position: absolute;
   left: -2px;
-  top: -0.35em;
+  top: -0.29em;
   width: 3px;
   height: 1.6em;
   border-radius: 2px;
@@ -675,7 +675,7 @@ body {
   content: "";
   position: absolute;
   left: -5px;
-  top: -0.35em;
+  top: -0.29em;
   width: 10px;
   height: 1.6em;
 }
