@@ -157,4 +157,124 @@ describe("span editor resize handles", () => {
       window.removeEventListener("keydown", seen);
     }
   });
+
+  const pointer = (type: string, target: EventTarget, init: MouseEventInit = {}) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 0, clientY: 0, ...init });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    target.dispatchEvent(event);
+    return event;
+  };
+  /** Make the editor resolve every pointer position to `offset`. */
+  const pointAt = (offset: number | null) => {
+    (document as any).caretPositionFromPoint = () => {
+      if (offset === null) return null;
+      const runs = Array.from(container.querySelectorAll<HTMLElement>(".run"));
+      const run = runs.find((r) => Number(r.dataset.start) <= offset
+        && offset <= Number(r.dataset.start) + r.textContent!.length)!;
+      return { offsetNode: run.firstChild, offset: offset - Number(run.dataset.start) };
+    };
+  };
+  const markedText = () => Array.from(container.querySelectorAll(".run--marked")).map((r) => r.textContent).join("|");
+
+  it("previews a drag, reports it on release and suppresses the text selection handler", () => {
+    const { handle, onResize, onSelection } = mount();
+    handle.setMentions([MENTIONS[0]]);
+    handle.setResizable(["ev-a"]);
+    container.setPointerCapture = vi.fn();
+    container.releasePointerCapture = vi.fn();
+
+    const down = pointer("pointerdown", handles()[1]);
+    expect(down.defaultPrevented).toBe(true);
+    expect(container.classList.contains("resizing")).toBe(true);
+
+    pointAt(25);
+    pointer("pointermove", container);
+    expect(markedText()).toBe("muscular hypotonia");
+    expect(onResize).not.toHaveBeenCalled();
+
+    pointAt(null); // pointer outside the text: keep the last valid edge
+    pointer("pointermove", container);
+    expect(markedText()).toBe("muscular hypotonia");
+
+    pointer("pointerup", container);
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 25 }]);
+    expect(container.classList.contains("resizing")).toBe(false);
+    expect(markedText()).toBe("muscular hypotonia");
+    expect(onSelection).not.toHaveBeenCalled();
+  });
+
+  it("restores the original span on Escape and reports nothing", () => {
+    const { handle, onResize } = mount();
+    handle.setMentions([MENTIONS[0]]);
+    handle.setResizable(["ev-a"]);
+    container.setPointerCapture = vi.fn();
+    container.releasePointerCapture = vi.fn();
+    const outer = vi.fn();
+    window.addEventListener("keydown", outer);
+    try {
+      pointer("pointerdown", handles()[0]);
+      pointAt(0);
+      pointer("pointermove", container);
+      expect(markedText()).toBe("severe muscular");
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      expect(markedText()).toBe("muscular");
+      expect(outer).not.toHaveBeenCalled();
+      pointer("pointerup", container);
+      expect(onResize).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", outer);
+    }
+  });
+
+  it("reports nothing when the edge ends where it started", () => {
+    const { handle, onResize } = mount();
+    handle.setMentions([MENTIONS[0]]);
+    handle.setResizable(["ev-a"]);
+    container.setPointerCapture = vi.fn();
+    container.releasePointerCapture = vi.fn();
+    pointer("pointerdown", handles()[1]);
+    pointAt(25);
+    pointer("pointermove", container);
+    pointAt(15);
+    pointer("pointermove", container);
+    pointer("pointerup", container);
+    expect(onResize).not.toHaveBeenCalled();
+    expect(markedText()).toBe("muscular");
+  });
+
+  it("cancels a drag when the mentions are replaced from outside", () => {
+    const { handle, onResize } = mount();
+    handle.setMentions([MENTIONS[0]]);
+    handle.setResizable(["ev-a"]);
+    container.setPointerCapture = vi.fn();
+    container.releasePointerCapture = vi.fn();
+    pointer("pointerdown", handles()[1]);
+    pointAt(25);
+    pointer("pointermove", container);
+    handle.setMentions([{ evidence_id: "ev-a", segments: [{ start: 0, end: 6 }], kind: "own" }]);
+    expect(markedText()).toBe("severe");
+    pointer("pointerup", container);
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+
+  it("does not pick the mention under the pointer with the click that ends a drag", () => {
+    const onPick = vi.fn();
+    const handle = mountSpanEditor(container, TEXT, [MENTIONS[0]], vi.fn(), onPick, undefined, vi.fn());
+    handle.setResizable(["ev-a"]);
+    container.setPointerCapture = vi.fn();
+    container.releasePointerCapture = vi.fn();
+    pointer("pointerdown", handles()[1]);
+    pointAt(25);
+    pointer("pointermove", container);
+    pointer("pointerup", container);
+    const run = container.querySelector<HTMLElement>(".run--marked")!;
+    run.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onPick).not.toHaveBeenCalled();
+    // An ordinary click afterwards picks as before.
+    run.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onPick).toHaveBeenCalledTimes(1);
+  });
+
 });

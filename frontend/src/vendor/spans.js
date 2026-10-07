@@ -86,6 +86,16 @@ export class SpanEditor {
     this._keyResizeTimer = null;
     this._onFocusOutBound = (e) => this._onFocusOut(e);
     container.addEventListener("focusout", this._onFocusOutBound);
+    this._drag = null;
+    this._onPointerDownBound = (e) => this._onPointerDown(e);
+    this._onPointerMoveBound = (e) => this._onPointerMove(e);
+    this._onPointerUpBound = (e) => this._endDrag(e, true);
+    this._onPointerCancelBound = (e) => this._endDrag(e, false);
+    this._onDragKeyBound = (e) => this._onDragKey(e);
+    container.addEventListener("pointerdown", this._onPointerDownBound);
+    container.addEventListener("pointermove", this._onPointerMoveBound);
+    container.addEventListener("pointerup", this._onPointerUpBound);
+    container.addEventListener("pointercancel", this._onPointerCancelBound);
 
     this._onMouseUpBound = (e) => this._onMouseUp(e);
     this._onMouseOverBound = (e) => this._onHover(e, true);
@@ -112,6 +122,11 @@ export class SpanEditor {
     this.container.removeEventListener("click", this._onClickBound);
     this.container.removeEventListener("focusout", this._onFocusOutBound);
     clearTimeout(this._keyResizeTimer);
+    this.container.removeEventListener("pointerdown", this._onPointerDownBound);
+    this.container.removeEventListener("pointermove", this._onPointerMoveBound);
+    this.container.removeEventListener("pointerup", this._onPointerUpBound);
+    this.container.removeEventListener("pointercancel", this._onPointerCancelBound);
+    window.removeEventListener("keydown", this._onDragKeyBound, true);
   }
 
   setReadOnly(readOnly) {
@@ -125,6 +140,7 @@ export class SpanEditor {
   }
 
   setMentions(mentions) {
+    this._stopDrag();
     clearTimeout(this._keyResizeTimer);
     this._keyResizeTimer = null;
     this._pendingKeyResize = null;
@@ -231,6 +247,88 @@ export class SpanEditor {
     if (event.relatedTarget?.classList?.contains("resize-handle")
       && event.relatedTarget.dataset.mention === this._pendingKeyResize.mentionId) return;
     this._flushKeyResize();
+  }
+
+  /** Text offset under a viewport point, or null outside the text. */
+  _offsetAtPoint(x, y) {
+    let node = null;
+    let offset = 0;
+    if (document.caretPositionFromPoint) {
+      const position = document.caretPositionFromPoint(x, y);
+      if (position) { node = position.offsetNode; offset = position.offset; }
+    } else if (document.caretRangeFromPoint) {
+      const range = document.caretRangeFromPoint(x, y);
+      if (range) { node = range.startContainer; offset = range.startOffset; }
+    }
+    if (!node || !this.container.contains(node)) return null;
+    return this._offsetOf(node, offset);
+  }
+
+  _onPointerDown(event) {
+    this._suppressClick = false;
+    const handle = event.target?.closest?.(".resize-handle");
+    if (!handle || this.readOnly || event.button > 0) return;
+    const mentionId = handle.dataset.mention;
+    const original = this._spansOf(mentionId);
+    if (!original) return;
+    // No text selection, no compatibility mouse events (and so no paint) for this gesture.
+    event.preventDefault();
+    // The click that ends the gesture must not pick whatever mention lies under the pointer.
+    this._suppressClick = true;
+    this._flushKeyResize();
+    this._drag = {
+      mentionId,
+      index: Number(handle.dataset.segment),
+      edge: handle.dataset.edge,
+      original,
+      current: null,
+      pointerId: event.pointerId,
+    };
+    this.container.classList.add("resizing");
+    this.container.setPointerCapture?.(event.pointerId);
+    window.addEventListener("keydown", this._onDragKeyBound, true);
+  }
+
+  _onPointerMove(event) {
+    const drag = this._drag;
+    if (!drag) return;
+    const offset = this._offsetAtPoint(event.clientX, event.clientY);
+    if (offset === null) return; // outside the text: keep the last valid edge
+    const next = resizeSegment(this.text, drag.original, drag.index, drag.edge, offset);
+    const shown = drag.current || drag.original;
+    const target = next || drag.original;
+    if (JSON.stringify(shown) === JSON.stringify(target)) return;
+    drag.current = next;
+    this._applySpans(drag.mentionId, target);
+  }
+
+  _stopDrag() {
+    const drag = this._drag;
+    this._drag = null;
+    this.container.classList.remove("resizing");
+    window.removeEventListener("keydown", this._onDragKeyBound, true);
+    if (drag) {
+      try { this.container.releasePointerCapture?.(drag.pointerId); } catch { /* already released */ }
+    }
+    return drag;
+  }
+
+  _endDrag(event, commit) {
+    const drag = this._stopDrag();
+    if (!drag) return;
+    if (commit && drag.current) {
+      this.handlers.onResize?.(drag.mentionId, drag.current);
+    } else if (drag.current) {
+      this._applySpans(drag.mentionId, drag.original);
+    }
+  }
+
+  _onDragKey(event) {
+    if (event.key !== "Escape" || !this._drag) return;
+    // Captured on window, so the case screen's own Escape (deselect) never sees it.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    this._endDrag(event, false);
   }
 
   highlight(mentionIds) {
@@ -379,6 +477,10 @@ export class SpanEditor {
   }
 
   _onClick(event) {
+    if (this._suppressClick) {
+      this._suppressClick = false;
+      return;
+    }
     if (!window.getSelection()?.isCollapsed) return;
     const ids = this._runIds(event.target);
     if (ids && ids.length && this.handlers.onPick) {
