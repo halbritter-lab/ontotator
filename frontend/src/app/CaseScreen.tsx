@@ -327,6 +327,22 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     [view.key.mode, view.available_inputs, view.targets, layerSelection.visibleLayerIds]);
   const sourceKey = (s: AnnotationSnapshot) => refKey({ annotation_id: s.annotation.annotation_id, version: s.version });
   const selectedSource = visibleSources.find(s => sourceKey(s) === selectedSourceId);
+  // Keep the selected sidebar entry visible, wherever the selection came from
+  // (text click, "Replaced by", keyboard navigation).
+  const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
+  // Same precedence as the inspector pane: reference, then proposal, then annotation.
+  const selectedListKey = selectedSourceId ? `source:${selectedSourceId}`
+    : selectedTargetId ? `target:${selectedTargetId}`
+    : selectedAnnotationId ? `annotation:${selectedAnnotationId}`
+    : null;
+  useEffect(() => {
+    if (!selectedListKey) return;
+    const entry = Array.from(
+      sidebarScrollRef.current?.querySelectorAll<HTMLElement>("[data-list-key]") ?? [],
+    ).find((el) => el.dataset.listKey === selectedListKey);
+    // jsdom has no scrollIntoView.
+    entry?.scrollIntoView?.({ block: "nearest" });
+  }, [selectedListKey]);
   const sourceMentions: MentionDisplay[] = useMemo(() => visibleSources.flatMap(s => s.evidence.map(ev => ({
     evidence_id: `source:${sourceKey(s)}:${ev.mention.evidence_id}:${ev.version}`,
     sourceId: sourceKey(s),
@@ -1329,7 +1345,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             disabled={queueState === "saving"}
           />
 
-          <div className="sidebar-scroll">
+          <div className="sidebar-scroll" ref={sidebarScrollRef}>
             {view.key.mode === "review" && (
               <>
                 <div className="sidebar-header">

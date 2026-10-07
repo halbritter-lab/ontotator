@@ -170,4 +170,24 @@ describe("continuous sidebar", () => {
     expect(scroller.contains(screen.getByRole("button", { name: /\+ New Annotation/ }))).toBe(true);
     expect(sidebar.lastElementChild).not.toBe(scroller);
   });
+
+  it("scrolls the selected entry into view", () => {
+    const scrolled: string[] = [];
+    const original = (Element.prototype as any).scrollIntoView;
+    (Element.prototype as any).scrollIntoView = function (this: HTMLElement, options: unknown) {
+      expect(options).toEqual({ block: "nearest" });
+      scrolled.push(this.dataset.listKey ?? "");
+    };
+    try {
+      const { container } = renderCase(reviewView());
+      expect(scrolled).toEqual([]);
+      fireEvent.click(itemFor(container, "HP:0002"));
+      expect(scrolled).toEqual([itemFor(container, "HP:0002").dataset.listKey]);
+      fireEvent.click(itemFor(container, "HP:0003"));
+      expect(scrolled[1]).toBe(itemFor(container, "HP:0003").dataset.listKey);
+      expect(scrolled.length).toBe(2);
+    } finally {
+      (Element.prototype as any).scrollIntoView = original;
+    }
+  });
 });
