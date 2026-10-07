@@ -4,10 +4,12 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from ontocurator.domain.documents import OntologyRef
 from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.ontology.provenance import SearchCandidate, SearchRequest
-from ontocurator.ontology.service import OntologyService
+from ontocurator.ontology.service import OntologyService, looks_like_code
 from ontocurator.packages.models import SearchEventRecord
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
@@ -76,3 +78,61 @@ def test_search_event_keeps_candidate_routes_and_reads_old_events() -> None:
     )
     again = SearchEventRecord.model_validate_json(new.model_dump_json())
     assert again.candidate_routes == {"HP:0001252": "exact"}
+
+
+@pytest.mark.parametrize(
+    "query", ["1250", "HP:0001250", "hp:0001250", "HP_0001250", " MONDO:1 "]
+)
+def test_looks_like_code_accepts_identifiers(query: str) -> None:
+    assert looks_like_code(query) is True
+
+
+@pytest.mark.parametrize(
+    "query", ["", "Seizure", "HP:", "trisomy 21", "HP:00012A", "low muscle tone"]
+)
+def test_looks_like_code_rejects_keywords(query: str) -> None:
+    assert looks_like_code(query) is False
+
+
+@pytest.mark.parametrize("query", ["HP:0001250", "hp:0001250", "1250", "HP_0001250"])
+def test_code_query_returns_exactly_that_term(query: str) -> None:
+    result = _service().search(_request(query))
+
+    assert result.route == "auto"
+    assert [c.term_id for c in result.candidates] == ["HP:0001250"]
+    candidate = result.candidates[0]
+    assert candidate.route == "id"
+    assert candidate.match_kind == "id"
+    assert (candidate.rank, candidate.display_pos) == (1, 1)
+    assert result.displayed_ids == ["HP:0001250"]
+    assert result.ranked_ids == ["HP:0001250"]
+    assert result.shuffled is False
+    assert result.seed is None
+
+
+def test_unknown_code_returns_nothing_and_no_similar_terms() -> None:
+    result = _service().search(_request("HP:9999999"))
+
+    assert result.candidates == []
+    assert result.displayed_ids == []
+    assert result.shuffled is False
+
+
+def test_explicit_routes_tag_their_candidates() -> None:
+    service = _service()
+
+    by_id = service.search(_request("HP:0001250", route="id"))
+    assert [c.route for c in by_id.candidates] == ["id"]
+
+    # The explicit exact route keeps its prefix fallback.
+    prefix = service.search(_request("hypoton", route="exact"))
+    assert prefix.route == "exact"
+    assert prefix.candidates[0].term_id == "HP:0001252"
+    assert prefix.candidates[0].route == "exact"
+    assert prefix.candidates[0].match_kind.startswith("prefix:")
+
+    lexical = service.search(_request("hypoton", route="lexical"))
+    assert lexical.shuffled is True
+    assert lexical.candidates
+    assert {c.route for c in lexical.candidates} == {"lexical"}
+    assert {c.match_language for c in lexical.candidates} == {"en"}

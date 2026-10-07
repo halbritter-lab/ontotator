@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import OntologyRef
@@ -30,6 +31,14 @@ from ontocurator.vendor.hpo_span_annotator.search import (
     SearchEngine,
     shuffle_seed,
 )
+
+# Digits alone, PREFIX:digits or PREFIX_digits. Anything else is a keyword.
+_CODE_QUERY = re.compile(r"^(?:\d+|[A-Za-z][A-Za-z0-9]*[:_]\d+)$")
+
+
+def looks_like_code(query: str) -> bool:
+    """Whether the single search treats this query as a term id."""
+    return bool(_CODE_QUERY.match((query or "").strip()))
 
 
 class OntologyService:
@@ -111,37 +120,12 @@ class OntologyService:
         )
 
     def search(self, request: SearchRequest) -> SearchResult:
-        seed: str | None = None
-        if request.route in SCORED_PATHS:
-            seed = shuffle_seed(
-                annotator_id=request.workspace_key.annotator_id,
-                mention_id=request.annotation_id,
-                query=request.query,
-                k=request.k,
-            )
+        if request.route == "auto":
+            hits, was_shuffled, seed = self._auto_hits(request)
+        else:
+            hits, was_shuffled, seed = self._route_hits(request)
 
-        raw_result = self.engine.search(
-            query=request.query,
-            path=request.route,
-            k=request.k,
-            seed=seed,
-        )
-
-        candidates = [
-            SearchCandidate(
-                term_id=hit["hpo_id"],
-                label=hit["label"],
-                definition=hit.get("definition", ""),
-                matched_term=hit.get("matched_term", ""),
-                match_kind=hit.get("match_kind", ""),
-                rank=hit.get("rank", 0),
-                display_pos=hit.get("display_pos", 0),
-                score=hit.get("score"),
-                obsolete=self.validate_term(hit["hpo_id"]).status == "obsolete",
-            )
-            for hit in raw_result["hits"]
-        ]
-
+        candidates = [self._candidate(hit) for hit in hits]
         displayed_ids = [c.hpo_id for c in candidates]
         ranked_ids = [c.hpo_id for c in sorted(candidates, key=lambda c: c.rank)]
 
@@ -151,11 +135,70 @@ class OntologyService:
             candidates=candidates,
             displayed_ids=displayed_ids,
             ranked_ids=ranked_ids,
-            shuffled=raw_result.get("shuffled", False),
+            shuffled=was_shuffled,
             seed=seed,
             layer_id=request.layer_id,
             ontology_sha256=self.ref.sha256,
             index_identity=self.index_identity,
+        )
+
+    def _route_hits(
+        self, request: SearchRequest
+    ) -> tuple[list[dict[str, Any]], bool, str | None]:
+        """One explicitly named route, exactly as the engine answers it."""
+        seed: str | None = None
+        if request.route in SCORED_PATHS:
+            seed = shuffle_seed(
+                annotator_id=request.workspace_key.annotator_id,
+                mention_id=request.annotation_id,
+                query=request.query,
+                k=request.k,
+            )
+        raw_result = self.engine.search(
+            query=request.query,
+            path=request.route,
+            k=request.k,
+            seed=seed,
+        )
+        hits: list[dict[str, Any]] = raw_result["hits"]
+        for hit in hits:
+            hit["route"] = request.route
+        return hits, bool(raw_result.get("shuffled", False)), seed
+
+    def _auto_hits(
+        self, request: SearchRequest
+    ) -> tuple[list[dict[str, Any]], bool, str | None]:
+        """The single search: a code finds its term, a keyword finds candidates."""
+        query = request.query.strip()
+        if not query:
+            return [], False, None
+
+        if looks_like_code(query):
+            # A typed id is a statement, not a question: that term or nothing.
+            hits: list[dict[str, Any]] = self.engine.search(
+                query=query, path="id", k=request.k
+            )["hits"]
+            for hit in hits:
+                hit["route"] = "id"
+            return hits, False, None
+
+        return [], False, None
+
+    def _candidate(self, hit: dict[str, Any]) -> SearchCandidate:
+        language = hit.get("matched_language")
+        return SearchCandidate(
+            term_id=hit["hpo_id"],
+            label=hit["label"],
+            definition=hit.get("definition", ""),
+            matched_term=hit.get("matched_term", ""),
+            match_kind=hit.get("match_kind", ""),
+            rank=hit.get("rank", 0),
+            display_pos=hit.get("display_pos", 0),
+            score=hit.get("score"),
+            obsolete=self.validate_term(hit["hpo_id"]).status == "obsolete",
+            route=hit.get("route", ""),
+            # "?" is the lexical index's marker for a name it could not place.
+            match_language=language if language and language != "?" else None,
         )
 
     def all_ancestors_of(self, hpo_id: str) -> set[str]:
