@@ -30,20 +30,18 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     debounceTimer.current = null;
   };
   useEffect(() => cancelDebounce, []);
-  const runSearch = (val: string, effectiveRoute: "lexical" | "exact" | "id" | "browse", immediate = false) => {
+  const runSearch = (val: string, immediate = false) => {
     cancelDebounce();
     if (immediate || debounceMs <= 0 || !val.trim()) {
-      void searchManager.search(val, annotationId, workspaceKey, effectiveRoute, 10, layerId);
+      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId);
       return;
     }
     debounceTimer.current = setTimeout(() => {
       debounceTimer.current = null;
-      void searchManager.search(val, annotationId, workspaceKey, effectiveRoute, 10, layerId);
+      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId);
     }, debounceMs);
   };
   const [state, setState] = useState<SearchState>(searchManager.getState());
-  const [route, setRoute] = useState<"lexical" | "exact" | "id" | "browse">("lexical");
-  const [userSelectedRoute, setUserSelectedRoute] = useState<boolean>(false);
   const [queryInput, setQueryInput] = useState<string>("");
 
   useEffect(() => {
@@ -56,47 +54,26 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     cancelDebounce();
     searchManager.clear();
     setQueryInput("");
-    setUserSelectedRoute(false);
-    setRoute("lexical");
   }, [annotationId, workspaceKey, layerId, searchManager]);
-
-  const isIdLike = (q: string): boolean => {
-    const trimmed = q.trim();
-    return /^\d+$/.test(trimmed) || /^[A-Za-z]+:\d+$/i.test(trimmed);
-  };
 
   const handleQueryChange = (val: string) => {
     setQueryInput(val);
-    let effectiveRoute = route;
-    if (!userSelectedRoute) {
-      if (isIdLike(val)) {
-        effectiveRoute = "id";
-        setRoute("id");
-      } else if (route === "id" && !isIdLike(val)) {
-        effectiveRoute = "lexical";
-        setRoute("lexical");
-      }
-    }
-    runSearch(val, effectiveRoute);
+    runSearch(val);
   };
 
   const handleClear = () => {
     cancelDebounce();
     setQueryInput("");
-    setUserSelectedRoute(false);
-    setRoute("lexical");
     searchManager.clear();
   };
 
-  const handleRouteChange = (newRoute: "lexical" | "exact" | "id" | "browse") => {
-    setUserSelectedRoute(true);
-    setRoute(newRoute);
-    if (queryInput) {
-      runSearch(queryInput, newRoute, true);
-    }
-  };
-
   const isObsolete = (c: SearchCandidate): boolean => c.obsolete === true;
+
+  // What matched, and in which language when it was not an English name.
+  const matchDetail = (c: SearchCandidate): string =>
+    c.match_language && c.match_language !== "en"
+      ? `${c.match_kind}, ${c.match_language}`
+      : `${c.match_kind}`;
 
   return (
     <div className="search-panel">
@@ -109,13 +86,13 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             id="search-input"
             type="text"
             className="form-control"
-            placeholder="Search term or identifier (e.g. 1250, HP:0001250, MONDO:0001250)"
+            placeholder="Name or code"
             value={queryInput}
             onChange={(e) => handleQueryChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                runSearch(queryInput, route, true);
+                runSearch(queryInput, true);
               }
             }}
             autoComplete="off"
@@ -132,27 +109,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           )}
         </div>
         <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
-          Pure digits search the main ontology. For other prefixes, provide the full identifier (e.g. MONDO:0001250).
+          Search by name or code (e.g. HP:0001250)
         </div>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="search-route-select" className="form-label">
-          Search Strategy
-        </label>
-        <select
-          id="search-route-select"
-          className="form-select"
-          value={route}
-          onChange={(e) =>
-            handleRouteChange(e.target.value as "lexical" | "exact" | "id" | "browse")
-          }
-        >
-          <option value="lexical">Lexical similarity</option>
-          <option value="exact">Exact term</option>
-          <option value="id">Identifier (e.g. HP:..., MONDO:...)</option>
-          <option value="browse">Hierarchy (Parents/Children)</option>
-        </select>
       </div>
 
       {state.isLoading && (
@@ -214,7 +172,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 </div>
                 {cand.matched_term && cand.matched_term !== cand.label && (
                   <div style={{ fontSize: "0.8rem", color: "var(--primary)", marginBottom: 2 }}>
-                    Match: »{cand.matched_term}« ({cand.match_kind})
+                    {`Match: »${cand.matched_term}« (${matchDetail(cand)})`}
                   </div>
                 )}
                 {cand.definition && <div className="candidate-def">{cand.definition}</div>}
