@@ -868,3 +868,76 @@ def test_auto_search_records_the_route_of_each_candidate(app_client):
     assert selections[0].candidate_routes["HP:0001252"] == "exact"
     assert selections[0].displayed_position == 1
     assert selections[0].ranked_position == 1
+
+
+def test_selection_from_the_similar_block_records_its_positions(app_client):
+    from ontocurator.domain.workspace import WorkspaceKey
+
+    client, _ = app_client
+    files = {
+        "file": (
+            "package.zip",
+            _create_sample_package_bytes("single"),
+            "application/zip",
+        )
+    }
+    assert client.post("/api/v1/packages", files=files).status_code == 200
+    opened = client.post(
+        "/api/v1/workspaces/open",
+        json={
+            "package_id": "pkg-scenario-a",
+            "document_id": "doc-beta",
+            "annotator_id": "annotator-1",
+            "mode": "independent",
+        },
+    )
+    assert opened.status_code == 200, opened.text
+    ws_id = opened.json()["workspace_id"]
+    ws_key = opened.json()["view"]["key"]
+
+    resp = client.post(
+        "/api/v1/search",
+        json={
+            "workspace_key": ws_key,
+            "annotation_id": "new-ann-1",
+            "layer_id": "hpo-layer",
+            "query": "Seizure",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    result = resp.json()
+    assert result["candidates"][0]["route"] == "exact"
+    # A term behind the exact block: its positions count the exact match too.
+    chosen = next(c for c in result["candidates"] if c["term_id"] == "HP:0011146")
+    assert chosen["route"] == "lexical"
+    assert chosen["display_pos"] > 1
+    assert chosen["rank"] > 1
+
+    resp = client.post(
+        f"/api/v1/workspaces/{ws_id}/commands",
+        json={
+            "mutation_id": "mut-select-similar",
+            "expected_revision": 0,
+            "payload": {
+                "command": "create_annotation",
+                "annotation_id": "new-ann-1",
+                "layer_id": "hpo-layer",
+                "type_id": "phenotype",
+                "term_id": "HP:0011146",
+                "axes": {"assertion": "present"},
+                "evidence_id": "ev-hypo",
+                "segments": [{"start": 30, "end": 44}],
+                "search_event_id": result["search_id"],
+            },
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    events = client.app.state.repo.get_search_events_for_workspace(
+        WorkspaceKey.model_validate(ws_key)
+    )
+    selections = [e for e in events if e.selected_term_id == "HP:0011146"]
+    assert len(selections) == 1
+    assert selections[0].candidate_routes["HP:0011146"] == "lexical"
+    assert selections[0].displayed_position == chosen["display_pos"]
+    assert selections[0].ranked_position == chosen["rank"]

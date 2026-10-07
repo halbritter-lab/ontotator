@@ -218,7 +218,8 @@ class OntologyService:
                 hit["rank"] += len(exact)
                 hit["display_pos"] += len(exact)
 
-        return exact + similar, bool(similar), seed
+        # A seed is reported only when it was used.
+        return exact + similar, bool(similar), seed if similar else None
 
     def _candidate(self, hit: dict[str, Any]) -> SearchCandidate:
         language = hit.get("matched_language")

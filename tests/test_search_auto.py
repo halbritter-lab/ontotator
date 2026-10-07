@@ -11,6 +11,7 @@ from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.ontology.provenance import SearchCandidate, SearchRequest
 from ontocurator.ontology.service import OntologyService, looks_like_code
 from ontocurator.packages.models import SearchEventRecord
+from ontocurator.vendor.hpo_span_annotator.search import shuffle_seed, shuffled
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 
@@ -207,6 +208,7 @@ def test_exact_matches_take_precedence_within_k(tmp_path: Path) -> None:
     two = service.search(_request("deafness", k=2))
     assert two.displayed_ids == ["TEST:0000002", "TEST:0000003"]
     assert two.shuffled is False
+    assert two.seed is None
 
     one = service.search(_request("deafness", k=1))
     assert one.displayed_ids == ["TEST:0000002"]
@@ -253,3 +255,73 @@ def test_similar_block_is_stable_per_annotator_and_keyed_by_annotator() -> None:
     assert other.seed != first.seed
     assert set(other.displayed_ids) == set(first.displayed_ids)
     assert other.ranked_ids == first.ranked_ids
+
+
+def _deafness_ontology(tmp_path: Path) -> Path:
+    """One exact match for `deafness` and eight terms that merely resemble it."""
+    labels = [
+        "Root",
+        "Deafness",
+        "Mild deafness",
+        "Severe deafness",
+        "Partial deafness",
+        "Profound deafness",
+        "Congenital deafness",
+        "Unilateral deafness",
+        "Bilateral deafness",
+        "Progressive deafness",
+    ]
+    payload = {
+        "graphs": [
+            {
+                "id": "http://example.com/deaf.json",
+                "meta": {"version": "http://example.com/releases/2026-06-23/deaf.json"},
+                "nodes": [
+                    {
+                        "id": f"http://purl.obolibrary.org/obo/TEST_{index:07d}",
+                        "lbl": label,
+                        "type": "CLASS",
+                    }
+                    for index, label in enumerate(labels, start=1)
+                ],
+                "edges": [
+                    {
+                        "sub": f"http://purl.obolibrary.org/obo/TEST_{index:07d}",
+                        "pred": "is_a",
+                        "obj": "http://purl.obolibrary.org/obo/TEST_0000001",
+                    }
+                    for index in range(2, len(labels) + 1)
+                ],
+            }
+        ]
+    }
+    path = tmp_path / "deaf.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_similar_block_is_shuffled_by_the_annotators_seed(tmp_path: Path) -> None:
+    service = _service(_deafness_ontology(tmp_path))
+    annotators = ["dr-a", "dr-b", "dr-c", "dr-d", "dr-e", "dr-f"]
+    results = {
+        annotator: service.search(_request("deafness", workspace_key=_key(annotator)))
+        for annotator in annotators
+    }
+
+    ranked = results["dr-a"].ranked_ids
+    assert ranked[0] == "TEST:0000002"
+    assert len(ranked) == 9
+
+    for annotator, result in results.items():
+        assert result.shuffled is True
+        assert result.ranked_ids == ranked
+        # The exact match stays on top; only the similar block moves.
+        assert result.displayed_ids[0] == "TEST:0000002"
+        seed = shuffle_seed(annotator, "ann-1", "deafness", 10)
+        assert result.seed == seed
+        expected = shuffled([{"hpo_id": term_id} for term_id in ranked[1:]], seed)
+        assert result.displayed_ids[1:] == [hit["hpo_id"] for hit in expected]
+
+    orders = {tuple(result.displayed_ids) for result in results.values()}
+    assert len(orders) > 1
+    assert any(result.displayed_ids != ranked for result in results.values())
