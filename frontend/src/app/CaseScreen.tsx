@@ -89,6 +89,7 @@ export const SHORTCUTS: { keys: string; description: string; reviewOnly?: boolea
   { keys: "Esc", description: "Clear selection / cancel adding a mention" },
   { keys: "Alt + ← / →", description: "Previous / next case" },
   { keys: "Shift + arrows, then release Shift", description: "Select text with the keyboard to create a mention" },
+  { keys: "← / →  (Ctrl: by word)", description: "Move the focused mention edge (Tab to an edge handle of the selected annotation)" },
   { keys: "?", description: "Show / hide this help" },
 ];
 
@@ -131,6 +132,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     isSpanless?: boolean;
   } | null>(null);
   const [isAttachingMention, setIsAttachingMention] = useState(false);
+  const [textResyncToken, setTextResyncToken] = useState(0);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const creatingPending = useRef(false);
   const [draft, setDraft] = useState<Draft>(view.draft);
@@ -778,6 +780,32 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
 
+  // A mention edge was dragged (or moved by keyboard) in the text.
+  const handleResizeMention = async (evidenceId: string, segments: Array<{ start: number; end: number }>) => {
+    const annId = selectedAnnotationId;
+    if (!annId) return;
+    try {
+      const updated = await mutateAnnotationAndSyncDecision(annId, () =>
+        enqueueMutation({
+          command: "edit_mention",
+          annotation_id: annId,
+          evidence_id: evidenceId,
+          segments,
+        })
+      );
+      // Shared evidence is copied on write and gets a new id: keep the selection on it.
+      const refs = (updated.annotations ?? []).find((a) => a.annotation.annotation_id === annId)
+        ?.annotation.evidence_refs ?? [];
+      if (selectedEvidenceId === evidenceId && !refs.some((r) => r.evidence_id === evidenceId)) {
+        setSelectedEvidenceId(refs.find((r) => r.evidence_id.startsWith(`${evidenceId}-cow-`))?.evidence_id ?? null);
+      }
+    } catch (error) {
+      // The text already shows the new edge: put it back to the saved state.
+      setTextResyncToken((token) => token + 1);
+      reportError(error);
+    }
+  };
+
   const handleDeleteAnnotation = async (annotationId: string) => {
     await enqueueMutation({
       command: "delete_draft_annotation",
@@ -960,6 +988,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Single-layer check logic vs multi-layer check logic
   const isSingleLayer = (view.layers ?? []).length <= 1;
   const editableLayerIds = view.scope?.editable_layer_ids ?? (view.layers ? view.layers.map(l => l.layer_id) : []);
+  // Only the selected curated annotation's mentions can be resized, and not while
+  // another text interaction (attaching a mention, choosing a term) is in progress.
+  const resizableEvidenceIds = selectedAnnotation && !isAttachingMention && !pendingAnnotation
+    && editableLayerIds.includes(selectedAnnotation.annotation.layer_id)
+    ? (selectedAnnotation.annotation.evidence_refs ?? []).map((r) => r.evidence_id)
+    : [];
 
   const openReviewTargets = reviewTargets.filter(
     (t) => !(draft.decisions ?? []).some((d) => refKey(d.target) === refKey(t)),
@@ -1593,6 +1627,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           onSelection={handleSelection}
           onPick={handlePickMention}
           onChangeIntent={setSelectionIntent}
+          resizableEvidenceIds={resizableEvidenceIds}
+          onResizeMention={(evidenceId, segments) => { void handleResizeMention(evidenceId, segments); }}
+          resyncToken={textResyncToken}
         />
 
         {/* Right: Annotation & Search Panel + Review Actions */}
