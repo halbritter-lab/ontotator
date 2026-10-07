@@ -15,7 +15,8 @@ export interface TargetProposal {
   term_id?: string;
   axes?: Record<string, unknown> | null;
   axes_values?: Record<string, string | null> | null;
-  provenance: components["schemas"]["Provenance"];
+  /** Null when the proposal's snapshot is missing, so its origin is unknown. */
+  provenance: components["schemas"]["Provenance"] | null;
   evidence_count: number;
   /** Text of the first mention, for telling equally named proposals apart. */
   quote?: string;
@@ -240,9 +241,15 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       </div>
       {/* Origin Info */}
       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 12 }}>
-        <AiBadge provenance={target.provenance} />{" "}
-        Source: <strong>{target.provenance.actor.kind}</strong> ({target.provenance.actor.actor_id}) •
-        Method: {target.provenance.method}
+        {target.provenance ? (
+          <>
+            <AiBadge provenance={target.provenance} />{" "}
+            Source: <strong>{target.provenance.actor.kind}</strong> ({target.provenance.actor.actor_id}) •
+            Method: {target.provenance.method}
+          </>
+        ) : (
+          <>Source: <strong>unknown</strong></>
+        )}
       </div>
 
       {/* Obsolete warning */}

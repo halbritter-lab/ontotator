@@ -265,10 +265,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         term_id: termId,
         axes: (snap?.annotation.axes_values ?? (snap?.annotation as any)?.axes?.values) as any,
         axes_values: snap?.annotation.axes_values ?? null,
-        provenance: snap?.annotation.provenance ?? {
-          actor: { actor_id: "unknown", kind: "tool" },
-          method: "automated",
-        },
+        provenance: snap?.annotation.provenance ?? null,
         evidence_count: snap?.annotation.evidence_refs?.length ?? 0,
         quote: snap?.evidence?.[0] ? quoteSegments(view.document.text, snap.evidence[0].mention.segments, 40) : undefined,
         is_obsolete: (view.term_statuses?.[statusKey] ?? view.term_statuses?.[termId]) === "obsolete",
@@ -1473,9 +1470,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                             <>
                               {t.evidence_count === 0 ? "Spanless" : `“${t.quote ?? ""}”`}
                               {t.evidence_count > 1 && ` +${t.evidence_count - 1} more`}
-                              {t.provenance.actor.kind === "tool"
+                              {t.provenance?.actor.kind === "tool"
                                 ? <>{" "}<AiBadge provenance={t.provenance} /></>
-                                : ` • ${t.provenance.actor.kind}`}
+                                : ` • ${t.provenance?.actor.kind ?? "origin unknown"}`}
                             </>
                           )}
                         </div>
@@ -1488,11 +1485,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
             {visibleSources.length > 0 && <section aria-label="Reference annotations">
               <div className="sidebar-header">Reference Annotations ({visibleSources.length})</div>
-              {visibleSources.map(s => <button type="button" className="btn btn-secondary" key={sourceKey(s)}
+              {visibleSources.map(s => <button type="button" className="reference-item" key={sourceKey(s)}
                 data-list-key={`source:${sourceKey(s)}`}
                 aria-pressed={sourceKey(s) === selectedSourceId} onClick={() => selectSource(sourceKey(s))}>
                 <TermName termId={s.annotation.term_id} label={termLabel(s.annotation.layer_id, s.annotation.term_id)} />
-                <span>
+                <span className="doc-meta">
                   {view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Read-only{" "}
                   <AiBadge provenance={s.annotation.provenance} />
                 </span>
@@ -1500,7 +1497,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </section>}
 
             <div className="sidebar-section">
-              <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="sidebar-header sidebar-header--actions">
                 <span>Curated Annotations ({visibleAnnotations.length})</span>
                 <button
                   type="button"

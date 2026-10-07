@@ -138,7 +138,7 @@ body {
 
 /* Left Sidebar: Document / Package List */
 .sidebar {
-  width: 280px;
+  width: 320px;
   border-right: 1px solid var(--border-color);
   background: var(--bg-surface);
   display: flex;
@@ -177,6 +177,58 @@ body {
   top: 0;
   z-index: 1;
   background: var(--bg-surface);
+}
+
+/* Section header with an action: the title gives way, the button stays whole. */
+.sidebar-header--actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-header--actions > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-header--actions .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Read-only reference annotation: laid out like a list entry. */
+.reference-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border-color);
+  border-left: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.reference-item:hover {
+  background: var(--bg-primary);
+}
+
+.reference-item[aria-pressed="true"] {
+  background: var(--primary-light);
+  border-left-color: var(--primary);
+}
+
+.reference-item .term-name {
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 
 /* Keep an entry scrolled into view clear of the sticky section header. */

@@ -215,6 +215,30 @@ describe("review outcome and section layout", () => {
     }
   });
 
+  it("does not claim AI origin for a proposal whose snapshot is missing", () => {
+    const view = reviewView();
+    view.available_inputs = view.available_inputs!.filter((s) => s.annotation.annotation_id !== "tool-prop");
+    const { container } = renderCase(view);
+    const item = itemFor(container, "tool-prop");
+    expect(within(item).queryByText("✦ AI")).toBeNull();
+    expect(item.textContent).toContain("• origin unknown");
+
+    fireEvent.click(item);
+    const details = container.querySelector<HTMLElement>(".inspector-pane")!;
+    expect(within(details).queryByText("✦ AI")).toBeNull();
+    expect(details.textContent).toContain("Source: unknown");
+  });
+
+  it("lays out reference annotations as list entries with a visible selection", () => {
+    const { container } = renderCase(reviewView());
+    const reference = itemFor(container, "HP:0003");
+    expect(reference.classList.contains("reference-item")).toBe(true);
+    expect(reference.classList.contains("btn")).toBe(false);
+    expect(reference.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(reference);
+    expect(reference.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("gives every section its own container so a sticky header leaves with its section", () => {
     const { container } = renderCase(reviewView());
     const scroller = container.querySelector(".sidebar-scroll")!;
