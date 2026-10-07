@@ -24,6 +24,9 @@ class SearchEventRecord(BaseModel):
     candidates: list[str]
     ranked_ids: list[str] = Field(default_factory=list)
     candidate_scores: dict[str, float] = Field(default_factory=dict)
+    # Term id -> route that surfaced it. Empty on events written before the
+    # single search existed.
+    candidate_routes: dict[str, str] = Field(default_factory=dict)
     selected_term_id: str | None = None
     ranked_position: int | None = None
     displayed_position: int | None = None

@@ -82,7 +82,10 @@ class SearchRequest(BaseModel):
     annotation_id: str
     layer_id: str = "hpo-layer"
     query: str
-    route: Literal["lexical", "exact", "id", "browse"] = "lexical"
+    # "auto" is the single search the interface uses: the service decides
+    # between a code lookup and a keyword search. The explicit routes remain for
+    # stored events and for other callers.
+    route: Literal["auto", "lexical", "exact", "id", "browse"] = "auto"
     k: int = Field(default=10, ge=1, le=100)
 
 
@@ -100,6 +103,11 @@ class SearchCandidate(BaseModel):
     display_pos: int = 0
     score: float | None = None
     obsolete: bool = False
+    # The route that put this candidate on the list: "id", "exact", "lexical"
+    # or "browse".
+    route: str = ""
+    # Language of the name that matched, when the route knows it.
+    match_language: str | None = None
 
     @model_validator(mode="before")
     @classmethod
