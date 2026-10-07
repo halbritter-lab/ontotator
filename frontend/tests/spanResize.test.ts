@@ -300,4 +300,21 @@ describe("span editor resize handles", () => {
     }
   });
 
+
+
+  it("keeps keyboard focus on a handle when the text is redrawn from outside", () => {
+    const { handle } = mount();
+    handle.setResizable(["ev-a"]);
+    handles()[1].focus();
+    // The saved state comes back from the server: same edge, new element.
+    handle.setMentions([{ evidence_id: "ev-a", segments: [{ start: 7, end: 13 }], kind: "own" }]);
+    expect(describeHandle(focused())).toBe("ev-a:0:end@13");
+    handle.setSelected("ev-a");
+    handle.setResizable(["ev-a"]);
+    expect(describeHandle(focused())).toBe("ev-a:0:end@13");
+    // The handles go away: focus is not moved to anything else in the text.
+    handle.setResizable([]);
+    expect(container.contains(document.activeElement)).toBe(false);
+  });
+
 });

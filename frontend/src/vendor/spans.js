@@ -398,7 +398,21 @@ export class SpanEditor {
       fragment.appendChild(node);
       for (const handle of ends.get(run.end) || []) fragment.appendChild(this._handleNode(handle));
     }
+    // Redrawing replaces the handles: keep keyboard focus on the edge that had it.
+    const active = document.activeElement;
+    const focusedEdge = active?.classList?.contains("resize-handle") && this.container.contains(active)
+      ? { ...active.dataset }
+      : null;
+    const refocusing = this._refocusing;
+    this._refocusing = true;
     this.container.replaceChildren(fragment);
+    if (focusedEdge) {
+      const candidates = Array.from(this.container.querySelectorAll(".resize-handle")).filter((node) =>
+        node.dataset.mention === focusedEdge.mention && node.dataset.edge === focusedEdge.edge);
+      (candidates.find((node) => node.dataset.offset === focusedEdge.offset)
+        || candidates.find((node) => node.dataset.segment === focusedEdge.segment))?.focus();
+    }
+    this._refocusing = refocusing;
     if (!this.text) {
       this.container.appendChild(document.createTextNode(NBSP));
     }

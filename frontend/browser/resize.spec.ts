@@ -86,6 +86,11 @@ test.describe("resizing mention spans", () => {
     await page.keyboard.press("ArrowLeft");
     await expect(mentionWithOffsets(page, "[0:7]")).toBeVisible();
     await expect(revision(page)).toHaveAttribute("title", "Revision 2");
+    // Saving redraws the text; the edge keeps the focus, so the next key press still moves it.
+    await expect(page.locator(".resize-handle--end")).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(mentionWithOffsets(page, "[0:6]")).toBeVisible();
+    await expect(revision(page)).toHaveAttribute("title", "Revision 3");
   });
 
   test("selecting text still works next to a mention with handles", async ({ page }) => {
