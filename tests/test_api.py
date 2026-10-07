@@ -785,3 +785,86 @@ def test_document_list_flags_review_inputs_only_in_review_mode(app_client):
     assert flags("pkg-scenario-a", "review") == [False, False]
     assert flags("demo-klinik-pakete-01", "independent") == [None, None]
     assert flags("demo-klinik-pakete-01", None) == [None, None]
+
+
+def test_auto_search_records_the_route_of_each_candidate(app_client):
+    from ontocurator.domain.workspace import WorkspaceKey
+
+    client, _ = app_client
+    files = {
+        "file": (
+            "package.zip",
+            _create_sample_package_bytes("single"),
+            "application/zip",
+        )
+    }
+    assert client.post("/api/v1/packages", files=files).status_code == 200
+    opened = client.post(
+        "/api/v1/workspaces/open",
+        json={
+            "package_id": "pkg-scenario-a",
+            "document_id": "doc-beta",
+            "annotator_id": "annotator-1",
+            "mode": "independent",
+        },
+    )
+    assert opened.status_code == 200, opened.text
+    ws_id = opened.json()["workspace_id"]
+    ws_key = opened.json()["view"]["key"]
+
+    # No "route" in the body: the default is the single search.
+    resp = client.post(
+        "/api/v1/search",
+        json={
+            "workspace_key": ws_key,
+            "annotation_id": "new-ann-1",
+            "layer_id": "hpo-layer",
+            "query": "hypotonia",
+            "k": 5,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    result = resp.json()
+    assert result["route"] == "auto"
+    assert result["candidates"][0]["term_id"] == "HP:0001252"
+    assert result["candidates"][0]["route"] == "exact"
+
+    repo = client.app.state.repo
+    event = repo.get_search_event(result["search_id"])
+    assert event is not None
+    assert event.route == "auto"
+    assert event.candidates == result["displayed_ids"]
+    assert event.candidate_routes == {
+        c["term_id"]: c["route"] for c in result["candidates"]
+    }
+    assert event.candidate_routes["HP:0001252"] == "exact"
+
+    # Selecting from that search keeps the routes on the selection event.
+    resp = client.post(
+        f"/api/v1/workspaces/{ws_id}/commands",
+        json={
+            "mutation_id": "mut-select-1",
+            "expected_revision": 0,
+            "payload": {
+                "command": "create_annotation",
+                "annotation_id": "new-ann-1",
+                "layer_id": "hpo-layer",
+                "type_id": "phenotype",
+                "term_id": "HP:0001252",
+                "axes": {"assertion": "present"},
+                "evidence_id": "ev-hypo",
+                "segments": [{"start": 30, "end": 44}],
+                "search_event_id": result["search_id"],
+            },
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    events = repo.get_search_events_for_workspace(WorkspaceKey.model_validate(ws_key))
+    selections = [e for e in events if e.selected_term_id == "HP:0001252"]
+    assert len(selections) == 1
+    assert selections[0].source_search_event_id == result["search_id"]
+    assert selections[0].route == "auto"
+    assert selections[0].candidate_routes["HP:0001252"] == "exact"
+    assert selections[0].displayed_position == 1
+    assert selections[0].ranked_position == 1

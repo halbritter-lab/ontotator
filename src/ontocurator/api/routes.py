@@ -536,6 +536,7 @@ def search_ontology(
         candidate_scores={
             c.term_id: c.score for c in result.candidates if c.score is not None
         },
+        candidate_routes={c.term_id: c.route for c in result.candidates if c.route},
         ontology_release=ontology.ref.release,
         index_identity=result.index_identity,
         timestamp=datetime.now(UTC).isoformat(),
