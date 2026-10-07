@@ -141,11 +141,32 @@ export class SpanEditor {
 
   setMentions(mentions) {
     this._stopDrag();
+    this.mentions = mentions || [];
+    // A keyboard change that is still waiting to be reported stays on top of the
+    // update (typically the save of the previous step), so no key press is lost.
+    const pending = this._pendingKeyResize;
+    if (pending && this.mentions.some((m) => m.mention_id === pending.mentionId)) {
+      this._applySpans(pending.mentionId, pending.spans);
+      return;
+    }
     clearTimeout(this._keyResizeTimer);
     this._keyResizeTimer = null;
     this._pendingKeyResize = null;
-    this.mentions = mentions || [];
     this.render();
+  }
+
+  /** Whether a run starts / ends a segment of a highlighted mention. */
+  _hotEdges(start, end) {
+    let atStart = false;
+    let atEnd = false;
+    for (const mention of this.mentions) {
+      if (!this.activeIds.has(mention.mention_id)) continue;
+      for (const span of normaliseSpans(mention.spans || [])) {
+        if (span.start === start) atStart = true;
+        if (span.end === end) atEnd = true;
+      }
+    }
+    return { atStart, atEnd };
   }
 
   setSuggestions(suggestions) {
@@ -326,6 +347,12 @@ export class SpanEditor {
     const drag = this._stopDrag();
     if (!drag) return;
     if (commit && drag.current) {
+      // Leave keyboard focus on the dropped edge, so arrow keys can fine-tune it.
+      const origin = drag.original[drag.index];
+      const anchor = drag.edge === "start" ? origin.end - 1 : origin.start;
+      const segment = drag.current.find((s) => s.start <= anchor && anchor < s.end) || drag.current[0];
+      this._findHandle(drag.mentionId, drag.edge, drag.edge === "start" ? segment.start : segment.end)
+        ?.focus({ preventScroll: true });
       this.handlers.onResize?.(drag.mentionId, drag.current);
     } else if (drag.current) {
       this._applySpans(drag.mentionId, drag.original);
@@ -346,6 +373,10 @@ export class SpanEditor {
       const ids = (node.dataset.mentions || "").split(",").filter(Boolean);
       const isHot = ids.some((id) => this.activeIds.has(id));
       node.classList.toggle("run--hot", isHot);
+      const start = Number(node.dataset.start);
+      const edges = isHot ? this._hotEdges(start, start + node.textContent.length) : null;
+      node.classList.toggle("run--hot-start", Boolean(edges?.atStart));
+      node.classList.toggle("run--hot-end", Boolean(edges?.atEnd));
       if (ids.length > 1) {
         const runMentions = ids
           .map((id) => this.mentions.find((m) => m.mention_id === id))
@@ -386,6 +417,9 @@ export class SpanEditor {
       }
       if (run.mentionIds.some((id) => this.activeIds.has(id))) {
         node.classList.add("run--hot");
+        const edges = this._hotEdges(run.start, run.end);
+        if (edges.atStart) node.classList.add("run--hot-start");
+        if (edges.atEnd) node.classList.add("run--hot-end");
       }
 
       if (run.mentionIds.length > 0) {

@@ -334,4 +334,47 @@ describe("span editor resize handles", () => {
     expect(container.contains(document.activeElement)).toBe(false);
   });
 
+  it("frames a highlighted segment once, even when an overlapping mention splits its runs", () => {
+    const { handle } = mount();
+    handle.setMentions([
+      { evidence_id: "ev-long", segments: [{ start: 0, end: 15 }], kind: "own" },
+      { evidence_id: "ev-inner", segments: [{ start: 7, end: 25 }], kind: "own" },
+    ]);
+    handle.setSelected("ev-long");
+    const hot = Array.from(container.querySelectorAll<HTMLElement>(".run--hot"));
+    expect(hot.map((r) => r.textContent)).toEqual(["severe ", "muscular"]);
+    expect(hot.map((r) => [r.classList.contains("run--hot-start"), r.classList.contains("run--hot-end")]))
+      .toEqual([[true, false], [false, true]]);
+    handle.setSelected(null);
+    expect(container.querySelectorAll(".run--hot, .run--hot-start, .run--hot-end").length).toBe(0);
+  });
+
+  it("leaves keyboard focus on the dropped edge after a drag", () => {
+    const { handle } = mount();
+    handle.setMentions([MENTIONS[0]]);
+    handle.setResizable(["ev-a"]);
+    container.setPointerCapture = vi.fn();
+    container.releasePointerCapture = vi.fn();
+    pointer("pointerdown", handles()[1]);
+    pointAt(25);
+    pointer("pointermove", container);
+    pointer("pointerup", container);
+    expect(describeHandle(focused())).toBe("ev-a:0:end@25");
+  });
+
+  it("keeps a keyboard step that is still pending when an earlier save comes back", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setMentions([MENTIONS[0]]);
+    handle.setResizable(["ev-a"]);
+    handles()[1].focus();
+    press(focused(), "ArrowLeft"); // 7..14, not reported yet
+    // The save of an earlier step returns with the previously saved span.
+    handle.setMentions([{ evidence_id: "ev-a", segments: [{ start: 7, end: 15 }], kind: "own" }]);
+    expect(markedText()).toBe("muscula");
+    expect(describeHandle(focused())).toBe("ev-a:0:end@14");
+    vi.advanceTimersByTime(400);
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 14 }]);
+  });
 });

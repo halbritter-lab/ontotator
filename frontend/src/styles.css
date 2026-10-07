@@ -295,6 +295,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  /* Room for the intent switch, so the text does not move when it appears. */
+  min-height: 50px;
 }
 
 .text-container {
@@ -593,8 +595,9 @@ body {
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   border-radius: 3px;
-  padding: 1px 2px;
-  margin: 0 1px;
+  /* No horizontal padding or margin: marking, selecting or resizing never moves the text. */
+  padding: 1px 0;
+  margin: 0;
 }
 
 /* 6-color pastel palette */
@@ -635,14 +638,41 @@ body {
 }
 
 /* Active / Selected mention */
-.mention-span.selected,
-.run--hot {
+.mention-span.selected {
   outline: 2px solid #0284c7;
   outline-offset: 1px;
   box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.35);
   font-weight: 500;
   position: relative;
   z-index: 1;
+}
+
+/* The frame is drawn per segment, not per run: lines above and below every run,
+   side lines only where a segment really starts or ends. Pieces split by an
+   overlapping annotation or a line break therefore show no false edges. */
+.run--hot {
+  --hot: #0284c7;
+  --hot-rows: 0 -2px 0 var(--hot), 0 2px 0 var(--hot);
+  --hot-left: -2px 0 0 var(--hot), -2px -2px 0 var(--hot), -2px 2px 0 var(--hot);
+  --hot-right: 2px 0 0 var(--hot), 2px -2px 0 var(--hot), 2px 2px 0 var(--hot);
+  box-shadow: var(--hot-rows);
+  box-decoration-break: slice;
+  -webkit-box-decoration-break: slice;
+  border-radius: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.run--hot-start {
+  box-shadow: var(--hot-rows), var(--hot-left);
+}
+
+.run--hot-end {
+  box-shadow: var(--hot-rows), var(--hot-right);
+}
+
+.run--hot-start.run--hot-end {
+  box-shadow: var(--hot-rows), var(--hot-left), var(--hot-right);
 }
 
 /* Drag handles at the edges of the selected annotation's mention segments.
