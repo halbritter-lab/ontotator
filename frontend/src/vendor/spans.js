@@ -140,18 +140,30 @@ export class SpanEditor {
   }
 
   setMentions(mentions) {
-    this._stopDrag();
     this.mentions = mentions || [];
+    // An update that leaves the dragged mention as it was when the drag began is
+    // the echo of an earlier save, not a change from outside: the drag goes on.
+    const drag = this._drag;
+    if (drag) {
+      const incoming = this._spansOf(drag.mentionId);
+      if (incoming && JSON.stringify(incoming) === JSON.stringify(drag.original)) {
+        this._applySpans(drag.mentionId, drag.current || drag.original);
+        return;
+      }
+      this._stopDrag();
+    }
     // A keyboard change that is still waiting to be reported stays on top of the
-    // update (typically the save of the previous step), so no key press is lost.
+    // update when the update is the save of the step before it (the mention comes
+    // back exactly as that step left it), so no key press is lost. Anything else is
+    // a change from outside - including a save that moved the selected annotation
+    // to a copy of shared evidence - and the pending change is dropped with it.
     const pending = this._pendingKeyResize;
-    if (pending && this.mentions.some((m) => m.mention_id === pending.mentionId)) {
+    const incoming = pending ? this._spansOf(pending.mentionId) : null;
+    if (pending && incoming && JSON.stringify(incoming) === JSON.stringify(pending.saved)) {
       this._applySpans(pending.mentionId, pending.spans);
       return;
     }
-    clearTimeout(this._keyResizeTimer);
-    this._keyResizeTimer = null;
-    this._pendingKeyResize = null;
+    this._clearKeyResize();
     this.render();
   }
 
@@ -182,7 +194,17 @@ export class SpanEditor {
   /** Mentions whose segments get draggable start/end handles. */
   setResizable(mentionIds) {
     this.resizableIds = new Set(mentionIds || []);
+    // The selection moved on while a keyboard change was still waiting: report it
+    // now, before its handles disappear.
+    const pending = this._pendingKeyResize;
+    if (pending && !this.resizableIds.has(pending.mentionId)) this._flushKeyResize();
     this.render();
+  }
+
+  _clearKeyResize() {
+    clearTimeout(this._keyResizeTimer);
+    this._keyResizeTimer = null;
+    this._pendingKeyResize = null;
   }
 
   _handlesByOffset() {
@@ -195,6 +217,15 @@ export class SpanEditor {
         starts.set(span.start, [...(starts.get(span.start) || []), { ...base, edge: "start", offset: span.start }]);
         ends.set(span.end, [...(ends.get(span.end) || []), { ...base, edge: "end", offset: span.end }]);
       });
+    }
+    // An end handle and a start handle (almost) on the same spot share the grab
+    // area: the end handle gets the lower half, the start handle the upper half.
+    for (const [offset, startHandles] of starts) {
+      for (const endOffset of [offset, offset - 1, offset - 2]) {
+        const endHandles = ends.get(endOffset);
+        if (!endHandles) continue;
+        for (const handle of [...startHandles, ...endHandles]) handle.crowded = true;
+      }
     }
     return { starts, ends };
   }
@@ -209,6 +240,10 @@ export class SpanEditor {
     node.tabIndex = 0;
     node.setAttribute("role", "separator");
     node.setAttribute("aria-label", handle.edge === "start" ? "Start of mention" : "End of mention");
+    node.title = handle.edge === "start"
+      ? "Drag to move the start of this mention (or focus it and use the arrow keys)"
+      : "Drag to move the end of this mention (or focus it and use the arrow keys)";
+    if (handle.crowded) node.classList.add("resize-handle--crowded");
     return node;
   }
 
@@ -256,10 +291,15 @@ export class SpanEditor {
       const previous = to;
       to = byWord ? wordBoundary(this.text, to, direction) : stepOffset(this.text, to, direction);
       if (to === previous) return;
+      // Inwards by word never jumps over the other edge (that would leave one character).
+      if (!outwards && byWord && (edge === "start" ? to >= spans[index].end : to <= spans[index].start)) return;
       next = resizeSegment(this.text, spans, index, edge, to);
       if (!outwards) break;
     }
     if (!next) return;
+    // The keyboard stops at a neighbouring segment; only a drag (which Escape can
+    // cancel) merges two segments.
+    if (next.length < spans.length) return;
     // The moved edge of the (possibly merged) segment that now contains the old one.
     const anchor = edge === "start" ? spans[index].end - 1 : spans[index].start;
     const segment = next.find((s) => s.start <= anchor && anchor < s.end) || next[0];
@@ -267,7 +307,8 @@ export class SpanEditor {
     this._applySpans(mentionId, next);
     this._findHandle(mentionId, edge, edge === "start" ? segment.start : segment.end)?.focus();
     this._refocusing = false;
-    this._pendingKeyResize = { mentionId, spans: next };
+    // `saved` is what Escape goes back to: the spans before the first unreported step.
+    this._pendingKeyResize = { mentionId, spans: next, saved: this._pendingKeyResize?.saved || spans };
     clearTimeout(this._keyResizeTimer);
     this._keyResizeTimer = setTimeout(() => this._flushKeyResize(), KEY_RESIZE_COMMIT_MS);
   }
@@ -291,12 +332,26 @@ export class SpanEditor {
       if (range) { node = range.startContainer; offset = range.startOffset; }
     }
     if (!node || !this.container.contains(node)) return null;
+    // In the empty part of the pane the browser answers with the nearest caret
+    // (usually the end of the text). Only a point on a text line counts.
+    const caret = document.createRange();
+    caret.setStart(node, offset);
+    caret.collapse(true);
+    const line = caret.getBoundingClientRect?.();
+    if (line && line.height > 0 && (y < line.top - line.height / 2 || y > line.bottom + line.height / 2)) {
+      return null;
+    }
     return this._offsetOf(node, offset);
   }
 
   _onPointerDown(event) {
     this._suppressClick = false;
     const handle = event.target?.closest?.(".resize-handle");
+    if (this._drag) {
+      // One drag at a time: a second finger or pointer does not take it over.
+      if (handle) event.preventDefault();
+      return;
+    }
     if (!handle || this.readOnly || event.button > 0) return;
     const mentionId = handle.dataset.mention;
     const original = this._spansOf(mentionId);
@@ -321,7 +376,12 @@ export class SpanEditor {
 
   _onPointerMove(event) {
     const drag = this._drag;
-    if (!drag) return;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    // The button was released where we could not see it: give the drag up.
+    if (event.pointerType === "mouse" && event.buttons === 0) {
+      this._endDrag(event, false);
+      return;
+    }
     const offset = this._offsetAtPoint(event.clientX, event.clientY);
     if (offset === null) return; // outside the text: keep the last valid edge
     const next = resizeSegment(this.text, drag.original, drag.index, drag.edge, offset);
@@ -344,6 +404,7 @@ export class SpanEditor {
   }
 
   _endDrag(event, commit) {
+    if (this._drag && event?.pointerId !== undefined && event.pointerId !== this._drag.pointerId) return;
     const drag = this._stopDrag();
     if (!drag) return;
     if (commit && drag.current) {
@@ -508,7 +569,17 @@ export class SpanEditor {
       this._onHandleKey(event, handle);
       return;
     }
-    // Any other key on a handle (Escape, a shortcut) first reports the pending change,
+    // Escape takes back a keyboard change that has not been saved yet, as it does
+    // for a drag, and is used up by that (the selection stays).
+    if (handle && event.key === "Escape" && this._pendingKeyResize) {
+      event.preventDefault();
+      event.stopPropagation();
+      const pending = this._pendingKeyResize;
+      this._clearKeyResize();
+      this._applySpans(pending.mentionId, pending.saved);
+      return;
+    }
+    // Any other key on a handle (a shortcut) first reports the pending change,
     // while the selection it belongs to is still current.
     if (handle && !["Control", "Shift", "Alt", "Meta"].includes(event.key)) this._flushKeyResize();
     if (event.shiftKey && /^(Arrow|Home$|End$|PageUp$|PageDown$)/.test(event.key)) {

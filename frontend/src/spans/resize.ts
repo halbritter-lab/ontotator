@@ -13,27 +13,40 @@ export type Edge = "start" | "end";
 const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
 const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
 
-/** Clamp to the text and move off the middle of a surrogate pair (backwards). */
-function snap(text: string, offset: number): number {
-  const clamped = Math.max(0, Math.min(text.length, Math.trunc(offset)));
-  if (
-    clamped > 0 && clamped < text.length
-    && isLowSurrogate(text.charCodeAt(clamped)) && isHighSurrogate(text.charCodeAt(clamped - 1))
-  ) {
-    return clamped - 1;
-  }
-  return clamped;
+const ZWJ = 0x200d;
+// Combining marks, variation selectors and emoji skin tones attach to the character before them.
+const EXTENDS_PREVIOUS = /[\p{M}\u200d\ufe00-\ufe0f\u{1f3fb}-\u{1f3ff}]/u;
+
+/** True when `offset` would cut a visible character in two (accent, joined emoji, surrogate pair). */
+function insideCharacter(text: string, offset: number): boolean {
+  if (offset <= 0 || offset >= text.length) return false;
+  if (isLowSurrogate(text.charCodeAt(offset)) && isHighSurrogate(text.charCodeAt(offset - 1))) return true;
+  const next = text.codePointAt(offset);
+  if (next !== undefined && EXTENDS_PREVIOUS.test(String.fromCodePoint(next))) return true;
+  return text.charCodeAt(offset - 1) === ZWJ;
 }
 
-/** The offset one codepoint before (-1) or after (1) `offset`, within the text. */
+/** Clamp to the text and move back to the start of the visible character the offset falls into. */
+function snap(text: string, offset: number): number {
+  let position = Math.max(0, Math.min(text.length, Math.trunc(offset)));
+  while (insideCharacter(text, position)) position -= 1;
+  return position;
+}
+
+/**
+ * The offset one visible character before (-1) or after (1) `offset`, within the
+ * text. A base letter with its combining marks, or a joined emoji, is one step.
+ */
 export function stepOffset(text: string, offset: number, direction: -1 | 1): number {
-  const from = snap(text, offset);
+  let position = snap(text, offset);
   if (direction === 1) {
-    if (from >= text.length) return text.length;
-    return from + (isHighSurrogate(text.charCodeAt(from)) && from + 1 < text.length ? 2 : 1);
+    if (position >= text.length) return text.length;
+    position += 1;
+    while (insideCharacter(text, position)) position += 1;
+    return position;
   }
-  if (from <= 0) return 0;
-  return from - (from >= 2 && isLowSurrogate(text.charCodeAt(from - 1)) ? 2 : 1);
+  if (position <= 0) return 0;
+  return snap(text, position - 1);
 }
 
 const WORD_CHAR = /[\p{L}\p{N}\p{M}]/u;

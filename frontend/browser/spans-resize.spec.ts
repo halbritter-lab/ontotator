@@ -114,4 +114,61 @@ test.describe("resizing mention spans", () => {
     await expect(mentionWithOffsets(page, "[10:21]")).toBeVisible();
     await expect(page.locator("[data-list-key^='target:']").filter({ hasText: "HP:0001250" })).toContainText("Replaced");
   });
+
+  test("the empty part of the pane does not pull the edge to the end of the text", async ({ page }) => {
+    await createHypotonia(page, "resize-blank");
+    await dragHandle(page, page.locator(".resize-handle--end"), 17, false);
+    await expect(page.locator(".text-container .run--marked")).toHaveText("Hypotonia and sei");
+    const pane = (await page.locator(".text-container").boundingBox())!;
+    await page.mouse.move(pane.x + pane.width / 2, pane.y + pane.height - 20, { steps: 6 });
+    await expect(page.locator(".text-container .run--marked")).toHaveText("Hypotonia and sei");
+    await page.mouse.up();
+    await expect(mentionWithOffsets(page, "[0:17]")).toBeVisible();
+  });
+
+  test("Escape takes back an unsaved keyboard step and keeps the annotation selected", async ({ page }) => {
+    await createHypotonia(page, "resize-key-escape");
+    await page.locator(".resize-handle--end").focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.locator(".text-container .run--marked")).toHaveText("Hypotoni");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".text-container .run--marked")).toHaveText("Hypotonia");
+    await expect(page.locator(".text-container .resize-handle")).toHaveCount(2);
+    await page.waitForTimeout(700);
+    await expect(revision(page)).toHaveAttribute("title", "Revision 1");
+  });
+
+  test("the text stays put when a segment or a mention is being added", async ({ page }) => {
+    await createHypotonia(page, "resize-still");
+    const top = () => page.locator(".text-container .run").first().evaluate((el) => el.getBoundingClientRect().top);
+    const before = await top();
+    await page.getByRole("button", { name: "+ Segment", exact: true }).click();
+    expect(await top()).toBe(before);
+    await page.getByRole("button", { name: /Switch to/ }).click();
+    await page.getByRole("button", { name: /Add Mention/ }).click();
+    await expect(page.locator(".attach-mention-banner")).toBeVisible();
+    expect(await top()).toBe(before);
+  });
+
+  test("two handles on nearly the same spot: lower half grabs the end, upper half the start", async ({ page }) => {
+    await createHypotonia(page, "resize-crowded");
+    await page.getByRole("button", { name: "+ Segment", exact: true }).click();
+    await selectText(page, 10, 13); // "and", one space after "Hypotonia"
+    await expect(mentionWithOffsets(page, "[0:9], [10:13]")).toBeVisible();
+    const handles = page.locator(".text-container .resize-handle");
+    await expect(handles).toHaveCount(4);
+    const grab = async (index: number, part: number, toOffset: number) => {
+      const box = (await handles.nth(index).boundingBox())!;
+      const target = await pointAtOffset(page, toOffset);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height * part);
+      await page.mouse.down();
+      await page.mouse.move(target.x, target.y, { steps: 8 });
+      await page.mouse.up();
+    };
+    // Both bars are a few pixels apart; pointing at either in its own half moves that edge.
+    await grab(1, 0.85, 5); // end of "Hypotonia"
+    await expect(mentionWithOffsets(page, "[0:5], [10:13]")).toBeVisible();
+    await grab(2, 0.15, 12); // start of "and"
+    await expect(mentionWithOffsets(page, "[0:5], [12:13]")).toBeVisible();
+  });
 });

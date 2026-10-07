@@ -81,3 +81,33 @@ describe("wordBoundary", () => {
     expect(wordBoundary("Muskelschwäche2 links", 0, 1)).toBe(15);
   });
 });
+
+describe("visible characters", () => {
+  const ACCENT = "cafe\u0301 au lait"; // "e" + combining acute = one visible character (3..5)
+  const FAMILY = "a\u{1F468}\u200D\u{1F469}\u200D\u{1F467}b"; // one joined emoji between a and b
+
+  it("steps over a base letter and its combining mark as one character", () => {
+    expect(stepOffset(ACCENT, 3, 1)).toBe(5);
+    expect(stepOffset(ACCENT, 5, -1)).toBe(3);
+    expect(wordBoundary(ACCENT, 0, 1)).toBe(5);
+  });
+
+  it("never leaves an edge between a letter and its accent", () => {
+    expect(resizeSegment(ACCENT, [{ start: 0, end: 3 }], 0, "end", 4)).toBeNull();
+    expect(resizeSegment(ACCENT, [{ start: 0, end: 5 }], 0, "end", 4)).toEqual([{ start: 0, end: 3 }]);
+    expect(resizeSegment(ACCENT, [{ start: 0, end: 5 }], 0, "start", 4)).toEqual([{ start: 3, end: 5 }]);
+  });
+
+  it("treats a joined emoji as one character", () => {
+    const end = FAMILY.length - 1;
+    expect(stepOffset(FAMILY, 1, 1)).toBe(end);
+    expect(stepOffset(FAMILY, end, -1)).toBe(1);
+    expect(resizeSegment(FAMILY, [{ start: 0, end: 1 }], 0, "end", 4)).toBeNull();
+  });
+
+  it("handles a Windows line break inside the text", () => {
+    const text = "ab\r\ncd";
+    expect(resizeSegment(text, [{ start: 0, end: 2 }], 0, "end", 4)).toBeNull(); // only the line break: trimmed
+    expect(resizeSegment(text, [{ start: 0, end: 2 }], 0, "end", 5)).toEqual([{ start: 0, end: 5 }]);
+  });
+});

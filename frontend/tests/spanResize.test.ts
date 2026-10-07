@@ -130,10 +130,10 @@ describe("span editor resize handles", () => {
     expect(describeHandle(focused())).toBe("ev-a:0:end@15");
     press(focused(), "ArrowLeft", { ctrlKey: true }); // drops "muscular": the mention is "severe" (0..6)
     expect(describeHandle(focused())).toBe("ev-a:0:end@6");
-    press(focused(), "ArrowLeft", { ctrlKey: true }); // 0 would cross the start: one character remains
-    expect(describeHandle(focused())).toBe("ev-a:0:end@1");
+    press(focused(), "ArrowLeft", { ctrlKey: true }); // the next word step would cross the start: nothing happens
+    expect(describeHandle(focused())).toBe("ev-a:0:end@6");
     vi.advanceTimersByTime(400);
-    expect(onResize).toHaveBeenLastCalledWith("ev-a", [{ start: 0, end: 1 }]);
+    expect(onResize).toHaveBeenLastCalledWith("ev-a", [{ start: 0, end: 6 }]);
   });
 
   it("crosses whitespace with a plain arrow key instead of getting stuck on it", () => {
@@ -193,7 +193,7 @@ describe("span editor resize handles", () => {
   };
   const markedText = () => Array.from(container.querySelectorAll(".run--marked")).map((r) => r.textContent).join("|");
 
-  it("previews a drag, reports it on release and suppresses the text selection handler", () => {
+  it("previews a drag and reports it on release", () => {
     const { handle, onResize, onSelection } = mount();
     handle.setMentions([MENTIONS[0]]);
     handle.setResizable(["ev-a"]);
@@ -309,7 +309,7 @@ describe("span editor resize handles", () => {
     try {
       press(focused(), "Control"); // a modifier on its way to Ctrl+Arrow is not "another key"
       expect(order).toEqual(["shortcut"]);
-      press(focused(), "Escape");
+      press(focused(), "j");
       expect(order).toEqual(["shortcut", "resize", "shortcut"]);
       expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 14 }]);
     } finally {
@@ -376,5 +376,133 @@ describe("span editor resize handles", () => {
     vi.advanceTimersByTime(400);
     expect(onResize).toHaveBeenCalledTimes(1);
     expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 14 }]);
+  });
+
+  it("stops a keyboard step at a neighbouring segment instead of merging into it", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setMentions([MENTIONS[1]]); // "severe" 0..6 and "hypotonia" 16..25
+    handle.setResizable(["ev-b"]);
+    handles()[1].focus(); // end of "severe"
+    for (let i = 0; i < 12; i += 1) press(focused(), "ArrowRight");
+    // "severe muscular" (0..15); the next step would cross the space into "hypotonia".
+    expect(describeHandle(focused())).toBe("ev-b:0:end@15");
+    expect(handles().length).toBe(4);
+    press(focused(), "ArrowRight", { ctrlKey: true });
+    expect(describeHandle(focused())).toBe("ev-b:0:end@15");
+    vi.advanceTimersByTime(400);
+    expect(onResize).toHaveBeenLastCalledWith("ev-b", [{ start: 0, end: 15 }, { start: 16, end: 25 }]);
+  });
+
+  it("takes back an unsaved keyboard change on Escape and keeps Escape to itself", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setMentions([MENTIONS[0]]);
+    handle.setResizable(["ev-a"]);
+    const outer = vi.fn();
+    window.addEventListener("keydown", outer);
+    try {
+      handles()[1].focus();
+      press(focused(), "ArrowLeft");
+      press(focused(), "ArrowLeft");
+      expect(markedText()).toBe("muscul");
+      press(focused(), "Escape");
+      expect(markedText()).toBe("muscular");
+      expect(describeHandle(focused())).toBe("ev-a:0:end@15");
+      expect(outer).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(400);
+      expect(onResize).not.toHaveBeenCalled();
+      // With nothing pending, Escape is the application's again.
+      press(focused(), "Escape");
+      expect(outer).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("keydown", outer);
+    }
+  });
+
+  it("drops a pending keyboard step when the save before it moved the annotation to copied evidence", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setMentions([MENTIONS[0]]); // "ev-a" 7..15, shared with another annotation
+    handle.setResizable(["ev-a"]);
+    handles()[1].focus();
+    press(focused(), "ArrowLeft");
+    vi.advanceTimersByTime(400); // first step reported: 7..14
+    expect(onResize).toHaveBeenCalledTimes(1);
+    press(focused(), "ArrowLeft"); // second step pending: 7..13
+    // The save copied the evidence: the selected annotation now owns "ev-a-cow-1"
+    // (7..14); "ev-a" still belongs to the other annotation, unchanged at 7..15.
+    handle.setMentions([
+      { evidence_id: "ev-a", segments: [{ start: 7, end: 15 }], kind: "own" },
+      { evidence_id: "ev-a-cow-1", segments: [{ start: 7, end: 14 }], kind: "own" },
+    ]);
+    handle.setResizable(["ev-a-cow-1"]);
+    vi.advanceTimersByTime(400);
+    // The second step is not reported against the other annotation's mention ...
+    expect(onResize).toHaveBeenCalledTimes(1);
+    // ... and that mention is shown as saved.
+    expect(handles().map(describeHandle)).toEqual(["ev-a-cow-1:0:start@7", "ev-a-cow-1:0:end@14"]);
+    expect(Array.from(container.querySelectorAll<HTMLElement>(".run--marked")).map((r) => r.textContent).join(""))
+      .toBe("muscular");
+  });
+
+  it("reports a pending keyboard change at once when the selection moves on", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setResizable(["ev-a"]);
+    handles()[1].focus();
+    press(focused(), "ArrowLeft");
+    handle.setResizable(["ev-b"]);
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 14 }]);
+  });
+
+  it("lets a drag survive the echo of an earlier save but not a real outside change", () => {
+    const { handle, onResize } = mount();
+    handle.setMentions([MENTIONS[0]]);
+    handle.setResizable(["ev-a"]);
+    container.setPointerCapture = vi.fn();
+    container.releasePointerCapture = vi.fn();
+    pointer("pointerdown", handles()[1]);
+    pointAt(25);
+    pointer("pointermove", container);
+    handle.setMentions([{ evidence_id: "ev-a", segments: [{ start: 7, end: 15 }], kind: "own" }]);
+    expect(markedText()).toBe("muscular hypotonia");
+    pointer("pointerup", container);
+    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 25 }]);
+  });
+
+  it("ignores other pointers while a drag is running", () => {
+    const { handle, onResize } = mount();
+    handle.setMentions([MENTIONS[0]]);
+    handle.setResizable(["ev-a"]);
+    container.setPointerCapture = vi.fn();
+    container.releasePointerCapture = vi.fn();
+    const other = (type: string, target: EventTarget) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "pointerId", { value: 2 });
+      target.dispatchEvent(event);
+    };
+    pointer("pointerdown", handles()[1]);
+    pointAt(25);
+    pointer("pointermove", container);
+    pointAt(20);
+    other("pointermove", container);
+    other("pointerup", container);
+    expect(onResize).not.toHaveBeenCalled();
+    expect(markedText()).toBe("muscular hypotonia");
+    pointer("pointerup", container);
+    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 25 }]);
+  });
+
+  it("splits the grab area only where an end handle and a start handle crowd each other", () => {
+    const { handle } = mount();
+    handle.setMentions([
+      { evidence_id: "ev-x", segments: [{ start: 0, end: 6 }, { start: 7, end: 15 }], kind: "own" },
+    ]);
+    handle.setResizable(["ev-x"]);
+    expect(handles().map((el) => `${el.dataset.edge}@${el.dataset.offset}:${el.classList.contains("resize-handle--crowded")}`))
+      .toEqual(["start@0:false", "end@6:true", "start@7:true", "end@15:false"]);
+    expect(handles()[0].title).toMatch(/Drag to move the start/);
   });
 });

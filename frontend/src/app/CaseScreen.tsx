@@ -341,7 +341,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     ).find((el) => el.dataset.listKey === selectedListKey);
     // jsdom has no scrollIntoView.
     entry?.scrollIntoView?.({ block: "nearest" });
-  }, [selectedListKey]);
+    // In the tab layout the list is hidden while another tab is open: catch up when it returns.
+  }, [selectedListKey, mobilePane]);
   const sourceMentions: MentionDisplay[] = useMemo(() => visibleSources.flatMap(s => s.evidence.map(ev => ({
     evidence_id: `source:${sourceKey(s)}:${ev.mention.evidence_id}:${ev.version}`,
     sourceId: sourceKey(s),

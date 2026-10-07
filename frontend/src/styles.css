@@ -299,6 +299,39 @@ body {
   min-height: 50px;
 }
 
+/* One line always: a long intent label is cut off rather than wrapping the bar. */
+.pane-toolbar > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.pane-toolbar > div:first-child .badge {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pane-toolbar .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* The "adding a mention" notice takes the toolbar's place instead of pushing the text down. */
+.center-pane {
+  position: relative;
+}
+
+.attach-mention-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: 50px;
+  box-sizing: border-box;
+  z-index: 3;
+}
+
 .text-container {
   flex: 1;
   padding: 24px 32px;
@@ -717,6 +750,18 @@ body {
   background-position: 0 100%;
   background-image: radial-gradient(circle at 50% calc(100% - 4px), #0c4a6e 4px, transparent 4.6px);
   margin-top: 0;
+}
+
+/* Two handles on (almost) the same spot: upper half grabs the start handle,
+   lower half the end handle, matching where their knobs are. */
+.resize-handle--crowded.resize-handle--start::after {
+  height: 0.8em;
+  padding-bottom: 0;
+}
+
+.resize-handle--crowded.resize-handle--end::after {
+  top: calc(-0.29em + 0.8em);
+  height: 0.8em;
 }
 
 .resize-handle:focus-visible {
