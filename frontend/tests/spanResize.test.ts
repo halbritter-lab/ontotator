@@ -115,19 +115,36 @@ describe("span editor resize handles", () => {
     const { handle, onResize } = mount();
     handle.setResizable(["ev-a"]);
     handles()[0].focus(); // start of "muscular" at 7
-    press(focused(), "ArrowLeft", { ctrlKey: true }); // 6: the space, trimmed away again -> no change
-    expect(describeHandle(focused())).toBe("ev-a:0:start@7");
+    // The boundary at 6 is only the space before "muscular": skip it and take in "severe".
     press(focused(), "ArrowLeft", { ctrlKey: true });
-    expect(describeHandle(focused())).toBe("ev-a:0:start@7");
+    expect(describeHandle(focused())).toBe("ev-a:0:start@0");
+    press(focused(), "ArrowLeft", { ctrlKey: true }); // already at the start of the text
+    expect(describeHandle(focused())).toBe("ev-a:0:start@0");
     vi.advanceTimersByTime(400);
-    expect(onResize).not.toHaveBeenCalled();
+    expect(onResize).toHaveBeenLastCalledWith("ev-a", [{ start: 0, end: 15 }]);
 
     handles()[1].focus();
-    press(focused(), "ArrowRight", { ctrlKey: true }); // 16: space, trimmed -> unchanged
-    press(focused(), "ArrowLeft", { ctrlKey: true }); // 7 would cross the start: clamped to one character
-    expect(describeHandle(focused())).toBe("ev-a:0:end@8");
+    press(focused(), "ArrowRight", { ctrlKey: true }); // across the space to the end of "hypotonia"
+    expect(describeHandle(focused())).toBe("ev-a:0:end@25");
+    press(focused(), "ArrowLeft", { ctrlKey: true }); // back to the end of "muscular"
+    expect(describeHandle(focused())).toBe("ev-a:0:end@15");
+    press(focused(), "ArrowLeft", { ctrlKey: true }); // drops "muscular": the mention is "severe" (0..6)
+    expect(describeHandle(focused())).toBe("ev-a:0:end@6");
+    press(focused(), "ArrowLeft", { ctrlKey: true }); // 0 would cross the start: one character remains
+    expect(describeHandle(focused())).toBe("ev-a:0:end@1");
     vi.advanceTimersByTime(400);
-    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 8 }]);
+    expect(onResize).toHaveBeenLastCalledWith("ev-a", [{ start: 0, end: 1 }]);
+  });
+
+  it("crosses whitespace with a plain arrow key instead of getting stuck on it", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setResizable(["ev-a"]);
+    handles()[0].focus(); // start of "muscular" at 7, a space before it
+    press(focused(), "ArrowLeft");
+    expect(describeHandle(focused())).toBe("ev-a:0:start@5"); // "e muscular"
+    vi.advanceTimersByTime(400);
+    expect(onResize).toHaveBeenLastCalledWith("ev-a", [{ start: 5, end: 15 }]);
   });
 
   it("reports immediately when focus leaves the handle", () => {

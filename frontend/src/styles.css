@@ -667,10 +667,10 @@ body {
   width: 3px;
   height: 1.6em;
   border-radius: 2px;
-  background: #0284c7;
+  background: #0c4a6e;
 }
 
-/* Wider invisible grab area. */
+/* Wider grab area; its knob tells a handle apart from the selection outline. */
 .resize-handle::after {
   content: "";
   position: absolute;
@@ -678,6 +678,15 @@ body {
   top: -0.29em;
   width: 10px;
   height: 1.6em;
+  background: radial-gradient(circle at 50% 4px, #0c4a6e 4px, transparent 4.6px) no-repeat;
+  margin-top: -6px;
+  padding-bottom: 6px;
+}
+
+.resize-handle--end::after {
+  background-position: 0 100%;
+  background-image: radial-gradient(circle at 50% calc(100% - 4px), #0c4a6e 4px, transparent 4.6px);
+  margin-top: 0;
 }
 
 .resize-handle:focus-visible {

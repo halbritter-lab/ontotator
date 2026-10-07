@@ -225,10 +225,19 @@ export class SpanEditor {
     const from = Number(handle.dataset.offset);
     const spans = this._spansOf(mentionId);
     if (!spans) return;
-    const to = (event.ctrlKey || event.metaKey)
-      ? wordBoundary(this.text, from, direction)
-      : stepOffset(this.text, from, direction);
-    const next = resizeSegment(this.text, spans, index, edge, to);
+    const byWord = event.ctrlKey || event.metaKey;
+    // A step that only crosses whitespace is trimmed away again, so keep going
+    // outwards until the edge really moves (or the text ends).
+    const outwards = (edge === "start") === (direction === -1);
+    let to = from;
+    let next = null;
+    while (!next) {
+      const previous = to;
+      to = byWord ? wordBoundary(this.text, to, direction) : stepOffset(this.text, to, direction);
+      if (to === previous) return;
+      next = resizeSegment(this.text, spans, index, edge, to);
+      if (!outwards) break;
+    }
     if (!next) return;
     // The moved edge of the (possibly merged) segment that now contains the old one.
     const anchor = edge === "start" ? spans[index].end - 1 : spans[index].start;
