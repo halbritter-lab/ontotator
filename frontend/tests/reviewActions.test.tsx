@@ -179,4 +179,22 @@ describe("ReviewActions", () => {
       note: undefined,
     });
   });
+
+  it("marks tool proposals with the AI badge next to the written-out source", () => {
+    const { rerender } = render(
+      <ReviewActions target={sampleTarget} currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />
+    );
+    expect(screen.getByLabelText("AI-generated: model-a · automated")).toBeDefined();
+    expect(screen.getByText(/Method: automated/)).toBeDefined();
+
+    rerender(
+      <ReviewActions
+        target={{ ...sampleTarget, provenance: { actor: { actor_id: "dr-weber", kind: "human" }, method: "manual" } }}
+        currentDecision={null}
+        draftAnnotations={[]}
+        onDecide={vi.fn()}
+      />
+    );
+    expect(screen.queryByText("✦ AI")).toBeNull();
+  });
 });

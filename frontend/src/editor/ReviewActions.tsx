@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import type { AnnotationSnapshot } from "../api/client";
 import type { components } from "../api/generated";
 import { TermName } from "./TermName";
+import { AiBadge } from "./AiBadge";
 
 export type ReviewDecision = components["schemas"]["ReviewDecision"];
 export type ReviewDecisionOutcome = "confirmed" | "rejected" | "changed" | "uncertain";
@@ -239,6 +240,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       </div>
       {/* Origin Info */}
       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 12 }}>
+        <AiBadge provenance={target.provenance} />{" "}
         Source: <strong>{target.provenance.actor.kind}</strong> ({target.provenance.actor.actor_id}) •
         Method: {target.provenance.method}
       </div>
