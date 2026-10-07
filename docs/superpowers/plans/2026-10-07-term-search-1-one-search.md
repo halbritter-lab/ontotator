@@ -343,88 +343,90 @@ def looks_like_code(query: str) -> bool:
 Replace the whole `search` method (from `def search(self, request: SearchRequest) -> SearchResult:` up to, but not including, `def all_ancestors_of`) with
 
 ```python
-    def search(self, request: SearchRequest) -> SearchResult:
-        if request.route == "auto":
-            hits, was_shuffled, seed = self._auto_hits(request)
-        else:
-            hits, was_shuffled, seed = self._route_hits(request)
+def search(self, request: SearchRequest) -> SearchResult:
+    if request.route == "auto":
+        hits, was_shuffled, seed = self._auto_hits(request)
+    else:
+        hits, was_shuffled, seed = self._route_hits(request)
 
-        candidates = [self._candidate(hit) for hit in hits]
-        displayed_ids = [c.hpo_id for c in candidates]
-        ranked_ids = [c.hpo_id for c in sorted(candidates, key=lambda c: c.rank)]
+    candidates = [self._candidate(hit) for hit in hits]
+    displayed_ids = [c.hpo_id for c in candidates]
+    ranked_ids = [c.hpo_id for c in sorted(candidates, key=lambda c: c.rank)]
 
-        return SearchResult(
-            route=request.route,
+    return SearchResult(
+        route=request.route,
+        query=request.query,
+        candidates=candidates,
+        displayed_ids=displayed_ids,
+        ranked_ids=ranked_ids,
+        shuffled=was_shuffled,
+        seed=seed,
+        layer_id=request.layer_id,
+        ontology_sha256=self.ref.sha256,
+        index_identity=self.index_identity,
+    )
+
+
+def _route_hits(
+    self, request: SearchRequest
+) -> tuple[list[dict[str, Any]], bool, str | None]:
+    """One explicitly named route, exactly as the engine answers it."""
+    seed: str | None = None
+    if request.route in SCORED_PATHS:
+        seed = shuffle_seed(
+            annotator_id=request.workspace_key.annotator_id,
+            mention_id=request.annotation_id,
             query=request.query,
-            candidates=candidates,
-            displayed_ids=displayed_ids,
-            ranked_ids=ranked_ids,
-            shuffled=was_shuffled,
-            seed=seed,
-            layer_id=request.layer_id,
-            ontology_sha256=self.ref.sha256,
-            index_identity=self.index_identity,
-        )
-
-    def _route_hits(
-        self, request: SearchRequest
-    ) -> tuple[list[dict[str, Any]], bool, str | None]:
-        """One explicitly named route, exactly as the engine answers it."""
-        seed: str | None = None
-        if request.route in SCORED_PATHS:
-            seed = shuffle_seed(
-                annotator_id=request.workspace_key.annotator_id,
-                mention_id=request.annotation_id,
-                query=request.query,
-                k=request.k,
-            )
-        raw_result = self.engine.search(
-            query=request.query,
-            path=request.route,
             k=request.k,
-            seed=seed,
         )
-        hits: list[dict[str, Any]] = raw_result["hits"]
-        for hit in hits:
-            hit["route"] = request.route
-        return hits, bool(raw_result.get("shuffled", False)), seed
+    raw_result = self.engine.search(
+        query=request.query,
+        path=request.route,
+        k=request.k,
+        seed=seed,
+    )
+    hits: list[dict[str, Any]] = raw_result["hits"]
+    for hit in hits:
+        hit["route"] = request.route
+    return hits, bool(raw_result.get("shuffled", False)), seed
 
-    def _auto_hits(
-        self, request: SearchRequest
-    ) -> tuple[list[dict[str, Any]], bool, str | None]:
-        """The single search: a code finds its term, a keyword finds candidates."""
-        query = request.query.strip()
-        if not query:
-            return [], False, None
 
-        if looks_like_code(query):
-            # A typed id is a statement, not a question: that term or nothing.
-            hits: list[dict[str, Any]] = self.engine.search(
-                query=query, path="id", k=request.k
-            )["hits"]
-            for hit in hits:
-                hit["route"] = "id"
-            return hits, False, None
-
+def _auto_hits(
+    self, request: SearchRequest
+) -> tuple[list[dict[str, Any]], bool, str | None]:
+    """The single search: a code finds its term, a keyword finds candidates."""
+    query = request.query.strip()
+    if not query:
         return [], False, None
 
-    def _candidate(self, hit: dict[str, Any]) -> SearchCandidate:
-        language = hit.get("matched_language")
-        return SearchCandidate(
-            term_id=hit["hpo_id"],
-            label=hit["label"],
-            definition=hit.get("definition", ""),
-            matched_term=hit.get("matched_term", ""),
-            match_kind=hit.get("match_kind", ""),
-            rank=hit.get("rank", 0),
-            display_pos=hit.get("display_pos", 0),
-            score=hit.get("score"),
-            obsolete=self.validate_term(hit["hpo_id"]).status == "obsolete",
-            route=hit.get("route", ""),
-            # "?" is the lexical index's marker for a name it could not place.
-            match_language=language if language and language != "?" else None,
-        )
+    if looks_like_code(query):
+        # A typed id is a statement, not a question: that term or nothing.
+        hits: list[dict[str, Any]] = self.engine.search(
+            query=query, path="id", k=request.k
+        )["hits"]
+        for hit in hits:
+            hit["route"] = "id"
+        return hits, False, None
 
+    return [], False, None
+
+
+def _candidate(self, hit: dict[str, Any]) -> SearchCandidate:
+    language = hit.get("matched_language")
+    return SearchCandidate(
+        term_id=hit["hpo_id"],
+        label=hit["label"],
+        definition=hit.get("definition", ""),
+        matched_term=hit.get("matched_term", ""),
+        match_kind=hit.get("match_kind", ""),
+        rank=hit.get("rank", 0),
+        display_pos=hit.get("display_pos", 0),
+        score=hit.get("score"),
+        obsolete=self.validate_term(hit["hpo_id"]).status == "obsolete",
+        route=hit.get("route", ""),
+        # "?" is the lexical index's marker for a name it could not place.
+        match_language=language if language and language != "?" else None,
+    )
 ```
 
 (The keyword branch — the final `return [], False, None` of `_auto_hits` — is filled in by Task 3.)
@@ -462,7 +464,9 @@ Append to `tests/test_search_auto.py`:
 def _tiny_ontology(tmp_path: Path) -> Path:
     """`Deafness` is the label of one term and a synonym of another."""
 
-    def node(local: str, label: str, synonyms: tuple[str, ...] = ()) -> dict[str, object]:
+    def node(
+        local: str, label: str, synonyms: tuple[str, ...] = ()
+    ) -> dict[str, object]:
         return {
             "id": f"http://purl.obolibrary.org/obo/TEST_{local}",
             "lbl": label,
@@ -680,7 +684,11 @@ def test_auto_search_records_the_route_of_each_candidate(app_client):
 
     client, _ = app_client
     files = {
-        "file": ("package.zip", _create_sample_package_bytes("single"), "application/zip")
+        "file": (
+            "package.zip",
+            _create_sample_package_bytes("single"),
+            "application/zip",
+        )
     }
     assert client.post("/api/v1/packages", files=files).status_code == 200
     opened = client.post(
@@ -764,15 +772,15 @@ Expected: FAIL at `assert event.candidate_routes == {...}` — the stored event 
 In `src/ontocurator/api/routes.py`, in `search_ontology`, in the `SearchEventRecord(...)` call, after
 
 ```python
-        candidate_scores={
-            c.term_id: c.score for c in result.candidates if c.score is not None
-        },
+candidate_scores = (
+    {c.term_id: c.score for c in result.candidates if c.score is not None},
+)
 ```
 
 add
 
 ```python
-        candidate_routes={c.term_id: c.route for c in result.candidates if c.route},
+candidate_routes = ({c.term_id: c.route for c in result.candidates if c.route},)
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
