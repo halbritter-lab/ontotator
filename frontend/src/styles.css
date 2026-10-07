@@ -160,6 +160,30 @@ body {
   flex: 1;
 }
 
+/* Case sidebar: proposals, references and curated annotations scroll together. */
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-scroll .doc-list {
+  flex: none;
+  overflow-y: visible;
+}
+
+.sidebar-scroll .sidebar-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-surface);
+}
+
+/* Keep an entry scrolled into view clear of the sticky section header. */
+.sidebar-scroll [data-list-key] {
+  scroll-margin-top: 48px;
+}
+
 .doc-item {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);

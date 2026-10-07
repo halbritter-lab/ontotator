@@ -1329,210 +1329,212 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             disabled={queueState === "saving"}
           />
 
-          {view.key.mode === "review" && (
-            <>
-              <div className="sidebar-header">
-                Review Proposals ({reviewTargets.length})
-              </div>
-              <ul className="doc-list" style={{ maxHeight: "40%", borderBottom: "2px solid var(--border-color)" }}>
-                {reviewTargets.map((t) => {
-                  const isSelected = refKey(t) === selectedTargetId;
-                  const dec = decisionsMap[refKey(t)];
-                  const isResolved = dec?.outcome === "changed" || dec?.outcome === "rejected";
-                  return (
-                    <li
-                      key={refKey(t)}
-                      data-list-key={`target:${refKey(t)}`}
-                      className={`doc-item ${isSelected ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}`}
-                      style={{
-                        opacity: isResolved && !isSelected ? 0.55 : 1,
-                        background: isResolved && !isSelected ? "rgba(0, 0, 0, 0.02)" : undefined,
-                      }}
-                      onClick={() => {
-                        const targetKey = refKey(t);
-                        if (selectedTargetId === targetKey) {
-                          handleDeselectAll();
-                          return;
-                        }
-                        setSelectedTargetId(targetKey);
-                        setSelectedAnnotationId(null);
-                        setSelectedSourceId(null);
-                        cancelPending();
-                        setMobilePane("details");
-                        const snap = (view.available_inputs ?? []).find(
-                          (s) => s.annotation.annotation_id === t.annotation_id && s.version === t.version
-                        );
-                        const firstEv = snap?.evidence?.[0];
-                        if (firstEv) {
-                          setSelectedEvidenceId(`target:${t.annotation_id}:${t.version}:${firstEv.mention.evidence_id}:${firstEv.version}`);
-                        } else {
-                          setSelectedEvidenceId(null);
-                        }
-                      }}
-                    >
-                      <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
-                          <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
-                        </span>
-                        {dec ? (
-                          <span
-                            className="badge"
-                            style={{
-                              fontSize: "0.72rem",
-                              fontWeight: 600,
-                              padding: "2px 6px",
-                              backgroundColor:
-                                dec.outcome === "confirmed" ? "var(--success-light)"
-                                : dec.outcome === "rejected" ? "var(--danger-light)"
-                                : dec.outcome === "changed" ? "#e2e8f0"
-                                : "var(--warning-light)",
-                              color:
-                                dec.outcome === "confirmed" ? "var(--success)"
-                                : dec.outcome === "rejected" ? "var(--danger)"
-                                : dec.outcome === "changed" ? "#475569"
-                                : "var(--warning)",
-                            }}
-                          >
-                            {dec.outcome === "confirmed" ? "✓ Confirmed"
-                             : dec.outcome === "rejected" ? "✕ Rejected"
-                             : dec.outcome === "changed" ? "✎ Replaced"
-                             : "? Uncertain"}
+          <div className="sidebar-scroll">
+            {view.key.mode === "review" && (
+              <>
+                <div className="sidebar-header">
+                  Review Proposals ({reviewTargets.length})
+                </div>
+                <ul className="doc-list" style={{ borderBottom: "2px solid var(--border-color)" }}>
+                  {reviewTargets.map((t) => {
+                    const isSelected = refKey(t) === selectedTargetId;
+                    const dec = decisionsMap[refKey(t)];
+                    const isResolved = dec?.outcome === "changed" || dec?.outcome === "rejected";
+                    return (
+                      <li
+                        key={refKey(t)}
+                        data-list-key={`target:${refKey(t)}`}
+                        className={`doc-item ${isSelected ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}`}
+                        style={{
+                          opacity: isResolved && !isSelected ? 0.55 : 1,
+                          background: isResolved && !isSelected ? "rgba(0, 0, 0, 0.02)" : undefined,
+                        }}
+                        onClick={() => {
+                          const targetKey = refKey(t);
+                          if (selectedTargetId === targetKey) {
+                            handleDeselectAll();
+                            return;
+                          }
+                          setSelectedTargetId(targetKey);
+                          setSelectedAnnotationId(null);
+                          setSelectedSourceId(null);
+                          cancelPending();
+                          setMobilePane("details");
+                          const snap = (view.available_inputs ?? []).find(
+                            (s) => s.annotation.annotation_id === t.annotation_id && s.version === t.version
+                          );
+                          const firstEv = snap?.evidence?.[0];
+                          if (firstEv) {
+                            setSelectedEvidenceId(`target:${t.annotation_id}:${t.version}:${firstEv.mention.evidence_id}:${firstEv.version}`);
+                          } else {
+                            setSelectedEvidenceId(null);
+                          }
+                        }}
+                      >
+                        <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
+                            <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
                           </span>
-                        ) : (
-                          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>open</span>
-                        )}
-                      </div>
-                      <div className="doc-meta" style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
-                        {dec?.outcome === "changed" ? (
-                          (() => {
-                            const replSnap = (draft.annotations ?? []).find(
-                              (a) => a.annotation.annotation_id === dec.replacement?.annotation_id
-                            );
-                            const replTermId = replSnap?.annotation.term_id ?? dec.replacement?.annotation_id ?? "";
-                            const replLabel = replSnap ? termLabel(replSnap.annotation.layer_id, replTermId) : null;
-                            const displayText = replLabel ? `${replLabel} (${replTermId})` : replTermId;
-                            return (
-                              <div style={{ marginTop: 2 }}>
-                                <button
-                                  type="button"
-                                  className="btn btn-link btn-sm"
-                                  style={{
-                                    padding: 0,
-                                    fontSize: "0.75rem",
-                                    color: "var(--primary)",
-                                    textDecoration: "underline",
-                                    cursor: "pointer",
-                                    textAlign: "left",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (dec.replacement?.annotation_id) {
-                                      setSelectedTargetId(null);
-                                      setSelectedSourceId(null);
-                                      setSelectedAnnotationId(dec.replacement.annotation_id);
-                                      setSelectedEvidenceId(replSnap?.annotation.evidence_refs?.[0]?.evidence_id ?? null);
-                                      setMobilePane("details");
-                                    }
-                                  }}
-                                  title="Jump to replacement annotation in draft"
-                                >
-                                  ↳ Replaced by: <strong>{displayText}</strong> ↗
-                                </button>
-                              </div>
-                            );
-                          })()
-                        ) : dec?.outcome === "rejected" ? (
-                          <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
-                            ✕ Proposal rejected
-                          </span>
-                        ) : (
-                          <>
-                            {t.evidence_count === 0 ? "Spanless" : `“${t.quote ?? ""}”`}
-                            {t.evidence_count > 1 && ` +${t.evidence_count - 1} more`}
-                            {t.provenance.actor.kind === "tool"
-                              ? <>{" "}<AiBadge provenance={t.provenance} /></>
-                              : ` • ${t.provenance.actor.kind}`}
-                          </>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
+                          {dec ? (
+                            <span
+                              className="badge"
+                              style={{
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
+                                padding: "2px 6px",
+                                backgroundColor:
+                                  dec.outcome === "confirmed" ? "var(--success-light)"
+                                  : dec.outcome === "rejected" ? "var(--danger-light)"
+                                  : dec.outcome === "changed" ? "#e2e8f0"
+                                  : "var(--warning-light)",
+                                color:
+                                  dec.outcome === "confirmed" ? "var(--success)"
+                                  : dec.outcome === "rejected" ? "var(--danger)"
+                                  : dec.outcome === "changed" ? "#475569"
+                                  : "var(--warning)",
+                              }}
+                            >
+                              {dec.outcome === "confirmed" ? "✓ Confirmed"
+                               : dec.outcome === "rejected" ? "✕ Rejected"
+                               : dec.outcome === "changed" ? "✎ Replaced"
+                               : "? Uncertain"}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>open</span>
+                          )}
+                        </div>
+                        <div className="doc-meta" style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
+                          {dec?.outcome === "changed" ? (
+                            (() => {
+                              const replSnap = (draft.annotations ?? []).find(
+                                (a) => a.annotation.annotation_id === dec.replacement?.annotation_id
+                              );
+                              const replTermId = replSnap?.annotation.term_id ?? dec.replacement?.annotation_id ?? "";
+                              const replLabel = replSnap ? termLabel(replSnap.annotation.layer_id, replTermId) : null;
+                              const displayText = replLabel ? `${replLabel} (${replTermId})` : replTermId;
+                              return (
+                                <div style={{ marginTop: 2 }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-link btn-sm"
+                                    style={{
+                                      padding: 0,
+                                      fontSize: "0.75rem",
+                                      color: "var(--primary)",
+                                      textDecoration: "underline",
+                                      cursor: "pointer",
+                                      textAlign: "left",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 4,
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (dec.replacement?.annotation_id) {
+                                        setSelectedTargetId(null);
+                                        setSelectedSourceId(null);
+                                        setSelectedAnnotationId(dec.replacement.annotation_id);
+                                        setSelectedEvidenceId(replSnap?.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+                                        setMobilePane("details");
+                                      }
+                                    }}
+                                    title="Jump to replacement annotation in draft"
+                                  >
+                                    ↳ Replaced by: <strong>{displayText}</strong> ↗
+                                  </button>
+                                </div>
+                              );
+                            })()
+                          ) : dec?.outcome === "rejected" ? (
+                            <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
+                              ✕ Proposal rejected
+                            </span>
+                          ) : (
+                            <>
+                              {t.evidence_count === 0 ? "Spanless" : `“${t.quote ?? ""}”`}
+                              {t.evidence_count > 1 && ` +${t.evidence_count - 1} more`}
+                              {t.provenance.actor.kind === "tool"
+                                ? <>{" "}<AiBadge provenance={t.provenance} /></>
+                                : ` • ${t.provenance.actor.kind}`}
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
 
-          {visibleSources.length > 0 && <section aria-label="Reference annotations">
-            <div className="sidebar-header">Reference Annotations ({visibleSources.length})</div>
-            {visibleSources.map(s => <button type="button" className="btn btn-secondary" key={sourceKey(s)}
-              data-list-key={`source:${sourceKey(s)}`}
-              aria-pressed={sourceKey(s) === selectedSourceId} onClick={() => selectSource(sourceKey(s))}>
-              <TermName termId={s.annotation.term_id} label={termLabel(s.annotation.layer_id, s.annotation.term_id)} />
-              <span>
-                {view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Read-only{" "}
-                <AiBadge provenance={s.annotation.provenance} />
-              </span>
-            </button>)}
-          </section>}
+            {visibleSources.length > 0 && <section aria-label="Reference annotations">
+              <div className="sidebar-header">Reference Annotations ({visibleSources.length})</div>
+              {visibleSources.map(s => <button type="button" className="btn btn-secondary" key={sourceKey(s)}
+                data-list-key={`source:${sourceKey(s)}`}
+                aria-pressed={sourceKey(s) === selectedSourceId} onClick={() => selectSource(sourceKey(s))}>
+                <TermName termId={s.annotation.term_id} label={termLabel(s.annotation.layer_id, s.annotation.term_id)} />
+                <span>
+                  {view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Read-only{" "}
+                  <AiBadge provenance={s.annotation.provenance} />
+                </span>
+              </button>)}
+            </section>}
 
-          <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Curated Annotations ({visibleAnnotations.length})</span>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={handleStartSpanless}
-              title="Create new annotation via ontology search"
-              style={{ fontSize: "0.75rem", padding: "2px 8px" }}
-            >
-              + New Annotation
-            </button>
+            <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Curated Annotations ({visibleAnnotations.length})</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleStartSpanless}
+                title="Create new annotation via ontology search"
+                style={{ fontSize: "0.75rem", padding: "2px 8px" }}
+              >
+                + New Annotation
+              </button>
+            </div>
+            <ul className="doc-list">
+              {visibleAnnotations.map((annSnap) => {
+                const isSelected =
+                  annSnap.annotation.annotation_id === selectedAnnotationId;
+                const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
+                const termId = annSnap.annotation.term_id;
+                const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
+                const firstAxisVal = Object.values(axesValues).find((v): v is string => typeof v === "string" && v.length > 0);
+                const layerName = view.layers?.find((l) => l.layer_id === annSnap.annotation.layer_id)?.label;
+
+                return (
+                  <li
+                    key={annSnap.annotation.annotation_id}
+                    data-list-key={`annotation:${annSnap.annotation.annotation_id}`}
+                    className={`doc-item ${isSelected ? "selected" : ""}`}
+                    onClick={() => {
+                      if (selectedAnnotationId === annSnap.annotation.annotation_id) {
+                        handleDeselectAll();
+                        return;
+                      }
+                      setSelectedTargetId(null);
+                      setSelectedSourceId(null);
+                      cancelPending();
+                      setSelectedAnnotationId(annSnap.annotation.annotation_id);
+                      setMobilePane("details");
+                      const firstEv = annSnap.annotation.evidence_refs?.[0]?.evidence_id;
+                      setSelectedEvidenceId(firstEv ?? null);
+                    }}
+                  >
+                    <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
+                      {layerName && (view.layers ?? []).length > 1 && (
+                        <span className="badge" style={{ fontSize: "0.7rem" }}>{layerName}</span>
+                      )}
+                    </div>
+                    <div className="doc-meta">
+                      {evCount === 0 ? "Spanless" : `${evCount} mention(s)`}
+                      {firstAxisVal && ` • ${firstAxisVal}`}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-          <ul className="doc-list">
-            {visibleAnnotations.map((annSnap) => {
-              const isSelected =
-                annSnap.annotation.annotation_id === selectedAnnotationId;
-              const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
-              const termId = annSnap.annotation.term_id;
-              const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
-              const firstAxisVal = Object.values(axesValues).find((v): v is string => typeof v === "string" && v.length > 0);
-              const layerName = view.layers?.find((l) => l.layer_id === annSnap.annotation.layer_id)?.label;
-
-              return (
-                <li
-                  key={annSnap.annotation.annotation_id}
-                  data-list-key={`annotation:${annSnap.annotation.annotation_id}`}
-                  className={`doc-item ${isSelected ? "selected" : ""}`}
-                  onClick={() => {
-                    if (selectedAnnotationId === annSnap.annotation.annotation_id) {
-                      handleDeselectAll();
-                      return;
-                    }
-                    setSelectedTargetId(null);
-                    setSelectedSourceId(null);
-                    cancelPending();
-                    setSelectedAnnotationId(annSnap.annotation.annotation_id);
-                    setMobilePane("details");
-                    const firstEv = annSnap.annotation.evidence_refs?.[0]?.evidence_id;
-                    setSelectedEvidenceId(firstEv ?? null);
-                  }}
-                >
-                  <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
-                    {layerName && (view.layers ?? []).length > 1 && (
-                      <span className="badge" style={{ fontSize: "0.7rem" }}>{layerName}</span>
-                    )}
-                  </div>
-                  <div className="doc-meta">
-                    {evCount === 0 ? "Spanless" : `${evCount} mention(s)`}
-                    {firstAxisVal && ` • ${firstAxisVal}`}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
 
           {(view.submissions ?? []).length > 0 && <div className="detail-section">
             <h3>Previous Submissions</h3>

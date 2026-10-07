@@ -143,3 +143,31 @@ describe("AI badge in the sidebar", () => {
     expect(within(curated).queryByText("✦ AI")).toBeNull();
   });
 });
+
+describe("continuous sidebar", () => {
+  it("puts proposals, references and curated annotations into one scroll container", () => {
+    const adopted = snapshot("copy", "HP:0001", {
+      actor: { actor_id: "dr-a", kind: "human" }, method: "manual", source_refs: ["tool-prop:tool-prop-v1"],
+    });
+    const { container } = renderCase(reviewView([adopted]));
+    const sidebar = container.querySelector(".sidebar")!;
+    const scrollers = sidebar.querySelectorAll(".sidebar-scroll");
+    expect(scrollers.length).toBe(1);
+    const scroller = scrollers[0];
+
+    for (const title of ["Review Proposals (2)", "Reference Annotations (1)", "Curated Annotations (1)"]) {
+      const header = Array.from(scroller.querySelectorAll(".sidebar-header"))
+        .find((el) => el.textContent?.includes(title));
+      expect(header, title).toBeDefined();
+    }
+    for (const entry of Array.from(sidebar.querySelectorAll("[data-list-key]"))) {
+      expect(scroller.contains(entry)).toBe(true);
+    }
+    for (const list of Array.from(sidebar.querySelectorAll<HTMLElement>(".doc-list"))) {
+      expect(list.style.maxHeight).toBe("");
+    }
+    // The layer controls and the footer stay outside the scrolling part.
+    expect(scroller.contains(screen.getByRole("button", { name: /\+ New Annotation/ }))).toBe(true);
+    expect(sidebar.lastElementChild).not.toBe(scroller);
+  });
+});
