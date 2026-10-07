@@ -693,6 +693,12 @@ body {
   cursor: ew-resize;
 }
 
+/* While dragging, the pointer must hit the text and not the grab area of the moving handle,
+   otherwise the edge sticks to its current position within that area. */
+.text-container.resizing .resize-handle {
+  pointer-events: none;
+}
+
 /* Modal / Setup dialog */
 .modal-overlay {
   position: fixed;
