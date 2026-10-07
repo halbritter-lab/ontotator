@@ -1347,7 +1347,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
           <div className="sidebar-scroll" ref={sidebarScrollRef}>
             {view.key.mode === "review" && (
-              <>
+              <div className="sidebar-section">
                 <div className="sidebar-header">
                   Review Proposals ({reviewTargets.length})
                 </div>
@@ -1458,13 +1458,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                   >
                                     ↳ Replaced by: <strong>{displayText}</strong> ↗
                                   </button>
+                                  {" "}<AiBadge provenance={t.provenance} />
                                 </div>
                               );
                             })()
                           ) : dec?.outcome === "rejected" ? (
-                            <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
-                              ✕ Proposal rejected
-                            </span>
+                            <>
+                              <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
+                                ✕ Proposal rejected
+                              </span>
+                              {" "}<AiBadge provenance={t.provenance} />
+                            </>
                           ) : (
                             <>
                               {t.evidence_count === 0 ? "Spanless" : `“${t.quote ?? ""}”`}
@@ -1479,7 +1483,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     );
                   })}
                 </ul>
-              </>
+              </div>
             )}
 
             {visibleSources.length > 0 && <section aria-label="Reference annotations">
@@ -1495,61 +1499,63 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               </button>)}
             </section>}
 
-            <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>Curated Annotations ({visibleAnnotations.length})</span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={handleStartSpanless}
-                title="Create new annotation via ontology search"
-                style={{ fontSize: "0.75rem", padding: "2px 8px" }}
-              >
-                + New Annotation
-              </button>
-            </div>
-            <ul className="doc-list">
-              {visibleAnnotations.map((annSnap) => {
-                const isSelected =
-                  annSnap.annotation.annotation_id === selectedAnnotationId;
-                const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
-                const termId = annSnap.annotation.term_id;
-                const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
-                const firstAxisVal = Object.values(axesValues).find((v): v is string => typeof v === "string" && v.length > 0);
-                const layerName = view.layers?.find((l) => l.layer_id === annSnap.annotation.layer_id)?.label;
+            <div className="sidebar-section">
+              <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Curated Annotations ({visibleAnnotations.length})</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleStartSpanless}
+                  title="Create new annotation via ontology search"
+                  style={{ fontSize: "0.75rem", padding: "2px 8px" }}
+                >
+                  + New Annotation
+                </button>
+              </div>
+              <ul className="doc-list">
+                {visibleAnnotations.map((annSnap) => {
+                  const isSelected =
+                    annSnap.annotation.annotation_id === selectedAnnotationId;
+                  const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
+                  const termId = annSnap.annotation.term_id;
+                  const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
+                  const firstAxisVal = Object.values(axesValues).find((v): v is string => typeof v === "string" && v.length > 0);
+                  const layerName = view.layers?.find((l) => l.layer_id === annSnap.annotation.layer_id)?.label;
 
-                return (
-                  <li
-                    key={annSnap.annotation.annotation_id}
-                    data-list-key={`annotation:${annSnap.annotation.annotation_id}`}
-                    className={`doc-item ${isSelected ? "selected" : ""}`}
-                    onClick={() => {
-                      if (selectedAnnotationId === annSnap.annotation.annotation_id) {
-                        handleDeselectAll();
-                        return;
-                      }
-                      setSelectedTargetId(null);
-                      setSelectedSourceId(null);
-                      cancelPending();
-                      setSelectedAnnotationId(annSnap.annotation.annotation_id);
-                      setMobilePane("details");
-                      const firstEv = annSnap.annotation.evidence_refs?.[0]?.evidence_id;
-                      setSelectedEvidenceId(firstEv ?? null);
-                    }}
-                  >
-                    <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
-                      {layerName && (view.layers ?? []).length > 1 && (
-                        <span className="badge" style={{ fontSize: "0.7rem" }}>{layerName}</span>
-                      )}
-                    </div>
-                    <div className="doc-meta">
-                      {evCount === 0 ? "Spanless" : `${evCount} mention(s)`}
-                      {firstAxisVal && ` • ${firstAxisVal}`}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                  return (
+                    <li
+                      key={annSnap.annotation.annotation_id}
+                      data-list-key={`annotation:${annSnap.annotation.annotation_id}`}
+                      className={`doc-item ${isSelected ? "selected" : ""}`}
+                      onClick={() => {
+                        if (selectedAnnotationId === annSnap.annotation.annotation_id) {
+                          handleDeselectAll();
+                          return;
+                        }
+                        setSelectedTargetId(null);
+                        setSelectedSourceId(null);
+                        cancelPending();
+                        setSelectedAnnotationId(annSnap.annotation.annotation_id);
+                        setMobilePane("details");
+                        const firstEv = annSnap.annotation.evidence_refs?.[0]?.evidence_id;
+                        setSelectedEvidenceId(firstEv ?? null);
+                      }}
+                    >
+                      <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
+                        {layerName && (view.layers ?? []).length > 1 && (
+                          <span className="badge" style={{ fontSize: "0.7rem" }}>{layerName}</span>
+                        )}
+                      </div>
+                      <div className="doc-meta">
+                        {evCount === 0 ? "Spanless" : `${evCount} mention(s)`}
+                        {firstAxisVal && ` • ${firstAxisVal}`}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           </div>
 
           {(view.submissions ?? []).length > 0 && <div className="detail-section">

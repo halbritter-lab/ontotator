@@ -191,3 +191,37 @@ describe("continuous sidebar", () => {
     }
   });
 });
+
+describe("review outcome and section layout", () => {
+  it("keeps the AI badge on rejected and replaced tool proposals", () => {
+    const adopted = snapshot("copy", "HP:0009", {
+      actor: { actor_id: "dr-a", kind: "human" }, method: "manual", source_refs: ["tool-prop:tool-prop-v1"],
+    });
+    for (const decision of [
+      { outcome: "rejected" as const },
+      { outcome: "changed" as const, replacement: { annotation_id: "copy", version: "copy-v1" } },
+    ]) {
+      const view = reviewView(decision.outcome === "changed" ? [adopted] : []);
+      view.draft.decisions = [{
+        decision_id: "d", target: { annotation_id: "tool-prop", version: "tool-prop-v1" },
+        note: "", reviewer_id: "dr-a", ...decision,
+      }] as any;
+      const { container } = renderCase(view);
+      const item = Array.from(container.querySelectorAll<HTMLElement>(".sidebar [data-list-key^='target:']"))
+        .find((el) => el.textContent?.includes("HP:0001"))!;
+      expect(item.classList.contains("doc-item--resolved"), decision.outcome).toBe(true);
+      expect(within(item).getByText("✦ AI"), decision.outcome).toBeDefined();
+      cleanup();
+    }
+  });
+
+  it("gives every section its own container so a sticky header leaves with its section", () => {
+    const { container } = renderCase(reviewView());
+    const scroller = container.querySelector(".sidebar-scroll")!;
+    const headers = Array.from(scroller.querySelectorAll(".sidebar-header"));
+    expect(headers.length).toBe(3);
+    const parents = headers.map((h) => h.parentElement);
+    expect(new Set(parents).size).toBe(3);
+    for (const parent of parents) expect(parent).not.toBe(scroller);
+  });
+});
