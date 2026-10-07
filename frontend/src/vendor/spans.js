@@ -4,6 +4,11 @@
  * Adapted from hpo-span-annotator / opti-data annot_gold.
  */
 
+import { resizeSegment, stepOffset, wordBoundary } from "../spans/resize";
+
+/** Delay before a keyboard resize is reported, so several steps become one edit. */
+const KEY_RESIZE_COMMIT_MS = 400;
+
 const NBSP = " ";
 
 /**
@@ -77,6 +82,10 @@ export class SpanEditor {
     this.activeIds = new Set();
     this.readOnly = false;
     this.resizableIds = new Set();
+    this._pendingKeyResize = null;
+    this._keyResizeTimer = null;
+    this._onFocusOutBound = (e) => this._onFocusOut(e);
+    container.addEventListener("focusout", this._onFocusOutBound);
 
     this._onMouseUpBound = (e) => this._onMouseUp(e);
     this._onMouseOverBound = (e) => this._onHover(e, true);
@@ -101,6 +110,8 @@ export class SpanEditor {
     this.container.removeEventListener("mouseover", this._onMouseOverBound);
     this.container.removeEventListener("mouseout", this._onMouseOutBound);
     this.container.removeEventListener("click", this._onClickBound);
+    this.container.removeEventListener("focusout", this._onFocusOutBound);
+    clearTimeout(this._keyResizeTimer);
   }
 
   setReadOnly(readOnly) {
@@ -114,6 +125,9 @@ export class SpanEditor {
   }
 
   setMentions(mentions) {
+    clearTimeout(this._keyResizeTimer);
+    this._keyResizeTimer = null;
+    this._pendingKeyResize = null;
     this.mentions = mentions || [];
     this.render();
   }
@@ -159,6 +173,64 @@ export class SpanEditor {
     node.setAttribute("role", "separator");
     node.setAttribute("aria-label", handle.edge === "start" ? "Start of mention" : "End of mention");
     return node;
+  }
+
+  _spansOf(mentionId) {
+    const mention = this.mentions.find((m) => m.mention_id === mentionId);
+    return mention ? normaliseSpans(mention.spans || []) : null;
+  }
+
+  /** Replace a mention's spans in the editor's own copy and redraw. */
+  _applySpans(mentionId, spans) {
+    this.mentions = this.mentions.map((m) => (m.mention_id === mentionId
+      ? { ...m, spans: spans.map((s) => ({ char_start: s.start, char_end: s.end })) }
+      : m));
+    this.render();
+  }
+
+  _findHandle(mentionId, edge, offset) {
+    return Array.from(this.container.querySelectorAll(".resize-handle")).find((node) =>
+      node.dataset.mention === mentionId && node.dataset.edge === edge && Number(node.dataset.offset) === offset);
+  }
+
+  _flushKeyResize() {
+    clearTimeout(this._keyResizeTimer);
+    this._keyResizeTimer = null;
+    const pending = this._pendingKeyResize;
+    this._pendingKeyResize = null;
+    if (pending) this.handlers.onResize?.(pending.mentionId, pending.spans);
+  }
+
+  _onHandleKey(event, handle) {
+    const direction = event.key === "ArrowLeft" ? -1 : 1;
+    const mentionId = handle.dataset.mention;
+    const edge = handle.dataset.edge;
+    const index = Number(handle.dataset.segment);
+    const from = Number(handle.dataset.offset);
+    const spans = this._spansOf(mentionId);
+    if (!spans) return;
+    const to = (event.ctrlKey || event.metaKey)
+      ? wordBoundary(this.text, from, direction)
+      : stepOffset(this.text, from, direction);
+    const next = resizeSegment(this.text, spans, index, edge, to);
+    if (!next) return;
+    // The moved edge of the (possibly merged) segment that now contains the old one.
+    const anchor = edge === "start" ? spans[index].end - 1 : spans[index].start;
+    const segment = next.find((s) => s.start <= anchor && anchor < s.end) || next[0];
+    this._refocusing = true;
+    this._applySpans(mentionId, next);
+    this._findHandle(mentionId, edge, edge === "start" ? segment.start : segment.end)?.focus();
+    this._refocusing = false;
+    this._pendingKeyResize = { mentionId, spans: next };
+    clearTimeout(this._keyResizeTimer);
+    this._keyResizeTimer = setTimeout(() => this._flushKeyResize(), KEY_RESIZE_COMMIT_MS);
+  }
+
+  _onFocusOut(event) {
+    if (this._refocusing || !this._pendingKeyResize) return;
+    if (event.relatedTarget?.classList?.contains("resize-handle")
+      && event.relatedTarget.dataset.mention === this._pendingKeyResize.mentionId) return;
+    this._flushKeyResize();
   }
 
   highlight(mentionIds) {
@@ -273,6 +345,14 @@ export class SpanEditor {
   // Keyboard selection (Shift + arrows/Home/End, or caret browsing): commit the
   // selection when Shift is released or Enter is pressed.
   _onKeyDown(event) {
+    const handle = event.target?.closest?.(".resize-handle");
+    if (handle && (event.key === "ArrowLeft" || event.key === "ArrowRight")
+      && !event.altKey && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      this._onHandleKey(event, handle);
+      return;
+    }
     if (event.shiftKey && /^(Arrow|Home$|End$|PageUp$|PageDown$)/.test(event.key)) {
       this._keySelecting = true;
     }

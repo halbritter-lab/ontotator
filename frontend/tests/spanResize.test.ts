@@ -87,4 +87,74 @@ describe("span editor resize handles", () => {
     container.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     expect(onSelection).toHaveBeenCalledWith(expect.objectContaining({ segments: [{ start: 7, end: 15 }] }));
   });
+
+  const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}) =>
+    el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init }));
+  const focused = () => document.activeElement as HTMLElement;
+
+  it("moves the focused edge with the arrow keys and reports once after a pause", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setResizable(["ev-a"]);
+    handles()[1].focus(); // end of "muscular" at 15
+
+    press(focused(), "ArrowLeft");
+    press(focused(), "ArrowLeft");
+    expect(describeHandle(focused())).toBe("ev-a:0:end@13");
+    expect(onResize).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(399);
+    expect(onResize).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 13 }]);
+  });
+
+  it("jumps to the next word boundary with Ctrl", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setResizable(["ev-a"]);
+    handles()[0].focus(); // start of "muscular" at 7
+    press(focused(), "ArrowLeft", { ctrlKey: true }); // 6: the space, trimmed away again -> no change
+    expect(describeHandle(focused())).toBe("ev-a:0:start@7");
+    press(focused(), "ArrowLeft", { ctrlKey: true });
+    expect(describeHandle(focused())).toBe("ev-a:0:start@7");
+    vi.advanceTimersByTime(400);
+    expect(onResize).not.toHaveBeenCalled();
+
+    handles()[1].focus();
+    press(focused(), "ArrowRight", { ctrlKey: true }); // 16: space, trimmed -> unchanged
+    press(focused(), "ArrowLeft", { ctrlKey: true }); // 7 would cross the start: clamped to one character
+    expect(describeHandle(focused())).toBe("ev-a:0:end@8");
+    vi.advanceTimersByTime(400);
+    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 8 }]);
+  });
+
+  it("reports immediately when focus leaves the handle", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setResizable(["ev-a"]);
+    handles()[1].focus();
+    press(focused(), "ArrowLeft");
+    focused().dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: document.body }));
+    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 14 }]);
+    vi.advanceTimersByTime(400);
+    expect(onResize).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let arrow keys on a handle reach global shortcuts", () => {
+    const { handle } = mount();
+    handle.setResizable(["ev-a"]);
+    const seen = vi.fn();
+    window.addEventListener("keydown", seen);
+    try {
+      handles()[1].focus();
+      press(focused(), "ArrowLeft");
+      expect(seen).not.toHaveBeenCalled();
+      press(focused(), "a");
+      expect(seen).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("keydown", seen);
+    }
+  });
 });
