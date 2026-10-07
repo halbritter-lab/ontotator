@@ -76,6 +76,7 @@ export class SpanEditor {
     this.markers = [];
     this.activeIds = new Set();
     this.readOnly = false;
+    this.resizableIds = new Set();
 
     this._onMouseUpBound = (e) => this._onMouseUp(e);
     this._onMouseOverBound = (e) => this._onHover(e, true);
@@ -127,6 +128,39 @@ export class SpanEditor {
     this.render();
   }
 
+  /** Mentions whose segments get draggable start/end handles. */
+  setResizable(mentionIds) {
+    this.resizableIds = new Set(mentionIds || []);
+    this.render();
+  }
+
+  _handlesByOffset() {
+    const starts = new Map();
+    const ends = new Map();
+    for (const mention of this.mentions) {
+      if (!this.resizableIds.has(mention.mention_id)) continue;
+      normaliseSpans(mention.spans || []).forEach((span, index) => {
+        const base = { mentionId: mention.mention_id, index };
+        starts.set(span.start, [...(starts.get(span.start) || []), { ...base, edge: "start", offset: span.start }]);
+        ends.set(span.end, [...(ends.get(span.end) || []), { ...base, edge: "end", offset: span.end }]);
+      });
+    }
+    return { starts, ends };
+  }
+
+  _handleNode(handle) {
+    const node = document.createElement("span");
+    node.className = `resize-handle resize-handle--${handle.edge}`;
+    node.dataset.mention = handle.mentionId;
+    node.dataset.segment = String(handle.index);
+    node.dataset.edge = handle.edge;
+    node.dataset.offset = String(handle.offset);
+    node.tabIndex = 0;
+    node.setAttribute("role", "separator");
+    node.setAttribute("aria-label", handle.edge === "start" ? "Start of mention" : "End of mention");
+    return node;
+  }
+
   highlight(mentionIds) {
     this.activeIds = new Set(mentionIds || []);
     for (const node of this.container.querySelectorAll(".run")) {
@@ -157,6 +191,7 @@ export class SpanEditor {
     const tints = normaliseSpans(this.suggestions);
     const fragment = document.createDocumentFragment();
 
+    const { starts, ends } = this._handlesByOffset();
     for (const run of runs) {
       const node = document.createElement("span");
       node.className = "run";
@@ -189,7 +224,9 @@ export class SpanEditor {
       }
 
       node.appendChild(document.createTextNode(this.text.slice(run.start, run.end)));
+      for (const handle of starts.get(run.start) || []) fragment.appendChild(this._handleNode(handle));
       fragment.appendChild(node);
+      for (const handle of ends.get(run.end) || []) fragment.appendChild(this._handleNode(handle));
     }
     this.container.replaceChildren(fragment);
     if (!this.text) {
@@ -199,6 +236,7 @@ export class SpanEditor {
 
   _offsetOf(node, offset) {
     let element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    if (element?.classList?.contains("resize-handle")) return Number(element.dataset.offset);
     while (element && element !== this.container && !element.classList?.contains("run")) {
       element = element.parentElement;
     }

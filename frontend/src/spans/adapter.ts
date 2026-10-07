@@ -42,6 +42,7 @@ export interface SelectionPayload {
 
 export type SelectionCallback = (payload: SelectionPayload) => void;
 export type PickCallback = (evidenceId: string) => void;
+export type ResizeCallback = (evidenceId: string, segments: CodepointSegment[]) => void;
 
 export interface SpanEditorHandle {
   setMentions: (mentions: MentionDisplay[]) => void;
@@ -50,6 +51,8 @@ export interface SpanEditorHandle {
     intent: "new_mention" | "extend_mention",
     evidenceId?: string,
   ) => void;
+  /** Evidence ids whose segments get drag handles. */
+  setResizable: (evidenceIds: string[]) => void;
   destroy: () => void;
 }
 
@@ -111,6 +114,7 @@ export function mountSpanEditor(
   onSelection: SelectionCallback,
   onPick: PickCallback,
   onInvalidMentions?: (evidenceIds: string[]) => void,
+  onResize?: ResizeCallback,
 ): SpanEditorHandle {
   const convert = (items: MentionDisplay[]): VendorMention[] => {
     const invalid: string[] = [];
@@ -152,6 +156,17 @@ export function mountSpanEditor(
         onPick(mentionIds[0]);
       }
     },
+    onResize: (mentionId: string, spans: Array<{ start: number; end: number }>) => {
+      if (!onResize) return;
+      try {
+        onResize(mentionId, spans.map((span) => ({
+          start: toCodepoint(text, span.start),
+          end: toCodepoint(text, span.end),
+        })));
+      } catch {
+        // an edge inside a surrogate pair cannot be expressed in codepoints: ignore
+      }
+    },
   });
 
   editor.setBlock(text);
@@ -171,6 +186,9 @@ export function mountSpanEditor(
     ) => {
       currentIntent = intent;
       currentEvidenceId = evidenceId;
+    },
+    setResizable: (evidenceIds: string[]) => {
+      editor.setResizable(evidenceIds);
     },
     destroy: () => {
       editor.destroy();
