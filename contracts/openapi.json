@@ -2312,6 +2312,22 @@
             "type": "boolean",
             "title": "Obsolete",
             "default": false
+          },
+          "route": {
+            "type": "string",
+            "title": "Route",
+            "default": ""
+          },
+          "match_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Language"
           }
         },
         "additionalProperties": false,
@@ -2344,13 +2360,14 @@
           "route": {
             "type": "string",
             "enum": [
+              "auto",
               "lexical",
               "exact",
               "id",
               "browse"
             ],
             "title": "Route",
-            "default": "lexical"
+            "default": "auto"
           },
           "k": {
             "type": "integer",

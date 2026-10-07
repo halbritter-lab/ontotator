@@ -1058,6 +1058,13 @@ export interface components {
              * @default false
              */
             obsolete: boolean;
+            /**
+             * Route
+             * @default
+             */
+            route: string;
+            /** Match Language */
+            match_language?: string | null;
         };
         /**
          * SearchRequest
@@ -1076,10 +1083,10 @@ export interface components {
             query: string;
             /**
              * Route
-             * @default lexical
+             * @default auto
              * @enum {string}
              */
-            route: "lexical" | "exact" | "id" | "browse";
+            route: "auto" | "lexical" | "exact" | "id" | "browse";
             /**
              * K
              * @default 10
