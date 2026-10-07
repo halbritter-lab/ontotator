@@ -9,6 +9,7 @@ import {
   type Submission,
 } from "../api/client";
 import type { components } from "../api/generated";
+import { AiBadge } from "../editor/AiBadge";
 import { AnnotationPanel, quoteSegments, type EvidenceSnapshot } from "../editor/AnnotationPanel";
 import {
   createMutationQueue,
@@ -1341,6 +1342,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   return (
                     <li
                       key={refKey(t)}
+                      data-list-key={`target:${refKey(t)}`}
                       className={`doc-item ${isSelected ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}`}
                       style={{
                         opacity: isResolved && !isSelected ? 0.55 : 1,
@@ -1450,7 +1452,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           <>
                             {t.evidence_count === 0 ? "Spanless" : `“${t.quote ?? ""}”`}
                             {t.evidence_count > 1 && ` +${t.evidence_count - 1} more`}
-                            {` • ${t.provenance.actor.kind}`}
+                            {t.provenance.actor.kind === "tool"
+                              ? <>{" "}<AiBadge provenance={t.provenance} /></>
+                              : ` • ${t.provenance.actor.kind}`}
                           </>
                         )}
                       </div>
@@ -1464,9 +1468,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           {visibleSources.length > 0 && <section aria-label="Reference annotations">
             <div className="sidebar-header">Reference Annotations ({visibleSources.length})</div>
             {visibleSources.map(s => <button type="button" className="btn btn-secondary" key={sourceKey(s)}
+              data-list-key={`source:${sourceKey(s)}`}
               aria-pressed={sourceKey(s) === selectedSourceId} onClick={() => selectSource(sourceKey(s))}>
               <TermName termId={s.annotation.term_id} label={termLabel(s.annotation.layer_id, s.annotation.term_id)} />
-              <span>{view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Read-only</span>
+              <span>
+                {view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Read-only{" "}
+                <AiBadge provenance={s.annotation.provenance} />
+              </span>
             </button>)}
           </section>}
 
@@ -1495,6 +1503,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               return (
                 <li
                   key={annSnap.annotation.annotation_id}
+                  data-list-key={`annotation:${annSnap.annotation.annotation_id}`}
                   className={`doc-item ${isSelected ? "selected" : ""}`}
                   onClick={() => {
                     if (selectedAnnotationId === annSnap.annotation.annotation_id) {
@@ -1572,7 +1581,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               <div className="detail-section">
                 <h2><TermName termId={selectedSource.annotation.term_id} label={termLabel(selectedSource.annotation.layer_id, selectedSource.annotation.term_id)} /></h2>
                 <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label} · Read-only</p>
-                <p>{selectedSource.annotation.provenance.actor.actor_id} · {selectedSource.annotation.provenance.method}</p>
+                <p>
+                  <AiBadge provenance={selectedSource.annotation.provenance} />{" "}
+                  {selectedSource.annotation.provenance.actor.actor_id} · {selectedSource.annotation.provenance.method}
+                </p>
                 {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Not specified"}</p>)}
                 <h3>Mentions ({selectedSource.evidence.length})</h3>
                 {selectedSource.evidence.map(ev => <p key={ev.version}>
