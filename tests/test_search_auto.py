@@ -136,3 +136,120 @@ def test_explicit_routes_tag_their_candidates() -> None:
     assert lexical.candidates
     assert {c.route for c in lexical.candidates} == {"lexical"}
     assert {c.match_language for c in lexical.candidates} == {"en"}
+
+
+def _tiny_ontology(tmp_path: Path) -> Path:
+    """`Deafness` is the label of one term and a synonym of another."""
+
+    def node(
+        local: str, label: str, synonyms: tuple[str, ...] = ()
+    ) -> dict[str, object]:
+        return {
+            "id": f"http://purl.obolibrary.org/obo/TEST_{local}",
+            "lbl": label,
+            "type": "CLASS",
+            "meta": {
+                "synonyms": [
+                    {"pred": "hasExactSynonym", "val": value} for value in synonyms
+                ]
+            },
+        }
+
+    payload = {
+        "graphs": [
+            {
+                "id": "http://example.com/tiny.json",
+                "meta": {"version": "http://example.com/releases/2026-06-23/tiny.json"},
+                "nodes": [
+                    node("0000001", "Root"),
+                    node("0000002", "Deafness"),
+                    node("0000003", "Hearing impairment", ("Deafness",)),
+                    node("0000004", "Partial deafness"),
+                ],
+                "edges": [
+                    {
+                        "sub": f"http://purl.obolibrary.org/obo/TEST_{local}",
+                        "pred": "is_a",
+                        "obj": "http://purl.obolibrary.org/obo/TEST_0000001",
+                    }
+                    for local in ("0000002", "0000003", "0000004")
+                ],
+            }
+        ]
+    }
+    path = tmp_path / "tiny.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_keyword_lists_exact_matches_first_then_similar(tmp_path: Path) -> None:
+    result = _service(_tiny_ontology(tmp_path)).search(_request("deafness"))
+
+    assert [(c.term_id, c.route, c.match_kind) for c in result.candidates] == [
+        ("TEST:0000002", "exact", "label"),
+        ("TEST:0000003", "exact", "hasExactSynonym"),
+        ("TEST:0000004", "lexical", "ngram"),
+    ]
+    assert result.displayed_ids == ["TEST:0000002", "TEST:0000003", "TEST:0000004"]
+    assert result.ranked_ids == ["TEST:0000002", "TEST:0000003", "TEST:0000004"]
+    assert [c.rank for c in result.candidates] == [1, 2, 3]
+    assert [c.display_pos for c in result.candidates] == [1, 2, 3]
+    assert result.shuffled is True
+    assert result.candidates[0].match_language is None
+    assert result.candidates[2].match_language == "en"
+    assert result.candidates[0].score is None
+    assert result.candidates[2].score is not None
+
+
+def test_exact_matches_take_precedence_within_k(tmp_path: Path) -> None:
+    service = _service(_tiny_ontology(tmp_path))
+
+    two = service.search(_request("deafness", k=2))
+    assert two.displayed_ids == ["TEST:0000002", "TEST:0000003"]
+    assert two.shuffled is False
+
+    one = service.search(_request("deafness", k=1))
+    assert one.displayed_ids == ["TEST:0000002"]
+
+
+def test_keyword_on_the_fixture_has_no_duplicates_and_consistent_ranks() -> None:
+    result = _service().search(_request("Seizure"))
+    ids = [c.term_id for c in result.candidates]
+
+    assert ids[0] == "HP:0001250"
+    assert result.candidates[0].route == "exact"
+    assert {c.route for c in result.candidates[1:]} == {"lexical"}
+    assert {"HP:0011146", "HP:0002133"} <= set(ids)
+    assert len(ids) == len(set(ids))
+    assert len(ids) <= 10
+
+    assert result.displayed_ids == ids
+    assert [c.display_pos for c in result.candidates] == list(range(1, len(ids) + 1))
+    assert sorted(c.rank for c in result.candidates) == list(range(1, len(ids) + 1))
+    assert result.ranked_ids[0] == "HP:0001250"
+    assert result.ranked_ids == [
+        c.term_id for c in sorted(result.candidates, key=lambda c: c.rank)
+    ]
+
+
+def test_auto_has_no_prefix_fallback() -> None:
+    result = _service().search(_request("hypoton"))
+
+    assert result.candidates
+    assert {c.route for c in result.candidates} == {"lexical"}
+    assert "HP:0001252" in result.displayed_ids
+
+
+def test_similar_block_is_stable_per_annotator_and_keyed_by_annotator() -> None:
+    service = _service()
+
+    first = service.search(_request("Seizure"))
+    again = service.search(_request("Seizure"))
+    other = service.search(_request("Seizure", workspace_key=_key("dr-other")))
+
+    assert first.seed is not None
+    assert again.seed == first.seed
+    assert again.displayed_ids == first.displayed_ids
+    assert other.seed != first.seed
+    assert set(other.displayed_ids) == set(first.displayed_ids)
+    assert other.ranked_ids == first.ranked_ids

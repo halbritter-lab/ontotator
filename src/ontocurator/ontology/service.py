@@ -30,6 +30,7 @@ from ontocurator.vendor.hpo_span_annotator.search import (
     SCORED_PATHS,
     SearchEngine,
     shuffle_seed,
+    shuffled,
 )
 
 # Digits alone, PREFIX:digits or PREFIX_digits. Anything else is a keyword.
@@ -182,7 +183,42 @@ class OntologyService:
                 hit["route"] = "id"
             return hits, False, None
 
-        return [], False, None
+        # Exact name matches first, in their fixed order: that a name equals the
+        # query is a fact about the query, not a score. No prefix fallback here;
+        # a partial word is what the similar block is for.
+        exact = self.ontology.exact(query, limit=request.k)
+        for position, hit in enumerate(exact, start=1):
+            hit["route"] = "exact"
+            hit["rank"] = position
+            hit["display_pos"] = position
+
+        seed = shuffle_seed(
+            annotator_id=request.workspace_key.annotator_id,
+            mention_id=request.annotation_id,
+            query=request.query,
+            k=request.k,
+        )
+
+        similar: list[dict[str, Any]] = []
+        remaining = request.k - len(exact)
+        lexical = self.engine.lexical
+        if remaining > 0 and lexical is not None and lexical.ready:
+            taken = {hit["hpo_id"] for hit in exact}
+            ranked = [
+                hit
+                for hit in lexical.search(query, request.k + len(exact))
+                if hit["hpo_id"] not in taken
+            ][:remaining]
+            # Shuffled because this order is a score. Ranks continue after the
+            # exact block so one event describes the whole list.
+            similar = shuffled(ranked, seed)
+            for hit in similar:
+                hit["route"] = "lexical"
+                hit["match_kind"] = "ngram"
+                hit["rank"] += len(exact)
+                hit["display_pos"] += len(exact)
+
+        return exact + similar, bool(similar), seed
 
     def _candidate(self, hit: dict[str, Any]) -> SearchCandidate:
         language = hit.get("matched_language")
