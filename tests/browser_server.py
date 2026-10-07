@@ -52,7 +52,9 @@ PORT = int(os.environ.get("HPO_E2E_PORT", "18765"))
 
 
 def fixture_package(
-    package_id: str = "browser-fixture", created_at: str = "2026-10-01T00:00:00Z"
+    package_id: str = "browser-fixture",
+    created_at: str = "2026-10-01T00:00:00Z",
+    proposals: list[tuple[str, str, int, int]] | None = None,
 ) -> bytes:
     hp_ont = OntologyDefinition(
         ontology_id="hp",
@@ -101,7 +103,8 @@ def fixture_package(
     )
     annotations, evidence = {}, {}
     for number, (kind, term, start, end) in enumerate(
-        [
+        proposals
+        or [
             ("human", "HP:0001252", 0, 9),
             ("tool", "HP:0001250", 14, 21),
         ]
@@ -166,6 +169,13 @@ def provision_changed_package(app, root: Path) -> None:  # type: ignore[no-untyp
             lambda *_: None,
         )
     app.state.provisioning = status
+
+
+# 30 tool proposals: enough to overflow the case sidebar at any window height.
+MANY_PROPOSALS = [
+    ("tool", "HP:0001252", 0, 9) if number % 2 == 0 else ("tool", "HP:0001250", 14, 21)
+    for number in range(30)
+]
 
 
 def scenario_package(scenario: str) -> bytes:
@@ -240,6 +250,10 @@ if __name__ == "__main__":
                 "review_references",
             ):
                 data = scenario_package(scenario)
+            elif scenario == "many_proposals":
+                data = fixture_package(
+                    package_id="pkg-many-proposals", proposals=MANY_PROPOSALS
+                )
             else:
                 data = fixture_package()
             return Response(data, media_type="application/zip")
