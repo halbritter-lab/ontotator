@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   ValidationError,
@@ -373,6 +373,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     entry?.scrollIntoView?.({ block: "nearest" });
     // In the tab layout the list is hidden while another tab is open: catch up when it returns.
   }, [selectedListKey, mobilePane]);
+  // The inspector shows something else: start at its top. Without this it keeps the scroll
+  // position of what it showed before -- next to a docked tree the pane is short, so a new
+  // annotation would appear scrolled to where its candidate was, its term name out of sight.
+  const inspectorRef = useRef<HTMLDivElement | null>(null);
+  const inspectorKey = pendingAnnotation ? `pending:${pendingAnnotation.annotationId}` : selectedListKey;
+  useLayoutEffect(() => {
+    if (inspectorRef.current) inspectorRef.current.scrollTop = 0;
+  }, [inspectorKey]);
   const sourceMentions: MentionDisplay[] = useMemo(() => visibleSources.flatMap(s => s.evidence.map(ev => ({
     evidence_id: `source:${sourceKey(s)}:${ev.mention.evidence_id}:${ev.version}`,
     sourceId: sourceKey(s),
@@ -1733,7 +1741,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         />
 
         {/* Right: Annotation & Search Panel + Review Actions */}
-        <div className="inspector-pane">
+        <div className="inspector-pane" ref={inspectorRef}>
           {selectedSource ? (
             <section className="detail-pane" aria-label="Reference details">
               <div className="detail-section">

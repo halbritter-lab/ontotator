@@ -346,6 +346,40 @@ const openPanel = async (container: HTMLElement, annotationId: string) => {
   await within(panel).findByText("Beta term", { selector: ".tree-label" });
   return panel;
 };
+describe("the annotation panel", () => {
+  it("starts at its top when it shows another annotation, and stays put while one is edited", async () => {
+    const view = baseView([snapshot("a1", "HP:A"), snapshot("a2", "HP:C")]);
+    mockServer(view);
+    const { container } = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+    const pane = container.querySelector<HTMLElement>(".inspector-pane")!;
+
+    // Next to a docked tree the panel is short: its content is scrolled, for
+    // instance down to a candidate of the search.
+    fireEvent.click(entry(container, "a1"));
+    pane.scrollTop = 120;
+    expect(pane.scrollTop).toBe(120);
+
+    // Editing the annotation that is shown does not move the panel ...
+    fireEvent.click(within(pane).getByLabelText("Absent"));
+    await waitFor(() => expect(api.applyCommand).toHaveBeenCalledTimes(1));
+    expect(pane.scrollTop).toBe(120);
+
+    // ... another annotation is shown from its top, with its term name ...
+    fireEvent.click(entry(container, "a2"));
+    expect(within(pane).getByRole("heading", { level: 2 }).textContent).toContain("HP:C");
+    expect(pane.scrollTop).toBe(0);
+
+    // ... and so is the search for a new one, and the panel after it was cancelled.
+    pane.scrollTop = 80;
+    fireEvent.click(screen.getByRole("button", { name: "+ New Annotation" }));
+    expect(within(pane).getByLabelText(/Search ontology term/i)).toBeDefined();
+    expect(pane.scrollTop).toBe(0);
+    pane.scrollTop = 60;
+    fireEvent.click(entry(container, "a1"));
+    expect(pane.scrollTop).toBe(0);
+  });
+});
+
 const panelNow = () => screen.getByRole("region", { name: "Ontology tree" });
 const pinSwitch = () => screen.getByRole("button", { name: "Keep open" });
 
