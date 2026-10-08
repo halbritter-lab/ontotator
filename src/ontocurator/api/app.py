@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from ontocurator.api.routes import router
 from ontocurator.api.security import verify_security
+from ontocurator.api.tree_routes import router as tree_router
 from ontocurator.application.legacy_config import (
     LegacyConfigInUse,
     LegacyConfigNotFound,
@@ -216,6 +217,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         )
 
     app.include_router(router)
+    app.include_router(tree_router)
 
     # Mount static assets if provided or embedded
     web_path: Path | None = None

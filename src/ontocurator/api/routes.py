@@ -475,6 +475,56 @@ def read_submission(
     return sub_svc.read(key, submission_id)
 
 
+def layer_ontology(
+    request: Request,
+    repo: Repository,
+    ws_svc: WorkspaceService,
+    workspace_key: WorkspaceKey,
+    layer_id: str,
+    annotation_id: str,
+) -> OntologyService:
+    """The ontology a search or a tree request may use for this layer.
+
+    Checks the working mode, the document, that the layer exists and is
+    accessible in the workspace's scope, and that an annotation already in the
+    draft belongs to that layer.
+    """
+    require_mode_allowed(request, workspace_key.mode)
+    ws_svc.get_document(workspace_key.package_id, workspace_key.document_id)
+    profile = repo.get_task_profile(workspace_key.package_id)
+    scope = build_scope(profile, workspace_key.mode)
+    profile_layer_ids = [layer.layer_id for layer in profile.layers]
+    if layer_id not in profile_layer_ids:
+        raise DomainError(
+            "UNKNOWN_LAYER",
+            f"Layer '{layer_id}' is not defined in task profile",
+        )
+    accessible = scope.editable_layer_ids + scope.reference_layer_ids
+    if layer_id not in accessible:
+        raise DomainError(
+            "INVALID_LAYER",
+            f"Layer '{layer_id}' is not accessible in workspace scope '{scope.scope_id}'",
+        )
+
+    # If annotation exists in draft, verify layer matches
+    try:
+        draft = repo.open_draft(workspace_key)
+        for snap in draft.annotations:
+            if snap.annotation.annotation_id == annotation_id:
+                if snap.annotation.layer_id != layer_id:
+                    raise DomainError(
+                        "LAYER_MISMATCH",
+                        f"Annotation '{annotation_id}' belongs to layer '{snap.annotation.layer_id}', not '{layer_id}'",
+                    )
+                break
+    except DomainError:
+        raise
+    except Exception:
+        pass
+
+    return get_ontology(request).for_layer(profile, layer_id)
+
+
 @router.post("/search")
 def search_ontology(
     req: SearchRequest,
@@ -483,42 +533,11 @@ def search_ontology(
     ws_svc: WorkspaceSvcDep,
 ) -> SearchResult:
     """Execute ontology search with deterministic provenance shuffling and layer scoping."""
-    require_mode_allowed(request, req.workspace_key.mode)
-    ws_svc.get_document(req.workspace_key.package_id, req.workspace_key.document_id)
-    profile = repo.get_task_profile(req.workspace_key.package_id)
-    scope = build_scope(profile, req.workspace_key.mode)
-    profile_layer_ids = [layer.layer_id for layer in profile.layers]
-    if req.layer_id not in profile_layer_ids:
-        raise DomainError(
-            "UNKNOWN_LAYER",
-            f"Layer '{req.layer_id}' is not defined in task profile",
-        )
-    accessible = scope.editable_layer_ids + scope.reference_layer_ids
-    if req.layer_id not in accessible:
-        raise DomainError(
-            "INVALID_LAYER",
-            f"Layer '{req.layer_id}' is not accessible in workspace scope '{scope.scope_id}'",
-        )
+    ontology = layer_ontology(
+        request, repo, ws_svc, req.workspace_key, req.layer_id, req.annotation_id
+    )
 
-    # If annotation exists in draft, verify layer matches
-    try:
-        draft = repo.open_draft(req.workspace_key)
-        for snap in draft.annotations:
-            if snap.annotation.annotation_id == req.annotation_id:
-                if snap.annotation.layer_id != req.layer_id:
-                    raise DomainError(
-                        "LAYER_MISMATCH",
-                        f"Annotation '{req.annotation_id}' belongs to layer '{snap.annotation.layer_id}', not '{req.layer_id}'",
-                    )
-                break
-    except DomainError:
-        raise
-    except Exception:
-        pass
-
-    ontology = request.app.state.ontology_registry.for_layer(profile, req.layer_id)
-
-    result = cast(SearchResult, ontology.search(req))
+    result = ontology.search(req)
     result.search_id = str(uuid4())
     result.index_identity = ontology.index_identity
     result.layer_id = req.layer_id
