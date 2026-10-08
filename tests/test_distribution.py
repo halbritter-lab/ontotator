@@ -453,3 +453,41 @@ def test_no_provisioning_from_source_without_flag(
     monkeypatch.chdir(root)
     _, api_app = _serve(tmp_path / "ws", None)
     assert _api(api_app).get("/api/v1/packages").json() == []
+
+
+def test_translation_files_next_to_the_ontologies_are_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    german = FIXTURES / "hp-de.babelon.tsv"
+    spanish = FIXTURES / "hp-es.babelon.tsv"
+
+    def translations(api_app) -> list[str]:  # type: ignore[no-untyped-def]
+        listed = _api(api_app).get("/api/v1/ontologies").json()
+        # Every loaded ontology with the prefix "hp" gets the files: the one from
+        # the ontologies folder and the one the demo package brings along.
+        assert {item["ontology_id"] for item in listed} == {"hp"}
+        per_ontology = {
+            tuple(t["language"] for t in item["translations"]) for item in listed
+        }
+        assert len(per_ontology) == 1
+        return list(per_ontology.pop())
+
+    # The delivery folder given with --provision-dir.
+    root = _provision_dir(tmp_path)
+    (root / "ontologies" / german.name).write_bytes(german.read_bytes())
+    ws = tmp_path / "ws"
+    _, api_app = _serve(ws, root)
+    assert translations(api_app) == ["de"]
+    # The file is read where it lies; it is not copied into the workspace.
+    assert not (ws / "ontologies" / german.name).exists()
+
+    # The workspace folder, on the next start.
+    (ws / "ontologies" / spanish.name).write_bytes(spanish.read_bytes())
+    _, api_app = _serve(ws, root)
+    assert translations(api_app) == ["de", "es"]
+
+    # ontologies/ next to the program (the current directory when run from source).
+    other = tmp_path / "ws-2"
+    monkeypatch.chdir(root)
+    _, api_app = _serve(other, None)
+    assert translations(api_app) == ["de"]

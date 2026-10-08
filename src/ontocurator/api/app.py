@@ -51,7 +51,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
         from ontocurator.ontology.registry import OntologyRegistry
 
-        registry = OntologyRegistry(base_dir=config.workspace_dir)
+        registry = OntologyRegistry(
+            base_dir=config.workspace_dir,
+            translation_dirs=[
+                config.workspace_dir / "ontologies",
+                *config.translation_dirs,
+            ],
+        )
         for p in config.ontology_paths:
             if p.is_file():
                 registry.register_path(p)
@@ -63,7 +69,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
                 registry.register_service(
                     OntologyService.load(
-                        config.ontology_path, config.expected_ontology_ref
+                        config.ontology_path,
+                        config.expected_ontology_ref,
+                        translation_paths=registry.translation_files(),
                     )
                 )
             else:
@@ -74,7 +82,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
         for definition, data in repo.ontology_resources():
             if registry.get_service(definition.sha256) is None:
-                registry.register_service(registry.load_resource(data, definition))
+                registry.register_service(
+                    registry.load_resource(
+                        data, definition, registry.translation_files()
+                    )
+                )
+        # A file that cannot be read was already reported while its ontology
+        # loaded. What is left to say: files that belong to no ontology at all.
+        for stray in registry.unassigned_translations():
+            logger.warning(
+                "Translation file %s matches no loaded ontology and is skipped.",
+                stray,
+            )
 
         app.state.config = config
         app.state.repo = repo

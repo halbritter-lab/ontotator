@@ -662,6 +662,12 @@ def serve(
             database_path=ws / "editor.db",
             ontology_path=ontology_list[0] if ontology_list else None,
             ontology_paths=ontology_list,
+            # Translation files lie next to the ontologies. The workspace
+            # folder is always searched; these are the delivery folders.
+            translation_dirs=[
+                app_dir() / "ontologies",
+                *([source_dir / "ontologies"] if source_dir is not None else []),
+            ],
             session_token=effective_token,
             host=host,
             port=actual_port,

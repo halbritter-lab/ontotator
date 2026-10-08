@@ -20,6 +20,9 @@ class AppConfig(BaseModel):
     database_path: Path | None = None
     ontology_path: Path | None = None
     ontology_paths: list[Path] = []
+    # Folders besides <workspace>/ontologies in which translation files
+    # (hp-de.babelon.tsv) are looked for, e.g. ontologies/ next to the executable.
+    translation_dirs: list[Path] = []
     expected_ontology_ref: OntologyRef | None = None
     session_token: str
     host: str = "127.0.0.1"

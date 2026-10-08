@@ -537,6 +537,7 @@ def search_ontology(
             c.term_id: c.score for c in result.candidates if c.score is not None
         },
         candidate_routes={c.term_id: c.route for c in result.candidates if c.route},
+        languages=result.languages,
         ontology_release=ontology.ref.release,
         index_identity=result.index_identity,
         timestamp=datetime.now(UTC).isoformat(),
@@ -603,6 +604,16 @@ def export_package_for_annotator(
     return _zip_response(pkg, _export_filename(package_id, annotator_id))
 
 
+class OntologyTranslation(BaseModel):
+    """One language an ontology can be searched in besides English."""
+
+    language: str
+    # The files that contributed names in this language.
+    filenames: list[str]
+    # Terms with at least one name in this language.
+    term_count: int
+
+
 class OntologyInfo(BaseModel):
     ontology_id: str
     release: str
@@ -611,6 +622,7 @@ class OntologyInfo(BaseModel):
     path: str | None = None
     status: Literal["loaded", "failed"] = "loaded"
     error: str | None = None
+    translations: list[OntologyTranslation] = Field(default_factory=list)
 
 
 def _ontology_info(sha: str, svc: OntologyService, path: Path | None) -> OntologyInfo:
@@ -620,6 +632,18 @@ def _ontology_info(sha: str, svc: OntologyService, path: Path | None) -> Ontolog
         sha256=sha,
         term_count=len(svc.ontology.terms),
         path=str(path) if path is not None else None,
+        translations=[
+            OntologyTranslation(
+                language=language,
+                filenames=sorted(
+                    item.filename
+                    for item in svc.translations
+                    if language in item.languages
+                ),
+                term_count=count,
+            )
+            for language, count in svc.translation_counts.items()
+        ],
     )
 
 
