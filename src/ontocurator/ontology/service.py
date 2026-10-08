@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
+import logging
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
@@ -18,10 +20,13 @@ from ontocurator.ontology.provenance import (
     SearchResult,
     TermStatus,
 )
-from ontocurator.vendor.hpo_span_annotator.hpo import (
-    Ontology,
-    load_translations,
+from ontocurator.ontology.translations import (
+    LoadedTranslation,
+    SkippedTranslation,
+    apply_translations,
+    translation_counts,
 )
+from ontocurator.vendor.hpo_span_annotator.hpo import Ontology
 from ontocurator.vendor.hpo_span_annotator.hpo import (
     load as load_ontology,
 )
@@ -32,6 +37,8 @@ from ontocurator.vendor.hpo_span_annotator.search import (
     shuffle_seed,
     shuffled,
 )
+
+logger = logging.getLogger(__name__)
 
 # Digits alone, PREFIX:digits or PREFIX_digits. Anything else is a keyword.
 _CODE_QUERY = re.compile(r"^(?:\d+|[A-Za-z][A-Za-z0-9]*[:_]\d+)$")
@@ -50,18 +57,33 @@ class OntologyService:
         ontology: Ontology,
         engine: SearchEngine,
         ref: OntologyRef,
+        translations: Sequence[LoadedTranslation] = (),
+        skipped_translations: Sequence[SkippedTranslation] = (),
     ) -> None:
         self.ontology = ontology
         self.engine = engine
         self.ref = ref
-        self.index_identity = canonical_hash(
-            {
-                "ontology_sha256": ref.sha256,
-                "algorithm": "char_wb_tfidf/1",
-                "ngram_range": [3, 5],
-                "id_normalization": "dominant_prefix_int_v1",
-            }
-        )
+        # The translation files whose names are in the index, and the files
+        # that belong to this ontology but could not be used.
+        self.translations = list(translations)
+        self.skipped_translations = list(skipped_translations)
+        # Language -> number of terms with a name in it. English is not listed:
+        # it is the ontology itself and always searched.
+        self.translation_counts = translation_counts(ontology)
+        self.languages = list(self.translation_counts)
+        identity: dict[str, Any] = {
+            "ontology_sha256": ref.sha256,
+            "algorithm": "char_wb_tfidf/1",
+            "ngram_range": [3, 5],
+            "id_normalization": "dominant_prefix_int_v1",
+        }
+        # Added only when there are translations, so an ontology without them
+        # keeps the identity it always had.
+        if self.translations:
+            identity["translation_sha256"] = sorted(
+                item.sha256 for item in self.translations
+            )
+        self.index_identity = canonical_hash(identity)
 
     @classmethod
     def load(
@@ -86,14 +108,58 @@ class OntologyService:
                 f"expected {expected.sha256}, got {digest}",
             )
 
-        ontology = load_ontology(path)
-        if translation_paths:
-            load_translations(ontology, [Path(p) for p in translation_paths])
+        return cls._build(load_ontology(path), expected, translation_paths)
 
-        lexical = LexicalIndex(ontology)
+    @classmethod
+    def _build(
+        cls,
+        ontology: Ontology,
+        ref: OntologyRef,
+        translation_paths: Iterable[Path | str],
+    ) -> OntologyService:
+        """Index a parsed ontology together with its translation files.
+
+        ``translation_paths`` may hold files of other ontologies; only those
+        whose name carries this ontology's prefix are used.
+        """
+        loaded, skipped = apply_translations(
+            ontology, [Path(p) for p in translation_paths]
+        )
+        for problem in skipped:
+            logger.warning(
+                "Skipping translation file %s: %s", problem.filename, problem.reason
+            )
+        languages = sorted({code for item in loaded for code in item.languages})
+        lexical = LexicalIndex(ontology, languages=languages)
         lexical.build()
         engine = SearchEngine(ontology=ontology, lexical=lexical)
-        return cls(ontology=ontology, engine=engine, ref=expected)
+        return cls(
+            ontology=ontology,
+            engine=engine,
+            ref=ref,
+            translations=loaded,
+            skipped_translations=skipped,
+        )
+
+    def with_translations(
+        self, translation_paths: Iterable[Path | str]
+    ) -> OntologyService:
+        """A new service over the same terms with exactly these translation files.
+
+        The terms are copied without their translated names, so a file that was
+        replaced or removed leaves nothing behind. This service is not touched
+        and keeps answering until the caller swaps the new one in.
+        """
+        terms = {
+            term_id: dataclasses.replace(term, translations={})
+            for term_id, term in self.ontology.terms.items()
+        }
+        ontology = Ontology(
+            terms,
+            self.ontology.release,
+            dominant_prefix=self.ontology.dominant_prefix,
+        )
+        return self._build(ontology, self.ref, translation_paths)
 
     def validate_term(self, hpo_id: str) -> TermStatus:
         term = self.ontology.get(hpo_id)
