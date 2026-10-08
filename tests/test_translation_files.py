@@ -1,5 +1,6 @@
 """Translation files: their names, where they are found, what the loader keeps."""
 
+import codecs
 import hashlib
 import shutil
 from pathlib import Path
@@ -129,3 +130,35 @@ def test_unusable_files_are_reported_not_raised(tmp_path: Path) -> None:
     assert "subject_id" in reasons["hp-fr.babelon.tsv"]
     assert "holds no name" in reasons["hp-nl.babelon.tsv"]
     assert translation_counts(ontology) == {"de": 4}
+
+
+def test_a_file_with_a_byte_order_mark_loads_like_one_without(tmp_path: Path) -> None:
+    """Excel writes "UTF-8 with BOM". The mark is not part of the first column
+    name, and the file counts with the bytes it has on disk."""
+    with_mark = tmp_path / "hp-de.babelon.tsv"
+    with_mark.write_bytes(codecs.BOM_UTF8 + DE.read_bytes())
+    assert DE.read_bytes().startswith(b"subject_id")
+
+    assert babelon_problem(with_mark) is None
+
+    ontology = load_ontology(HP)
+    loaded, skipped = apply_translations(ontology, [with_mark])
+
+    assert skipped == []
+    assert [(item.filename, item.languages) for item in loaded] == [
+        ("hp-de.babelon.tsv", ("de",))
+    ]
+    assert loaded[0].sha256 == hashlib.sha256(with_mark.read_bytes()).hexdigest()
+    assert translation_counts(ontology) == {"de": 4}
+    assert ontology.terms["HP:0001250"].translations == {"de": ["Krampfanfall"]}
+    # The file itself is left as it is.
+    assert with_mark.read_bytes() == codecs.BOM_UTF8 + DE.read_bytes()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["hp-de.babelon.tsv"]
+
+    # A marked file that is no babelon TSV is named by its own name.
+    wrong = tmp_path / "hp-fr.babelon.tsv"
+    wrong.write_bytes(codecs.BOM_UTF8 + b"term\tname\nHP:0001250\tCrise\n")
+    assert "subject_id" in (babelon_problem(wrong) or "")
+    _, skipped = apply_translations(load_ontology(HP), [wrong])
+    assert [item.filename for item in skipped] == ["hp-fr.babelon.tsv"]
+    assert str(wrong) in skipped[0].reason

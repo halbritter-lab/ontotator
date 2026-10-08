@@ -8,12 +8,14 @@ lives here, outside the vendored code.
 
 from __future__ import annotations
 
+import codecs
 import csv
 import hashlib
 import re
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 from ontocurator.vendor.hpo_span_annotator.hpo import (
@@ -63,7 +65,9 @@ def discover_translation_files(search_dirs: Iterable[Path]) -> list[Path]:
 def babelon_problem(path: Path) -> str | None:
     """Why a file cannot be a babelon TSV, or None if its header is fine."""
     try:
-        with path.open(encoding="utf-8", newline="") as handle:
+        # utf-8-sig: a byte-order mark (Excel's "UTF-8 with BOM") is not part
+        # of the first column name.
+        with path.open(encoding="utf-8-sig", newline="") as handle:
             header = next(csv.reader(handle, delimiter="\t"), None)
     except (OSError, UnicodeDecodeError, csv.Error) as exc:
         return f"{path.name} cannot be read as a tab-separated text file: {exc}"
@@ -87,6 +91,29 @@ class SkippedTranslation:
 
     filename: str
     reason: str
+
+
+def _load_file(ontology: Ontology, path: Path) -> tuple[str, dict[str, int]]:
+    """Merge one file; its SHA-256 and the terms it reached per language.
+
+    The digest is that of the file as it lies on disk. A file that starts with
+    a byte-order mark is handed to the vendored loader as a copy without it,
+    under the same name (the loader reads the language from the name when the
+    column is missing): the loader opens files as plain UTF-8 and would take
+    the mark for the start of the first column name.
+    """
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if not raw.startswith(codecs.BOM_UTF8):
+        return digest, load_translations(ontology, [path])
+    with TemporaryDirectory(prefix="ontocurator-translation-") as scratch:
+        view = Path(scratch) / path.name
+        view.write_bytes(raw[len(codecs.BOM_UTF8) :])
+        try:
+            return digest, load_translations(ontology, [view])
+        except OntologyError as exc:
+            # Name the file the user knows, not the copy.
+            raise OntologyError(str(exc).replace(str(view), str(path))) from exc
 
 
 def apply_translations(
@@ -114,8 +141,7 @@ def apply_translations(
             if term.translations
         }
         try:
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            counts = load_translations(ontology, [path])
+            digest, counts = _load_file(ontology, path)
         except (OntologyError, OSError, UnicodeDecodeError, csv.Error) as exc:
             for term_id, term in ontology.terms.items():
                 if term.translations or term_id in before:

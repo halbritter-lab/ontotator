@@ -402,6 +402,29 @@ def test_a_file_that_cannot_be_replaced_is_reported_and_changes_nothing(
     )
 
 
+def test_uploading_a_file_with_a_byte_order_mark_works(tmp_path: Path) -> None:
+    client = _client(tmp_path, ontology_paths=[HP])
+    key = _open_single(client)
+    marked = b"\xef\xbb\xbf" + DE.read_bytes()
+
+    response = _upload(client, "hp-de.babelon.tsv", marked)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["message"] == (
+        "hp-de.babelon.tsv was added. HP 2026-06-23: de 4 terms."
+    )
+    # Stored as it was sent, mark included.
+    stored = tmp_path / "workspace" / "ontologies" / "hp-de.babelon.tsv"
+    assert stored.read_bytes() == marked
+    assert _search(client, key, "Krampfanfall")["candidates"][0]["term_id"] == (
+        "HP:0001250"
+    )
+    # The mark is part of the content the index identity is made of.
+    marked_identity = _search(client, key, "Krampfanfall")["index_identity"]
+    assert _upload(client, "hp-de.babelon.tsv", DE.read_bytes()).status_code == 200
+    assert _search(client, key, "Krampfanfall")["index_identity"] != marked_identity
+
+
 def test_ontology_json_upload_still_answers_with_the_ontology(tmp_path: Path) -> None:
     client = _client(tmp_path)
 
