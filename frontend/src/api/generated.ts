@@ -440,6 +440,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terms/tree/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Tree
+         * @description Open the tree at a term and start the walk's event.
+         */
+        post: operations["open_tree_api_v1_terms_tree_open_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terms/tree/node": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tree Node
+         * @description Details of a shown node; its children and other paths on request.
+         */
+        post: operations["tree_node_api_v1_terms_tree_node_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -934,6 +974,10 @@ export interface components {
             mode_by_package?: {
                 [key: string]: "independent" | "review" | "assisted";
             };
+            /** Tree Pinned By Annotator */
+            tree_pinned_by_annotator?: {
+                [key: string]: boolean;
+            };
             /** Search Languages By Annotator */
             search_languages_by_annotator?: {
                 [key: string]: string[];
@@ -949,6 +993,10 @@ export interface components {
             /** Mode By Package */
             mode_by_package?: {
                 [key: string]: "independent" | "review" | "assisted";
+            } | null;
+            /** Tree Pinned By Annotator */
+            tree_pinned_by_annotator?: {
+                [key: string]: boolean;
             } | null;
             /** Search Languages By Annotator */
             search_languages_by_annotator?: {
@@ -1304,6 +1352,113 @@ export interface components {
             message: string;
             /** Ontologies */
             ontologies?: components["schemas"]["OntologyInfo"][];
+        };
+        /**
+         * TreeLevel
+         * @description An expanded node and the children shown under it.
+         */
+        TreeLevel: {
+            /** Term Id */
+            term_id: string;
+            /** Children */
+            children: components["schemas"]["TreeNode"][];
+        };
+        /**
+         * TreeNode
+         * @description One row of the tree.
+         */
+        TreeNode: {
+            /** Term Id */
+            term_id: string;
+            /** Label */
+            label: string;
+            /** Child Count */
+            child_count: number;
+        };
+        /**
+         * TreeNodeRequest
+         * @description Ask about a node the walk has already shown.
+         */
+        TreeNodeRequest: {
+            workspace_key: components["schemas"]["WorkspaceKey"];
+            /** Annotation Id */
+            annotation_id: string;
+            /** Layer Id */
+            layer_id: string;
+            /** Browse Id */
+            browse_id: string;
+            /** Term Id */
+            term_id: string;
+            /** Via Parent Id */
+            via_parent_id?: string | null;
+            /**
+             * Expand
+             * @default false
+             */
+            expand: boolean;
+        };
+        /** TreeNodeResponse */
+        TreeNodeResponse: {
+            detail: components["schemas"]["TreeTermDetail"];
+            /** Children */
+            children: components["schemas"]["TreeNode"][];
+            /** Path */
+            path: string[];
+            /** Levels */
+            levels: components["schemas"]["TreeLevel"][];
+        };
+        /**
+         * TreeOpenRequest
+         * @description Start a walk at the term of an annotation.
+         */
+        TreeOpenRequest: {
+            workspace_key: components["schemas"]["WorkspaceKey"];
+            /** Annotation Id */
+            annotation_id: string;
+            /** Layer Id */
+            layer_id: string;
+            /** Term Id */
+            term_id: string;
+        };
+        /**
+         * TreeOpenResponse
+         * @description The tree as it opens: roots, the expanded path to the start term.
+         */
+        TreeOpenResponse: {
+            /** Browse Id */
+            browse_id: string;
+            /**
+             * Start Status
+             * @enum {string}
+             */
+            start_status: "valid" | "obsolete" | "unknown";
+            /** Roots */
+            roots: components["schemas"]["TreeNode"][];
+            /** Path */
+            path: string[];
+            /** Levels */
+            levels: components["schemas"]["TreeLevel"][];
+            detail: components["schemas"]["TreeTermDetail"] | null;
+        };
+        /**
+         * TreeTermDetail
+         * @description What the detail pane shows for the selected node.
+         */
+        TreeTermDetail: {
+            /** Term Id */
+            term_id: string;
+            /** Label */
+            label: string;
+            /** Definition */
+            definition: string;
+            /** Synonyms */
+            synonyms: string[];
+            /** Translations */
+            translations: {
+                [key: string]: string[];
+            };
+            /** Parents */
+            parents: components["schemas"]["TreeNode"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -2046,6 +2201,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OntologyInfo"] | components["schemas"]["TranslationUploadInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_tree_api_v1_terms_tree_open_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TreeOpenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreeOpenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tree_node_api_v1_terms_tree_node_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TreeNodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreeNodeResponse"];
                 };
             };
             /** @description Validation Error */

@@ -879,6 +879,84 @@
           }
         }
       }
+    },
+    "/api/v1/terms/tree/open": {
+      "post": {
+        "summary": "Open Tree",
+        "description": "Open the tree at a term and start the walk's event.",
+        "operationId": "open_tree_api_v1_terms_tree_open_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TreeOpenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreeOpenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/terms/tree/node": {
+      "post": {
+        "summary": "Tree Node",
+        "description": "Details of a shown node; its children and other paths on request.",
+        "operationId": "tree_node_api_v1_terms_tree_node_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TreeNodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreeNodeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2056,6 +2134,13 @@
             "type": "object",
             "title": "Mode By Package"
           },
+          "tree_pinned_by_annotator": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Tree Pinned By Annotator"
+          },
           "search_languages_by_annotator": {
             "additionalProperties": {
               "items": {
@@ -2102,6 +2187,20 @@
               }
             ],
             "title": "Mode By Package"
+          },
+          "tree_pinned_by_annotator": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tree Pinned By Annotator"
           },
           "search_languages_by_annotator": {
             "anyOf": [
@@ -2951,6 +3050,282 @@
         ],
         "title": "TranslationUploadInfo",
         "description": "Answer to the upload of a translation file (``.tsv``)."
+      },
+      "TreeLevel": {
+        "properties": {
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/TreeNode"
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "term_id",
+          "children"
+        ],
+        "title": "TreeLevel",
+        "description": "An expanded node and the children shown under it."
+      },
+      "TreeNode": {
+        "properties": {
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "child_count": {
+            "type": "integer",
+            "title": "Child Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "term_id",
+          "label",
+          "child_count"
+        ],
+        "title": "TreeNode",
+        "description": "One row of the tree."
+      },
+      "TreeNodeRequest": {
+        "properties": {
+          "workspace_key": {
+            "$ref": "#/components/schemas/WorkspaceKey"
+          },
+          "annotation_id": {
+            "type": "string",
+            "title": "Annotation Id"
+          },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "browse_id": {
+            "type": "string",
+            "title": "Browse Id"
+          },
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "via_parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Via Parent Id"
+          },
+          "expand": {
+            "type": "boolean",
+            "title": "Expand",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workspace_key",
+          "annotation_id",
+          "layer_id",
+          "browse_id",
+          "term_id"
+        ],
+        "title": "TreeNodeRequest",
+        "description": "Ask about a node the walk has already shown."
+      },
+      "TreeNodeResponse": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/TreeTermDetail"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/TreeNode"
+            },
+            "type": "array",
+            "title": "Children"
+          },
+          "path": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Path"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/TreeLevel"
+            },
+            "type": "array",
+            "title": "Levels"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "detail",
+          "children",
+          "path",
+          "levels"
+        ],
+        "title": "TreeNodeResponse"
+      },
+      "TreeOpenRequest": {
+        "properties": {
+          "workspace_key": {
+            "$ref": "#/components/schemas/WorkspaceKey"
+          },
+          "annotation_id": {
+            "type": "string",
+            "title": "Annotation Id"
+          },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workspace_key",
+          "annotation_id",
+          "layer_id",
+          "term_id"
+        ],
+        "title": "TreeOpenRequest",
+        "description": "Start a walk at the term of an annotation."
+      },
+      "TreeOpenResponse": {
+        "properties": {
+          "browse_id": {
+            "type": "string",
+            "title": "Browse Id"
+          },
+          "start_status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "obsolete",
+              "unknown"
+            ],
+            "title": "Start Status"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/TreeNode"
+            },
+            "type": "array",
+            "title": "Roots"
+          },
+          "path": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Path"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/TreeLevel"
+            },
+            "type": "array",
+            "title": "Levels"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TreeTermDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "browse_id",
+          "start_status",
+          "roots",
+          "path",
+          "levels",
+          "detail"
+        ],
+        "title": "TreeOpenResponse",
+        "description": "The tree as it opens: roots, the expanded path to the start term."
+      },
+      "TreeTermDetail": {
+        "properties": {
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "definition": {
+            "type": "string",
+            "title": "Definition"
+          },
+          "synonyms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Synonyms"
+          },
+          "translations": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Translations"
+          },
+          "parents": {
+            "items": {
+              "$ref": "#/components/schemas/TreeNode"
+            },
+            "type": "array",
+            "title": "Parents"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "term_id",
+          "label",
+          "definition",
+          "synonyms",
+          "translations",
+          "parents"
+        ],
+        "title": "TreeTermDetail",
+        "description": "What the detail pane shows for the selected node."
       },
       "ValidationError": {
         "properties": {
