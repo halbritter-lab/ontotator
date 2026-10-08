@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from typing import Any, Literal
 from urllib.parse import quote
@@ -54,6 +54,34 @@ def _key_str(key: WorkspaceKey) -> str:
     if not any(":" in part for part in parts):
         return ":".join(parts)
     return _ESCAPED_KEY_PREFIX + "|".join(quote(part, safe="") for part in parts)
+
+
+def _is_tree_walk(event: SearchEventRecord) -> bool:
+    """Whether an event is a walk through the tree, the one event that grows."""
+    # The copy written for a selection is taken at one moment; it never grows.
+    return event.route == "browse" and event.selected_term_id is None
+
+
+def _same_tree_walk(stored: SearchEventRecord, incoming: SearchEventRecord) -> bool:
+    """Whether two records are one tree walk seen at two moments.
+
+    A walk only ever gains terms at the end, and its two lists gain them
+    together. So one record must be the later one in both lists, the earlier
+    record's lists must be the beginning of the later one's, and nothing else
+    may differ.
+    """
+    if not _is_tree_walk(stored) or not _is_tree_walk(incoming):
+        return False
+    grown = {"candidates", "ranked_ids"}
+    if stored.model_dump(exclude=grown) != incoming.model_dump(exclude=grown):
+        return False
+    earlier, later = sorted((stored, incoming), key=lambda e: len(e.candidates))
+    shown, ranked = len(earlier.candidates), len(earlier.ranked_ids)
+    return (
+        later.candidates[:shown] == earlier.candidates
+        and later.ranked_ids[:ranked] == earlier.ranked_ids
+        and later.candidates[shown:] == later.ranked_ids[ranked:]
+    )
 
 
 def _legacy_key_str(key: WorkspaceKey) -> str:
@@ -1385,6 +1413,57 @@ class Repository:
             ),
         )
 
+    def append_search_event_candidates(
+        self,
+        event_id: str,
+        term_ids: Iterable[str],
+        *,
+        workspace_key: WorkspaceKey | None = None,
+        annotation_id: str | None = None,
+        layer_id: str | None = None,
+    ) -> SearchEventRecord | None:
+        """Add newly shown terms to a stored tree walk, in order of first appearance.
+
+        A search event is written once. The one exception is a walk through the
+        tree: what it showed grows with every node that is opened, and the
+        selection made from it has to find those terms among its candidates.
+
+        Only a walk grows: an event of another route, or the copy written for a
+        selection, is left alone. ``workspace_key``, ``annotation_id`` and
+        ``layer_id`` name the owner the caller acts for; the event must belong
+        to each one that is given. Returns None, and stores nothing, for an
+        unknown event and for one that fails these checks.
+
+        The checks, the read and the write happen in one transaction, so two
+        requests of the same walk cannot lose each other's terms.
+        """
+        conn = self.db.get_connection()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            event = self.get_search_event(event_id)
+            if event is not None and (
+                not _is_tree_walk(event)
+                or (workspace_key is not None and event.workspace_key != workspace_key)
+                or (annotation_id is not None and event.annotation_id != annotation_id)
+                or (layer_id is not None and event.layer_id != layer_id)
+            ):
+                event = None
+            if event is not None:
+                known = set(event.candidates)
+                added = [t for t in dict.fromkeys(term_ids) if t not in known]
+                if added:
+                    event.candidates = [*event.candidates, *added]
+                    event.ranked_ids = [*event.ranked_ids, *added]
+                    conn.execute(
+                        "UPDATE search_events SET payload_json=? WHERE event_id=?",
+                        (event.model_dump_json(), event_id),
+                    )
+            conn.execute("COMMIT")
+            return event
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+
     def get_search_event(self, event_id: str) -> SearchEventRecord | None:
         row = (
             self.db.get_connection()
@@ -1432,5 +1511,14 @@ class Repository:
                 raise InvalidPackage("Conflicting immutable submission content")
         for event in package.search_events:
             existing_event = self.get_search_event(event.event_id)
-            if existing_event is not None and existing_event != event:
+            if existing_event is None or existing_event == event:
+                continue
+            if not _same_tree_walk(existing_event, event):
                 raise InvalidPackage("Conflicting search event content")
+            # Two exports of one walk through the tree, taken at different
+            # moments: keep the one that has seen more.
+            if len(event.candidates) > len(existing_event.candidates):
+                conn.execute(
+                    "UPDATE search_events SET payload_json=? WHERE event_id=?",
+                    (event.model_dump_json(), event.event_id),
+                )
