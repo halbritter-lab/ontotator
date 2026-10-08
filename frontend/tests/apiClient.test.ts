@@ -43,6 +43,30 @@ describe("ApiClient and session management", () => {
     expect(pkgs[0].package_id).toBe("pkg-1");
   });
 
+  it("posts tree requests to the tree endpoints", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    globalThis.fetch = fetchSpy;
+    const client = new ApiClient({ token: "tok" });
+    const workspace_key = {
+      package_id: "pkg",
+      document_id: "doc",
+      annotator_id: "dr-a",
+      mode: "independent" as const,
+      scope_id: "scope-default",
+      target_set_id: "empty",
+    };
+
+    await client.openTree({ workspace_key, annotation_id: "a", layer_id: "l", term_id: "HP:1" });
+    await client.loadTreeNode({ workspace_key, annotation_id: "a", layer_id: "l", browse_id: "w", term_id: "HP:2", expand: true });
+
+    expect(fetchSpy.mock.calls.map(([url, init]) => [url, init.method])).toEqual([
+      ["/api/v1/terms/tree/open", "POST"],
+      ["/api/v1/terms/tree/node", "POST"],
+    ]);
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({ workspace_key, annotation_id: "a", layer_id: "l", term_id: "HP:1" });
+    expect(JSON.parse(fetchSpy.mock.calls[1][1].body)).toMatchObject({ browse_id: "w", term_id: "HP:2", expand: true });
+  });
+
   it("maps 409 Conflict to ConflictError", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,

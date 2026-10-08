@@ -16,6 +16,13 @@ export type Submission = components["schemas"]["Submission"];
 export type SearchRequest = components["schemas"]["SearchRequest"];
 export type SearchResult = components["schemas"]["SearchResult"];
 export type SearchCandidate = components["schemas"]["SearchCandidate"];
+export type TreeNode = components["schemas"]["TreeNode"];
+export type TreeLevel = components["schemas"]["TreeLevel"];
+export type TreeTermDetail = components["schemas"]["TreeTermDetail"];
+export type TreeOpenRequest = components["schemas"]["TreeOpenRequest"];
+export type TreeOpenResponse = components["schemas"]["TreeOpenResponse"];
+export type TreeNodeRequest = components["schemas"]["TreeNodeRequest"];
+export type TreeNodeResponse = components["schemas"]["TreeNodeResponse"];
 export type AxisDefinition = components["schemas"]["AxisDefinition"];
 export type AxesConfig = components["schemas"]["AxesConfig"];
 export type AxesValues = Record<string, string | null>;
@@ -490,6 +497,22 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify(req),
       ...(signal ? { signal } : {}),
+    });
+  }
+
+  /** Start a walk through the ontology tree at a term. The server logs what it shows. */
+  async openTree(req: TreeOpenRequest): Promise<TreeOpenResponse> {
+    return this.request<TreeOpenResponse>("/api/v1/terms/tree/open", {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
+  }
+
+  /** A shown node: its details; with `expand` its children; with `via_parent_id` the path through that parent. */
+  async loadTreeNode(req: TreeNodeRequest): Promise<TreeNodeResponse> {
+    return this.request<TreeNodeResponse>("/api/v1/terms/tree/node", {
+      method: "POST",
+      body: JSON.stringify(req),
     });
   }
 
