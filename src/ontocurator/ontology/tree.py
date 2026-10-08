@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import heapq
 import threading
-from weakref import WeakKeyDictionary
 
 from pydantic import BaseModel, ConfigDict
 
@@ -250,7 +249,8 @@ class OntologyTree:
         )
 
 
-_trees: WeakKeyDictionary[Ontology, OntologyTree] = WeakKeyDictionary()
+# The attribute of a loaded ontology that carries its tree.
+_TREE_ATTRIBUTE = "_ontocurator_tree"
 _trees_lock = threading.Lock()
 
 
@@ -259,9 +259,15 @@ def tree_for(ontology: Ontology) -> OntologyTree:
 
     Requests share it, so the pass over all terms that finds the roots happens
     once per ontology and not once per request.
+
+    The tree is kept on the ontology itself, not in a table beside it. A tree
+    refers to its ontology, so a table -- even one with weak keys -- would hold
+    every ontology ever loaded; this way the two form a cycle that is collected
+    once nothing else refers to the ontology.
     """
     with _trees_lock:
-        tree = _trees.get(ontology)
+        tree: OntologyTree | None = getattr(ontology, _TREE_ATTRIBUTE, None)
         if tree is None:
-            tree = _trees[ontology] = OntologyTree(ontology)
+            tree = OntologyTree(ontology)
+            setattr(ontology, _TREE_ATTRIBUTE, tree)
         return tree

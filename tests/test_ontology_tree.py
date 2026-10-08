@@ -1,6 +1,8 @@
 """The ontology tree: roots, children and paths, without the API."""
 
+import gc
 import json
+import weakref
 from pathlib import Path
 
 import pytest
@@ -222,6 +224,21 @@ def test_one_tree_is_kept_per_loaded_ontology() -> None:
     # The kept list of roots is not handed out for others to change.
     tree.roots().append("HP:0000118")
     assert tree.roots() == ["HP:0000001"]
+
+
+def test_an_ontology_with_a_tree_is_released_once_nothing_else_holds_it() -> None:
+    ontology = load(FIXTURE_PATH)
+    tree = tree_for(ontology)
+    assert tree.roots() == ["HP:0000001"]
+    assert tree.path_to("HP:0001250")
+    gone = weakref.ref(ontology)
+
+    del ontology, tree
+    gc.collect()
+
+    # A replaced ontology (every translation upload loads a new one) must not
+    # stay in memory because a tree was once built for it.
+    assert gone() is None
 
 
 def test_unknown_and_obsolete_terms_have_no_detail() -> None:
