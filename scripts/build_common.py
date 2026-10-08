@@ -161,6 +161,12 @@ folder is registered when Ontocurator starts: it is copied into
 workspace/ontologies and stays available even if the file here is removed.
 Invalid files are skipped with a message in the console window.
 
+Translation files (official babelon TSV files, e.g. hp-de.babelon.tsv and
+hp-de.synonyms.tsv) placed in this folder make the terms searchable in that
+language. The name decides the ontology: hp-de.* belongs to the ontology whose
+term IDs start with HP. They are read from this folder on every start and are
+not copied; a replaced file takes effect at the next start.
+
 """
     + _DELIVERY_RULES
 )
@@ -192,10 +198,13 @@ class Preload:
     packages: tuple[Path, ...] = ()
     ontologies: tuple[Path, ...] = ()
     settings: Path | None = None
+    translations: tuple[Path, ...] = ()
 
     @property
     def empty(self) -> bool:
-        return not (self.packages or self.ontologies or self.settings)
+        return not (
+            self.packages or self.ontologies or self.settings or self.translations
+        )
 
 
 def check_bundle_name(name: str) -> str:
@@ -232,11 +241,28 @@ def validate_preload(preload: Preload) -> list[str]:
     from ontocurator.distribution_settings import read_settings_file
     from ontocurator.domain.documents import OntologyRef
     from ontocurator.ontology.service import OntologyService
+    from ontocurator.ontology.translations import (
+        babelon_problem,
+        parse_translation_name,
+    )
     from ontocurator.packages.reader import PackageReader
 
     warnings: list[str] = []
     _check_unique_names(preload.packages, "work package")
     _check_unique_names(preload.ontologies, "ontology")
+    _check_unique_names(preload.translations, "translation")
+
+    for path in preload.translations:
+        if not path.is_file():
+            raise PreloadError(f"Translation file not found: {path}")
+        if parse_translation_name(path.name) is None:
+            raise PreloadError(
+                f"{path.name} is not a translation file name; expected "
+                "<prefix>-<language>.<kind>.tsv, e.g. hp-de.babelon.tsv."
+            )
+        problem = babelon_problem(path)
+        if problem is not None:
+            raise PreloadError(problem)
 
     package_ids: dict[str, Path] = {}
     for path in preload.packages:
@@ -258,15 +284,33 @@ def validate_preload(preload: Preload) -> list[str]:
             )
         package_ids[pid] = path
 
+    prefixes: set[str] = set()
     for path in preload.ontologies:
         if path.suffix.lower() != ".json" or not path.is_file():
             raise PreloadError(f"Ontology not found or not a .json file: {path}")
         try:
-            OntologyService.load(
-                path, OntologyRef(release="preload", sha256=_sha256(path))
+            service = OntologyService.load(
+                path,
+                OntologyRef(release="preload", sha256=_sha256(path)),
+                translation_paths=preload.translations,
             )
         except Exception as exc:
             raise PreloadError(f"{path} is not a usable ontology: {exc}") from exc
+        prefixes.add((service.ontology.dominant_prefix or "").lower())
+        for skipped in service.skipped_translations:
+            raise PreloadError(
+                f"Translation file {skipped.filename} cannot be used with "
+                f"{path.name}: {skipped.reason}"
+            )
+
+    for path in preload.translations:
+        parsed = parse_translation_name(path.name)
+        if parsed is not None and parsed[0] not in prefixes:
+            warnings.append(
+                f"{path.name} belongs to an ontology with the prefix "
+                f"'{parsed[0].upper()}', which is not one of the ontologies added "
+                "here; make sure the bundle contains it."
+            )
 
     if preload.settings is not None:
         if not preload.settings.is_file():
@@ -300,11 +344,13 @@ def apply_preload(bundle_dir: Path, preload: Preload) -> None:
     """Copy validated preload files into an extracted/built bundle folder.
 
     Produces exactly the layout of the manual steps (unzip, drop files into
-    packages/ and ontologies/, add ontocurator-settings.json, zip again).
+    packages/ and ontologies/ (ontologies and their translation files), add
+    ontocurator-settings.json, zip again).
     """
     write_folder_readmes(bundle_dir)
     targets = [(p, bundle_dir / "packages" / p.name) for p in preload.packages]
     targets += [(p, bundle_dir / "ontologies" / p.name) for p in preload.ontologies]
+    targets += [(p, bundle_dir / "ontologies" / p.name) for p in preload.translations]
     if preload.settings is not None:
         targets.append((preload.settings, bundle_dir / SETTINGS_FILENAME))
     for source, dest in targets:

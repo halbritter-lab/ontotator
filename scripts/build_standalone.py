@@ -11,9 +11,9 @@ Steps:
 4. Portable layout (portable.txt marker, ontologies/, packages/, workspace/,
    README.txt, license notices) and a deterministic ZIP
    ``<out-dir>/ontocurator-portable-<os>-<arch>.zip``.
-   Optional preloads (``--package``, ``--ontology``, ``--settings``) are
-   validated before the build and copied into packages/, ontologies/ and
-   ontocurator-settings.json; ``--bundle-name NAME`` names the ZIP and its
+   Optional preloads (``--package``, ``--ontology``, ``--translation``,
+   ``--settings``) are validated before the build and copied into packages/,
+   ontologies/ and ontocurator-settings.json; ``--bundle-name NAME`` names the ZIP and its
    top-level folder ``NAME``. ``scripts/provision_bundle.py`` does the same
    for an already built ZIP.
 5. macOS additionally: ``Ontocurator.app`` (windowed bundle, per-user data in
@@ -123,7 +123,9 @@ Where your data lives
 Everything is stored inside this folder:
   workspace/            database, imported packages and drafts
   workspace/ontologies/ ontology files (.json) - auto-loaded on start
-  ontologies/           ontology .json files registered on every start
+  ontologies/           ontology .json files registered on every start,
+                        translation files (e.g. hp-de.babelon.tsv) read on
+                        every start
   packages/             work package .zip files imported on every start
   ontocurator-settings.json   optional presets (see below)
   config.json           settings (created on first start)
@@ -469,6 +471,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Ontology to ship in ontologies/ (registered on start; repeatable).",
     )
     parser.add_argument(
+        "--translation",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="TSV",
+        help="Translation file (babelon TSV, e.g. hp-de.babelon.tsv) to ship in "
+        "ontologies/ (read on start; repeatable).",
+    )
+    parser.add_argument(
         "--settings",
         type=Path,
         default=None,
@@ -486,6 +497,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         packages=tuple(p.resolve() for p in args.package),
         ontologies=tuple(p.resolve() for p in args.ontology),
         settings=args.settings.resolve() if args.settings else None,
+        translations=tuple(p.resolve() for p in args.translation),
     )
     try:
         if args.bundle_name is not None:

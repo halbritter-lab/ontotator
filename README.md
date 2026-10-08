@@ -5,7 +5,7 @@ A standalone, secure, offline web-based editor for annotating and reviewing biom
 Designed specifically for clinical curation workflows, Ontocurator supports:
 - **Configured Annotation Layers & Task Profiles**: Fine-grained task configuration via `TaskProfile`: customizable layers (`layers`), annotation types (`annotation_types`), and required ontologies (`ontologies`). Multi-layer workflows allow annotating distinct aspects (e.g. phenotypes, diseases, therapies) independently or jointly.
 - **Zero-Extra-Click Single-Layer Simplicity**: Work packages with a single layer present zero superfluous layer controls, maintaining the exact streamlined ergonomics of dedicated single-ontology curation.
-- **Multi-Ontology Loading & Registry**: Load pinned OBO Graph JSON ontologies via repeatable `--ontology PATH` flags, auto-discovery in `<workspace>/ontologies/`, or upload in the web UI. Local in-memory exact and prefix lexical search with instant results.
+- **Multi-Ontology Loading & Registry**: Load pinned OBO Graph JSON ontologies via repeatable `--ontology PATH` flags, auto-discovery in `<workspace>/ontologies/`, or upload in the web UI. Local in-memory exact and prefix lexical search with instant results. Official HPO translation files (`hp-<language>.babelon.tsv`, `hp-<language>.synonyms.tsv`) placed next to the ontology or uploaded in the web UI make the terms searchable in that language; each annotator chooses the languages with the flag button in the search box.
 - **Layer-Scoped Case Navigation & Checkmarks**: Fast document navigation respecting package document order (`document_order`), with layer-specific completion validation and explicit verification checkmarks (`checked_layer_ids`).
 - **Independent Annotation**: Clean-slate annotation without proposal bias, external prediction leakage, or term count exposure.
 - **Origin-Neutral Review**: Identical treatment, actions, validation rules, and status transitions for human proposals and machine/tool predictions.
@@ -253,7 +253,7 @@ the ZIP and double-click the executable:
 ```
 Ontocurator/
 ├── ontocurator.exe
-├── ontologies/                 ← *.json registered at startup
+├── ontologies/                 ← *.json registered at startup, hp-<language>.*.tsv read at startup
 ├── packages/                   ← *.zip work packages imported at startup
 ├── ontocurator-settings.json   ← optional presets
 └── workspace/
@@ -265,6 +265,14 @@ remembered in `config.json`), then imports each `packages/*.zip` (packages may
 need those ontologies or embed their own). Packages that are already imported
 unchanged are skipped silently, so starting again is safe. Invalid files are
 skipped with a message in the console; they never block the start.
+
+Translation files (`hp-de.babelon.tsv`, `hp-es.synonyms.tsv`, … from
+[obophenotype/hpo-translations](https://github.com/obophenotype/hpo-translations))
+in `ontologies/` or `workspace/ontologies/` are read at every start and belong
+to the ontology whose term IDs start with the prefix in the file name. They
+are not copied and not pinned by packages: replacing a file changes what the
+search finds from the next start on. Ship them with `--translation FILE.tsv`
+(`build_standalone.py`, `provision_bundle.py`).
 
 **These folders are for the initial delivery only.** Imported packages are
 immutable and pinned by hash, so replacing or editing files there later does

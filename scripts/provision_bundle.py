@@ -1,7 +1,7 @@
 """Preconfigure an already built portable Ontocurator ZIP (no rebuild).
 
-Adds work packages, ontologies and an optional ontocurator-settings.json to a
-copy of a portable bundle, validated exactly like ``build_standalone.py``
+Adds work packages, ontologies, translation files and an optional
+ontocurator-settings.json to a copy of a portable bundle, validated exactly like ``build_standalone.py``
 does, and writes ``<out-dir>/<bundle-name>.zip`` whose top-level folder is
 ``<bundle-name>``. The input ZIP is not modified. Needs only Python and the
 project environment (no Node.js, no PyInstaller):
@@ -11,7 +11,8 @@ project environment (no Node.js, no PyInstaller):
         --settings ontocurator-settings.json --bundle-name study-xy
 
 The result is the same as doing it by hand: extract the ZIP, copy the .zip
-files into packages/ and the .json ontologies into ontologies/, add
+files into packages/ and the .json ontologies and .tsv translation files
+into ontologies/, add
 ontocurator-settings.json next to the executable, and zip the folder again.
 """
 
@@ -58,6 +59,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Ontology to ship in ontologies/ (repeatable).",
     )
     parser.add_argument(
+        "--translation",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="TSV",
+        help="Translation file (babelon TSV, e.g. hp-de.babelon.tsv) to ship in "
+        "ontologies/ (repeatable).",
+    )
+    parser.add_argument(
         "--settings",
         type=Path,
         default=None,
@@ -81,9 +91,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         packages=tuple(p.resolve() for p in args.package),
         ontologies=tuple(p.resolve() for p in args.ontology),
         settings=args.settings.resolve() if args.settings else None,
+        translations=tuple(p.resolve() for p in args.translation),
     )
     if args.preload.empty:
-        parser.error("nothing to add: give --package, --ontology and/or --settings")
+        parser.error(
+            "nothing to add: give --package, --ontology, --translation "
+            "and/or --settings"
+        )
     if not args.bundle.is_file():
         parser.error(f"bundle not found: {args.bundle}")
     try:
