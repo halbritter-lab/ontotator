@@ -88,6 +88,25 @@ class OntologyRegistry:
                 unassigned.append(path)
         return unassigned
 
+    def rebuild_for_prefix(
+        self, prefix: str, translation_paths: Iterable[Path]
+    ) -> dict[str, OntologyService]:
+        """New services for the ontologies of a prefix; nothing is published.
+
+        The caller looks at the result and hands it to :meth:`publish`. Until
+        then, and if this raises, the current services keep answering.
+        """
+        paths = list(translation_paths)
+        return {
+            sha: service.with_translations(paths)
+            for sha, service in self.services_for_prefix(prefix)
+        }
+
+    def publish(self, services: dict[str, OntologyService]) -> None:
+        """Swap in rebuilt services, all at once."""
+        with self._lock:
+            self._services.update(services)
+
     def register(self, path: Path | str, expected: OntologyDefinition) -> None:
         """Register and validate an ontology artifact against an expected OntologyDefinition."""
         p = Path(path)

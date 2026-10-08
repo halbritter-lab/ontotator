@@ -12,6 +12,7 @@ from layered_fixtures import make_layered_package
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
+from ontocurator.ontology.service import OntologyService
 from ontocurator.packages.writer import PackageWriter
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -201,3 +202,176 @@ def test_search_event_records_the_active_languages(tmp_path: Path) -> None:
 
     english = _search(client, key, "Krampfanfall", languages=[])
     assert repo.get_search_event(english["search_id"]).languages == ["en"]
+
+
+# --- upload ----------------------------------------------------------------- #
+
+
+def _upload(client: TestClient, name: str, data: bytes) -> Any:
+    return client.post(
+        "/api/v1/ontologies",
+        files={"file": (name, data, "text/tab-separated-values")},
+    )
+
+
+def test_uploading_a_translation_reloads_the_ontology(tmp_path: Path) -> None:
+    client = _client(tmp_path, ontology_paths=[HP, MONDO])
+    key = _open_single(client)
+    before = _search(client, key, "Muskelhypotonie")
+    assert before["languages"] == ["en"]
+    assert all(c["match_language"] in (None, "en") for c in before["candidates"])
+
+    response = _upload(client, "HP-de.babelon.tsv", DE.read_bytes())
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["filename"] == "hp-de.babelon.tsv"
+    assert body["language"] == "de"
+    assert body["assigned"] is True
+    assert body["message"] == "hp-de.babelon.tsv was added. HP 2026-06-23: de 4 terms."
+    assert [item["ontology_id"] for item in body["ontologies"]] == ["hp"]
+    assert body["ontologies"][0]["translations"] == [
+        {"language": "de", "filenames": ["hp-de.babelon.tsv"], "term_count": 4}
+    ]
+    stored = tmp_path / "workspace" / "ontologies" / "hp-de.babelon.tsv"
+    assert stored.read_bytes() == DE.read_bytes()
+    # No staging folder is left behind.
+    assert [p.name for p in stored.parent.iterdir() if p.name.startswith(".")] == []
+
+    after = _search(client, key, "Muskelhypotonie")
+    assert after["languages"] == ["en", "de"]
+    assert after["candidates"][0]["match_language"] == "de"
+    assert after["index_identity"] != before["index_identity"]
+    listed = _listed(client)
+    assert listed["hp"]["translations"] == body["ontologies"][0]["translations"]
+    assert listed["mondo"]["translations"] == []
+
+
+def test_uploading_the_same_name_replaces_the_file(tmp_path: Path) -> None:
+    client = _client(tmp_path, ontology_paths=[HP])
+    key = _open_single(client)
+    assert _upload(client, "hp-de.babelon.tsv", DE.read_bytes()).status_code == 200
+    assert _upload(client, "hp-es.babelon.tsv", ES.read_bytes()).status_code == 200
+
+    smaller = (
+        b"subject_id\tpredicate_id\ttranslation_language\ttranslation_value\n"
+        b"HP:0001284\trdfs:label\tde\tAreflexie\n"
+    )
+    response = _upload(client, "hp-de.babelon.tsv", smaller)
+
+    assert response.status_code == 200, response.text
+    # German is replaced, Spanish is kept.
+    assert response.json()["ontologies"][0]["translations"] == [
+        {"language": "de", "filenames": ["hp-de.babelon.tsv"], "term_count": 1},
+        {"language": "es", "filenames": ["hp-es.babelon.tsv"], "term_count": 3},
+    ]
+    folder = tmp_path / "workspace" / "ontologies"
+    assert (folder / "hp-de.babelon.tsv").read_bytes() == smaller
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "hp-de.babelon.tsv",
+        "hp-es.babelon.tsv",
+    ]
+    # The names of the replaced file are gone, the new one is found.
+    assert "HP:0001250" not in _search(client, key, "Krampfanfall")["displayed_ids"]
+    assert _search(client, key, "Areflexie")["candidates"][0]["match_language"] == "de"
+    assert _search(client, key, "Hipotonía")["candidates"][0]["match_language"] == "es"
+
+
+@pytest.mark.parametrize(
+    ("name", "data", "reason"),
+    [
+        ("hp-de.babelon.tsv", b"term\tname\nHP:0001250\tKrampf\n", "subject_id"),
+        (
+            "hp-de.babelon.tsv",
+            b"subject_id\ttranslation_value\nHP:9999999\tUnbekannt\n",
+            "holds no name",
+        ),
+        ("hp-de.babelon.tsv", b"", "subject_id"),
+        ("hp-de.babelon.tsv", b"\xff\xfe\x00broken", "cannot be read"),
+        ("german.tsv", DE.read_bytes(), "not a translation file name"),
+    ],
+)
+def test_unusable_uploads_are_rejected_and_change_nothing(
+    tmp_path: Path, name: str, data: bytes, reason: str
+) -> None:
+    folder = _folder(tmp_path, DE)
+    client = _client(tmp_path, ontology_paths=[HP])
+    before = _listed(client)
+
+    response = _upload(client, name, data)
+
+    assert response.status_code == 400, response.text
+    assert reason in response.json()["detail"]
+    assert sorted(p.name for p in folder.iterdir()) == ["hp-de.babelon.tsv"]
+    assert (folder / "hp-de.babelon.tsv").read_bytes() == DE.read_bytes()
+    assert _listed(client) == before
+
+
+def test_upload_without_a_matching_ontology_is_stored_with_a_notice(
+    tmp_path: Path,
+) -> None:
+    client = _client(tmp_path, ontology_paths=[MONDO])
+
+    response = _upload(client, "hp-de.babelon.tsv", DE.read_bytes())
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["assigned"] is False
+    assert body["ontologies"] == []
+    assert "no loaded ontology has the prefix 'HP'" in body["message"]
+    stored = tmp_path / "workspace" / "ontologies" / "hp-de.babelon.tsv"
+    assert stored.read_bytes() == DE.read_bytes()
+    assert _listed(client)["mondo"]["translations"] == []
+
+    # Not a babelon file: rejected although no ontology could check its rows.
+    bad = _upload(client, "hp-es.babelon.tsv", b"term\tname\nx\ty\n")
+    assert bad.status_code == 400
+    assert not (stored.parent / "hp-es.babelon.tsv").exists()
+
+    # The ontology that arrives later picks the stored file up.
+    added = client.post(
+        "/api/v1/ontologies",
+        files={"file": ("hp.json", HP.read_bytes(), "application/json")},
+    )
+    assert added.status_code == 200, added.text
+    assert added.json()["translations"] == [
+        {"language": "de", "filenames": ["hp-de.babelon.tsv"], "term_count": 4}
+    ]
+
+
+def test_failed_reload_keeps_the_old_index_and_stores_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    folder = _folder(tmp_path, DE)
+    client = _client(tmp_path, ontology_paths=[HP])
+    key = _open_single(client)
+    before = _search(client, key, "Krampfanfall")
+
+    def broken(self: OntologyService, paths: object) -> OntologyService:
+        raise RuntimeError("index build failed")
+
+    monkeypatch.setattr(OntologyService, "with_translations", broken)
+    response = _upload(client, "hp-es.babelon.tsv", ES.read_bytes())
+
+    assert response.status_code == 500, response.text
+    assert "index build failed" in response.json()["detail"]
+    assert sorted(p.name for p in folder.iterdir()) == ["hp-de.babelon.tsv"]
+    after = _search(client, key, "Krampfanfall")
+    assert after["languages"] == ["en", "de"]
+    assert after["index_identity"] == before["index_identity"]
+    assert after["candidates"][0]["term_id"] == "HP:0001250"
+
+
+def test_ontology_json_upload_still_answers_with_the_ontology(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+
+    response = client.post(
+        "/api/v1/ontologies",
+        files={"file": ("hp.json", HP.read_bytes(), "application/json")},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["ontology_id"] == "hp"
+    assert body["translations"] == []
+    assert "filename" not in body

@@ -37,6 +37,7 @@ from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.uploads import (
     OntologyUploadService,
     PackageImportService,
+    TranslationUploadService,
 )
 from ontocurator.application.workspaces import (
     DocumentSummary,
@@ -625,6 +626,18 @@ class OntologyInfo(BaseModel):
     translations: list[OntologyTranslation] = Field(default_factory=list)
 
 
+class TranslationUploadInfo(BaseModel):
+    """Answer to the upload of a translation file (``.tsv``)."""
+
+    filename: str
+    language: str
+    # False when no loaded ontology has the file's prefix yet.
+    assigned: bool
+    message: str
+    # The ontologies that were reloaded with the file.
+    ontologies: list[OntologyInfo] = Field(default_factory=list)
+
+
 def _ontology_info(sha: str, svc: OntologyService, path: Path | None) -> OntologyInfo:
     return OntologyInfo(
         ontology_id=(svc.ontology.dominant_prefix or "unknown").lower(),
@@ -675,11 +688,14 @@ def upload_ontology(
     file: UploadFile,
     request: Request,
     ontology: OntologyDep,
-) -> OntologyInfo:
-    """Upload and register an ontology file into the active workspace.
+) -> OntologyInfo | TranslationUploadInfo:
+    """Upload an ontology (``.json``) or a translation file (``.tsv``).
 
-    Stored immutably as ``<stem>-<sha256[:12]>.json`` and remembered in the
-    persistent configuration so it is registered again after a restart.
+    An ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` and
+    remembered in the persistent configuration so it is registered again after
+    a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is
+    stored under its own name, replaces a file of that name, and the ontology
+    it belongs to is reloaded.
     """
     config = getattr(request.app.state, "config", None)
     directory = (
@@ -687,6 +703,8 @@ def upload_ontology(
         if config
         else Path("./workspace/ontologies")
     )
+    if (file.filename or "").lower().endswith(".tsv"):
+        return _upload_translation(file, ontology, directory)
     uploads = OntologyUploadService(ontology, directory)
     try:
         stored = uploads.store(file.file, file.filename)
@@ -698,3 +716,45 @@ def upload_ontology(
         ) from exc
     uploads.persist(stored.path)
     return _ontology_info(stored.sha256, stored.service, stored.path)
+
+
+def _upload_translation(
+    file: UploadFile, ontology: OntologyRegistry, directory: Path
+) -> TranslationUploadInfo:
+    try:
+        stored = TranslationUploadService(ontology, directory).store(
+            file.file, file.filename
+        )
+    except PayloadTooLarge:
+        raise
+    except DomainError as exc:
+        # A failed reload is not the uploader's mistake.
+        status = 500 if exc.code == "TRANSLATION_RELOAD_FAILED" else 400
+        raise HTTPException(
+            status_code=status, detail=f"Failed to add translation: {exc}"
+        ) from exc
+
+    name = stored.path.name
+    infos = [
+        _ontology_info(sha, svc, ontology.registered_path(sha))
+        for sha, svc in stored.services.items()
+    ]
+    if not infos:
+        message = (
+            f"{name} was stored, but no loaded ontology has the prefix "
+            f"'{stored.prefix.upper()}'. It is used as soon as such an ontology is added."
+        )
+    else:
+        loaded = "; ".join(
+            f"{info.ontology_id.upper()} {info.release}: "
+            + ", ".join(f"{t.language} {t.term_count} terms" for t in info.translations)
+            for info in infos
+        )
+        message = f"{name} was added. {loaded}."
+    return TranslationUploadInfo(
+        filename=name,
+        language=stored.language,
+        assigned=bool(infos),
+        message=message,
+        ontologies=infos,
+    )

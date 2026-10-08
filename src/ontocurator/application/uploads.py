@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,12 +22,14 @@ from ontocurator.domain.errors import DomainError, PayloadTooLarge
 from ontocurator.ontology.naming import content_addressed_name
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
+from ontocurator.ontology.translations import babelon_problem, parse_translation_name
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
 from ontocurator.packages.reader import MAX_COMPRESSED_BYTES, PackageReader
 from ontocurator.storage.repository import Repository
 from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
 
 MAX_ONTOLOGY_UPLOAD_BYTES = 512 * 1024 * 1024  # 512 MiB
+MAX_TRANSLATION_UPLOAD_BYTES = 64 * 1024 * 1024  # 64 MiB
 MAX_PACKAGE_UPLOAD_BYTES = MAX_COMPRESSED_BYTES
 _CHUNK_BYTES = 1024 * 1024
 _SPOOL_IN_MEMORY_BYTES = 8 * 1024 * 1024
@@ -91,7 +94,9 @@ class OntologyUploadService:
             if service is None:
                 try:
                     service = OntologyService.load(
-                        tmp_path, OntologyRef(release="uploaded", sha256=digest)
+                        tmp_path,
+                        OntologyRef(release="uploaded", sha256=digest),
+                        translation_paths=self.registry.translation_files(),
                     )
                 except DomainError:
                     raise
@@ -149,6 +154,96 @@ class OntologyUploadService:
         if resolved not in [p.resolve() for p in config.ontology_paths]:
             config.ontology_paths.append(resolved)
             save_persistent_config(config)
+
+
+@dataclass(frozen=True)
+class StoredTranslation:
+    """Result of a translation upload."""
+
+    path: Path
+    prefix: str
+    language: str
+    # SHA-256 of the ontology -> its service, rebuilt with the new file. Empty
+    # when no loaded ontology has the file's prefix.
+    services: dict[str, OntologyService]
+
+
+class TranslationUploadService:
+    """Stores an uploaded babelon TSV and rebuilds the ontologies it belongs to.
+
+    Unlike an ontology, a translation file is stored under its own name and a
+    file of the same name is replaced: packages pin ontologies, not
+    translations. The file only reaches its place after the ontologies were
+    rebuilt with it, so a file that cannot be used changes nothing.
+    """
+
+    def __init__(self, registry: OntologyRegistry, directory: Path) -> None:
+        self.registry = registry
+        self.directory = directory
+
+    def store(self, source: BinaryIO, filename: str | None) -> StoredTranslation:
+        name = (filename or "").replace("\\", "/").rsplit("/", 1)[-1].lower()
+        parsed = parse_translation_name(name)
+        if parsed is None:
+            raise DomainError(
+                "INVALID_TRANSLATION",
+                f"'{name}' is not a translation file name. Expected "
+                "<prefix>-<language>.<kind>.tsv, e.g. hp-de.babelon.tsv.",
+            )
+        prefix, language = parsed
+
+        self.directory.mkdir(parents=True, exist_ok=True)
+        # Staged under its real name: the loader reads the language from it.
+        staging = self.directory / f".upload-{uuid4().hex}"
+        staging.mkdir()
+        staged = staging / name
+        try:
+            with staged.open("wb") as handle:
+                copy_limited(
+                    source, handle, MAX_TRANSLATION_UPLOAD_BYTES, "Translation upload"
+                )
+            problem = babelon_problem(staged)
+            if problem is not None:
+                raise DomainError("INVALID_TRANSLATION", problem)
+
+            self.registry.load_registered()
+            others = [
+                path
+                for path in self.registry.translation_files()
+                if path.name.lower() != name
+            ]
+            try:
+                rebuilt = self.registry.rebuild_for_prefix(prefix, [*others, staged])
+            except Exception as exc:
+                raise DomainError(
+                    "TRANSLATION_RELOAD_FAILED",
+                    f"The ontology could not be reloaded with '{name}': {exc}. "
+                    "The file was not stored; the search is unchanged.",
+                ) from exc
+            if rebuilt and not any(
+                item.filename == name
+                for service in rebuilt.values()
+                for item in service.translations
+            ):
+                reasons = [
+                    item.reason
+                    for service in rebuilt.values()
+                    for item in service.skipped_translations
+                    if item.filename == name
+                ]
+                raise DomainError(
+                    "INVALID_TRANSLATION",
+                    reasons[0] if reasons else f"'{name}' holds no usable name.",
+                )
+
+            dest = self.directory / name
+            os.replace(staged, dest)
+            self.registry.publish(rebuilt)
+            return StoredTranslation(
+                path=dest, prefix=prefix, language=language, services=rebuilt
+            )
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
 
 
 class PackageImportService:
