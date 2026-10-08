@@ -338,7 +338,41 @@ def test_request_and_result_carry_the_languages() -> None:
     plain = _service()
     assert _search(plain, "Muskelhypotonie").languages == ["en"]
     assert _search(plain, "Muskelhypotonie", languages=["de"]).languages == ["en"]
-    assert _search(plain, "HP:0001250").languages == ["en"]
+    # A code is answered by the id route, which searches no names.
+    assert _search(plain, "HP:0001250").languages == []
+
+
+def test_the_result_names_only_the_languages_its_route_searched() -> None:
+    service = _service(DE, ES)
+
+    # The keyword routes that look at translated names.
+    assert _search(service, "Krampfanfall").languages == ["en", "de", "es"]
+    assert _search(service, "Krampfanfall", route="lexical").languages == [
+        "en",
+        "de",
+        "es",
+    ]
+    assert _search(
+        service, "Krampfanfall", route="lexical", languages=["es"]
+    ).languages == ["en", "es"]
+
+    # The explicit exact route knows English names only.
+    exact = _search(service, "Krampfanfall", route="exact")
+    assert (exact.candidates, exact.languages) == ([], ["en"])
+    assert _search(service, "Seizure", route="exact", languages=["de"]).languages == [
+        "en"
+    ]
+
+    # A term id and the tree are not searches over names in any language.
+    for query, route in (
+        ("HP:0001250", "id"),
+        ("HP:0001250", "browse"),
+        ("HP:0001250", "auto"),
+        ("1250", "auto"),
+    ):
+        result = _search(service, query, route=route)
+        assert result.candidates, (query, route)
+        assert result.languages == [], (query, route)
 
 
 def test_missing_languages_field_means_all_loaded_languages() -> None:

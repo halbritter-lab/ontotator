@@ -220,8 +220,25 @@ class OntologyService:
             layer_id=request.layer_id,
             ontology_sha256=self.ref.sha256,
             index_identity=self.index_identity,
-            languages=["en", *languages],
+            languages=self._searched_languages(request, languages),
         )
+
+    @staticmethod
+    def _searched_languages(
+        request: SearchRequest, languages: Sequence[str]
+    ) -> list[str]:
+        """The languages whose names this search actually looked at.
+
+        A term id and the tree are not searches over names, so they report
+        none. The explicit exact route knows English names only.
+        """
+        if request.route in ("id", "browse"):
+            return []
+        if request.route == "auto" and looks_like_code(request.query):
+            return []
+        if request.route == "exact":
+            return ["en"]
+        return ["en", *languages]
 
     def _seed(self, request: SearchRequest, languages: Sequence[str]) -> str:
         """The permutation key: annotator, annotation, query, depth, languages.

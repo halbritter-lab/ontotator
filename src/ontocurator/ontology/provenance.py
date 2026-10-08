@@ -176,7 +176,8 @@ class SearchResult(BaseModel):
     layer_id: str | None = None
     ontology_sha256: str | None = None
     index_identity: str | None = None
-    # The languages this search looked at, English first.
+    # The languages whose names this search looked at, English first. Empty
+    # when it looked at no names (a term id, the tree).
     languages: list[str] = Field(default_factory=list)
 
 
