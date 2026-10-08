@@ -1186,3 +1186,71 @@ body {
   gap: 8px;
   margin-top: 8px;
 }
+
+/* Search languages: flag button at the right edge of the search box */
+.search-language {
+  position: relative;
+  flex: none;
+  display: flex;
+}
+
+.search-language-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  cursor: pointer;
+}
+
+.search-language-button:hover,
+.search-language-button[aria-expanded="true"] {
+  border-color: var(--primary);
+}
+
+.lang-flag {
+  display: block;
+  width: 16px;
+  height: 12px;
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.18);
+}
+
+.lang-code {
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 12px;
+  color: var(--text-muted);
+}
+
+.search-language-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 96px;
+  padding: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+}
+
+.search-language-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.search-language-option:hover {
+  background: var(--primary-light);
+}
