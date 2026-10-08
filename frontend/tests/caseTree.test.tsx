@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ValidationError } from "../src/api/client";
+import { App } from "../src/App";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
 
 const key = {
@@ -334,5 +335,260 @@ describe("the tree in the case screen", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Ontology tree" })).toBeNull());
     expect(apply).toHaveBeenCalledTimes(1);
     expect(decide).not.toHaveBeenCalled();
+  });
+});
+
+/** Select the draft annotation and open its tree as the docked panel. */
+const openPanel = async (container: HTMLElement, annotationId: string) => {
+  fireEvent.click(entry(container, annotationId));
+  fireEvent.click(screen.getByRole("button", { name: "Show in tree" }));
+  const panel = await screen.findByRole("region", { name: "Ontology tree" });
+  await within(panel).findByText("Beta term", { selector: ".tree-label" });
+  return panel;
+};
+const panelNow = () => screen.getByRole("region", { name: "Ontology tree" });
+const pinSwitch = () => screen.getByRole("button", { name: "Keep open" });
+
+describe("the pinned tree", () => {
+  it("pinning turns the dialog into a side panel without starting over, and reports the choice", async () => {
+    const view = baseView([snapshot("a1", "HP:A")]);
+    const { open } = mockTree();
+    const onTreePinnedChange = vi.fn();
+    const { container } = render(
+      <CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} onTreePinnedChange={onTreePinnedChange} />,
+    );
+    const dialog = await openDialog(container, "a1");
+    fireEvent.click(rowOf(dialog, "Beta term"));
+    expect(pinSwitch().getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(pinSwitch());
+
+    const panel = panelNow();
+    expect(screen.queryByRole("dialog", { name: "Ontology tree" })).toBeNull();
+    expect(onTreePinnedChange).toHaveBeenCalledTimes(1);
+    expect(onTreePinnedChange).toHaveBeenCalledWith(true);
+    expect(pinSwitch().getAttribute("aria-pressed")).toBe("true");
+    // The same walk: no second request, the selection made in the dialog is still there.
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(rowOf(panel, "Beta term").getAttribute("aria-selected")).toBe("true");
+    // Docked into the layout, after the inspector.
+    const layout = container.querySelector(".app-layout")!;
+    expect(layout.classList.contains("tree-pinned")).toBe(true);
+    expect(panel.parentElement!.parentElement).toBe(layout);
+    expect(layout.lastElementChild).toBe(panel.parentElement);
+  });
+
+  it("opens as the side panel right away when the annotator has pinned it", async () => {
+    const view = baseView([snapshot("a1", "HP:A")]);
+    mockTree();
+    const { container } = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} treePinned />);
+
+    // Never by itself: selecting an annotation is not asking for the tree.
+    fireEvent.click(entry(container, "a1"));
+    expect(screen.queryByRole("region", { name: "Ontology tree" })).toBeNull();
+    fireEvent.click(entry(container, "a1")); // deselect again
+
+    const panel = await openPanel(container, "a1");
+    expect(screen.queryByRole("dialog", { name: "Ontology tree" })).toBeNull();
+    expect(pinSwitch().getAttribute("aria-pressed")).toBe("true");
+    expect(panel.contains(document.activeElement)).toBe(true);
+  });
+
+  it("stays open after 'Use this term' and marks the new term as the current one", async () => {
+    const view = baseView([snapshot("a1", "HP:A")]);
+    const { open } = mockTree();
+    const { apply } = mockServer(view);
+    const { container } = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} treePinned />);
+    const panel = await openPanel(container, "a1");
+
+    fireEvent.click(rowOf(panel, "Beta term"));
+    fireEvent.click(useButton(panel));
+
+    await waitFor(() => expect(rowOf(panel, "Beta term").getAttribute("aria-current")).toBe("true"));
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0][1].payload).toEqual({
+      command: "set_term",
+      annotation_id: "a1",
+      term_id: "HP:B",
+      search_event_id: "walk-1",
+    });
+    expect(panelNow()).toBe(panel);
+    expect(rowOf(panel, "Term HP:A").hasAttribute("aria-current")).toBe(false);
+    await waitFor(() => expect(within(panel).getByText("This is the annotation's current term.")).toBeDefined());
+    expect(useButton(panel).disabled).toBe(true);
+    // Still the same walk.
+    expect(open).toHaveBeenCalledTimes(1);
+
+    // A second change from the same walk carries the same id.
+    fireEvent.click(rowOf(panel, "Term HP:A"));
+    await waitFor(() => expect(useButton(panel).disabled).toBe(false));
+    fireEvent.click(useButton(panel));
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(2));
+    expect(apply.mock.calls[1][1].payload).toMatchObject({ term_id: "HP:A", search_event_id: "walk-1" });
+  });
+
+  it("jumps to another own annotation with a term, and stays put for anything else", async () => {
+    const view = reviewView([snapshot("a1", "HP:A"), snapshot("a2", "HP:C")]);
+    const { open } = mockTree();
+    const { container } = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} treePinned />);
+    await openPanel(container, "a1");
+    expect(open.mock.calls[0][0]).toMatchObject({ annotation_id: "a1", term_id: "HP:A" });
+
+    // Another own annotation: a new walk at its term.
+    fireEvent.click(entry(container, "a2"));
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    expect(open.mock.calls[1][0]).toEqual({
+      workspace_key: view.key,
+      annotation_id: "a2",
+      layer_id: "phenotype",
+      term_id: "HP:C",
+    });
+    await within(panelNow()).findByText("Term HP:C", { selector: ".tree-label" });
+    expect(rowOf(panelNow(), "Term HP:C").getAttribute("aria-selected")).toBe("true");
+    // The jump does not take the keyboard focus away from where the annotator is working.
+    expect(panelNow().contains(document.activeElement)).toBe(false);
+
+    // A proposal: the tree stays where it is and assigns nothing.
+    fireEvent.click(rowOf(panelNow(), "Beta term"));
+    expect(useButton(panelNow()).disabled).toBe(false);
+    fireEvent.click(container.querySelector<HTMLElement>('[data-list-key^="target:"]')!);
+    expect(screen.getByText(/Review decision for this proposal/i)).toBeDefined();
+    expect(rowOf(panelNow(), "Term HP:C")).toBeDefined();
+    expect(useButton(panelNow()).disabled).toBe(true);
+    expect(within(panelNow()).getByText("Select one of your annotations to assign a term from the tree.")).toBeDefined();
+
+    // A reference, then nothing at all: the same.
+    fireEvent.click(container.querySelector<HTMLElement>('[data-list-key^="source:"]')!);
+    expect(useButton(panelNow()).disabled).toBe(true);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(container.querySelector(".doc-item.selected")).toBeNull();
+    expect(rowOf(panelNow(), "Term HP:C")).toBeDefined();
+    expect(useButton(panelNow()).disabled).toBe(true);
+    expect(open).toHaveBeenCalledTimes(2);
+
+    // Back on the annotation the tree is showing: no new walk, and it can assign again.
+    fireEvent.click(entry(container, "a2"));
+    expect(useButton(panelNow()).disabled).toBe(false);
+    expect(open).toHaveBeenCalledTimes(2);
+
+    // The first annotation again: that is another annotation, so a third walk.
+    fireEvent.click(entry(container, "a1"));
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(3));
+    expect(open.mock.calls[2][0]).toMatchObject({ annotation_id: "a1", term_id: "HP:A" });
+  });
+
+  it("closes by releasing the pin, and the next time opens as a dialog", async () => {
+    const view = baseView([snapshot("a1", "HP:A")]);
+    const { open } = mockTree();
+    const onTreePinnedChange = vi.fn();
+    const { container } = render(
+      <CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} treePinned onTreePinnedChange={onTreePinnedChange} />,
+    );
+    await openPanel(container, "a1");
+
+    fireEvent.click(pinSwitch());
+
+    expect(onTreePinnedChange).toHaveBeenCalledTimes(1);
+    expect(onTreePinnedChange).toHaveBeenCalledWith(false);
+    expect(screen.queryByRole("region", { name: "Ontology tree" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Ontology tree" })).toBeNull();
+    expect(container.querySelector(".app-layout")!.classList.contains("tree-pinned")).toBe(false);
+    expect(entry(container, "a1").classList.contains("selected")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show in tree" }));
+    expect(await screen.findByRole("dialog", { name: "Ontology tree" })).toBeDefined();
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
+  it("closes with its close button or with Escape inside the tree, and does not come back by itself", async () => {
+    const view = baseView([snapshot("a1", "HP:A"), snapshot("a2", "HP:C")]);
+    const { open } = mockTree();
+    const onTreePinnedChange = vi.fn();
+    const { container } = render(
+      <CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} treePinned onTreePinnedChange={onTreePinnedChange} />,
+    );
+    const panel = await openPanel(container, "a1");
+    const row = rowOf(panel, "Term HP:A");
+    expect(document.activeElement).toBe(row);
+
+    fireEvent.keyDown(row, { key: "Escape" });
+
+    expect(screen.queryByRole("region", { name: "Ontology tree" })).toBeNull();
+    // Escape closed the tree only: the annotation is still selected, the pin is still set.
+    expect(entry(container, "a1").classList.contains("selected")).toBe(true);
+    expect(onTreePinnedChange).not.toHaveBeenCalled();
+
+    // Selecting another annotation does not bring the tree back.
+    fireEvent.click(entry(container, "a2"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByRole("region", { name: "Ontology tree" })).toBeNull();
+    expect(open).toHaveBeenCalledTimes(1);
+
+    // Asked for again, it is the panel again; its close button closes it.
+    fireEvent.click(screen.getByRole("button", { name: "Show in tree" }));
+    await screen.findByRole("region", { name: "Ontology tree" });
+    fireEvent.click(screen.getByRole("button", { name: "Close tree" }));
+    expect(screen.queryByRole("region", { name: "Ontology tree" })).toBeNull();
+    expect(onTreePinnedChange).not.toHaveBeenCalled();
+  });
+
+  it("below 1100 px a pinned tree is a dialog without a pin switch", async () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    });
+    const view = baseView([snapshot("a1", "HP:A")]);
+    mockTree();
+    const { container } = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} treePinned />);
+
+    const dialog = await openDialog(container, "a1");
+
+    expect(screen.queryByRole("region", { name: "Ontology tree" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Keep open" })).toBeNull();
+    expect(container.querySelector(".app-layout")!.classList.contains("tree-pinned")).toBe(false);
+  });
+
+  it("the App hands the stored choice of this annotator to the case and saves a change", async () => {
+    window.localStorage.clear();
+    vi.spyOn(api, "getPreferences").mockResolvedValue({
+      last_annotator_id: "dr-a",
+      mode_by_package: {},
+      tree_pinned_by_annotator: { "dr-a": true, "dr-b": false },
+    });
+    const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({
+      last_annotator_id: "dr-a",
+      mode_by_package: {},
+      tree_pinned_by_annotator: {},
+    });
+    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", ontology: { release: "test" } }] as any);
+    vi.spyOn(api, "listDocuments").mockResolvedValue([
+      { document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" },
+    ]);
+    vi.spyOn(api, "openWorkspace").mockResolvedValue({
+      workspace_id: "ws",
+      view: baseView([snapshot("a1", "HP:A")]),
+    });
+    mockTree();
+    const { container } = render(<App />);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Open case/i }).hasAttribute("disabled")).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Open case/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Yes, continue/i }));
+    await waitFor(() => expect(entry(container, "a1")).not.toBeNull());
+
+    // As after a reload: the stored choice makes "Show in tree" open the side panel.
+    await openPanel(container, "a1");
+
+    fireEvent.click(pinSwitch());
+    expect(save).toHaveBeenCalledWith({ tree_pinned_by_annotator: { "dr-a": false } });
+    expect(screen.queryByRole("region", { name: "Ontology tree" })).toBeNull();
   });
 });

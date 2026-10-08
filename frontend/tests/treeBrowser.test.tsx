@@ -496,4 +496,27 @@ describe("TreeBrowser: dialog and panel", () => {
     expect(item("Status epilepticus")).toBe(row);
     expect(row.getAttribute("aria-selected")).toBe("true");
   });
+
+  it("brings the selected row back on screen when the tree is docked, without moving the focus", async () => {
+    vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
+    vi.spyOn(api, "loadTreeNode").mockResolvedValue({
+      detail: detail("HP:2133", "Status epilepticus"),
+      children: [],
+      path: [],
+      levels: [],
+    });
+    const props = baseProps();
+    const { rerender } = render(<TreeBrowser {...props} />);
+    await loaded();
+    fireEvent.click(item("Status epilepticus"));
+    const pin = screen.getByRole("button", { name: "Keep open" });
+    pin.focus();
+    expect(scrolled).toEqual(["HP:1/HP:707/HP:1250"]);
+
+    // The docked panel is smaller than the dialog: the row may have left the visible part.
+    rerender(<TreeBrowser {...props} variant="panel" pinned />);
+
+    expect(scrolled).toEqual(["HP:1/HP:707/HP:1250", "HP:1/HP:707/HP:1250/HP:2133"]);
+    expect(document.activeElement).toBe(pin);
+  });
 });

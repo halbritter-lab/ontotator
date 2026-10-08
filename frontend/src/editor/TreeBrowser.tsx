@@ -131,6 +131,17 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Docking and undocking change the size of the tree's box (the panel is much
+  // smaller than the dialog): keep the selected row on screen. The focus stays.
+  const shownVariant = useRef(variant);
+  useEffect(() => {
+    if (shownVariant.current === variant) return;
+    shownVariant.current = variant;
+    const key = selectedKey ?? focusedKey;
+    if (key) setReveal({ key, focus: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant]);
+
   const loadNode = async (key: string, options: { expand?: boolean; viaParentId?: string }) => {
     if (!browseId) return null;
     setError(null);
