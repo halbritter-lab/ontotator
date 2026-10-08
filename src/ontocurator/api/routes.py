@@ -506,21 +506,19 @@ def layer_ontology(
             f"Layer '{layer_id}' is not accessible in workspace scope '{scope.scope_id}'",
         )
 
-    # If annotation exists in draft, verify layer matches
-    try:
-        draft = repo.open_draft(workspace_key)
-        for snap in draft.annotations:
-            if snap.annotation.annotation_id == annotation_id:
-                if snap.annotation.layer_id != layer_id:
-                    raise DomainError(
-                        "LAYER_MISMATCH",
-                        f"Annotation '{annotation_id}' belongs to layer '{snap.annotation.layer_id}', not '{layer_id}'",
-                    )
-                break
-    except DomainError:
-        raise
-    except Exception:
-        pass
+    # If the annotation exists in the draft, its layer must be the one asked
+    # for. A workspace that has no draft yet gets an empty one from
+    # ``open_draft``, so "not yet in the draft" raises nothing; a draft that
+    # cannot be read is an error, never a reason to skip this check.
+    draft = repo.open_draft(workspace_key)
+    for snap in draft.annotations:
+        if snap.annotation.annotation_id == annotation_id:
+            if snap.annotation.layer_id != layer_id:
+                raise DomainError(
+                    "LAYER_MISMATCH",
+                    f"Annotation '{annotation_id}' belongs to layer '{snap.annotation.layer_id}', not '{layer_id}'",
+                )
+            break
 
     return get_ontology(request).for_layer(profile, layer_id)
 

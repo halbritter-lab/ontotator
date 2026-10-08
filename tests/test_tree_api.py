@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
@@ -526,6 +527,60 @@ def test_tree_requests_pass_the_same_checks_as_a_search(app_client):
             assert resp.json()["code"] == code, (endpoint, fields)
 
     assert _events(client, ws_key) == []
+
+
+def test_a_failing_draft_lookup_does_not_skip_the_layer_check(app_client, monkeypatch):
+    client, _ = app_client
+    _import(client, make_layered_package("multi_editable"))
+    ws_id, ws_key = _open(client, "pkg-scenario-c")
+    created = _command(
+        client,
+        ws_id,
+        0,
+        {
+            "command": "create_annotation",
+            "annotation_id": "ann-1",
+            "layer_id": "layer-1",
+            "type_id": "type-opt",
+            "term_id": "HP:0001250",
+        },
+    )
+    assert created.status_code == 200, created.text
+    repo = client.app.state.repo
+
+    def busy(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    # ann-1 lives in layer-1. With the draft unreadable nobody can tell, so
+    # the request must fail rather than go through for layer-2.
+    wrong_layer = {"layer_id": "layer-2"}
+    requests = [
+        lambda: _tree(client, ws_key, "open", term_id="HP:0001250", **wrong_layer),
+        lambda: _tree(
+            client, ws_key, "node", term_id="HP:0001250", browse_id="any", **wrong_layer
+        ),
+        lambda: client.post(
+            "/api/v1/search",
+            json={
+                "workspace_key": ws_key,
+                "annotation_id": "ann-1",
+                "query": "Seizure",
+                **wrong_layer,
+            },
+        ),
+    ]
+    with monkeypatch.context() as patched:
+        patched.setattr(repo, "open_draft", busy)
+        for send in requests:
+            with pytest.raises(sqlite3.OperationalError):
+                send()
+
+    assert _events(client, ws_key) == []
+    # With the draft readable again the same requests are refused by name.
+    for send in requests:
+        resp = send()
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["code"] == "LAYER_MISMATCH"
 
 
 def test_also_under_returns_the_other_path_and_logs_what_it_reveals(graph_walk):
