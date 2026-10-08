@@ -18,7 +18,14 @@ import unicodedata
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    ValidationError,
+    field_validator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +83,12 @@ def _check_search_languages(
     return checked
 
 
+def _check_tree_pinned(value: dict[str, bool] | None) -> dict[str, bool] | None:
+    if value is None:
+        return None
+    return {normalize_annotator_id(a): pinned for a, pinned in value.items()}
+
+
 class LegacyConfigDecision(BaseModel):
     """What was decided about the settings file of an earlier installation.
 
@@ -96,6 +109,8 @@ class Preferences(BaseModel):
 
     last_annotator_id: str | None = None
     mode_by_package: dict[str, PreferenceMode] = Field(default_factory=dict)
+    # Annotator id -> whether the ontology tree stays open as a side panel.
+    tree_pinned_by_annotator: dict[str, bool] = Field(default_factory=dict)
     # Annotator id -> translation languages that annotator searches in. No
     # entry means the annotator never chose: all loaded languages are searched.
     search_languages_by_annotator: dict[str, list[str]] = Field(default_factory=dict)
@@ -119,6 +134,9 @@ class PreferencesUpdate(BaseModel):
 
     last_annotator_id: str | None = None
     mode_by_package: dict[str, PreferenceMode] | None = None
+    # Merged per annotator, like the language selections below. Only a real
+    # true or false is taken: "yes" or 1 is a mistake of the caller.
+    tree_pinned_by_annotator: dict[str, StrictBool] | None = None
     # Merged per annotator: the given annotators' selections are replaced, the
     # others are kept.
     search_languages_by_annotator: dict[str, list[str]] | None = None
@@ -126,6 +144,9 @@ class PreferencesUpdate(BaseModel):
     validate_annotator = field_validator("last_annotator_id")(_check_annotator)
     validate_search_languages = field_validator("search_languages_by_annotator")(
         _check_search_languages
+    )
+    validate_tree_pinned = field_validator("tree_pinned_by_annotator")(
+        _check_tree_pinned
     )
 
 
@@ -171,6 +192,11 @@ class PreferencesStore:
                 codes = _clean_languages(languages)
                 if isinstance(annotator_id, str) and codes is not None:
                     prefs.search_languages_by_annotator[annotator_id] = codes
+        pinned = data.get("tree_pinned_by_annotator")
+        if isinstance(pinned, dict):
+            for annotator_id, value in pinned.items():
+                if isinstance(annotator_id, str) and isinstance(value, bool):
+                    prefs.tree_pinned_by_annotator[annotator_id] = value
         with contextlib.suppress(ValidationError):
             if isinstance(data.get("legacy_config"), dict):
                 prefs.legacy_config = LegacyConfigDecision.model_validate(
@@ -194,6 +220,8 @@ class PreferencesStore:
                 prefs.last_annotator_id = change.last_annotator_id
             if change.mode_by_package:
                 prefs.mode_by_package.update(change.mode_by_package)
+            if change.tree_pinned_by_annotator:
+                prefs.tree_pinned_by_annotator.update(change.tree_pinned_by_annotator)
             if change.search_languages_by_annotator:
                 prefs.search_languages_by_annotator.update(
                     change.search_languages_by_annotator

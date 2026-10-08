@@ -14,6 +14,7 @@ EMPTY_PREFERENCES = {
     "last_annotator_id": None,
     "mode_by_package": {},
     "search_languages_by_annotator": {},
+    "tree_pinned_by_annotator": {},
 }
 
 
@@ -71,6 +72,7 @@ def test_preferences_round_trip_and_persist_in_workspace(app_client):
         "last_annotator_id": "JPL",
         "mode_by_package": {"pkg-a": "review"},
         "search_languages_by_annotator": {},
+        "tree_pinned_by_annotator": {},
     }
     stored = json.loads(
         (config.workspace_dir / "preferences.json").read_text(encoding="utf-8")
@@ -85,6 +87,7 @@ def test_preferences_round_trip_and_persist_in_workspace(app_client):
         "last_annotator_id": "JPL",
         "mode_by_package": {"pkg-a": "review", "pkg-b": "independent"},
         "search_languages_by_annotator": {},
+        "tree_pinned_by_annotator": {},
     }
     assert client.get("/api/v1/preferences").json() == resp.json()
     # No temporary files are left behind (atomic replace).
@@ -163,6 +166,7 @@ def test_search_languages_are_stored_per_annotator(app_client):
         "last_annotator_id": "AB",
         "mode_by_package": {},
         "search_languages_by_annotator": {"JPL": ["fr"], "AB": []},
+        "tree_pinned_by_annotator": {},
     }
     assert client.get(url).json() == resp.json()
     stored = json.loads(
@@ -217,4 +221,63 @@ def test_unreadable_search_language_entries_are_ignored(app_client):
         "last_annotator_id": "JPL",
         "mode_by_package": {},
         "search_languages_by_annotator": {"JPL": ["de"]},
+        "tree_pinned_by_annotator": {},
     }
+
+
+def test_tree_pin_is_stored_per_annotator_and_merged(app_client):
+    from ontocurator.application.preferences import PreferencesStore
+
+    client, config = app_client
+    assert client.get("/api/v1/preferences").json()["tree_pinned_by_annotator"] == {}
+
+    resp = client.put(
+        "/api/v1/preferences", json={"tree_pinned_by_annotator": {"JPL": True}}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["tree_pinned_by_annotator"] == {"JPL": True}
+
+    # One annotator's choice does not touch another's.
+    resp = client.put(
+        "/api/v1/preferences",
+        json={"tree_pinned_by_annotator": {"AB": True, "JPL": False}},
+    )
+    assert resp.json()["tree_pinned_by_annotator"] == {"JPL": False, "AB": True}
+
+    # An update of something else keeps it.
+    resp = client.put("/api/v1/preferences", json={"last_annotator_id": "AB"})
+    assert resp.json()["tree_pinned_by_annotator"] == {"JPL": False, "AB": True}
+    assert resp.json()["last_annotator_id"] == "AB"
+
+    path = config.workspace_dir / "preferences.json"
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert stored["tree_pinned_by_annotator"] == {"JPL": False, "AB": True}
+    # A restart reads it back.
+    assert PreferencesStore(path).load().tree_pinned_by_annotator == {
+        "JPL": False,
+        "AB": True,
+    }
+
+
+def test_unreadable_tree_pin_entries_are_ignored(app_client):
+    client, config = app_client
+    (config.workspace_dir / "preferences.json").write_text(
+        json.dumps({"tree_pinned_by_annotator": {"JPL": "yes", "AB": True, "X": 1}}),
+        encoding="utf-8",
+    )
+
+    resp = client.get("/api/v1/preferences")
+
+    assert resp.status_code == 200
+    assert resp.json()["tree_pinned_by_annotator"] == {"AB": True}
+
+
+@pytest.mark.parametrize("bad", [{"JPL": "yes"}, {"JPL": 1}, {"": True}, ["JPL"]])
+def test_a_tree_pin_that_is_not_true_or_false_is_refused(app_client, bad):
+    """Beyond the plan: an update is checked as strictly as the stored file."""
+    client, _ = app_client
+
+    resp = client.put("/api/v1/preferences", json={"tree_pinned_by_annotator": bad})
+
+    assert resp.status_code == 422
+    assert client.get("/api/v1/preferences").json()["tree_pinned_by_annotator"] == {}
