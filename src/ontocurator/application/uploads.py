@@ -90,37 +90,45 @@ class OntologyUploadService:
                     source, handle, MAX_ONTOLOGY_UPLOAD_BYTES, "Ontology upload"
                 )
 
-            service = self._loaded_service(digest)
-            if service is None:
-                try:
-                    service = OntologyService.load(
-                        tmp_path,
-                        OntologyRef(release="uploaded", sha256=digest),
-                        translation_paths=self.registry.translation_files(),
-                    )
-                except DomainError:
-                    raise
-                except (OntologyError, ValueError, KeyError, TypeError) as exc:
-                    raise DomainError("INVALID_ONTOLOGY", str(exc)) from exc
-
-            dest_path = self._existing_copy(digest)
-            if dest_path is None:
-                dest_path = self.directory / content_addressed_name(filename, digest)
-                if dest_path.exists():
-                    if _file_sha256(dest_path) != digest:
-                        raise DomainError(
-                            "ONTOLOGY_PATH_CONFLICT",
-                            f"'{dest_path.name}' already exists with different content",
-                        )
-                else:
-                    os.replace(tmp_path, dest_path)
-
-            self.registry.register_path(dest_path)
-            self.registry.register_service(service)
-            return StoredOntology(service=service, path=dest_path, sha256=digest)
+            # One change: the translation files are read, the ontology is
+            # built with them and registered before any other change starts.
+            with self.registry.changing():
+                return self._register(tmp_path, filename, digest)
         finally:
             if tmp_path.exists():
                 tmp_path.unlink()
+
+    def _register(
+        self, tmp_path: Path, filename: str | None, digest: str
+    ) -> StoredOntology:
+        service = self._loaded_service(digest)
+        if service is None:
+            try:
+                service = OntologyService.load(
+                    tmp_path,
+                    OntologyRef(release="uploaded", sha256=digest),
+                    translation_paths=self.registry.translation_files(),
+                )
+            except DomainError:
+                raise
+            except (OntologyError, ValueError, KeyError, TypeError) as exc:
+                raise DomainError("INVALID_ONTOLOGY", str(exc)) from exc
+
+        dest_path = self._existing_copy(digest)
+        if dest_path is None:
+            dest_path = self.directory / content_addressed_name(filename, digest)
+            if dest_path.exists():
+                if _file_sha256(dest_path) != digest:
+                    raise DomainError(
+                        "ONTOLOGY_PATH_CONFLICT",
+                        f"'{dest_path.name}' already exists with different content",
+                    )
+            else:
+                os.replace(tmp_path, dest_path)
+
+        self.registry.register_path(dest_path)
+        self.registry.register_service(service)
+        return StoredOntology(service=service, path=dest_path, sha256=digest)
 
     def _loaded_service(self, digest: str) -> OntologyService | None:
         try:
@@ -206,44 +214,57 @@ class TranslationUploadService:
             if problem is not None:
                 raise DomainError("INVALID_TRANSLATION", problem)
 
-            self.registry.load_registered()
-            others = [
-                path
-                for path in self.registry.translation_files()
-                if path.name.lower() != name
-            ]
-            try:
-                rebuilt = self.registry.rebuild_for_prefix(prefix, [*others, staged])
-            except Exception as exc:
-                raise DomainError(
-                    "TRANSLATION_RELOAD_FAILED",
-                    f"The ontology could not be reloaded with '{name}': {exc}. "
-                    "The file was not stored; the search is unchanged.",
-                ) from exc
-            if rebuilt and not any(
-                item.filename == name
-                for service in rebuilt.values()
-                for item in service.translations
-            ):
-                reasons = [
-                    item.reason
-                    for service in rebuilt.values()
-                    for item in service.skipped_translations
-                    if item.filename == name
-                ]
-                raise DomainError(
-                    "INVALID_TRANSLATION",
-                    reasons[0] if reasons else f"'{name}' holds no usable name.",
-                )
-
-            dest = self.directory / name
-            os.replace(staged, dest)
-            self.registry.publish(rebuilt)
+            # One change from here to the swap: the files in the folder are
+            # read, the ontologies rebuilt, the file moved into place and the
+            # new services published before any other change starts. Searches
+            # do not wait for this; the old services answer them meanwhile.
+            with self.registry.changing():
+                rebuilt = self._rebuild_and_place(prefix, name, staged)
             return StoredTranslation(
-                path=dest, prefix=prefix, language=language, services=rebuilt
+                path=self.directory / name,
+                prefix=prefix,
+                language=language,
+                services=rebuilt,
             )
         finally:
             shutil.rmtree(staging, ignore_errors=True)
+
+    def _rebuild_and_place(
+        self, prefix: str, name: str, staged: Path
+    ) -> dict[str, OntologyService]:
+        self.registry.load_registered()
+        others = [
+            path
+            for path in self.registry.translation_files()
+            if path.name.lower() != name
+        ]
+        try:
+            rebuilt = self.registry.rebuild_for_prefix(prefix, [*others, staged])
+        except Exception as exc:
+            raise DomainError(
+                "TRANSLATION_RELOAD_FAILED",
+                f"The ontology could not be reloaded with '{name}': {exc}. "
+                "The file was not stored; the search is unchanged.",
+            ) from exc
+        if rebuilt and not any(
+            item.filename == name
+            for service in rebuilt.values()
+            for item in service.translations
+        ):
+            reasons = [
+                item.reason
+                for service in rebuilt.values()
+                for item in service.skipped_translations
+                if item.filename == name
+            ]
+            raise DomainError(
+                "INVALID_TRANSLATION",
+                reasons[0] if reasons else f"'{name}' holds no usable name.",
+            )
+
+        os.replace(staged, self.directory / name)
+        self.registry.publish(rebuilt)
+        return rebuilt
 
 
 class PackageImportService:
@@ -264,10 +285,21 @@ class PackageImportService:
     def import_package(self, pkg: ValidatedPackage) -> PackageManifest:
         """Import an already validated package (ontologies are parsed first)."""
         assert pkg.manifest.task_profile is not None
-        services = self.registry.prepare_package(
-            pkg.manifest.task_profile, pkg.embedded_files
-        )
+        with self.registry.changing():
+            generation = self.registry.translation_generation
+            services = self.registry.prepare_package(
+                pkg.manifest.task_profile, pkg.embedded_files
+            )
+        # The database write is not part of the registry change: an edit that
+        # holds the database and waits for an ontology to load must not meet an
+        # import that holds the registry and waits for the database.
         self.repo.import_package(pkg)
-        for service in services:
-            self.registry.register_service(service)
+        with self.registry.changing():
+            if self.registry.translation_generation != generation:
+                # A translation file arrived meanwhile. What was prepared was
+                # built without it and would replace services that have it.
+                files = self.registry.translation_files()
+                services = [service.with_translations(files) for service in services]
+            for service in services:
+                self.registry.register_service(service)
         return pkg.manifest

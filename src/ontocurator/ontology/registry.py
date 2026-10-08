@@ -44,6 +44,13 @@ class OntologyRegistry:
     it happens outside that lock under a per-digest load lock: other requests
     keep being served while a file loads, and two threads never parse the same
     digest twice (double-checked insert).
+
+    Whatever changes *which* ontologies and translation files are loaded (a
+    load, an upload, a package import) runs under a second lock,
+    :meth:`changing`: it looks at the translation files, builds services and
+    publishes them as one step, so no change is built on a set of files another
+    change is replacing. Looking up a loaded service never takes that lock, so
+    searches are answered by the current services while a change is under way.
     """
 
     def __init__(
@@ -55,6 +62,12 @@ class OntologyRegistry:
         self._registered_paths: dict[str, Path] = {}
         self._failures: dict[str, OntologyLoadFailure] = {}
         self._lock = threading.RLock()
+        # Serialises changes; see the class docstring. Always taken before
+        # ``_lock`` and the per-digest load locks, never while holding them.
+        self._change_lock = threading.RLock()
+        # Counts the swaps of :meth:`publish`, i.e. the times the translation
+        # files changed under the loaded ontologies.
+        self.translation_generation = 0
         self._load_locks: dict[str, threading.Lock] = {}
         # Relative ``resource_path`` entries resolve against this directory
         # (the workspace), never against the process working directory.
@@ -62,6 +75,15 @@ class OntologyRegistry:
         # The folders ontologies are looked for in. Translation files
         # (hp-de.babelon.tsv) lie next to the ontologies there.
         self.translation_dirs = [Path(d) for d in translation_dirs]
+
+    def changing(self) -> threading.RLock:
+        """The lock for a change to the loaded ontologies or translations.
+
+        Hold it (``with registry.changing():``) from reading
+        :meth:`translation_files` until the services built with them are
+        registered or published. It is re-entrant.
+        """
+        return self._change_lock
 
     def translation_files(self) -> list[Path]:
         """Every translation file in the ontology folders, as of now."""
@@ -106,6 +128,7 @@ class OntologyRegistry:
         """Swap in rebuilt services, all at once."""
         with self._lock:
             self._services.update(services)
+            self.translation_generation += 1
 
     def register(self, path: Path | str, expected: OntologyDefinition) -> None:
         """Register and validate an ontology artifact against an expected OntologyDefinition."""
@@ -149,7 +172,9 @@ class OntologyRegistry:
             if cached is not None:
                 return cached
             load_lock = self._load_locks.setdefault(sha, threading.Lock())
-        with load_lock:
+        # A first load reads the translation files, so it is a change too: an
+        # upload that is replacing a file must not be overtaken by it.
+        with self._change_lock, load_lock:
             with self._lock:
                 cached = self._services.get(sha)
             if cached is not None:
