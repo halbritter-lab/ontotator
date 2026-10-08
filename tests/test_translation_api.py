@@ -2,6 +2,7 @@
 
 import io
 import logging
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -360,6 +361,45 @@ def test_failed_reload_keeps_the_old_index_and_stores_nothing(
     assert after["languages"] == ["en", "de"]
     assert after["index_identity"] == before["index_identity"]
     assert after["candidates"][0]["term_id"] == "HP:0001250"
+
+
+def test_a_file_that_cannot_be_replaced_is_reported_and_changes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows a file that is open in another program cannot be replaced."""
+    folder = _folder(tmp_path, DE)
+    client = _client(tmp_path, ontology_paths=[HP])
+    key = _open_single(client)
+    before = _search(client, key, "Krampfanfall")
+    smaller = (
+        b"subject_id\tpredicate_id\ttranslation_language\ttranslation_value\n"
+        b"HP:0001284\trdfs:label\tde\tAreflexie\n"
+    )
+    replace = os.replace
+
+    def locked(source: Any, target: Any) -> None:
+        if str(target).endswith(".tsv"):
+            raise PermissionError(13, "The file is used by another process")
+        replace(source, target)
+
+    monkeypatch.setattr(os, "replace", locked)
+    response = _upload(client, "hp-de.babelon.tsv", smaller)
+
+    assert response.status_code == 500, response.text
+    detail = response.json()["detail"]
+    assert "'hp-de.babelon.tsv' could not be replaced" in detail
+    assert "used by another process" in detail
+    assert "The file was not stored; the search is unchanged." in detail
+    assert sorted(p.name for p in folder.iterdir()) == ["hp-de.babelon.tsv"]
+    assert (folder / "hp-de.babelon.tsv").read_bytes() == DE.read_bytes()
+    after = _search(client, key, "Krampfanfall")
+    assert after["index_identity"] == before["index_identity"]
+    assert after["candidates"][0]["term_id"] == "HP:0001250"
+    # The name only the new file has is not searched.
+    assert all(
+        candidate["matched_term"] != "Areflexie"
+        for candidate in _search(client, key, "Areflexie")["candidates"]
+    )
 
 
 def test_ontology_json_upload_still_answers_with_the_ontology(tmp_path: Path) -> None:

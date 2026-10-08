@@ -262,7 +262,15 @@ class TranslationUploadService:
                 reasons[0] if reasons else f"'{name}' holds no usable name.",
             )
 
-        os.replace(staged, self.directory / name)
+        try:
+            os.replace(staged, self.directory / name)
+        except OSError as exc:
+            # E.g. the old file is open in another program (Windows).
+            raise DomainError(
+                "TRANSLATION_STORE_FAILED",
+                f"'{name}' could not be replaced: {exc}. "
+                "The file was not stored; the search is unchanged.",
+            ) from exc
         self.registry.publish(rebuilt)
         return rebuilt
 

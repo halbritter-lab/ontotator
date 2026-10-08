@@ -728,8 +728,10 @@ def _upload_translation(
     except PayloadTooLarge:
         raise
     except DomainError as exc:
-        # A failed reload is not the uploader's mistake.
-        status = 500 if exc.code == "TRANSLATION_RELOAD_FAILED" else 400
+        # A failed reload, or a file that could not be moved into place, is
+        # not the uploader's mistake.
+        server_side = ("TRANSLATION_RELOAD_FAILED", "TRANSLATION_STORE_FAILED")
+        status = 500 if exc.code in server_side else 400
         raise HTTPException(
             status_code=status, detail=f"Failed to add translation: {exc}"
         ) from exc
