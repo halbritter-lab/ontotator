@@ -117,6 +117,43 @@ def test_unusable_files_are_logged_and_do_not_stop_the_load(
     assert "HP:0001250" in _search(service, "Krampfanfall").displayed_ids
 
 
+def test_a_file_that_breaks_part_way_leaves_none_of_its_names(tmp_path: Path) -> None:
+    """The loader merges row by row. A file whose end cannot be read is
+    skipped, and then nothing of its beginning may stay behind either."""
+    header = b"subject_id\tpredicate_id\ttranslation_language\ttranslation_value\n"
+    filler = b"HP:9999999\trdfs:label\tfr\tRemplissage\n" * 2000
+    broken = tmp_path / "hp-fr.babelon.tsv"
+    broken.write_bytes(
+        header + b"HP:0001250\trdfs:label\tfr\tCrise\n" + filler + b"\xff\xfe\n"
+    )
+
+    alone = _service(broken)
+    assert [item.filename for item in alone.skipped_translations] == [broken.name]
+    assert (alone.languages, alone.translations, alone.translation_counts) == (
+        [],
+        [],
+        {},
+    )
+    assert all(not term.translations for term in alone.ontology.terms.values())
+    assert alone.index_identity == _plain_identity(HP)
+    assert "HP:0001250" not in _search(alone, "Crise").displayed_ids
+    assert _search(alone, "Crise").languages == ["en"]
+
+    # What an earlier file brought is kept, also for a term the broken file
+    # touched before it broke.
+    earlier = tmp_path / "hp-de.babelon.tsv"
+    earlier.write_bytes(header + b"HP:0001250\trdfs:label\tde\tKrampfanfall\n")
+    later = tmp_path / "hp-es.babelon.tsv"
+    later.write_bytes(header + b"HP:0001250\trdfs:label\tes\tCrisis\n")
+    mixed = _service(earlier, broken, later)
+    assert mixed.translation_counts == {"de": 1, "es": 1}
+    assert mixed.ontology.terms["HP:0001250"].translations == {
+        "de": ["Krampfanfall"],
+        "es": ["Crisis"],
+    }
+    assert mixed.index_identity == _service(earlier, later).index_identity
+
+
 def test_identity_changes_with_and_only_with_the_translation_files(
     tmp_path: Path,
 ) -> None:

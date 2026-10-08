@@ -106,10 +106,20 @@ def apply_translations(
         parsed = parse_translation_name(path.name)
         if parsed is None or not prefix or parsed[0] != prefix:
             continue
+        # The loader merges row by row. A file that breaks in the middle must
+        # leave nothing behind, so the names as they are now are remembered.
+        before = {
+            term_id: {code: list(names) for code, names in term.translations.items()}
+            for term_id, term in ontology.terms.items()
+            if term.translations
+        }
         try:
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             counts = load_translations(ontology, [path])
         except (OntologyError, OSError, UnicodeDecodeError, csv.Error) as exc:
+            for term_id, term in ontology.terms.items():
+                if term.translations or term_id in before:
+                    term.translations = before.get(term_id, {})
             skipped.append(SkippedTranslation(path.name, str(exc)))
             continue
         if not counts:
