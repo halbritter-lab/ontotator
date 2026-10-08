@@ -22,6 +22,10 @@ from ontocurator.vendor.hpo_span_annotator.hpo import (
     load_translations,
     normalise,
 )
+from ontocurator.vendor.hpo_span_annotator.lexical import (
+    LexicalIndex,
+    LexicalIndexError,
+)
 
 # <prefix>-<language>.<anything>.tsv, e.g. hp-de.babelon.tsv. The prefix is the
 # ontology's dominant id prefix in lower case, the language has two letters.
@@ -169,6 +173,69 @@ class TranslatedNames:
                     "matched_term": name,
                     "match_kind": "translation",
                     "matched_language": language,
+                }
+            )
+        return out
+
+
+class LanguageLexicalIndex(LexicalIndex):
+    """The lexical index, searchable in a chosen subset of its languages.
+
+    One index holds every language. A search that names languages ignores the
+    rows of all others *before* the best name per term is picked. Filtering the
+    finished list instead would lose every term whose best-scoring name is in a
+    language the annotator switched off, although an English name of the same
+    term matches too.
+    """
+
+    def search(
+        self,
+        query: str,
+        k: int,
+        languages: Collection[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        if languages is None:
+            return super().search(query, k)
+        if not self.ready:
+            raise LexicalIndexError("the lexical index is not built")
+        import numpy as np
+
+        allowed = {"en", *languages}
+        scores = (self._vectorizer.transform([query]) @ self._matrix.T).toarray()[0]
+        keep = np.fromiter(
+            (code in allowed for code in self._term_language),
+            dtype=bool,
+            count=len(self._term_language),
+        )
+        scores[~keep] = 0.0
+
+        # From here on this is the parent's ranking: best name per term, top k.
+        best: dict[str, tuple[float, str, str]] = {}
+        for index in np.argsort(-scores)[: max(400, k * 40)]:
+            score = float(scores[index])
+            if score <= 0:
+                break
+            hpo_id = self._ids[index]
+            if hpo_id not in best or score > best[hpo_id][0]:
+                best[hpo_id] = (
+                    score,
+                    self._terms[index],
+                    self._term_language[index],
+                )
+            if len(best) >= k * 4:
+                break
+
+        ranked = sorted(best.items(), key=lambda kv: -kv[1][0])[:k]
+        out = []
+        for hpo_id, (score, matched, language) in ranked:
+            term = self.ontology.terms[hpo_id]
+            out.append(
+                {
+                    **term.as_dict(),
+                    "matched_term": matched,
+                    "score": round(score, 4),
+                    "matched_language": language,
+                    "match_kind": "ngram" if language == "en" else f"ngram:{language}",
                 }
             )
         return out

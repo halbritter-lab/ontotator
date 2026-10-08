@@ -27,6 +27,9 @@ class SearchEventRecord(BaseModel):
     # Term id -> route that surfaced it. Empty on events written before the
     # single search existed.
     candidate_routes: dict[str, str] = Field(default_factory=dict)
+    # The languages the search looked at, English first. Empty on events
+    # written before translations existed.
+    languages: list[str] = Field(default_factory=list)
     selected_term_id: str | None = None
     ranked_position: int | None = None
     displayed_position: int | None = None

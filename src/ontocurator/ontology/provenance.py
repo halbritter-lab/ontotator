@@ -87,6 +87,9 @@ class SearchRequest(BaseModel):
     # stored events and for other callers.
     route: Literal["auto", "lexical", "exact", "id", "browse"] = "auto"
     k: int = Field(default=10, ge=1, le=100)
+    # Translation languages to search besides English. None means every
+    # language that is loaded; codes that are not loaded are ignored.
+    languages: list[str] | None = Field(default=None, max_length=32)
 
 
 class SearchCandidate(BaseModel):
@@ -173,6 +176,8 @@ class SearchResult(BaseModel):
     layer_id: str | None = None
     ontology_sha256: str | None = None
     index_identity: str | None = None
+    # The languages this search looked at, English first.
+    languages: list[str] = Field(default_factory=list)
 
 
 class HierarchyWarning(BaseModel):

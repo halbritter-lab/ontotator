@@ -21,6 +21,7 @@ from ontocurator.ontology.provenance import (
     TermStatus,
 )
 from ontocurator.ontology.translations import (
+    LanguageLexicalIndex,
     LoadedTranslation,
     SkippedTranslation,
     TranslatedNames,
@@ -31,7 +32,6 @@ from ontocurator.vendor.hpo_span_annotator.hpo import Ontology
 from ontocurator.vendor.hpo_span_annotator.hpo import (
     load as load_ontology,
 )
-from ontocurator.vendor.hpo_span_annotator.lexical import LexicalIndex
 from ontocurator.vendor.hpo_span_annotator.search import (
     SCORED_PATHS,
     SearchEngine,
@@ -132,7 +132,7 @@ class OntologyService:
                 "Skipping translation file %s: %s", problem.filename, problem.reason
             )
         languages = sorted({code for item in loaded for code in item.languages})
-        lexical = LexicalIndex(ontology, languages=languages)
+        lexical = LanguageLexicalIndex(ontology, languages=languages)
         lexical.build()
         engine = SearchEngine(ontology=ontology, lexical=lexical)
         return cls(
@@ -163,6 +163,16 @@ class OntologyService:
         )
         return self._build(ontology, self.ref, translation_paths)
 
+    def active_languages(self, requested: Sequence[str] | None) -> list[str]:
+        """The loaded translation languages a search looks at.
+
+        ``None`` means all of them. Codes that are not loaded are ignored.
+        """
+        if requested is None:
+            return list(self.languages)
+        wanted = {code.strip().lower() for code in requested}
+        return [code for code in self.languages if code in wanted]
+
     def validate_term(self, hpo_id: str) -> TermStatus:
         term = self.ontology.get(hpo_id)
         if term is None:
@@ -189,10 +199,11 @@ class OntologyService:
         )
 
     def search(self, request: SearchRequest) -> SearchResult:
+        languages = self.active_languages(request.languages)
         if request.route == "auto":
-            hits, was_shuffled, seed = self._auto_hits(request)
+            hits, was_shuffled, seed = self._auto_hits(request, languages)
         else:
-            hits, was_shuffled, seed = self._route_hits(request)
+            hits, was_shuffled, seed = self._route_hits(request, languages)
 
         candidates = [self._candidate(hit) for hit in hits]
         displayed_ids = [c.hpo_id for c in candidates]
@@ -209,33 +220,76 @@ class OntologyService:
             layer_id=request.layer_id,
             ontology_sha256=self.ref.sha256,
             index_identity=self.index_identity,
+            languages=["en", *languages],
         )
+
+    def _seed(self, request: SearchRequest, languages: Sequence[str]) -> str:
+        """The permutation key: annotator, annotation, query, depth, languages.
+
+        The same query with another language selection is a new question and
+        may be shuffled anew. Without an active translation language the key is
+        the one the search had before translations existed.
+        """
+        seed = shuffle_seed(
+            annotator_id=request.workspace_key.annotator_id,
+            mention_id=request.annotation_id,
+            query=request.query,
+            k=request.k,
+        )
+        if not languages:
+            return seed
+        raw = f"{seed}|{','.join(sorted(languages))}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+    def _similar(
+        self, query: str, k: int, languages: Sequence[str]
+    ) -> list[dict[str, Any]]:
+        """Lexical hits by score, over English and the given languages only."""
+        lexical = self.engine.lexical
+        if lexical is None or not lexical.ready:
+            return []
+        if isinstance(lexical, LanguageLexicalIndex):
+            return lexical.search(query, k, languages=languages)
+        return lexical.search(query, k)
 
     def _route_hits(
-        self, request: SearchRequest
+        self, request: SearchRequest, languages: Sequence[str]
     ) -> tuple[list[dict[str, Any]], bool, str | None]:
-        """One explicitly named route, exactly as the engine answers it."""
+        """One explicitly named route, as the engine answers it.
+
+        The lexical route is answered here when the index can filter by
+        language, so a language the annotator switched off stays off on this
+        route too. The explicit exact route knows English names only.
+        """
         seed: str | None = None
         if request.route in SCORED_PATHS:
-            seed = shuffle_seed(
-                annotator_id=request.workspace_key.annotator_id,
-                mention_id=request.annotation_id,
+            seed = self._seed(request, languages)
+        query = request.query.strip()
+        lexical = self.engine.lexical
+        hits: list[dict[str, Any]]
+        if (
+            seed is not None
+            and query
+            and isinstance(lexical, LanguageLexicalIndex)
+            and lexical.ready
+        ):
+            hits = shuffled(lexical.search(query, request.k, languages=languages), seed)
+            was_shuffled = True
+        else:
+            raw_result = self.engine.search(
                 query=request.query,
+                path=request.route,
                 k=request.k,
+                seed=seed,
             )
-        raw_result = self.engine.search(
-            query=request.query,
-            path=request.route,
-            k=request.k,
-            seed=seed,
-        )
-        hits: list[dict[str, Any]] = raw_result["hits"]
+            hits = raw_result["hits"]
+            was_shuffled = bool(raw_result.get("shuffled", False))
         for hit in hits:
             hit["route"] = request.route
-        return hits, bool(raw_result.get("shuffled", False)), seed
+        return hits, was_shuffled, seed
 
     def _auto_hits(
-        self, request: SearchRequest
+        self, request: SearchRequest, languages: Sequence[str]
     ) -> tuple[list[dict[str, Any]], bool, str | None]:
         """The single search: a code finds its term, a keyword finds candidates."""
         query = request.query.strip()
@@ -258,7 +312,7 @@ class OntologyService:
         taken = {hit["hpo_id"] for hit in exact}
         # Then the translated names of the active languages. A term that an
         # English name already matched is not listed twice.
-        for hit in self._translated.exact(query, self.languages):
+        for hit in self._translated.exact(query, languages):
             if len(exact) >= request.k:
                 break
             if hit["hpo_id"] not in taken:
@@ -269,20 +323,14 @@ class OntologyService:
             hit["rank"] = position
             hit["display_pos"] = position
 
-        seed = shuffle_seed(
-            annotator_id=request.workspace_key.annotator_id,
-            mention_id=request.annotation_id,
-            query=request.query,
-            k=request.k,
-        )
+        seed = self._seed(request, languages)
 
         similar: list[dict[str, Any]] = []
         remaining = request.k - len(exact)
-        lexical = self.engine.lexical
-        if remaining > 0 and lexical is not None and lexical.ready:
+        if remaining > 0:
             ranked = [
                 hit
-                for hit in lexical.search(query, request.k + len(exact))
+                for hit in self._similar(query, request.k + len(exact), languages)
                 if hit["hpo_id"] not in taken
             ][:remaining]
             # Shuffled because this order is a score. Ranks continue after the

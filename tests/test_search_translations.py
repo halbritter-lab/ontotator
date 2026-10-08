@@ -1,6 +1,7 @@
 """Translated term names in the search: loading, matches, languages."""
 
 import hashlib
+import json
 import logging
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from ontocurator.domain.documents import OntologyRef
 from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.ontology.provenance import SearchRequest, SearchResult
 from ontocurator.ontology.service import OntologyService
+from ontocurator.packages.models import SearchEventRecord
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"
@@ -282,3 +284,163 @@ def test_english_exact_matches_come_before_translated_ones(tmp_path: Path) -> No
     two = _search(service, "seizure", k=2)
     assert two.displayed_ids == ["HP:0001250", "HP:0001252"]
     assert two.shuffled is False
+
+
+# --- language selection ----------------------------------------------------- #
+
+
+def test_request_and_result_carry_the_languages() -> None:
+    assert (
+        SearchRequest.model_validate(
+            {"workspace_key": _key(), "annotation_id": "a", "query": "q"}
+        ).languages
+        is None
+    )
+    assert SearchResult(route="auto", query="q").languages == []
+
+    plain = _service()
+    assert _search(plain, "Muskelhypotonie").languages == ["en"]
+    assert _search(plain, "Muskelhypotonie", languages=["de"]).languages == ["en"]
+    assert _search(plain, "HP:0001250").languages == ["en"]
+
+
+def test_missing_languages_field_means_all_loaded_languages() -> None:
+    service = _service(DE, ES)
+
+    assert _search(service, "Krampfanfall").languages == ["en", "de", "es"]
+    assert _search(service, "Krampfanfall", languages=None).languages == [
+        "en",
+        "de",
+        "es",
+    ]
+    assert _search(service, "Krampfanfall").candidates[0].match_language == "de"
+    assert _search(service, "Hipotonía").candidates[0].match_language == "es"
+
+
+def test_a_deselected_language_yields_no_match_through_its_names() -> None:
+    service = _service(DE, ES)
+
+    # Exact block: the German name does not count, the Spanish one still does.
+    spanish_only = _search(service, "Krampfanfall", languages=["es"])
+    assert spanish_only.languages == ["en", "es"]
+    assert "HP:0001250" not in spanish_only.displayed_ids
+    assert all(c.match_language != "de" for c in spanish_only.candidates)
+    assert (
+        _search(service, "Hipotonía", languages=["es"]).candidates[0].route == "exact"
+    )
+
+    # Similar block.
+    english_only = _search(service, "Krampfanfälle", languages=[])
+    assert english_only.languages == ["en"]
+    assert "HP:0001250" not in english_only.displayed_ids
+    assert all(c.match_language in (None, "en") for c in english_only.candidates)
+
+    # Codes that are not loaded are ignored; case and spaces do not matter.
+    odd = _search(service, "Krampfanfall", languages=[" DE ", "xx", "en"])
+    assert odd.languages == ["en", "de"]
+    assert odd.candidates[0].term_id == "HP:0001250"
+
+
+def test_a_term_stays_findable_through_an_allowed_name() -> None:
+    """The best name of Hypotonia for this query is German. With German off the
+    term must still be listed, through an English name of its own. Filtering
+    the finished list by the language of the best name would lose it."""
+    service = _service(DE, ES)
+
+    with_german = _search(service, "Muskelhypotonie")
+    assert with_german.candidates[0].route == "exact"
+    assert with_german.candidates[0].match_language == "de"
+
+    without = _search(service, "Muskelhypotonie", languages=["es"])
+    hit = next(c for c in without.candidates if c.term_id == "HP:0001252")
+    assert (hit.route, hit.match_language) == ("lexical", "en")
+    assert hit.matched_term == "Hypotonia"
+    assert hit.score is not None and 0 < hit.score < 1
+
+    # The same on the explicit lexical route.
+    legacy = _search(service, "Muskelhypotonie", languages=[], route="lexical")
+    hit = next(c for c in legacy.candidates if c.term_id == "HP:0001252")
+    assert (hit.match_language, hit.matched_term) == ("en", "Hypotonia")
+    assert legacy.shuffled is True
+    assert {c.route for c in legacy.candidates} == {"lexical"}
+    everything = _search(service, "Muskelhypotonie", route="lexical")
+    hit = next(c for c in everything.candidates if c.term_id == "HP:0001252")
+    assert (hit.match_language, hit.matched_term) == ("de", "Muskelhypotonie")
+
+
+def test_english_stays_on_whatever_is_selected() -> None:
+    service = _service(DE, ES)
+
+    for languages in ([], ["de"], ["es"], ["de", "es"], None):
+        result = _search(service, "Hypotonia", languages=languages)
+        first = result.candidates[0]
+        assert (first.term_id, first.route, first.match_kind) == (
+            "HP:0001252",
+            "exact",
+            "label",
+        )
+        assert result.languages[0] == "en"
+
+    similar = _search(service, "low muscle", languages=[])
+    hit = next(c for c in similar.candidates if c.term_id == "HP:0001252")
+    assert (hit.match_language, hit.matched_term) == ("en", "Low muscle tone")
+
+
+def test_the_language_selection_is_part_of_the_shuffle_seed() -> None:
+    service = _service(DE, ES)
+    query = "hearing"
+
+    seeds = {
+        name: _search(service, query, languages=languages).seed
+        for name, languages in {
+            "none": [],
+            "de": ["de"],
+            "es": ["es"],
+            "both": ["de", "es"],
+            "all": None,
+        }.items()
+    }
+    assert None not in seeds.values()
+    assert seeds["both"] == seeds["all"]
+    assert len({seeds["none"], seeds["de"], seeds["es"], seeds["both"]}) == 4
+    # Order and spelling of the request do not make a new question.
+    assert _search(service, query, languages=["ES", "de"]).seed == seeds["both"]
+    # English only is the question the search asked before translations.
+    assert _search(_service(), query).seed == seeds["none"]
+    assert _search(_service(DE), query).seed == seeds["de"]
+    # Still keyed by annotator.
+    other = _search(service, query, workspace_key=_key("dr-other"), languages=["de"])
+    assert other.seed != seeds["de"]
+    # The explicit lexical route uses the same key.
+    assert (
+        _search(service, query, languages=["de"], route="lexical").seed == seeds["de"]
+    )
+
+
+def test_the_language_selection_is_not_part_of_the_index_identity() -> None:
+    service = _service(DE, ES)
+
+    assert {
+        _search(service, "Krampfanfall", languages=languages).index_identity
+        for languages in ([], ["de"], ["es"], None)
+    } == {service.index_identity}
+
+
+def test_search_event_keeps_languages_and_reads_old_events() -> None:
+    old_payload = {
+        "event_id": "evt-old",
+        "workspace_key": _key().model_dump(),
+        "annotation_id": "ann-1",
+        "query": "hypotonia",
+        "route": "auto",
+        "candidates": ["HP:0001252"],
+        "ontology_release": "2026-01-01",
+        "index_identity": "idx",
+        "timestamp": "2026-01-01T00:00:00+00:00",
+    }
+    old = SearchEventRecord.model_validate_json(json.dumps(old_payload))
+    assert old.languages == []
+
+    new = SearchEventRecord.model_validate({**old_payload, "languages": ["en", "de"]})
+    again = SearchEventRecord.model_validate_json(new.model_dump_json())
+    assert again.languages == ["en", "de"]
