@@ -974,10 +974,6 @@ export interface components {
             mode_by_package?: {
                 [key: string]: "independent" | "review" | "assisted";
             };
-            /** Tree Pinned By Annotator */
-            tree_pinned_by_annotator?: {
-                [key: string]: boolean;
-            };
             /** Search Languages By Annotator */
             search_languages_by_annotator?: {
                 [key: string]: string[];
@@ -993,10 +989,6 @@ export interface components {
             /** Mode By Package */
             mode_by_package?: {
                 [key: string]: "independent" | "review" | "assisted";
-            } | null;
-            /** Tree Pinned By Annotator */
-            tree_pinned_by_annotator?: {
-                [key: string]: boolean;
             } | null;
             /** Search Languages By Annotator */
             search_languages_by_annotator?: {

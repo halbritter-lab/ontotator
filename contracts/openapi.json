@@ -2134,13 +2134,6 @@
             "type": "object",
             "title": "Mode By Package"
           },
-          "tree_pinned_by_annotator": {
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "type": "object",
-            "title": "Tree Pinned By Annotator"
-          },
           "search_languages_by_annotator": {
             "additionalProperties": {
               "items": {
@@ -2187,20 +2180,6 @@
               }
             ],
             "title": "Mode By Package"
-          },
-          "tree_pinned_by_annotator": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "boolean"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tree Pinned By Annotator"
           },
           "search_languages_by_annotator": {
             "anyOf": [
