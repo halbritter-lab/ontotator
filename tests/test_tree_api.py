@@ -7,7 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 from layered_fixtures import HP_DIGEST, make_layered_package
 from test_api import app_client as _shared_app_client
-from test_ontology_tree import FIXTURE_PATH, tid, write_graph_ontology
+from test_ontology_tree import (
+    FIXTURE_PATH,
+    MIXED,
+    tid,
+    write_graph_ontology,
+    write_mixed_ontology,
+)
 
 from ontocurator.api.app import create_app
 from ontocurator.application.exports import ExportService
@@ -125,10 +131,8 @@ def walk(app_client):
     return client, ws_id, ws_key
 
 
-@pytest.fixture
-def graph_walk(tmp_path):
-    """A workspace whose layer uses the multi-parent ontology of the tree tests."""
-    path = write_graph_ontology(tmp_path)
+def _walk_on(tmp_path, path, term_id):
+    """A workspace whose layer uses the ontology file at ``path``."""
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     package = make_layered_package("single")
     profile = package.manifest.task_profile
@@ -165,11 +169,25 @@ def graph_walk(tmp_path):
             "annotation_id": "ann-1",
             "layer_id": "hpo-layer",
             "type_id": "phenotype",
-            "term_id": tid("0000006"),
+            "term_id": term_id,
         },
     )
     assert resp.status_code == 200, resp.text
     return client, ws_id, ws_key
+
+
+@pytest.fixture
+def graph_walk(tmp_path):
+    """A workspace whose layer uses the multi-parent ontology of the tree tests."""
+    return _walk_on(tmp_path, write_graph_ontology(tmp_path), tid("0000006"))
+
+
+@pytest.fixture
+def mixed_walk(tmp_path):
+    """A workspace whose ontology carries many classes of other ontologies."""
+    own = {f"OWN:{number:07d}": ("OWN:0000001",) for number in range(100, 500)}
+    path = write_mixed_ontology(tmp_path, {**MIXED, **own})
+    return _walk_on(tmp_path, path, "OWN:0000003")
 
 
 def test_open_returns_the_path_to_the_term_and_logs_everything_it_shows(walk):
@@ -563,6 +581,43 @@ def test_also_under_returns_the_other_path_and_logs_what_it_reveals(graph_walk):
         tid("0000008"),
         tid("0000005"),
     ]
+
+
+def test_classes_of_other_ontologies_are_neither_returned_nor_logged_as_roots(
+    mixed_walk,
+):
+    client, _, ws_key = mixed_walk
+
+    opened = _tree(client, ws_key, "open", term_id="OWN:0000003")
+
+    assert opened.status_code == 200, opened.text
+    body = opened.json()
+    tops = ["EXT:0000001", "EXT:0000002", "EXT:0000003", "OWN:0000001"]
+    assert [n["term_id"] for n in body["roots"]] == tops
+    assert body["path"] == ["OWN:0000001", "OWN:0000002", "OWN:0000003"]
+    shown = _event(client, body["browse_id"]).candidates
+    assert shown[:4] == tops
+    # None of the 300 parentless stubs was shown, so none is logged.
+    assert not [t for t in shown if t.startswith(("STUB:", "REF:"))]
+    assert "EXT:0000005" not in shown
+    assert len(opened.content) < 40_000
+
+    # A term of the ontology that hangs under a foreign class is reached there.
+    via = _tree(client, ws_key, "open", term_id="OWN:0000006").json()
+    assert via["path"] == ["EXT:0000003", "EXT:0000004", "OWN:0000006"]
+    assert [n["term_id"] for n in via["roots"]] == tops
+
+    # Opened at a stub itself, the walk shows that one stub and can select it.
+    stub = _tree(client, ws_key, "open", term_id="STUB:0000007").json()
+    assert stub["start_status"] == "valid"
+    assert stub["path"] == ["STUB:0000007"]
+    assert sorted(n["term_id"] for n in stub["roots"]) == [*tops, "STUB:0000007"]
+    logged = _event(client, stub["browse_id"]).candidates
+    assert sorted(logged) == [*tops, "STUB:0000007"]
+    node = _tree(
+        client, ws_key, "node", browse_id=stub["browse_id"], term_id="STUB:0000007"
+    )
+    assert node.status_code == 200, node.text
 
 
 def test_also_under_refuses_a_term_that_is_not_a_parent(graph_walk):

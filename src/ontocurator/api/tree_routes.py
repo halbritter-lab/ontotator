@@ -102,8 +102,8 @@ def open_tree(
         request, repo, ws_svc, req.workspace_key, req.layer_id, req.annotation_id
     )
     tree = tree_for(ontology.ontology)
-    roots = tree.nodes(tree.roots())
     path = tree.path_to(req.term_id)
+    roots = tree.nodes(tree.roots_with(path))
     levels = tree.levels(path)
     shown = _shown(roots, *(level.children for level in levels))
 

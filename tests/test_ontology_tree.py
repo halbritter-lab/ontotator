@@ -72,6 +72,66 @@ def write_graph_ontology(directory: Path) -> Path:
     return path
 
 
+def write_mixed_ontology(
+    directory: Path,
+    terms: dict[str, tuple[str, ...]],
+    name: str = "mixed.json",
+) -> Path:
+    """Write an ontology of several prefixes: CURIE -> parent CURIEs.
+
+    Real releases look like this: next to their own classes they carry classes
+    of other ontologies they refer to, most of them without any ``is_a`` edge.
+    """
+
+    def iri(term_id: str) -> str:
+        return "http://purl.obolibrary.org/obo/" + term_id.replace(":", "_")
+
+    payload = {
+        "graphs": [
+            {
+                "id": "http://example.com/mixed.json",
+                "meta": {"version": "http://example.com/releases/2026-06-23/m.json"},
+                "nodes": [
+                    {"id": iri(term_id), "lbl": f"Label of {term_id}", "type": "CLASS"}
+                    for term_id in terms
+                ],
+                "edges": [
+                    {"sub": iri(term_id), "pred": "is_a", "obj": iri(parent)}
+                    for term_id, parents in terms.items()
+                    for parent in parents
+                ],
+            }
+        ]
+    }
+    path = directory / name
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+# An ontology "OWN" that refers to many classes of other ontologies.
+MIXED: dict[str, tuple[str, ...]] = {
+    "OWN:0000001": (),
+    "OWN:0000002": ("OWN:0000001",),
+    "OWN:0000003": ("OWN:0000002",),
+    # Under its own hierarchy and under a class of another ontology.
+    "OWN:0000004": ("OWN:0000002", "EXT:0000001"),
+    # Only under a class of another ontology, directly ...
+    "OWN:0000005": ("EXT:0000002",),
+    # ... and two levels down.
+    "OWN:0000006": ("EXT:0000004",),
+    "EXT:0000001": (),
+    "EXT:0000002": (),
+    "EXT:0000003": (),
+    "EXT:0000004": ("EXT:0000003",),
+    # A hierarchy of the other ontology with nothing of OWN under it.
+    "EXT:0000005": (),
+    "EXT:0000006": ("EXT:0000005",),
+    # Reference stubs: no parent, no child.
+    **{f"STUB:{number:07d}": () for number in range(1, 201)},
+    **{f"REF:{number:07d}": () for number in range(1, 101)},
+}
+
+
 def _graph_tree(tmp_path: Path) -> OntologyTree:
     return OntologyTree(load(write_graph_ontology(tmp_path)))
 
@@ -92,6 +152,99 @@ def test_roots_are_live_terms_without_live_parents_sorted_by_label(
         "Root",
     ]
     assert _fixture_tree().roots() == ["HP:0000001"]
+
+
+def test_parentless_classes_of_other_ontologies_are_not_roots(tmp_path: Path) -> None:
+    own = {f"OWN:{number:07d}": ("OWN:0000001",) for number in range(100, 500)}
+    ontology = load(write_mixed_ontology(tmp_path, {**MIXED, **own}))
+    assert ontology.dominant_prefix == "OWN"
+    tree = OntologyTree(ontology)
+
+    roots = tree.roots()
+
+    # The ontology's own top, and the tops of the two foreign hierarchies that
+    # have terms of the ontology under them. None of the 300 stubs, and not the
+    # foreign hierarchy without any own term.
+    assert roots == ["EXT:0000001", "EXT:0000002", "EXT:0000003", "OWN:0000001"]
+
+
+def test_every_own_term_stays_reachable_from_a_root(tmp_path: Path) -> None:
+    own = {f"OWN:{number:07d}": ("OWN:0000001",) for number in range(100, 500)}
+    ontology = load(write_mixed_ontology(tmp_path, {**MIXED, **own}))
+    tree = OntologyTree(ontology)
+    roots = set(tree.roots())
+
+    # Only foreign parents: the foreign top is the way in.
+    assert tree.path_to("OWN:0000005") == ["EXT:0000002", "OWN:0000005"]
+    assert tree.path_to("OWN:0000006") == ["EXT:0000003", "EXT:0000004", "OWN:0000006"]
+    # A foreign parent as "Also under" works as a path node.
+    assert tree.path_to("OWN:0000004", via_parent_id="EXT:0000001") == [
+        "EXT:0000001",
+        "OWN:0000004",
+    ]
+    assert tree.children_of("EXT:0000001") == ["OWN:0000004"]
+
+    reachable: set[str] = set()
+    stack = list(roots)
+    while stack:
+        current = stack.pop()
+        if current not in reachable:
+            reachable.add(current)
+            stack.extend(tree.children_of(current))
+    own_terms = {t for t in ontology.terms if t.startswith("OWN:")}
+    assert own_terms <= reachable
+    # And every path of an own term, whichever parent it runs through, starts
+    # at a root.
+    for term_id in own_terms:
+        assert tree.path_to(term_id)[0] in roots
+        for parent in tree.parents_of(term_id):
+            assert tree.path_to(term_id, via_parent_id=parent)[0] in roots
+
+
+def test_without_a_dominant_prefix_every_parentless_term_is_a_root(
+    tmp_path: Path,
+) -> None:
+    terms = {
+        "AAA:0000001": (),
+        "AAA:0000002": ("AAA:0000001",),
+        "BBB:0000001": (),
+        "BBB:0000002": (),
+    }
+    ontology = load(write_mixed_ontology(tmp_path, terms))
+    assert ontology.dominant_prefix is None
+
+    assert OntologyTree(ontology).roots() == [
+        "AAA:0000001",
+        "BBB:0000001",
+        "BBB:0000002",
+    ]
+
+
+def test_the_top_above_a_start_term_is_shown_even_if_it_is_no_root(
+    tmp_path: Path,
+) -> None:
+    own = {f"OWN:{number:07d}": ("OWN:0000001",) for number in range(100, 500)}
+    tree = OntologyTree(load(write_mixed_ontology(tmp_path, {**MIXED, **own})))
+    usual = tree.roots()
+
+    # A term of another ontology can be the term of an annotation. Opening
+    # the tree there shows its own top next to the roots, in label order.
+    path = tree.path_to("EXT:0000006")
+    assert path == ["EXT:0000005", "EXT:0000006"]
+    assert tree.roots_with(path) == [
+        "EXT:0000001",
+        "EXT:0000002",
+        "EXT:0000003",
+        "EXT:0000005",
+        "OWN:0000001",
+    ]
+    assert tree.roots_with(tree.path_to("STUB:0000007")) == sorted(
+        [*usual, "STUB:0000007"]
+    )
+    # A path that starts at a root, and no path at all, add nothing.
+    assert tree.roots_with(tree.path_to("OWN:0000003")) == usual
+    assert tree.roots_with([]) == usual
+    assert tree.roots() == usual
 
 
 def test_children_are_sorted_by_label_and_leave_out_obsolete_terms(

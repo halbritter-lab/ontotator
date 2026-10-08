@@ -7,6 +7,9 @@ scored and nothing is shuffled; children come in alphabetical order.
 Obsolete terms are not part of the tree. A term whose parents are all obsolete
 is therefore shown as a root rather than lost.
 
+Classes of other ontologies that a release merely refers to are not roots; see
+:meth:`OntologyTree.roots` for the exact rule.
+
 Cost: a request touches the terms it shows and their children, never the whole
 ontology. The one exception, finding the roots, is done once per loaded
 ontology and kept, as is every path once it was worked out (see
@@ -100,19 +103,69 @@ class OntologyTree:
         )
 
     def roots(self) -> list[str]:
+        """The top level of the tree, sorted by label.
+
+        A root is a live term without a live parent. In an ontology with a
+        dominant prefix that alone is not enough: a release carries classes of
+        other ontologies it refers to, thousands of them without any parent.
+        There a root is a live term without a live parent that either has the
+        dominant prefix or has a live term with the dominant prefix somewhere
+        below it. The second half keeps every term of the ontology reachable
+        and lets every path of such a term start at a root.
+        """
         roots = self._roots
         if roots is None:
             # Two threads may both get here; they compute the same list.
-            roots = self._sorted(
-                [
-                    term.hpo_id
-                    for term in self.ontology.terms.values()
-                    if not term.obsolete
-                    and not any(self.live(p) is not None for p in term.parents)
-                ]
-            )
+            tops = [
+                term.hpo_id
+                for term in self.ontology.terms.values()
+                if not term.obsolete
+                and not any(self.live(p) is not None for p in term.parents)
+            ]
+            prefix = self.ontology.dominant_prefix
+            if prefix is not None and not all(
+                self._has_prefix(t, prefix) for t in tops
+            ):
+                above = self._above_prefix(prefix)
+                tops = [t for t in tops if self._has_prefix(t, prefix) or t in above]
+            roots = self._sorted(tops)
             self._roots = roots
         return list(roots)
+
+    def roots_with(self, path: list[str]) -> list[str]:
+        """The roots, and the top of this path if it is not one of them.
+
+        Only a path to a term of another ontology can start outside the roots.
+        Such a term may still be the term of an annotation; the tree opened
+        there shows the top above it as one more row of the top level.
+        """
+        roots = self.roots()
+        if not path or path[0] in roots:
+            return roots
+        return self._sorted([*roots, path[0]])
+
+    @staticmethod
+    def _has_prefix(term_id: str, prefix: str) -> bool:
+        return term_id.split(":", 1)[0] == prefix
+
+    def _above_prefix(self, prefix: str) -> set[str]:
+        """Every live term that has a live term with this prefix below it."""
+        above: set[str] = set()
+        stack = [
+            term.hpo_id
+            for term in self.ontology.terms.values()
+            if not term.obsolete and self._has_prefix(term.hpo_id, prefix)
+        ]
+        while stack:
+            term = self.live(stack.pop())
+            if term is None:
+                continue
+            for parent_id in term.parents:
+                parent = self.live(parent_id)
+                if parent is not None and parent.hpo_id not in above:
+                    above.add(parent.hpo_id)
+                    stack.append(parent.hpo_id)
+        return above
 
     def child_count(self, term_id: str) -> int:
         """How many children :meth:`children_of` lists, without sorting them."""
