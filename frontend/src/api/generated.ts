@@ -425,10 +425,13 @@ export interface paths {
         put?: never;
         /**
          * Upload Ontology
-         * @description Upload and register an ontology file into the active workspace.
+         * @description Upload an ontology (``.json``) or a translation file (``.tsv``).
          *
-         *     Stored immutably as ``<stem>-<sha256[:12]>.json`` and remembered in the
-         *     persistent configuration so it is registered again after a restart.
+         *     An ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` and
+         *     remembered in the persistent configuration so it is registered again after
+         *     a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is
+         *     stored under its own name, replaces a file of that name, and the ontology
+         *     it belongs to is reloaded.
          */
         post: operations["upload_ontology_api_v1_ontologies_post"];
         delete?: never;
@@ -832,6 +835,8 @@ export interface components {
             status: "loaded" | "failed";
             /** Error */
             error?: string | null;
+            /** Translations */
+            translations?: components["schemas"]["OntologyTranslation"][];
         };
         /**
          * OntologyRef
@@ -842,6 +847,18 @@ export interface components {
             release: string;
             /** Sha256 */
             sha256: string;
+        };
+        /**
+         * OntologyTranslation
+         * @description One language an ontology can be searched in besides English.
+         */
+        OntologyTranslation: {
+            /** Language */
+            language: string;
+            /** Filenames */
+            filenames: string[];
+            /** Term Count */
+            term_count: number;
         };
         /**
          * OpenWorkspaceRequest
@@ -917,6 +934,10 @@ export interface components {
             mode_by_package?: {
                 [key: string]: "independent" | "review" | "assisted";
             };
+            /** Search Languages By Annotator */
+            search_languages_by_annotator?: {
+                [key: string]: string[];
+            };
         };
         /**
          * PreferencesUpdate
@@ -928,6 +949,10 @@ export interface components {
             /** Mode By Package */
             mode_by_package?: {
                 [key: string]: "independent" | "review" | "assisted";
+            } | null;
+            /** Search Languages By Annotator */
+            search_languages_by_annotator?: {
+                [key: string]: string[];
             } | null;
         };
         /**
@@ -1092,6 +1117,8 @@ export interface components {
              * @default 10
              */
             k: number;
+            /** Languages */
+            languages?: string[] | null;
         };
         /**
          * SearchResult
@@ -1123,6 +1150,8 @@ export interface components {
             ontology_sha256?: string | null;
             /** Index Identity */
             index_identity?: string | null;
+            /** Languages */
+            languages?: string[];
         };
         /**
          * Segment
@@ -1257,6 +1286,22 @@ export interface components {
             layer_id: string;
             /** Term Id */
             term_id: string;
+        };
+        /**
+         * TranslationUploadInfo
+         * @description Answer to the upload of a translation file (``.tsv``).
+         */
+        TranslationUploadInfo: {
+            /** Filename */
+            filename: string;
+            /** Language */
+            language: string;
+            /** Assigned */
+            assigned: boolean;
+            /** Message */
+            message: string;
+            /** Ontologies */
+            ontologies?: components["schemas"]["OntologyInfo"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -1998,7 +2043,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OntologyInfo"];
+                    "application/json": components["schemas"]["OntologyInfo"] | components["schemas"]["TranslationUploadInfo"];
                 };
             };
             /** @description Validation Error */

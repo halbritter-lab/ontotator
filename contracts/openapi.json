@@ -836,7 +836,7 @@
       },
       "post": {
         "summary": "Upload Ontology",
-        "description": "Upload and register an ontology file into the active workspace.\n\nStored immutably as ``<stem>-<sha256[:12]>.json`` and remembered in the\npersistent configuration so it is registered again after a restart.",
+        "description": "Upload an ontology (``.json``) or a translation file (``.tsv``).\n\nAn ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` and\nremembered in the persistent configuration so it is registered again after\na restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is\nstored under its own name, replaces a file of that name, and the ontology\nit belongs to is reloaded.",
         "operationId": "upload_ontology_api_v1_ontologies_post",
         "requestBody": {
           "content": {
@@ -854,7 +854,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OntologyInfo"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/OntologyInfo"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TranslationUploadInfo"
+                    }
+                  ],
+                  "title": "Response Upload Ontology Api V1 Ontologies Post"
                 }
               }
             }
@@ -1765,6 +1773,13 @@
               }
             ],
             "title": "Error"
+          },
+          "translations": {
+            "items": {
+              "$ref": "#/components/schemas/OntologyTranslation"
+            },
+            "type": "array",
+            "title": "Translations"
           }
         },
         "type": "object",
@@ -1795,6 +1810,33 @@
         ],
         "title": "OntologyRef",
         "description": "Reference to pinned HPO ontology release and digest."
+      },
+      "OntologyTranslation": {
+        "properties": {
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "filenames": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Filenames"
+          },
+          "term_count": {
+            "type": "integer",
+            "title": "Term Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "language",
+          "filenames",
+          "term_count"
+        ],
+        "title": "OntologyTranslation",
+        "description": "One language an ontology can be searched in besides English."
       },
       "OpenWorkspaceRequest": {
         "properties": {
@@ -2013,6 +2055,16 @@
             },
             "type": "object",
             "title": "Mode By Package"
+          },
+          "search_languages_by_annotator": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Search Languages By Annotator"
           }
         },
         "type": "object",
@@ -2050,6 +2102,23 @@
               }
             ],
             "title": "Mode By Package"
+          },
+          "search_languages_by_annotator": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Languages By Annotator"
           }
         },
         "additionalProperties": false,
@@ -2375,6 +2444,21 @@
             "minimum": 1.0,
             "title": "K",
             "default": 10
+          },
+          "languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Languages"
           }
         },
         "additionalProperties": false,
@@ -2477,6 +2561,13 @@
               }
             ],
             "title": "Index Identity"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
           }
         },
         "additionalProperties": false,
@@ -2817,6 +2908,42 @@
           "term_id"
         ],
         "title": "TermLookup"
+      },
+      "TranslationUploadInfo": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "assigned": {
+            "type": "boolean",
+            "title": "Assigned"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "ontologies": {
+            "items": {
+              "$ref": "#/components/schemas/OntologyInfo"
+            },
+            "type": "array",
+            "title": "Ontologies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "language",
+          "assigned",
+          "message"
+        ],
+        "title": "TranslationUploadInfo",
+        "description": "Answer to the upload of a translation file (``.tsv``)."
       },
       "ValidationError": {
         "properties": {
