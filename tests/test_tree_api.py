@@ -19,6 +19,7 @@ from test_ontology_tree import (
 from ontocurator.api.app import create_app
 from ontocurator.application.exports import ExportService
 from ontocurator.config import AppConfig
+from ontocurator.distribution_settings import DistributionSettings
 from ontocurator.domain.profiles import profile_hash
 from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.packages.writer import PackageWriter
@@ -507,6 +508,67 @@ def test_the_tree_follows_the_layer_and_a_walk_cannot_change_layers(app_client):
     )
     assert resp.status_code == 422
     assert resp.json()["code"] == "INVALID_TREE_WALK"
+
+
+def test_a_layer_outside_the_scope_of_the_workspace_has_no_tree(app_client):
+    client, _ = app_client
+    _import(client, make_layered_package("assisted"))
+    # Working independently, the reference layer is not part of the scope.
+    _, ws_key = _open(client, "pkg-scenario-b", mode="independent")
+    _, assisted_key = _open(client, "pkg-scenario-b", mode="assisted")
+    fields = {
+        "annotation_id": "note-1",
+        "layer_id": "reference-layer",
+        "term_id": "MONDO:0001250",
+    }
+    browse_id = _tree(client, assisted_key, "open", **fields).json()["browse_id"]
+    before = _event(client, browse_id)
+
+    for endpoint, extra in (("open", {}), ("node", {"browse_id": browse_id})):
+        resp = _tree(client, ws_key, endpoint, **fields, **extra)
+        assert resp.status_code == 422, (endpoint, resp.text)
+        assert resp.json()["code"] == "INVALID_LAYER", endpoint
+
+    assert _events(client, ws_key) == []
+    assert _event(client, browse_id) == before
+
+
+def test_tree_requests_are_refused_in_a_mode_the_installation_does_not_allow(
+    tmp_path,
+):
+    config = AppConfig(
+        workspace_dir=tmp_path,
+        database_path=tmp_path / "blinded.db",
+        ontology_paths=[FIXTURE_PATH, FIXTURE_PATH.parent / "mondo.json"],
+        session_token="secret-session-token",
+        distribution=DistributionSettings(allowed_modes=["independent"]),
+    )
+    client = TestClient(
+        create_app(config), headers={"Authorization": "Bearer secret-session-token"}
+    )
+    _import(client, make_layered_package("assisted"))
+    _, ws_key = _open(client, "pkg-scenario-b", mode="independent")
+    fields = {
+        "annotation_id": "note-1",
+        "layer_id": "target-layer",
+        "term_id": "HP:0001250",
+    }
+    browse_id = _tree(client, ws_key, "open", **fields).json()["browse_id"]
+    before = _event(client, browse_id)
+
+    for mode in ("assisted", "review"):
+        other = {**ws_key, "mode": mode}
+        for endpoint, extra in (("open", {}), ("node", {"browse_id": browse_id})):
+            resp = _tree(client, other, endpoint, **fields, **extra)
+            assert resp.status_code == 403, (mode, endpoint, resp.text)
+            assert resp.json()["code"] == "MODE_NOT_ALLOWED", (mode, endpoint)
+
+    # Nothing was logged for the refused modes, and the walk did not grow.
+    assert [e.event_id for e in _events(client, ws_key)] == [browse_id]
+    for mode in ("assisted", "review"):
+        key = WorkspaceKey.model_validate({**ws_key, "mode": mode})
+        assert client.app.state.repo.get_search_events_for_workspace(key) == []
+    assert _event(client, browse_id) == before
 
 
 def _two_layers_one_ontology():
