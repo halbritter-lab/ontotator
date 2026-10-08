@@ -368,6 +368,67 @@ def test_a_term_stays_findable_through_an_allowed_name() -> None:
     assert (hit.match_language, hit.matched_term) == ("de", "Muskelhypotonie")
 
 
+def _shared_name_files(tmp_path: Path) -> tuple[Path, Path]:
+    """A French and a Dutch file that give Hypotonia the same name."""
+    paths = []
+    for code in ("fr", "nl"):
+        path = tmp_path / f"hp-{code}.babelon.tsv"
+        path.write_text(
+            "subject_id\tpredicate_id\ttranslation_language\ttranslation_value\n"
+            f"HP:0001252\trdfs:label\t{code}\tHypotonie\n",
+            encoding="utf-8",
+        )
+        paths.append(path)
+    return paths[0], paths[1]
+
+
+@pytest.mark.parametrize(
+    ("languages", "reported"),
+    [
+        (["nl"], "nl"),
+        (["fr"], "fr"),
+        (["fr", "nl"], "fr"),
+        (["nl", "fr"], "fr"),
+        (None, "fr"),
+    ],
+)
+def test_a_name_shared_by_two_languages_counts_for_each_of_them(
+    tmp_path: Path, languages: list[str] | None, reported: str
+) -> None:
+    """The index holds a string once per term. A name that two languages share
+    must stay findable when one of them is switched off, and the hit names a
+    language that was searched."""
+    service = _service(*_shared_name_files(tmp_path))
+    assert service.translation_counts == {"fr": 1, "nl": 1}
+
+    legacy = _search(service, "Hypotonie", languages=languages, route="lexical")
+    hit = next(c for c in legacy.candidates if c.term_id == "HP:0001252")
+    assert (hit.matched_term, hit.score, hit.match_language) == (
+        "Hypotonie",
+        1.0,
+        reported,
+    )
+
+    # The similar block of the single search, with a query that equals no name.
+    similar = _search(service, "Hypotonies", languages=languages)
+    hit = next(c for c in similar.candidates if c.term_id == "HP:0001252")
+    assert (hit.route, hit.matched_term, hit.match_language) == (
+        "lexical",
+        "Hypotonie",
+        reported,
+    )
+
+
+def test_a_shared_name_is_off_when_all_its_languages_are_off(tmp_path: Path) -> None:
+    service = _service(*_shared_name_files(tmp_path), DE)
+
+    for languages in ([], ["de"]):
+        result = _search(service, "Hypotonie", languages=languages, route="lexical")
+        hit = next(c for c in result.candidates if c.term_id == "HP:0001252")
+        assert (hit.matched_term, hit.match_language) == ("Hypotonia", "en")
+        assert hit.score is not None and hit.score < 1
+
+
 def test_english_stays_on_whatever_is_selected() -> None:
     service = _service(DE, ES)
 

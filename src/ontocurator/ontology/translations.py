@@ -186,7 +186,81 @@ class LanguageLexicalIndex(LexicalIndex):
     finished list instead would lose every term whose best-scoring name is in a
     language the annotator switched off, although an English name of the same
     term matches too.
+
+    The index holds a string once per term, also when two languages share it
+    (``Hypotonie`` is a French and a Dutch name of one term), and the vendored
+    index tags that row with the first of the languages only. Which rows carry
+    a name of which language is therefore kept here, once per build, so a
+    shared name counts for each of its languages and a search does no pass
+    over the rows in Python.
     """
+
+    # More selections than this are not kept; a mask is one byte per row.
+    _MAX_CACHED_MASKS = 64
+
+    def __init__(
+        self,
+        ontology: Ontology,
+        languages: Iterable[str] = (),
+        cache_dir: Path | None = None,
+    ) -> None:
+        super().__init__(ontology, languages=languages, cache_dir=cache_dir)
+        # Language -> boolean array over the rows: "a name of this language".
+        self._language_rows: dict[str, Any] = {}
+        # Row -> its languages, sorted, for the rows that have more than one.
+        self._shared_rows: dict[int, tuple[str, ...]] = {}
+        # Selection -> boolean array over the rows that are switched off.
+        self._off_rows: dict[frozenset[str], Any] = {}
+
+    def build(self) -> None:
+        super().build()
+        import numpy as np
+
+        size = len(self._terms)
+        rows = {code: np.zeros(size, dtype=bool) for code in sorted(self.languages)}
+        shared: dict[int, tuple[str, ...]] = {}
+        for index, tag in enumerate(self._term_language):
+            if tag == "en":
+                continue
+            translations = self.ontology.terms[self._ids[index]].translations
+            text = self._terms[index]
+            codes = tuple(c for c in rows if text in translations.get(c, ()))
+            for code in codes:
+                rows[code][index] = True
+            if len(codes) > 1:
+                shared[index] = codes
+        # A language without a single row has nothing to switch off.
+        self._language_rows = {c: mask for c, mask in rows.items() if mask.any()}
+        self._shared_rows = shared
+        self._off_rows = {}
+
+    def _rows_off(self, allowed: frozenset[str]) -> Any:
+        """The rows no allowed language has a name in; None if there is none."""
+        if allowed.issuperset(self._language_rows):
+            return None
+        off = self._off_rows.get(allowed)
+        if off is None:
+            import numpy as np
+
+            off = np.zeros(len(self._terms), dtype=bool)
+            for code, mask in self._language_rows.items():
+                if code not in allowed:
+                    off |= mask
+            # A shared name stays on while one of its languages is allowed.
+            for code, mask in self._language_rows.items():
+                if code in allowed:
+                    off &= ~mask
+            if len(self._off_rows) >= self._MAX_CACHED_MASKS:
+                self._off_rows.clear()
+            self._off_rows[allowed] = off
+        return off
+
+    def _language_of(self, index: int, allowed: frozenset[str] | None) -> str:
+        """The language a row is reported with: one that was searched."""
+        codes = self._shared_rows.get(index)
+        if codes is None:
+            return self._term_language[index]
+        return next(c for c in codes if allowed is None or c in allowed)
 
     def search(
         self,
@@ -194,20 +268,17 @@ class LanguageLexicalIndex(LexicalIndex):
         k: int,
         languages: Collection[str] | None = None,
     ) -> list[dict[str, Any]]:
-        if languages is None:
-            return super().search(query, k)
         if not self.ready:
             raise LexicalIndexError("the lexical index is not built")
         import numpy as np
 
-        allowed = {"en", *languages}
+        allowed = None if languages is None else frozenset(languages)
         scores = (self._vectorizer.transform([query]) @ self._matrix.T).toarray()[0]
-        keep = np.fromiter(
-            (code in allowed for code in self._term_language),
-            dtype=bool,
-            count=len(self._term_language),
-        )
-        scores[~keep] = 0.0
+        # Nothing to switch off when every language is searched, and in
+        # particular when no translation is loaded at all.
+        off = None if allowed is None else self._rows_off(allowed)
+        if off is not None:
+            scores[off] = 0.0
 
         # From here on this is the parent's ranking: best name per term, top k.
         best: dict[str, tuple[float, str, str]] = {}
@@ -220,7 +291,7 @@ class LanguageLexicalIndex(LexicalIndex):
                 best[hpo_id] = (
                     score,
                     self._terms[index],
-                    self._term_language[index],
+                    self._language_of(int(index), allowed),
                 )
             if len(best) >= k * 4:
                 break
