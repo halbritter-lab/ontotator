@@ -1,0 +1,9 @@
+subject_id	predicate_id	source_language	source_value	translation_language	translation_value	translation_status
+HP:0001250	rdfs:label	en	Seizure	de	Krampfanfall	OFFICIAL
+HP:0001250	IAO:0000115	en	A seizure is an intermittent abnormality.	de	Ein Krampfanfall ist eine vorübergehende Störung.	OFFICIAL
+HP:0001252	rdfs:label	en	Hypotonia	de	Muskelhypotonie	OFFICIAL
+HP:0000365	rdfs:label	en	Hearing impairment	de	Schwerhörigkeit	OFFICIAL
+HP:0000407	rdfs:label	en	Sensorineural hearing impairment	de	Schallempfindungsschwerhörigkeit	CANDIDATE
+HP:0001284	rdfs:label	en	Areflexia	de	Areflexia	NOT_TRANSLATED
+HP:0000123	rdfs:label	en	Obsolete example term	de	Veralteter Beispielbegriff	OFFICIAL
+HP:9999999	rdfs:label	en	Unknown term	de	Unbekannter Begriff	OFFICIAL

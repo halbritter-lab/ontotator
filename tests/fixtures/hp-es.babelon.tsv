@@ -1,0 +1,5 @@
+source_language	source_value	subject_id	predicate_id	translation_language	translation_value	translation_status
+en	Seizure	HP:0001250	rdfs:label	es	Crisis epiléptica	OFFICIAL
+en	Hypotonia	HP:0001252	rdfs:label	es	Hipotonía	OFFICIAL
+en	Areflexia	HP:0001284	rdfs:label	es	Arreflexia	OFFICIAL
+en	Hearing impairment	HP:0000365	rdfs:label	es	Hipoacusia	OFFICIAL
