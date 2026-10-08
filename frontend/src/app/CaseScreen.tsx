@@ -40,6 +40,7 @@ import { SearchPanel } from "../editor/SearchPanel";
 import { SearchManager } from "../editor/searchState";
 import { TermName } from "../editor/TermName";
 import { TextPane } from "../editor/TextPane";
+import { TreeBrowser } from "../editor/TreeBrowser";
 import { useTermLabels } from "../editor/useTermLabels";
 import { termColorIndex, type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { CaseNavigation } from "./CaseNavigation";
@@ -169,6 +170,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [historySubmission, setHistorySubmission] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"list" | "text" | "details">("text");
+  // The ontology tree. One entry is one walk; a new nonce starts a new one.
+  const [treeWalk, setTreeWalk] = useState<{
+    nonce: number;
+    annotationId: string;
+    layerId: string;
+    termId: string;
+    /** Whether to move the keyboard focus into the tree when it has loaded. */
+    focus: boolean;
+  } | null>(null);
+  const treeNonce = useRef(0);
 
   const displayedTerms = useMemo(() => [
     ...(draft.annotations ?? []),
@@ -750,17 +761,58 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setMobilePane("details");
   };
 
-  const handleUpdateTerm = async (termId: string, searchId?: string) => {
-    if (!selectedAnnotationId) return;
-    const annId = selectedAnnotationId;
-    await mutateAnnotationAndSyncDecision(annId, () =>
+  // One path for every term change, from the search and from the tree: through the
+  // mutation queue, then the review post-processing.
+  const setTermOf = (annotationId: string, termId: string, searchId?: string) =>
+    mutateAnnotationAndSyncDecision(annotationId, () =>
       enqueueMutation({
         command: "set_term",
-        annotation_id: annId,
+        annotation_id: annotationId,
         term_id: termId,
         search_event_id: searchId,
       })
     );
+
+  const handleUpdateTerm = async (termId: string, searchId?: string) => {
+    if (!selectedAnnotationId) return;
+    await setTermOf(selectedAnnotationId, termId, searchId);
+  };
+
+  // --- Ontology tree -----------------------------------------------------------
+  // The annotation the inspector shows as editable right now (same precedence as the pane itself).
+  const treeAnnotation =
+    !selectedSource && !pendingAnnotation && !(view.key.mode === "review" && selectedTarget)
+      ? selectedAnnotation
+      : null;
+  // Docked as a side panel instead of shown as a dialog.
+  const treeDocked: boolean = false;
+  // The annotation the open walk belongs to, as it is in the draft now.
+  const treeWalkAnnotation = treeWalk
+    ? (draft.annotations ?? []).find((a) => a.annotation.annotation_id === treeWalk.annotationId) ?? null
+    : null;
+
+  const startTreeWalk = (annotation: AnnotationSnapshot, focus: boolean) => {
+    treeNonce.current += 1;
+    setTreeWalk({
+      nonce: treeNonce.current,
+      annotationId: annotation.annotation.annotation_id,
+      layerId: annotation.annotation.layer_id,
+      termId: annotation.annotation.term_id,
+      focus,
+    });
+  };
+
+  const handleShowInTree = () => {
+    if (!treeAnnotation || !treeAnnotation.annotation.term_id) return;
+    startTreeWalk(treeAnnotation, true);
+  };
+
+  // "Use this term": the same set_term as a search selection, bound to the walk's event.
+  // A failure is thrown to the tree, which shows it (the page's own error line is behind the dialog).
+  const handleUseTreeTerm = async (termId: string, browseId: string) => {
+    if (!treeWalk) return;
+    await setTermOf(treeWalk.annotationId, termId, browseId);
+    if (!treeDocked) setTreeWalk(null);
   };
 
   const handleUpdateAxes = async (axesValues: Partial<AxesValues>) => {
@@ -1134,7 +1186,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const prevDoc = documentList ? adjacentCase(documentList, view.document.document_id, -1) : null;
   const nextDoc = documentList ? adjacentCase(documentList, view.document.document_id, 1) : null;
 
-  const modalOpen = !!(confirmRequest || completedSubmission || historySubmission || submitDialogOpen || showShortcutHelp);
+  const modalOpen = !!(confirmRequest || completedSubmission || historySubmission || submitDialogOpen || showShortcutHelp)
+    || (!!treeWalk && !treeDocked);
   const navigateTo = (docId: string) => {
     if (!onNavigateCase) return;
     void leaveCase(() => onNavigateCase(docId));
@@ -1742,6 +1795,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 setMobilePane("details");
               } : undefined}
               onDeselect={handleDeselectAll}
+              onShowInTree={handleShowInTree}
               onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
               onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
               onUpdateAxes={(axesValues) => { void handleUpdateAxes(axesValues).catch(reportError); }}
@@ -1762,6 +1816,26 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             />
           )}
         </div>
+
+        {/* Ontology tree: always at this place in the layout, so that pinning does not restart the walk. */}
+        {treeWalk && (
+          <TreeBrowser
+            key={treeWalk.nonce}
+            variant={treeDocked ? "panel" : "dialog"}
+            workspaceKey={view.key}
+            annotationId={treeWalk.annotationId}
+            layerId={treeWalk.layerId}
+            startTermId={treeWalk.termId}
+            currentTermId={treeWalkAnnotation?.annotation.term_id ?? null}
+            canAssign={!!treeAnnotation && treeAnnotation.annotation.annotation_id === treeWalk.annotationId}
+            focusOnOpen={treeWalk.focus}
+            pinned={false}
+            canPin={false}
+            onTogglePin={() => undefined}
+            onClose={() => setTreeWalk(null)}
+            onUseTerm={handleUseTreeTerm}
+          />
+        )}
       </div>
 
       {historySubmission && <div className="modal-overlay">

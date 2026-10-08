@@ -1526,3 +1526,8 @@ body {
     border-bottom: 1px solid var(--border-color);
   }
 }
+
+/* "Show in tree", under the term name of an annotation */
+.annotation-tree-button {
+  margin-top: 2px;
+}

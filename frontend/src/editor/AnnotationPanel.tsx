@@ -29,6 +29,8 @@ export interface AnnotationPanelProps {
   } | null;
   onNavigateTarget?: () => void;
   onDeselect?: () => void;
+  /** Open the ontology tree at this annotation's term. */
+  onShowInTree?: () => void;
   onSelectEvidence: (evidenceId: string) => void;
   onUpdateTerm: (termId: string, searchId?: string) => void;
   onUpdateAxes: (axes: Partial<Axes>) => void;
@@ -65,6 +67,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   linkedTarget,
   onNavigateTarget,
   onDeselect,
+  onShowInTree,
   onSelectEvidence,
   onUpdateTerm,
   onUpdateAxes,
@@ -153,6 +156,16 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "2px 0 4px" }}>
               <TermName termId={currentTerm} label={termLabel} />
             </h2>
+            {onShowInTree && currentTerm && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm annotation-tree-button"
+                onClick={onShowInTree}
+                title="Show this term in the ontology tree: broader and narrower terms"
+              >
+                Show in tree
+              </button>
+            )}
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <button
