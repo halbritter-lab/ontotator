@@ -11,14 +11,16 @@ from __future__ import annotations
 import csv
 import hashlib
 import re
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from ontocurator.vendor.hpo_span_annotator.hpo import (
     Ontology,
     OntologyError,
     load_translations,
+    normalise,
 )
 
 # <prefix>-<language>.<anything>.tsv, e.g. hp-de.babelon.tsv. The prefix is the
@@ -126,3 +128,47 @@ def translation_counts(ontology: Ontology) -> dict[str, int]:
             if names:
                 counts[language] = counts.get(language, 0) + 1
     return dict(sorted(counts.items()))
+
+
+class TranslatedNames:
+    """Exact-match index of the translated names.
+
+    The ontology's own index holds labels and synonyms only. This is the same
+    lookup (same normalisation) for the names the babelon files added.
+    """
+
+    def __init__(self, ontology: Ontology) -> None:
+        self.ontology = ontology
+        # Normalised name -> [(language, term id, the name as written)].
+        self._names: dict[str, list[tuple[str, str, str]]] = {}
+        for term in ontology.live_terms():
+            for language, names in term.translations.items():
+                for name in names:
+                    self._names.setdefault(normalise(name), []).append(
+                        (language, term.hpo_id, name)
+                    )
+
+    def exact(self, query: str, languages: Collection[str]) -> list[dict[str, Any]]:
+        """Terms with a name in one of ``languages`` that equals the query.
+
+        Ordered by language code, then term id: a fixed order that says nothing
+        about relevance. Each term appears once.
+        """
+        hits = sorted(
+            hit for hit in self._names.get(normalise(query), []) if hit[0] in languages
+        )
+        out: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for language, hpo_id, name in hits:
+            if hpo_id in seen:
+                continue
+            seen.add(hpo_id)
+            out.append(
+                {
+                    **self.ontology.terms[hpo_id].as_dict(),
+                    "matched_term": name,
+                    "match_kind": "translation",
+                    "matched_language": language,
+                }
+            )
+        return out

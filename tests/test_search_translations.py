@@ -201,3 +201,84 @@ def test_with_translations_builds_a_new_service_and_leaves_the_old_one() -> None
     assert spanish.ontology.terms["HP:0001252"].translations == {"es": ["Hipotonía"]}
     assert "HP:0001250" not in _search(spanish, "Krampfanfall").displayed_ids
     assert spanish.with_translations([]).index_identity == _plain_identity(HP)
+
+
+# --- exact matches ---------------------------------------------------------- #
+
+
+def test_exact_match_on_a_german_name_reports_its_language() -> None:
+    result = _search(_service(DE, ES), "Muskelhypotonie")
+
+    first = result.candidates[0]
+    assert (first.term_id, first.route, first.match_kind, first.match_language) == (
+        "HP:0001252",
+        "exact",
+        "translation",
+        "de",
+    )
+    assert first.matched_term == "Muskelhypotonie"
+    assert first.label == "Hypotonia"
+    assert (first.rank, first.display_pos, first.score) == (1, 1, None)
+    assert result.displayed_ids[0] == result.ranked_ids[0] == "HP:0001252"
+    # The exact hit is not repeated in the similar block.
+    assert result.displayed_ids.count("HP:0001252") == 1
+
+
+def test_exact_match_on_a_translated_name_ignores_case_and_accents() -> None:
+    service = _service(DE, ES)
+
+    german = _search(service, "schwerhorigkeit").candidates[0]
+    assert (german.term_id, german.route, german.match_language) == (
+        "HP:0000365",
+        "exact",
+        "de",
+    )
+    assert german.matched_term == "Schwerhörigkeit"
+
+    spanish = _search(service, "HIPOTONIA").candidates[0]
+    assert (spanish.term_id, spanish.route, spanish.match_language) == (
+        "HP:0001252",
+        "exact",
+        "es",
+    )
+    assert spanish.matched_term == "Hipotonía"
+
+
+def test_english_exact_matches_come_before_translated_ones(tmp_path: Path) -> None:
+    # "Seizure" is the label of HP:0001250. Here it is also a German name of two
+    # other terms, and a Spanish name of a third.
+    german = tmp_path / "hp-de.babelon.tsv"
+    german.write_text(
+        "subject_id\tpredicate_id\ttranslation_language\ttranslation_value\n"
+        "HP:0001284\trdfs:label\tde\tSeizure\n"
+        "HP:0001252\trdfs:label\tde\tSeizure\n",
+        encoding="utf-8",
+    )
+    spanish = tmp_path / "hp-es.babelon.tsv"
+    spanish.write_text(
+        "subject_id\tpredicate_id\ttranslation_language\ttranslation_value\n"
+        "HP:0000365\trdfs:label\tes\tSeizure\n"
+        "HP:0001252\trdfs:label\tes\tSeizure\n",
+        encoding="utf-8",
+    )
+    service = _service(spanish, german)
+    result = _search(service, "seizure")
+
+    exact = [c for c in result.candidates if c.route == "exact"]
+    # English first; then by language code and term id; each term once.
+    assert [(c.term_id, c.match_kind, c.match_language) for c in exact] == [
+        ("HP:0001250", "label", None),
+        ("HP:0001252", "translation", "de"),
+        ("HP:0001284", "translation", "de"),
+        ("HP:0000365", "translation", "es"),
+    ]
+    assert [c.rank for c in exact] == [1, 2, 3, 4]
+    assert [c.display_pos for c in exact] == [1, 2, 3, 4]
+    assert result.displayed_ids[:4] == [c.term_id for c in exact]
+    assert len(result.displayed_ids) == len(set(result.displayed_ids))
+    assert {c.route for c in result.candidates[4:]} <= {"lexical"}
+
+    # Exact matches take precedence within k, English first.
+    two = _search(service, "seizure", k=2)
+    assert two.displayed_ids == ["HP:0001250", "HP:0001252"]
+    assert two.shuffled is False

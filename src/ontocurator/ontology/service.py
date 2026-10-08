@@ -23,6 +23,7 @@ from ontocurator.ontology.provenance import (
 from ontocurator.ontology.translations import (
     LoadedTranslation,
     SkippedTranslation,
+    TranslatedNames,
     apply_translations,
     translation_counts,
 )
@@ -71,6 +72,7 @@ class OntologyService:
         # it is the ontology itself and always searched.
         self.translation_counts = translation_counts(ontology)
         self.languages = list(self.translation_counts)
+        self._translated = TranslatedNames(ontology)
         identity: dict[str, Any] = {
             "ontology_sha256": ref.sha256,
             "algorithm": "char_wb_tfidf/1",
@@ -253,6 +255,15 @@ class OntologyService:
         # query is a fact about the query, not a score. No prefix fallback here;
         # a partial word is what the similar block is for.
         exact = self.ontology.exact(query, limit=request.k)
+        taken = {hit["hpo_id"] for hit in exact}
+        # Then the translated names of the active languages. A term that an
+        # English name already matched is not listed twice.
+        for hit in self._translated.exact(query, self.languages):
+            if len(exact) >= request.k:
+                break
+            if hit["hpo_id"] not in taken:
+                taken.add(hit["hpo_id"])
+                exact.append(hit)
         for position, hit in enumerate(exact, start=1):
             hit["route"] = "exact"
             hit["rank"] = position
@@ -269,7 +280,6 @@ class OntologyService:
         remaining = request.k - len(exact)
         lexical = self.engine.lexical
         if remaining > 0 and lexical is not None and lexical.ready:
-            taken = {hit["hpo_id"] for hit in exact}
             ranked = [
                 hit
                 for hit in lexical.search(query, request.k + len(exact))
