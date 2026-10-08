@@ -405,6 +405,37 @@ def test_a_walk_belongs_to_its_workspace_and_annotation(walk):
     assert _event(client, selection_id).candidates == SEIZURE_WALK
 
 
+def test_a_search_with_the_old_browse_route_is_not_a_tree_walk(walk):
+    client, _, ws_key = walk
+    # The legacy "browse" route of the search: the children of a term. Its
+    # event has the same route as a walk, and the same owner as this request.
+    search = client.post(
+        "/api/v1/search",
+        json={
+            "workspace_key": ws_key,
+            "annotation_id": "ann-1",
+            "layer_id": "hpo-layer",
+            "query": "HP:0000707",
+            "route": "browse",
+        },
+    )
+    assert search.status_code == 200, search.text
+    search_id = search.json()["search_id"]
+    before = _event(client, search_id)
+    assert before.route == "browse"
+    assert "HP:0001250" in before.candidates
+    assert set(before.candidate_routes) == set(before.candidates)
+
+    for extra in ({}, {"expand": True}):
+        resp = _tree(
+            client, ws_key, "node", browse_id=search_id, term_id="HP:0001250", **extra
+        )
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["code"] == "INVALID_TREE_WALK"
+
+    assert _event(client, search_id) == before
+
+
 def test_the_tree_follows_the_layer_and_a_walk_cannot_change_layers(app_client):
     client, _ = app_client
     _import(client, make_layered_package("assisted"))

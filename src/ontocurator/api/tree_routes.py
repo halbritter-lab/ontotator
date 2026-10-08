@@ -26,7 +26,7 @@ from ontocurator.ontology.tree import (
     TreeTermDetail,
     tree_for,
 )
-from ontocurator.packages.models import SearchEventRecord
+from ontocurator.packages.models import SearchEventRecord, is_tree_walk
 
 router = APIRouter(prefix="/api/v1")
 
@@ -153,8 +153,9 @@ def tree_node(
     event = repo.get_search_event(req.browse_id)
     if (
         event is None
-        or event.route != "browse"
-        or event.selected_term_id is not None
+        # A search with the old "browse" route and the copy written for a
+        # selection carry the same route; neither is a walk.
+        or not is_tree_walk(event)
         or event.workspace_key != req.workspace_key
         or event.annotation_id != req.annotation_id
         or event.layer_id != req.layer_id

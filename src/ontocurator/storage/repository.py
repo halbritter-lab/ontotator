@@ -26,6 +26,7 @@ from ontocurator.packages.models import (
     PackageManifest,
     SearchEventRecord,
     ValidatedPackage,
+    is_tree_walk,
 )
 from ontocurator.storage.database import Database
 
@@ -56,12 +57,6 @@ def _key_str(key: WorkspaceKey) -> str:
     return _ESCAPED_KEY_PREFIX + "|".join(quote(part, safe="") for part in parts)
 
 
-def _is_tree_walk(event: SearchEventRecord) -> bool:
-    """Whether an event is a walk through the tree, the one event that grows."""
-    # The copy written for a selection is taken at one moment; it never grows.
-    return event.route == "browse" and event.selected_term_id is None
-
-
 def _same_tree_walk(stored: SearchEventRecord, incoming: SearchEventRecord) -> bool:
     """Whether two records are one tree walk seen at two moments.
 
@@ -70,7 +65,7 @@ def _same_tree_walk(stored: SearchEventRecord, incoming: SearchEventRecord) -> b
     record's lists must be the beginning of the later one's, and nothing else
     may differ.
     """
-    if not _is_tree_walk(stored) or not _is_tree_walk(incoming):
+    if not is_tree_walk(stored) or not is_tree_walk(incoming):
         return False
     grown = {"candidates", "ranked_ids"}
     if stored.model_dump(exclude=grown) != incoming.model_dump(exclude=grown):
@@ -1442,7 +1437,7 @@ class Repository:
         try:
             event = self.get_search_event(event_id)
             if event is not None and (
-                not _is_tree_walk(event)
+                not is_tree_walk(event)
                 or (workspace_key is not None and event.workspace_key != workspace_key)
                 or (annotation_id is not None and event.annotation_id != annotation_id)
                 or (layer_id is not None and event.layer_id != layer_id)

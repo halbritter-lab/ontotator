@@ -189,6 +189,10 @@ def test_a_selection_made_from_a_walk_never_grows_on_import(tmp_path):
         {"route": "lexical"},
         # The copy written for a selection made from a walk.
         {"selected_term_id": "HP:2"},
+        # A search with the old "browse" route: it names the route that found
+        # each candidate, and may score them. A walk does neither.
+        {"candidate_routes": {"HP:1": "browse", "HP:2": "browse"}},
+        {"candidate_scores": {"HP:1": 1.0}},
     ],
 )
 def test_only_a_walk_grows(tmp_path, overrides):

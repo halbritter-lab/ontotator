@@ -89,6 +89,27 @@ class SearchEventRecord(BaseModel):
         return super().model_copy(update=update, deep=deep)
 
 
+def is_tree_walk(event: SearchEventRecord) -> bool:
+    """Whether an event is a walk through the ontology tree.
+
+    The one definition, used wherever a walk is treated differently from a
+    search: by ``tree/node``, when a walk gains terms, and on import.
+
+    A walk shares ``route="browse"`` with the search's old route of that name
+    and with the copy written for a selection. What sets it apart: nothing was
+    selected (the copy for a selection is taken at one moment and never
+    grows), and nothing was found by a search route or scored -- a search
+    names the route of every candidate in ``candidate_routes``, a tree shows
+    terms without ranking them.
+    """
+    return (
+        event.route == "browse"
+        and event.selected_term_id is None
+        and not event.candidate_routes
+        and not event.candidate_scores
+    )
+
+
 class PackageManifest(BaseModel):
     """Manifest describing work package metadata and checksums."""
 
