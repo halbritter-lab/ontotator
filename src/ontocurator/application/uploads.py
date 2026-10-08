@@ -170,10 +170,15 @@ class StoredTranslation:
 
     path: Path
     prefix: str
+    # The language in the file name.
     language: str
     # SHA-256 of the ontology -> its service, rebuilt with the new file. Empty
     # when no loaded ontology has the file's prefix.
     services: dict[str, OntologyService]
+    # The languages the names of the file were loaded as, sorted. They come
+    # from the file's ``translation_language`` column and need not be the one
+    # in its name. Empty when no ontology was rebuilt.
+    languages: tuple[str, ...] = ()
 
 
 class TranslationUploadService:
@@ -225,6 +230,17 @@ class TranslationUploadService:
                 prefix=prefix,
                 language=language,
                 services=rebuilt,
+                languages=tuple(
+                    sorted(
+                        {
+                            code
+                            for service in rebuilt.values()
+                            for item in service.translations
+                            if item.filename == name
+                            for code in item.languages
+                        }
+                    )
+                ),
             )
         finally:
             shutil.rmtree(staging, ignore_errors=True)

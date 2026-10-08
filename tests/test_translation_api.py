@@ -425,6 +425,70 @@ def test_uploading_a_file_with_a_byte_order_mark_works(tmp_path: Path) -> None:
     assert _search(client, key, "Krampfanfall")["index_identity"] != marked_identity
 
 
+def test_the_answer_names_the_language_of_the_content_not_of_the_file_name(
+    tmp_path: Path,
+) -> None:
+    """The file name decides the ontology. The language of a name comes from
+    the column ``translation_language``; the name only stands in when that
+    column is missing."""
+    client = _client(tmp_path, ontology_paths=[HP])
+
+    # German content under a French name.
+    response = _upload(client, "hp-fr.babelon.tsv", DE.read_bytes())
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["filename"] == "hp-fr.babelon.tsv"
+    assert (body["language"], body["languages"]) == ("de", ["de"])
+    assert body["message"] == (
+        "hp-fr.babelon.tsv was added. HP 2026-06-23: de 4 terms. "
+        "The file name says 'fr', but the names in the file are marked as 'de' "
+        "and are searched as 'de'."
+    )
+    assert _listed(client)["hp"]["translations"] == [
+        {"language": "de", "filenames": ["hp-fr.babelon.tsv"], "term_count": 4}
+    ]
+
+    # Name and content agree: nothing is added to the message.
+    agreeing = _upload(client, "hp-es.babelon.tsv", ES.read_bytes()).json()
+    assert (agreeing["language"], agreeing["languages"]) == ("es", ["es"])
+    assert "file name says" not in agreeing["message"]
+
+    # No language column: the name is all there is, and it is right.
+    plain = _upload(
+        client,
+        "hp-nl.babelon.tsv",
+        b"subject_id\tpredicate_id\ttranslation_value\n"
+        b"HP:0001284\trdfs:label\tAreflexie\n",
+    ).json()
+    assert (plain["language"], plain["languages"]) == ("nl", ["nl"])
+    assert "file name says" not in plain["message"]
+
+    # Two languages in one file, one of them the one in the name.
+    mixed = _upload(
+        client,
+        "hp-it.babelon.tsv",
+        b"subject_id\tpredicate_id\ttranslation_language\ttranslation_value\n"
+        b"HP:0001284\trdfs:label\tit\tAreflessia\n"
+        b"HP:0001250\trdfs:label\tpt\tConvulsao\n",
+    ).json()
+    assert (mixed["language"], mixed["languages"]) == ("it", ["it", "pt"])
+    assert mixed["message"].endswith(
+        "The file name says 'it', but the names in the file are marked as "
+        "'it', 'pt' and are searched as such."
+    )
+
+
+def test_an_unassigned_upload_reports_the_language_of_its_name(tmp_path: Path) -> None:
+    client = _client(tmp_path, ontology_paths=[MONDO])
+
+    body = _upload(client, "hp-fr.babelon.tsv", DE.read_bytes()).json()
+
+    # Nothing was loaded, so nothing is known beyond the name.
+    assert (body["assigned"], body["language"], body["languages"]) == (False, "fr", [])
+    assert "file name says" not in body["message"]
+
+
 def test_ontology_json_upload_still_answers_with_the_ontology(tmp_path: Path) -> None:
     client = _client(tmp_path)
 

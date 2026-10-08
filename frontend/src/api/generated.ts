@@ -1296,6 +1296,8 @@ export interface components {
             filename: string;
             /** Language */
             language: string;
+            /** Languages */
+            languages?: string[];
             /** Assigned */
             assigned: boolean;
             /** Message */

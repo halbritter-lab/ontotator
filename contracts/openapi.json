@@ -2919,6 +2919,13 @@
             "type": "string",
             "title": "Language"
           },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
           "assigned": {
             "type": "boolean",
             "title": "Assigned"

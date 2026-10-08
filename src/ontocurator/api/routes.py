@@ -630,7 +630,14 @@ class TranslationUploadInfo(BaseModel):
     """Answer to the upload of a translation file (``.tsv``)."""
 
     filename: str
+    # The language the names of the file are searched as. That is the one in
+    # the file name unless the file marks its names differently; with several
+    # languages in one file, the one in the name if it is among them, else the
+    # first.
     language: str
+    # Every language names of the file were loaded as. Empty when no ontology
+    # was reloaded (``assigned`` is false).
+    languages: list[str] = Field(default_factory=list)
     # False when no loaded ontology has the file's prefix yet.
     assigned: bool
     message: str
@@ -753,9 +760,23 @@ def _upload_translation(
             for info in infos
         )
         message = f"{name} was added. {loaded}."
+    language = stored.language
+    languages = list(stored.languages)
+    if languages and languages != [stored.language]:
+        # The file name decides the ontology only; the language of a name is
+        # the one the file gives it.
+        marked = ", ".join(f"'{code}'" for code in languages)
+        searched = marked if len(languages) == 1 else "such"
+        message += (
+            f" The file name says '{stored.language}', but the names in the "
+            f"file are marked as {marked} and are searched as {searched}."
+        )
+        if stored.language not in languages:
+            language = languages[0]
     return TranslationUploadInfo(
         filename=name,
-        language=stored.language,
+        language=language,
+        languages=languages,
         assigned=bool(infos),
         message=message,
         ontologies=infos,
