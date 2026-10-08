@@ -16,6 +16,8 @@ import {
 export interface TreeBrowserProps {
   /** A modal dialog, or a panel docked into the case layout. Same content, same DOM. */
   variant: "dialog" | "panel";
+  /** Out of sight and out of reach for now; the walk and its state are kept. */
+  collapsed?: boolean;
   workspaceKey: WorkspaceKey;
   /** The annotation this walk belongs to. */
   annotationId: string;
@@ -50,6 +52,7 @@ const START_NOTICE: Record<string, string> = {
  */
 export const TreeBrowser: React.FC<TreeBrowserProps> = ({
   variant,
+  collapsed = false,
   workspaceKey,
   annotationId,
   layerId,
@@ -105,6 +108,12 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [isDialog]);
+
+  // Collapsed, nothing in here keeps the keyboard focus.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (collapsed && active instanceof HTMLElement && sectionRef.current?.contains(active)) active.blur();
+  }, [collapsed]);
 
   // One walk per mount. The guard keeps React's development double-run of
   // effects from logging a second walk; nothing is cancelled on cleanup for
@@ -265,7 +274,7 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
       : null;
 
   return (
-    <div className={`tree-host tree-host--${variant}`}>
+    <div className={`tree-host tree-host--${variant}`} hidden={collapsed}>
       <section
         ref={sectionRef}
         className="tree-browser"
@@ -283,7 +292,7 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
               className="btn btn-secondary btn-sm tree-pin"
               aria-pressed={pinned}
               onClick={onTogglePin}
-              title={pinned ? "Close the side panel; the tree opens as a dialog again" : "Keep the tree open next to the text"}
+              title={pinned ? "Close the docked tree; from now on it opens as a dialog" : "Keep the tree open under the annotation panel"}
             >
               Keep open
             </button>

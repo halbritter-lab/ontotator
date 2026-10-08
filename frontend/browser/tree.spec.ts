@@ -44,10 +44,47 @@ async function openWithSeizure(page: Page, annotator: string, size = { width: 12
   await expect(page.locator(".inspector-pane h2")).toContainText(SEIZURE);
 }
 
+/**
+ * Release "Keep open" in the docked tree. The choice is stored, and from then
+ * on this annotator's tree opens as a dialog.
+ */
+async function releasePin(page: Page) {
+  await showInTree(page).click();
+  const panel = treePanel(page);
+  await expect(panel).toBeVisible();
+  await expect(treeItem(page, SEIZURE)).toBeFocused();
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith("/api/v1/preferences") && response.request().method() !== "GET",
+  );
+  await panel.getByRole("button", { name: "Keep open" }).click();
+  expect((await saved).ok()).toBeTruthy();
+  await expect(panel).toHaveCount(0);
+  await expect(treeDialog(page)).toHaveCount(0);
+}
+
+/** Every value of "Keep open" this page stores for an annotator from now on, in order. */
+function treePinWrites(page: Page): boolean[] {
+  const writes: boolean[] = [];
+  page.on("request", (request) => {
+    if (!request.url().endsWith("/api/v1/preferences") || request.method() === "GET") return;
+    const pinned = request.postDataJSON()?.tree_pinned_by_annotator;
+    if (pinned) writes.push(...(Object.values(pinned) as boolean[]));
+  });
+  return writes;
+}
+
 const box = async (locator: Locator) => {
   const found = await locator.boundingBox();
   expect(found).not.toBeNull();
   return found!;
+};
+
+type Box = { x: number; y: number; width: number; height: number };
+/** The same place and size. Grid tracks land on fractions of a pixel, so to the pixel. */
+const expectSameBox = (actual: Box, expected: Box) => {
+  for (const side of ["x", "y", "width", "height"] as const) {
+    expect(Math.abs(actual[side] - expected[side]), `${side}: ${actual[side]} for ${expected[side]}`).toBeLessThan(1);
+  }
 };
 
 /** What has the keyboard focus, as something two steps can be compared by. */
@@ -59,8 +96,10 @@ const focused = (page: Page) =>
   });
 
 test.describe("ontology tree", () => {
-  test("search a term, open the tree at it, pick a child and use it", async ({ page }) => {
+  test("in the dialog: open the tree at a term, pick a child and use it", async ({ page }) => {
     await openWithSeizure(page, "tree-pick");
+    // The dialog is what an annotator gets who has released "Keep open".
+    await releasePin(page);
     const commands: string[] = [];
     page.on("request", (request) => {
       if (request.method() === "POST" && /\/api\/v1\/workspaces\/[^/]+\/commands$/.test(request.url())) {
@@ -156,6 +195,7 @@ test.describe("ontology tree", () => {
 
   test("the tree is operable by keyboard and keeps the focus inside the dialog", async ({ page }) => {
     await openWithSeizure(page, "tree-keys");
+    await releasePin(page);
     await showInTree(page).focus();
     await page.keyboard.press("Enter");
     const dialog = treeDialog(page);
@@ -249,31 +289,40 @@ test.describe("ontology tree", () => {
     await expect(page.locator(".sidebar .doc-item.selected")).toHaveCount(1);
   });
 
-  test("pinned at 1280x720, the tree sits beside the text and follows the selection", async ({ page }) => {
-    await openWithSeizure(page, "tree-pin");
+  test("a first 'Show in tree' docks the tree under the annotation panel at 1280x720, and it follows the selection", async ({ page }) => {
+    await openWithSeizure(page, "tree-first");
     const textBefore = await box(page.locator(".center-pane"));
+    const pinWrites = treePinWrites(page);
 
+    // Nothing is stored for this annotator: the tree does not open in a window.
     await showInTree(page).click();
-    const pin = treeDialog(page).getByRole("button", { name: "Keep open" });
-    await expect(pin).toHaveAttribute("aria-pressed", "false");
-    await treeItem(page, STATUS_EPILEPTICUS).click();
-    const opens: string[] = [];
-    page.on("request", (request) => {
-      if (request.url().endsWith("/api/v1/terms/tree/open")) opens.push(String(request.postDataJSON()?.term_id));
-    });
-    await pin.click();
-
     const panel = treePanel(page);
     await expect(panel).toBeVisible();
     await expect(treeDialog(page)).toHaveCount(0);
     await expect(page.locator(".app-layout")).toHaveClass(/tree-pinned/);
     await expect(page.locator(".tree-host--panel")).toHaveCount(1);
     await expect(panel.getByRole("button", { name: "Keep open" })).toHaveAttribute("aria-pressed", "true");
-    // The same walk, now docked: what was selected is still selected, and no second walk began.
+    await expect(panel).not.toHaveAttribute("aria-modal", /.*/);
+    // Opened at the term, which has the focus and is on screen.
+    await expect(treeItem(page, SEIZURE)).toHaveAttribute("aria-selected", "true");
+    await expect(treeItem(page, SEIZURE)).toHaveAttribute("aria-current", "true");
+    await expect(treeItem(page, SEIZURE)).toBeFocused();
+    await expect(treeItem(page, SEIZURE)).toBeInViewport({ ratio: 1 });
+    // The annotation panel above it shows the annotation from its top.
+    expect(await page.locator(".inspector-pane").evaluate((pane) => pane.scrollTop)).toBe(0);
+    await expect(page.locator(".inspector-pane h2")).toBeInViewport({ ratio: 1 });
+    await expect(showInTree(page)).toBeInViewport({ ratio: 1 });
+    // Docking by default is not a choice: nothing was stored.
+    expect(pinWrites).toEqual([]);
+
+    await treeItem(page, STATUS_EPILEPTICUS).click();
+    const opens: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/v1/terms/tree/open")) opens.push(String(request.postDataJSON()?.term_id));
+    });
     await expect(treeItem(page, STATUS_EPILEPTICUS)).toHaveAttribute("aria-selected", "true");
     await expect(treeItem(page, SEIZURE)).toHaveAttribute("aria-current", "true");
     await expect(treeItem(page, STATUS_EPILEPTICUS)).toBeInViewport();
-    expect(opens).toEqual([]);
 
     // 1280x720: case text, annotation panel and tree are all on screen, none
     // covers another, and each has a usable size.
@@ -281,18 +330,21 @@ test.describe("ontology tree", () => {
     const text = await box(page.locator(".center-pane"));
     const inspector = await box(page.locator(".inspector-pane"));
     const tree = await box(page.locator(".tree-host--panel"));
-    // The text keeps the width it had without the tree.
-    expect(text.width).toBe(textBefore.width);
+    // The text keeps the place and the size it had without the tree.
+    expectSameBox(text, textBefore);
     expect(text.width).toBeGreaterThanOrEqual(500);
     expect(text.height).toBeGreaterThanOrEqual(500);
     expect(sidebar.x + sidebar.width).toBeLessThanOrEqual(text.x + 1);
     expect(text.x + text.width).toBeLessThanOrEqual(inspector.x + 1);
-    expect(text.x + text.width).toBeLessThanOrEqual(tree.x + 1);
     expect(inspector.width).toBeGreaterThanOrEqual(370);
     expect(inspector.height).toBeGreaterThanOrEqual(200);
+    // The tree is under the annotation panel, in the same column, down to the bottom.
+    expect(tree.x).toBe(inspector.x);
     expect(tree.width).toBe(inspector.width);
     expect(tree.height).toBeGreaterThanOrEqual(300);
-    expect(inspector.y + inspector.height).toBeLessThanOrEqual(tree.y + 1);
+    expect(Math.abs(inspector.y + inspector.height - tree.y)).toBeLessThanOrEqual(1);
+    expect(inspector.y).toBe(text.y);
+    expect(Math.abs(tree.y + tree.height - (text.y + text.height))).toBeLessThanOrEqual(1);
     expect(tree.x + tree.width).toBeLessThanOrEqual(1281);
     expect(tree.y + tree.height).toBeLessThanOrEqual(721);
     // Inside the tree: the rows and the details each have room for some lines.
@@ -321,6 +373,20 @@ test.describe("ontology tree", () => {
     await expect(page.locator(".inspector-pane h2")).toContainText(STATUS_EPILEPTICUS);
     expect(opens).toEqual([]);
 
+    // The focus is not held in the docked tree: Shift+Tab goes over its two
+    // buttons and on into the annotation panel; the tree stays open.
+    await treeItem(page, SEIZURE).click();
+    await expect(treeItem(page, SEIZURE)).toBeFocused();
+    const back: string[] = [];
+    for (let step = 0; step < 3; step += 1) {
+      await page.keyboard.press("Shift+Tab");
+      back.push(await focused(page));
+    }
+    expect(back.slice(0, 2)).toEqual(["BUTTON:Close tree", "BUTTON:Keep open"]);
+    await expect(panel.locator(":focus")).toHaveCount(0);
+    await expect(page.locator(".inspector-pane :focus")).toHaveCount(1);
+    await expect(panel).toBeVisible();
+
     // In the panel, Escape belongs to the tree only while the focus is in it.
     await treeItem(page, SEIZURE).click();
     await expect(treeItem(page, SEIZURE)).toBeFocused();
@@ -328,24 +394,60 @@ test.describe("ontology tree", () => {
     await page.keyboard.press("Escape");
     await expect(panel).toBeVisible();
 
-    // The text is still usable: a second annotation, and the tree goes to its term
-    // with a walk of its own, without taking the focus.
+    // The text is still usable. A new annotation has no term yet, so there is
+    // nothing for the tree to show: it makes room, and the search has the
+    // whole column.
+    const host = page.locator(".tree-host--panel");
+    const column = { x: inspector.x, y: inspector.y, width: inspector.width, height: text.height };
     await selectText(page, 0, 9);
     const search = page.getByLabel(/Search ontology term/i);
+    await expect(search).toBeVisible();
+    await expect(host).toBeHidden();
+    await expect(host).toHaveCount(1);
+    await expect(panel).toHaveCount(0);
+    await expect(treeDialog(page)).toHaveCount(0);
+    expectSameBox(await box(page.locator(".inspector-pane")), column);
+    expectSameBox(await box(page.locator(".center-pane")), text);
+    // Given up, the tree is back where it was, on the same walk.
+    await page.locator(".inspector-pane").getByRole("button", { name: "Cancel" }).click();
+    await expect(panel).toBeVisible();
+    expectSameBox(await box(host), tree);
+    expectSameBox(await box(page.locator(".inspector-pane")), inspector);
+    await expect(treeItem(page, SEIZURE)).toHaveAttribute("aria-selected", "true");
+    await expect(treeItem(page, STATUS_EPILEPTICUS)).toHaveAttribute("aria-current", "true");
+    expect(opens).toEqual([]);
+
+    // Started again and searched: the box and the candidates are on screen
+    // without scrolling, not behind or squeezed above the tree.
+    await selectText(page, 0, 9);
+    await expect(host).toBeHidden();
     await search.fill("Hypotonia");
-    // The search has less room above the tree, but it is all there: the box
-    // on screen, the candidates by scrolling the annotation panel alone.
     await expect(search).toBeInViewport({ ratio: 1 });
     const candidate = page.locator(".candidate-card").filter({ hasText: HYPOTONIA });
     await expect(candidate).toBeVisible();
-    const searching = await box(page.locator(".inspector-pane"));
-    expect(searching.height).toBe(inspector.height);
-    expect((await box(page.locator(".tree-host--panel"))).y).toBe(tree.y);
-    await page.locator(".candidate-card").last().scrollIntoViewIfNeeded();
-    await expect(page.locator(".candidate-card").last()).toBeInViewport({ ratio: 1 });
+    expect(await page.locator(".inspector-pane").evaluate((pane) => pane.scrollTop)).toBe(0);
+    await expect(candidate).toBeInViewport({ ratio: 1 });
+    const cards = page.locator(".candidate-card");
+    const shown = await cards.count();
+    for (let index = 0; index < Math.min(shown, 4); index += 1) {
+      await expect(cards.nth(index)).toBeInViewport({ ratio: 1 });
+    }
+    // All of them fit where the docked tree would have left room for none.
+    const lastCard = await box(cards.nth(Math.min(shown, 4) - 1));
+    expect(lastCard.y + lastCard.height).toBeGreaterThan(tree.y);
+    expectSameBox(await box(page.locator(".inspector-pane")), column);
+    await cards.last().scrollIntoViewIfNeeded();
+    await expect(cards.last()).toBeInViewport({ ratio: 1 });
+    expect(opens).toEqual([]);
+
+    // The term is chosen: the tree is back in its place and goes to the new
+    // annotation's term with a walk of its own, without taking the focus.
     await candidate.click();
     await expect(revision(page)).toHaveAttribute("title", "Revision 3");
     await expect(ownAnnotations(page)).toHaveCount(2);
+    await expect(panel).toBeVisible();
+    expectSameBox(await box(host), tree);
+    expectSameBox(await box(page.locator(".inspector-pane")), inspector);
     // The annotation panel shows the new annotation from its top, not from
     // where the list of candidates had been scrolled to.
     await expect(page.locator(".inspector-pane h2")).toContainText(HYPOTONIA);
@@ -372,35 +474,175 @@ test.describe("ontology tree", () => {
     await treeItem(page, STATUS_EPILEPTICUS).click();
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
+    await expect(host).toHaveCount(0);
     await expect(page.locator(".app-layout")).not.toHaveClass(/tree-pinned/);
     await expect(page.locator(".sidebar .doc-item.selected")).toHaveCount(1);
     await expect(revision(page)).toHaveAttribute("title", "Revision 3");
+    // All along, nothing about the pin was stored.
+    expect(pinWrites).toEqual([]);
   });
 
-  test("the pin survives a reload, and a narrow window has no pin", async ({ page }) => {
+  test("docked, the tree is under the annotation panel at every width from 1100 px, never beside it", async ({ page }) => {
+    await openWithSeizure(page, "tree-wide");
+    const sizes = [
+      { width: 1100, height: 700 },
+      { width: 1280, height: 720 },
+      { width: 1440, height: 900 },
+      { width: 1599, height: 900 },
+      { width: 1600, height: 900 },
+      { width: 1920, height: 1080 },
+      { width: 2560, height: 1440 },
+    ];
+    const heights: string[] = [];
+    for (const size of sizes) {
+      await test.step(`${size.width}x${size.height}`, async () => {
+        await page.setViewportSize(size);
+        await expect(treePanel(page)).toHaveCount(0);
+        const sidebarBefore = await box(page.locator(".app-layout > .sidebar"));
+        const textBefore = await box(page.locator(".center-pane"));
+        const inspectorBefore = await box(page.locator(".inspector-pane"));
+
+        await showInTree(page).click();
+        const panel = treePanel(page);
+        await expect(panel).toBeVisible();
+        await expect(treeItem(page, SEIZURE)).toBeFocused();
+
+        const sidebar = await box(page.locator(".app-layout > .sidebar"));
+        const text = await box(page.locator(".center-pane"));
+        const inspector = await box(page.locator(".inspector-pane"));
+        const tree = await box(page.locator(".tree-host--panel"));
+        // Three columns as without the tree: list and case text are untouched.
+        expectSameBox(sidebar, sidebarBefore);
+        expectSameBox(text, textBefore);
+        expect(inspector.x).toBe(inspectorBefore.x);
+        expect(inspector.y).toBe(inspectorBefore.y);
+        expect(inspector.width).toBe(inspectorBefore.width);
+        expect(Math.abs(inspector.x + inspector.width - size.width)).toBeLessThanOrEqual(1);
+        // The right-hand column is split: annotation panel above, tree below, nothing left over.
+        expect(tree.x).toBe(inspector.x);
+        expect(tree.width).toBe(inspector.width);
+        expect(Math.abs(inspector.y + inspector.height - tree.y)).toBeLessThanOrEqual(1);
+        expect(Math.abs(inspector.height + tree.height - inspectorBefore.height)).toBeLessThanOrEqual(1);
+        expect(Math.abs(tree.y + tree.height - (text.y + text.height))).toBeLessThanOrEqual(1);
+        // Both parts are usable: the annotation panel has at least 40 % of the column,
+        // the tree at least as much as the panel, and 400 px or 60 % of a low column.
+        const columnHeight = inspectorBefore.height;
+        expect(inspector.height).toBeGreaterThanOrEqual(250);
+        expect(inspector.height).toBeGreaterThanOrEqual(columnHeight * 0.4 - 1);
+        expect(tree.height).toBeGreaterThanOrEqual(Math.min(400, columnHeight * 0.6) - 1);
+        expect(tree.height).toBeGreaterThanOrEqual(370);
+        expect(tree.height).toBeGreaterThanOrEqual(inspector.height - 1);
+        // Neither is short while the other has room to spare. An annotation panel that
+        // has to scroll has given the tree no more than its due (half, or 400 px on a low
+        // screen); one that shows everything is no higher than its content needs, beyond
+        // its 40 %.
+        const content = await page.locator(".inspector-pane").evaluate((pane) => pane.scrollHeight);
+        if (content > inspector.height + 1) {
+          expect(tree.height).toBeLessThanOrEqual(Math.max(columnHeight / 2, 400) + 1);
+        } else {
+          expect(inspector.height).toBeLessThanOrEqual(Math.max(content, columnHeight * 0.4) + 1);
+        }
+        heights.push(`${size.width}x${size.height}: ${Math.round(inspector.height)}/${Math.round(tree.height)}`);
+        await expect(showInTree(page)).toBeInViewport({ ratio: 1 });
+        await expect(panel.getByRole("button", { name: "Use this term" })).toBeInViewport({ ratio: 1 });
+        await expect(treeItem(page, SEIZURE)).toBeInViewport({ ratio: 1 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+        expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBeTruthy();
+
+        await panel.getByRole("button", { name: "Close tree" }).click();
+        await expect(panel).toHaveCount(0);
+      });
+    }
+    // Annotation panel / tree, in px. The panel's content is 500 px high here: it scrolls
+    // on the low screens, fits exactly at 1080 and has its 40 % at 1440.
+    expect(heights).toEqual([
+      "1100x700: 251/377",
+      "1280x720: 266/400",
+      "1440x900: 423/423",
+      "1599x900: 423/423",
+      "1600x900: 423/423",
+      "1920x1080: 500/526",
+      "2560x1440: 554/832",
+    ]);
+  });
+
+  test("releasing the pin gives the dialog and pinning docks again, both survive a reload, and a narrow window has no pin", async ({ page }) => {
     await openWithSeizure(page, "tree-reload");
+    const pinWrites = treePinWrites(page);
+    const reopen = async () => {
+      // A reload ends the page session: the dashboard comes back with the same
+      // package and annotator, the mode and the identity have to be given again.
+      await page.reload();
+      await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
+      await expect(page.getByTestId("dashboard-identity")).toHaveText("tree-reload");
+      await page.locator("#mode-select").selectOption("independent");
+      await openCase(page, { identity: "tree-reload" });
+      await expect(revision(page)).toHaveAttribute("title", "Revision 1");
+      // Nothing is open until it is asked for.
+      await expect(treePanel(page)).toHaveCount(0);
+      await expect(treeDialog(page)).toHaveCount(0);
+      await ownAnnotations(page).first().click();
+    };
+
+    // With nothing stored the tree is docked, also after a reload.
     await showInTree(page).click();
+    await expect(treePanel(page)).toBeVisible();
+    await reopen();
+    await showInTree(page).click();
+    await expect(treePanel(page)).toBeVisible();
+    await expect(treeDialog(page)).toHaveCount(0);
+    expect(pinWrites).toEqual([]);
+
+    // Releasing the pin closes the panel, and the next opening is a dialog ...
+    const released = page.waitForResponse(
+      (response) => response.url().endsWith("/api/v1/preferences") && response.request().method() !== "GET",
+    );
+    await treePanel(page).getByRole("button", { name: "Keep open" }).click();
+    expect((await released).ok()).toBeTruthy();
+    expect(pinWrites).toEqual([false]);
+    await expect(treePanel(page)).toHaveCount(0);
+    await expect(page.locator(".app-layout")).not.toHaveClass(/tree-pinned/);
+    await showInTree(page).click();
+    await expect(treeDialog(page)).toBeVisible();
+    await expect(treeDialog(page)).toHaveAttribute("aria-modal", "true");
+    await expect(treeDialog(page).getByRole("button", { name: "Keep open" })).toHaveAttribute("aria-pressed", "false");
+    await page.keyboard.press("Escape");
+    await expect(treeDialog(page)).toHaveCount(0);
+
+    // ... also after a reload.
+    await reopen();
+    await showInTree(page).click();
+    await expect(treeDialog(page)).toBeVisible();
+    await expect(treePanel(page)).toHaveCount(0);
+    await expect(page.locator(".app-layout")).not.toHaveClass(/tree-pinned/);
+    const pin = treeDialog(page).getByRole("button", { name: "Keep open" });
+    await expect(pin).toHaveAttribute("aria-pressed", "false");
+
+    // Pinned from the dialog, the same walk is docked: what was selected is
+    // still selected, and no second walk began.
+    await treeItem(page, STATUS_EPILEPTICUS).click();
+    const opens: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/v1/terms/tree/open")) opens.push(String(request.postDataJSON()?.term_id));
+    });
     const saved = page.waitForResponse(
       (response) => response.url().endsWith("/api/v1/preferences") && response.request().method() !== "GET",
     );
-    await treeDialog(page).getByRole("button", { name: "Keep open" }).click();
+    await pin.click();
     expect((await saved).ok()).toBeTruthy();
+    expect(pinWrites).toEqual([false, true]);
     await expect(treePanel(page)).toBeVisible();
-
-    // A reload ends the page session: the dashboard comes back with the same
-    // package and annotator, the mode and the identity have to be given again.
-    await page.reload();
-    await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
-    await expect(page.getByTestId("dashboard-identity")).toHaveText("tree-reload");
-    await page.locator("#mode-select").selectOption("independent");
-    await openCase(page, { identity: "tree-reload" });
-    await expect(revision(page)).toHaveAttribute("title", "Revision 1");
-    // Nothing is open until it is asked for ...
-    await expect(treePanel(page)).toHaveCount(0);
     await expect(treeDialog(page)).toHaveCount(0);
-    await ownAnnotations(page).first().click();
+    await expect(page.locator(".app-layout")).toHaveClass(/tree-pinned/);
+    await expect(treePanel(page).getByRole("button", { name: "Keep open" })).toHaveAttribute("aria-pressed", "true");
+    await expect(treeItem(page, STATUS_EPILEPTICUS)).toHaveAttribute("aria-selected", "true");
+    await expect(treeItem(page, SEIZURE)).toHaveAttribute("aria-current", "true");
+    await expect(treeItem(page, STATUS_EPILEPTICUS)).toBeInViewport();
+    expect(opens).toEqual([]);
+
+    // The pin survives a reload: the docked panel at once, not a dialog.
+    await reopen();
     await showInTree(page).click();
-    // ... and then it is the side panel at once, not a dialog.
     await expect(treePanel(page)).toBeVisible();
     await expect(treeDialog(page)).toHaveCount(0);
     await expect(page.locator(".app-layout")).toHaveClass(/tree-pinned/);
@@ -408,12 +650,9 @@ test.describe("ontology tree", () => {
     await expect(treeItem(page, SEIZURE)).toHaveAttribute("aria-current", "true");
     // Opened by hand, the docked tree takes the focus.
     await expect(treeItem(page, SEIZURE)).toBeFocused();
+    expect(opens).toEqual([SEIZURE]);
 
     // Below 1100 px the same walk is a dialog, and there is no pin switch.
-    const opens: string[] = [];
-    page.on("request", (request) => {
-      if (request.url().endsWith("/api/v1/terms/tree/open")) opens.push(String(request.postDataJSON()?.term_id));
-    });
     await treeItem(page, DIALEPTIC).click();
     await page.setViewportSize({ width: 1000, height: 700 });
     const dialog = treeDialog(page);
@@ -431,7 +670,7 @@ test.describe("ontology tree", () => {
     await expect(treeItem(page, DIALEPTIC)).toBeInViewport();
     await page.setViewportSize({ width: 1000, height: 700 });
     await expect(dialog).toBeVisible();
-    expect(opens).toEqual([]);
+    expect(opens).toEqual([SEIZURE]);
     await dialog.getByRole("button", { name: "Close tree" }).click();
     await expect(dialog).toHaveCount(0);
     // Opened in the narrow window it is a dialog too, still without the switch.
@@ -441,28 +680,28 @@ test.describe("ontology tree", () => {
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
 
-    // Wide again, the stored choice still holds. Releasing the pin closes the
-    // panel, and the next opening is a dialog -- also after another reload.
+    // Wide again, the stored choice still holds; the narrow window stored nothing.
     await page.setViewportSize({ width: 1280, height: 720 });
     await showInTree(page).click();
     await expect(treePanel(page)).toBeVisible();
-    const released = page.waitForResponse(
-      (response) => response.url().endsWith("/api/v1/preferences") && response.request().method() !== "GET",
-    );
-    await treePanel(page).getByRole("button", { name: "Keep open" }).click();
-    expect((await released).ok()).toBeTruthy();
-    await expect(treePanel(page)).toHaveCount(0);
-    await showInTree(page).click();
-    await expect(treeDialog(page)).toBeVisible();
-    await expect(treeDialog(page).getByRole("button", { name: "Keep open" })).toHaveAttribute("aria-pressed", "false");
+    await expect(treeDialog(page)).toHaveCount(0);
+    expect(pinWrites).toEqual([false, true]);
+  });
 
-    await page.reload();
-    await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
-    await page.locator("#mode-select").selectOption("independent");
-    await openCase(page, { identity: "tree-reload" });
-    await ownAnnotations(page).first().click();
+  test("below 1100 px a first 'Show in tree' is a dialog without a pin switch", async ({ page }) => {
+    await openWithSeizure(page, "tree-narrow", { width: 1000, height: 700 });
+    const pinWrites = treePinWrites(page);
+
     await showInTree(page).click();
-    await expect(treeDialog(page)).toBeVisible();
+    const dialog = treeDialog(page);
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute("aria-modal", "true");
     await expect(treePanel(page)).toHaveCount(0);
+    await expect(page.locator(".app-layout")).not.toHaveClass(/tree-pinned/);
+    await expect(dialog.getByRole("button", { name: "Keep open" })).toHaveCount(0);
+    await expect(treeItem(page, SEIZURE)).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    expect(pinWrites).toEqual([]);
   });
 });

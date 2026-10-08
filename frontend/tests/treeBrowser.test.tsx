@@ -445,6 +445,27 @@ describe("TreeBrowser: dialog and panel", () => {
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("a collapsed panel is out of sight and out of reach, and comes back with the same walk", async () => {
+    const open = vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
+    const { props, container, rerender } = renderBrowser({ variant: "panel", pinned: true });
+    await loaded();
+    fireEvent.click(item("Status epilepticus"));
+    const host = container.querySelector<HTMLElement>(".tree-host--panel")!;
+    expect(host.hidden).toBe(false);
+
+    rerender(<TreeBrowser {...props} collapsed />);
+    expect(container.querySelector(".tree-host--panel")).toBe(host);
+    expect(host.hidden).toBe(true);
+    expect(screen.queryByRole("region", { name: "Ontology tree" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use this term" })).toBeNull();
+
+    rerender(<TreeBrowser {...props} />);
+    expect(host.hidden).toBe(false);
+    expect(screen.getByRole("region", { name: "Ontology tree" })).toBeDefined();
+    expect(item("Status epilepticus").getAttribute("aria-selected")).toBe("true");
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
   it("does not pull the focus into a panel that was not opened by hand", async () => {
     vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
     renderBrowser({ variant: "panel", pinned: true, focusOnOpen: false });

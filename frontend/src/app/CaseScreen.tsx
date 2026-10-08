@@ -115,7 +115,10 @@ export interface CaseScreenProps {
   onReload?: () => Promise<void>;
   /** Called after a successful submission (e.g. to refresh the case list). */
   onSubmitted?: () => void | Promise<void>;
-  /** This annotator's stored choice: the ontology tree stays open as a side panel. */
+  /**
+   * This annotator's stored choice: the ontology tree is docked under the annotation
+   * panel ("Keep open"). Docked is the default; `false` means it opens as a dialog.
+   */
   treePinned?: boolean;
   /** Called when the annotator pins or releases the tree, to store the choice. */
   onTreePinnedChange?: (pinned: boolean) => void;
@@ -129,7 +132,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   documentList,
   onReload,
   onSubmitted,
-  treePinned = false,
+  treePinned = true,
   onTreePinnedChange,
 }) => {
   const [pendingAnnotation, setPendingAnnotation] = useState<{
@@ -188,7 +191,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   } | null>(null);
   const treeNonce = useRef(0);
   const [treePinnedNow, setTreePinnedNow] = useState(treePinned);
-  // Below this width there is no room for a docked tree next to text and annotation panel.
+  // Below this width there is no room for a docked tree under the annotation panel.
   const wideEnoughToPin = useMinWidth(1100);
 
   const displayedTerms = useMemo(() => [
@@ -802,8 +805,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     !selectedSource && !pendingAnnotation && !(view.key.mode === "review" && selectedTarget)
       ? selectedAnnotation
       : null;
-  // Docked as a side panel instead of shown as a dialog.
+  // Docked under the annotation panel instead of shown as a dialog.
   const treeDocked = !!treeWalk && treePinnedNow && wideEnoughToPin;
+  // While the term of a new annotation is being searched there is nothing for the tree to
+  // show, and the candidates need the room: the docked tree steps aside (same walk, out of
+  // sight) and the search has the whole column. It is back once a term is chosen or the
+  // search is given up.
+  const treeCollapsed = treeDocked && !!pendingAnnotation;
   // The annotation the open walk belongs to, as it is in the draft now.
   const treeWalkAnnotation = treeWalk
     ? (draft.annotations ?? []).find((a) => a.annotation.annotation_id === treeWalk.annotationId) ?? null
@@ -1466,7 +1474,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         ))}
       </nav>
       {/* Main Workspace Layout */}
-      <div className={`app-layout mobile-pane-${mobilePane}${treeDocked ? " tree-pinned" : ""}`}>
+      <div className={`app-layout mobile-pane-${mobilePane}${treeDocked && !treeCollapsed ? " tree-pinned" : ""}`}>
         {/* Left: Sidebar (Annotations & Review Targets) */}
         <aside className="sidebar">
           {/* Multi-layer controls (rendered only if >1 layer) */}
@@ -1859,6 +1867,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <TreeBrowser
             key={treeWalk.nonce}
             variant={treeDocked ? "panel" : "dialog"}
+            collapsed={treeCollapsed}
             workspaceKey={view.key}
             annotationId={treeWalk.annotationId}
             layerId={treeWalk.layerId}
