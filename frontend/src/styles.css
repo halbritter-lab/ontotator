@@ -1509,6 +1509,12 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
+/* Next to a long hint in the narrow panel the button keeps its one line. */
+.tree-detail__actions .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .tree-detail__hint {
   font-size: 0.78rem;
   color: var(--text-muted);
