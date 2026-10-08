@@ -33,6 +33,31 @@ class TreeNode(BaseModel):
     child_count: int
 
 
+class TreeLevel(BaseModel):
+    """An expanded node and the children shown under it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    term_id: str
+    children: list[TreeNode]
+
+
+class TreeTermDetail(BaseModel):
+    """What the detail pane shows for the selected node."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    term_id: str
+    label: str
+    definition: str
+    synonyms: list[str]
+    # Language code -> translated names. Empty unless translation files are loaded.
+    translations: dict[str, list[str]]
+    # Every parent, alphabetically. The interface lists the ones the current
+    # path does not run through as "Also under".
+    parents: list[TreeNode]
+
+
 class OntologyTree:
     """Read-only tree view of a loaded ontology."""
 
@@ -153,6 +178,30 @@ class OntologyTree:
             )
         memo[term_id] = [*best, term_id]
         return memo[term_id]
+
+    def levels(self, expanded_ids: list[str]) -> list[TreeLevel]:
+        """The children shown under each of these nodes, in the given order."""
+        return [
+            TreeLevel(term_id=term_id, children=self.nodes(self.children_of(term_id)))
+            for term_id in expanded_ids
+        ]
+
+    def detail(self, term_id: str) -> TreeTermDetail | None:
+        term = self.live(term_id)
+        if term is None:
+            return None
+        return TreeTermDetail(
+            term_id=term.hpo_id,
+            label=term.label,
+            definition=term.definition,
+            synonyms=list(dict.fromkeys(value for _, value in term.synonyms)),
+            translations={
+                language: list(names)
+                for language, names in sorted(term.translations.items())
+                if names
+            },
+            parents=self.nodes(self.parents_of(term.hpo_id)),
+        )
 
 
 _trees: WeakKeyDictionary[Ontology, OntologyTree] = WeakKeyDictionary()

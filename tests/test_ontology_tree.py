@@ -222,3 +222,57 @@ def test_one_tree_is_kept_per_loaded_ontology() -> None:
     # The kept list of roots is not handed out for others to change.
     tree.roots().append("HP:0000118")
     assert tree.roots() == ["HP:0000001"]
+
+
+def test_unknown_and_obsolete_terms_have_no_detail() -> None:
+    tree = _fixture_tree()
+
+    assert tree.detail("HP:9999999") is None
+    assert tree.detail("HP:0000123") is None
+
+
+def test_levels_list_the_children_under_each_expanded_node() -> None:
+    tree = _fixture_tree()
+
+    levels = tree.levels(["HP:0000001", "HP:0000118"])
+
+    assert [level.term_id for level in levels] == ["HP:0000001", "HP:0000118"]
+    assert [n.term_id for n in levels[0].children] == ["HP:0000118"]
+    assert [(n.term_id, n.label, n.child_count) for n in levels[1].children] == [
+        ("HP:0000707", "Abnormality of the nervous system", 3),
+        ("HP:0000365", "Hearing impairment", 1),
+    ]
+
+
+def test_detail_lists_names_translations_and_all_parents(tmp_path: Path) -> None:
+    fixture = _fixture_tree()
+    term = fixture.ontology.terms["HP:0001252"]
+    # What a loaded translation file leaves on the term.
+    term.translations["de"] = ["Muskelhypotonie", "Hypotonie"]
+    term.translations["fr"] = ["Hypotonie musculaire"]
+    term.translations["es"] = []
+
+    detail = fixture.detail("HP:0001252")
+
+    assert detail is not None
+    assert (detail.term_id, detail.label) == ("HP:0001252", "Hypotonia")
+    assert detail.definition
+    assert detail.synonyms == ["Low muscle tone", "Muscle hypotonia", "Hypotonic"]
+    assert detail.translations == {
+        "de": ["Muskelhypotonie", "Hypotonie"],
+        "fr": ["Hypotonie musculaire"],
+    }
+    assert list(detail.translations) == ["de", "fr"]
+    assert [n.term_id for n in detail.parents] == ["HP:0000707"]
+
+    untranslated = fixture.detail("HP:0001250")
+    assert untranslated is not None
+    assert untranslated.translations == {}
+
+    graph = _graph_tree(tmp_path)
+    twin = graph.detail(tid("0000006"))
+    assert twin is not None
+    assert [n.label for n in twin.parents] == ["Alpha", "Beta"]
+    root = graph.detail(tid("0000001"))
+    assert root is not None
+    assert root.parents == []
