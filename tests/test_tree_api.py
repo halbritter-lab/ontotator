@@ -488,6 +488,123 @@ def test_the_tree_follows_the_layer_and_a_walk_cannot_change_layers(app_client):
     assert resp.json()["code"] == "INVALID_TREE_WALK"
 
 
+def _two_layers_one_ontology():
+    """Scenario C with both editable layers on the HPO."""
+    package = make_layered_package("multi_editable")
+    profile = package.manifest.task_profile
+    first, second = profile.layers
+    second = second.model_copy(
+        update={
+            "ontology_id": first.ontology_id,
+            "annotation_types": first.annotation_types,
+            "default_type_id": first.default_type_id,
+        }
+    )
+    profile = profile.model_copy(
+        update={
+            "layers": [first, second],
+            "ontologies": [
+                o for o in profile.ontologies if o.ontology_id == first.ontology_id
+            ],
+        }
+    )
+    manifest = package.manifest.model_copy(
+        update={
+            "package_id": "pkg-two-layers",
+            "task_profile": profile,
+            "task_profile_sha256": profile_hash(profile),
+        }
+    )
+    return package.model_copy(update={"manifest": manifest})
+
+
+def _create(annotation_id, layer_id, term_id, event_id=None):
+    return {
+        "command": "create_annotation",
+        "annotation_id": annotation_id,
+        "layer_id": layer_id,
+        "type_id": "type-opt",
+        "term_id": term_id,
+        **({"search_event_id": event_id} if event_id else {}),
+    }
+
+
+def test_a_walk_of_one_layer_assigns_nothing_in_another(app_client):
+    client, _ = app_client
+    _import(client, _two_layers_one_ontology())
+    ws_id, ws_key = _open(client, "pkg-two-layers")
+    # Both layers use the same ontology, so the term is valid in either: only
+    # the layer tells the two apart.
+    walks = {}
+    for annotation_id in ("ann-new", "ann-old"):
+        opened = _tree(
+            client,
+            ws_key,
+            "open",
+            annotation_id=annotation_id,
+            layer_id="layer-1",
+            term_id="HP:0001250",
+        )
+        assert opened.status_code == 200, opened.text
+        walks[annotation_id] = opened.json()["browse_id"]
+    search = client.post(
+        "/api/v1/search",
+        json={
+            "workspace_key": ws_key,
+            "annotation_id": "ann-new",
+            "layer_id": "layer-1",
+            "query": "Status epilepticus",
+        },
+    )
+    assert search.status_code == 200, search.text
+    assert "HP:0002133" in _event(client, search.json()["search_id"]).candidates
+
+    # Creating an annotation in layer-2 from an event of layer-1 ...
+    for event_id in (walks["ann-new"], search.json()["search_id"]):
+        refused = _command(
+            client,
+            ws_id,
+            0,
+            _create("ann-new", "layer-2", "HP:0002133", event_id),
+            f"mut-create-{event_id}",
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["code"] == "INVALID_SEARCH_SELECTION"
+
+    # ... and changing the term of one that lives there.
+    created = _command(client, ws_id, 0, _create("ann-old", "layer-2", "HP:0001250"))
+    assert created.status_code == 200, created.text
+    changed = _command(
+        client,
+        ws_id,
+        1,
+        {
+            "command": "set_term",
+            "annotation_id": "ann-old",
+            "term_id": "HP:0002133",
+            "search_event_id": walks["ann-old"],
+        },
+    )
+    assert changed.status_code == 422, changed.text
+    assert changed.json()["code"] == "INVALID_SEARCH_SELECTION"
+
+    assert not [e for e in _events(client, ws_key) if e.selected_term_id]
+    terms = client.app.state.repo.open_draft(WorkspaceKey.model_validate(ws_key))
+    assert [
+        (a.annotation.layer_id, a.annotation.term_id) for a in terms.annotations
+    ] == [("layer-2", "HP:0001250")]
+
+    # The same event does assign in its own layer.
+    own = _command(
+        client,
+        ws_id,
+        1,
+        _create("ann-new", "layer-1", "HP:0002133", walks["ann-new"]),
+        "mut-own-layer",
+    )
+    assert own.status_code == 200, own.text
+
+
 def test_tree_requests_pass_the_same_checks_as_a_search(app_client):
     client, _ = app_client
     _import(client, make_layered_package("multi_editable"))

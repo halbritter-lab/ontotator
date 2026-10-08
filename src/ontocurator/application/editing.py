@@ -304,16 +304,28 @@ class EditingService:
                 and cmd.search_event_id
             ):
                 event = self.repo.get_search_event(cmd.search_event_id)
+                # The layer the annotation has after this edit. Two layers can
+                # share an ontology, so the candidates alone do not tell
+                # whether the event was a search or a walk for this layer.
+                layer_id = next(
+                    (
+                        snap.annotation.layer_id
+                        for snap in result.annotations
+                        if snap.annotation.annotation_id == cmd.annotation_id
+                    ),
+                    None,
+                )
                 if (
                     event is None
                     or event.workspace_key != key
                     or event.annotation_id != cmd.annotation_id
+                    or event.layer_id != layer_id
                     or cmd.term_id not in event.candidates
                 ):
                     raise DomainError(
                         "INVALID_SEARCH_SELECTION",
                         "Search selection does not match this workspace, "
-                        "annotation and candidate",
+                        "annotation, layer and candidate",
                     )
                 event = event.model_copy(deep=True)
                 event.source_search_event_id = cmd.search_event_id
