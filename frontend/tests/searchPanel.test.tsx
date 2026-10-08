@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SearchPanel } from "../src/editor/SearchPanel";
+import { toggledSelection, type SearchLanguageControl } from "../src/editor/searchLanguages";
 import { SearchManager } from "../src/editor/searchState";
 
 const key = {
@@ -94,5 +96,113 @@ describe("SearchPanel", () => {
     expect(await screen.findByText("Match: »Muskelhypotonie« (translation, de)")).toBeDefined();
     expect(screen.getByText("Match: »Seizures« (hasExactSynonym)")).toBeDefined();
     expect(screen.getAllByText(/^Match:/)).toHaveLength(2);
+  });
+});
+
+describe("SearchPanel language selection", () => {
+  afterEach(cleanup);
+
+  const loaded = ["de", "es"];
+
+  /** The panel with a parent that keeps the selection, as the case screen does. */
+  const Harness = ({
+    searchOntology,
+    initial,
+    onStore,
+  }: {
+    searchOntology: ReturnType<typeof vi.fn>;
+    initial: string[] | undefined;
+    onStore: (selection: string[]) => void;
+  }) => {
+    const [manager] = useState(() => new SearchManager({ searchOntology } as any));
+    const [stored, setStored] = useState(initial);
+    const languages: SearchLanguageControl = {
+      options: [
+        { language: "de", termCount: 3412 },
+        { language: "es", termCount: 18201 },
+      ],
+      active: stored === undefined ? loaded : loaded.filter((code) => stored.includes(code)),
+      onToggle: (language) => {
+        const next = toggledSelection(loaded, stored, language);
+        setStored(next);
+        onStore(next);
+      },
+    };
+    return (
+      <SearchPanel
+        searchManager={manager}
+        annotationId="a"
+        workspaceKey={key}
+        layerId="phenotype"
+        onSelectCandidate={vi.fn()}
+        debounceMs={0}
+        languages={languages}
+      />
+    );
+  };
+
+  it("shows no language button without loaded translations and sends no languages", async () => {
+    const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
+    const input = renderPanel(searchOntology);
+
+    expect(screen.queryByRole("button", { name: /Search languages/ })).toBeNull();
+    fireEvent.change(input, { target: { value: "seizure" } });
+    await waitFor(() => expect(searchOntology).toHaveBeenCalledTimes(1));
+    expect("languages" in searchOntology.mock.calls[0][0]).toBe(false);
+  });
+
+  it("shows the button in the row of the search box and sends the active languages", async () => {
+    const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
+    render(<Harness searchOntology={searchOntology} initial={["es"]} onStore={vi.fn()} />);
+
+    const button = screen.getByRole("button", { name: "Search languages: EN, ES" });
+    const input = screen.getByLabelText(/Search ontology term/i);
+    expect(button.closest(".search-language")!.parentElement).toBe(input.parentElement);
+
+    fireEvent.change(input, { target: { value: "krampf" } });
+    await waitFor(() => expect(searchOntology).toHaveBeenCalledTimes(1));
+    expect(searchOntology.mock.calls[0][0].languages).toEqual(["es"]);
+  });
+
+  it("stores a deselection, repeats the pending query at once and sends the new languages", async () => {
+    const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
+    const onStore = vi.fn();
+    render(<Harness searchOntology={searchOntology} initial={undefined} onStore={onStore} />);
+    const input = screen.getByLabelText(/Search ontology term/i);
+
+    fireEvent.change(input, { target: { value: "krampf" } });
+    await waitFor(() => expect(searchOntology).toHaveBeenCalledTimes(1));
+    expect(searchOntology.mock.calls[0][0].languages).toEqual(["de", "es"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Search languages: EN, DE, ES" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "DE" }));
+
+    expect(onStore).toHaveBeenCalledWith(["es"]);
+    await waitFor(() => expect(searchOntology).toHaveBeenCalledTimes(2));
+    expect(searchOntology.mock.calls[1][0].query).toBe("krampf");
+    expect(searchOntology.mock.calls[1][0].languages).toEqual(["es"]);
+    expect(screen.getByRole("button", { name: "Search languages: EN, ES" })).toBeDefined();
+    // The list stays open; English cannot be switched off.
+    const english = screen.getByRole("checkbox", { name: "EN" }) as HTMLInputElement;
+    expect(english.checked && english.disabled).toBe(true);
+    expect(input.getAttribute("value")).toBe("krampf");
+
+    // Switching the last language off still sends a selection: English only.
+    fireEvent.click(screen.getByRole("checkbox", { name: "ES" }));
+    await waitFor(() => expect(searchOntology).toHaveBeenCalledTimes(3));
+    expect(searchOntology.mock.calls[2][0].languages).toEqual([]);
+  });
+
+  it("does not search when the selection changes while the box is empty", async () => {
+    const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
+    const onStore = vi.fn();
+    render(<Harness searchOntology={searchOntology} initial={undefined} onStore={onStore} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Search languages/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "DE" }));
+
+    expect(onStore).toHaveBeenCalledWith(["es"]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(searchOntology).not.toHaveBeenCalled();
   });
 });

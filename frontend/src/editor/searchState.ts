@@ -93,7 +93,9 @@ export class SearchManager {
     workspaceKey: WorkspaceKey,
     route: SearchRoute = "auto",
     k = 10,
-    layerId?: string | null
+    layerId?: string | null,
+    /** Translation languages to search besides English; omit to search all loaded ones. */
+    languages?: string[]
   ): Promise<SearchCandidate[]> {
     const query = rawQuery.trim();
 
@@ -143,6 +145,7 @@ export class SearchManager {
         query,
         route,
         k,
+        ...(languages ? { languages } : {}),
       };
 
 

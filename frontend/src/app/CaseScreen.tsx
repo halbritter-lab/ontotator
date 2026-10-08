@@ -35,6 +35,7 @@ import {
   type ReviewDecisionOutcome,
   type TargetProposal,
 } from "../editor/ReviewActions";
+import { useSearchLanguages } from "../editor/searchLanguages";
 import { SearchPanel } from "../editor/SearchPanel";
 import { SearchManager } from "../editor/searchState";
 import { TermName } from "../editor/TermName";
@@ -184,6 +185,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   useEffect(() => {
     searchManager.setLayer(layerSelection.activeLayerId);
   }, [layerSelection.activeLayerId, searchManager]);
+
+  // Search languages: stored per annotator, offered per ontology of the layer.
+  const languagesForOntology = useSearchLanguages(api, view.key.annotator_id);
+  const searchLanguagesFor = (layerId: string | null | undefined) => {
+    const ontologyId = (view.layers ?? []).find((layer) => layer.layer_id === layerId)?.ontology_id;
+    const definition = (view.ontologies ?? []).find((item) => item.ontology_id === ontologyId);
+    return languagesForOntology(definition?.sha256);
+  };
 
   // Dedicated mutation queue for this workspace
   const queueRef = useRef<MutationQueue>(null as unknown as MutationQueue);
@@ -1674,6 +1683,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 </p>
                 <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
+                  languages={searchLanguagesFor(pendingAnnotation.layerId)}
                   onSelectCandidate={(candidate, searchId) => { void createPendingAnnotation(candidate.term_id, searchId); }} />
                 <button type="button" className="btn btn-secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</button>
               </div>
@@ -1716,6 +1726,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               documentText={view.document.text}
               isAttachingMention={isAttachingMention}
               layerId={selectedAnnotation?.annotation.layer_id}
+              searchLanguages={searchLanguagesFor(selectedAnnotation?.annotation.layer_id)}
               termLabel={selectedAnnotation ? termLabel(selectedAnnotation.annotation.layer_id, selectedAnnotation.annotation.term_id) : null}
               axesConfig={currentAxesConfig}
               linkedTarget={linkedTargetForSelectedAnnotation ? {

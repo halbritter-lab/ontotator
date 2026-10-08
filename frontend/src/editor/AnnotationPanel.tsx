@@ -4,6 +4,7 @@ import type { components } from "../api/generated";
 import type { CodepointSegment } from "../spans/adapter";
 import { SearchPanel } from "./SearchPanel";
 import { TermName } from "./TermName";
+import type { SearchLanguageControl } from "./searchLanguages";
 import type { SearchManager, WorkspaceKey } from "./searchState";
 
 export type AxesValues = Record<string, string | null>;
@@ -39,6 +40,8 @@ export interface AnnotationPanelProps {
   documentText?: string;
   /** True while "+ Add Mention" mode waits for a text selection. */
   isAttachingMention?: boolean;
+  /** Language selection of the term search, when the layer's ontology has translations. */
+  searchLanguages?: SearchLanguageControl;
 }
 
 /** Quote the text covered by codepoint segments; discontinuous parts are joined with " … ". */
@@ -70,6 +73,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   onSetIntent,
   documentText = "",
   isAttachingMention = false,
+  searchLanguages,
 }) => {
   const [showSearch, setShowSearch] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -180,6 +184,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               workspaceKey={workspaceKey}
               currentTermId={currentTerm}
               onSelectCandidate={handleSelectCandidate}
+              languages={searchLanguages}
             />
           </div>
         )}

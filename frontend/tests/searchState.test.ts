@@ -46,6 +46,21 @@ describe("SearchManager", () => {
     expect(searchOntologySpy.mock.calls[1][0].route).toBe("exact");
   });
 
+  it("sends the languages only when they are given", async () => {
+    searchOntologySpy.mockResolvedValue({ route: "auto", query: "krampf", candidates: [] });
+    const manager = new SearchManager(mockClient);
+
+    await manager.search("krampf", "ann-1", sampleKey, "auto", 10, "hpo-layer");
+    expect("languages" in searchOntologySpy.mock.calls[0][0]).toBe(false);
+
+    await manager.search("krampf", "ann-1", sampleKey, "auto", 10, "hpo-layer", ["de", "es"]);
+    expect(searchOntologySpy.mock.calls[1][0].languages).toEqual(["de", "es"]);
+
+    // An empty list is a selection (English only), not "no selection".
+    await manager.search("krampf", "ann-1", sampleKey, "auto", 10, "hpo-layer", []);
+    expect(searchOntologySpy.mock.calls[2][0].languages).toEqual([]);
+  });
+
   it("updates state with candidates upon successful search", async () => {
     const candidate: SearchCandidate = {
       term_id: "HP:0001252",

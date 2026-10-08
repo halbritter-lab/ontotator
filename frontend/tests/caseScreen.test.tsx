@@ -219,6 +219,59 @@ describe("CaseScreen integration", () => {
     expect(screen.getAllByText(/Spanless|Spanlos/i).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("offers the search languages of the layer's ontology and remembers the annotator's choice", async () => {
+    vi.spyOn(api, "listOntologies").mockResolvedValue([
+      {
+        ontology_id: "hp",
+        release: "2024-06-25",
+        sha256: "TEST-HP-SHA",
+        term_count: 11,
+        translations: [
+          { language: "de", filenames: ["hp-de.babelon.tsv"], term_count: 4 },
+          { language: "es", filenames: ["hp-es.babelon.tsv"], term_count: 3 },
+        ],
+      },
+    ]);
+    vi.spyOn(api, "getPreferences").mockResolvedValue({
+      last_annotator_id: "user-test",
+      mode_by_package: {},
+      search_languages_by_annotator: { "user-test": ["es"], "someone-else": ["de"] },
+    });
+    const store = vi.spyOn(api, "updatePreferences").mockResolvedValue({} as any);
+    const search = vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "s", candidates: [] } as any);
+
+    render(<CaseScreen view={sampleView} workspaceId="ws-test-token" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText(/\+ (New Annotation|Neue Annotation)/i));
+
+    // The stored selection of this annotator is back after loading.
+    const button = await screen.findByRole("button", { name: "Search languages: EN, ES" });
+    fireEvent.change(screen.getByLabelText(/Search ontology term/i), { target: { value: "Krampfanfall" } });
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+    expect(search.mock.calls[0][0].languages).toEqual(["es"]);
+
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("checkbox", { name: "DE" }));
+
+    expect(store).toHaveBeenCalledWith({ search_languages_by_annotator: { "user-test": ["de", "es"] } });
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+    expect(search.mock.calls[1][0].languages).toEqual(["de", "es"]);
+    expect(search.mock.calls[1][0].query).toBe("Krampfanfall");
+  });
+
+  it("shows no language button when the ontology has no translations", async () => {
+    const listed = vi.spyOn(api, "listOntologies").mockResolvedValue([
+      { ontology_id: "hp", release: "2024-06-25", sha256: "test-hp-sha", term_count: 11, translations: [] },
+    ]);
+    vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: "user-test", mode_by_package: {} });
+
+    render(<CaseScreen view={sampleView} workspaceId="ws-test-token" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText(/\+ (New Annotation|Neue Annotation)/i));
+
+    await waitFor(() => expect(listed).toHaveBeenCalled());
+    expect(screen.getByLabelText(/Search ontology term/i)).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Search languages/ })).toBeNull();
+  });
+
   it("updates clinical axes on an existing annotation", async () => {
     const viewWithAnn = {
       ...sampleView,

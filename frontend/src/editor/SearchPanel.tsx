@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { SearchCandidate } from "../api/client";
+import { SearchLanguageButton } from "./SearchLanguageButton";
+import type { SearchLanguageControl } from "./searchLanguages";
 import { SearchManager, type SearchState, type WorkspaceKey } from "./searchState";
 
 export interface SearchPanelProps {
@@ -11,6 +13,8 @@ export interface SearchPanelProps {
   onSelectCandidate: (candidate: SearchCandidate, searchId?: string) => void;
   /** Delay before a typed query is sent; avoids one request (and one logged search event) per keystroke. */
   debounceMs?: number;
+  /** Present when the layer's ontology has translations loaded; then the language button is shown. */
+  languages?: SearchLanguageControl;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -23,7 +27,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   currentTermId,
   onSelectCandidate,
   debounceMs = SEARCH_DEBOUNCE_MS,
+  languages,
 }) => {
+  const languageControl = languages && languages.options.length > 0 ? languages : undefined;
+  // Sent with every request when translations are loaded; English is implied.
+  const requestLanguages = languageControl?.active;
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelDebounce = () => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -33,12 +41,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const runSearch = (val: string, immediate = false) => {
     cancelDebounce();
     if (immediate || debounceMs <= 0 || !val.trim()) {
-      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId);
+      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages);
       return;
     }
     debounceTimer.current = setTimeout(() => {
       debounceTimer.current = null;
-      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId);
+      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages);
     }, debounceMs);
   };
   const [state, setState] = useState<SearchState>(searchManager.getState());
@@ -55,6 +63,16 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     searchManager.clear();
     setQueryInput("");
   }, [annotationId, workspaceKey, layerId, searchManager]);
+
+  // A changed language selection is a new question: ask the pending query again.
+  const languagesKey = requestLanguages ? requestLanguages.join(",") : null;
+  const lastLanguagesKey = useRef(languagesKey);
+  useEffect(() => {
+    if (lastLanguagesKey.current === languagesKey) return;
+    lastLanguagesKey.current = languagesKey;
+    if (queryInput.trim()) runSearch(queryInput, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [languagesKey]);
 
   const handleQueryChange = (val: string) => {
     setQueryInput(val);
@@ -107,6 +125,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               ✕
             </button>
           )}
+          {languageControl && <SearchLanguageButton control={languageControl} />}
         </div>
         <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
           Search by name or code (e.g. HP:0001250)
