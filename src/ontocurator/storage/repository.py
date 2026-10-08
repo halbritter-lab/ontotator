@@ -60,11 +60,14 @@ def _key_str(key: WorkspaceKey) -> str:
 def _same_tree_walk(stored: SearchEventRecord, incoming: SearchEventRecord) -> bool:
     """Whether two records are one tree walk seen at two moments.
 
-    A walk only ever gains terms at the end, and its two lists gain them
-    together. So one record must be the later one in both lists, the earlier
-    record's lists must be the beginning of the later one's, and nothing else
-    may differ.
+    A walk only ever gains terms at the end, its two lists gain them together,
+    and it lists every term once. So both records must be walks, one must be
+    the later one in both lists, the earlier record's lists must be the
+    beginning of the later one's, the later one must not repeat a term, and
+    nothing else may differ.
     """
+    # This checks the shape of a walk, not its truth: someone who edits their
+    # own export can add terms the tree never showed, as they could by walking.
     if not is_tree_walk(stored) or not is_tree_walk(incoming):
         return False
     grown = {"candidates", "ranked_ids"}
@@ -76,6 +79,8 @@ def _same_tree_walk(stored: SearchEventRecord, incoming: SearchEventRecord) -> b
         later.candidates[:shown] == earlier.candidates
         and later.ranked_ids[:ranked] == earlier.ranked_ids
         and later.candidates[shown:] == later.ranked_ids[ranked:]
+        # The added terms are new: none repeats an earlier one or another.
+        and len(set(later.candidates)) == len(later.candidates)
     )
 
 

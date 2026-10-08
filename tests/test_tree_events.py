@@ -260,6 +260,62 @@ def test_lists_that_did_not_grow_together_are_a_conflict(tmp_path, incoming):
     assert (stored.candidates, stored.ranked_ids) == (["HP:1", "HP:2"],) * 2
 
 
+@pytest.mark.parametrize(
+    ("stored", "incoming"),
+    [
+        # The added terms repeat one the walk had already shown ...
+        (["HP:1", "HP:2"], ["HP:1", "HP:2", "HP:1"]),
+        (["HP:1", "HP:2"], ["HP:1", "HP:2", "HP:3", "HP:2"]),
+        # ... or one another. A walk lists every term once.
+        (["HP:1", "HP:2"], ["HP:1", "HP:2", "HP:3", "HP:3"]),
+        # The same, with the longer record being the stored one.
+        (["HP:1", "HP:2", "HP:1"], ["HP:1", "HP:2"]),
+        (["HP:1", "HP:2", "HP:3", "HP:3"], ["HP:1", "HP:2"]),
+    ],
+)
+def test_a_walk_that_lists_a_term_twice_is_a_conflict(tmp_path, stored, incoming):
+    repo = _repo(tmp_path)
+    repo.save_search_event(_walk(stored))
+
+    with pytest.raises(InvalidPackage):
+        repo.import_package(_export_with(_walk(incoming), "export-conflict"))
+
+    kept = repo.get_search_event("walk-1")
+    assert kept is not None
+    assert (kept.candidates, kept.ranked_ids) == (stored, stored)
+    assert repo.get_document("export-conflict", "doc-1") is None
+
+
+@pytest.mark.parametrize(
+    "search",
+    [
+        # What POST /search with the old "browse" route stored: the route of
+        # every candidate, with or without scores.
+        {"candidate_routes": {"HP:1": "browse", "HP:2": "browse"}},
+        {"candidate_scores": {"HP:1": 1.0, "HP:2": 0.5}},
+        {
+            "candidate_routes": {"HP:1": "browse", "HP:2": "browse"},
+            "candidate_scores": {"HP:1": 1.0, "HP:2": 0.5},
+        },
+    ],
+)
+@pytest.mark.parametrize("longer", ["incoming", "stored"])
+def test_a_search_with_the_old_browse_route_never_grows_on_import(
+    tmp_path, search, longer
+):
+    short, long = ["HP:1", "HP:2"], ["HP:1", "HP:2", "HP:3"]
+    stored, incoming = (short, long) if longer == "incoming" else (long, short)
+    repo = _repo(tmp_path)
+    repo.save_search_event(_walk(stored, **search))
+
+    with pytest.raises(InvalidPackage):
+        repo.import_package(_export_with(_walk(incoming, **search), "export-x"))
+
+    kept = repo.get_search_event("walk-1")
+    assert kept is not None
+    assert kept.candidates == stored
+
+
 def _through_a_file(package):
     """What a recipient reads from the package file."""
     buffer = io.BytesIO()
