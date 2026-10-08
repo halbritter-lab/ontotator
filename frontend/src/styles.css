@@ -1330,35 +1330,28 @@ body {
   padding: 0 6px;
 }
 
-/* Ontology tree: the browser as a dialog (the docked panel follows further down) */
-.tree-host--dialog {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(15, 23, 42, 0.45);
+/* Ontology tree: the browser, a panel docked into the case layout (its place there
+   follows further down) */
+.tree-host {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
+}
+
+.tree-host[hidden] {
+  display: none;
 }
 
 .tree-browser {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   background: var(--bg-surface);
-}
-
-.tree-browser:focus {
-  outline: none;
-}
-
-.tree-host--dialog .tree-browser {
-  width: min(900px, 100vw);
-  height: min(600px, 100vh);
-  border-radius: var(--radius);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
 }
 
 .tree-browser__header {
@@ -1376,12 +1369,6 @@ body {
   min-width: 0;
   font-size: 0.95rem;
   font-weight: 600;
-}
-
-.tree-pin[aria-pressed="true"] {
-  background: var(--primary-light);
-  border-color: var(--primary);
-  color: var(--primary-hover);
 }
 
 .tree-notice,
@@ -1407,11 +1394,12 @@ body {
   color: var(--text-muted);
 }
 
+/* The rows above the details of the selected term. */
 .tree-browser__body {
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
 }
 
 .tree-browser__tree {
@@ -1419,7 +1407,9 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  border-right: 1px solid var(--border-color);
+  /* A row brought into view is whole, also where the box ends on a fraction of a pixel. */
+  scroll-padding-block: 2px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .tree-detail {
@@ -1520,85 +1510,77 @@ body {
   color: var(--text-muted);
 }
 
-/* Small screens: the dialog fills the screen, tree above details. */
-@media (max-width: 700px) {
-  .tree-host--dialog .tree-browser {
-    width: 100vw;
-    height: 100vh;
-    border-radius: 0;
-  }
-  .tree-host--dialog .tree-browser__body {
-    flex-direction: column;
-  }
-  .tree-host--dialog .tree-browser__tree {
-    border-right: 0;
-    border-bottom: 1px solid var(--border-color);
-  }
-}
-
 /* "Show in tree", under the term name of an annotation */
 .annotation-tree-button {
   margin-top: 2px;
 }
 
-/* Ontology tree, pinned: docked into the case layout, from 1100 px at every width the
-   same way: under the annotation panel in the right column, which the two share (the
-   text keeps its width). Below 1100 px the tree is never docked. */
-.tree-host[hidden] {
-  display: none;
-}
+/* Ontology tree in the case layout: under the annotation panel, wherever that is.
 
-.tree-host--panel {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  background: var(--bg-surface);
-  border-left: 1px solid var(--border-color);
-  border-top: 1px solid var(--border-color);
-}
-
-.tree-host--panel .tree-browser {
-  flex: 1;
-}
-
-.tree-host--panel .tree-browser__body {
-  flex-direction: column;
-}
-
-.tree-host--panel .tree-browser__tree {
-  border-right: 0;
-  border-bottom: 1px solid var(--border-color);
-}
-
-@media (min-width: 1100px) {
-  /* The split of the right column: the annotation panel is as high as its content,
-     but never less than 40 % of the column (so that it does not jump about while
-     little is shown) and never more than the tree leaves: the tree keeps at least
-     half of the column, and on a low screen 400 px (or 60 %, whichever is less).
-     So neither part is short while the other has room to spare. */
-  .app-layout.tree-pinned {
+   Wide (three columns): the two share the right column, the text keeps its width. The
+   annotation panel is as high as its content, but never less than 40 % of the column
+   (so that it does not jump about while little is shown) and never more than the tree
+   leaves: the tree keeps at least half of the column, and on a low screen 400 px (or
+   60 %, whichever is less). So neither part is short while the other has room to spare. */
+@media (min-width: 1025px) {
+  .app-layout.tree-open {
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr) 380px;
     grid-template-rows: minmax(40%, auto) minmax(max(50%, min(400px, 60%)), 1fr);
   }
-  .app-layout.tree-pinned > .sidebar {
+  .app-layout.tree-open > .sidebar {
     grid-column: 1;
     grid-row: 1 / 3;
     min-height: 0;
   }
-  .app-layout.tree-pinned > .center-pane {
+  .app-layout.tree-open > .center-pane {
     grid-column: 2;
     grid-row: 1 / 3;
     min-width: 0;
     min-height: 0;
   }
-  .app-layout.tree-pinned > .inspector-pane {
+  .app-layout.tree-open > .inspector-pane {
     grid-column: 3;
     grid-row: 1;
     min-height: 0;
   }
-  .app-layout.tree-pinned > .tree-host--panel {
+  .app-layout.tree-open > .tree-host {
     grid-column: 3;
     grid-row: 2;
+  }
+}
+
+/* Two columns (up to 1024 px): the annotation panel is a strip under the text there.
+   The tree is docked in that strip, next to the panel, and the strip gets more of
+   the height while the tree is open. */
+@media (min-width: 701px) and (max-width: 1024px) {
+  .app-layout.tree-open {
+    grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(200px, 1fr) minmax(300px, 55%);
+  }
+  .app-layout.tree-open > .center-pane {
+    grid-column: 2 / 4;
+  }
+  .app-layout.tree-open > .inspector-pane {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .app-layout.tree-open > .tree-host {
+    grid-column: 3;
+    grid-row: 2;
+  }
+}
+
+/* One pane at a time (up to 700 px): the tree is part of "Details", under the
+   annotation panel, and has the larger share of the height. */
+@media (max-width: 700px) {
+  .app-layout.mobile-pane-list > .tree-host,
+  .app-layout.mobile-pane-text > .tree-host {
+    display: none;
+  }
+  .app-layout > .tree-host {
+    flex: 1.5;
+    width: 100%;
+    border-left: 0;
   }
 }

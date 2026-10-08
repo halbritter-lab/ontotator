@@ -71,7 +71,6 @@ const sharedWalk = (): TreeOpenResponse => ({
 });
 
 const baseProps = (): TreeBrowserProps => ({
-  variant: "dialog",
   workspaceKey: key,
   annotationId: "ann-1",
   layerId: "phenotype",
@@ -79,9 +78,6 @@ const baseProps = (): TreeBrowserProps => ({
   currentTermId: "HP:1250",
   canAssign: true,
   focusOnOpen: true,
-  pinned: false,
-  canPin: true,
-  onTogglePin: vi.fn(),
   onClose: vi.fn(),
   onUseTerm: vi.fn().mockResolvedValue(undefined),
 });
@@ -99,13 +95,20 @@ const loaded = (label = "Seizure") => screen.findByText(label, { selector: ".tre
 const useButton = () => screen.getByRole("button", { name: "Use this term" }) as HTMLButtonElement;
 const detailPane = (container: HTMLElement) => within(container.querySelector(".tree-detail") as HTMLElement);
 
+// jsdom lays nothing out and has no scrollIntoView. What can be seen here is which row
+// the tree asks the browser to bring into view, and how: "nearest" scrolls only as far
+// as needed, so a tree that fits stays at its top. Where the rows really end up is
+// asserted in a real browser (browser/tree.spec.ts).
 const originalScroll = (Element.prototype as any).scrollIntoView;
 let scrolled: Array<string | undefined> = [];
+let scrollOptions: unknown[] = [];
 
 beforeEach(() => {
   scrolled = [];
-  (Element.prototype as any).scrollIntoView = function (this: HTMLElement) {
+  scrollOptions = [];
+  (Element.prototype as any).scrollIntoView = function (this: HTMLElement, options?: unknown) {
     scrolled.push(this.dataset.key);
+    scrollOptions.push(options);
   };
 });
 
@@ -116,7 +119,7 @@ afterEach(() => {
 });
 
 describe("TreeBrowser: one walk", () => {
-  it("opens at the start term: path open, term selected, focused and scrolled into view", async () => {
+  it("opens at the start term: path open, term selected, focused and asked into view", async () => {
     const open = vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
     renderBrowser();
 
@@ -145,6 +148,8 @@ describe("TreeBrowser: one walk", () => {
     expect(item("Hearing impairment").getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(start);
     expect(scrolled).toEqual(["HP:1/HP:707/HP:1250"]);
+    // Only as far as needed, never centred.
+    expect(scrollOptions).toEqual([{ block: "nearest" }]);
     expect(screen.queryByRole("status")).toBeNull();
   });
 
@@ -348,6 +353,7 @@ describe("TreeBrowser: one walk", () => {
     expect(places.map((el) => el.getAttribute("aria-selected"))).toEqual(["false", "true"]);
     expect(document.activeElement).toBe(places[1]);
     expect(scrolled[scrolled.length - 1]).toBe("R/B/X");
+    expect(scrollOptions[scrollOptions.length - 1]).toEqual({ block: "nearest" });
     // Seen from Beta, Alpha is the other parent.
     expect(pane.getByRole("button", { name: "Alpha" })).toBeDefined();
     expect(pane.queryByRole("button", { name: "Beta" })).toBeNull();
@@ -383,81 +389,75 @@ describe("TreeBrowser: one walk", () => {
   });
 });
 
-describe("TreeBrowser: dialog and panel", () => {
-  it("as a dialog it is modal, keeps Tab inside and closes on Escape from anywhere", async () => {
+describe("TreeBrowser: the docked panel", () => {
+  it("is a plain region, never a dialog: nothing modal, Tab is not held, Escape closes only from inside the tree", async () => {
     vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
-    const { props } = renderBrowser();
-    const dialog = await screen.findByRole("dialog", { name: "Ontology tree" });
-    await loaded();
-
-    expect(dialog.getAttribute("aria-modal")).toBe("true");
-    const pin = screen.getByRole("button", { name: "Keep open" });
-    const close = screen.getByRole("button", { name: "Close tree" });
-
-    // "Use this term" is disabled here, so the tree row is the last stop.
-    fireEvent.keyDown(item("Seizure"), { key: "Tab" });
-    expect(document.activeElement).toBe(pin);
-    fireEvent.keyDown(pin, { key: "Tab", shiftKey: true });
-    expect(document.activeElement).toBe(item("Seizure"));
-    // In between, Tab is left to the browser.
-    expect(fireEvent.keyDown(close, { key: "Tab" })).toBe(true);
-
-    fireEvent.keyDown(document.body, { key: "Escape" });
-    expect(props.onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("as a dialog it takes the focus at once and gives it back when it goes", async () => {
-    vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
-    const opener = document.createElement("button");
-    document.body.appendChild(opener);
-    opener.focus();
-    try {
-      const { unmount } = renderBrowser();
-      // Before the tree has loaded, the focus is already inside the dialog.
-      expect(screen.getByRole("dialog", { name: "Ontology tree" }).contains(document.activeElement)).toBe(true);
-      await loaded();
-      unmount();
-      expect(document.activeElement).toBe(opener);
-    } finally {
-      opener.remove();
-    }
-  });
-
-  it("as a panel it is a plain region: Escape closes it only from inside the tree", async () => {
-    vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
-    const { props, container } = renderBrowser({ variant: "panel", pinned: true });
+    const { props, container } = renderBrowser();
     const region = await screen.findByRole("region", { name: "Ontology tree" });
     await loaded();
 
     expect(region.hasAttribute("aria-modal")).toBe(false);
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(container.querySelector(".tree-host--panel")).not.toBeNull();
-    expect(container.querySelector(".tree-host--dialog")).toBeNull();
-    expect(screen.getByRole("button", { name: "Keep open" }).getAttribute("aria-pressed")).toBe("true");
+    expect(region.parentElement).toBe(container.querySelector(".tree-host"));
+    expect(region.parentElement!.className).toBe("tree-host");
 
     fireEvent.keyDown(document.body, { key: "Escape" });
     fireEvent.keyDown(screen.getByRole("button", { name: "Close tree" }), { key: "Escape" });
     expect(props.onClose).not.toHaveBeenCalled();
-    // Tab is not trapped.
+    // Tab is left to the browser everywhere: on the row, on the buttons, forwards and backwards.
     expect(fireEvent.keyDown(item("Seizure"), { key: "Tab" })).toBe(true);
+    expect(fireEvent.keyDown(item("Seizure"), { key: "Tab", shiftKey: true })).toBe(true);
+    expect(fireEvent.keyDown(screen.getByRole("button", { name: "Close tree" }), { key: "Tab", shiftKey: true })).toBe(true);
+    expect(document.activeElement).toBe(item("Seizure"));
 
     fireEvent.keyDown(item("Seizure"), { key: "Escape" });
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("a collapsed panel is out of sight and out of reach, and comes back with the same walk", async () => {
+  it("has one control in its header: close", async () => {
+    vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
+    const { props, container } = renderBrowser();
+    await loaded();
+
+    const header = container.querySelector<HTMLElement>(".tree-browser__header")!;
+    expect(within(header).getByRole("heading", { name: "Ontology tree" })).toBeDefined();
+    const controls = within(header).getAllByRole("button");
+    expect(controls.map((control) => control.getAttribute("aria-label"))).toEqual(["Close tree"]);
+    expect(screen.queryByRole("button", { name: "Keep open" })).toBeNull();
+
+    fireEvent.click(controls[0]);
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not take the focus before the tree has loaded, and then puts it on the start term", async () => {
+    vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    try {
+      renderBrowser();
+      expect(document.activeElement).toBe(opener);
+      await loaded();
+      expect(document.activeElement).toBe(item("Seizure"));
+    } finally {
+      opener.remove();
+    }
+  });
+
+  it("collapsed it is out of sight and out of reach, and comes back with the same walk", async () => {
     const open = vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
-    const { props, container, rerender } = renderBrowser({ variant: "panel", pinned: true });
+    const { props, container, rerender } = renderBrowser();
     await loaded();
     fireEvent.click(item("Status epilepticus"));
-    const host = container.querySelector<HTMLElement>(".tree-host--panel")!;
+    const host = container.querySelector<HTMLElement>(".tree-host")!;
     expect(host.hidden).toBe(false);
 
     rerender(<TreeBrowser {...props} collapsed />);
-    expect(container.querySelector(".tree-host--panel")).toBe(host);
+    expect(container.querySelector(".tree-host")).toBe(host);
     expect(host.hidden).toBe(true);
     expect(screen.queryByRole("region", { name: "Ontology tree" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Use this term" })).toBeNull();
+    expect(host.contains(document.activeElement)).toBe(false);
 
     rerender(<TreeBrowser {...props} />);
     expect(host.hidden).toBe(false);
@@ -466,78 +466,13 @@ describe("TreeBrowser: dialog and panel", () => {
     expect(open).toHaveBeenCalledTimes(1);
   });
 
-  it("does not pull the focus into a panel that was not opened by hand", async () => {
+  it("does not pull the focus into a tree that was not opened by hand", async () => {
     vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
-    renderBrowser({ variant: "panel", pinned: true, focusOnOpen: false });
+    renderBrowser({ focusOnOpen: false });
     await loaded();
 
     expect(scrolled).toEqual(["HP:1/HP:707/HP:1250"]);
+    expect(scrollOptions).toEqual([{ block: "nearest" }]);
     expect(screen.getByRole("region", { name: "Ontology tree" }).contains(document.activeElement)).toBe(false);
-  });
-
-  it("has a pin switch only where pinning is possible, and a close button always", async () => {
-    vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
-    const { props, unmount } = renderBrowser();
-    await loaded();
-
-    const pin = screen.getByRole("button", { name: "Keep open" });
-    expect(pin.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(pin);
-    expect(props.onTogglePin).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole("button", { name: "Close tree" }));
-    expect(props.onClose).toHaveBeenCalledTimes(1);
-    unmount();
-
-    renderBrowser({ canPin: false });
-    await loaded();
-    expect(screen.queryByRole("button", { name: "Keep open" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Close tree" })).toBeDefined();
-  });
-
-  it("pinning keeps the walk: same tree, same selection, no second request", async () => {
-    const open = vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
-    vi.spyOn(api, "loadTreeNode").mockResolvedValue({
-      detail: detail("HP:2133", "Status epilepticus"),
-      children: [],
-      path: [],
-      levels: [],
-    });
-    const props = baseProps();
-    const { rerender } = render(<TreeBrowser {...props} />);
-    await loaded();
-    fireEvent.click(item("Status epilepticus"));
-    const row = item("Status epilepticus");
-
-    rerender(<TreeBrowser {...props} variant="panel" pinned />);
-
-    expect(screen.getByRole("region", { name: "Ontology tree" })).toBeDefined();
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(open).toHaveBeenCalledTimes(1);
-    // The very same DOM node, still selected.
-    expect(item("Status epilepticus")).toBe(row);
-    expect(row.getAttribute("aria-selected")).toBe("true");
-  });
-
-  it("brings the selected row back on screen when the tree is docked, without moving the focus", async () => {
-    vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
-    vi.spyOn(api, "loadTreeNode").mockResolvedValue({
-      detail: detail("HP:2133", "Status epilepticus"),
-      children: [],
-      path: [],
-      levels: [],
-    });
-    const props = baseProps();
-    const { rerender } = render(<TreeBrowser {...props} />);
-    await loaded();
-    fireEvent.click(item("Status epilepticus"));
-    const pin = screen.getByRole("button", { name: "Keep open" });
-    pin.focus();
-    expect(scrolled).toEqual(["HP:1/HP:707/HP:1250"]);
-
-    // The docked panel is smaller than the dialog: the row may have left the visible part.
-    rerender(<TreeBrowser {...props} variant="panel" pinned />);
-
-    expect(scrolled).toEqual(["HP:1/HP:707/HP:1250", "HP:1/HP:707/HP:1250/HP:2133"]);
-    expect(document.activeElement).toBe(pin);
   });
 });

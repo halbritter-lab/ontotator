@@ -43,8 +43,8 @@ export const TermTree: React.FC<TermTreeProps> = ({
     if (!reveal) return;
     const element = items.current.get(reveal.key);
     if (!element) return;
-    // jsdom has no scrollIntoView.
-    element.scrollIntoView?.({ block: "center" });
+    // Only as far as needed: a tree that fits is shown from its top. (jsdom has no scrollIntoView.)
+    element.scrollIntoView?.({ block: "nearest" });
     if (reveal.focus) element.focus({ preventScroll: true });
   }, [reveal]);
 

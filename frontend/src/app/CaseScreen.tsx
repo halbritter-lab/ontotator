@@ -41,7 +41,6 @@ import { SearchManager } from "../editor/searchState";
 import { TermName } from "../editor/TermName";
 import { TextPane } from "../editor/TextPane";
 import { TreeBrowser } from "../editor/TreeBrowser";
-import { useMinWidth } from "../editor/useMinWidth";
 import { useTermLabels } from "../editor/useTermLabels";
 import { termColorIndex, type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { CaseNavigation } from "./CaseNavigation";
@@ -115,13 +114,6 @@ export interface CaseScreenProps {
   onReload?: () => Promise<void>;
   /** Called after a successful submission (e.g. to refresh the case list). */
   onSubmitted?: () => void | Promise<void>;
-  /**
-   * This annotator's stored choice: the ontology tree is docked under the annotation
-   * panel ("Keep open"). Docked is the default; `false` means it opens as a dialog.
-   */
-  treePinned?: boolean;
-  /** Called when the annotator pins or releases the tree, to store the choice. */
-  onTreePinnedChange?: (pinned: boolean) => void;
 }
 
 export const CaseScreen: React.FC<CaseScreenProps> = ({
@@ -132,8 +124,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   documentList,
   onReload,
   onSubmitted,
-  treePinned = true,
-  onTreePinnedChange,
 }) => {
   const [pendingAnnotation, setPendingAnnotation] = useState<{
     annotationId: string;
@@ -180,7 +170,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [historySubmission, setHistorySubmission] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"list" | "text" | "details">("text");
-  // The ontology tree. One entry is one walk; a new nonce starts a new one.
+  // The ontology tree, docked under the annotation panel while a walk is open. One entry
+  // is one walk; a new nonce starts a new one.
   const [treeWalk, setTreeWalk] = useState<{
     nonce: number;
     annotationId: string;
@@ -190,9 +181,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     focus: boolean;
   } | null>(null);
   const treeNonce = useRef(0);
-  const [treePinnedNow, setTreePinnedNow] = useState(treePinned);
-  // Below this width there is no room for a docked tree under the annotation panel.
-  const wideEnoughToPin = useMinWidth(1100);
 
   const displayedTerms = useMemo(() => [
     ...(draft.annotations ?? []),
@@ -805,13 +793,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     !selectedSource && !pendingAnnotation && !(view.key.mode === "review" && selectedTarget)
       ? selectedAnnotation
       : null;
-  // Docked under the annotation panel instead of shown as a dialog.
-  const treeDocked = !!treeWalk && treePinnedNow && wideEnoughToPin;
   // While the term of a new annotation is being searched there is nothing for the tree to
-  // show, and the candidates need the room: the docked tree steps aside (same walk, out of
-  // sight) and the search has the whole column. It is back once a term is chosen or the
-  // search is given up.
-  const treeCollapsed = treeDocked && !!pendingAnnotation;
+  // show, and the candidates need the room: the tree steps aside (same walk, out of sight)
+  // and the search has the whole column. It is back once a term is chosen or the search is
+  // given up.
+  const treeCollapsed = !!treeWalk && !!pendingAnnotation;
   // The annotation the open walk belongs to, as it is in the draft now.
   const treeWalkAnnotation = treeWalk
     ? (draft.annotations ?? []).find((a) => a.annotation.annotation_id === treeWalk.annotationId) ?? null
@@ -834,31 +820,32 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   // "Use this term": the same set_term as a search selection, bound to the walk's event.
-  // A failure is thrown to the tree, which shows it (the page's own error line is behind the dialog).
+  // A failure is thrown to the tree, which shows it where the term was chosen. The tree stays open.
   const handleUseTreeTerm = async (termId: string, browseId: string) => {
     if (!treeWalk) return;
     await setTermOf(treeWalk.annotationId, termId, browseId);
-    if (!treeDocked) setTreeWalk(null);
   };
 
-  // Pinning a dialog docks the same walk. Releasing the pin closes the panel.
-  const handleToggleTreePin = () => {
-    const next = !treePinnedNow;
-    setTreePinnedNow(next);
-    onTreePinnedChange?.(next);
-    if (!next) setTreeWalk(null);
+  // Closing changes nothing else: the tree is gone until "Show in tree" is used again. A
+  // keyboard focus that was in the tree goes back to that button instead of getting lost.
+  const handleCloseTree = () => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest(".tree-host")) {
+      inspectorRef.current?.querySelector<HTMLElement>(".annotation-tree-button")?.focus();
+    }
+    setTreeWalk(null);
   };
 
-  // A docked tree follows the selection: another own annotation with a term starts a new
+  // An open tree follows the selection: another own annotation with a term starts a new
   // walk there. Anything else (a proposal, a reference, nothing) leaves the tree as it is.
   const followAnnotationId = treeAnnotation?.annotation.term_id ? treeAnnotation.annotation.annotation_id : null;
   useEffect(() => {
-    if (!treeDocked || !treeWalk || !treeAnnotation || !followAnnotationId) return;
+    if (!treeWalk || !treeAnnotation || !followAnnotationId) return;
     if (followAnnotationId === treeWalk.annotationId) return;
     startTreeWalk(treeAnnotation, false);
     // Only a change of the selected annotation moves the tree, not an edit of it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [followAnnotationId, treeDocked]);
+  }, [followAnnotationId]);
 
   const handleUpdateAxes = async (axesValues: Partial<AxesValues>) => {
     if (!selectedAnnotationId || !selectedAnnotation) return;
@@ -1231,8 +1218,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const prevDoc = documentList ? adjacentCase(documentList, view.document.document_id, -1) : null;
   const nextDoc = documentList ? adjacentCase(documentList, view.document.document_id, 1) : null;
 
-  const modalOpen = !!(confirmRequest || completedSubmission || historySubmission || submitDialogOpen || showShortcutHelp)
-    || (!!treeWalk && !treeDocked);
+  const modalOpen = !!(confirmRequest || completedSubmission || historySubmission || submitDialogOpen || showShortcutHelp);
   const navigateTo = (docId: string) => {
     if (!onNavigateCase) return;
     void leaveCase(() => onNavigateCase(docId));
@@ -1474,7 +1460,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         ))}
       </nav>
       {/* Main Workspace Layout */}
-      <div className={`app-layout mobile-pane-${mobilePane}${treeDocked && !treeCollapsed ? " tree-pinned" : ""}`}>
+      <div className={`app-layout mobile-pane-${mobilePane}${treeWalk && !treeCollapsed ? " tree-open" : ""}`}>
         {/* Left: Sidebar (Annotations & Review Targets) */}
         <aside className="sidebar">
           {/* Multi-layer controls (rendered only if >1 layer) */}
@@ -1862,11 +1848,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           )}
         </div>
 
-        {/* Ontology tree: always at this place in the layout, so that pinning does not restart the walk. */}
+        {/* Ontology tree: docked into the layout, after the annotation panel. */}
         {treeWalk && (
           <TreeBrowser
             key={treeWalk.nonce}
-            variant={treeDocked ? "panel" : "dialog"}
             collapsed={treeCollapsed}
             workspaceKey={view.key}
             annotationId={treeWalk.annotationId}
@@ -1875,10 +1860,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             currentTermId={treeWalkAnnotation?.annotation.term_id ?? null}
             canAssign={!!treeAnnotation && treeAnnotation.annotation.annotation_id === treeWalk.annotationId}
             focusOnOpen={treeWalk.focus}
-            pinned={treePinnedNow}
-            canPin={wideEnoughToPin}
-            onTogglePin={handleToggleTreePin}
-            onClose={() => setTreeWalk(null)}
+            onClose={handleCloseTree}
             onUseTerm={handleUseTreeTerm}
           />
         )}

@@ -14,8 +14,6 @@ import {
 } from "./treeState";
 
 export interface TreeBrowserProps {
-  /** A modal dialog, or a panel docked into the case layout. Same content, same DOM. */
-  variant: "dialog" | "panel";
   /** Out of sight and out of reach for now; the walk and its state are kept. */
   collapsed?: boolean;
   workspaceKey: WorkspaceKey;
@@ -30,10 +28,6 @@ export interface TreeBrowserProps {
   canAssign: boolean;
   /** Move the keyboard focus into the tree once it has loaded. */
   focusOnOpen: boolean;
-  pinned: boolean;
-  /** False on screens too narrow for the docked panel: then there is no pin switch. */
-  canPin: boolean;
-  onTogglePin: () => void;
   onClose: () => void;
   /** Assign the term. The walk's id binds the selection to what was shown. */
   onUseTerm: (termId: string, browseId: string) => Promise<void>;
@@ -47,11 +41,11 @@ const START_NOTICE: Record<string, string> = {
 };
 
 /**
- * One walk through the ontology tree. It opens once, when the component mounts;
- * the parent starts another walk by giving the component a new key.
+ * One walk through the ontology tree, as a panel docked into the case layout. It
+ * opens once, when the component mounts; the parent starts another walk by giving
+ * the component a new key.
  */
 export const TreeBrowser: React.FC<TreeBrowserProps> = ({
-  variant,
   collapsed = false,
   workspaceKey,
   annotationId,
@@ -60,9 +54,6 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
   currentTermId,
   canAssign,
   focusOnOpen,
-  pinned,
-  canPin,
-  onTogglePin,
   onClose,
   onUseTerm,
 }) => {
@@ -80,34 +71,6 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
 
   const sectionRef = useRef<HTMLElement | null>(null);
   const opened = useRef(false);
-  const isDialog = variant === "dialog";
-  const latest = useRef({ isDialog, onClose });
-  latest.current = { isDialog, onClose };
-
-  // A dialog hands the focus back to where it was opened from. This effect comes
-  // first so that it sees the opener before the dialog takes the focus.
-  useEffect(() => {
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    return () => {
-      if (latest.current.isDialog && opener && document.contains(opener)) opener.focus();
-    };
-  }, []);
-
-  // Dialog only: take the focus, and close on Escape wherever the focus is.
-  useEffect(() => {
-    if (!isDialog) return;
-    const section = sectionRef.current;
-    if (section && !section.contains(document.activeElement)) section.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      // Captured at the window: nothing below (the case screen's Escape) sees it.
-      event.stopPropagation();
-      latest.current.onClose();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [isDialog]);
 
   // Collapsed, nothing in here keeps the keyboard focus.
   useEffect(() => {
@@ -139,17 +102,6 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
       .catch((reason) => setError(messageOf(reason)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Docking and undocking change the size of the tree's box (the panel is much
-  // smaller than the dialog): keep the selected row on screen. The focus stays.
-  const shownVariant = useRef(variant);
-  useEffect(() => {
-    if (shownVariant.current === variant) return;
-    shownVariant.current = variant;
-    const key = selectedKey ?? focusedKey;
-    if (key) setReveal({ key, focus: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variant]);
 
   const loadNode = async (key: string, options: { expand?: boolean; viaParentId?: string }) => {
     if (!browseId) return null;
@@ -241,32 +193,6 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
     }
   };
 
-  // Dialog only: Tab wraps around inside.
-  const trapTab = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (!isDialog || event.key !== "Tab") return;
-    const section = sectionRef.current;
-    if (!section) return;
-    const stops = Array.from(section.querySelectorAll<HTMLElement>('button:not([disabled]), [tabindex="0"]'));
-    if (stops.length === 0) {
-      event.preventDefault();
-      section.focus();
-      return;
-    }
-    // The key goes to the element that has the focus. Wrap when no stop lies
-    // beyond it in the direction of travel; in between, Tab is the browser's.
-    const from = event.target as Node;
-    const isBefore = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-    if (event.shiftKey) {
-      if (from === section || !stops.some((stop) => isBefore(stop, from))) {
-        event.preventDefault();
-        stops[stops.length - 1].focus();
-      }
-    } else if (!stops.some((stop) => isBefore(from, stop))) {
-      event.preventDefault();
-      stops[0].focus();
-    }
-  };
-
   const hint = !canAssign
     ? "Select one of your annotations to assign a term from the tree."
     : isCurrent
@@ -274,29 +200,10 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
       : null;
 
   return (
-    <div className={`tree-host tree-host--${variant}`} hidden={collapsed}>
-      <section
-        ref={sectionRef}
-        className="tree-browser"
-        role={isDialog ? "dialog" : "region"}
-        aria-modal={isDialog ? true : undefined}
-        aria-label="Ontology tree"
-        tabIndex={-1}
-        onKeyDown={trapTab}
-      >
+    <div className="tree-host" hidden={collapsed}>
+      <section ref={sectionRef} className="tree-browser" role="region" aria-label="Ontology tree">
         <header className="tree-browser__header">
           <h2>Ontology tree</h2>
-          {canPin && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm tree-pin"
-              aria-pressed={pinned}
-              onClick={onTogglePin}
-              title={pinned ? "Close the docked tree; from now on it opens as a dialog" : "Keep the tree open under the annotation panel"}
-            >
-              Keep open
-            </button>
-          )}
           <button type="button" className="btn btn-secondary btn-sm" aria-label="Close tree" onClick={onClose}>
             ✕
           </button>

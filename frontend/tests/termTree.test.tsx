@@ -185,19 +185,25 @@ describe("TermTree", () => {
     expect(item("Alpha").querySelector(".tree-current")).toBeNull();
   });
 
-  it("scrolls the revealed row into view and focuses it only when asked", () => {
+  // jsdom lays nothing out: this sees that the row is asked into view, and with "nearest"
+  // (scroll only as far as needed, so a tree that fits stays at its top), not where it
+  // ends up. That is asserted in a real browser, in browser/tree.spec.ts.
+  it("asks the revealed row into view, no further than needed, and focuses it only when asked", () => {
     const scrolled: Array<[string | undefined, unknown]> = [];
     (Element.prototype as any).scrollIntoView = function (this: HTMLElement, options: unknown) {
       scrolled.push([this.dataset.key, options]);
     };
 
     const first = render(<Harness reveal={{ key: "R/A/X", focus: false }} />);
-    expect(scrolled).toEqual([["R/A/X", { block: "center" }]]);
+    expect(scrolled).toEqual([["R/A/X", { block: "nearest" }]]);
     expect(document.activeElement).not.toBe(item("Shared"));
     first.unmount();
 
     render(<Harness reveal={{ key: "R/A/X", focus: true }} />);
-    expect(scrolled).toHaveLength(2);
+    expect(scrolled).toEqual([
+      ["R/A/X", { block: "nearest" }],
+      ["R/A/X", { block: "nearest" }],
+    ]);
     expect(document.activeElement).toBe(item("Shared"));
   });
 });

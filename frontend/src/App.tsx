@@ -128,9 +128,6 @@ export const App: React.FC = () => {
   const [confirmedAnnotator, setConfirmedAnnotator] = useState<string | null>(null);
   const [pendingOpen, setPendingOpen] = useState<{ docId: string; identity: string } | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("independent");
-  // Per annotator: whether the ontology tree is docked under the annotation panel ("Keep open").
-  // An annotator without an entry gets it docked; `false` is stored when the pin is released.
-  const [treePinnedByAnnotator, setTreePinnedByAnnotator] = useState<Record<string, boolean>>({});
   const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [provisioningNotices, setProvisioningNotices] = useState<ProvisioningNotice[]>([]);
   const [legacyConfig, setLegacyConfig] = useState<LegacyConfigStatus | null>(null);
@@ -236,7 +233,6 @@ export const App: React.FC = () => {
       const modes: Record<string, WorkspaceMode> = {};
       for (const [pkg, m] of Object.entries(prefs?.mode_by_package ?? {})) if (isMode(m)) modes[pkg] = m;
       modeByPackageRef.current = modes;
-      setTreePinnedByAnnotator(prefs?.tree_pinned_by_annotator ?? {});
       // A preset identity (personalised installation) wins over the last one used;
       // either way the person still confirms it before the first case opens.
       const last = settingsRef.current.annotatorId ?? prefs?.last_annotator_id?.trim();
@@ -591,12 +587,6 @@ export const App: React.FC = () => {
               if (selectedPackageId) await refreshDocuments(selectedPackageId, { annotator: annotatorRef.current, mode });
             }}
             onClose={() => { void closeWorkspace(); }}
-            treePinned={treePinnedByAnnotator[activeWorkspace.view.key.annotator_id] ?? true}
-            onTreePinnedChange={(pinned) => {
-              const annotator = activeWorkspace.view.key.annotator_id;
-              setTreePinnedByAnnotator((current) => ({ ...current, [annotator]: pinned }));
-              void api.updatePreferences({ tree_pinned_by_annotator: { [annotator]: pinned } }).catch(() => undefined);
-            }}
           />
         </CaseErrorBoundary>
         {sessionScreen}
