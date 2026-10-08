@@ -102,6 +102,10 @@ def open_tree(
         request, repo, ws_svc, req.workspace_key, req.layer_id, req.annotation_id
     )
     tree = tree_for(ontology.ontology)
+    # A start term that resolves carries its id (an alternative id, another
+    # case or stray blanks lead to the same term); one that does not resolve
+    # is kept as it was sent.
+    start = ontology.validate_term(req.term_id)
     path = tree.path_to(req.term_id)
     roots = tree.nodes(tree.roots_with(path))
     levels = tree.levels(path)
@@ -115,7 +119,7 @@ def open_tree(
             annotation_id=req.annotation_id,
             layer_id=req.layer_id,
             ontology_sha256=ontology.ref.sha256,
-            query=req.term_id,
+            query=start.term_id,
             route="browse",
             candidates=shown,
             # Nothing is scored in a tree: the ranked order is the shown order.
@@ -127,7 +131,7 @@ def open_tree(
     )
     return TreeOpenResponse(
         browse_id=browse_id,
-        start_status=ontology.validate_term(req.term_id).status,
+        start_status=start.status,
         roots=roots,
         path=path,
         levels=levels,

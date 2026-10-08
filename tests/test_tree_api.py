@@ -239,6 +239,27 @@ def test_open_returns_the_path_to_the_term_and_logs_everything_it_shows(walk):
     assert event.ontology_release == "2026-06-23"
 
 
+@pytest.mark.parametrize(
+    ("sent", "logged", "status"),
+    [
+        # A start term that resolves is logged by its id, however it was typed.
+        ("  hp:0001250 ", "HP:0001250", "valid"),
+        ("HP:0001250", "HP:0001250", "valid"),
+        (" hp:0000123", "HP:0000123", "obsolete"),
+        # One that does not resolve is logged as sent: there is no id to name.
+        ("  hp:9999999 ", "  hp:9999999 ", "unknown"),
+    ],
+)
+def test_the_walk_logs_the_start_term_by_its_resolved_id(walk, sent, logged, status):
+    client, _, ws_key = walk
+
+    resp = _tree(client, ws_key, "open", term_id=sent)
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["start_status"] == status
+    assert _event(client, resp.json()["browse_id"]).query == logged
+
+
 def test_every_open_starts_a_walk_of_its_own(walk):
     client, _, ws_key = walk
 
