@@ -10,7 +10,7 @@
 
 - **Eine Suche:** Die Auswahl „Search Strategy" entfällt. Ein Suchfeld findet Terme über Code oder Stichwort. Exakte Namenstreffer stehen oben, ähnliche Treffer folgen in gemischter Reihenfolge.
 - **Übersetzungen:** Offizielle HPO-Übersetzungsdateien (Babelon-TSV) liegen neben der Ontologie und werden mit durchsucht. Zielsprachen sind die von Phentrieve unterstützten: Deutsch, Spanisch, Französisch, Niederländisch (Englisch ist immer dabei). Welche der geladenen Sprachen durchsucht werden, stellt jeder Annotator über einen kleinen Flaggen-Knopf rechts im Suchfeld ein (Aufklappliste mit Checkboxen); die Wahl bleibt für ihn gespeichert.
-- **Baum:** Am Term einer eigenen Annotation öffnet ein Knopf den aufklappbaren Ontologie-Baum, aufgeklappt an diesem Term. Ein Klick wählt aus, „Use this term" ersetzt den Term der Annotation. Der Baum sitzt angedockt unter dem Annotations-Bereich in der rechten Spalte, bleibt offen und folgt der ausgewählten Annotation; ein Fenster (Dialog) ist er nur, wenn der Annotator „Keep open" gelöst hat, und auf schmalen Bildschirmen.
+- **Baum:** Am Term einer eigenen Annotation öffnet ein Knopf den aufklappbaren Ontologie-Baum, aufgeklappt an diesem Term. Ein Klick wählt aus, „Use this term" ersetzt den Term der Annotation. Der Baum hat genau eine Form: Er sitzt angedockt unter dem Annotations-Bereich in der rechten Spalte (in schmalen Fenstern dort, wo der Annotations-Bereich dann liegt), bleibt offen, bis man ihn schließt, und folgt der ausgewählten Annotation. Ein Fenster (Dialog) gibt es nicht, auch keine Einstellung dazu.
 - **Nachvollziehbarkeit bleibt:** Die App speichert schon heute zu jeder Suche, was gesucht und was angezeigt wurde, und zu jeder Termwahl, aus welcher Suche sie stammt. Das gilt künftig genauso für die neue Suche und für den Baum.
 - **Umsetzung in drei Plänen**, in dieser Reihenfolge: (1) eine Suche, (2) Übersetzungen, (3) Baum.
 
@@ -132,12 +132,14 @@ Ein Knopf „Show in tree" neben dem Termnamen im Annotations-Bereich (`Annotati
 
 Weitere Einstiege (an Suchtreffern, ohne Startterm) gibt es nicht.
 
-### Fenster
+### Ein Ort: angedockt unter dem Annotations-Bereich
 
-Der Baum öffnet standardmäßig **nicht** als Fenster, sondern angedockt (siehe „Angeheftet offen lassen"). Ein Fenster ist er nur, wenn der Annotator „Keep open" gelöst hat, und unter 1100 px Breite. Dann ist er ein Dialog über dem Arbeitsbereich (ca. 900 × 600 px, auf kleinen Bildschirmen bildschirmfüllend), zweispaltig:
+„Show in tree" zeigt den Baum immer an derselben Stelle: angedockt am Annotations-Bereich, in der rechten Spalte **unter** ihm (siehe „Platz im Layout" weiter unten). Es gibt nur diese eine Form – kein Fenster (Dialog), keinen Schalter zum Anheften und keine gespeicherte Einstellung. Der Baum öffnet sich nie von selbst, sondern erst nach „Show in tree".
 
-- **Links der Baum** ab der Wurzel der Ontologie. Der Startterm ist aufgeklappt, markiert und ins Bild gescrollt; alle Knoten auf einem Pfad von der Wurzel zu ihm sind aufgeklappt.
-- **Rechts die Details** des ausgewählten Knotens: Name, ID, Definition, Synonyme, übersetzte Namen nach Sprache, „Also under: …" und der Knopf **„Use this term"**.
+Der Baum-Bereich hat einen Kopf mit dem Titel und einem einzigen Bedienelement, dem Schließen-Kreuz („Close tree"). Darunter:
+
+- **Oben der Baum** ab der Wurzel der Ontologie. Der Startterm ist aufgeklappt und markiert; alle Knoten auf einem Pfad von der Wurzel zu ihm sind aufgeklappt. Gescrollt wird nur so weit, wie nötig ist, damit der Startterm im Bild ist: Ein Baum, der in seinen Bereich passt, beginnt oben bei der Wurzel.
+- **Darunter die Details** des ausgewählten Knotens: Name, ID, Definition, Synonyme, übersetzte Namen nach Sprache, „Also under: …" und der Knopf **„Use this term"**.
 
 Regeln:
 
@@ -145,24 +147,20 @@ Regeln:
 - Kinder sind alphabetisch nach Name sortiert. Hier wird nichts gemischt.
 - Ein Term mit mehreren Eltern erscheint unter jedem. Beim Öffnen wird der kürzeste Pfad aufgeklappt (bei Gleichstand der alphabetisch erste). „Also under: …" nennt die übrigen Eltern; ein Klick klappt den Pfad über diesen Elternknoten auf und springt dorthin.
 - Veraltete Terme erscheinen nicht. Ist der Startterm selbst veraltet oder unbekannt, öffnet der Baum an der Wurzel und zeigt einen Hinweis.
-- Ein Klick auf einen Knoten wählt ihn nur aus (Details rechts). Zugewiesen wird erst mit „Use this term". Der Knopf ist deaktiviert, solange der ausgewählte Knoten der aktuelle Term der Annotation ist.
-- „Use this term" ersetzt den Term der Annotation (`set_term`), schließt den Dialog (der angedockte Baum bleibt offen) und lässt die Annotation ausgewählt. Im Review greift die vorhandene Nachbehandlung (Proposal gilt als „geändert", eine ausdrückliche Ablehnung bleibt).
+- Ein Klick auf einen Knoten wählt ihn nur aus (Details darunter). Zugewiesen wird erst mit „Use this term". Der Knopf ist deaktiviert, solange der ausgewählte Knoten der aktuelle Term der Annotation ist.
+- „Use this term" ersetzt den Term der Annotation (`set_term`) und lässt die Annotation ausgewählt. Der Baum bleibt offen; der neue Term ist danach als aktueller Term markiert. Im Review greift die vorhandene Nachbehandlung (Proposal gilt als „geändert", eine ausdrückliche Ablehnung bleibt). Lehnt der Server den Term ab, steht der Grund im Baum.
+- Wählt der Annotator eine andere eigene Annotation mit Term aus, springt der Baum zu deren Term (neuer Baum-Durchgang, siehe Protokoll), ohne den Fokus zu verschieben. Ist eine Annotation ohne Term, ein Proposal oder nichts ausgewählt, bleibt der Baum stehen und „Use this term" ist deaktiviert.
+- Solange für eine neue Annotation noch ein Term gesucht wird (es gibt noch nichts, was der Baum zeigen könnte), tritt der Baum zurück: Suchfeld und Kandidaten haben den ganzen Annotations-Bereich. Ist der Term gewählt oder die Suche abgebrochen, ist der Baum wieder da – nach einem Abbruch mit demselben Baum-Durchgang.
+- Schließen: über das Schließen-Kreuz, oder mit `Esc`, wenn der Fokus im Baum liegt. Schließen ändert keine Einstellung. Der Baum bleibt danach zu, auch wenn eine andere Annotation ausgewählt wird, bis wieder „Show in tree" geklickt wird. Lag der Fokus im Baum-Bereich, geht er beim Schließen zurück auf „Show in tree".
 
-### Angeheftet offen lassen
+Platz im Layout – der Baum folgt dem Annotations-Bereich dorthin, wo dieser bei der jeweiligen Fensterbreite sitzt:
 
-Im Kopf des Baums sitzt ein Schalter „Keep open" (Pin). Er ist standardmäßig gesetzt: Ein Annotator ohne gespeicherte Wahl bekommt den Baum angedockt. Angedockt sitzt der Baum ab 1100 px Breite immer **unter** dem Annotations-Bereich in der rechten Spalte, nie daneben – eine vierte Spalte gibt es nicht, auch nicht auf sehr breiten Bildschirmen. Im Baum-Bereich stehen der Baum oben und die Details darunter; der Falltext behält seine Breite und bleibt sichtbar und bedienbar.
+- **Drei Spalten (ab 1025 px Breite):** Baum und Annotations-Bereich teilen sich die rechte Spalte, der Baum unten, nie daneben – eine vierte Spalte gibt es nicht, auch nicht auf sehr breiten Bildschirmen. Der Falltext behält seine Breite und bleibt sichtbar und bedienbar. Der Annotations-Bereich ist so hoch wie sein Inhalt, mindestens aber 40 % der Spalte; der Baum behält mindestens die Hälfte der Spalte und auf niedrigen Bildschirmen 400 px (höchstens 60 %). So ist keiner der beiden knapp, während der andere Platz übrig hat.
+- **Zwei Spalten (701 bis 1024 px):** Hier liegt der Annotations-Bereich als Streifen unter dem Falltext. Der Baum sitzt in diesem Streifen rechts neben dem Annotations-Bereich (je die Hälfte); solange der Baum offen ist, bekommt der Streifen 55 % der Höhe (mindestens 300 px), der Falltext den Rest.
+- **Ein Bereich zur Zeit (bis 700 px, Reiter „List" / „Document" / „Details"):** Der Baum gehört zu „Details" und sitzt dort unter dem Annotations-Bereich, mit dem größeren Anteil der Höhe (60 %). In den anderen Reitern ist er nicht zu sehen; der Baum-Durchgang bleibt erhalten.
+- Wird das Fenster breiter oder schmaler, wandert derselbe Baum-Durchgang mit.
 
-- Aufteilung der rechten Spalte: Der Annotations-Bereich ist so hoch wie sein Inhalt, mindestens aber 40 % der Spalte; der Baum behält mindestens die Hälfte der Spalte und auf niedrigen Bildschirmen 400 px (höchstens 60 %). So ist keiner der beiden knapp, während der andere Platz übrig hat.
-- Solange für eine neue Annotation noch ein Term gesucht wird (es gibt noch nichts, was der Baum zeigen könnte), tritt der angedockte Baum zurück: Suchfeld und Kandidaten haben die ganze Spalte. Ist der Term gewählt oder die Suche abgebrochen, ist der Baum wieder da – nach einem Abbruch mit demselben Baum-Durchgang.
-- Angedockt hält der Baum den Fokus nicht fest; `Tab` führt hinaus.
-- „Use this term" ersetzt den Term und lässt den Baum offen; der neue Term ist danach als aktueller Term markiert.
-- Wählt der Annotator eine andere eigene Annotation mit Term aus, springt der Baum zu deren Term (neuer Baum-Durchgang, siehe Protokoll). Ist eine Annotation ohne Term, ein Proposal oder nichts ausgewählt, bleibt der Baum stehen und „Use this term" ist deaktiviert.
-- Der Bereich schließt über sein Schließen-Kreuz oder durch Lösen des Pins; `Esc` schließt ihn nur, wenn der Fokus im Baum liegt.
-- Wer den Pin löst, bekommt von da an den Dialog; im Kopf des Dialogs lässt sich der Baum wieder anheften, aus dem Dialog wird dann ohne neuen Baum-Durchgang der angedockte Bereich.
-- Die Wahl wird je Annotator in den Workspace-Einstellungen gespeichert (`tree_pinned_by_annotator`; kein Eintrag bedeutet angedockt, `false` Dialog). Der Baum öffnet sich nie von selbst, sondern erst nach dem ersten „Show in tree" in einem Fall.
-- Auf schmalen Bildschirmen (unter 1100 px Breite) gibt es den Schalter nicht; dort bleibt es beim Dialog.
-
-Tastatur (Muster eines ARIA-Baums, `role="tree"` / `treeitem`): `↑`/`↓` wechseln den Knoten, `→` klappt auf bzw. geht zum ersten Kind, `←` klappt zu bzw. geht zum Elternknoten, `Enter` wählt aus, `Esc` schließt. Der Fokus bleibt im Dialog.
+Tastatur (Muster eines ARIA-Baums, `role="tree"` / `treeitem`): `↑`/`↓` wechseln den Knoten, `→` klappt auf bzw. geht zum ersten Kind, `←` klappt zu bzw. geht zum Elternknoten, `Enter` wählt aus, `Esc` schließt. Beim Öffnen über „Show in tree" geht der Fokus auf die Zeile des Startterms. Der Baum hält den Fokus nicht fest; `Tab` führt hinaus.
 
 ### Schnittstelle
 
@@ -175,10 +173,10 @@ Ein Knoten in den Antworten besteht aus `term_id`, `label`, `child_count`.
 
 ### Protokoll
 
-- Ein Baum-Durchgang beginnt mit jedem `tree/open` – beim Öffnen und, im angehefteten Baum, bei jedem Sprung zu einer anderen Annotation. Jeder Durchgang hat sein eigenes Ereignis und seine eigene `browse_id`.
+- Ein Baum-Durchgang beginnt mit jedem `tree/open` – beim Öffnen und, im offenen Baum, bei jedem Sprung zu einer anderen Annotation. Jeder Durchgang hat sein eigenes Ereignis und seine eigene `browse_id`.
 - Das Ereignis aus `tree/open` hält als `candidates` alle Terme fest, die dem Annotator in diesem Baum-Durchgang gezeigt wurden, in der Reihenfolge ihres ersten Erscheinens: zuerst die beim Öffnen sichtbaren, dann – bei jedem `tree/node` – die neu sichtbar gewordenen Kinder. `ranked_ids` ist dieselbe Liste, `shuffled` entfällt (keine Bewertung).
 - „Use this term" schickt `set_term` mit `search_event_id = browse_id`. Die vorhandene Prüfung (Term muss unter den Kandidaten des Ereignisses sein) und das vorhandene Auswahl-Ereignis greifen unverändert. Der Fundweg ist damit `browse`, und das Protokoll zeigt Startterm, gesehene Terme und gewählten Term.
-- Wird der Dialog ohne Auswahl geschlossen, bleibt das Ereignis als Suche ohne Auswahl stehen, wie eine Suche, aus der nichts gewählt wurde.
+- Wird der Baum ohne Auswahl geschlossen, bleibt das Ereignis als Suche ohne Auswahl stehen, wie eine Suche, aus der nichts gewählt wurde.
 
 ### Backend
 
@@ -208,8 +206,9 @@ Ein Knoten in den Antworten besteht aus `term_id`, `label`, `child_count`.
 **Baum**
 
 - Backend: Wurzeln, Kinder (sortiert, ohne veraltete), Pfade für Terme mit einem und mit mehreren Eltern, `via_parent_id`, unbekannter und veralteter Startterm; das Ereignis sammelt die gezeigten Terme; `set_term` mit `browse_id` wird angenommen für gezeigte und abgelehnt für nicht gezeigte Terme.
-- Frontend: Öffnen am Startterm, Aufklappen lädt nach, Tastaturbedienung, „Use this term" schickt `set_term` mit `search_event_id`, Knopf nur an eigenen Annotationen; angeheftet bleibt der Baum nach „Use this term" offen, springt beim Wechsel der Annotation zu deren Term und öffnet nach Neuladen wieder als Seitenbereich.
-- Browser: Term suchen und zuweisen, Baum öffnen, ein Kind auswählen und übernehmen; die Annotation trägt danach das Kind.
+- Backend, Einstellungen: Eine `preferences.json` aus einer früheren Version, die noch `tree_pinned_by_annotator` enthält, lädt ohne Fehler; der Schlüssel wird ignoriert und ist nach dem nächsten Speichern weg.
+- Frontend: Öffnen am Startterm, Aufklappen lädt nach, Tastaturbedienung, „Use this term" schickt `set_term` mit `search_event_id` (derselbe Weg wie eine Suchauswahl, mit der Nachbehandlung im Review), Knopf nur an eigenen Annotationen; der Baum ist ein angedockter Bereich und nie ein Dialog, hat im Kopf nur das Schließen-Kreuz, bleibt nach „Use this term" offen, zeigt eine Ablehnung des Servers, springt beim Wechsel der Annotation zu deren Term, tritt für die Termsuche einer neuen Annotation zurück, schließt mit `Esc` nur aus dem Baum heraus und gibt den Fokus an „Show in tree" zurück; er speichert nichts.
+- Browser: Term suchen und zuweisen, Baum öffnen, ein Kind auswählen und übernehmen; die Annotation trägt danach das Kind. Der Baum sitzt bei jeder Fensterbreite angedockt am Annotations-Bereich (drei Spalten, zwei Spalten, ein Bereich zur Zeit) und zeigt einen Baum, der hineinpasst, von oben; nach Neuladen ist er zu, bis er wieder geöffnet wird.
 
 **Danach jeweils:** eingebettete Web-Assets neu bauen.
 
