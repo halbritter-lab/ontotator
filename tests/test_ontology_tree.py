@@ -276,3 +276,36 @@ def test_detail_lists_names_translations_and_all_parents(tmp_path: Path) -> None
     root = graph.detail(tid("0000001"))
     assert root is not None
     assert root.parents == []
+
+
+def test_a_kept_path_is_not_handed_out_for_others_to_change() -> None:
+    tree = _fixture_tree()
+
+    tree.path_to("HP:0002133").append("HP:0000001")
+    tree.path_to("HP:0001250").clear()
+
+    assert tree.path_to("HP:0002133")[-2:] == ["HP:0001250", "HP:0002133"]
+    assert tree.path_to("HP:0001250")[-1] == "HP:0001250"
+    assert tree.path_to("HP:0002133", via_parent_id="HP:0001250") == tree.path_to(
+        "HP:0002133"
+    )
+
+
+def test_a_cyclic_file_gives_the_same_paths_whatever_was_asked_first(
+    tmp_path: Path,
+) -> None:
+    # Root > A > B, and the file wrongly names B a parent of A as well.
+    def cyclic_tree() -> OntologyTree:
+        ontology = load(write_graph_ontology(tmp_path))
+        ontology.terms[tid("0000003")].parents.append(tid("0000004"))
+        return OntologyTree(ontology)
+
+    expected = {
+        tid("0000003"): [tid("0000001"), tid("0000003")],
+        tid("0000004"): [tid("0000001"), tid("0000003"), tid("0000004")],
+    }
+    for order in (["0000003", "0000004"], ["0000004", "0000003"]):
+        tree = cyclic_tree()
+        for _ in range(2):
+            for local in order:
+                assert tree.path_to(tid(local)) == expected[tid(local)], order

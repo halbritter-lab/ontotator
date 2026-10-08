@@ -9,11 +9,13 @@ is therefore shown as a root rather than lost.
 
 Cost: a request touches the terms it shows and their children, never the whole
 ontology. The one exception, finding the roots, is done once per loaded
-ontology and kept (see :func:`tree_for`).
+ontology and kept, as is every path once it was worked out (see
+:func:`tree_for`).
 """
 
 from __future__ import annotations
 
+import heapq
 import threading
 from weakref import WeakKeyDictionary
 
@@ -65,6 +67,9 @@ class OntologyTree:
         self.ontology = ontology
         # The roots need one pass over every term; they are found once.
         self._roots: list[str] | None = None
+        # Term id -> its path from a root. Filled as terms are asked for; the
+        # hierarchy and the labels of a loaded ontology never change.
+        self._paths: dict[str, list[str]] = {}
 
     def live(self, term_id: str) -> Term | None:
         """The term behind an id (alternative ids resolve), unless obsolete."""
@@ -144,40 +149,81 @@ class OntologyTree:
         if term is None:
             return []
         if via_parent_id is None:
-            return self._best_path(term.hpo_id, {}, set())
+            return list(self._path(term.hpo_id))
         parent = self.live(via_parent_id)
         if parent is None or parent.hpo_id not in term.parents:
             raise DomainError(
                 "INVALID_TREE_PARENT",
                 f"Term '{via_parent_id}' is not a parent of '{term.hpo_id}'",
             )
-        return [*self._best_path(parent.hpo_id, {}, set()), term.hpo_id]
+        return [*self._path(parent.hpo_id), term.hpo_id]
 
-    def _best_path(
-        self, term_id: str, memo: dict[str, list[str]], walking: set[str]
-    ) -> list[str]:
-        if term_id in memo:
-            return memo[term_id]
-        # `walking` only guards against a cyclic file; a valid ontology has none.
-        walking.add(term_id)
-        candidates = [
-            self._best_path(parent, memo, walking)
-            for parent in self.parents_of(term_id)
-            if parent not in walking
-        ]
-        walking.discard(term_id)
-        best: list[str] = []
-        if candidates:
-            best = min(
-                candidates,
-                key=lambda path: (
-                    len(path),
-                    [self.ontology.label_of(i).casefold() for i in path],
-                    path,
-                ),
-            )
-        memo[term_id] = [*best, term_id]
-        return memo[term_id]
+    def _path(self, term_id: str) -> list[str]:
+        """The best path of a live term, kept for the next request.
+
+        Works without recursion and by distance from a root, so a file that is
+        deeper than Python's stack or (wrongly) cyclic gets the same answer
+        whatever was asked first.
+        """
+        known = self._paths.get(term_id)
+        if known is not None:
+            return known
+
+        # The ancestors whose paths are not known yet, and their live parents.
+        parents: dict[str, list[str]] = {}
+        stack = [term_id]
+        while stack:
+            current = stack.pop()
+            if current in parents or current in self._paths:
+                continue
+            parents[current] = self.parents_of(current)
+            stack.extend(parents[current])
+        children: dict[str, list[str]] = {}
+        for child, above in parents.items():
+            for parent in above:
+                children.setdefault(parent, []).append(child)
+
+        # Distance from a root, counted outwards from what is already known:
+        # the roots among the new terms and the ancestors with a kept path.
+        depth = {t: 0 for t, above in parents.items() if not above}
+        depth.update({t: len(self._paths[t]) - 1 for t in children if t in self._paths})
+        heap = [(d, t) for t, d in depth.items()]
+        heapq.heapify(heap)
+        order: list[str] = []
+        while heap:
+            d, current = heapq.heappop(heap)
+            if d != depth[current]:
+                continue
+            if current in parents:
+                order.append(current)
+            for child in children.get(current, ()):
+                if d + 1 < depth.get(child, d + 2):
+                    depth[child] = d + 1
+                    heapq.heappush(heap, (d + 1, child))
+
+        # Nearest first, so the paths one level up are there when needed.
+        found: dict[str, list[str]] = {}
+        for current in order:
+            candidates = [
+                found.get(parent) or self._paths[parent]
+                for parent in parents[current]
+                if depth.get(parent) == depth[current] - 1
+            ]
+            best: list[str] = []
+            if candidates:
+                # All equally short: the labels decide, from the root down.
+                best = min(
+                    candidates,
+                    key=lambda path: (
+                        [self.ontology.label_of(i).casefold() for i in path],
+                        path,
+                    ),
+                )
+            found[current] = [*best, current]
+        # Threads that get here together write the same paths.
+        self._paths.update(found)
+        # No root above it: only possible in a cyclic file. It stands alone.
+        return found.get(term_id, [term_id])
 
     def levels(self, expanded_ids: list[str]) -> list[TreeLevel]:
         """The children shown under each of these nodes, in the given order."""
