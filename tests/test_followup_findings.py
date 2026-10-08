@@ -295,11 +295,11 @@ def test_registry_parses_outside_shared_lock_and_only_once(
     release = threading.Event()
     loads: list[Path] = []
 
-    def slow_load(path, ref):  # type: ignore[no-untyped-def]
+    def slow_load(path, ref, **kwargs):  # type: ignore[no-untyped-def]
         loads.append(path)
         started.set()
         assert release.wait(10)
-        return original_load(path, ref)
+        return original_load(path, ref, **kwargs)
 
     monkeypatch.setattr(registry_module.OntologyService, "load", slow_load)
     results: list[object] = []

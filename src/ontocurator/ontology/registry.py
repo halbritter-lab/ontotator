@@ -4,6 +4,7 @@ import copy
 import hashlib
 import logging
 import threading
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -17,6 +18,10 @@ from ontocurator.domain.profiles import (
     resolve_ontology,
 )
 from ontocurator.ontology.service import OntologyService
+from ontocurator.ontology.translations import (
+    discover_translation_files,
+    parse_translation_name,
+)
 from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
 
 logger = logging.getLogger(__name__)
@@ -41,7 +46,11 @@ class OntologyRegistry:
     digest twice (double-checked insert).
     """
 
-    def __init__(self, base_dir: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        base_dir: Path | str | None = None,
+        translation_dirs: Iterable[Path | str] = (),
+    ) -> None:
         self._services: dict[str, OntologyService] = {}
         self._registered_paths: dict[str, Path] = {}
         self._failures: dict[str, OntologyLoadFailure] = {}
@@ -50,6 +59,34 @@ class OntologyRegistry:
         # Relative ``resource_path`` entries resolve against this directory
         # (the workspace), never against the process working directory.
         self.base_dir = Path(base_dir).resolve() if base_dir is not None else None
+        # The folders ontologies are looked for in. Translation files
+        # (hp-de.babelon.tsv) lie next to the ontologies there.
+        self.translation_dirs = [Path(d) for d in translation_dirs]
+
+    def translation_files(self) -> list[Path]:
+        """Every translation file in the ontology folders, as of now."""
+        return discover_translation_files(self.translation_dirs)
+
+    def services_for_prefix(self, prefix: str) -> list[tuple[str, OntologyService]]:
+        """Loaded ontologies whose dominant id prefix is ``prefix`` (lower case)."""
+        return [
+            (sha, service)
+            for sha, service in self.services()
+            if (service.ontology.dominant_prefix or "").lower() == prefix
+        ]
+
+    def unassigned_translations(self) -> list[Path]:
+        """Translation files whose prefix matches no loaded ontology."""
+        loaded = {
+            (service.ontology.dominant_prefix or "").lower()
+            for _, service in self.services()
+        }
+        unassigned = []
+        for path in self.translation_files():
+            parsed = parse_translation_name(path.name)
+            if parsed is not None and parsed[0] not in loaded:
+                unassigned.append(path)
+        return unassigned
 
     def register(self, path: Path | str, expected: OntologyDefinition) -> None:
         """Register and validate an ontology artifact against an expected OntologyDefinition."""
@@ -98,7 +135,9 @@ class OntologyRegistry:
                 cached = self._services.get(sha)
             if cached is not None:
                 return cached
-            service = OntologyService.load(path, ref)
+            service = OntologyService.load(
+                path, ref, translation_paths=self.translation_files()
+            )
             with self._lock:
                 service = self._services.setdefault(sha, service)
                 self._failures.pop(sha, None)
@@ -113,14 +152,20 @@ class OntologyRegistry:
             self._failures.pop(sha, None)
 
     @staticmethod
-    def load_resource(data: bytes, expected: OntologyDefinition) -> OntologyService:
+    def load_resource(
+        data: bytes,
+        expected: OntologyDefinition,
+        translation_paths: Iterable[Path] = (),
+    ) -> OntologyService:
         """Validate and parse archive bytes without retaining a temporary path."""
         with TemporaryDirectory(prefix="ontocurator-ontology-") as directory:
             path = Path(directory) / "ontology.json"
             path.write_bytes(data)
             try:
                 return OntologyService.load(
-                    path, OntologyRef(release=expected.release, sha256=expected.sha256)
+                    path,
+                    OntologyRef(release=expected.release, sha256=expected.sha256),
+                    translation_paths=translation_paths,
                 )
             except DomainError:
                 raise
@@ -134,7 +179,11 @@ class OntologyRegistry:
         prepared = []
         for ont in profile.ontologies:
             if ont.resource_path and ont.resource_path in resources:
-                prepared.append(self.load_resource(resources[ont.resource_path], ont))
+                prepared.append(
+                    self.load_resource(
+                        resources[ont.resource_path], ont, self.translation_files()
+                    )
+                )
             else:
                 service = self.get_service(ont.sha256)
                 if service is None:
