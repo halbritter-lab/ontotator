@@ -64,6 +64,31 @@ describe("Curation Dashboard Start Screen", () => {
     expect(within(table).getByText(/^Open$|^Offen$/i)).toBeDefined();
   });
 
+  it("shows the languages and term counts of each ontology", async () => {
+    vi.spyOn(api, "listPackages").mockResolvedValue(samplePackages as any);
+    vi.spyOn(api, "listDocuments").mockResolvedValue(sampleDocuments as any);
+    vi.spyOn(api, "listOntologies").mockResolvedValue([
+      {
+        ontology_id: "hp",
+        release: "2026-06-23",
+        sha256: "1",
+        term_count: 19000,
+        translations: [
+          { language: "de", filenames: ["hp-de.babelon.tsv", "hp-de.synonyms.tsv"], term_count: 3412 },
+          { language: "es", filenames: ["hp-es.babelon.tsv"], term_count: 18201 },
+          { language: "fr", filenames: ["hp-fr.babelon.tsv"], term_count: 880 },
+        ],
+      },
+      { ontology_id: "mondo", release: "2026-01-01", sha256: "2", term_count: 7, translations: [] },
+    ]);
+
+    render(<App />);
+
+    expect(
+      await screen.findByText("Ontologies: HP 2026-06-23 · de 3 412 · es 18 201 · fr 880 terms, MONDO"),
+    ).toBeDefined();
+  });
+
   it("filters documents by status tabs", async () => {
     vi.spyOn(api, "listPackages").mockResolvedValue(samplePackages as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(sampleDocuments as any);

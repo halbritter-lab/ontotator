@@ -95,6 +95,18 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** 18201 -> "18 201". */
+const formatCount = (n: number) => n.toLocaleString("en-US").replace(/,/g, " ");
+
+/** "HP", or with translations "HP 2026-06-23 · de 3 412 · es 18 201 terms". */
+export const ontologySummary = (ontology: OntologyInfo): string => {
+  const id = ontology.ontology_id.toUpperCase();
+  const translations = ontology.translations ?? [];
+  if (translations.length === 0) return id;
+  const languages = translations.map((item) => `${item.language} ${formatCount(item.term_count)}`);
+  return `${id} ${ontology.release} · ${languages.join(" · ")} terms`;
+};
 const casesText = (n: number) => `${n} ${n === 1 ? "case" : "cases"}`;
 
 export const App: React.FC = () => {
@@ -392,8 +404,10 @@ export const App: React.FC = () => {
     setIsUploadingOntology(true);
     setError(null);
     try {
-      await api.uploadOntology(file);
+      const uploaded = await api.uploadOntology(file);
       await loadOntologies();
+      // A translation file answers with what was loaded, or why it waits for its ontology.
+      if ("filename" in uploaded) setNotice(uploaded.message);
       const pending = missingOntologyPrompt?.pendingPackageFile;
       setMissingOntologyPrompt(null);
       if (pending) {
@@ -529,7 +543,7 @@ export const App: React.FC = () => {
   );
 
   const ontologyLabels = useMemo(
-    () => Array.from(new Set(ontologies.map((o) => o.ontology_id.toUpperCase()))),
+    () => Array.from(new Set(ontologies.map(ontologySummary))),
     [ontologies],
   );
 
@@ -594,8 +608,8 @@ export const App: React.FC = () => {
       <input
         ref={ontologyInputRef}
         type="file"
-        accept=".json"
-        aria-label="Ontology file (.json)"
+        accept=".json,.tsv"
+        aria-label="Ontology (.json) or translation file (.tsv)"
         style={{ display: "none" }}
         onChange={handleUploadMissingOntology}
         disabled={isUploadingOntology}
@@ -634,6 +648,7 @@ export const App: React.FC = () => {
                 background: "var(--bg-secondary)",
                 padding: "3px 8px",
                 borderRadius: 4,
+                whiteSpace: "nowrap",
               }}
             >
               Ontologies: {ontologyLabels.join(", ")}
@@ -645,7 +660,7 @@ export const App: React.FC = () => {
             onClick={() => ontologyInputRef.current?.click()}
             disabled={isUploadingOntology}
           >
-            {isUploadingOntology ? "Uploading..." : "Add ontology (.json)"}
+            {isUploadingOntology ? "Uploading..." : "Add ontology (.json) or translation (.tsv)"}
           </button>
           {hasPackages && importButton(false)}
         </div>

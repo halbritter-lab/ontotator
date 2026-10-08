@@ -36,12 +36,17 @@ export type LegacyConfigDeleted = components["schemas"]["LegacyConfigDeleted"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
+export type OntologyTranslation = components["schemas"]["OntologyTranslation"];
+export type TranslationUploadInfo = components["schemas"]["TranslationUploadInfo"];
+
 export interface OntologyInfo {
   ontology_id: string;
   release: string;
   sha256: string;
   term_count: number;
   path?: string | null;
+  /** The languages the ontology can be searched in besides English. */
+  translations?: OntologyTranslation[];
 }
 
 export class ApiError extends Error {
@@ -564,10 +569,11 @@ export class ApiClient {
     });
   }
 
-  async uploadOntology(file: File): Promise<OntologyInfo> {
+  /** Upload an ontology (.json) or a translation file (.tsv, e.g. hp-de.babelon.tsv). */
+  async uploadOntology(file: File): Promise<OntologyInfo | TranslationUploadInfo> {
     const formData = new FormData();
     formData.append("file", file);
-    return this.request<OntologyInfo>("/api/v1/ontologies", {
+    return this.request<OntologyInfo | TranslationUploadInfo>("/api/v1/ontologies", {
       method: "POST",
       body: formData,
     });
