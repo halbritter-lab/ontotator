@@ -7,3 +7,8 @@ src/ontocurator/web/** -text -diff
 *.zip binary
 *.sqlite binary
 *.sqlite3 binary
+
+# Translation files (babelon TSV) are hashed byte-wise for the index identity.
+# Check them out as they are stored, so core.autocrlf does not give the
+# fixtures other line ends, and with them another identity, on Windows.
+*.tsv -text

@@ -162,3 +162,19 @@ def test_a_file_with_a_byte_order_mark_loads_like_one_without(tmp_path: Path) ->
     _, skipped = apply_translations(load_ontology(HP), [wrong])
     assert [item.filename for item in skipped] == ["hp-fr.babelon.tsv"]
     assert str(wrong) in skipped[0].reason
+
+
+@pytest.mark.parametrize(
+    ("fixture", "sha256"),
+    [
+        (DE, "aa8f4e933a4fa12078b83e039d2d3aff273706b550e416f584228a034d7aeb12"),
+        (ES, "3f3af8643b35997d4d8be01fbb9615652e0aa30350f2baca06e5b49caba9cc7e"),
+    ],
+)
+def test_the_fixtures_have_the_same_bytes_on_every_platform(
+    fixture: Path, sha256: str
+) -> None:
+    """Translation files count by their bytes (index identity). `*.tsv -text`
+    in .gitattributes keeps a Windows checkout from turning the line ends of
+    the fixtures into CRLF, which would give them another identity there."""
+    assert hashlib.sha256(fixture.read_bytes()).hexdigest() == sha256
