@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 PREFERENCES_FILENAME = "preferences.json"
 MAX_ANNOTATOR_ID_LENGTH = 64
 
+MAX_SEARCH_LANGUAGES = 32
+
 PreferenceMode = Literal["independent", "review", "assisted"]
 
 
@@ -42,6 +44,36 @@ def normalize_annotator_id(value: str) -> str:
 
 def _check_annotator(value: str | None) -> str | None:
     return None if value is None else normalize_annotator_id(value)
+
+
+def _clean_languages(value: object) -> list[str] | None:
+    """A stored language selection: short lower-case codes, each once."""
+    if not isinstance(value, list) or len(value) > MAX_SEARCH_LANGUAGES:
+        return None
+    codes: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            return None
+        code = item.strip().lower()
+        if not (2 <= len(code) <= 8 and code.isascii() and code.isalpha()):
+            return None
+        if code not in codes:
+            codes.append(code)
+    return codes
+
+
+def _check_search_languages(
+    value: dict[str, list[str]] | None,
+) -> dict[str, list[str]] | None:
+    if value is None:
+        return None
+    checked: dict[str, list[str]] = {}
+    for annotator_id, languages in value.items():
+        codes = _clean_languages(languages)
+        if codes is None:
+            raise ValueError("languages must be a short list of language codes")
+        checked[normalize_annotator_id(annotator_id)] = codes
+    return checked
 
 
 class LegacyConfigDecision(BaseModel):
@@ -64,6 +96,9 @@ class Preferences(BaseModel):
 
     last_annotator_id: str | None = None
     mode_by_package: dict[str, PreferenceMode] = Field(default_factory=dict)
+    # Annotator id -> translation languages that annotator searches in. No
+    # entry means the annotator never chose: all loaded languages are searched.
+    search_languages_by_annotator: dict[str, list[str]] = Field(default_factory=dict)
 
     validate_annotator = field_validator("last_annotator_id")(_check_annotator)
 
@@ -84,8 +119,14 @@ class PreferencesUpdate(BaseModel):
 
     last_annotator_id: str | None = None
     mode_by_package: dict[str, PreferenceMode] | None = None
+    # Merged per annotator: the given annotators' selections are replaced, the
+    # others are kept.
+    search_languages_by_annotator: dict[str, list[str]] | None = None
 
     validate_annotator = field_validator("last_annotator_id")(_check_annotator)
+    validate_search_languages = field_validator("search_languages_by_annotator")(
+        _check_search_languages
+    )
 
 
 class PreferencesStore:
@@ -124,6 +165,12 @@ class PreferencesStore:
                     "assisted",
                 ):
                     prefs.mode_by_package[package_id] = mode
+        selections = data.get("search_languages_by_annotator")
+        if isinstance(selections, dict):
+            for annotator_id, languages in selections.items():
+                codes = _clean_languages(languages)
+                if isinstance(annotator_id, str) and codes is not None:
+                    prefs.search_languages_by_annotator[annotator_id] = codes
         with contextlib.suppress(ValidationError):
             if isinstance(data.get("legacy_config"), dict):
                 prefs.legacy_config = LegacyConfigDecision.model_validate(
@@ -147,6 +194,10 @@ class PreferencesStore:
                 prefs.last_annotator_id = change.last_annotator_id
             if change.mode_by_package:
                 prefs.mode_by_package.update(change.mode_by_package)
+            if change.search_languages_by_annotator:
+                prefs.search_languages_by_annotator.update(
+                    change.search_languages_by_annotator
+                )
             self._write(prefs)
             return prefs.public()
 
