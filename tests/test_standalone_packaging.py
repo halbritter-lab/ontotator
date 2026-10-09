@@ -99,6 +99,10 @@ def test_pyinstaller_args(tmp_path: Path) -> None:
     assert "--noupx" in args
     assert "--onedir" in args
     assert "--copy-metadata=ontocurator" in args
+    assert "--copy-metadata=numpy" in args
+    assert "--copy-metadata=scipy" in args
+    assert "--copy-metadata=scikit-learn" in args
+    assert any("search_conditions.sql" in arg for arg in args)
     import importlib.util
 
     for arg in args:
@@ -134,6 +138,10 @@ def test_build_release_wheel_check() -> None:
         "ontocurator/web/assets/index-1.css",
     }
     assert build_release.missing_wheel_files(complete) == []
+    assert (
+        "ontocurator/storage/search_conditions.sql"
+        in build_release.REQUIRED_WHEEL_FILES
+    )
     assert build_release.missing_wheel_files(
         complete - {"ontocurator/web/assets/index-1.css"}
     ) == ["ontocurator/web/assets/*.css"]

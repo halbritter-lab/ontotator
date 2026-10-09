@@ -23,8 +23,10 @@ from ontocurator.domain.profiles import (
 )
 from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import decode_snapshot, verify_snapshot
 from ontocurator.domain.workspace import Submission
+from ontocurator.ontology.conditions import validate_resources, validate_search_events
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.packages.models import (
     PackageManifest,
@@ -162,6 +164,9 @@ def _read_package(
         if ont.resource_path:
             allowed_files.add(ont.resource_path)
 
+    for condition in manifest.search_conditions or []:
+        allowed_files.update(item.resource_path for item in condition.translations)
+
     for name in file_contents:
         if name not in allowed_files:
             raise InvalidPackage(f"Disallowed file in archive: '{name}'")
@@ -184,6 +189,10 @@ def _read_package(
                     f"File SHA-256 mismatch for '{filename}': "
                     f"expected {expected_hash}, got {actual_hash}"
                 )
+
+    captured_paths = validate_resources(
+        manifest.search_conditions, manifest.task_profile, file_contents
+    )
 
     # Verify embedded ontology resources
     for ont in manifest.task_profile.ontologies:
@@ -300,6 +309,10 @@ def _read_package(
     for line in _jsonl_records(file_contents["search-events.jsonl"]):
         search_events.append(SearchEventRecord.model_validate_json(line))
 
+    validate_search_events(
+        manifest.search_conditions, manifest.task_profile, search_events
+    )
+
     # Cross-dataset integrity checks
     for ev in evidence.values():
         bound_doc = documents.get(ev.document_id)
@@ -360,6 +373,21 @@ def _read_package(
             raise InvalidPackage("Unsupported submission format or revision")
         if sub.origin_key.document_id not in documents:
             raise InvalidPackage("Submission references missing document")
+        expected_scope = build_scope(manifest.task_profile, sub.origin_key.mode)
+        if sub.scope is not None and (
+            sub.scope.mode != sub.origin_key.mode
+            or sub.scope.scope_id != sub.origin_key.scope_id
+            or sub.scope.editable_layer_ids != expected_scope.editable_layer_ids
+            or sub.scope.reference_layer_ids != expected_scope.reference_layer_ids
+        ):
+            # A projected independent export retains the original scope ID,
+            # which hashed its full source profile. Compare that ID to origin,
+            # while verifying the actual permitted layers against this profile.
+            raise InvalidPackage("Submission scope contradicts origin or profile")
+        if len(sub.checked_layer_ids) != len(set(sub.checked_layer_ids)) or not set(
+            sub.checked_layer_ids
+        ) <= set(expected_scope.editable_layer_ids):
+            raise InvalidPackage("Submission checked layers contradict editable scope")
         canonical_targets = ReviewTargetSet.create(sub.targets.targets)
         if sub.targets != canonical_targets:
             raise InvalidPackage("Submission target set identity mismatch")
@@ -466,9 +494,13 @@ def _read_package(
         submissions=submissions,
         search_events=search_events,
         embedded_files={
-            ont.resource_path: file_contents[ont.resource_path]
-            for ont in manifest.task_profile.ontologies
-            if ont.resource_path and ont.resource_path in file_contents
+            path: file_contents[path]
+            for path in captured_paths
+            | {
+                ont.resource_path
+                for ont in manifest.task_profile.ontologies
+                if ont.resource_path and ont.resource_path in file_contents
+            }
         },
     )
 

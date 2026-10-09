@@ -213,6 +213,10 @@ def pyinstaller_args(
         f"--add-data={web_src}{sep}ontocurator/web",
         f"--add-data={STORAGE_DIR / 'schema_v4.sql'}{sep}ontocurator/storage",
         f"--add-data={STORAGE_DIR / 'ontology_resources.sql'}{sep}ontocurator/storage",
+        f"--add-data={STORAGE_DIR / 'search_conditions.sql'}{sep}ontocurator/storage",
+        "--copy-metadata=numpy",
+        "--copy-metadata=scipy",
+        "--copy-metadata=scikit-learn",
         # importlib.metadata.version("ontocurator") must work when frozen.
         "--copy-metadata=ontocurator",
         *(f"--hidden-import={h}" for h in HIDDEN_IMPORTS),

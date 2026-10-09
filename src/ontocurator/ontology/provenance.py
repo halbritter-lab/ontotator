@@ -8,6 +8,7 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from ontocurator.domain.workspace import WorkspaceKey
+from ontocurator.ontology.conditions import Digest, SearchExecution
 
 
 class TermStatus(BaseModel):
@@ -176,6 +177,9 @@ class SearchResult(BaseModel):
     layer_id: str | None = None
     ontology_sha256: str | None = None
     index_identity: str | None = None
+    search_condition_id: Digest | None = None
+    execution: SearchExecution | None = None
+    runtime_drift: bool | None = None
     # The languages whose names this search looked at, English first. Empty
     # when it looked at no names (a term id, the tree).
     languages: list[str] = Field(default_factory=list)

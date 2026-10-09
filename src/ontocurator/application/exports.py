@@ -12,6 +12,7 @@ from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile, profile_hash
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import WorkspaceKey, WorkspaceMode
+from ontocurator.ontology.conditions import projected_conditions
 from ontocurator.packages.models import (
     PackageManifest,
     SearchEventRecord,
@@ -53,7 +54,9 @@ class ExportService:
 
         documents = {d.document_id: d for d in self.repo.list_documents(package_id)}
         # Load the installed package and its profile once for all workspaces.
-        orig_pkg = self.repo.export_package(package_id)
+        orig_pkg = self.repo.export_package(
+            package_id, include_captured_conditions=False
+        )
         package_profile = self.repo.get_task_profile(package_id)
         annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
         evidence: dict[tuple[str, str], EvidenceSnapshot] = {}
@@ -82,6 +85,17 @@ class ExportService:
             if ont.resource_path and ont.resource_path in stored_resources
         }
 
+        conditions = projected_conditions(
+            self.repo.get_search_conditions(package_id), profile
+        )
+        embedded.update(
+            {
+                item.resource_path: stored_resources[item.resource_path]
+                for condition in conditions or []
+                for item in condition.translations
+            }
+        )
+
         manifest = PackageManifest(
             format_version="ontocurator-work-package/v2",
             package_id=f"export-{uuid4()}",
@@ -89,6 +103,7 @@ class ExportService:
             document_order=list(documents),
             task_profile=profile,
             task_profile_sha256=profile_hash(profile),
+            search_conditions=conditions,
             origin_package_id=package_id,
             origin_manifest_hash=canonical_hash(orig_pkg.manifest.model_dump()),
         )
@@ -108,7 +123,7 @@ class ExportService:
         """Produce a scoped ValidatedPackage containing only workspace data."""
         return self._export_workspace(
             key,
-            self.repo.export_package(key.package_id),
+            self.repo.export_package(key.package_id, include_captured_conditions=False),
             self.repo.get_task_profile(key.package_id),
             self.repo.get_document(key.package_id, key.document_id),
         )
@@ -221,6 +236,14 @@ class ExportService:
             ]
         now = datetime.now(UTC).isoformat()
         export_pkg_id = f"export-{uuid4()}"
+        conditions = projected_conditions(
+            self.repo.get_search_conditions(key.package_id), task_profile
+        )
+        captured_paths = {
+            item.resource_path
+            for condition in conditions or []
+            for item in condition.translations
+        }
         manifest = PackageManifest(
             format_version="ontocurator-work-package/v2",
             package_id=export_pkg_id,
@@ -228,6 +251,7 @@ class ExportService:
             document_order=[key.document_id],
             task_profile=task_profile,
             task_profile_sha256=profile_hash(task_profile),
+            search_conditions=conditions,
             origin_package_id=key.package_id,
             origin_manifest_hash=canonical_hash(orig_pkg.manifest.model_dump()),
         )
@@ -240,8 +264,13 @@ class ExportService:
             submissions=submissions_map,
             search_events=search_events,
             embedded_files={
-                ont.resource_path: orig_pkg.embedded_files[ont.resource_path]
-                for ont in task_profile.ontologies
-                if ont.resource_path and ont.resource_path in orig_pkg.embedded_files
+                path: orig_pkg.embedded_files[path]
+                for path in captured_paths
+                | {
+                    ont.resource_path
+                    for ont in task_profile.ontologies
+                    if ont.resource_path
+                    and ont.resource_path in orig_pkg.embedded_files
+                }
             },
         )

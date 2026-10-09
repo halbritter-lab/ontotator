@@ -312,7 +312,9 @@ class PackageImportService:
         with self.registry.changing():
             generation = self.registry.translation_generation
             services = self.registry.prepare_package(
-                pkg.manifest.task_profile, pkg.embedded_files
+                pkg.manifest.task_profile,
+                pkg.embedded_files,
+                pkg.manifest.search_conditions,
             )
         # The database write is not part of the registry change: an edit that
         # holds the database and waits for an ontology to load must not meet an

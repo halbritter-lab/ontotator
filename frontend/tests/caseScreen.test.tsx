@@ -220,7 +220,7 @@ describe("CaseScreen integration", () => {
   });
 
   it("offers the search languages of the layer's ontology and remembers the annotator's choice", async () => {
-    vi.spyOn(api, "listOntologies").mockResolvedValue([
+    vi.spyOn(api, "listPackageOntologies").mockResolvedValue([
       {
         ontology_id: "hp",
         release: "2024-06-25",
@@ -259,7 +259,7 @@ describe("CaseScreen integration", () => {
   });
 
   it("shows no language button when the ontology has no translations", async () => {
-    const listed = vi.spyOn(api, "listOntologies").mockResolvedValue([
+    const listed = vi.spyOn(api, "listPackageOntologies").mockResolvedValue([
       { ontology_id: "hp", release: "2024-06-25", sha256: "test-hp-sha", term_count: 11, translations: [] },
     ]);
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: "user-test", mode_by_package: {} });
@@ -267,7 +267,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={sampleView} workspaceId="ws-test-token" onClose={vi.fn()} />);
     fireEvent.click(screen.getByText(/\+ (New Annotation|Neue Annotation)/i));
 
-    await waitFor(() => expect(listed).toHaveBeenCalled());
+    await waitFor(() => expect(listed).toHaveBeenCalledWith(sampleView.key.package_id));
     expect(screen.getByLabelText(/Search ontology term/i)).toBeDefined();
     expect(screen.queryByRole("button", { name: /Search languages/ })).toBeNull();
   });

@@ -52,6 +52,8 @@ class ReviewService:
                 f"Review decisions are only permitted in review mode, got '{key.mode}'",
             )
         cmd = self.parse_command(envelope.payload)
+        if self.registry is not None and cmd.outcome == "confirmed":
+            self.registry.ensure_package_conditions(self.repo, key.package_id)
 
         def operation(draft: Draft) -> Draft:
             return self._execute_decision(draft, cmd, key)
@@ -108,8 +110,8 @@ class ReviewService:
         if cmd.outcome == "confirmed":
             ont_svc = None
             if self.registry is not None:
-                ont_svc = self.registry.for_layer(
-                    task_profile, target_snap.annotation.layer_id
+                ont_svc = self.registry.for_package_layer(
+                    self.repo, key.package_id, target_snap.annotation.layer_id
                 )
             elif self.ontology is not None:
                 ont_svc = self.ontology

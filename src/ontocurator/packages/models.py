@@ -8,6 +8,7 @@ from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.documents import Document, EvidenceSnapshot, OntologyRef
 from ontocurator.domain.profiles import TaskProfile
 from ontocurator.domain.workspace import Submission, WorkspaceKey
+from ontocurator.ontology.conditions import Digest, SearchCondition, SearchExecution
 
 
 class SearchEventRecord(BaseModel):
@@ -39,6 +40,9 @@ class SearchEventRecord(BaseModel):
     ontology_release: str
     index_identity: str
     timestamp: str
+    search_condition_id: Digest | None = None
+    execution: SearchExecution | None = None
+    runtime_drift: bool | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -132,9 +136,14 @@ class PackageManifest(BaseModel):
     created_at: str
     origin_package_id: str | None = None
     origin_manifest_hash: str | None = None
+    search_conditions: list[SearchCondition] | None = Field(
+        default=None, max_length=128
+    )
 
     def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         data = super().model_dump(*args, **kwargs)
+        if self.search_conditions is None:
+            data.pop("search_conditions", None)
         if self.format_version == "hpo-editor-work-package/v1":
             data.pop("axes_config", None)
             data.pop("axes_config_sha256", None)

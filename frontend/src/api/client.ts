@@ -594,6 +594,12 @@ export class ApiClient {
     });
   }
 
+  async listPackageOntologies(packageId: string): Promise<OntologyInfo[]> {
+    return this.request<OntologyInfo[]>(`/api/v1/packages/${encodeURIComponent(packageId)}/ontologies`, {
+      method: "GET",
+    });
+  }
+
   /** Upload an ontology (.json) or a translation file (.tsv, e.g. hp-de.babelon.tsv). */
   async uploadOntology(file: File): Promise<OntologyInfo | TranslationUploadInfo> {
     const formData = new FormData();

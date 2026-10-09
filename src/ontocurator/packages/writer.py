@@ -10,6 +10,7 @@ from ontocurator.domain.errors import InvalidPackage
 from ontocurator.domain.profiles import profile_hash
 from ontocurator.domain.serialization import encode_snapshot
 from ontocurator.domain.workspace import Submission
+from ontocurator.ontology.conditions import validate_resources, validate_search_events
 from ontocurator.packages.models import ValidatedPackage
 
 
@@ -83,6 +84,18 @@ def _prepare_package_payloads(
     extra_files = dict(package.embedded_files)
     if embedded_files:
         extra_files.update(embedded_files)
+    if package.manifest.task_profile is not None:
+        validate_resources(
+            package.manifest.search_conditions,
+            package.manifest.task_profile,
+            extra_files,
+        )
+    if package.manifest.task_profile is not None:
+        validate_search_events(
+            package.manifest.search_conditions,
+            package.manifest.task_profile,
+            package.search_events,
+        )
     for filename, data in extra_files.items():
         file_hashes[filename] = hashlib.sha256(data).hexdigest()
 

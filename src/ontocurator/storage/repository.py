@@ -23,6 +23,7 @@ from ontocurator.domain.workspace import (
     Submission,
     WorkspaceKey,
 )
+from ontocurator.ontology.conditions import SearchCondition, validate_resources
 from ontocurator.packages.models import (
     PackageManifest,
     SearchEventRecord,
@@ -572,6 +573,25 @@ class Repository:
 
     def _store_ontology_resources(self, package: ValidatedPackage) -> None:
         """Persist resources inside the same transaction as their package."""
+        if package.manifest.search_conditions is not None:
+            assert package.manifest.task_profile is not None
+            validate_resources(
+                package.manifest.search_conditions,
+                package.manifest.task_profile,
+                package.embedded_files,
+            )
+            existing = self.get_search_conditions(package.manifest.package_id)
+            if existing is not None and existing != package.manifest.search_conditions:
+                raise InvalidPackage("Conflicting immutable package search conditions")
+            self.db.get_connection().execute(
+                "INSERT OR IGNORE INTO package_search_conditions VALUES (?, ?)",
+                (
+                    package.manifest.package_id,
+                    json.dumps(
+                        [c.model_dump() for c in package.manifest.search_conditions]
+                    ),
+                ),
+            )
         self.db.get_connection().executemany(
             "INSERT OR IGNORE INTO package_ontology_resources "
             "(package_id, resource_path, content) VALUES (?, ?, ?)",
@@ -580,6 +600,53 @@ class Repository:
                 for path, data in package.embedded_files.items()
             ],
         )
+
+    def get_search_conditions(self, package_id: str) -> list[SearchCondition] | None:
+        row = (
+            self.db.get_connection()
+            .execute(
+                "SELECT payload_json FROM package_search_conditions WHERE package_id=?",
+                (package_id,),
+            )
+            .fetchone()
+        )
+        return (
+            [SearchCondition.model_validate(c) for c in json.loads(row[0])]
+            if row
+            else None
+        )
+
+    def capture_search_conditions(
+        self,
+        package_id: str,
+        conditions: list[SearchCondition],
+        resources: dict[str, bytes],
+    ) -> list[SearchCondition]:
+        """Insert first-use capture atomically without rewriting source manifests.
+
+        Call before entering a draft mutation transaction. Concurrent captures
+        return the first committed condition set rather than replacing it.
+        """
+        validate_resources(conditions, self.get_task_profile(package_id), resources)
+        conn = self.db.get_connection()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            existing = self.get_search_conditions(package_id)
+            if existing is None:
+                conn.execute(
+                    "INSERT INTO package_search_conditions VALUES (?, ?)",
+                    (package_id, json.dumps([c.model_dump() for c in conditions])),
+                )
+                conn.executemany(
+                    "INSERT OR IGNORE INTO package_ontology_resources VALUES (?, ?, ?)",
+                    [(package_id, path, data) for path, data in resources.items()],
+                )
+                existing = conditions
+            conn.execute("COMMIT")
+            return existing
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
 
     def get_embedded_files(self, package_id: str) -> dict[str, bytes]:
         rows = (
@@ -1121,7 +1188,9 @@ class Repository:
             cursor.execute("ROLLBACK;")
             raise
 
-    def export_package(self, package_id: str) -> ValidatedPackage:
+    def export_package(
+        self, package_id: str, *, include_captured_conditions: bool = True
+    ) -> ValidatedPackage:
         """Export all data associated with package into a ValidatedPackage."""
         conn = self.db.get_connection()
         cursor = conn.cursor()
@@ -1197,6 +1266,11 @@ class Repository:
         search_events = [
             SearchEventRecord.model_validate_json(r[0]) for r in cursor.fetchall()
         ]
+
+        if include_captured_conditions:
+            conditions = self.get_search_conditions(package_id)
+            if conditions is not None:
+                manifest = manifest.model_copy(update={"search_conditions": conditions})
 
         return ValidatedPackage(
             manifest=manifest,

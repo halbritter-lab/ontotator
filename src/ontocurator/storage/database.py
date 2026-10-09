@@ -29,6 +29,7 @@ REQUIRED_TABLES = frozenset(
         "package_search_events",
         "mutation_receipts",
         "package_ontology_resources",
+        "package_search_conditions",
     }
 )
 
@@ -128,6 +129,7 @@ class Database:
             # Format confirmed as v4. Older v4 workspaces predate the embedded
             # ontology resource table; add it idempotently and atomically.
             self._run_script_atomically(_get_sql_schema_path("ontology_resources.sql"))
+            self._run_script_atomically(_get_sql_schema_path("search_conditions.sql"))
             self._verify_required_tables()
             return
 
@@ -140,6 +142,7 @@ class Database:
         )
         if cursor.fetchone() is None:
             self._run_script_atomically(_get_sql_schema_path("schema_v4.sql"))
+        self._run_script_atomically(_get_sql_schema_path("search_conditions.sql"))
         self._verify_required_tables()
 
     def _run_script_atomically(self, schema_path: Path) -> None:

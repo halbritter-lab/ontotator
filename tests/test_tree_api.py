@@ -919,17 +919,17 @@ def test_the_export_carries_the_walk_with_everything_it_showed(walk):
     assert selection.displayed_position == 10
 
 
-def test_details_carry_translated_names_once_they_are_loaded(walk):
+def test_details_ignore_ambient_names_added_after_package_capture(walk):
     client, _, ws_key = walk
     repo = client.app.state.repo
     service = client.app.state.ontology_registry.for_layer(
         repo.get_task_profile("pkg-scenario-a"), "hpo-layer"
     )
-    # What Part 2's translation files leave on a term.
+    # Simulate a later ambient change after this workspace captured its resources.
     service.ontology.terms["HP:0001250"].translations["de"] = ["Krampfanfall"]
 
     opened = _tree(client, ws_key, "open", term_id="HP:0001250").json()
-    assert opened["detail"]["translations"] == {"de": ["Krampfanfall"]}
+    assert opened["detail"]["translations"] == {}
 
     node = _tree(
         client,

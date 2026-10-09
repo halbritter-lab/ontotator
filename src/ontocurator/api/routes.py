@@ -365,10 +365,11 @@ def resolve_term_labels(
     ontology: OntologyDep,
 ) -> list[TermLabel]:
     """Resolve display names against the ontology pinned to each package layer."""
-    profile = repo.get_task_profile(payload.package_id)
     labels: list[TermLabel] = []
     for term in payload.terms:
-        status = ontology.for_layer(profile, term.layer_id).validate_term(term.term_id)
+        status = ontology.for_package_layer(
+            repo, payload.package_id, term.layer_id
+        ).validate_term(term.term_id)
         labels.append(
             TermLabel(
                 layer_id=term.layer_id,
@@ -532,7 +533,9 @@ def layer_ontology(
                 )
             break
 
-    return get_ontology(request).for_layer(profile, layer_id)
+    return get_ontology(request).for_package_layer(
+        repo, workspace_key.package_id, layer_id
+    )
 
 
 @router.post("/search")
@@ -549,7 +552,12 @@ def search_ontology(
 
     result = ontology.search(req)
     result.search_id = str(uuid4())
-    result.index_identity = ontology.index_identity
+    result.index_identity = ontology.identity_for_languages(result.languages)
+    result.search_condition_id = (
+        ontology.search_condition.condition_id if ontology.search_condition else None
+    )
+    result.execution = ontology.execution(result.languages, req.k)
+    result.runtime_drift = ontology.runtime_drift()
     result.layer_id = req.layer_id
     result.ontology_sha256 = ontology.ref.sha256
 
@@ -570,6 +578,9 @@ def search_ontology(
         languages=result.languages,
         ontology_release=ontology.ref.release,
         index_identity=result.index_identity,
+        search_condition_id=result.search_condition_id,
+        execution=result.execution,
+        runtime_drift=result.runtime_drift,
         timestamp=datetime.now(UTC).isoformat(),
     )
     repo.save_search_event(event)
@@ -694,6 +705,21 @@ def _ontology_info(sha: str, svc: OntologyService, path: Path | None) -> Ontolog
             for language, count in svc.translation_counts.items()
         ],
     )
+
+
+@router.get("/packages/{package_id}/ontologies")
+def package_ontologies(
+    package_id: str, repo: RepoDep, ontology: OntologyDep
+) -> list[OntologyInfo]:
+    """Search languages from the package's immutable first-use resource capture."""
+    profile = repo.get_task_profile(package_id)
+    results = []
+    for definition in profile.ontologies:
+        service = ontology.for_package_ontology(
+            repo, package_id, definition.ontology_id
+        )
+        results.append(_ontology_info(definition.sha256, service, None))
+    return results
 
 
 @router.get("/ontologies")

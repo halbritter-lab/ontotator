@@ -812,6 +812,50 @@
         }
       }
     },
+    "/api/v1/packages/{package_id}/ontologies": {
+      "get": {
+        "summary": "Package Ontologies",
+        "description": "Search languages from the package's immutable first-use resource capture.",
+        "operationId": "package_ontologies_api_v1_packages__package_id__ontologies_get",
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OntologyInfo"
+                  },
+                  "title": "Response Package Ontologies Api V1 Packages  Package Id  Ontologies Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ontologies": {
       "get": {
         "summary": "List Ontologies",
@@ -1517,6 +1561,97 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "IndexConfiguration": {
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Algorithm",
+            "default": "selected-language-char-wb-tfidf/2"
+          },
+          "analyzer": {
+            "type": "string",
+            "const": "char_wb",
+            "title": "Analyzer",
+            "default": "char_wb"
+          },
+          "ngram_range": {
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Ngram Range",
+            "default": [
+              3,
+              5
+            ]
+          },
+          "sublinear_tf": {
+            "type": "boolean",
+            "title": "Sublinear Tf",
+            "default": true
+          },
+          "lowercase": {
+            "type": "boolean",
+            "title": "Lowercase",
+            "default": true
+          },
+          "use_idf": {
+            "type": "boolean",
+            "title": "Use Idf",
+            "default": true
+          },
+          "smooth_idf": {
+            "type": "boolean",
+            "title": "Smooth Idf",
+            "default": true
+          },
+          "norm": {
+            "type": "string",
+            "const": "l2",
+            "title": "Norm",
+            "default": "l2"
+          },
+          "fitting_corpus": {
+            "type": "string",
+            "const": "english-plus-selected-translations",
+            "title": "Fitting Corpus",
+            "default": "english-plus-selected-translations"
+          },
+          "term_aggregation": {
+            "type": "string",
+            "const": "max-name-score",
+            "title": "Term Aggregation",
+            "default": "max-name-score"
+          },
+          "id_normalization": {
+            "type": "string",
+            "title": "Id Normalization",
+            "default": "dominant_prefix_int_v1"
+          },
+          "ranking": {
+            "type": "string",
+            "title": "Ranking",
+            "default": "numpy-argsort-max400-k40-terms-k4/1"
+          },
+          "display_shuffle": {
+            "type": "string",
+            "title": "Display Shuffle",
+            "default": "sha256-annotator-annotation-query-k-languages/1"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "IndexConfiguration",
+        "description": "Declared defaults and application algorithms, separate from the runtime."
+      },
       "LayerDefinition": {
         "properties": {
           "layer_id": {
@@ -2109,6 +2244,21 @@
               }
             ],
             "title": "Origin Manifest Hash"
+          },
+          "search_conditions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SearchCondition"
+                },
+                "type": "array",
+                "maxItems": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Conditions"
           }
         },
         "additionalProperties": false,
@@ -2420,6 +2570,66 @@
         "title": "ReviewTargetSet",
         "description": "Immutable, sorted set of targeted annotation references for a review round."
       },
+      "RuntimeIdentity": {
+        "properties": {
+          "app_version": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "App Version"
+          },
+          "app_artifact_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "App Artifact Sha256"
+          },
+          "app_artifact_kind": {
+            "type": "string",
+            "enum": [
+              "python-sources",
+              "frozen-executable",
+              "python-artifacts"
+            ],
+            "title": "App Artifact Kind"
+          },
+          "python": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Python"
+          },
+          "numpy": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Numpy"
+          },
+          "scipy": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Scipy"
+          },
+          "scikit_learn": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Scikit Learn"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "app_version",
+          "app_artifact_sha256",
+          "app_artifact_kind",
+          "python",
+          "numpy",
+          "scipy",
+          "scikit_learn"
+        ],
+        "title": "RuntimeIdentity"
+      },
       "SearchCandidate": {
         "properties": {
           "term_id": {
@@ -2496,6 +2706,86 @@
         ],
         "title": "SearchCandidate",
         "description": "Single candidate term returned by an ontology search route."
+      },
+      "SearchCondition": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "ontocurator-search-condition/v1",
+            "title": "Schema Version",
+            "default": "ontocurator-search-condition/v1"
+          },
+          "condition_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Condition Id"
+          },
+          "ontology_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Ontology Sha256"
+          },
+          "translations": {
+            "items": {
+              "$ref": "#/components/schemas/TranslationResource"
+            },
+            "type": "array",
+            "maxItems": 128,
+            "title": "Translations"
+          },
+          "index": {
+            "$ref": "#/components/schemas/IndexConfiguration"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeIdentity"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "condition_id",
+          "ontology_sha256",
+          "runtime"
+        ],
+        "title": "SearchCondition"
+      },
+      "SearchExecution": {
+        "properties": {
+          "index": {
+            "$ref": "#/components/schemas/IndexConfiguration"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeIdentity"
+          },
+          "fitting_languages": {
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "type": "array",
+            "maxItems": 33,
+            "title": "Fitting Languages"
+          },
+          "k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "K"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "runtime"
+        ],
+        "title": "SearchExecution"
       },
       "SearchRequest": {
         "properties": {
@@ -2650,6 +2940,39 @@
               }
             ],
             "title": "Index Identity"
+          },
+          "search_condition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Condition Id"
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchExecution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runtime_drift": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Drift"
           },
           "languages": {
             "items": {
@@ -2997,6 +3320,45 @@
           "term_id"
         ],
         "title": "TermLookup"
+      },
+      "TranslationResource": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Filename"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256"
+          },
+          "resource_path": {
+            "type": "string",
+            "maxLength": 256,
+            "title": "Resource Path"
+          },
+          "languages": {
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Languages"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "filename",
+          "sha256",
+          "resource_path",
+          "languages"
+        ],
+        "title": "TranslationResource"
       },
       "TranslationUploadInfo": {
         "properties": {

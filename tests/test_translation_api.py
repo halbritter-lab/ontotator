@@ -1,5 +1,6 @@
 """Translation files through the HTTP API: start-up, listing, search event, upload."""
 
+import hashlib
 import io
 import logging
 import os
@@ -199,7 +200,7 @@ def test_search_event_records_the_active_languages(tmp_path: Path) -> None:
     assert spanish["languages"] == ["en", "es"]
     assert "HP:0001250" not in spanish["displayed_ids"]
     assert repo.get_search_event(spanish["search_id"]).languages == ["en", "es"]
-    assert spanish["index_identity"] == everything["index_identity"]
+    assert spanish["index_identity"] != everything["index_identity"]
 
     english = _search(client, key, "Krampfanfall", languages=[])
     assert repo.get_search_event(english["search_id"]).languages == ["en"]
@@ -240,9 +241,9 @@ def test_uploading_a_translation_reloads_the_ontology(tmp_path: Path) -> None:
     assert [p.name for p in stored.parent.iterdir() if p.name.startswith(".")] == []
 
     after = _search(client, key, "Muskelhypotonie")
-    assert after["languages"] == ["en", "de"]
-    assert after["candidates"][0]["match_language"] == "de"
-    assert after["index_identity"] != before["index_identity"]
+    # The ambient registry changes; this already captured package stays fixed.
+    assert after["languages"] == ["en"]
+    assert after["index_identity"] == before["index_identity"]
     listed = _listed(client)
     assert listed["hp"]["translations"] == body["ontologies"][0]["translations"]
     assert listed["mondo"]["translations"] == []
@@ -422,7 +423,9 @@ def test_uploading_a_file_with_a_byte_order_mark_works(tmp_path: Path) -> None:
     # The mark is part of the content the index identity is made of.
     marked_identity = _search(client, key, "Krampfanfall")["index_identity"]
     assert _upload(client, "hp-de.babelon.tsv", DE.read_bytes()).status_code == 200
-    assert _search(client, key, "Krampfanfall")["index_identity"] != marked_identity
+    assert _search(client, key, "Krampfanfall")["index_identity"] == marked_identity
+    captured = client.app.state.repo.get_search_conditions(key["package_id"])[0]
+    assert captured.translations[0].sha256 == hashlib.sha256(marked).hexdigest()
 
 
 def test_the_answer_names_the_language_of_the_content_not_of_the_file_name(

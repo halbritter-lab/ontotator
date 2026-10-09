@@ -199,7 +199,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, [layerSelection.activeLayerId, searchManager]);
 
   // Search languages: stored per annotator, offered per ontology of the layer.
-  const languagesForOntology = useSearchLanguages(api, view.key.annotator_id);
+  const languagesForOntology = useSearchLanguages(api, view.key.annotator_id, view.key.package_id);
   const searchLanguagesFor = (layerId: string | null | undefined) => {
     const ontologyId = (view.layers ?? []).find((layer) => layer.layer_id === layerId)?.ontology_id;
     const definition = (view.ontologies ?? []).find((item) => item.ontology_id === ontologyId);

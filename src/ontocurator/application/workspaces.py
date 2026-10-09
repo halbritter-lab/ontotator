@@ -13,7 +13,6 @@ from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import (
     LayerDefinition,
     OntologyDefinition,
-    TaskProfile,
     resolve_layer,
     resolve_ontology,
 )
@@ -80,11 +79,9 @@ class WorkspaceService:
             self.registry = None
             self.ontology = ontology
 
-    def _get_service_for_layer(
-        self, profile: TaskProfile, layer_id: str
-    ) -> OntologyService:
+    def _get_service_for_layer(self, package_id: str, layer_id: str) -> OntologyService:
         if self.registry is not None:
-            return self.registry.for_layer(profile, layer_id)
+            return self.registry.for_package_layer(self.repo, package_id, layer_id)
         if self.ontology is not None:
             return self.ontology
         raise DomainError(
@@ -318,13 +315,15 @@ class WorkspaceService:
             lid = a.annotation.layer_id
             st_key = f"{lid}:{tid}"
             if st_key not in term_statuses:
-                service = self._get_service_for_layer(profile, lid)
+                service = self._get_service_for_layer(key.package_id, lid)
                 term_statuses[st_key] = service.validate_term(tid).status
 
         for snap in draft.annotations:
             st_key = f"{snap.annotation.layer_id}:{snap.annotation.term_id}"
             if st_key not in term_statuses:
-                service = self._get_service_for_layer(profile, snap.annotation.layer_id)
+                service = self._get_service_for_layer(
+                    key.package_id, snap.annotation.layer_id
+                )
                 term_statuses[st_key] = service.validate_term(
                     snap.annotation.term_id
                 ).status

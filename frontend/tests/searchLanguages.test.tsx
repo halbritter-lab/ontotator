@@ -24,7 +24,7 @@ const mondo = { ontology_id: "mondo", release: "2026-01-01", sha256: "ffff", ter
 
 const clientWith = (stored?: Record<string, string[]>) => {
   const client = {
-    listOntologies: vi.fn().mockResolvedValue([hp, mondo]),
+    listPackageOntologies: vi.fn().mockResolvedValue([hp, mondo]),
     getPreferences: vi.fn().mockResolvedValue({
       last_annotator_id: "JPL",
       mode_by_package: {},
@@ -56,7 +56,7 @@ describe("search language selection", () => {
 describe("useSearchLanguages", () => {
   it("offers the loaded languages of the ontology, all active by default", async () => {
     const client = clientWith();
-    const { result } = renderHook(() => useSearchLanguages(client, "JPL"));
+    const { result } = renderHook(() => useSearchLanguages(client, "JPL", "study"));
 
     await waitFor(() => expect(result.current("abc123")).toBeDefined());
     const control = result.current("abc123")!;
@@ -65,11 +65,12 @@ describe("useSearchLanguages", () => {
       { language: "es", termCount: 18201 },
     ]);
     expect(control.active).toEqual(["de", "es"]);
+    expect(client.listPackageOntologies).toHaveBeenCalledWith("study");
   });
 
   it("gives nothing for an ontology without translations or an unknown one", async () => {
     const client = clientWith();
-    const { result } = renderHook(() => useSearchLanguages(client, "JPL"));
+    const { result } = renderHook(() => useSearchLanguages(client, "JPL", "study"));
 
     await waitFor(() => expect(result.current("abc123")).toBeDefined());
     expect(result.current("ffff")).toBeUndefined();
@@ -80,20 +81,20 @@ describe("useSearchLanguages", () => {
   it("restores the stored selection of this annotator and not of another one", async () => {
     const client = clientWith({ JPL: ["es", "fr"], AB: ["de"] });
 
-    const mine = renderHook(() => useSearchLanguages(client, "JPL"));
+    const mine = renderHook(() => useSearchLanguages(client, "JPL", "study"));
     await waitFor(() => expect(mine.result.current("abc123")?.active).toEqual(["es"]));
 
-    const theirs = renderHook(() => useSearchLanguages(client, "AB"));
+    const theirs = renderHook(() => useSearchLanguages(client, "AB", "study"));
     await waitFor(() => expect(theirs.result.current("abc123")?.active).toEqual(["de"]));
 
-    const nobody = renderHook(() => useSearchLanguages(client, "NEW"));
+    const nobody = renderHook(() => useSearchLanguages(client, "NEW", "study"));
     await waitFor(() => expect(nobody.result.current("abc123")).toBeDefined());
     expect(nobody.result.current("abc123")!.active).toEqual(["de", "es"]);
   });
 
   it("stores a change for this annotator only and applies it at once", async () => {
     const client = clientWith({ JPL: ["es", "fr"], AB: ["de"] });
-    const { result } = renderHook(() => useSearchLanguages(client, "JPL"));
+    const { result } = renderHook(() => useSearchLanguages(client, "JPL", "study"));
     await waitFor(() => expect(result.current("abc123")?.active).toEqual(["es"]));
 
     act(() => result.current("abc123")!.onToggle("de"));
@@ -112,13 +113,13 @@ describe("useSearchLanguages", () => {
 
   it("stays silent when the server cannot be asked", async () => {
     const client = {
-      listOntologies: vi.fn().mockRejectedValue(new Error("offline")),
+      listPackageOntologies: vi.fn().mockRejectedValue(new Error("offline")),
       getPreferences: vi.fn().mockRejectedValue(new Error("offline")),
       updatePreferences: vi.fn(),
     } as unknown as LanguageClient;
-    const { result } = renderHook(() => useSearchLanguages(client, "JPL"));
+    const { result } = renderHook(() => useSearchLanguages(client, "JPL", "study"));
 
-    await waitFor(() => expect(client.listOntologies).toHaveBeenCalled());
+    await waitFor(() => expect(client.listPackageOntologies).toHaveBeenCalled());
     expect(result.current("abc123")).toBeUndefined();
   });
 });

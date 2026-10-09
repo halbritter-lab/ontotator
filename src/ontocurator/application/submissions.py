@@ -67,6 +67,7 @@ def validate_draft_terms(
     draft: Draft,
     profile: TaskProfile,
     ontology: OntologyService | OntologyRegistry,
+    repo: Repository | None = None,
 ) -> None:
     """Every annotation authored in this draft must use a currently valid term.
 
@@ -78,7 +79,9 @@ def validate_draft_terms(
     for snap in draft.annotations:
         layer_id = snap.annotation.layer_id
         service = (
-            ontology.for_layer(profile, layer_id)
+            ontology.for_package_layer(repo, draft.key.package_id, layer_id)
+            if isinstance(ontology, OntologyRegistry) and repo is not None
+            else ontology.for_layer(profile, layer_id)
             if isinstance(ontology, OntologyRegistry)
             else ontology
         )
@@ -119,7 +122,7 @@ def validate_completion(
 
     # 2b. Re-check term status against the pinned ontology at submit time
     if ontology is not None:
-        validate_draft_terms(draft, profile, ontology)
+        validate_draft_terms(draft, profile, ontology, repo)
 
     # 3. If in review mode, validate review completeness
     if scope.mode == "review":
@@ -186,6 +189,9 @@ class SubmissionService:
                 "DOCUMENT_NOT_CHECKED",
                 "The document must be marked as checked before submitting",
             )
+
+        if isinstance(self.ontology, OntologyRegistry):
+            self.ontology.ensure_package_conditions(self.repo, key.package_id)
 
         def operation(draft: Draft) -> Submission:
             return self._create_submission(draft, cmd, key)

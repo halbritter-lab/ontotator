@@ -135,7 +135,7 @@ def test_a_file_that_breaks_part_way_leaves_none_of_its_names(tmp_path: Path) ->
         {},
     )
     assert all(not term.translations for term in alone.ontology.terms.values())
-    assert alone.index_identity == _plain_identity(HP)
+    assert alone.index_identity == _service().index_identity
     assert "HP:0001250" not in _search(alone, "Crise").displayed_ids
     assert _search(alone, "Crise").languages == ["en"]
 
@@ -161,14 +161,17 @@ def test_identity_changes_with_and_only_with_the_translation_files(
     german = _service(DE)
     both = _service(DE, ES)
 
-    # Without translations the identity is the one it always was.
-    assert plain.index_identity == _plain_identity(HP)
+    # The corrected fitting algorithm/runtime receives a new identity.
+    assert plain.index_identity != _plain_identity(HP)
     # Files of another ontology leave the identity alone.
-    assert _service(DE, ES, ontology=MONDO).index_identity == _plain_identity(MONDO)
+    assert (
+        _service(DE, ES, ontology=MONDO).index_identity
+        == _service(ontology=MONDO).index_identity
+    )
     # A file that contributes nothing is not part of the index.
     useless = tmp_path / "hp-nl.babelon.tsv"
     useless.write_text("subject_id\ttranslation_value\nHP:9\tx\n", encoding="utf-8")
-    assert _service(useless).index_identity == _plain_identity(HP)
+    assert _service(useless).index_identity == plain.index_identity
 
     assert len({plain.index_identity, german.index_identity, both.index_identity}) == 3
     # The order the files are given in does not matter.
@@ -239,7 +242,7 @@ def test_with_translations_builds_a_new_service_and_leaves_the_old_one() -> None
     assert spanish.languages == ["es"]
     assert spanish.ontology.terms["HP:0001252"].translations == {"es": ["Hipotonía"]}
     assert "HP:0001250" not in _search(spanish, "Krampfanfall").displayed_ids
-    assert spanish.with_translations([]).index_identity == _plain_identity(HP)
+    assert spanish.with_translations([]).index_identity == _service().index_identity
 
 
 # --- exact matches ---------------------------------------------------------- #
@@ -549,13 +552,22 @@ def test_the_language_selection_is_part_of_the_shuffle_seed() -> None:
     )
 
 
-def test_the_language_selection_is_not_part_of_the_index_identity() -> None:
+def test_language_selection_identifies_the_actual_fitting_corpus() -> None:
     service = _service(DE, ES)
 
-    assert {
+    identities = {
         _search(service, "Krampfanfall", languages=languages).index_identity
         for languages in ([], ["de"], ["es"], None)
-    } == {service.index_identity}
+    }
+    assert len(identities) == 4
+    assert (
+        _search(service, "Krampfanfall", languages=[]).index_identity
+        == _search(_service(), "Krampfanfall").index_identity
+    )
+    assert (
+        _search(service, "Krampfanfall", languages=["de"]).index_identity
+        == _search(_service(DE), "Krampfanfall").index_identity
+    )
 
 
 def test_search_event_keeps_languages_and_reads_old_events() -> None:
@@ -572,6 +584,9 @@ def test_search_event_keeps_languages_and_reads_old_events() -> None:
     }
     old = SearchEventRecord.model_validate_json(json.dumps(old_payload))
     assert old.languages == []
+    assert old.search_condition_id is None
+    assert old.execution is None
+    assert old.runtime_drift is None
 
     new = SearchEventRecord.model_validate({**old_payload, "languages": ["en", "de"]})
     again = SearchEventRecord.model_validate_json(new.model_dump_json())

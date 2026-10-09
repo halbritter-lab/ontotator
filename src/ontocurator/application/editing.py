@@ -261,11 +261,9 @@ class EditingService:
             self.registry = None
             self.ontology = ontology
 
-    def _get_service_for_layer(
-        self, profile: TaskProfile, layer_id: str
-    ) -> OntologyService:
+    def _get_service_for_layer(self, package_id: str, layer_id: str) -> OntologyService:
         if self.registry is not None:
-            return self.registry.for_layer(profile, layer_id)
+            return self.registry.for_package_layer(self.repo, package_id, layer_id)
         if self.ontology is not None:
             return self.ontology
         raise DomainError(
@@ -296,6 +294,11 @@ class EditingService:
                 "INVALID_SCOPE",
                 f"Workspace scope_id '{key.scope_id}' does not match expected '{scope.scope_id}'",
             )
+
+        if self.registry is not None and isinstance(
+            cmd, (CreateAnnotationCommand, SetTermCommand)
+        ):
+            self.registry.ensure_package_conditions(self.repo, key.package_id)
 
         def operation(draft: Draft) -> Draft:
             result = self._execute_edit(draft, cmd, doc, profile, scope)
@@ -403,7 +406,7 @@ class EditingService:
 
     def _validate_term_for_layer(
         self,
-        profile: TaskProfile,
+        package_id: str,
         layer_id: str,
         term_id: str,
     ) -> str:
@@ -412,7 +415,7 @@ class EditingService:
         Alternative (merged) IDs and case variants resolve to the primary ID,
         which is what gets stored.
         """
-        service = self._get_service_for_layer(profile, layer_id)
+        service = self._get_service_for_layer(package_id, layer_id)
         status = service.validate_term(term_id)
         if status.status == "obsolete":
             hint = f"; use '{status.replaced_by}' instead" if status.replaced_by else ""
@@ -427,13 +430,11 @@ class EditingService:
             )
         return status.term_id
 
-    def _primary_term_id(
-        self, profile: TaskProfile, layer_id: str, term_id: str
-    ) -> str:
+    def _primary_term_id(self, package_id: str, layer_id: str, term_id: str) -> str:
         """Primary ID for an alternative ID or case variant, without rejecting
         obsolete or unknown terms (adopted proposals may carry those)."""
         try:
-            status = self._get_service_for_layer(profile, layer_id).validate_term(
+            status = self._get_service_for_layer(package_id, layer_id).validate_term(
                 term_id
             )
         except DomainError:
@@ -529,9 +530,13 @@ class EditingService:
         if self._is_verified_adoption(draft, cmd, doc, target_layer):
             # Store the primary ID like a normal creation; provenance still
             # points at the adopted source annotation.
-            term_id = self._primary_term_id(profile, target_layer, cmd.term_id)
+            term_id = self._primary_term_id(
+                draft.key.package_id, target_layer, cmd.term_id
+            )
         else:
-            term_id = self._validate_term_for_layer(profile, target_layer, cmd.term_id)
+            term_id = self._validate_term_for_layer(
+                draft.key.package_id, target_layer, cmd.term_id
+            )
 
         if any(
             a.annotation.annotation_id == cmd.annotation_id for a in draft.annotations
@@ -627,7 +632,9 @@ class EditingService:
                 f"Annotation '{cmd.annotation_id}' belongs to reference layer '{layer_id}'",
             )
 
-        term_id = self._validate_term_for_layer(profile, layer_id, cmd.term_id)
+        term_id = self._validate_term_for_layer(
+            draft.key.package_id, layer_id, cmd.term_id
+        )
         updated_ann = existing.annotation.model_copy(update={"term_id": term_id})
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [

@@ -410,6 +410,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/packages/{package_id}/ontologies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Package Ontologies
+         * @description Search languages from the package's immutable first-use resource capture.
+         */
+        get: operations["package_ontologies_api_v1_packages__package_id__ontologies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ontologies": {
         parameters: {
             query?: never;
@@ -731,6 +751,87 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * IndexConfiguration
+         * @description Declared defaults and application algorithms, separate from the runtime.
+         */
+        IndexConfiguration: {
+            /**
+             * Algorithm
+             * @default selected-language-char-wb-tfidf/2
+             */
+            algorithm: string;
+            /**
+             * Analyzer
+             * @default char_wb
+             * @constant
+             */
+            analyzer: "char_wb";
+            /**
+             * Ngram Range
+             * @default [
+             *       3,
+             *       5
+             *     ]
+             */
+            ngram_range: [
+                number,
+                number
+            ];
+            /**
+             * Sublinear Tf
+             * @default true
+             */
+            sublinear_tf: boolean;
+            /**
+             * Lowercase
+             * @default true
+             */
+            lowercase: boolean;
+            /**
+             * Use Idf
+             * @default true
+             */
+            use_idf: boolean;
+            /**
+             * Smooth Idf
+             * @default true
+             */
+            smooth_idf: boolean;
+            /**
+             * Norm
+             * @default l2
+             * @constant
+             */
+            norm: "l2";
+            /**
+             * Fitting Corpus
+             * @default english-plus-selected-translations
+             * @constant
+             */
+            fitting_corpus: "english-plus-selected-translations";
+            /**
+             * Term Aggregation
+             * @default max-name-score
+             * @constant
+             */
+            term_aggregation: "max-name-score";
+            /**
+             * Id Normalization
+             * @default dominant_prefix_int_v1
+             */
+            id_normalization: string;
+            /**
+             * Ranking
+             * @default numpy-argsort-max400-k40-terms-k4/1
+             */
+            ranking: string;
+            /**
+             * Display Shuffle
+             * @default sha256-annotator-annotation-query-k-languages/1
+             */
+            display_shuffle: string;
+        };
+        /**
          * LayerDefinition
          * @description Definition of an annotation layer binding an ontology and types.
          */
@@ -964,6 +1065,8 @@ export interface components {
             origin_package_id?: string | null;
             /** Origin Manifest Hash */
             origin_manifest_hash?: string | null;
+            /** Search Conditions */
+            search_conditions?: components["schemas"]["SearchCondition"][] | null;
         };
         /**
          * Preferences
@@ -1084,6 +1187,26 @@ export interface components {
             /** Targets */
             targets: components["schemas"]["AnnotationRef"][];
         };
+        /** RuntimeIdentity */
+        RuntimeIdentity: {
+            /** App Version */
+            app_version: string;
+            /** App Artifact Sha256 */
+            app_artifact_sha256: string;
+            /**
+             * App Artifact Kind
+             * @enum {string}
+             */
+            app_artifact_kind: "python-sources" | "frozen-executable" | "python-artifacts";
+            /** Python */
+            python: string;
+            /** Numpy */
+            numpy: string;
+            /** Scipy */
+            scipy: string;
+            /** Scikit Learn */
+            scikit_learn: string;
+        };
         /**
          * SearchCandidate
          * @description Single candidate term returned by an ontology search route.
@@ -1132,6 +1255,32 @@ export interface components {
             route: string;
             /** Match Language */
             match_language?: string | null;
+        };
+        /** SearchCondition */
+        SearchCondition: {
+            /**
+             * Schema Version
+             * @default ontocurator-search-condition/v1
+             * @constant
+             */
+            schema_version: "ontocurator-search-condition/v1";
+            /** Condition Id */
+            condition_id: string;
+            /** Ontology Sha256 */
+            ontology_sha256: string;
+            /** Translations */
+            translations?: components["schemas"]["TranslationResource"][];
+            index?: components["schemas"]["IndexConfiguration"];
+            runtime: components["schemas"]["RuntimeIdentity"];
+        };
+        /** SearchExecution */
+        SearchExecution: {
+            index?: components["schemas"]["IndexConfiguration"];
+            runtime: components["schemas"]["RuntimeIdentity"];
+            /** Fitting Languages */
+            fitting_languages?: string[];
+            /** K */
+            k?: number | null;
         };
         /**
          * SearchRequest
@@ -1192,6 +1341,11 @@ export interface components {
             ontology_sha256?: string | null;
             /** Index Identity */
             index_identity?: string | null;
+            /** Search Condition Id */
+            search_condition_id?: string | null;
+            execution?: components["schemas"]["SearchExecution"] | null;
+            /** Runtime Drift */
+            runtime_drift?: boolean | null;
             /** Languages */
             languages?: string[];
         };
@@ -1328,6 +1482,17 @@ export interface components {
             layer_id: string;
             /** Term Id */
             term_id: string;
+        };
+        /** TranslationResource */
+        TranslationResource: {
+            /** Filename */
+            filename: string;
+            /** Sha256 */
+            sha256: string;
+            /** Resource Path */
+            resource_path: string;
+            /** Languages */
+            languages: string[];
         };
         /**
          * TranslationUploadInfo
@@ -2142,6 +2307,37 @@ export interface operations {
                 };
                 content: {
                     "application/zip": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    package_ontologies_api_v1_packages__package_id__ontologies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OntologyInfo"][];
                 };
             };
             /** @description Validation Error */

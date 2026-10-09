@@ -13,6 +13,13 @@ from typing import Any, Literal
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import OntologyRef
 from ontocurator.domain.errors import DomainError
+from ontocurator.ontology.conditions import (
+    IndexConfiguration,
+    SearchCondition,
+    SearchExecution,
+    TranslationResource,
+    current_runtime,
+)
 from ontocurator.ontology.provenance import (
     HierarchyWarning,
     SearchCandidate,
@@ -73,19 +80,60 @@ class OntologyService:
         self.translation_counts = translation_counts(ontology)
         self.languages = list(self.translation_counts)
         self._translated = TranslatedNames(ontology)
-        identity: dict[str, Any] = {
-            "ontology_sha256": ref.sha256,
-            "algorithm": "char_wb_tfidf/1",
-            "ngram_range": [3, 5],
-            "id_normalization": "dominant_prefix_int_v1",
+        self.search_condition: SearchCondition | None = None
+        self.index_identity = self.identity_for_languages(["en", *self.languages])
+
+    def identity_for_languages(self, languages: Sequence[str]) -> str:
+        """Identity of the actual selected fitting corpus and execution code."""
+        selected = set(languages) - {"en"}
+        return canonical_hash(
+            {
+                "ontology_sha256": self.ref.sha256,
+                "index": IndexConfiguration().model_dump(),
+                "runtime": current_runtime().model_dump(),
+                "fitting_languages": list(languages),
+                "translations": [
+                    {"filename": item.filename, "sha256": item.sha256}
+                    for item in self.translations
+                    if selected.intersection(item.languages)
+                ],
+            }
+        )
+
+    def capture_condition(self) -> SearchCondition:
+        payload = {
+            "schema_version": "ontocurator-search-condition/v1",
+            "ontology_sha256": self.ref.sha256.lower(),
+            "translations": [
+                TranslationResource(
+                    filename=item.filename,
+                    sha256=item.sha256,
+                    resource_path=f"search-resources/{item.sha256}/{item.filename}",
+                    languages=list(item.languages),
+                ).model_dump()
+                for item in self.translations
+            ],
+            "index": IndexConfiguration().model_dump(),
+            "runtime": current_runtime().model_dump(),
         }
-        # Added only when there are translations, so an ontology without them
-        # keeps the identity it always had.
-        if self.translations:
-            identity["translation_sha256"] = sorted(
-                item.sha256 for item in self.translations
-            )
-        self.index_identity = canonical_hash(identity)
+        return SearchCondition.model_validate(
+            {"condition_id": canonical_hash(payload), **payload}
+        )
+
+    def execution(
+        self, languages: Sequence[str], k: int | None = None
+    ) -> SearchExecution:
+        return SearchExecution(
+            runtime=current_runtime(), fitting_languages=list(languages), k=k
+        )
+
+    def runtime_drift(self) -> bool | None:
+        if self.search_condition is None:
+            return None
+        return (
+            self.search_condition.runtime != current_runtime()
+            or self.search_condition.index != IndexConfiguration()
+        )
 
     @classmethod
     def load(
@@ -208,6 +256,7 @@ class OntologyService:
         candidates = [self._candidate(hit) for hit in hits]
         displayed_ids = [c.hpo_id for c in candidates]
         ranked_ids = [c.hpo_id for c in sorted(candidates, key=lambda c: c.rank)]
+        searched_languages = self._searched_languages(request, languages)
 
         return SearchResult(
             route=request.route,
@@ -219,8 +268,15 @@ class OntologyService:
             seed=seed,
             layer_id=request.layer_id,
             ontology_sha256=self.ref.sha256,
-            index_identity=self.index_identity,
-            languages=self._searched_languages(request, languages),
+            index_identity=self.identity_for_languages(searched_languages),
+            languages=searched_languages,
+            search_condition_id=self.search_condition.condition_id
+            if self.search_condition
+            else None,
+            execution=self.execution(searched_languages, request.k)
+            if self.search_condition
+            else None,
+            runtime_drift=self.runtime_drift(),
         )
 
     @staticmethod

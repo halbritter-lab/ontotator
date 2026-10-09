@@ -4,10 +4,12 @@ import copy
 import hashlib
 import logging
 import threading
+from collections import OrderedDict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import TYPE_CHECKING
 
 from ontocurator.domain.documents import OntologyRef
 from ontocurator.domain.errors import DomainError
@@ -17,6 +19,7 @@ from ontocurator.domain.profiles import (
     resolve_layer,
     resolve_ontology,
 )
+from ontocurator.ontology.conditions import SearchCondition, validate_resources
 from ontocurator.ontology.service import OntologyService
 from ontocurator.ontology.translations import (
     discover_translation_files,
@@ -25,6 +28,9 @@ from ontocurator.ontology.translations import (
 from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from ontocurator.storage.repository import Repository
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,7 @@ class OntologyRegistry:
         translation_dirs: Iterable[Path | str] = (),
     ) -> None:
         self._services: dict[str, OntologyService] = {}
+        self._package_services: OrderedDict[str, OntologyService] = OrderedDict()
         self._registered_paths: dict[str, Path] = {}
         self._failures: dict[str, OntologyLoadFailure] = {}
         self._lock = threading.RLock()
@@ -217,9 +224,13 @@ class OntologyRegistry:
                 raise DomainError("INVALID_ONTOLOGY", str(exc)) from exc
 
     def prepare_package(
-        self, profile: TaskProfile, resources: dict[str, bytes]
+        self,
+        profile: TaskProfile,
+        resources: dict[str, bytes],
+        conditions: list[SearchCondition] | None = None,
     ) -> list[OntologyService]:
         """Parse all resources before package commit; publish services only afterward."""
+        validate_resources(conditions, profile, resources)
         prepared = []
         for ont in profile.ontologies:
             if ont.resource_path and ont.resource_path in resources:
@@ -235,7 +246,107 @@ class OntologyRegistry:
                         "ONTOLOGY_NOT_FOUND", f"Missing ontology '{ont.ontology_id}'"
                     )
                 prepared.append(service)
+        if conditions is not None:
+            services = {service.ref.sha256.lower(): service for service in prepared}
+            for condition in conditions:
+                self._pinned_service(
+                    services[condition.ontology_sha256], condition, resources
+                )
         return prepared
+
+    @staticmethod
+    def _pinned_service(
+        base: OntologyService, condition: SearchCondition, resources: dict[str, bytes]
+    ) -> OntologyService:
+        """Parse only captured files, preserving names needed by the TSV loader."""
+        with TemporaryDirectory(prefix="ontocurator-search-") as directory:
+            paths = []
+            for item in condition.translations:
+                path = Path(directory) / item.filename
+                path.write_bytes(resources[item.resource_path])
+                paths.append(path)
+            service = base.with_translations(paths)
+        actual = [
+            (t.filename, t.sha256, list(t.languages)) for t in service.translations
+        ]
+        expected = [(t.filename, t.sha256, t.languages) for t in condition.translations]
+        if sorted(actual) != sorted(expected) or service.skipped_translations:
+            raise DomainError(
+                "INVALID_SEARCH_CONDITION",
+                "Captured translations do not match their declared ontology/languages",
+            )
+        service.search_condition = condition
+        return service
+
+    def ensure_package_conditions(
+        self, repo: Repository, package_id: str
+    ) -> list[SearchCondition]:
+        conditions = repo.get_search_conditions(package_id)
+        if conditions is not None:
+            return conditions
+        profile = repo.get_task_profile(package_id)
+        resources: dict[str, bytes] = {}
+        # Capture immutable loaded content while an upload cannot swap services.
+        # Release the change lock before acquiring a database write transaction.
+        with self.changing():
+            conditions = []
+            seen: set[str] = set()
+            for ont in profile.ontologies:
+                if ont.sha256.lower() in seen:
+                    continue
+                seen.add(ont.sha256.lower())
+                service = self._for_definition(ont)
+                condition = service.capture_condition()
+                conditions.append(condition)
+                resources.update(
+                    {
+                        f"search-resources/{item.sha256}/{item.filename}": item.content
+                        for item in service.translations
+                    }
+                )
+        return repo.capture_search_conditions(package_id, conditions, resources)
+
+    def for_package_layer(
+        self, repo: Repository, package_id: str, layer_id: str
+    ) -> OntologyService:
+        """Resolve a package layer against its first-use/imported immutable pins."""
+        profile = repo.get_task_profile(package_id)
+        layer = resolve_layer(profile, layer_id)
+        definition = resolve_ontology(profile, layer.ontology_id)
+        return self._package_ontology(repo, package_id, definition)
+
+    def for_package_ontology(
+        self, repo: Repository, package_id: str, ontology_id: str
+    ) -> OntologyService:
+        definition = resolve_ontology(repo.get_task_profile(package_id), ontology_id)
+        return self._package_ontology(repo, package_id, definition)
+
+    def _package_ontology(
+        self, repo: Repository, package_id: str, definition: OntologyDefinition
+    ) -> OntologyService:
+        conditions = self.ensure_package_conditions(repo, package_id)
+        condition = next(
+            c for c in conditions if c.ontology_sha256 == definition.sha256.lower()
+        )
+        with self._lock:
+            service = self._package_services.get(condition.condition_id)
+            if service is not None:
+                self._package_services.move_to_end(condition.condition_id)
+        if service is None:
+            # Loading/building happens without holding either registry map lock
+            # or a database transaction. Publication never touches ambient services.
+            base = self._for_definition(definition)
+            service = self._pinned_service(
+                base, condition, repo.get_embedded_files(package_id)
+            )
+            with self._lock:
+                service = self._package_services.setdefault(
+                    condition.condition_id, service
+                )
+                self._package_services.move_to_end(condition.condition_id)
+                if len(self._package_services) > 8:
+                    self._package_services.popitem(last=False)
+        return self._bind_release(service, definition)
 
     def register_path(self, path: Path | str) -> str:
         """Inspect and register a local ontology file without prior expected metadata, returning its SHA-256."""
@@ -314,6 +425,12 @@ class OntologyRegistry:
         """Retrieve or load the exact OntologyService bound to the specified layer of a TaskProfile."""
         layer = resolve_layer(profile, layer_id)
         ont_def = resolve_ontology(profile, layer.ontology_id)
+        return self._for_definition(ont_def, layer_id)
+
+    def _for_definition(
+        self, ont_def: OntologyDefinition, layer_id: str = ""
+    ) -> OntologyService:
+        """Definitions can be declared without a layer, or alias another digest."""
         sha = ont_def.sha256.lower()
 
         with self._lock:

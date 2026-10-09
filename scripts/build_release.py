@@ -37,6 +37,7 @@ REQUIRED_WHEEL_FILES = [
     "ontocurator/cli.py",
     "ontocurator/storage/schema_v4.sql",
     "ontocurator/storage/ontology_resources.sql",
+    "ontocurator/storage/search_conditions.sql",
     "ontocurator/web/index.html",
 ]
 

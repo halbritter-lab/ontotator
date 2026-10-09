@@ -15,7 +15,7 @@ import re
 import threading
 from collections import OrderedDict
 from collections.abc import Collection, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -85,6 +85,7 @@ class LoadedTranslation:
     filename: str
     sha256: str
     languages: tuple[str, ...]
+    content: bytes = field(repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -95,7 +96,7 @@ class SkippedTranslation:
     reason: str
 
 
-def _load_file(ontology: Ontology, path: Path) -> tuple[str, dict[str, int]]:
+def _load_file(ontology: Ontology, path: Path) -> tuple[str, dict[str, int], bytes]:
     """Merge one file; its SHA-256 and the terms it reached per language.
 
     The digest is that of the file as it lies on disk. A file that starts with
@@ -106,13 +107,13 @@ def _load_file(ontology: Ontology, path: Path) -> tuple[str, dict[str, int]]:
     """
     raw = path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
-    if not raw.startswith(codecs.BOM_UTF8):
-        return digest, load_translations(ontology, [path])
     with TemporaryDirectory(prefix="ontocurator-translation-") as scratch:
         view = Path(scratch) / path.name
-        view.write_bytes(raw[len(codecs.BOM_UTF8) :])
+        view.write_bytes(
+            raw[len(codecs.BOM_UTF8) :] if raw.startswith(codecs.BOM_UTF8) else raw
+        )
         try:
-            return digest, load_translations(ontology, [view])
+            return digest, load_translations(ontology, [view]), raw
         except OntologyError as exc:
             # Name the file the user knows, not the copy.
             raise OntologyError(str(exc).replace(str(view), str(path))) from exc
@@ -143,7 +144,7 @@ def apply_translations(
             if term.translations
         }
         try:
-            digest, counts = _load_file(ontology, path)
+            digest, counts, raw = _load_file(ontology, path)
         except (OntologyError, OSError, UnicodeDecodeError, csv.Error) as exc:
             for term_id, term in ontology.terms.items():
                 if term.translations or term_id in before:
@@ -158,7 +159,7 @@ def apply_translations(
                 )
             )
             continue
-        loaded.append(LoadedTranslation(path.name, digest, tuple(sorted(counts))))
+        loaded.append(LoadedTranslation(path.name, digest, tuple(sorted(counts)), raw))
     return loaded, skipped
 
 

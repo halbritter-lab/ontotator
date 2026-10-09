@@ -125,7 +125,12 @@ def open_tree(
             # Nothing is scored in a tree: the ranked order is the shown order.
             ranked_ids=list(shown),
             ontology_release=ontology.ref.release,
-            index_identity=ontology.index_identity,
+            index_identity=ontology.identity_for_languages([]),
+            search_condition_id=ontology.search_condition.condition_id
+            if ontology.search_condition
+            else None,
+            execution=ontology.execution([]),
+            runtime_drift=ontology.runtime_drift(),
             timestamp=datetime.now(UTC).isoformat(),
         )
     )

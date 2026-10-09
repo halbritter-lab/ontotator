@@ -34,7 +34,7 @@ export const toggledSelection = (
   return [...loaded.filter((code) => next.includes(code)), ...notLoaded];
 };
 
-export type LanguageClient = Pick<ApiClient, "listOntologies" | "getPreferences" | "updatePreferences">;
+export type LanguageClient = Pick<ApiClient, "listPackageOntologies" | "getPreferences" | "updatePreferences">;
 
 /**
  * The search languages of one annotator. Returns a function that gives the
@@ -44,6 +44,7 @@ export type LanguageClient = Pick<ApiClient, "listOntologies" | "getPreferences"
 export function useSearchLanguages(
   client: LanguageClient,
   annotatorId: string,
+  packageId: string,
 ): (ontologySha256: string | null | undefined) => SearchLanguageControl | undefined {
   const [ontologies, setOntologies] = useState<OntologyInfo[]>([]);
   const [stored, setStored] = useState<string[] | undefined>(undefined);
@@ -52,7 +53,8 @@ export function useSearchLanguages(
 
   useEffect(() => {
     let cancelled = false;
-    client.listOntologies().then(
+    setOntologies([]);
+    client.listPackageOntologies(packageId).then(
       (list) => {
         if (!cancelled) setOntologies(list ?? []);
       },
@@ -69,7 +71,7 @@ export function useSearchLanguages(
     return () => {
       cancelled = true;
     };
-  }, [client, annotatorId]);
+  }, [client, annotatorId, packageId]);
 
   return useCallback(
     (ontologySha256) => {
