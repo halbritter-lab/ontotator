@@ -83,6 +83,13 @@ current = latest_submissions(submissions)
 
 Each submission references its complete approved snapshot set and review decisions. The archive also retains original targets, replacement versions and evidence dependencies; these historical records are not additional approved results. A returning reviewer resumes the recorded target set. A new reviewer receives the current submitted results. Cases with no proposals can still be checked and submitted as negative or supplemented with authored findings.
 
+Submitted snapshots and review targets must belong to the mode's editable
+layers. Reference-layer snapshots remain valid archive dependencies, but cannot
+be submitted results or review targets. Continued work retains its original
+logical origin and scope identity, including after an independent export projects
+reference layers out of the local profile; completion is validated against the
+current local permissions.
+
 Use `ontocurator analyze PACKAGE --annotator ID --output results.json` for versioned current-result rows, explicit missing/checked-negative/uncertain states, full evidence and round ambiguity. See [the scientific workflow](scientific-workflow.md) for the two-annotator technical pilot and interpretation rules.
 
 ## TaskProfile Schema
