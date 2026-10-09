@@ -406,6 +406,11 @@ def _read_package(
                 raise InvalidPackage(
                     "Submission target is missing or belongs to another document"
                 )
+            if (
+                target_snapshot.annotation.layer_id
+                not in expected_scope.editable_layer_ids
+            ):
+                raise InvalidPackage("Submission target is outside the editable scope")
         submitted = {(a.annotation.annotation_id, a.version): a for a in sub.snapshots}
         if len(submitted) != len(sub.snapshots):
             raise InvalidPackage("Duplicate submitted annotation reference")
@@ -417,6 +422,8 @@ def _read_package(
                 raise InvalidPackage(
                     "Submitted snapshot is missing, changed or from another document"
                 )
+            if snap.annotation.layer_id not in expected_scope.editable_layer_ids:
+                raise InvalidPackage("Submitted snapshot is outside the editable scope")
         decided = {(d.target.annotation_id, d.target.version) for d in sub.decisions}
         if sub.origin_key.mode == "review":
             if decided != target_refs or len(decided) != len(sub.decisions):

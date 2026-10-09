@@ -236,6 +236,10 @@ class SubmissionService:
         # Continuing an imported round keeps its logical immutable origin and
         # revision sequence; its local package binding is stored separately.
         origin_key = previous[0].origin_key if previous else key
+        # A projected export changes the local profile hash, but continuation
+        # retains its logical origin. Use current permission lists with that
+        # original scope identity rather than attributing it to the projection.
+        submission_scope = scope.model_copy(update={"scope_id": origin_key.scope_id})
 
         # Validate completion against profile and scope
         validate_completion(draft, task_profile, scope, self.repo, self.ontology)
@@ -307,7 +311,7 @@ class SubmissionService:
 
         canonical_content = {
             "key": key.model_dump(),
-            "scope": scope.model_dump(),
+            "scope": submission_scope.model_dump(),
             "targets": draft.targets.model_dump(),
             "draft_revision": draft.revision,
             "snapshots": [s.version for s in deduped_snaps],
@@ -319,7 +323,7 @@ class SubmissionService:
             format_version="ontocurator-submission/v2",
             submission_id=sub_id,
             origin_key=origin_key,
-            scope=scope,
+            scope=submission_scope,
             targets=draft.targets,
             draft_revision=draft.revision + 1,
             snapshots=deduped_snaps,
