@@ -115,11 +115,18 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
 
-    // Case 2 has no review proposals: review navigation does not offer it.
-    await expect(page.locator(".case-navigation").getByRole("button", { name: /Next Case/i })).toBeDisabled();
+    // A case with no proposals still needs checking; it can yield a negative result.
+    await expect(page.locator(".case-navigation").getByRole("button", { name: /Next Case/i })).toBeEnabled();
     const caseTwo = page.locator(".case-navigation select option").filter({ hasText: /Case 2 of 2/i });
-    await expect(caseTwo).toBeDisabled();
-    await expect(caseTwo).toHaveText(/no proposals/i);
+    await expect(caseTwo).toBeEnabled();
+    await page.locator(".case-navigation").getByRole("button", { name: /Next Case/i }).click();
+    await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2/i);
+    await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (0)" })).toBeVisible();
+    await page.locator(".layer-controls").getByRole("button", { name: /Mark .* as verified/i }).click();
+    await submitCase(page);
+    await page.getByRole("button", { name: /Stay in case/i }).click();
+    await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
+    await page.locator(".case-navigation").getByRole("button", { name: /Previous Case/i }).click();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
 

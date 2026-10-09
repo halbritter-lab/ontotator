@@ -20,6 +20,33 @@ condition. English remains available in every condition. Historical packages
 without recorded search conditions cannot retroactively establish the software
 or translation resources used for old searches.
 
+## Preserve search conditions
+
+A package without captured conditions is fixed at its first package-specific
+ontology use. Install the intended translations before opening cases or querying
+that package's ontologies. Later global translation uploads are available for new
+packages; they do not change the resources of a package already captured.
+
+Exports carry content-addressed translation bytes and optional
+`manifest.search_conditions`: ontology digest, translation filenames/digests,
+index parameters, application artifact identity and Python/numerical-library
+versions. The case editor lists languages from those package resources. English
+and the selected translations form the fitted search corpus; disabled languages
+do not affect its ranks or scores.
+
+Keep the application artifact and its locked environment as well as the export.
+New search events refer to their `search_condition_id` and record actual
+`execution` conditions, including the fitting languages. `runtime_drift` marks a
+difference from the captured software/index conditions. Imported historical
+conditions and events retain their original identity; using the same resource
+bytes in a different runtime does not establish exact numerical reproduction.
+Legacy events remain without this metadata.
+
+If the task profile declares an external ontology rather than embedding it, a
+fresh workspace still needs that exact ontology file. Its declared digest is
+checked. Captured translations are included in the export and do not require
+the importing machine's global translation files.
+
 ## Technical pilot with two annotators
 
 1. Choose a small package containing positive findings, a genuine negative
