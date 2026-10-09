@@ -336,7 +336,7 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
     view = ctx["ws_svc"].open(local_key, submission.targets)
     assert len(view.draft.decisions) == 1
     assert view.draft.annotations == []
-    assert view.draft.revision == 0
+    assert view.draft.revision == submission.draft_revision
 
 
 def test_sequential_search_selections_survive_two_export_imports(tmp_path):

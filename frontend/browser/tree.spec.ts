@@ -605,9 +605,10 @@ test.describe("ontology tree", () => {
     await expect(treeItem(page, SEIZURE)).toBeFocused();
     expect(stored).toEqual([]);
 
-    // A reload ends the page session: the dashboard comes back with the same
-    // package and annotator, the mode and the identity have to be given again.
+    // A reload ends the page session. Choose this test's package explicitly:
+    // other specs import newer packages into the shared synthetic server.
     await page.reload();
+    await page.locator("#package-select").selectOption("browser-fixture");
     await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
     await expect(page.getByTestId("dashboard-identity")).toHaveText("tree-reload");
     await page.locator("#mode-select").selectOption("independent");

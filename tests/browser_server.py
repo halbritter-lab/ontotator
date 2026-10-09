@@ -254,6 +254,8 @@ if __name__ == "__main__":
                 data = fixture_package(
                     package_id="pkg-many-proposals", proposals=MANY_PROPOSALS
                 )
+            elif scenario == "translations":
+                data = fixture_package(package_id="translation-fixture")
             else:
                 data = fixture_package()
             return Response(data, media_type="application/zip")

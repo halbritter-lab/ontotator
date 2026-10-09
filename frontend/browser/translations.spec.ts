@@ -11,11 +11,10 @@ const startSearch = async (page: Page, query: string) => {
 };
 const seizure = (page: Page) => page.locator(".candidate-card").filter({ hasText: "HP:0001250" });
 
-// Uploading the file changes the shared test server for the specs that run
-// after this one: they then search with German loaded. They pick candidates
-// by term id, which German names do not change.
+// Use a package not captured by earlier specs. Upload before its first case
+// opens; previously captured packages retain their own search resources.
 test("translations: upload, search in German, switch the language off, selection survives a reload", async ({ page }) => {
-  await importPackage(page, "", "browser-fixture", ANNOTATOR);
+  await importPackage(page, "?scenario=translations", "translation-fixture", ANNOTATOR);
 
   await page.locator('input[type="file"][accept=".json,.tsv"]').setInputFiles(GERMAN);
   await expect(page.getByRole("status", { name: "Import result" })).toContainText(
@@ -47,7 +46,7 @@ test("translations: upload, search in German, switch the language off, selection
   // A fresh page: the selection comes back from the workspace preferences.
   await page.goto("about:blank");
   await page.goto(LAUNCH_URL);
-  await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
+  await expect(page.locator("#package-select")).toHaveValue("translation-fixture");
   await openCase(page, { identity: ANNOTATOR });
   await startSearch(page, "Krampfanfall");
   await expect(page.getByRole("button", { name: "Search languages: EN", exact: true })).toBeVisible();

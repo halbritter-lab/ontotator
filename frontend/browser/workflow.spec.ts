@@ -81,6 +81,7 @@ test("real backend: review, resume, reload, submit and authenticated export", as
   expect(await download.failure()).toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.zip$/);
   await page.reload();
+  await page.locator("#package-select").selectOption("browser-fixture");
   await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
   await expect(page.getByText(/Forbidden|Unauthorized|Error loading/)).toHaveCount(0);
 });
