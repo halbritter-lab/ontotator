@@ -47,10 +47,20 @@ Two export flavours produce v2 packages with `origin_package_id` / `origin_manif
 ```python
 latest = {}
 for sub in submissions:
-    k = tuple(sub["origin_key"][f] for f in
-              ("package_id", "document_id", "annotator_id", "mode", "scope_id", "target_set_id"))
+    k = tuple(
+        sub["origin_key"][f]
+        for f in (
+            "package_id",
+            "document_id",
+            "annotator_id",
+            "mode",
+            "scope_id",
+            "target_set_id",
+        )
+    )
     if k not in latest or (sub["draft_revision"], sub["created_at"]) > (
-        latest[k]["draft_revision"], latest[k]["created_at"]
+        latest[k]["draft_revision"],
+        latest[k]["created_at"],
     ):
         latest[k] = sub
 ```
