@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   api,
   ApiClient,
+  ApiError,
   ConflictError,
   initSessionToken,
   parseContentDispositionFilename,
@@ -145,6 +146,41 @@ describe("A2/token: launch hash and token storage", () => {
 });
 
 describe("A1/A7: dashboard blinding, identity and persistence", () => {
+  it("opens a zero-proposal case in a review-only distribution without constructing fresh targets", async () => {
+    asAnnotator("dr-a");
+    vi.spyOn(api, "getSettings").mockResolvedValue({ allowed_modes: ["review"], default_mode: "review" } as any);
+    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listDocuments").mockResolvedValue([{ ...docs[0], has_review_inputs: false }]);
+    const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
+    const view = reviewView();
+    view.targets = { target_set_id: "empty", targets: [] };
+    view.available_inputs = [];
+    const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/i }));
+    await confirmIdentity();
+    await waitFor(() => expect(open).toHaveBeenCalledWith(expect.objectContaining({ mode: "review", targets: null })));
+    expect(inputs).not.toHaveBeenCalled();
+    expect(await screen.findByRole("button", { name: /Finish & Submit Case/i })).toBeDefined();
+  });
+
+  it("requires and sends explicit round selection when resuming is ambiguous", async () => {
+    asAnnotator("dr-a");
+    vi.spyOn(api, "getSettings").mockResolvedValue({ allowed_modes: ["review"], default_mode: "review" } as any);
+    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
+    const open = vi.spyOn(api, "openWorkspace")
+      .mockRejectedValueOnce(new ApiError(422, "Select the review round to resume", "AMBIGUOUS_REVIEW_ROUND", { rounds: ["round-a", "round-b"] } as any))
+      .mockResolvedValue({ workspace_id: "ws", view: reviewView() });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/i }));
+    await confirmIdentity();
+    const dialog = await screen.findByRole("dialog", { name: /Select review round/i });
+    fireEvent.change(within(dialog).getByLabelText("Review round"), { target: { value: "round-b" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Resume round/i }));
+    await waitFor(() => expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ review_round_target_set_id: "round-b", targets: null })));
+  });
+
   it("does not refetch on every keystroke, applies the identity on blur and keeps it out of the browser", async () => {
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
     const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
@@ -240,6 +276,27 @@ describe("Export", () => {
 
 describe("A4/A5: review decisions and notes", () => {
   const rejected = { decision_id: "d", target: { annotation_id: "prop", version: "p-v1" }, outcome: "rejected" as const, note: "wrong body site", reviewer_id: "dr-a" };
+
+  it("confirms discarding an adopted edited copy before switching away from changed", async () => {
+    const copy = proposal("copy", "edited-v2", "HP:0002");
+    copy.annotation.provenance = { actor: { actor_id: "dr-a", kind: "human" as any }, method: "manual", source_refs: ["prop:p-v1"] } as any;
+    const changed = { ...rejected, outcome: "changed" as const, replacement: { annotation_id: "copy", version: "edited-v2" } };
+    const view = reviewView([changed], [copy], copy.evidence);
+    const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...view.draft, revision: 1, annotations: [], evidence: [], decisions: [rejected] });
+    render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+    fireEvent.keyDown(window, { key: "j" });
+    fireEvent.keyDown(window, { key: "2" });
+    const dialog = await screen.findByRole("dialog", { name: /Discard adopted copy/i });
+    expect(decide).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: /Cancel/i }));
+    expect(decide).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "2" });
+    const confirm = await screen.findByRole("dialog", { name: /Discard adopted copy/i });
+    fireEvent.click(within(confirm).getByRole("button", { name: /Discard copy and change decision/i }));
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+    expect(decide.mock.calls[0][1].payload.outcome).toBe("rejected");
+    await waitFor(() => expect(screen.queryByText("HP:0002")).toBeNull());
+  });
 
   it("never overrides an explicit rejection when an adopted copy is edited", async () => {
     const copy = proposal("copy", "c-v1", "HP:0001");
@@ -446,7 +503,7 @@ describe("Review cases", () => {
     expect(dialog.textContent).toMatch(/2 annotation\(s\) will be submitted \(1 confirmed proposal\(s\), 1 curated\)/);
   });
 
-  it("offers the next case that has proposals after submitting a review", async () => {
+  it("offers the next case including zero proposals after submitting a review", async () => {
     vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s", created_at: "now", snapshots: [], decisions: [] } as any);
     const onNavigate = vi.fn().mockResolvedValue(undefined);
     const documentList = [
@@ -457,11 +514,11 @@ describe("Review cases", () => {
     render(<CaseScreen view={reviewView([confirmed])} workspaceId="ws" onClose={vi.fn()}
       onNavigateCase={onNavigate} documentList={documentList} />);
     await submitCase();
-    fireEvent.click(await screen.findByRole("button", { name: /Review next case \(Case 3\)/i }));
-    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("doc-3"));
+    fireEvent.click(await screen.findByRole("button", { name: /Review next case \(Case 2\)/i }));
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("doc-de"));
   });
 
-  it("offers no next case when no later case has proposals", async () => {
+  it("offers a later case even when it has no proposals", async () => {
     vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s", created_at: "now", snapshots: [], decisions: [] } as any);
     const documentList = [
       { ...docs[0], document_id: "doc", has_review_inputs: true },
@@ -471,7 +528,7 @@ describe("Review cases", () => {
       onNavigateCase={vi.fn()} documentList={documentList} />);
     await submitCase();
     await screen.findByRole("dialog", { name: /Case submitted/i });
-    expect(screen.queryByRole("button", { name: /Review next case/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /Review next case/i })).toBeDefined();
   });
 
   it("quotes each proposal's text so equally named proposals can be told apart", () => {

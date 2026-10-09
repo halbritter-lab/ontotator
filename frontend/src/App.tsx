@@ -127,6 +127,8 @@ export const App: React.FC = () => {
   // Identity the person confirmed ("You are annotating as ...") in this page session.
   const [confirmedAnnotator, setConfirmedAnnotator] = useState<string | null>(null);
   const [pendingOpen, setPendingOpen] = useState<{ docId: string; identity: string } | null>(null);
+  const [roundSelection, setRoundSelection] = useState<{ docId: string; identity: string; rounds: string[] } | null>(null);
+  const [selectedRound, setSelectedRound] = useState("");
   const [mode, setMode] = useState<WorkspaceMode>("independent");
   const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [provisioningNotices, setProvisioningNotices] = useState<ProvisioningNotice[]>([]);
@@ -427,35 +429,31 @@ export const App: React.FC = () => {
    * Open a case. In review mode, all review proposals for the case are loaded here
    * (and only here). Throws on failure.
    */
-  const openCase = async (docId: string, opts: { forceRemount?: boolean; identity?: string } = {}) => {
+  const openCase = async (docId: string, opts: { forceRemount?: boolean; identity?: string; roundId?: string } = {}) => {
     if (!selectedPackageId) throw new Error("No work package selected.");
     const identity = opts.identity ?? annotatorRef.current;
     if (identityProblem(identity)) throw new Error("Enter your initials before opening a case.");
-    let targets: ReviewTargetSet | null = null;
-    if (mode === "review") {
-      const inputs = await api.getReviewInputs({
-        package_id: selectedPackageId,
-        document_id: docId,
-        annotator_id: identity,
-        mode: "review",
-      });
-      if (inputs.length === 0) {
-        throw new Error(
-          `No review proposals are available for case ${docId}. Switch to "${modeLabels.independent}" to annotate this case.`,
-        );
-      }
-      targets = {
-        target_set_id: "",
-        targets: inputs.map((s) => ({ annotation_id: s.annotation.annotation_id, version: s.version })),
-      };
-    }
-    const res = await api.openWorkspace({
+    let res: OpenWorkspaceResponse;
+    try {
+      res = await api.openWorkspace({
       package_id: selectedPackageId,
       document_id: docId,
       annotator_id: identity,
       mode,
-      targets,
-    });
+      targets: null,
+      ...(opts.roundId ? { review_round_target_set_id: opts.roundId } : {}),
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "AMBIGUOUS_REVIEW_ROUND"
+          && typeof err.details === "object" && Array.isArray(err.details.rounds)
+          && err.details.rounds.every((id) => typeof id === "string")) {
+        setSelectedRound("");
+        setRoundSelection({ docId, identity, rounds: err.details.rounds as string[] });
+        return;
+      }
+      throw err;
+    }
+    setRoundSelection(null);
     setSelectedDocId(docId);
     if (opts.forceRemount) setWorkspaceNonce((n) => n + 1);
     setActiveWorkspace(res);
@@ -556,6 +554,29 @@ export const App: React.FC = () => {
   const hasPackages = packages.length > 0;
   const showGuide = packagesLoaded && !hasPackages;
 
+  const roundSelectionDialog = (
+    roundSelection && <div className="modal-overlay">
+        <div className="modal-content" role="dialog" aria-label="Select review round" aria-modal="true">
+          <h2>Select review round</h2>
+          <p>This annotator has several review rounds for this case. Choose the round to continue.</p>
+          <label htmlFor="review-round-select">Review round</label>
+          <select id="review-round-select" className="form-select" value={selectedRound} onChange={(e) => setSelectedRound(e.target.value)}>
+            <option value="">Choose a round</option>
+            {roundSelection.rounds.map((id) => <option key={id} value={id}>{id}</option>)}
+          </select>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => setRoundSelection(null)}>Cancel</button>
+            <button type="button" className="btn btn-primary" disabled={!selectedRound || isOpening} onClick={async () => {
+              setIsOpening(true);
+              try { await openCase(roundSelection.docId, { identity: roundSelection.identity, roundId: selectedRound }); }
+              catch (err) { reportError("Error opening review round", err); }
+              finally { setIsOpening(false); }
+            }}>Resume round</button>
+          </div>
+        </div>
+      </div>
+  );
+
   const sessionScreen = sessionLost && (
     <SessionLostScreen
       reason={sessionLost}
@@ -568,7 +589,7 @@ export const App: React.FC = () => {
 
   if (activeWorkspace) {
     const currentDocId = activeWorkspace.view.document.document_id;
-    const reload = () => openCase(currentDocId, { forceRemount: true });
+    const reload = () => openCase(currentDocId, { forceRemount: true, roundId: mode === "review" ? activeWorkspace.view.key.target_set_id : undefined });
     return (
       <>
         <CaseErrorBoundary
@@ -589,6 +610,7 @@ export const App: React.FC = () => {
             onClose={() => { void closeWorkspace(); }}
           />
         </CaseErrorBoundary>
+        {roundSelectionDialog}
         {sessionScreen}
       </>
     );
@@ -631,6 +653,7 @@ export const App: React.FC = () => {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-primary)" }}>
       {fileInputs}
+      {roundSelectionDialog}
       {/* App Header */}
       <header className="app-header">
         <div className="app-title" style={{ display: "flex", alignItems: "baseline", gap: 10 }}>

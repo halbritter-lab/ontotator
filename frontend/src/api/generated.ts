@@ -918,6 +918,8 @@ export interface components {
              */
             mode: "independent" | "review" | "assisted";
             targets?: components["schemas"]["ReviewTargetSet"] | null;
+            /** Review Round Target Set Id */
+            review_round_target_set_id?: string | null;
         };
         /**
          * OpenWorkspaceResponse

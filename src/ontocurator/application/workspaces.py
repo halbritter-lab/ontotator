@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.annotations import AnnotationRef, AnnotationSnapshot
 from ontocurator.domain.axes import AxisDefinition
 from ontocurator.domain.documents import Document
 from ontocurator.domain.errors import DomainError
@@ -17,6 +17,7 @@ from ontocurator.domain.profiles import (
     resolve_layer,
     resolve_ontology,
 )
+from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, Submission, WorkspaceKey
@@ -119,7 +120,11 @@ class WorkspaceService:
                     position=idx,
                     status=status,
                     has_review_inputs=(
-                        bool(self.get_review_inputs(package_id, d.document_id))
+                        bool(
+                            self.repo.list_annotations_for_document(
+                                package_id, d.document_id
+                            )
+                        )
                         if reveal_review_inputs
                         else None
                     ),
@@ -140,12 +145,39 @@ class WorkspaceService:
     def get_review_inputs(
         self, package_id: str, document_id: str
     ) -> list[AnnotationSnapshot]:
-        """Fetch historical annotations eligible as review targets."""
+        """Use current submitted results, or raw proposals before any submission.
+
+        Dependency snapshots remain available for provenance and explicit targets;
+        they are never implicitly promoted to current review inputs.
+        """
         profile = self.repo.get_task_profile(package_id)
         scope = build_scope(profile, "review")
+        submissions = latest_submissions(
+            self.repo.get_submissions_for_document(package_id, document_id)
+        )
+        origins: dict[tuple[str, str, str], list[Submission]] = {}
+        for submission in submissions:
+            origin = submission.origin_key
+            origins.setdefault(
+                (origin.annotator_id, origin.mode, origin.scope_id), []
+            ).append(submission)
+        if any(len(group) > 1 for group in origins.values()):
+            raise DomainError(
+                "AMBIGUOUS_REVIEW_INPUTS",
+                {
+                    "message": "Multiple submitted origins or rounds require explicit review targets",
+                    "origins": [s.origin_key.model_dump() for s in submissions],
+                },
+            )
+        inputs = (
+            [a for s in submissions for a in s.snapshots]
+            if submissions
+            else self.repo.list_annotations_for_document(package_id, document_id)
+        )
+        unique = {(s.annotation.annotation_id, s.version): s for s in inputs}
         return [
             snap
-            for snap in self.repo.list_annotations_for_document(package_id, document_id)
+            for snap in unique.values()
             if snap.annotation.layer_id in scope.editable_layer_ids
         ]
 
@@ -190,8 +222,46 @@ class WorkspaceService:
             if targets is not None:
                 effective_targets = targets
             else:
-                existing_draft = self.repo.open_draft(key)
-                effective_targets = existing_draft.targets
+                rounds = [
+                    k
+                    for k in self.repo.list_workspace_keys(
+                        key.package_id, key.annotator_id, "review", key.document_id
+                    )
+                    if k.document_id == key.document_id and k.scope_id == key.scope_id
+                ]
+                if key.target_set_id != "targets-0":
+                    rounds = [k for k in rounds if k.target_set_id == key.target_set_id]
+                    if not rounds:
+                        raise DomainError(
+                            "REVIEW_ROUND_NOT_FOUND",
+                            "Selected review round is unavailable",
+                        )
+                if len(rounds) > 1:
+                    raise DomainError(
+                        "AMBIGUOUS_REVIEW_ROUND",
+                        {
+                            "message": "Select the review round to resume",
+                            "rounds": [k.target_set_id for k in rounds],
+                        },
+                    )
+                if rounds:
+                    key = rounds[0]
+                    effective_targets = self.repo.open_draft(key).targets
+                else:
+                    effective_targets = ReviewTargetSet.create(
+                        [
+                            AnnotationRef(
+                                annotation_id=s.annotation.annotation_id,
+                                version=s.version,
+                            )
+                            for s in self.get_review_inputs(
+                                key.package_id, key.document_id
+                            )
+                        ]
+                    )
+                    key = key.model_copy(
+                        update={"target_set_id": effective_targets.target_set_id}
+                    )
             all_inputs = self.repo.list_annotations_for_document(
                 key.package_id, key.document_id
             )

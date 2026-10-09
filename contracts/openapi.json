@@ -1949,6 +1949,17 @@
                 "type": "null"
               }
             ]
+          },
+          "review_round_target_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Round Target Set Id"
           }
         },
         "additionalProperties": false,

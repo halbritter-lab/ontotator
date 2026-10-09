@@ -112,6 +112,7 @@ class OpenWorkspaceRequest(BaseModel):
     annotator_id: str
     mode: WorkspaceMode = "independent"
     targets: ReviewTargetSet | None = None
+    review_round_target_set_id: str | None = None
 
 
 class OpenWorkspaceResponse(BaseModel):
@@ -408,9 +409,20 @@ def open_workspace(
     """Open or initialize a workspace view."""
     require_mode_allowed(request, req.mode)
     targets = req.targets
+    if req.review_round_target_set_id is not None and (
+        req.mode != "review" or targets is not None
+    ):
+        raise DomainError(
+            "INVALID_REVIEW_ROUND",
+            "Round selection requires review mode without explicit targets",
+        )
     if targets is not None and not targets.target_set_id:
         targets = ReviewTargetSet.create(targets.targets)
-    target_set_id = targets.target_set_id if targets else "targets-0"
+    target_set_id = (
+        targets.target_set_id
+        if targets
+        else (req.review_round_target_set_id or "targets-0")
+    )
     key = WorkspaceKey(
         package_id=req.package_id,
         document_id=req.document_id,

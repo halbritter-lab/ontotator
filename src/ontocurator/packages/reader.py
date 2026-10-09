@@ -21,6 +21,7 @@ from ontocurator.domain.profiles import (
     resolve_ontology,
     resolve_type,
 )
+from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.serialization import decode_snapshot, verify_snapshot
 from ontocurator.domain.workspace import Submission
@@ -355,6 +356,8 @@ def _read_package(
                 )
 
     for sub in submissions.values():
+        if sub.format_version != "ontocurator-submission/v2" or sub.draft_revision < 1:
+            raise InvalidPackage("Unsupported submission format or revision")
         if sub.origin_key.document_id not in documents:
             raise InvalidPackage("Submission references missing document")
         canonical_targets = ReviewTargetSet.create(sub.targets.targets)
@@ -392,10 +395,68 @@ def _read_package(
                 raise InvalidPackage(
                     "Submission decisions do not cover exactly its review targets"
                 )
+            for decision in sub.decisions:
+                target_ref = (decision.target.annotation_id, decision.target.version)
+                reviewed_snapshot = annotations[target_ref]
+                if decision.reviewer_id != sub.origin_key.annotator_id:
+                    raise InvalidPackage(
+                        "Review decision reviewer does not match submission origin"
+                    )
+                if decision.outcome == "confirmed":
+                    if target_ref not in submitted:
+                        raise InvalidPackage(
+                            "Confirmed review target is missing from submitted results"
+                        )
+                elif target_ref in submitted:
+                    raise InvalidPackage(
+                        "Unapproved review target occurs in submitted results"
+                    )
+                if decision.outcome == "changed":
+                    replacement = decision.replacement
+                    assert replacement is not None
+                    replacement_ref = (replacement.annotation_id, replacement.version)
+                    replacement_snap = annotations.get(replacement_ref)
+                    if replacement_snap is None or replacement_ref not in submitted:
+                        raise InvalidPackage(
+                            "Review replacement is missing from submitted results"
+                        )
+                    if (
+                        replacement_snap.document_id != reviewed_snapshot.document_id
+                        or replacement_snap.annotation.layer_id
+                        != reviewed_snapshot.annotation.layer_id
+                        or replacement_snap.annotation.type_id
+                        != reviewed_snapshot.annotation.type_id
+                    ):
+                        raise InvalidPackage(
+                            "Review replacement document, layer or type mismatch"
+                        )
+            for snap in sub.snapshots:
+                linked_targets = [
+                    r
+                    for r in sub.targets.targets
+                    if f"{r.annotation_id}:{r.version}"
+                    in snap.annotation.provenance.source_refs
+                ]
+                if linked_targets and not any(
+                    d.outcome == "changed"
+                    and d.target in linked_targets
+                    and d.replacement is not None
+                    and d.replacement.annotation_id == snap.annotation.annotation_id
+                    and d.replacement.version == snap.version
+                    for d in sub.decisions
+                ):
+                    raise InvalidPackage(
+                        "Unresolved adopted copy in submitted review results"
+                    )
         elif sub.decisions or target_refs:
             raise InvalidPackage(
                 "Independent submission cannot contain review decisions or targets"
             )
+
+    try:
+        latest_submissions(submissions.values())
+    except DomainError as exc:
+        raise InvalidPackage(str(exc)) from exc
 
     return ValidatedPackage(
         manifest=manifest,

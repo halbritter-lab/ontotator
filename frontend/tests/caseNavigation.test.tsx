@@ -138,20 +138,20 @@ describe("CaseNavigation Component", () => {
       { ...sampleDocuments[2], has_review_inputs: true },
     ];
 
-    it("skips cases without review proposals when stepping forward and back", () => {
+    it("includes cases without review proposals when stepping forward and back", () => {
       const onNavigate = vi.fn().mockResolvedValue(undefined);
       const { rerender } = render(
         <CaseNavigation documents={reviewDocuments} currentDocumentId="doc-beta" onNavigate={onNavigate} />
       );
       fireEvent.click(screen.getByRole("button", { name: /Next Case/i }));
-      expect(onNavigate).toHaveBeenLastCalledWith("doc-gamma");
+      expect(onNavigate).toHaveBeenLastCalledWith("doc-alpha");
 
       rerender(<CaseNavigation documents={reviewDocuments} currentDocumentId="doc-gamma" onNavigate={onNavigate} />);
       fireEvent.click(screen.getByRole("button", { name: /Previous Case/i }));
-      expect(onNavigate).toHaveBeenLastCalledWith("doc-beta");
+      expect(onNavigate).toHaveBeenLastCalledWith("doc-alpha");
     });
 
-    it("disables the next button when no later case has proposals", () => {
+    it("enables the next button for a later case with no proposals", () => {
       render(
         <CaseNavigation
           documents={[reviewDocuments[0], reviewDocuments[1]]}
@@ -159,14 +159,14 @@ describe("CaseNavigation Component", () => {
           onNavigate={vi.fn()}
         />
       );
-      expect((screen.getByRole("button", { name: /Next Case/i }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: /Next Case/i }) as HTMLButtonElement).disabled).toBe(false);
     });
 
-    it("marks cases without proposals as unavailable in the case list", () => {
+    it("keeps cases without proposals available in the case list", () => {
       render(<CaseNavigation documents={reviewDocuments} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
       const option = screen.getByRole("option", { name: /doc-alpha/ }) as HTMLOptionElement;
-      expect(option.disabled).toBe(true);
-      expect(option.textContent).toMatch(/no proposals/i);
+      expect(option.disabled).toBe(false);
+      expect(option.textContent).not.toMatch(/no proposals/i);
       expect((screen.getByRole("option", { name: /doc-gamma/ }) as HTMLOptionElement).disabled).toBe(false);
     });
   });

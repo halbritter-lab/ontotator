@@ -13,6 +13,7 @@ from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
 from ontocurator.domain.profiles import OntologyDefinition, TaskProfile, profile_hash
+from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
@@ -655,6 +656,7 @@ class Repository:
         package_id: str,
         annotator_id: str,
         mode: str | None = None,
+        document_id: str | None = None,
     ) -> list[WorkspaceKey]:
         """Return local workspace identities of one annotator, matched exactly.
 
@@ -667,8 +669,8 @@ class Repository:
             "SELECT package_id, document_id, annotator_id, mode, scope_id, "
             "target_set_id FROM workspaces "
             "WHERE package_id = ? AND annotator_id = ? "
-            "AND (? IS NULL OR mode = ?);",
-            (package_id, annotator_id, mode, mode),
+            "AND (? IS NULL OR mode = ?) AND (? IS NULL OR document_id = ?);",
+            (package_id, annotator_id, mode, mode, document_id, document_id),
         )
         for row in rows:
             key = WorkspaceKey(
@@ -687,8 +689,9 @@ class Repository:
             "JOIN imported_submission_bindings b USING(submission_id) "
             "WHERE b.local_package_id = ? "
             "AND json_extract(s.payload_json, '$.origin_key.annotator_id') = ? "
-            "AND (? IS NULL OR json_extract(s.payload_json, '$.origin_key.mode') = ?);",
-            (package_id, annotator_id, mode, mode),
+            "AND (? IS NULL OR json_extract(s.payload_json, '$.origin_key.mode') = ?) "
+            "AND (? IS NULL OR json_extract(s.payload_json, '$.origin_key.document_id') = ?);",
+            (package_id, annotator_id, mode, mode, document_id, document_id),
         )
         for row in rows:
             origin = WorkspaceKey.model_validate(json.loads(row[0])["origin_key"])
@@ -783,7 +786,16 @@ class Repository:
             )
             submissions = self.get_submissions_for_workspace(key)
             if submissions:
-                latest = submissions[-1]
+                current = latest_submissions(submissions)
+                if len(current) != 1:
+                    raise DomainError(
+                        "AMBIGUOUS_SUBMISSION_ORIGIN",
+                        {
+                            "message": "Cannot restore multiple submission origins into one draft",
+                            "origins": [s.origin_key.model_dump() for s in current],
+                        },
+                    )
+                latest = current[0]
                 confirmed = {
                     (d.target.annotation_id, d.target.version)
                     for d in latest.decisions
@@ -854,8 +866,13 @@ class Repository:
                         ),
                     )
                 cursor.execute(
-                    "UPDATE workspaces SET targets_json=? WHERE workspace_key=?",
-                    (latest.targets.model_dump_json(), k_str),
+                    "UPDATE workspaces SET targets_json=?, revision=?, checked_layer_ids_json=? WHERE workspace_key=?",
+                    (
+                        latest.targets.model_dump_json(),
+                        latest.draft_revision,
+                        json.dumps(latest.checked_layer_ids),
+                        k_str,
+                    ),
                 )
             return self._open_draft(key, targets)
 
@@ -1073,7 +1090,7 @@ class Repository:
                     "VALUES (?, ?, ?, ?, ?, ?, ?);",
                     (
                         result.submission_id,
-                        k_str,
+                        _key_str(result.origin_key),
                         json.dumps(result.targets.model_dump()),
                         result.draft_revision,
                         json.dumps(getattr(result, "checked_layer_ids", [])),
@@ -1246,60 +1263,36 @@ class Repository:
     ) -> Literal["not_started", "in_progress", "completed"]:
         """Compute document progress status strictly isolated to annotator and mode."""
         conn = self.db.get_connection()
-
-        # Submissions bound to this local package, matched exactly (binary,
-        # case-sensitive) on the structured origin identity. Local and imported
-        # submissions both carry a binding; imports keep document, annotator
-        # and mode of their origin key.
-        sub_row = conn.execute(
-            "SELECT s.draft_revision FROM submissions s "
-            "JOIN imported_submission_bindings b USING(submission_id) "
-            "WHERE b.local_package_id = ? "
-            "AND json_extract(s.payload_json, '$.origin_key.document_id') = ? "
-            "AND json_extract(s.payload_json, '$.origin_key.annotator_id') = ? "
-            "AND json_extract(s.payload_json, '$.origin_key.mode') = ? "
-            "ORDER BY s.created_at DESC LIMIT 1;",
-            (package_id, document_id, annotator_id, mode),
-        ).fetchone()
-
-        # Check existing draft workspace
-        ws_row = conn.execute(
-            "SELECT workspace_key, revision, checked_layer_ids_json FROM workspaces "
-            "WHERE package_id = ? AND document_id = ? AND annotator_id = ? AND mode = ?;",
-            (package_id, document_id, annotator_id, mode),
-        ).fetchone()
-
-        if sub_row is not None:
-            sub_rev = sub_row[0]
-            if ws_row is not None:
-                ws_rev = ws_row[1]
-                if ws_rev > sub_rev:
+        any_completed = False
+        for key in self.list_workspace_keys(
+            package_id, annotator_id, mode, document_id
+        ):
+            if key.document_id != document_id:
+                continue
+            current = latest_submissions(self.get_submissions_for_workspace(key))
+            row = conn.execute(
+                "SELECT revision, checked_layer_ids_json FROM workspaces WHERE workspace_key=?",
+                (_key_str(key),),
+            ).fetchone()
+            if current:
+                any_completed = True
+                # Never compare a draft revision across unrelated origin branches.
+                if row is not None and (
+                    len(current) != 1 or row[0] > current[0].draft_revision
+                ):
                     return "in_progress"
-            return "completed"
-
-        if ws_row is None:
-            return "not_started"
-
-        ws_key, ws_rev, checked_json = ws_row
-        checked_layers = json.loads(checked_json) if checked_json else []
-        if ws_rev > 0 or len(checked_layers) > 0:
-            return "in_progress"
-
-        has_ann = conn.execute(
-            "SELECT 1 FROM workspace_annotations WHERE workspace_key = ? LIMIT 1;",
-            (ws_key,),
-        ).fetchone()
-        if has_ann is not None:
-            return "in_progress"
-
-        has_dec = conn.execute(
-            "SELECT 1 FROM workspace_decisions WHERE workspace_key = ? LIMIT 1;",
-            (ws_key,),
-        ).fetchone()
-        if has_dec is not None:
-            return "in_progress"
-
-        return "not_started"
+                continue
+            if row is None:
+                continue
+            if row[0] > 0 or json.loads(row[1] or "[]"):
+                return "in_progress"
+            for table in ("workspace_annotations", "workspace_decisions"):
+                if conn.execute(
+                    f"SELECT 1 FROM {table} WHERE workspace_key=? LIMIT 1",
+                    (_key_str(key),),
+                ).fetchone():
+                    return "in_progress"
+        return "completed" if any_completed else "not_started"
 
     def get_annotation_snapshot(
         self, annotation_id: str, version: str
@@ -1358,6 +1351,19 @@ class Repository:
             f"USING(submission_id) WHERE b.local_key IN ({placeholders}) "
             "ORDER BY s.created_at ASC;",
             aliases,
+        )
+        return [Submission.model_validate_json(row[0]) for row in rows]
+
+    def get_submissions_for_document(
+        self, package_id: str, document_id: str
+    ) -> list[Submission]:
+        """Read only immutable submissions locally bound to this document."""
+        rows = self.db.get_connection().execute(
+            "SELECT s.payload_json FROM submissions s "
+            "JOIN imported_submission_bindings b USING(submission_id) "
+            "WHERE b.local_package_id=? "
+            "AND json_extract(s.payload_json, '$.origin_key.document_id')=?;",
+            (package_id, document_id),
         )
         return [Submission.model_validate_json(row[0]) for row in rows]
 

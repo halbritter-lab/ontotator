@@ -12,6 +12,7 @@ from ontocurator.domain.axes import validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError, IncompleteReview
 from ontocurator.domain.profiles import TaskProfile, resolve_type
+from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import (
     Draft,
@@ -142,6 +143,25 @@ def validate_completion(
             raise IncompleteReview(
                 "Decisions must match exactly the active review targets"
             )
+        for snap in draft.annotations:
+            linked_targets = [
+                t
+                for t in draft.targets.targets
+                if f"{t.annotation_id}:{t.version}"
+                in snap.annotation.provenance.source_refs
+            ]
+            if linked_targets and not any(
+                d.outcome == "changed"
+                and d.target in linked_targets
+                and d.replacement is not None
+                and d.replacement.annotation_id == snap.annotation.annotation_id
+                and d.replacement.version == snap.version
+                for d in draft.decisions
+            ):
+                raise DomainError(
+                    "UNRESOLVED_ADOPTED_COPY",
+                    "Adopted copies require an exact changed decision; decide or delete the copy",
+                )
 
 
 class SubmissionService:
@@ -201,6 +221,15 @@ class SubmissionService:
 
         task_profile = self.repo.get_task_profile(key.package_id)
         scope = build_scope(task_profile, key.mode)
+        previous = latest_submissions(self.repo.get_submissions_for_workspace(key))
+        if len(previous) > 1:
+            raise DomainError(
+                "AMBIGUOUS_SUBMISSION_ORIGIN",
+                "Cannot continue multiple submission origins",
+            )
+        # Continuing an imported round keeps its logical immutable origin and
+        # revision sequence; its local package binding is stored separately.
+        origin_key = previous[0].origin_key if previous else key
 
         # Validate completion against profile and scope
         validate_completion(draft, task_profile, scope, self.repo, self.ontology)
@@ -235,6 +264,14 @@ class SubmissionService:
                         raise DomainError(
                             "REPLACEMENT_NOT_FOUND",
                             "Approved replacement version is no longer in the draft",
+                        )
+                    if (
+                        rep_snap.annotation.layer_id != target.annotation.layer_id
+                        or rep_snap.annotation.type_id != target.annotation.type_id
+                    ):
+                        raise DomainError(
+                            "REPLACEMENT_LAYER_TYPE_MISMATCH",
+                            "Replacement must match the target layer and type",
                         )
                     snapshots.append(rep_snap)
 
@@ -275,7 +312,7 @@ class SubmissionService:
         return Submission(
             format_version="ontocurator-submission/v2",
             submission_id=sub_id,
-            origin_key=key,
+            origin_key=origin_key,
             scope=scope,
             targets=draft.targets,
             draft_revision=draft.revision + 1,

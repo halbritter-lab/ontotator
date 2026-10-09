@@ -97,6 +97,7 @@ class ReviewService:
                     "UNEXPECTED_REPLACEMENT",
                     "Replacement must be None when clearing a decision",
                 )
+            self._discard_abandoned_adoptions(draft, cmd)
             draft.decisions = [d for d in draft.decisions if d.target != cmd.target]
             target_layer = target_snap.annotation.layer_id
             draft.checked_layer_ids = [
@@ -177,6 +178,7 @@ class ReviewService:
             reviewer_id=key.annotator_id,
         )
 
+        self._discard_abandoned_adoptions(draft, cmd)
         draft.decisions = [d for d in draft.decisions if d.target != cmd.target] + [
             decision
         ]
@@ -188,3 +190,42 @@ class ReviewService:
         ]
 
         return draft
+
+    @staticmethod
+    def _discard_abandoned_adoptions(draft: Draft, cmd: DecisionCommand) -> None:
+        """Remove only adopted counterversions of this target, retaining authored findings."""
+        source = f"{cmd.target.annotation_id}:{cmd.target.version}"
+        removed = [
+            a
+            for a in draft.annotations
+            if source in a.annotation.provenance.source_refs
+            and (
+                cmd.replacement is None
+                or a.annotation.annotation_id != cmd.replacement.annotation_id
+            )
+        ]
+        draft.annotations = [
+            a
+            for a in draft.annotations
+            if source not in a.annotation.provenance.source_refs
+            or (
+                cmd.replacement is not None
+                and a.annotation.annotation_id == cmd.replacement.annotation_id
+            )
+        ]
+        used = {
+            (r.evidence_id, r.version)
+            for a in draft.annotations
+            for r in a.annotation.evidence_refs
+        }
+        removed_evidence = {
+            (r.evidence_id, r.version)
+            for a in removed
+            for r in a.annotation.evidence_refs
+        }
+        draft.evidence = [
+            e
+            for e in draft.evidence
+            if (e.mention.evidence_id, e.version) not in removed_evidence
+            or (e.mention.evidence_id, e.version) in used
+        ]

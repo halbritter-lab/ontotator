@@ -925,6 +925,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (!target) return;
     setActionError(null);
     const key = targetKeyOf(target);
+    const abandonedCopies = (latestDraft.current.annotations ?? []).filter((a) =>
+      a.annotation.provenance.source_refs?.includes(`${target.annotation_id}:${target.version}`)
+      && a.annotation.annotation_id !== payload.replacement?.annotation_id);
+    if (abandonedCopies.length > 0) {
+      const ok = await askConfirm(
+        "Discard adopted copy?",
+        "Changing this decision removes the editable copy adopted from this proposal, including its edits. Independently added findings are kept.",
+        "Discard copy and change decision",
+      );
+      if (!ok) return;
+    }
     let note: string | undefined;
     if (payload.outcome === null) {
       // Removing a decision must not silently lose the note text: keep it in the editor.
@@ -987,7 +998,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       } catch (error) { reportError(error); return; }
     }
 
-    if (existingCopy) {
+    if (existingCopy && (latestDraft.current.annotations ?? []).some((a) => a.annotation.annotation_id === existingCopy.annotation.annotation_id)) {
       openCopy(existingCopy.annotation.annotation_id);
       return;
     }
@@ -1214,7 +1225,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
   }, [selectedAnnotation, view.key.mode, draft.decisions, reviewTargets, termLabel]);
 
-  // In review mode, cases without proposals are skipped.
+  // Review includes every document in package order.
   const prevDoc = documentList ? adjacentCase(documentList, view.document.document_id, -1) : null;
   const nextDoc = documentList ? adjacentCase(documentList, view.document.document_id, 1) : null;
 

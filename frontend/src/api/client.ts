@@ -56,12 +56,14 @@ export interface OntologyInfo {
   translations?: OntologyTranslation[];
 }
 
+type ApiErrorDetails = string | Record<string, unknown>;
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
-  readonly details?: string;
+  readonly details?: ApiErrorDetails;
 
-  constructor(status: number, message: string, code?: string, details?: string) {
+  constructor(status: number, message: string, code?: string, details?: ApiErrorDetails) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -71,7 +73,7 @@ export class ApiError extends Error {
 }
 
 export class AuthError extends ApiError {
-  constructor(message = "Unauthorized or invalid session token", details?: string, code = "FORBIDDEN") {
+  constructor(message = "Unauthorized or invalid session token", details?: ApiErrorDetails, code = "FORBIDDEN") {
     super(403, message, code, details);
     this.name = "AuthError";
   }
@@ -125,14 +127,14 @@ function notifySessionLost(reason: SessionLostReason): void {
 }
 
 export class ConflictError extends ApiError {
-  constructor(message = "Revision conflict detected", code = "REVISION_CONFLICT", details?: string) {
+  constructor(message = "Revision conflict detected", code = "REVISION_CONFLICT", details?: ApiErrorDetails) {
     super(409, message, code, details);
     this.name = "ConflictError";
   }
 }
 
 export class ValidationError extends ApiError {
-  constructor(message: string, code = "VALIDATION_ERROR", details?: string) {
+  constructor(message: string, code = "VALIDATION_ERROR", details?: ApiErrorDetails) {
     super(422, message, code, details);
     this.name = "ValidationError";
   }
@@ -297,16 +299,16 @@ export class ApiClient {
 
     if (!response.ok) {
       let code: string | undefined;
-      let details: string | undefined;
+      let details: ApiErrorDetails | undefined;
       let message = `API request failed with status ${response.status}`;
 
       try {
         const errorJson = await response.json();
         if (errorJson && typeof errorJson === "object") {
           code = (errorJson.code as string) || undefined;
-          details = (errorJson.details as string) || (errorJson.detail as string) || undefined;
+          details = errorJson.details || errorJson.detail || undefined;
           if (details) {
-            message = details;
+            message = typeof details === "string" ? details : String(details.message ?? message);
           }
         }
       } catch {

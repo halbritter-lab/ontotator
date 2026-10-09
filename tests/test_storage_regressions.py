@@ -100,7 +100,7 @@ def test_imported_submission_seeds_draft(tmp_path):
     repo.import_package(package)
     draft = repo.open_draft(key_for())
     assert draft.annotations == sub.snapshots
-    assert draft.revision == 0
+    assert draft.revision == sub.draft_revision
     assert repo.open_draft(key_for()) == draft
 
 

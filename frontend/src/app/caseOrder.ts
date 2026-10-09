@@ -2,9 +2,9 @@ import type { DocumentSummary } from "../api/client";
 
 /**
  * Whether a case can be opened in the current mode. The server only sets
- * ``has_review_inputs`` for review mode, where cases without proposals cannot be opened.
+ * All documents are reviewable, including checked-negative cases with no proposals.
  */
-export const canOpenCase = (doc: DocumentSummary): boolean => doc.has_review_inputs !== false;
+export const canOpenCase = (_doc: DocumentSummary): boolean => true;
 
 /** The nearest case before (-1) or after (1) the current one, in package order, that can be opened. */
 export function adjacentCase(

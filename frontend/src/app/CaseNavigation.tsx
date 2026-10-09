@@ -26,7 +26,7 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
   const currentDoc = currentIndex >= 0 ? documents[currentIndex] : null;
   const position = currentDoc?.position ?? (currentIndex >= 0 ? currentIndex + 1 : 1);
 
-  // In review mode, cases without proposals are skipped.
+  // Review includes every document in package order.
   const prevDoc = adjacentCase(documents, currentDocumentId, -1);
   const nextDoc = adjacentCase(documents, currentDocumentId, 1);
   const hasPrev = prevDoc !== null;
