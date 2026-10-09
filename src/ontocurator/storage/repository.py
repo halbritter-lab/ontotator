@@ -1272,6 +1272,20 @@ class Repository:
             if conditions is not None:
                 manifest = manifest.model_copy(update={"search_conditions": conditions})
 
+        declared_search_resources = {
+            item.resource_path
+            for condition in manifest.search_conditions or []
+            for item in condition.translations
+        }
+        # A first capture can commit after the condition read above. Its bytes
+        # are only part of this export if this manifest observed their declaration.
+        embedded_files = {
+            path: content
+            for path, content in self.get_embedded_files(package_id).items()
+            if not path.startswith("search-resources/")
+            or path in declared_search_resources
+        }
+
         return ValidatedPackage(
             manifest=manifest,
             documents=documents,
@@ -1279,7 +1293,7 @@ class Repository:
             evidence=evidence,
             submissions=submissions,
             search_events=search_events,
-            embedded_files=self.get_embedded_files(package_id),
+            embedded_files=embedded_files,
         )
 
     def get_document(self, package_id: str, document_id: str) -> Document | None:

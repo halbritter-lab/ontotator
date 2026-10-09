@@ -20,8 +20,10 @@ from test_translation_api import (
     _upload,
 )
 
+from ontocurator.application.exports import ExportService
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import InvalidPackage
+from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.packages.reader import PackageReader
 from ontocurator.packages.writer import PackageWriter
 
@@ -375,3 +377,82 @@ def test_inconsistent_search_execution_metadata_is_rejected(
 
     with pytest.raises(InvalidPackage):
         PackageReader.read_from_stream(_alter(data, change))
+
+
+@pytest.mark.parametrize("boundary", ["workspace", "package", "package-aggregate"])
+def test_first_use_capture_during_export_includes_matching_resources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str
+) -> None:
+    _folder(tmp_path, DE)
+    client = _client(tmp_path, ontology_paths=[HP])
+    key = _open_single(client, embedded=True)
+    repo = client.app.state.repo
+    registry = client.app.state.ontology_registry
+    original_manifest = repo.get_manifest(key["package_id"]).model_dump()
+    assert repo.get_search_conditions(key["package_id"]) is None
+    service = ExportService(repo)
+    if boundary == "package-aggregate":
+        original_workspace_export = service._export_workspace
+
+        def capture_after_workspace(*args: Any, **kwargs: Any) -> Any:
+            package = original_workspace_export(*args, **kwargs)
+            registry.ensure_package_conditions(repo, key["package_id"])
+            return package
+
+        monkeypatch.setattr(service, "_export_workspace", capture_after_workspace)
+    else:
+        original_export = repo.export_package
+
+        def capture_after_resource_read(*args: Any, **kwargs: Any) -> Any:
+            package = original_export(*args, **kwargs)
+            registry.ensure_package_conditions(repo, key["package_id"])
+            return package
+
+        monkeypatch.setattr(repo, "export_package", capture_after_resource_read)
+    exported = (
+        service.for_workspace(WorkspaceKey.model_validate(key))
+        if boundary == "workspace"
+        else service.for_package(key["package_id"], key["annotator_id"], "independent")
+    )
+    assert exported.manifest.origin_manifest_hash == canonical_hash(original_manifest)
+    assert exported.manifest.search_conditions is not None
+    resource = exported.manifest.search_conditions[0].translations[0]
+    assert exported.embedded_files[resource.resource_path] == DE.read_bytes()
+    stream = io.BytesIO()
+    PackageWriter.write_to_stream(exported, stream)
+    stream.seek(0)
+    assert (
+        PackageReader.read_from_stream(stream).manifest.search_conditions
+        == exported.manifest.search_conditions
+    )
+
+
+def test_raw_export_ignores_capture_committed_after_condition_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _folder(tmp_path, DE)
+    client = _client(tmp_path, ontology_paths=[HP])
+    key = _open_single(client, embedded=True)
+    repo = client.app.state.repo
+    registry = client.app.state.ontology_registry
+    original_conditions = repo.get_search_conditions
+    did_capture = False
+
+    def capture_after_condition_read(package_id: str) -> Any:
+        nonlocal did_capture
+        conditions = original_conditions(package_id)
+        if not did_capture:
+            did_capture = True
+            registry.ensure_package_conditions(repo, package_id)
+        return conditions
+
+    monkeypatch.setattr(repo, "get_search_conditions", capture_after_condition_read)
+    exported = repo.export_package(key["package_id"])
+    assert exported.manifest.search_conditions is None
+    assert not any(
+        path.startswith("search-resources/") for path in exported.embedded_files
+    )
+    stream = io.BytesIO()
+    PackageWriter.write_to_stream(exported, stream)
+    stream.seek(0)
+    assert PackageReader.read_from_stream(stream).manifest.search_conditions is None

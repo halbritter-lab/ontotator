@@ -78,16 +78,18 @@ class ExportService:
         if profile is None:
             # Mixed modes: the full package profile covers every layer.
             profile = package_profile
-        stored_resources = orig_pkg.embedded_files
+        conditions = projected_conditions(
+            self.repo.get_search_conditions(package_id), profile
+        )
+        # First capture commits conditions and bytes atomically. Read bytes
+        # after observing conditions, rather than reuse the earlier package view.
+        stored_resources = self.repo.get_embedded_files(package_id)
         embedded = {
             ont.resource_path: stored_resources[ont.resource_path]
             for ont in profile.ontologies
             if ont.resource_path and ont.resource_path in stored_resources
         }
 
-        conditions = projected_conditions(
-            self.repo.get_search_conditions(package_id), profile
-        )
         embedded.update(
             {
                 item.resource_path: stored_resources[item.resource_path]
@@ -239,6 +241,7 @@ class ExportService:
         conditions = projected_conditions(
             self.repo.get_search_conditions(key.package_id), task_profile
         )
+        stored_resources = self.repo.get_embedded_files(key.package_id)
         captured_paths = {
             item.resource_path
             for condition in conditions or []
@@ -264,13 +267,12 @@ class ExportService:
             submissions=submissions_map,
             search_events=search_events,
             embedded_files={
-                path: orig_pkg.embedded_files[path]
+                path: stored_resources[path]
                 for path in captured_paths
                 | {
                     ont.resource_path
                     for ont in task_profile.ontologies
-                    if ont.resource_path
-                    and ont.resource_path in orig_pkg.embedded_files
+                    if ont.resource_path and ont.resource_path in stored_resources
                 }
             },
         )
