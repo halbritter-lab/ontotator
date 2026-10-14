@@ -7,15 +7,28 @@ from pathlib import Path
 
 import pytest
 from pg_harness import database_for
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from test_storage import _sample_package
 from test_storage_regressions import key_for
 
 from ontocurator.domain.documents import Document
-from ontocurator.domain.errors import DomainError, InvalidPackage
+from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
+from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.workspace import (
+    Draft,
+    MutationEnvelope,
+    Submission,
+    WorkspaceKey,
+)
 from ontocurator.packages.models import SearchEventRecord, ValidatedPackage
-from ontocurator.storage.repository import Repository, _lock_id
-from ontocurator.storage.tables import SearchEventRow, StoredFileRow
+from ontocurator.storage.repository import Repository, _key_str, _lock_id
+from ontocurator.storage.tables import (
+    DraftRow,
+    MutationReceiptRow,
+    SearchEventRow,
+    StoredFileRow,
+)
 
 
 def _repo(tmp_path: Path) -> Repository:
@@ -200,19 +213,6 @@ def test_imports_of_different_projects_wait_for_each_other(tmp_path: Path) -> No
         assert importing.result(timeout=10) == "pkg-a"
 
 
-from sqlalchemy import text  # noqa: E402
-from sqlalchemy.exc import DBAPIError  # noqa: E402
-
-from ontocurator.domain.errors import RevisionConflict  # noqa: E402
-from ontocurator.domain.review import ReviewTargetSet  # noqa: E402
-from ontocurator.domain.workspace import (  # noqa: E402
-    Draft,
-    MutationEnvelope,
-    Submission,
-    WorkspaceKey,
-)
-
-
 def _key(package_id: str = "pkg-a", annotator_id: str = "ann-1") -> WorkspaceKey:
     return WorkspaceKey(
         package_id=package_id,
@@ -370,12 +370,6 @@ def test_a_new_draft_resumes_the_latest_submission(tmp_path: Path) -> None:
     assert draft.annotations == resumed.snapshots
 
 
-from sqlalchemy.exc import IntegrityError  # noqa: E402
-
-from ontocurator.storage.repository import _key_str  # noqa: E402
-from ontocurator.storage.tables import DraftRow, MutationReceiptRow  # noqa: E402
-
-
 def test_a_failure_in_the_callers_transaction_undoes_the_mutation(
     tmp_path: Path,
 ) -> None:
@@ -494,3 +488,171 @@ def test_an_import_waits_for_a_writer_of_a_known_search_event(tmp_path: Path) ->
             release.set()
         holder.result(timeout=10)
         assert importing.result(timeout=10) == "export-2"
+
+
+def _project_walk(
+    event_id: str, key: WorkspaceKey, candidates: list[str]
+) -> SearchEventRecord:
+    return SearchEventRecord(
+        event_id=event_id,
+        workspace_key=key,
+        annotation_id="ann-1",
+        query="",
+        route="browse",
+        candidates=candidates,
+        ranked_ids=list(candidates),
+        layer_id="hpo-layer",
+        ontology_release="2026-06-23",
+        index_identity="tree",
+        timestamp="2026-10-14T12:00:00Z",
+    )
+
+
+def _copies(repo: Repository, event_id: str) -> list[list[str]]:
+    with repo.db.transaction() as conn:
+        stored = conn.execute(
+            select(SearchEventRow.payload)
+            .where(SearchEventRow.event_id == event_id)
+            .order_by(SearchEventRow.project_id)
+        ).scalars()
+        return [SearchEventRecord.model_validate(p).candidates for p in stored]
+
+
+def test_a_search_event_belongs_to_its_project(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    repo.import_package(_sample_package("pkg-b"))
+    event = _project_walk("walk-1", _key(), ["HP:0001252"])
+
+    repo.save_search_event(event)
+
+    assert repo.get_search_event("walk-1") == event
+    assert repo.get_search_event("walk-1", "pkg-a") == event
+    assert repo.get_search_event("walk-1", "pkg-b") is None
+    assert repo.get_search_events_for_workspace(_key()) == [event]
+    assert repo.get_search_events_for_workspace(_key("pkg-b")) == []
+
+
+def test_a_walk_grows_only_for_its_owner(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    repo.save_search_event(_project_walk("walk-1", _key(), ["HP:0001252"]))
+
+    grown = repo.append_search_event_candidates(
+        "walk-1", ["HP:0001250", "HP:0001252"], workspace_key=_key()
+    )
+    foreign = repo.append_search_event_candidates(
+        "walk-1", ["HP:0000001"], workspace_key=_key(annotator_id="ann-2")
+    )
+
+    assert grown is not None
+    assert grown.candidates == ["HP:0001252", "HP:0001250"]
+    assert foreign is None
+    stored = repo.get_search_event("walk-1", "pkg-a")
+    assert stored is not None and stored.candidates == ["HP:0001252", "HP:0001250"]
+
+
+def test_a_growing_walk_keeps_every_copy_of_its_id_equal(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    walk = _project_walk("walk-1", _key(), ["HP:1"])
+    repo.save_search_event(walk)
+    repo.import_package(_with_event("pkg-b", walk))
+
+    grown = repo.append_search_event_candidates(
+        "walk-1", ["HP:2"], workspace_key=_key()
+    )
+
+    assert grown is not None and grown.candidates == ["HP:1", "HP:2"]
+    assert _copies(repo, "walk-1") == [["HP:1", "HP:2"], ["HP:1", "HP:2"]]
+    assert repo.get_search_event("walk-1") == grown
+    assert (
+        repo.append_search_event_candidates(
+            "walk-1", ["HP:3"], workspace_key=_key("pkg-c")
+        )
+        is None
+    )
+
+
+def test_an_append_waiting_for_an_import_grows_the_new_copy_too(
+    tmp_path: Path,
+) -> None:
+    repo = _seeded(tmp_path)
+    walk = _project_walk("walk-1", _key(), ["HP:1"])
+    repo.save_search_event(walk)
+    held = threading.Event()
+    release = threading.Event()
+
+    def import_and_hold() -> None:
+        with repo.db.transaction():
+            repo.import_package(_with_event("pkg-b", walk))
+            held.set()
+            release.wait(10)
+
+    with ThreadPoolExecutor(2) as pool:
+        importer = pool.submit(import_and_hold)
+        assert held.wait(10)
+        appending = pool.submit(
+            repo.append_search_event_candidates,
+            "walk-1",
+            ["HP:2"],
+            workspace_key=_key(),
+        )
+        try:
+            with pytest.raises(TimeoutError):
+                appending.result(timeout=1)
+        finally:
+            release.set()
+        importer.result(timeout=10)
+        grown = appending.result(timeout=10)
+
+    assert grown is not None and grown.candidates == ["HP:1", "HP:2"]
+    assert _copies(repo, "walk-1") == [["HP:1", "HP:2"], ["HP:1", "HP:2"]]
+
+
+def test_an_import_waiting_for_an_append_keeps_the_new_terms(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    walk = _project_walk("walk-1", _key(), ["HP:1"])
+    repo.save_search_event(walk)
+    held = threading.Event()
+    release = threading.Event()
+
+    def append_and_hold() -> None:
+        with repo.db.transaction():
+            repo.append_search_event_candidates(
+                "walk-1", ["HP:2"], workspace_key=_key()
+            )
+            held.set()
+            release.wait(10)
+
+    with ThreadPoolExecutor(2) as pool:
+        appender = pool.submit(append_and_hold)
+        assert held.wait(10)
+        importing = pool.submit(repo.import_package, _with_event("pkg-b", walk))
+        try:
+            with pytest.raises(TimeoutError):
+                importing.result(timeout=1)
+        finally:
+            release.set()
+        appender.result(timeout=10)
+        assert importing.result(timeout=10) == "pkg-b"
+
+    assert _copies(repo, "walk-1") == [["HP:1", "HP:2"], ["HP:1", "HP:2"]]
+
+
+def test_an_export_contains_proposals_drafts_history_and_events(
+    tmp_path: Path,
+) -> None:
+    repo = _seeded(tmp_path)
+    package = _sample_package("pkg-a")
+    repo.run_mutation(_key(), _envelope("m1", 0), _check)
+    submission = _submission(_key(), 2)
+    repo.run_mutation(_key(), _envelope("m2", 1), lambda _d: submission)
+    event = _project_walk("walk-1", _key(), ["HP:0001252"])
+    repo.save_search_event(event)
+
+    exported = repo.export_package("pkg-a")
+
+    assert exported.manifest == package.manifest
+    assert exported.documents == package.documents
+    assert exported.annotations == package.annotations
+    assert exported.evidence == package.evidence
+    assert exported.submissions == {"sub-2": submission}
+    assert exported.search_events == [event]

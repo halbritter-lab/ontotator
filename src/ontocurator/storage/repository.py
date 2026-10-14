@@ -1362,3 +1362,272 @@ class Repository:
         with self.db.transaction() as conn:
             stored = conn.execute(statement.limit(1)).scalar_one_or_none()
         return None if stored is None else Submission.model_validate(stored)
+
+    # --- search events ------------------------------------------------------ #
+
+    def save_search_event(self, event: SearchEventRecord) -> None:
+        """Store a new event in the project of its workspace."""
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, event.workspace_key.package_id)
+            self._insert_search_event(
+                conn,
+                project_id,
+                event,
+                local_key=_key_str(event.workspace_key),
+                imported=False,
+            )
+
+    def get_search_event(
+        self, event_id: str, package_id: str | None = None
+    ) -> SearchEventRecord | None:
+        """The event with this ID; within a project when ``package_id`` is given.
+
+        Without a project, an ID stored in several projects must have the same
+        content everywhere; otherwise the lookup is ambiguous.
+        """
+        statement = select(SearchEventRow.payload).where(
+            SearchEventRow.event_id == event_id
+        )
+        with self.db.transaction() as conn:
+            if package_id is not None:
+                project_id = self._project_id(conn, package_id)
+                if project_id is None:
+                    return None
+                statement = statement.where(SearchEventRow.project_id == project_id)
+            stored = conn.execute(statement).scalars().all()
+        events = [SearchEventRecord.model_validate(p) for p in stored]
+        if not events:
+            return None
+        if any(e != events[0] for e in events[1:]):
+            raise DomainError("AMBIGUOUS_SEARCH_EVENT", {"event_id": event_id})
+        return events[0]
+
+    def append_search_event_candidates(
+        self,
+        event_id: str,
+        term_ids: Iterable[str],
+        *,
+        workspace_key: WorkspaceKey | None = None,
+        annotation_id: str | None = None,
+        layer_id: str | None = None,
+    ) -> SearchEventRecord | None:
+        """Add newly shown terms to a stored tree walk, in order of first appearance.
+
+        Only a walk grows. ``workspace_key``, ``annotation_id`` and ``layer_id``
+        name the owner the caller acts for; the event must belong to each one
+        that is given, and to the project of ``workspace_key``. Returns None,
+        and stores nothing, for an unknown event and for one that fails these
+        checks.
+
+        Every copy of an event ID, in any project, holds the same walk. All
+        copies are locked, in the order an import locks them, and grow
+        together, so two requests of one walk cannot lose each other's terms
+        and a concurrent import keeps them.
+        """
+        with self.db.transaction() as conn:
+            project_id: int | None = None
+            if workspace_key is not None:
+                project_id = self._project_id(conn, workspace_key.package_id)
+                if project_id is None:
+                    return None
+            rows = conn.execute(
+                select(SearchEventRow.project_id, SearchEventRow.payload)
+                .where(SearchEventRow.event_id == event_id)
+                .order_by(SearchEventRow.project_id)
+                .with_for_update()
+            ).all()
+            own = [r for r in rows if project_id in (None, r.project_id)]
+            if not own:
+                return None
+            event = SearchEventRecord.model_validate(own[0].payload)
+            if (
+                not is_tree_walk(event)
+                or (workspace_key is not None and event.workspace_key != workspace_key)
+                or (annotation_id is not None and event.annotation_id != annotation_id)
+                or (layer_id is not None and event.layer_id != layer_id)
+            ):
+                return None
+            known = set(event.candidates)
+            added = [t for t in dict.fromkeys(term_ids) if t not in known]
+            if added:
+                event.candidates = [*event.candidates, *added]
+                event.ranked_ids = [*event.ranked_ids, *added]
+                # By event ID alone: this also reaches a copy that an import,
+                # which this call waited for, committed after the select above.
+                conn.execute(
+                    update(SearchEventRow)
+                    .where(SearchEventRow.event_id == event_id)
+                    .values(payload=event.model_dump(mode="json"))
+                )
+            return event
+
+    def get_search_events_for_workspace(
+        self, key: WorkspaceKey
+    ) -> list[SearchEventRecord]:
+        """Events written in, or imported into, this workspace, in written order."""
+        aliases = _workspace_aliases(key)
+        with self.db.transaction() as conn:
+            project_id = self._project_id(conn, key.package_id)
+            if project_id is None:
+                return []
+            stored = (
+                conn.execute(
+                    select(SearchEventRow.payload)
+                    .where(
+                        SearchEventRow.project_id == project_id,
+                        or_(
+                            SearchEventRow.workspace_key.in_(aliases),
+                            SearchEventRow.local_key.in_(aliases),
+                        ),
+                    )
+                    .order_by(SearchEventRow.seq)
+                )
+                .scalars()
+                .all()
+            )
+        return [SearchEventRecord.model_validate(p) for p in stored]
+
+    # --- export ------------------------------------------------------------- #
+
+    def export_package(
+        self, package_id: str, *, include_captured_conditions: bool = True
+    ) -> ValidatedPackage:
+        """Everything of a project as an in-memory package."""
+        with self.db.transaction() as conn:
+            project = conn.execute(
+                select(ProjectRow.id, ProjectRow.manifest).where(
+                    ProjectRow.project_key == package_id
+                )
+            ).one_or_none()
+            if project is None:
+                raise InvalidPackage(f"Package '{package_id}' not found")
+            project_id = project.id
+            manifest = PackageManifest.model_validate(project.manifest)
+            documents = {
+                row.document_id: Document(
+                    document_id=row.document_id,
+                    text=row.text,
+                    language=row.language,
+                    text_sha256=row.text_sha256,
+                )
+                for row in conn.execute(
+                    select(
+                        DocumentRow.document_id,
+                        DocumentRow.text,
+                        DocumentRow.language,
+                        DocumentRow.text_sha256,
+                    ).where(DocumentRow.project_id == project_id)
+                )
+            }
+            in_drafts = (
+                exists()
+                .where(DraftRow.project_id == project_id)
+                .where(DraftAnnotationRow.draft_id == DraftRow.id)
+                .where(
+                    DraftAnnotationRow.annotation_id
+                    == AnnotationSnapshotRow.annotation_id
+                )
+                .where(DraftAnnotationRow.version == AnnotationSnapshotRow.version)
+            )
+            proposed = (
+                exists()
+                .where(ProposalAnnotationRow.project_id == project_id)
+                .where(
+                    ProposalAnnotationRow.annotation_id
+                    == AnnotationSnapshotRow.annotation_id
+                )
+                .where(ProposalAnnotationRow.version == AnnotationSnapshotRow.version)
+            )
+            annotation_payloads = (
+                conn.execute(
+                    select(AnnotationSnapshotRow.payload).where(
+                        AnnotationSnapshotRow.project_id == project_id,
+                        or_(proposed, in_drafts),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            evidence_in_drafts = (
+                exists()
+                .where(DraftRow.project_id == project_id)
+                .where(DraftEvidenceRow.draft_id == DraftRow.id)
+                .where(DraftEvidenceRow.evidence_id == EvidenceSnapshotRow.evidence_id)
+                .where(DraftEvidenceRow.version == EvidenceSnapshotRow.version)
+            )
+            evidence_proposed = (
+                exists()
+                .where(ProposalEvidenceRow.project_id == project_id)
+                .where(
+                    ProposalEvidenceRow.evidence_id == EvidenceSnapshotRow.evidence_id
+                )
+                .where(ProposalEvidenceRow.version == EvidenceSnapshotRow.version)
+            )
+            evidence_payloads = (
+                conn.execute(
+                    select(EvidenceSnapshotRow.payload).where(
+                        EvidenceSnapshotRow.project_id == project_id,
+                        or_(evidence_proposed, evidence_in_drafts),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            submission_payloads = (
+                conn.execute(
+                    select(SubmissionRow.payload)
+                    .where(SubmissionRow.project_id == project_id)
+                    .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
+                )
+                .scalars()
+                .all()
+            )
+            event_payloads = (
+                conn.execute(
+                    select(SearchEventRow.payload)
+                    .where(SearchEventRow.project_id == project_id)
+                    .order_by(SearchEventRow.seq)
+                )
+                .scalars()
+                .all()
+            )
+            conditions = (
+                self._search_conditions(conn, project_id)
+                if include_captured_conditions
+                else None
+            )
+        if conditions is not None:
+            manifest = manifest.model_copy(update={"search_conditions": conditions})
+        annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
+        for payload in annotation_payloads:
+            snap = decode_snapshot(payload)
+            annotations[(snap.annotation.annotation_id, snap.version)] = snap
+        evidence: dict[tuple[str, str], EvidenceSnapshot] = {}
+        for payload in evidence_payloads:
+            ev = EvidenceSnapshot.model_validate(payload)
+            evidence[(ev.mention.evidence_id, ev.version)] = ev
+        submissions = {
+            s.submission_id: s
+            for s in (Submission.model_validate(p) for p in submission_payloads)
+        }
+        declared = {
+            item.resource_path
+            for condition in manifest.search_conditions or []
+            for item in condition.translations
+        }
+        # A first capture can commit after the condition read above. Its bytes
+        # are only part of this export if this manifest observed their declaration.
+        embedded_files = {
+            path: content
+            for path, content in self.get_embedded_files(package_id).items()
+            if not path.startswith("search-resources/") or path in declared
+        }
+        return ValidatedPackage(
+            manifest=manifest,
+            documents=documents,
+            annotations=annotations,
+            evidence=evidence,
+            submissions=submissions,
+            search_events=[SearchEventRecord.model_validate(p) for p in event_payloads],
+            embedded_files=embedded_files,
+        )
