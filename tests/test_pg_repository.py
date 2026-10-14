@@ -2,7 +2,8 @@
 
 import hashlib
 import threading
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -689,6 +690,90 @@ def test_a_local_search_event_with_a_known_id_is_refused(tmp_path: Path) -> None
             repo.save_search_event(_project_walk("walk-1", key, ["HP:2"]))
 
     assert _copies(repo, "walk-1") == [["HP:1"]]
+
+
+def _wait_until_blocked_or_done(repo: Repository, future: Future[object]) -> None:
+    """Return once ``future`` finished or a session of its database waits for a lock."""
+    deadline = time.monotonic() + 10
+    pause = threading.Event()
+    while not future.done():
+        with repo.db.engine.connect() as conn:
+            waiting = conn.execute(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+                )
+            ).scalar_one()
+        if waiting:
+            return
+        assert time.monotonic() < deadline, "neither finished nor waiting"
+        pause.wait(0.01)
+
+
+def test_an_import_racing_a_local_save_of_its_event_id_is_refused(
+    tmp_path: Path,
+) -> None:
+    repo = _seeded(tmp_path)
+    local = _project_walk("walk-1", _key(), ["HP:1"])
+    foreign = _with_event("pkg-b", _project_walk("walk-1", _key(), ["HP:9"]))
+    saved = threading.Event()
+    release = threading.Event()
+
+    def save_and_hold() -> None:
+        # The local save has checked that the ID is new but not committed yet.
+        with repo.db.transaction():
+            repo.save_search_event(local)
+            saved.set()
+            release.wait(10)
+
+    with ThreadPoolExecutor(2) as pool:
+        saver = pool.submit(save_and_hold)
+        assert saved.wait(10)
+        importing = pool.submit(repo.import_package, foreign)
+        try:
+            _wait_until_blocked_or_done(repo, importing)
+        finally:
+            release.set()
+        saver.result(timeout=10)
+        with pytest.raises(InvalidPackage, match="Conflicting search event content"):
+            importing.result(timeout=10)
+
+    assert _copies(repo, "walk-1") == [["HP:1"]]
+    assert repo.get_search_event("walk-1") == local
+
+
+def test_a_local_save_racing_an_import_of_its_event_id_is_refused(
+    tmp_path: Path,
+) -> None:
+    repo = _seeded(tmp_path)
+    imported = _project_walk("walk-1", _key(), ["HP:9"])
+    imported_into_b = _with_event("pkg-b", imported)
+    held = threading.Event()
+    release = threading.Event()
+
+    def import_and_hold() -> None:
+        # The import has checked that the ID is unknown but not committed yet.
+        with repo.db.transaction():
+            repo.import_package(imported_into_b)
+            held.set()
+            release.wait(10)
+
+    with ThreadPoolExecutor(2) as pool:
+        importer = pool.submit(import_and_hold)
+        assert held.wait(10)
+        saving = pool.submit(
+            repo.save_search_event, _project_walk("walk-1", _key(), ["HP:1"])
+        )
+        try:
+            _wait_until_blocked_or_done(repo, saving)
+        finally:
+            release.set()
+        importer.result(timeout=10)
+        with pytest.raises(DomainError, match="SEARCH_EVENT_EXISTS"):
+            saving.result(timeout=10)
+
+    assert _copies(repo, "walk-1") == [["HP:9"]]
+    assert repo.get_search_event("walk-1", "pkg-a") is None
 
 
 def test_an_exported_project_imports_and_exports_unchanged(tmp_path: Path) -> None:

@@ -145,6 +145,16 @@ def _lock_id(*parts: str) -> int:
     return int.from_bytes(digest[:8], "big", signed=True)
 
 
+# Search event IDs are global, but the primary key is per project. Writers that
+# check an ID and then insert it hold this lock until they commit: local saves
+# shared (they bring fresh IDs, so they need not wait for each other), imports
+# exclusive (they bring external IDs, so no local save may check in between).
+# One lock for all IDs keeps a large import at one lock and costs local saves
+# only the wait for an import with search events, which are serialised anyway.
+# Lock order: "import", "project", this lock, then search event rows.
+SEARCH_EVENT_IDENTITY_LOCK = _lock_id("search-event-identity")
+
+
 def _submission_payload(submission: Submission) -> dict[str, Any]:
     payload = submission.model_dump(mode="json")
     payload["snapshots"] = [encode_snapshot(s) for s in submission.snapshots]
@@ -219,6 +229,10 @@ class Repository:
                     func.pg_advisory_xact_lock(_lock_id("project", manifest.package_id))
                 )
             )
+            if package.search_events:
+                conn.execute(
+                    select(func.pg_advisory_xact_lock(SEARCH_EVENT_IDENTITY_LOCK))
+                )
             longest = self._verify_existing_snapshots(conn, package)
             existing = conn.execute(
                 select(
@@ -1374,9 +1388,13 @@ class Repository:
         """
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, event.workspace_key.package_id)
-            # Not locked: local IDs are a fresh uuid4 or a hash over the
-            # workspace and the mutation, so two concurrent local saves never
-            # bring the same new ID. Only imports repeat known IDs.
+            # Shared: local IDs are a fresh uuid4 or a hash over the workspace
+            # and the mutation, so two concurrent local saves never bring the
+            # same new ID. An import may repeat any ID, so it takes the lock
+            # exclusively and cannot check between this check and the commit.
+            conn.execute(
+                select(func.pg_advisory_xact_lock_shared(SEARCH_EVENT_IDENTITY_LOCK))
+            )
             known = conn.execute(
                 select(exists().where(SearchEventRow.event_id == event.event_id))
             ).scalar_one()
