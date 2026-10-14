@@ -78,6 +78,24 @@ const focused = (page: Page) =>
   });
 
 test.describe("ontology tree", () => {
+  test("every row shows its term id and links to hpo.jax.org without selecting", async ({ page }) => {
+    await openWithSeizure(page, "tree-links");
+    await showInTree(page).click();
+    const row = treeItem(page, DIALEPTIC);
+    await expect(row.locator(".tree-id")).toHaveText(DIALEPTIC);
+    const link = row.locator("a.tree-external");
+    await expect(link).toHaveAttribute("href", `https://hpo.jax.org/browse/term/${DIALEPTIC}`);
+    await expect(link).toHaveAttribute("target", "_blank");
+
+    await page.context().route("https://hpo.jax.org/**", route => route.abort());
+
+    // Follow the link without leaving the case: the new tab is closed again.
+    const [popup] = await Promise.all([page.waitForEvent("popup"), link.click()]);
+    await popup.close();
+    await expect(row).toHaveAttribute("aria-selected", "false");
+    await expect(treeItem(page, SEIZURE)).toHaveAttribute("aria-selected", "true");
+  });
+
   test("open the tree at a term, pick a child and use it", async ({ page }) => {
     await openWithSeizure(page, "tree-pick");
     const commands: string[] = [];
@@ -258,13 +276,17 @@ test.describe("ontology tree", () => {
       throw new Error(`The focus did not leave the tree: ${stops.join(", ")}`);
     };
     const forward = await stopsInTree("Tab");
-    expect(forward.filter((stop) => stop !== "details")).toEqual(["BUTTON:Use this term"]);
+    expect(forward.filter((stop) => stop !== "details")).toEqual([
+      `A:View ${SENSORINEURAL} on hpo.jax.org`,
+      "BUTTON:Use this term",
+    ]);
     await expect(panel).toBeVisible();
-    // Backwards the same way in: "Use this term", the row, the close button, and
+    // Backwards: "Use this term", the detail link, the row, the close button, and
     // on into the annotation panel above.
     const backward = await stopsInTree("Shift+Tab");
     expect(backward.filter((stop) => stop !== "details")).toEqual([
       "BUTTON:Use this term",
+      `A:View ${SENSORINEURAL} on hpo.jax.org`,
       `LI:${SENSORINEURAL}`,
       "BUTTON:Close tree",
     ]);
