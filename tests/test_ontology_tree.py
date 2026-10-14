@@ -479,3 +479,29 @@ def test_a_cyclic_file_gives_the_same_paths_whatever_was_asked_first(
         for _ in range(2):
             for local in order:
                 assert tree.path_to(tid(local)) == expected[tid(local)], order
+
+
+def test_a_node_links_to_the_page_of_its_term() -> None:
+    tree = tree_for(load(FIXTURE_PATH))
+
+    node = tree.node("HP:0001250")
+
+    assert node.external_url == "https://hpo.jax.org/browse/term/HP:0001250"
+
+
+def test_the_detail_links_to_the_page_of_its_term() -> None:
+    tree = tree_for(load(FIXTURE_PATH))
+
+    detail = tree.detail("HP:0001250")
+
+    assert detail is not None
+    assert detail.external_url == "https://hpo.jax.org/browse/term/HP:0001250"
+    assert all(parent.external_url for parent in detail.parents)
+
+
+def test_terms_of_other_ontologies_link_to_the_lookup_service(tmp_path: Path) -> None:
+    tree = OntologyTree(load(write_graph_ontology(tmp_path)))
+
+    assert tree.node(tid("0000003")).external_url == (
+        "https://www.ebi.ac.uk/ols4/search?q=TEST%3A0000003"
+    )

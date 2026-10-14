@@ -24,6 +24,7 @@ import threading
 from pydantic import BaseModel, ConfigDict
 
 from ontocurator.domain.errors import DomainError
+from ontocurator.ontology.links import external_term_url
 from ontocurator.vendor.hpo_span_annotator.hpo import Ontology, Term
 
 
@@ -35,6 +36,7 @@ class TreeNode(BaseModel):
     term_id: str
     label: str
     child_count: int
+    external_url: str | None = None
 
 
 class TreeLevel(BaseModel):
@@ -60,6 +62,7 @@ class TreeTermDetail(BaseModel):
     # Every parent, alphabetically. The interface lists the ones the current
     # path does not run through as "Also under".
     parents: list[TreeNode]
+    external_url: str | None = None
 
 
 class OntologyTree:
@@ -185,6 +188,7 @@ class OntologyTree:
             term_id=term_id,
             label=self.ontology.label_of(term_id),
             child_count=self.child_count(term_id),
+            external_url=external_term_url(term_id),
         )
 
     def nodes(self, term_ids: list[str]) -> list[TreeNode]:
@@ -299,6 +303,7 @@ class OntologyTree:
                 if names
             },
             parents=self.nodes(self.parents_of(term.hpo_id)),
+            external_url=external_term_url(term.hpo_id),
         )
 
 

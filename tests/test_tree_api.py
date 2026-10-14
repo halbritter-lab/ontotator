@@ -201,7 +201,12 @@ def test_open_returns_the_path_to_the_term_and_logs_everything_it_shows(walk):
     body = resp.json()
     assert body["start_status"] == "valid"
     assert body["roots"] == [
-        {"term_id": "HP:0000001", "label": "All", "child_count": 1}
+        {
+            "term_id": "HP:0000001",
+            "label": "All",
+            "child_count": 1,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0000001",
+        }
     ]
     assert body["path"] == ["HP:0000001", "HP:0000118", "HP:0000707", "HP:0001250"]
     assert [level["term_id"] for level in body["levels"]] == body["path"]
@@ -211,19 +216,31 @@ def test_open_returns_the_path_to_the_term_and_logs_everything_it_shows(walk):
         "HP:0001250",
     ]
     assert body["levels"][3]["children"] == [
-        {"term_id": "HP:0011146", "label": "Dialeptic seizure", "child_count": 0},
-        {"term_id": "HP:0002133", "label": "Status epilepticus", "child_count": 0},
+        {
+            "term_id": "HP:0011146",
+            "label": "Dialeptic seizure",
+            "child_count": 0,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0011146",
+        },
+        {
+            "term_id": "HP:0002133",
+            "label": "Status epilepticus",
+            "child_count": 0,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0002133",
+        },
     ]
     detail = body["detail"]
     assert (detail["term_id"], detail["label"]) == ("HP:0001250", "Seizure")
     assert detail["definition"]
     assert sorted(detail["synonyms"]) == ["Convulsion", "Epileptic seizure", "Seizures"]
     assert detail["translations"] == {}
+    assert detail["external_url"] == "https://hpo.jax.org/browse/term/HP:0001250"
     assert detail["parents"] == [
         {
             "term_id": "HP:0000707",
             "label": "Abnormality of the nervous system",
             "child_count": 3,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0000707",
         }
     ]
 
@@ -311,6 +328,7 @@ def test_expanding_a_node_returns_its_children_and_adds_them_to_the_walk(walk):
             "term_id": "HP:0000407",
             "label": "Sensorineural hearing impairment",
             "child_count": 0,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0000407",
         }
     ]
     assert (body["path"], body["levels"]) == ([], [])
@@ -855,7 +873,8 @@ def test_classes_of_other_ontologies_are_neither_returned_nor_logged_as_roots(
     # None of the 300 parentless stubs was shown, so none is logged.
     assert not [t for t in shown if t.startswith(("STUB:", "REF:"))]
     assert "EXT:0000005" not in shown
-    assert len(opened.content) < 40_000
+    # The same bounded walk now includes one external URL per visible node.
+    assert len(opened.content) < 70_000
 
     # A term of the ontology that hangs under a foreign class is reached there.
     via = _tree(client, ws_key, "open", term_id="OWN:0000006").json()
@@ -968,4 +987,5 @@ def test_details_show_the_names_of_translation_files_that_are_loaded(tmp_path):
         "term_id": "HP:0001250",
         "label": "Seizure",
         "child_count": 2,
+        "external_url": "https://hpo.jax.org/browse/term/HP:0001250",
     }
