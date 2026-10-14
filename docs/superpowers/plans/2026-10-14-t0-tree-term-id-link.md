@@ -4,11 +4,31 @@
 
 **Goal:** Every row of the ontology tree, and the detail pane, show the term ID and a link to the term's official page (hpo.jax.org for HPO).
 
-**Architecture:** A pure backend function maps a CURIE prefix to an external URL. `TreeNode` and `TreeTermDetail` carry it as an optional `external_url`. The frontend renders the ID and a ↗ link that does not select the row. Spec: `docs/superpowers/specs/2026-10-14-t0-tree-term-id-link-design.md`.
+**Architecture:** A pure backend function maps a CURIE prefix to an external URL. `TreeNode` and `TreeTermDetail` carry it as an optional `external_url`. The frontend renders the ID and a ↗ link that does not select the row. Spec: `docs/superpowers/specs/2026-10-14-t0-tree-term-id-link-design.md`. Revised after `docs/superpowers/reviews/2026-10-14-t0-t1-plan-review.md` (T0-1 … T0-7).
 
 **Tech Stack:** Python 3.11, FastAPI, Pydantic v2, pytest · React 18, TypeScript, Vitest, Testing Library, Playwright · openapi-typescript.
 
-**Branch:** work on `feat/tree-term-links`, created from `main`, preferably in a worktree (`.worktrees/tree-term-links`). Do not work on `docs/roadmap-web-service`.
+**Branch:** work on `feat/tree-term-links`, created from `main`, in a worktree. Do not work on `docs/roadmap-web-service`.
+
+### Task 0: Worktree setup
+
+- [ ] **Step 1: Create the worktree and install dependencies**
+
+```bash
+cd /c/Users/jan-p/Development/ontocurator
+git worktree add .worktrees/tree-term-links -b feat/tree-term-links main
+cd .worktrees/tree-term-links
+uv sync
+npm --prefix frontend ci
+npx --prefix frontend playwright install chromium
+```
+
+- [ ] **Step 2: Baseline**
+
+Run: `uv run pytest -q && npm --prefix frontend test`
+Expected: everything passes before any change. Stop and report if not.
+
+All later commands run inside `.worktrees/tree-term-links`.
 
 ---
 
@@ -20,12 +40,13 @@
 | `tests/test_ontology_links.py` | **new**: prefix mapping and encoding |
 | `src/ontocurator/ontology/tree.py` | `external_url` on `TreeNode` and `TreeTermDetail` |
 | `tests/test_ontology_tree.py` | node/detail carry the URL |
+| `tests/test_tree_api.py` | exact node expectations gain `external_url` |
 | `contracts/openapi.json`, `frontend/src/api/generated.ts` | regenerated, never hand-edited |
 | `frontend/src/editor/treeState.ts` | `TreeRow.externalUrl` |
 | `frontend/src/editor/TermTree.tsx` | ID + link in each row |
 | `frontend/src/editor/TreeBrowser.tsx` | link next to the ID in the detail pane |
 | `frontend/src/styles.css` | `.tree-id`, `.tree-external` |
-| `frontend/tests/termTree.test.tsx`, `frontend/tests/caseTree.test.tsx` | component tests |
+| `frontend/tests/termTree.test.tsx`, `frontend/tests/caseTree.test.tsx`, `frontend/tests/treeState.test.ts` | component and state tests |
 | `frontend/browser/tree.spec.ts` | browser test |
 | `src/ontocurator/web/**` | rebuilt embedded assets |
 
@@ -61,7 +82,10 @@ def test_each_prefix_links_to_its_term_page(term_id: str, expected: str) -> None
 
 
 def test_the_id_is_encoded_where_it_could_break_the_url() -> None:
-    assert external_term_url("HP:12 3/4") == "https://hpo.jax.org/browse/term/HP%3A12%203%2F4"
+    assert (
+        external_term_url("HP:12 3/4")
+        == "https://hpo.jax.org/browse/term/HP%3A12%203%2F4"
+    )
 
 
 @pytest.mark.parametrize("term_id", ["", "no-prefix", ":0001", "HP:"])
@@ -189,15 +213,92 @@ Change `node()`:
 
 In `detail()`, add `external_url=external_term_url(term.hpo_id),` after `parents=...`.
 
-- [ ] **Step 4: Run the tree tests and the tree API tests**
+- [ ] **Step 4: Update the exact expectations in `tests/test_tree_api.py`**
+
+These assertions compare whole node dicts and now fail. Add the URL to each expected node:
+
+- `test_open_returns_the_path_to_the_term_and_logs_everything_it_shows` (≈ line 203):
+
+```python
+    assert body["roots"] == [
+        {
+            "term_id": "HP:0000001",
+            "label": "All",
+            "child_count": 1,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0000001",
+        }
+    ]
+```
+
+  and (≈ line 213):
+
+```python
+    assert body["levels"][3]["children"] == [
+        {
+            "term_id": "HP:0011146",
+            "label": "Dialeptic seizure",
+            "child_count": 0,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0011146",
+        },
+        {
+            "term_id": "HP:0002133",
+            "label": "Status epilepticus",
+            "child_count": 0,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0002133",
+        },
+    ]
+```
+
+  and (≈ line 222):
+
+```python
+    assert detail["parents"] == [
+        {
+            "term_id": "HP:0000707",
+            "label": "Abnormality of the nervous system",
+            "child_count": 3,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0000707",
+        }
+    ]
+    assert detail["external_url"] == "https://hpo.jax.org/browse/term/HP:0001250"
+```
+
+- `test_expanding_a_node_returns_its_children_and_adds_them_to_the_walk` (≈ line 311):
+
+```python
+    assert body["children"] == [
+        {
+            "term_id": "HP:0000407",
+            "label": "Sensorineural hearing impairment",
+            "child_count": 0,
+            "external_url": "https://hpo.jax.org/browse/term/HP:0000407",
+        }
+    ]
+```
+
+- The translation-names test (≈ line 967):
+
+```python
+    assert opened["levels"][2]["children"][2] == {
+        "term_id": "HP:0001250",
+        "label": "Seizure",
+        "child_count": 2,
+        "external_url": "https://hpo.jax.org/browse/term/HP:0001250",
+    }
+```
+
+Then search for any other exact node dicts: `grep -n '"child_count":' tests/*.py`. Add `external_url` to every whole-dict comparison of a node. Leave alone comparisons that only pick fields.
+
+- [ ] **Step 5: Run the tree tests and the tree API tests**
 
 Run: `uv run pytest tests/test_ontology_tree.py tests/test_tree_api.py tests/test_tree_events.py -v`
 Expected: all pass. The tree events log term IDs only, so the logged walks are unchanged.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/ontocurator/ontology/tree.py tests/test_ontology_tree.py
+uv run ruff check --fix . && uv run ruff format .
+git add src/ontocurator/ontology/tree.py tests/test_ontology_tree.py tests/test_tree_api.py
 git commit -m "feat(tree): return each term's external page with nodes and details"
 ```
 
@@ -231,10 +332,11 @@ git commit -m "build(api): regenerate contract for external term links"
 ### Task 4: Tree rows show the ID and the link
 
 **Files:**
+- Create: `frontend/src/editor/termLinks.ts`
 - Modify: `frontend/src/editor/treeState.ts` (`TreeRow` ≈ line 15, `visibleRows` ≈ line 84)
-- Modify: `frontend/src/editor/TermTree.tsx` (row markup after `.tree-label`)
+- Modify: `frontend/src/editor/TermTree.tsx` (row markup)
 - Modify: `frontend/src/styles.css` (after `.tree-count` ≈ line 1317)
-- Test: `frontend/tests/termTree.test.tsx`
+- Test: `frontend/tests/termTree.test.tsx`, `frontend/tests/treeState.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -273,6 +375,11 @@ Append inside `describe("TermTree", …)`:
     expect(link.getAttribute("tabindex")).toBe("-1");
   });
 
+  it("names each row by its label only, not by its id or link", () => {
+    render(<Harness />);
+    expect(screen.getByRole("treeitem", { name: "Alpha" })).toBe(item("Alpha"));
+  });
+
   it("following the link neither selects nor opens the row", () => {
     const onSelect = vi.fn();
     render(<Harness onSelect={onSelect} />);
@@ -284,6 +391,13 @@ Append inside `describe("TermTree", …)`:
     expect(item("Beta").getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("Enter on a row still selects it; the link does not take over the key", () => {
+    const onSelect = vi.fn();
+    render(<Harness onSelect={onSelect} />);
+    fireEvent.keyDown(item("Alpha"), { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledWith("R/A");
+  });
+
   it("shows the id without a link where no page is known", () => {
     render(<Harness />);
     fireEvent.click(item("Beta").querySelector(".tree-toggle")!);
@@ -293,12 +407,47 @@ Append inside `describe("TermTree", …)`:
   });
 ```
 
+In `frontend/tests/treeState.test.ts`, the expectation in `shows only the roots while nothing is expanded` (≈ line 41) compares whole rows. Replace it with:
+
+```ts
+    expect(visibleRows(sample(), new Set())).toEqual([
+      { key: "R", termId: "R", label: "Root", depth: 1, parentKey: null, childCount: 2, externalUrl: null, expanded: false, posInSet: 1, setSize: 1 },
+    ]);
+```
+
+Append inside `describe("visibleRows", …)`:
+
+```ts
+  it("carries each node's external page into its row", () => {
+    const data = withRoots(emptyTree(), [
+      { term_id: "R", label: "Root", child_count: 0, external_url: "https://terms.example/R" },
+    ]);
+    expect(visibleRows(data, new Set())[0].externalUrl).toBe("https://terms.example/R");
+  });
+```
+
 - [ ] **Step 2: Run them and see them fail**
 
-Run: `npm --prefix frontend test -- --run tests/termTree.test.tsx`
-Expected: the three new tests FAIL (no `.tree-id`). The existing tests pass.
+Run: `npm --prefix frontend test -- --run tests/termTree.test.tsx tests/treeState.test.ts`
+Expected: the new tests and the changed `toEqual` FAIL. The other existing tests pass.
 
 - [ ] **Step 3: Implement**
+
+Create `frontend/src/editor/termLinks.ts`:
+
+```ts
+/** The host a link leads to, for its accessible name; the text itself if it is no URL. */
+export const hostOf = (url: string): string => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+};
+
+/** "View HP:0001250 on hpo.jax.org" */
+export const viewLabel = (termId: string, url: string): string => `View ${termId} on ${hostOf(url)}`;
+```
 
 In `frontend/src/editor/treeState.ts`, add the field to `TreeRow` after `childCount`:
 
@@ -313,23 +462,24 @@ In `visibleRows`, set it next to `childCount: node.child_count,`:
         externalUrl: node.external_url ?? null,
 ```
 
-In `frontend/src/editor/TermTree.tsx`, add this helper above `export const TermTree`:
+In `frontend/src/editor/TermTree.tsx`, import the helper:
 
 ```tsx
-/** The host a link leads to, for its accessible name. */
-const hostOf = (url: string): string => {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-};
+import { viewLabel } from "./termLinks";
+```
+
+On the `<li role="treeitem" …>`, add an accessible name that is the label only:
+
+```tsx
+            aria-labelledby={`tree-label-${row.key}`}
 ```
 
 Replace `<span className="tree-label">{row.label}</span>` with:
 
 ```tsx
-            <span className="tree-label">{row.label}</span>
+            <span className="tree-label" id={`tree-label-${row.key}`}>
+              {row.label}
+            </span>
             <span className="tree-id">{row.termId}</span>
             {row.externalUrl && (
               <a
@@ -338,14 +488,16 @@ Replace `<span className="tree-label">{row.label}</span>` with:
                 target="_blank"
                 rel="noopener noreferrer"
                 tabIndex={-1}
-                title={`View ${row.termId} on ${hostOf(row.externalUrl)}`}
-                aria-label={`View ${row.termId} on ${hostOf(row.externalUrl)}`}
+                title={viewLabel(row.termId, row.externalUrl)}
+                aria-label={viewLabel(row.termId, row.externalUrl)}
                 onClick={(event) => event.stopPropagation()} // looking a term up is not selecting it
               >
                 ↗
               </a>
             )}
 ```
+
+A mouse click on the link focuses it, and the `li`'s bubbling `onFocus` then moves the roving tab stop to that row. That is intended: the row the user just interacted with becomes the tab stop. The link is never in the Tab order, so keyboard users reach the page through the detail pane's link.
 
 In `frontend/src/styles.css`, add after the `.tree-count` rule:
 
@@ -374,13 +526,13 @@ In `frontend/src/styles.css`, add after the `.tree-count` rule:
 
 - [ ] **Step 4: Run them and see them pass**
 
-Run: `npm --prefix frontend test -- --run tests/termTree.test.tsx`
-Expected: all pass.
+Run: `npm --prefix frontend test -- --run tests/termTree.test.tsx tests/treeState.test.ts && npm --prefix frontend run typecheck`
+Expected: all pass. The typecheck reports no errors.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/editor/treeState.ts frontend/src/editor/TermTree.tsx frontend/src/styles.css frontend/tests/termTree.test.tsx
+git add frontend/src/editor/termLinks.ts frontend/src/editor/treeState.ts frontend/src/editor/TermTree.tsx frontend/src/styles.css frontend/tests/termTree.test.tsx frontend/tests/treeState.test.ts
 git commit -m "feat(tree): show term ids and an external link in each tree row"
 ```
 
@@ -388,7 +540,10 @@ git commit -m "feat(tree): show term ids and an external link in each tree row"
 
 **Files:**
 - Modify: `frontend/src/editor/TreeBrowser.tsx` (detail markup ≈ line 252)
+- Modify: `frontend/src/styles.css` (after `.tree-detail__id` ≈ line 1437)
 - Test: `frontend/tests/caseTree.test.tsx`
+
+`.tree-detail__id` keeps containing only the ID. The browser tests at `frontend/browser/tree.spec.ts:136,156` compare its full text and stay valid. The link sits beside it in a wrapper.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -410,10 +565,12 @@ Append inside `describe("the tree in the case screen", …)`:
     const detail = panel.querySelector<HTMLElement>(".tree-detail")!;
 
     const link = await within(detail).findByRole("link", { name: "View HP:A on hpo.jax.org" });
-    expect(link.closest(".tree-detail__id")?.textContent).toBe("HP:A↗");
     expect(link.getAttribute("href")).toBe("https://hpo.jax.org/browse/term/HP:A");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    // The id element holds the id alone; the link is its sibling.
+    expect(detail.querySelector(".tree-detail__id")?.textContent).toBe("HP:A");
+    expect(link.parentElement).toBe(detail.querySelector(".tree-detail__id")?.parentElement);
   });
 ```
 
@@ -424,7 +581,13 @@ Expected: FAIL, unable to find role "link".
 
 - [ ] **Step 3: Implement**
 
-In `frontend/src/editor/TreeBrowser.tsx`, replace
+In `frontend/src/editor/TreeBrowser.tsx`, import the helper:
+
+```tsx
+import { viewLabel } from "./termLinks";
+```
+
+Replace
 
 ```tsx
                   <div className="tree-detail__id">{detail.term_id}</div>
@@ -433,16 +596,16 @@ In `frontend/src/editor/TreeBrowser.tsx`, replace
 with
 
 ```tsx
-                  <div className="tree-detail__id">
-                    {detail.term_id}
+                  <div className="tree-detail__ids">
+                    <div className="tree-detail__id">{detail.term_id}</div>
                     {detail.external_url && (
                       <a
                         className="tree-external"
                         href={detail.external_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        aria-label={`View ${detail.term_id} on ${new URL(detail.external_url).host}`}
-                        title={`View ${detail.term_id} on ${new URL(detail.external_url).host}`}
+                        aria-label={viewLabel(detail.term_id, detail.external_url)}
+                        title={viewLabel(detail.term_id, detail.external_url)}
                       >
                         ↗
                       </a>
@@ -450,21 +613,36 @@ with
                   </div>
 ```
 
-The server only returns absolute URLs, so `new URL` cannot throw here.
+In `frontend/src/styles.css`, add after the `.tree-detail__id` rule:
+
+```css
+.tree-detail__ids {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tree-detail__ids .tree-detail__id {
+  margin-bottom: 0;
+}
+```
 
 - [ ] **Step 4: Run the frontend checks**
 
-Run: `npm --prefix frontend test -- --run tests/caseTree.test.tsx tests/termTree.test.tsx && npm --prefix frontend run typecheck`
-Expected: all pass, and the typecheck reports no errors.
+Run: `npm --prefix frontend test && npm --prefix frontend run typecheck`
+Expected: all frontend tests pass. The typecheck reports no errors.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/editor/TreeBrowser.tsx frontend/tests/caseTree.test.tsx
+git add frontend/src/editor/TreeBrowser.tsx frontend/src/styles.css frontend/tests/caseTree.test.tsx
 git commit -m "feat(tree): link the selected term to its official page"
 ```
 
 ### Task 6: Browser test
+
+The spec says the existing tree test is extended. This plan adds a separate test instead, so the existing layout tests stay focused.
 
 **Files:**
 - Modify: `frontend/browser/tree.spec.ts` (inside `test.describe("ontology tree", …)`)
@@ -494,7 +672,7 @@ The popup tries to load hpo.jax.org. If the test environment has no network, the
 - [ ] **Step 2: Run it**
 
 Run: `npm --prefix frontend run test:e2e -- tree.spec.ts`
-Expected: all tree specs pass, including the new one.
+Expected: all tree specs pass, including the new one and the existing `.tree-detail__id` text checks (lines ≈136, 156).
 
 - [ ] **Step 3: Commit**
 

@@ -236,3 +236,27 @@ The offsets in the sketch have been verified. The JSON Schema and fixtures of th
 - **Layers inside the unit:** a single annotated document must be self-describing, because Phentrieve writes single units. Therefore `annotation_set.layers[]` declares each layer: `layer_id`, `profile`, ontology resource and `allowed_roots`. The bundle manifest repeats the union of all layers. Units whose layers conflict with each other cannot form a bundle.
 - **Ontology `sha256` is optional in the format.** Tools that know only a release version (e.g. Phentrieve's HPO database) can still write valid units. Ontocurator always sets it, and releases carry it.
 - **Phenopacket export without a hard dependency:** the export builds the protobuf-JSON structure directly. The `[phenopacket]` extra only adds validation against the official `phenopackets` classes.
+
+## Changes After the Plan Review (2026-10-14, `reviews/2026-10-14-t0-t1-plan-review.md`)
+
+- **Versioning (refines F3):**
+  - Minor versions add optional fields and new profiles. Older readers warn about unknown profiles and keep unknown fields on round trips.
+  - New values of closed lists (`set_kind`, `method`, actor `kind`, `basis`, profile axis values) need a major version.
+  - The package ships one frozen schema file per released minor version, and validation uses the file of the declared version.
+- **Binding contract (refines F12):** the contract consists of three parts:
+  - the document and manifest schemas;
+  - a per-annotation profile schema (`hpo-phenotype-annotation-<version>.json`);
+  - conformance fixtures with expected issue codes.
+
+  Rules that JSON Schema cannot express are listed in the README.
+- **References:** `urn:ontospan:<annotation_set_id>:<annotation_id>`, with each part percent-encoded. Exports prefix the bundle ID. `source_refs` use the same syntax.
+- **Matching (refines F11):**
+  - Matching only pairs annotations of the same layer.
+  - The pairing is an optimal assignment: as many equal pairs as possible, then compatible pairs, then conflicts. Ties are broken deterministically.
+  - Groups are returned in text order.
+  - Document-level and mention-based annotations with the same term and axes are `compatible`.
+  - A segment that normalises to nothing never matches and gets a validation warning.
+- **Agreement:** annotation-level and mention-level F1 (each strict and tolerant), term-level F1, and modifier agreement.
+- **Ontology identity:** an `OntologyView` exposes `release`. Validation reports a mismatch with the layer's `ontology.version`.
+- **Timestamps** must carry a timezone.
+
