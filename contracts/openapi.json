@@ -3439,6 +3439,17 @@
           "child_count": {
             "type": "integer",
             "title": "Child Count"
+          },
+          "external_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Url"
           }
         },
         "additionalProperties": false,
@@ -3664,6 +3675,17 @@
             },
             "type": "array",
             "title": "Parents"
+          },
+          "external_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Url"
           }
         },
         "additionalProperties": false,

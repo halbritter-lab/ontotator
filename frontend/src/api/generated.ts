@@ -1533,6 +1533,8 @@ export interface components {
             label: string;
             /** Child Count */
             child_count: number;
+            /** External Url */
+            external_url?: string | null;
         };
         /**
          * TreeNodeRequest
@@ -1618,6 +1620,8 @@ export interface components {
             };
             /** Parents */
             parents: components["schemas"]["TreeNode"][];
+            /** External Url */
+            external_url?: string | null;
         };
         /** ValidationError */
         ValidationError: {
