@@ -105,6 +105,8 @@ const mockTree = () => {
   const labelOf = (termId: string) => (termId === "HP:B" ? "Beta term" : `Term ${termId}`);
   const root = { term_id: "HP:R", label: "Root", child_count: 2 };
   const detailOf = (termId: string) => ({
+    external_url: `https://hpo.jax.org/browse/term/${termId}`,
+
     term_id: termId,
     label: labelOf(termId),
     definition: "",
@@ -193,6 +195,23 @@ afterEach(() => {
 });
 
 describe("the tree in the case screen", () => {
+  it("links the selected term to its official page next to its id", async () => {
+    const view = baseView([snapshot("a1", "HP:A")]);
+    mockTree();
+    const { container } = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+
+    const panel = await openPanel(container, "a1");
+    const detail = panel.querySelector<HTMLElement>(".tree-detail")!;
+
+    const link = await within(detail).findByRole("link", { name: "View HP:A on hpo.jax.org" });
+    expect(link.getAttribute("href")).toBe("https://hpo.jax.org/browse/term/HP:A");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    // The id element holds the id alone; the link is its sibling.
+    expect(detail.querySelector(".tree-detail__id")?.textContent).toBe("HP:A");
+    expect(link.parentElement).toBe(detail.querySelector(".tree-detail__id")?.parentElement);
+  });
+
   it("is offered at an own annotation with a term and nowhere else", () => {
     const { container } = render(
       <CaseScreen view={reviewView([snapshot("a1", "HP:A")])} workspaceId="ws" onClose={vi.fn()} />,

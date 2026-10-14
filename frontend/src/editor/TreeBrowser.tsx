@@ -1,3 +1,4 @@
+import { viewLabel } from "./termLinks";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, type TreeTermDetail } from "../api/client";
 import type { WorkspaceKey } from "./searchState";
@@ -249,7 +250,21 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
               {detail ? (
                 <>
                   <h3 className="tree-detail__name">{detail.label}</h3>
-                  <div className="tree-detail__id">{detail.term_id}</div>
+                  <div className="tree-detail__ids">
+                    <div className="tree-detail__id">{detail.term_id}</div>
+                    {detail.external_url && (
+                      <a
+                        className="tree-external"
+                        href={detail.external_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={viewLabel(detail.term_id, detail.external_url)}
+                        title={viewLabel(detail.term_id, detail.external_url)}
+                      >
+                        ↗
+                      </a>
+                    )}
+                  </div>
                   {detail.definition && <p className="tree-detail__definition">{detail.definition}</p>}
                   {detail.synonyms.length > 0 && (
                     <div className="tree-detail__group">

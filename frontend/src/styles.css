@@ -1584,3 +1584,35 @@ body {
     border-left: 0;
   }
 }
+
+.tree-id {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.tree-external {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 0 2px;
+}
+
+.tree-external:hover,
+.tree-external:focus-visible {
+  color: var(--primary);
+}
+
+.tree-detail__ids {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tree-detail__ids .tree-detail__id {
+  margin-bottom: 0;
+}
