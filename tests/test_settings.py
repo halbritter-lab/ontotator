@@ -1,0 +1,98 @@
+"""Settings from the environment: secrets and the database URL."""
+
+from pathlib import Path
+
+import pytest
+
+from ontocurator import settings
+from ontocurator.settings import SettingsError, database_url, read_secret
+
+
+def test_a_secret_comes_from_the_variable(tmp_path: Path) -> None:
+    assert read_secret("X", {"X": "value"}) == "value"
+
+
+def test_a_secret_comes_from_its_file_without_the_line_end(tmp_path: Path) -> None:
+    secret = tmp_path / "x"
+    secret.write_text("value\n", encoding="utf-8")
+
+    assert read_secret("X", {"X_FILE": str(secret)}) == "value"
+
+
+def test_a_missing_secret_is_none() -> None:
+    assert read_secret("X", {}) is None
+
+
+@pytest.mark.parametrize(
+    ("env", "message"),
+    [
+        ({"X": "a", "X_FILE": "b"}, "Set only one of X and X_FILE"),
+        ({"X": ""}, "X must not be empty"),
+        ({"X_FILE": "/does/not/exist"}, "Unable to read X_FILE"),
+    ],
+)
+def test_contradictory_or_unreadable_secrets_are_refused(
+    env: dict[str, str], message: str
+) -> None:
+    with pytest.raises(SettingsError, match=message):
+        read_secret("X", env)
+
+
+def test_an_empty_secret_file_is_refused(tmp_path: Path) -> None:
+    secret = tmp_path / "x"
+    secret.write_text("\n", encoding="utf-8")
+
+    with pytest.raises(SettingsError, match="X_FILE is empty"):
+        read_secret("X", {"X_FILE": str(secret)})
+
+
+def test_the_database_password_is_read_from_its_file(tmp_path: Path) -> None:
+    secret = tmp_path / "pw"
+    secret.write_text("s3cret\n", encoding="utf-8")
+    env = {
+        "ONTOCURATOR_DATABASE_URL": "postgresql://ontocurator_app@db:5432/ontocurator",
+        "ONTOCURATOR_DATABASE_PASSWORD_FILE": str(secret),
+    }
+
+    url = database_url(env)
+
+    assert url.drivername == "postgresql+psycopg"
+    assert url.username == "ontocurator_app"
+    assert url.password == "s3cret"
+    assert url.host == "db"
+
+
+def test_a_password_in_the_url_and_a_password_setting_conflict() -> None:
+    env = {
+        "ONTOCURATOR_DATABASE_URL": "postgresql://u:pw@db/x",
+        "ONTOCURATOR_DATABASE_PASSWORD": "other",
+    }
+
+    with pytest.raises(SettingsError, match="already contains a password"):
+        database_url(env)
+
+
+@pytest.mark.parametrize(
+    "env",
+    [{}, {"ONTOCURATOR_DATABASE_URL": "sqlite:///x.db"}],
+)
+def test_only_postgresql_urls_are_accepted(env: dict[str, str]) -> None:
+    with pytest.raises(SettingsError):
+        database_url(env)
+
+
+def test_the_migration_url_has_its_own_prefix() -> None:
+    env = {"ONTOCURATOR_MIGRATION_DATABASE_URL": "postgresql://owner@db/x"}
+
+    assert database_url(env, prefix="ONTOCURATOR_MIGRATION_DATABASE").username == (
+        "owner"
+    )
+
+
+def test_an_explicit_url_wins_over_the_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "database_url_provider", lambda _ws: "from-provider")
+
+    assert settings.resolve_database_url("explicit", None) == "explicit"
+    assert settings.resolve_database_url(None, Path("ws")) == "from-provider"

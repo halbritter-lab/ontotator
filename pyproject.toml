@@ -9,13 +9,16 @@ description = "Secure offline editor for ontology annotation and origin-neutral 
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.14,<2",
     "fastapi>=0.110,<1",
     "numpy>=1.26,<3",
     "platformdirs>=4,<5",
+    "psycopg[binary]>=3.2,<4",
     "pydantic>=2,<3",
     "python-multipart>=0.0.9",
     "rfc8785>=0.1,<1",
     "scikit-learn>=1.4,<2",
+    "sqlalchemy>=2.0.36,<2.1",
     "typer>=0.12,<1",
     "uvicorn>=0.28,<1",
 ]
@@ -32,6 +35,7 @@ dev = [
     "pytest>=8,<10",
     "pytest-cov>=6,<8",
     "ruff>=0.9,<1",
+    "testcontainers[postgres]>=4.9,<5",
 ]
 
 [tool.hatch.build.targets.wheel]
