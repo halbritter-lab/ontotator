@@ -30,7 +30,7 @@ from ontocurator.packages.models import (
     ValidatedPackage,
     is_tree_walk,
 )
-from ontocurator.storage.database import Database
+from ontocurator.storage.sqlite_database import Database
 
 _ESCAPED_KEY_PREFIX = "wk2|"
 

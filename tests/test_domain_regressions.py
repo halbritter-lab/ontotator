@@ -342,8 +342,8 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
 def test_sequential_search_selections_survive_two_export_imports(tmp_path):
     from ontocurator.ontology.registry import OntologyRegistry
     from ontocurator.packages.models import SearchEventRecord
-    from ontocurator.storage.database import Database
-    from ontocurator.storage.repository import Repository
+    from ontocurator.storage.sqlite_database import Database
+    from ontocurator.storage.sqlite_repository import Repository
 
     ctx = _setup_review_test_env(tmp_path)
     key, _ = review(ctx)

@@ -37,7 +37,7 @@ from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_repository import Repository
 
 
 class CreateAnnotationCommand(BaseModel):

@@ -68,7 +68,7 @@ from ontocurator.packages.models import (
     ValidatedPackage,
 )
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_repository import Repository
 
 router = APIRouter(prefix="/api/v1")
 

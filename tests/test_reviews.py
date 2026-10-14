@@ -27,8 +27,8 @@ from ontocurator.domain.review import ReviewOutcome, ReviewTargetSet
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.service import OntologyService
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 

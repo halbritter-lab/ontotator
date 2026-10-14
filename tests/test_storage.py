@@ -34,8 +34,8 @@ from ontocurator.domain.workspace import (
     WorkspaceKey,
 )
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 HP_DIGEST = "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4"
 

@@ -15,8 +15,8 @@ from ontocurator.domain.errors import InvalidPackage
 from ontocurator.packages.models import ValidatedPackage
 from ontocurator.packages.reader import read_package
 from ontocurator.packages.writer import write_package, write_package_to_stream
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP_PATH = FIXTURES / "hp.json"
@@ -187,7 +187,7 @@ def test_workspace_key_encoding_is_unambiguous_and_backward_compatible(
     tmp_path: Path,
 ) -> None:
     from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
-    from ontocurator.storage.repository import _key_str
+    from ontocurator.storage.sqlite_repository import _key_str
 
     legacy = WorkspaceKey(
         package_id="p",
@@ -229,7 +229,7 @@ def test_workspace_key_encoding_is_unambiguous_and_backward_compatible(
 def test_schema_init_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import sqlite3
 
-    from ontocurator.storage import database as database_module
+    from ontocurator.storage import sqlite_database as database_module
 
     broken = tmp_path / "broken_schema.sql"
     real = (Path(database_module.__file__).parent / "schema_v4.sql").read_text(
@@ -268,7 +268,7 @@ def test_database_reopens_path_with_uri_special_characters(tmp_path: Path) -> No
 
 
 def test_fresh_schema_contains_ontology_resources_and_no_legacy_migrations() -> None:
-    from ontocurator.storage import database as database_module
+    from ontocurator.storage import sqlite_database as database_module
 
     storage_dir = Path(database_module.__file__).parent
     schema = (storage_dir / "schema_v4.sql").read_text(encoding="utf-8")

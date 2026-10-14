@@ -20,8 +20,8 @@ from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
 from ontocurator.packages.reader import read_package
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 
 def archive_roundtrip(package):

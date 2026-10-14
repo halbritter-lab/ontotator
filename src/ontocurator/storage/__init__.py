@@ -1,4 +1,4 @@
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 __all__ = ["Database", "Repository"]

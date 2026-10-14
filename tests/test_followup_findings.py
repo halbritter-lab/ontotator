@@ -18,9 +18,9 @@ from ontocurator.domain.workspace import (
     WorkspaceKey,
 )
 from ontocurator.packages.models import SearchEventRecord
-from ontocurator.storage import repository as repository_module
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage import sqlite_repository as repository_module
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 # --- Finding 1: legacy ':'-joined workspace keys stay reachable ------------ #
 

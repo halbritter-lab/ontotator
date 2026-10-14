@@ -7,7 +7,7 @@ import pytest
 
 from ontocurator.domain.errors import DomainError, InvalidPackage
 from ontocurator.packages.reader import read_package
-from ontocurator.storage.database import Database
+from ontocurator.storage.sqlite_database import Database
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "legacy_v1"
 

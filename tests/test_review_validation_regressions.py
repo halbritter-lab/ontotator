@@ -21,8 +21,8 @@ from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.packages.reader import read_package
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 
 def add_proposal(package, *, layer_id="hpo-layer", axes_values=None):

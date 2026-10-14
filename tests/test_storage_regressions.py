@@ -7,8 +7,8 @@ from ontocurator.application.exports import ExportService
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 
 def key_for(package_id="pkg-1"):
@@ -231,7 +231,7 @@ def test_independent_import_resumes_at_default_api_key(tmp_path):
         )
         assert local_key.endswith(":targets-0")
         # Existing databases can still contain the pre-fix canonical binding.
-        from ontocurator.storage.repository import _key_str
+        from ontocurator.storage.sqlite_repository import _key_str
 
         repo.db.get_connection().execute(
             "UPDATE imported_submission_bindings SET local_key=?",

@@ -17,8 +17,8 @@ from ontocurator.domain.errors import DomainError, RevisionConflict
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 
 def _setup_registry_for_package(pkg) -> OntologyRegistry:

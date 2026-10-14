@@ -12,8 +12,8 @@ from ontocurator.domain.errors import InvalidPackage
 from ontocurator.packages.models import SearchEventRecord
 from ontocurator.packages.reader import PackageReader
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_database import Database
+from ontocurator.storage.sqlite_repository import Repository
 
 
 def _walk(candidates: list[str], **overrides: object) -> SearchEventRecord:

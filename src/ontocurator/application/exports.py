@@ -18,7 +18,7 @@ from ontocurator.packages.models import (
     SearchEventRecord,
     ValidatedPackage,
 )
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_repository import Repository
 
 
 class ExportService:

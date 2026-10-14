@@ -22,7 +22,7 @@ from ontocurator.domain.workspace import (
 )
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.sqlite_repository import Repository
 
 
 class SubmitCommand(BaseModel):
