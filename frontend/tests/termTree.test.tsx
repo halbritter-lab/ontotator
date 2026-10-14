@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TermTree } from "../src/editor/TermTree";
@@ -70,6 +70,18 @@ afterEach(() => {
 });
 
 describe("TermTree", () => {
+  it("Enter on a mouse-focused external link keeps native navigation and does not select", () => {
+    const onSelect = vi.fn();
+    render(<Harness onSelect={onSelect} />);
+    const link = item("Beta").querySelector<HTMLAnchorElement>("a.tree-external")!;
+    act(() => link.focus());
+    expect(document.activeElement).toBe(link);
+    expect(fireEvent.keyDown(link, { key: "Enter" })).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(item("Beta").getAttribute("aria-selected")).toBe("false");
+  });
+
+
   it("shows each row's term id and links to the term's page in a new tab", () => {
     render(<Harness />);
 

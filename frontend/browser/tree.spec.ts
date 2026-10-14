@@ -78,6 +78,18 @@ const focused = (page: Page) =>
   });
 
 test.describe("ontology tree", () => {
+  test("term labels remain readable beside ids and links in the tablet tree", async ({ page }) => {
+    await openWithSeizure(page, "tree-label-width", { width: 800, height: 700 });
+    await showInTree(page).click();
+    const label = treeItem(page, SEIZURE).locator(".tree-label");
+    await expect(label).toBeVisible();
+    expect((await box(label)).width).toBeGreaterThanOrEqual(70);
+    await expect(treeItem(page, SEIZURE).locator(".tree-id")).toBeVisible();
+    await expect(treeItem(page, SEIZURE).locator(".tree-external")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  });
+
+
   test("every row shows its term id and links to hpo.jax.org without selecting", async ({ page }) => {
     await openWithSeizure(page, "tree-links");
     await showInTree(page).click();
@@ -92,6 +104,10 @@ test.describe("ontology tree", () => {
     // Follow the link without leaving the case: the new tab is closed again.
     const [popup] = await Promise.all([page.waitForEvent("popup"), link.click()]);
     await popup.close();
+    // The clicked link remains focusable: Enter must open its page, never select the row.
+    await link.focus();
+    const [keyboardPopup] = await Promise.all([page.waitForEvent("popup"), page.keyboard.press("Enter")]);
+    await keyboardPopup.close();
     await expect(row).toHaveAttribute("aria-selected", "false");
     await expect(treeItem(page, SEIZURE)).toHaveAttribute("aria-selected", "true");
   });
@@ -702,7 +718,8 @@ test.describe("ontology tree", () => {
       expect(tree.width).toBeGreaterThanOrEqual(280);
       const rows = await box(panel.locator(".tree-browser__tree"));
       const details = await box(panel.locator(".tree-detail__body"));
-      const rowHeight = (await box(treeItem(page, SEIZURE))).height;
+      // Metadata can wrap; keep room for at least four single-line rows.
+      const rowHeight = (await box(treeItem(page, "HP:0000001"))).height;
       expect(rows.height).toBeGreaterThanOrEqual(4 * rowHeight);
       expect(details.height).toBeGreaterThanOrEqual(60);
       await expect(panel.getByRole("button", { name: "Use this term" })).toBeInViewport({ ratio: 1 });

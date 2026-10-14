@@ -1263,6 +1263,7 @@ body {
 
 .tree-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
   padding-top: 3px;
@@ -1306,8 +1307,8 @@ body {
 }
 
 .tree-label {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 1 1 10ch;
+  min-width: 10ch;
 }
 
 .tree-item--current .tree-label {

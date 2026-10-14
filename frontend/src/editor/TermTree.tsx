@@ -125,6 +125,9 @@ export const TermTree: React.FC<TermTreeProps> = ({
                 title={viewLabel(row.termId, row.externalUrl)}
                 aria-label={viewLabel(row.termId, row.externalUrl)}
                 onClick={(event) => event.stopPropagation()} // looking a term up is not selecting it
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.stopPropagation();
+                }}
               >
                 ↗
               </a>
