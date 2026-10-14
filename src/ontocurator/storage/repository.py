@@ -842,3 +842,502 @@ class Repository:
         )
         # Imported events may already be known; a locally written one must be new.
         conn.execute(statement.on_conflict_do_nothing() if imported else statement)
+
+    # --- drafts and mutations ---------------------------------------------- #
+
+    def list_workspace_keys(
+        self,
+        package_id: str,
+        annotator_id: str,
+        mode: str | None = None,
+        document_id: str | None = None,
+    ) -> list[WorkspaceKey]:
+        """Workspace identities of one annotator: opened drafts and submissions."""
+        profile = self.get_task_profile(package_id)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, package_id)
+            drafts = select(
+                DraftRow.document_id,
+                DraftRow.mode,
+                DraftRow.scope_id,
+                DraftRow.target_set_id,
+            ).where(
+                DraftRow.project_id == project_id, DraftRow.annotator_id == annotator_id
+            )
+            submissions = select(SubmissionRow.payload).where(
+                SubmissionRow.project_id == project_id,
+                SubmissionRow.annotator_id == annotator_id,
+            )
+            if mode is not None:
+                drafts = drafts.where(DraftRow.mode == mode)
+                submissions = submissions.where(SubmissionRow.mode == mode)
+            if document_id is not None:
+                drafts = drafts.where(DraftRow.document_id == document_id)
+                submissions = submissions.where(
+                    SubmissionRow.document_id == document_id
+                )
+            draft_rows = conn.execute(drafts).all()
+            payloads = conn.execute(submissions).scalars().all()
+        keys: dict[str, WorkspaceKey] = {}
+        for row in draft_rows:
+            key = WorkspaceKey(
+                package_id=package_id,
+                document_id=row.document_id,
+                annotator_id=annotator_id,
+                mode=row.mode,
+                scope_id=row.scope_id,
+                target_set_id=row.target_set_id,
+            )
+            keys[_key_str(key)] = key
+        for payload in payloads:
+            origin = WorkspaceKey.model_validate(payload["origin_key"])
+            key = (
+                origin
+                if origin.package_id == package_id
+                else _local_import_key(origin, package_id, profile)
+            )
+            keys.setdefault(_key_str(key), key)
+        return sorted(
+            keys.values(),
+            key=lambda k: (k.document_id, k.mode, k.scope_id, k.target_set_id),
+        )
+
+    @staticmethod
+    def _draft_row(
+        conn: Connection, project_id: int, key_string: str
+    ) -> Row[Any] | None:
+        return conn.execute(
+            select(
+                DraftRow.id,
+                DraftRow.revision,
+                DraftRow.checked_layer_ids,
+                DraftRow.targets,
+            ).where(DraftRow.project_id == project_id, DraftRow.draft_key == key_string)
+        ).one_or_none()
+
+    def open_draft(
+        self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
+    ) -> Draft:
+        """Open or initialize the draft of a workspace key."""
+        with self.db.transaction() as conn:
+            return self._open_draft(conn, key, targets)
+
+    def _open_draft(
+        self, conn: Connection, key: WorkspaceKey, targets: ReviewTargetSet | None
+    ) -> Draft:
+        project_id = self._require_project(conn, key.package_id)
+        key_string = _key_str(key)
+        row = self._draft_row(conn, project_id, key_string)
+        if row is None:
+            self._create_draft(conn, project_id, key, key_string, targets)
+            row = self._draft_row(conn, project_id, key_string)
+            if row is None:
+                raise DomainError("DRAFT_NOT_CREATED", key_string)
+        annotations = (
+            conn.execute(
+                select(AnnotationSnapshotRow.payload)
+                .join(
+                    DraftAnnotationRow,
+                    and_(
+                        DraftAnnotationRow.annotation_id
+                        == AnnotationSnapshotRow.annotation_id,
+                        DraftAnnotationRow.version == AnnotationSnapshotRow.version,
+                    ),
+                )
+                .where(
+                    DraftAnnotationRow.draft_id == row.id,
+                    AnnotationSnapshotRow.project_id == project_id,
+                )
+                .order_by(DraftAnnotationRow.annotation_id, DraftAnnotationRow.version)
+            )
+            .scalars()
+            .all()
+        )
+        evidence = (
+            conn.execute(
+                select(EvidenceSnapshotRow.payload)
+                .join(
+                    DraftEvidenceRow,
+                    and_(
+                        DraftEvidenceRow.evidence_id == EvidenceSnapshotRow.evidence_id,
+                        DraftEvidenceRow.version == EvidenceSnapshotRow.version,
+                    ),
+                )
+                .where(
+                    DraftEvidenceRow.draft_id == row.id,
+                    EvidenceSnapshotRow.project_id == project_id,
+                )
+                .order_by(DraftEvidenceRow.evidence_id, DraftEvidenceRow.version)
+            )
+            .scalars()
+            .all()
+        )
+        decisions = (
+            conn.execute(
+                select(ReviewDecisionRow.payload)
+                .where(ReviewDecisionRow.draft_id == row.id)
+                .order_by(ReviewDecisionRow.position)
+            )
+            .scalars()
+            .all()
+        )
+        return Draft(
+            key=key,
+            targets=ReviewTargetSet.model_validate(row.targets),
+            revision=int(row.revision),
+            annotations=[decode_snapshot(p) for p in annotations],
+            evidence=[EvidenceSnapshot.model_validate(p) for p in evidence],
+            decisions=[ReviewDecision.model_validate(p) for p in decisions],
+            checked_layer_ids=list(row.checked_layer_ids),
+        )
+
+    def _create_draft(
+        self,
+        conn: Connection,
+        project_id: int,
+        key: WorkspaceKey,
+        key_string: str,
+        targets: ReviewTargetSet | None,
+    ) -> None:
+        """Create the draft row; a new draft resumes the latest submission of its key."""
+        effective = targets if targets is not None else ReviewTargetSet.create([])
+        draft_id = conn.execute(
+            pg_insert(DraftRow)
+            .values(
+                project_id=project_id,
+                draft_key=key_string,
+                document_id=key.document_id,
+                annotator_id=key.annotator_id,
+                mode=key.mode,
+                scope_id=key.scope_id,
+                target_set_id=key.target_set_id,
+                targets=effective.model_dump(mode="json"),
+                updated_at=datetime.now(UTC),
+            )
+            .on_conflict_do_nothing(index_elements=["project_id", "draft_key"])
+            .returning(DraftRow.id)
+        ).scalar_one_or_none()
+        if draft_id is None:
+            return  # created by a concurrent request; the caller reads it
+        submissions = self._submissions_for_workspace(conn, project_id, key)
+        if not submissions:
+            return
+        current = latest_submissions(submissions)
+        if len(current) != 1:
+            raise DomainError(
+                "AMBIGUOUS_SUBMISSION_ORIGIN",
+                {
+                    "message": "Cannot restore multiple submission origins into one draft",
+                    "origins": [s.origin_key.model_dump() for s in current],
+                },
+            )
+        latest = current[0]
+        confirmed = {
+            (d.target.annotation_id, d.target.version)
+            for d in latest.decisions
+            if d.outcome == "confirmed"
+        }
+        annotations = [
+            a
+            for a in latest.snapshots
+            if key.mode != "review"
+            or (a.annotation.annotation_id, a.version) not in confirmed
+        ]
+        evidence = [ev for a in annotations for ev in a.evidence]
+        decisions = [
+            # Rebind the local decision identity to this workspace.
+            d.model_copy(
+                update={
+                    "decision_id": canonical_hash(
+                        {"workspace": key.model_dump(), "target": d.target.model_dump()}
+                    )
+                }
+            )
+            for d in latest.decisions
+        ]
+        self._insert_snapshots(conn, project_id, annotations, evidence)
+        self._write_draft_content(conn, draft_id, annotations, evidence, decisions)
+        conn.execute(
+            update(DraftRow)
+            .where(DraftRow.id == draft_id)
+            .values(
+                targets=latest.targets.model_dump(mode="json"),
+                revision=latest.draft_revision,
+                checked_layer_ids=list(latest.checked_layer_ids),
+            )
+        )
+
+    @staticmethod
+    def _write_draft_content(
+        conn: Connection,
+        draft_id: int,
+        annotations: list[AnnotationSnapshot],
+        evidence: list[EvidenceSnapshot],
+        decisions: list[ReviewDecision],
+    ) -> None:
+        """Insert the content rows of a draft whose previous rows are gone."""
+        if annotations:
+            conn.execute(
+                pg_insert(DraftAnnotationRow).on_conflict_do_nothing(),
+                [
+                    {
+                        "draft_id": draft_id,
+                        "annotation_id": a.annotation.annotation_id,
+                        "version": a.version,
+                    }
+                    for a in annotations
+                ],
+            )
+        if evidence:
+            conn.execute(
+                pg_insert(DraftEvidenceRow).on_conflict_do_nothing(),
+                [
+                    {
+                        "draft_id": draft_id,
+                        "evidence_id": e.mention.evidence_id,
+                        "version": e.version,
+                    }
+                    for e in evidence
+                ],
+            )
+        if decisions:
+            conn.execute(
+                insert(ReviewDecisionRow),
+                [
+                    {
+                        "draft_id": draft_id,
+                        "decision_id": d.decision_id,
+                        "position": position,
+                        "target_id": d.target.annotation_id,
+                        "target_version": d.target.version,
+                        "outcome": d.outcome,
+                        "replacement_id": d.replacement.annotation_id
+                        if d.replacement
+                        else None,
+                        "replacement_version": d.replacement.version
+                        if d.replacement
+                        else None,
+                        "note": d.note,
+                        "reviewer_id": d.reviewer_id,
+                        "payload": d.model_dump(mode="json"),
+                    }
+                    for position, d in enumerate(decisions)
+                ],
+            )
+
+    def run_mutation(
+        self,
+        key: WorkspaceKey,
+        envelope: MutationEnvelope,
+        operation: Callable[[Draft], Draft | Submission],
+    ) -> Draft | Submission:
+        """Run ``operation`` on the draft at the expected revision, exactly once.
+
+        Writers of one draft are serialised by a transaction-scoped advisory
+        lock. A retried mutation ID with the same payload replays the stored
+        response; with another payload it is a conflict.
+        """
+        key_string = _key_str(key)
+        request_hash = canonical_hash(envelope.model_dump())
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, key.package_id)
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock(
+                        _lock_id("draft", key.package_id, key_string)
+                    )
+                )
+            )
+            receipt = conn.execute(
+                select(
+                    MutationReceiptRow.request_hash, MutationReceiptRow.response
+                ).where(
+                    MutationReceiptRow.project_id == project_id,
+                    MutationReceiptRow.workspace_key == key_string,
+                    MutationReceiptRow.mutation_id == envelope.mutation_id,
+                )
+            ).one_or_none()
+            if receipt is not None:
+                if receipt.request_hash != request_hash:
+                    raise RevisionConflict(
+                        "Mutation ID reused with different payload: "
+                        f"{envelope.mutation_id}"
+                    )
+                if "submission_id" in receipt.response:
+                    return Submission.model_validate(receipt.response)
+                return Draft.model_validate(receipt.response)
+
+            row = self._draft_row(conn, project_id, key_string)
+            current_revision = 0 if row is None else int(row.revision)
+            if current_revision != envelope.expected_revision:
+                raise RevisionConflict(
+                    f"REVISION_CONFLICT: Expected revision "
+                    f"{envelope.expected_revision}, current is {current_revision}"
+                )
+            result = operation(self._open_draft(conn, key, None))
+            draft_row = self._draft_row(conn, project_id, key_string)
+            if draft_row is None:
+                raise DomainError("DRAFT_NOT_CREATED", key_string)
+            now = datetime.now(UTC)
+            new_revision = current_revision + 1
+            response: dict[str, Any]
+            if isinstance(result, Draft):
+                result.revision = new_revision
+                conn.execute(
+                    update(DraftRow)
+                    .where(DraftRow.id == draft_row.id)
+                    .values(
+                        revision=new_revision,
+                        checked_layer_ids=list(result.checked_layer_ids),
+                        updated_at=now,
+                    )
+                )
+                conn.execute(
+                    delete(DraftAnnotationRow).where(
+                        DraftAnnotationRow.draft_id == draft_row.id
+                    )
+                )
+                conn.execute(
+                    delete(DraftEvidenceRow).where(
+                        DraftEvidenceRow.draft_id == draft_row.id
+                    )
+                )
+                conn.execute(
+                    delete(ReviewDecisionRow).where(
+                        ReviewDecisionRow.draft_id == draft_row.id
+                    )
+                )
+                self._insert_snapshots(
+                    conn, project_id, result.annotations, result.evidence
+                )
+                self._write_draft_content(
+                    conn,
+                    draft_row.id,
+                    result.annotations,
+                    result.evidence,
+                    result.decisions,
+                )
+                response = _draft_payload(result)
+            elif isinstance(result, Submission):
+                conn.execute(
+                    update(DraftRow)
+                    .where(DraftRow.id == draft_row.id)
+                    .values(revision=new_revision, updated_at=now)
+                )
+                self._insert_submission(conn, project_id, result, local_key=key_string)
+                response = _submission_payload(result)
+            else:
+                raise ValueError(f"Unsupported operation return type: {type(result)}")
+            conn.execute(
+                insert(MutationReceiptRow).values(
+                    project_id=project_id,
+                    workspace_key=key_string,
+                    mutation_id=envelope.mutation_id,
+                    request_hash=request_hash,
+                    response=response,
+                    created_at=now,
+                )
+            )
+            return result
+
+    def get_document_status(
+        self,
+        package_id: str,
+        document_id: str,
+        annotator_id: str,
+        mode: str,
+    ) -> Literal["not_started", "in_progress", "completed"]:
+        """Progress of one annotator in one mode on one document."""
+        keys = self.list_workspace_keys(package_id, annotator_id, mode, document_id)
+        any_completed = False
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, package_id)
+            for key in keys:
+                current = latest_submissions(
+                    self._submissions_for_workspace(conn, project_id, key)
+                )
+                row = self._draft_row(conn, project_id, _key_str(key))
+                if current:
+                    any_completed = True
+                    # Never compare a draft revision across unrelated origins.
+                    if row is not None and (
+                        len(current) != 1 or row.revision > current[0].draft_revision
+                    ):
+                        return "in_progress"
+                    continue
+                if row is None:
+                    continue
+                if row.revision > 0 or row.checked_layer_ids:
+                    return "in_progress"
+                has_content = conn.execute(
+                    select(
+                        exists().where(DraftAnnotationRow.draft_id == row.id)
+                        | exists().where(ReviewDecisionRow.draft_id == row.id)
+                    )
+                ).scalar_one()
+                if has_content:
+                    return "in_progress"
+        return "completed" if any_completed else "not_started"
+
+    # --- submissions -------------------------------------------------------- #
+
+    @staticmethod
+    def _submissions_for_workspace(
+        conn: Connection, project_id: int, key: WorkspaceKey
+    ) -> list[Submission]:
+        stored = (
+            conn.execute(
+                select(SubmissionRow.payload)
+                .where(
+                    SubmissionRow.project_id == project_id,
+                    SubmissionRow.local_key.in_(_workspace_aliases(key)),
+                )
+                .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
+            )
+            .scalars()
+            .all()
+        )
+        return [Submission.model_validate(p) for p in stored]
+
+    def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
+        """Submissions bound to this workspace key, oldest first."""
+        with self.db.transaction() as conn:
+            project_id = self._project_id(conn, key.package_id)
+            if project_id is None:
+                return []
+            return self._submissions_for_workspace(conn, project_id, key)
+
+    def get_submissions_for_document(
+        self, package_id: str, document_id: str
+    ) -> list[Submission]:
+        """Every submission of the project for one document."""
+        with self.db.transaction() as conn:
+            stored = (
+                conn.execute(
+                    select(SubmissionRow.payload)
+                    .join(ProjectRow, ProjectRow.id == SubmissionRow.project_id)
+                    .where(
+                        ProjectRow.project_key == package_id,
+                        SubmissionRow.document_id == document_id,
+                    )
+                    .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
+                )
+                .scalars()
+                .all()
+            )
+        return [Submission.model_validate(p) for p in stored]
+
+    def get_submission(
+        self, submission_id: str, package_id: str | None = None
+    ) -> Submission | None:
+        """A submission by ID, within a project when ``package_id`` is given."""
+        statement = select(SubmissionRow.payload).where(
+            SubmissionRow.submission_id == submission_id
+        )
+        if package_id is not None:
+            statement = statement.join(
+                ProjectRow, ProjectRow.id == SubmissionRow.project_id
+            ).where(ProjectRow.project_key == package_id)
+        with self.db.transaction() as conn:
+            stored = conn.execute(statement.limit(1)).scalar_one_or_none()
+        return None if stored is None else Submission.model_validate(stored)

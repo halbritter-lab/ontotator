@@ -198,3 +198,173 @@ def test_imports_of_different_projects_wait_for_each_other(tmp_path: Path) -> No
             release.set()
         holder.result(timeout=10)
         assert importing.result(timeout=10) == "pkg-a"
+
+
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.exc import DBAPIError  # noqa: E402
+
+from ontocurator.domain.errors import RevisionConflict  # noqa: E402
+from ontocurator.domain.review import ReviewTargetSet  # noqa: E402
+from ontocurator.domain.workspace import (  # noqa: E402
+    Draft,
+    MutationEnvelope,
+    Submission,
+    WorkspaceKey,
+)
+
+
+def _key(package_id: str = "pkg-a", annotator_id: str = "ann-1") -> WorkspaceKey:
+    return WorkspaceKey(
+        package_id=package_id,
+        document_id="doc-1",
+        annotator_id=annotator_id,
+        mode="independent",
+        target_set_id=ReviewTargetSet.create([]).target_set_id,
+    )
+
+
+def _envelope(mutation_id: str, expected: int) -> MutationEnvelope:
+    return MutationEnvelope(
+        mutation_id=mutation_id, expected_revision=expected, payload={}
+    )
+
+
+def _check(draft: Draft) -> Draft:
+    draft.document_checked = True
+    return draft
+
+
+def _seeded(tmp_path: Path) -> Repository:
+    repo = _repo(tmp_path)
+    repo.import_package(_sample_package("pkg-a"))
+    return repo
+
+
+def test_a_draft_starts_at_revision_zero_and_each_write_counts(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+
+    assert repo.open_draft(_key()).revision == 0
+    result = repo.run_mutation(_key(), _envelope("m1", 0), _check)
+
+    assert isinstance(result, Draft) and result.revision == 1
+    reopened = repo.open_draft(_key())
+    assert reopened.revision == 1
+    assert reopened.checked_layer_ids == ["hpo"]
+
+
+def test_two_writers_on_one_revision_get_exactly_one_conflict(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    repo.open_draft(_key())
+    lock = threading.Lock()
+    outcomes: list[str] = []
+
+    def write(mutation_id: str) -> None:
+        try:
+            repo.run_mutation(_key(), _envelope(mutation_id, 0), _check)
+            result = "ok"
+        except RevisionConflict:
+            result = "conflict"
+        with lock:
+            outcomes.append(result)
+
+    with ThreadPoolExecutor(2) as pool:
+        list(pool.map(write, ["first", "second"]))
+
+    assert sorted(outcomes) == ["conflict", "ok"]
+    assert repo.open_draft(_key()).revision == 1
+
+
+def test_a_retry_replays_the_stored_answer_without_running_again(
+    tmp_path: Path,
+) -> None:
+    repo = _seeded(tmp_path)
+    first = repo.run_mutation(_key(), _envelope("m1", 0), _check)
+
+    def must_not_run(_draft: Draft) -> Draft:
+        raise AssertionError("a replay must not run the operation")
+
+    assert repo.run_mutation(_key(), _envelope("m1", 0), must_not_run) == first
+
+
+def test_a_reused_mutation_id_with_another_payload_is_a_conflict(
+    tmp_path: Path,
+) -> None:
+    repo = _seeded(tmp_path)
+    repo.run_mutation(_key(), _envelope("m1", 0), _check)
+    other = MutationEnvelope(mutation_id="m1", expected_revision=0, payload={"x": 1})
+
+    with pytest.raises(RevisionConflict, match="reused"):
+        repo.run_mutation(_key(), other, _check)
+
+
+def test_a_failing_operation_writes_nothing(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+
+    def broken(draft: Draft) -> Draft:
+        draft.document_checked = True
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        repo.run_mutation(_key(), _envelope("m1", 0), broken)
+
+    draft = repo.open_draft(_key())
+    assert (draft.revision, draft.checked_layer_ids) == (0, [])
+
+
+def _submission(key: WorkspaceKey, revision: int) -> Submission:
+    return Submission(
+        submission_id=f"sub-{revision}",
+        origin_key=key,
+        targets=ReviewTargetSet.create([]),
+        draft_revision=revision,
+        snapshots=[],
+        decisions=[],
+        checked_layer_ids=["hpo"],
+        created_at="2026-10-14T12:00:00Z",
+    )
+
+
+def test_a_submission_is_stored_and_cannot_be_changed(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    submission = _submission(_key(), 1)
+
+    repo.run_mutation(_key(), _envelope("submit", 0), lambda _d: submission)
+
+    assert repo.get_submissions_for_workspace(_key()) == [submission]
+    assert repo.get_submission("sub-1") == submission
+    with (
+        pytest.raises(DBAPIError, match="permission denied"),
+        repo.db.transaction() as conn,
+    ):
+        conn.execute(text("UPDATE ontocurator.submissions SET mode = 'review'"))
+
+
+def test_document_status_follows_drafts_and_submissions(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+
+    def status() -> str:
+        return repo.get_document_status("pkg-a", "doc-1", "ann-1", "independent")
+
+    assert status() == "not_started"
+    repo.open_draft(_key())
+    assert status() == "not_started"
+    repo.run_mutation(_key(), _envelope("m1", 0), _check)
+    assert status() == "in_progress"
+    repo.run_mutation(_key(), _envelope("m2", 1), lambda _d: _submission(_key(), 2))
+    assert status() == "completed"
+    assert repo.list_workspace_keys("pkg-a", "ann-1") == [_key()]
+
+
+def test_a_new_draft_resumes_the_latest_submission(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    package = _sample_package("pkg-a")
+    resumed = _submission(_key(), 7).model_copy(
+        update={"snapshots": list(package.annotations.values())}
+    )
+    repo.run_mutation(_key(), _envelope("submit", 0), lambda _d: resumed)
+    other_key = _key().model_copy(update={"target_set_id": "targets-0"})
+
+    draft = repo.open_draft(other_key)
+
+    assert draft.revision == 7
+    assert draft.annotations == resumed.snapshots
