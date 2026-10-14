@@ -309,9 +309,21 @@ Status: Questions 1–8 are answered, see §5. New detailed questions are resolv
   - Translation review has only one stage.
   - T4 needs the variant model anyway.
 
+- **E11 (backend language): the backend stays in Python** (FastAPI, SQLAlchemy, Alembic). The frontend stays in TypeScript, and the OpenAPI contract with generated types connects the two.
+  - Reason: E4/E7 require one shared implementation of validation and matching, and the benchmark and Phentrieve are Python. The backend's domain, ontology and search code (~12.8k lines, ~18.7k lines of tests) is kept.
+  - The user's concern was performance. Measured on 2026-10-14 with the current code and HPO 2026-06-23 (no translation files):
+    - ontology load ≈ 5.5 s once per process, ≈ 140 MB;
+    - term search median 53 ms, p95 69 ms, max 84 ms (200 calls).
+  - Implications:
+    - Most requests are database-bound, where the language makes no difference.
+    - One process handles ≈ 19 searches/s.
+    - Scaling means more worker processes at ≈ 150 MB each.
+    - Search latency is a matter of the algorithm (caching, prefix index), not of Python versus Node.
+- **E12 (scale assumption):** 5–30 concurrent users; projects with hundreds to a few thousand documents. T2 sets concrete latency targets for this load and verifies them with a load test in the Docker setup.
+
 ## 6. Next Steps
 
 1. T0: The design is approved (`2026-10-14-t0-tree-term-id-link-design.md`). Implementation is still pending.
 2. T1: The design is agreed (`2026-10-14-t1-shared-annotation-format-design.md`). The package lives privately in the user's own account (F12), so coordination with Phentrieve is only needed in T7.
    - Addition to the roadmap: The format allows **all HPO terms** (incl. history and interventions) as well as **modifiers**. MAxO is planned.
-3. Then discuss T2. This is the server architecture: data model, auth, Docker.
+3. T2 is in brainstorming (`2026-10-14-t2-server-foundation-design.md`). It covers the server architecture: data model, auth and Docker.
