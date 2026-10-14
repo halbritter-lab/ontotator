@@ -107,10 +107,14 @@ A proposal set is a unit with `set_kind: tool_output` whose actors are of kind `
 - Allowed, e.g. two tools or two runs. Each is shown with its own actor label.
 - A newer set does not replace an older one. Both stay immutable.
 
-**Arrival after work has started**
-- A proposal set imported for a document whose stage has already started does not change existing drafts.
-- It feeds only stages that have not started. The progress view marks such documents.
-- The project lead may reopen the stage (T4 W1) to use the new set.
+**Arrival after work has started** (user decision 2026-10-14)
+- Nothing is merged into an existing draft automatically, and no stage has to be reopened.
+- A draft on that document shows the notice "new proposals available" with the set's tool label.
+- The annotator can either:
+  - adopt the set with one click, so its annotations appear as open proposals in the draft (in the assisted round they join the W2 checklist); or
+  - ignore it. The notice can be dismissed and stays available in the detail pane.
+- Adopting and dismissing are recorded in the edit log (T2 D6).
+- Drafts not yet started receive the set as normal input (O5). This applies under the stage's proposal policy (T4 W4). Under `hidden` no notice is shown.
 
 **Display**
 - Proposals carry the existing AI badge. The detail pane shows tool name, version, model, run ID and `provenance.notes`.
@@ -129,6 +133,7 @@ A proposal set is a unit with `set_kind: tool_output` whose actors are of kind `
 | O4 | Project options `contiguous_mentions_only`, and a restriction of a profile's axis values (e.g. hiding `unknown`). Both are checked at submission and on proposal import. | T3 A5 |
 | O5 | A stage can take an imported proposal set as its working input, using the W2 checklist. This is the assisted first round. | T4 W1, W2 |
 | O6 | Release bundles contain lineage sets (I5) and fill the manifest `release` block (I7). | T4 W7 |
+| O7 | Late proposal sets: a started draft shows "new proposals available". One click adopts the set as open proposals, or the annotator ignores it. No automatic merge and no reopening. Adopting and dismissing are edit events. | T2 D6, T4 W2, W4 |
 
 ### I5: Release export
 
@@ -214,7 +219,7 @@ GitHub Actions are not available. Every repository runs `uv run pytest` locally,
     - missing tool provenance refused;
     - project restrictions (O4);
     - variants and translation status (I2);
-    - a late proposal set not altering drafts.
+    - a late proposal set (O7): the notice appears, nothing is merged until adopted, adopting yields open proposals, and both actions are edit events.
   - An API-level test: import → assisted first round (O5) → adjudicate → release → export. It checks the lineage sets, O3 and the `release` block against ontospan validation.
 - **Local end-to-end script** `scripts/check_integration_roundtrip.py`: it runs against the dev compose stack with the fixtures and is run by hand before tagging a release.
 
@@ -226,7 +231,7 @@ GitHub Actions are not available. Every repository runs `uv run pytest` locally,
 | T7b | T2 D5 | CLI import of documents and proposals: O1, O2, required tool provenance |
 | T7c | T3 | Upload preview with proposal sets and tools; O4 |
 | T7d | T5 | Variant import (format 1.1), translation status on import (I2) |
-| T7e | T4 | O3, O5, O6, `release` block (I7), release export with lineage (I5) |
+| T7e | T4 | O3, O5, O6, O7, `release` block (I7), release export with lineage (I5) |
 
 ## Open questions
 
