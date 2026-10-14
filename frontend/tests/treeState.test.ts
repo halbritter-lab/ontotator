@@ -37,9 +37,16 @@ describe("tree keys", () => {
 });
 
 describe("visibleRows", () => {
+  it("carries each node's external page into its row", () => {
+    const data = withRoots(emptyTree(), [
+      { term_id: "R", label: "Root", child_count: 0, external_url: "https://terms.example/R" },
+    ]);
+    expect(visibleRows(data, new Set())[0].externalUrl).toBe("https://terms.example/R");
+  });
+
   it("shows only the roots while nothing is expanded", () => {
     expect(visibleRows(sample(), new Set())).toEqual([
-      { key: "R", termId: "R", label: "Root", depth: 1, parentKey: null, childCount: 2, expanded: false, posInSet: 1, setSize: 1 },
+      { key: "R", termId: "R", label: "Root", depth: 1, parentKey: null, childCount: 2, externalUrl: null, expanded: false, posInSet: 1, setSize: 1 },
     ]);
   });
 

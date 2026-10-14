@@ -20,6 +20,8 @@ export interface TreeRow {
   depth: number;
   parentKey: string | null;
   childCount: number;
+  /** The term's official page; null if none is known. */
+  externalUrl: string | null;
   expanded: boolean;
   posInSet: number;
   setSize: number;
@@ -85,6 +87,7 @@ export function visibleRows(data: TreeData, expanded: ReadonlySet<string>): Tree
         depth,
         parentKey,
         childCount: node.child_count,
+        externalUrl: node.external_url ?? null,
         expanded: isExpanded,
         posInSet: index + 1,
         setSize: known.length,

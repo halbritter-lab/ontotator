@@ -1,3 +1,4 @@
+import { viewLabel } from "./termLinks";
 import React, { useEffect, useRef } from "react";
 import { keyAction, type TreeRow } from "./treeState";
 
@@ -87,6 +88,7 @@ export const TermTree: React.FC<TermTreeProps> = ({
               else items.current.delete(row.key);
             }}
             role="treeitem"
+            aria-labelledby={`tree-label-${row.key}`}
             className={isCurrent ? "tree-item tree-item--current" : "tree-item"}
             style={{ paddingLeft: 8 + (row.depth - 1) * 14 }}
             data-key={row.key}
@@ -109,7 +111,27 @@ export const TermTree: React.FC<TermTreeProps> = ({
             ) : (
               <span className="tree-toggle" aria-hidden="true" />
             )}
-            <span className="tree-label">{row.label}</span>
+            <span className="tree-label" id={`tree-label-${row.key}`}>
+              {row.label}
+            </span>
+            <span className="tree-id">{row.termId}</span>
+            {row.externalUrl && (
+              <a
+                className="tree-external"
+                href={row.externalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                tabIndex={-1}
+                title={viewLabel(row.termId, row.externalUrl)}
+                aria-label={viewLabel(row.termId, row.externalUrl)}
+                onClick={(event) => event.stopPropagation()} // looking a term up is not selecting it
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.stopPropagation();
+                }}
+              >
+                ↗
+              </a>
+            )}
             {row.childCount > 0 && (
               <span className="tree-count" aria-label={`${row.childCount} children`}>
                 {row.childCount}

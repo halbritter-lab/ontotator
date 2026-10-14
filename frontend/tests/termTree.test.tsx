@@ -1,16 +1,21 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TermTree } from "../src/editor/TermTree";
 import { emptyTree, visibleRows, withLevels, withRoots } from "../src/editor/treeState";
 
-const node = (term_id: string, label: string, child_count = 0) => ({ term_id, label, child_count });
+const node = (term_id: string, label: string, child_count = 0) => ({
+  term_id,
+  label,
+  child_count,
+  external_url: `https://terms.example/${term_id}`,
+});
 
-// Root > (Alpha > Shared, Beta > Yonder), everything loaded.
+// Root > (Alpha > Shared, Beta > Yonder), everything loaded. Yonder has no known page.
 const data = withLevels(withRoots(emptyTree(), [node("R", "Root", 2)]), [
   { term_id: "R", children: [node("A", "Alpha", 1), node("B", "Beta", 1)] },
   { term_id: "A", children: [node("X", "Shared")] },
-  { term_id: "B", children: [node("Y", "Yonder")] },
+  { term_id: "B", children: [{ ...node("Y", "Yonder"), external_url: null }] },
 ]);
 
 interface HarnessProps {
@@ -65,6 +70,63 @@ afterEach(() => {
 });
 
 describe("TermTree", () => {
+  it("Enter on a mouse-focused external link keeps native navigation and does not select", () => {
+    const onSelect = vi.fn();
+    render(<Harness onSelect={onSelect} />);
+    const link = item("Beta").querySelector<HTMLAnchorElement>("a.tree-external")!;
+    act(() => link.focus());
+    expect(document.activeElement).toBe(link);
+    expect(fireEvent.keyDown(link, { key: "Enter" })).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(item("Beta").getAttribute("aria-selected")).toBe("false");
+  });
+
+
+  it("shows each row's term id and links to the term's page in a new tab", () => {
+    render(<Harness />);
+
+    const alpha = item("Alpha");
+    expect(alpha.querySelector(".tree-id")?.textContent).toBe("A");
+    const link = alpha.querySelector<HTMLAnchorElement>("a.tree-external")!;
+    expect(link.getAttribute("href")).toBe("https://terms.example/A");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(link.getAttribute("aria-label")).toBe("View A on terms.example");
+    // Not a stop of its own in the Tab order: the tree keeps one roving tab stop.
+    expect(link.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("names each row by its label only, not by its id or link", () => {
+    render(<Harness />);
+    expect(screen.getByRole("treeitem", { name: "Alpha" })).toBe(item("Alpha"));
+  });
+
+  it("following the link neither selects nor opens the row", () => {
+    const onSelect = vi.fn();
+    render(<Harness onSelect={onSelect} />);
+
+    fireEvent.click(item("Beta").querySelector("a.tree-external")!);
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(item("Beta").getAttribute("aria-selected")).toBe("false");
+    expect(item("Beta").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("Enter on a row still selects it; the link does not take over the key", () => {
+    const onSelect = vi.fn();
+    render(<Harness onSelect={onSelect} />);
+    fireEvent.keyDown(item("Alpha"), { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledWith("R/A");
+  });
+
+  it("shows the id without a link where no page is known", () => {
+    render(<Harness />);
+    fireEvent.click(item("Beta").querySelector(".tree-toggle")!);
+
+    expect(item("Yonder").querySelector(".tree-id")?.textContent).toBe("Y");
+    expect(item("Yonder").querySelector("a.tree-external")).toBeNull();
+  });
+
   it("is an ARIA tree whose rows carry level, position, state and child count", () => {
     render(<Harness />);
 
