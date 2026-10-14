@@ -1,0 +1,327 @@
+"""Typed table mappings of the server schema (T2 P2).
+
+The repository runs Core statements against these mapped classes on a
+``Connection``. It never loads ORM objects, so snapshot and submission
+payloads stay plain JSON (JSONB). A project replaces the work package of the
+desktop editor; ``WorkspaceKey.package_id`` carries ``projects.project_key``.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, ClassVar
+
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Identity,
+    Index,
+    MetaData,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+SCHEMA = "ontocurator"
+OWNER_ROLE = "ontocurator_owner"
+APP_ROLE = "ontocurator_app"
+
+# The application role may only read and insert these (T2 D6).
+APPEND_ONLY_TABLES = ("annotation_snapshots", "evidence_snapshots", "submissions")
+
+NAMING_CONVENTION = {
+    "ix": "ix_%(table_name)s_%(column_0_N_name)s",
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_N_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(schema=SCHEMA, naming_convention=NAMING_CONVENTION)
+    type_annotation_map: ClassVar[dict[Any, Any]] = {
+        str: Text(),
+        dict[str, Any]: JSONB(),
+        list[Any]: JSONB(),
+        datetime: DateTime(timezone=True),
+    }
+
+
+class ProjectRow(Base):
+    """A project; until T2d it is created from an in-memory seed package."""
+
+    __tablename__ = "projects"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    project_key: Mapped[str] = mapped_column(unique=True)
+    name: Mapped[str]
+    manifest: Mapped[dict[str, Any]]
+    manifest_sha256: Mapped[str]
+    task_profile: Mapped[dict[str, Any]]
+    task_profile_sha256: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class StoredFileRow(Base):
+    """A file of the content-addressed store on the data volume (D3)."""
+
+    __tablename__ = "stored_files"
+
+    sha256: Mapped[str] = mapped_column(primary_key=True)
+    size: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ProjectResourceRow(Base):
+    """An embedded ontology or captured search resource of a project."""
+
+    __tablename__ = "project_resources"
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    resource_path: Mapped[str] = mapped_column(primary_key=True)
+    sha256: Mapped[str] = mapped_column(ForeignKey(StoredFileRow.sha256))
+
+
+class ProjectSearchConditionsRow(Base):
+    """The immutable search conditions captured at first use or imported."""
+
+    __tablename__ = "project_search_conditions"
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    conditions: Mapped[list[Any]]
+
+
+class DocumentRow(Base):
+    """A canonical text; ``position`` is its place in the project's order."""
+
+    __tablename__ = "documents"
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    document_id: Mapped[str] = mapped_column(primary_key=True)
+    position: Mapped[int | None]
+    language: Mapped[str]
+    text: Mapped[str]
+    text_sha256: Mapped[str]
+    source_text_sha256: Mapped[str | None]
+
+
+class AnnotationSnapshotRow(Base):
+    """An immutable, content-addressed annotation snapshot (append-only)."""
+
+    __tablename__ = "annotation_snapshots"
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    annotation_id: Mapped[str] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(primary_key=True)
+    document_id: Mapped[str]
+    payload: Mapped[dict[str, Any]]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class EvidenceSnapshotRow(Base):
+    """An immutable, content-addressed evidence snapshot (append-only)."""
+
+    __tablename__ = "evidence_snapshots"
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    evidence_id: Mapped[str] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(primary_key=True)
+    document_id: Mapped[str]
+    payload: Mapped[dict[str, Any]]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ProposalAnnotationRow(Base):
+    """An annotation the project offers as input (imported proposals)."""
+
+    __tablename__ = "proposal_annotations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_id", "annotation_id", "version"],
+            [
+                f"{SCHEMA}.annotation_snapshots.project_id",
+                f"{SCHEMA}.annotation_snapshots.annotation_id",
+                f"{SCHEMA}.annotation_snapshots.version",
+            ],
+        ),
+    )
+
+    project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    annotation_id: Mapped[str] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(primary_key=True)
+
+
+class ProposalEvidenceRow(Base):
+    """Evidence that belongs to the project's proposals."""
+
+    __tablename__ = "proposal_evidence"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_id", "evidence_id", "version"],
+            [
+                f"{SCHEMA}.evidence_snapshots.project_id",
+                f"{SCHEMA}.evidence_snapshots.evidence_id",
+                f"{SCHEMA}.evidence_snapshots.version",
+            ],
+        ),
+    )
+
+    project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    evidence_id: Mapped[str] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(primary_key=True)
+
+
+class DraftRow(Base):
+    """The mutable, revisioned working state of one workspace key."""
+
+    __tablename__ = "drafts"
+    __table_args__ = (
+        UniqueConstraint("project_id", "draft_key"),
+        Index(
+            "ix_drafts_project_annotator_document",
+            "project_id",
+            "annotator_id",
+            "document_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    draft_key: Mapped[str]
+    document_id: Mapped[str]
+    annotator_id: Mapped[str]
+    mode: Mapped[str]
+    scope_id: Mapped[str]
+    target_set_id: Mapped[str]
+    targets: Mapped[dict[str, Any]]
+    revision: Mapped[int] = mapped_column(server_default=text("0"))
+    checked_layer_ids: Mapped[list[Any]] = mapped_column(
+        server_default=text("'[]'::jsonb")
+    )
+    updated_at: Mapped[datetime]
+
+
+class DraftAnnotationRow(Base):
+    __tablename__ = "draft_annotations"
+
+    draft_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(DraftRow.id, ondelete="CASCADE"), primary_key=True
+    )
+    annotation_id: Mapped[str] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(primary_key=True)
+
+
+class DraftEvidenceRow(Base):
+    __tablename__ = "draft_evidence"
+
+    draft_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(DraftRow.id, ondelete="CASCADE"), primary_key=True
+    )
+    evidence_id: Mapped[str] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(primary_key=True)
+
+
+class ReviewDecisionRow(Base):
+    """A review decision of a draft, kept in the order it was made."""
+
+    __tablename__ = "review_decisions"
+
+    draft_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(DraftRow.id, ondelete="CASCADE"), primary_key=True
+    )
+    decision_id: Mapped[str] = mapped_column(primary_key=True)
+    position: Mapped[int]
+    target_id: Mapped[str]
+    target_version: Mapped[str]
+    outcome: Mapped[str]
+    replacement_id: Mapped[str | None]
+    replacement_version: Mapped[str | None]
+    note: Mapped[str | None]
+    reviewer_id: Mapped[str]
+    payload: Mapped[dict[str, Any]]
+
+
+class SubmissionRow(Base):
+    """An immutable submission (append-only).
+
+    ``local_key`` is the workspace key the submission belongs to in this
+    project. For an imported submission it differs from ``origin_key``.
+    """
+
+    __tablename__ = "submissions"
+    __table_args__ = (
+        Index("ix_submissions_project_local_key", "project_id", "local_key"),
+        Index("ix_submissions_project_document", "project_id", "document_id"),
+    )
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    submission_id: Mapped[str] = mapped_column(primary_key=True)
+    local_key: Mapped[str]
+    origin_key: Mapped[str]
+    document_id: Mapped[str]
+    annotator_id: Mapped[str]
+    mode: Mapped[str]
+    draft_revision: Mapped[int]
+    payload: Mapped[dict[str, Any]]
+    created_at: Mapped[str]
+    recorded_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class SearchEventRow(Base):
+    """Provenance of a term search or tree walk.
+
+    ``seq`` keeps the order events were written in. ``imported`` marks events
+    that came with a seed package (they take part in its re-import check).
+    """
+
+    __tablename__ = "search_events"
+    __table_args__ = (
+        Index("ix_search_events_project_local_key", "project_id", "local_key"),
+        Index("ix_search_events_project_workspace_key", "project_id", "workspace_key"),
+    )
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    event_id: Mapped[str] = mapped_column(primary_key=True)
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(always=True))
+    workspace_key: Mapped[str]
+    local_key: Mapped[str]
+    imported: Mapped[bool] = mapped_column(server_default=text("false"))
+    annotation_id: Mapped[str]
+    layer_id: Mapped[str | None]
+    ontology_sha256: Mapped[str | None]
+    payload: Mapped[dict[str, Any]]
+    timestamp: Mapped[str]
+
+
+class MutationReceiptRow(Base):
+    """The stored response of a committed write, replayed on a retry."""
+
+    __tablename__ = "mutation_receipts"
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    workspace_key: Mapped[str] = mapped_column(primary_key=True)
+    mutation_id: Mapped[str] = mapped_column(primary_key=True)
+    request_hash: Mapped[str]
+    response: Mapped[dict[str, Any]]
+    created_at: Mapped[datetime]

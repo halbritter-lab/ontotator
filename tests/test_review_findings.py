@@ -273,7 +273,9 @@ def test_fresh_schema_contains_ontology_resources_and_no_legacy_migrations() -> 
     storage_dir = Path(database_module.__file__).parent
     schema = (storage_dir / "schema_v4.sql").read_text(encoding="utf-8")
     assert "package_ontology_resources" in schema
-    assert not (storage_dir / "migrations").exists()
+    # storage/migrations now holds the Alembic environment; the legacy SQLite
+    # migrations were *.sql files there.
+    assert not list((storage_dir / "migrations").rglob("*.sql"))
 
 
 # --- Finding 4/5: term validation and evidence identity -------------------- #
