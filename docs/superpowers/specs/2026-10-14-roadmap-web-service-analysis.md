@@ -321,9 +321,20 @@ Status: Questions 1–8 are answered, see §5. New detailed questions are resolv
     - Search latency is a matter of the algorithm (caching, prefix index), not of Python versus Node.
 - **E12 (scale assumption):** 5–30 concurrent users; projects with hundreds to a few thousand documents. T2 sets concrete latency targets for this load and verifies them with a load test in the Docker setup.
 
-## 6. Next Steps
+## 6. Status of the Subprojects
 
-1. T0: The design is approved (`2026-10-14-t0-tree-term-id-link-design.md`). Implementation is still pending.
-2. T1: The design is agreed (`2026-10-14-t1-shared-annotation-format-design.md`). The package lives privately in the user's own account (F12), so coordination with Phentrieve is only needed in T7.
-   - Addition to the roadmap: The format allows **all HPO terms** (incl. history and interventions) as well as **modifiers**. MAxO is planned.
-3. T2 is in brainstorming (`2026-10-14-t2-server-foundation-design.md`). It covers the server architecture: data model, auth and Docker.
+| # | Spec | Status |
+|---|---|---|
+| T0 | `2026-10-14-t0-tree-term-id-link-design.md` | design agreed |
+| T1 | `2026-10-14-t1-shared-annotation-format-design.md` | design agreed |
+| T2 | `2026-10-14-t2-server-foundation-design.md` | design agreed |
+| T3 | `2026-10-14-t3-admin-design.md` | design agreed |
+| T5 | `2026-10-14-t5-variants-translation-review-design.md` | design agreed |
+| T4 | `2026-10-14-t4-workflows-merge-design.md` | design agreed |
+| T6 | UI overhaul with Impeccable | open. The Impeccable skill is not installed in the current environment. |
+| T7 | Integrations (benchmark import/export, Phentrieve reads releases) | open |
+
+Changes to the roadmap made while specifying:
+- The format allows all HPO terms (including history and interventions) and modifiers. MAxO is planned (T1 F5–F7).
+- Comments on annotations are part of T4 (W8).
+- The start-of-session mode choice is replaced by stage tasks and the blind switch (T4 W2, W4).
