@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from layered_fixtures import make_layered_package
+from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
@@ -39,7 +40,7 @@ def _client(tmp_path: Path, **config: Any) -> TestClient:
     app = create_app(
         AppConfig(
             workspace_dir=workspace,
-            database_path=workspace / "editor.db",
+            database_url=database_url_for(workspace / "editor.db"),
             session_token=TOKEN,
             **config,
         )

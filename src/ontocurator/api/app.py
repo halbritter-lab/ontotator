@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
+from ontocurator import settings
 from ontocurator.api.routes import router
 from ontocurator.api.security import verify_security
 from ontocurator.api.tree_routes import router as tree_router
@@ -29,8 +30,8 @@ from ontocurator.domain.errors import (
     PayloadTooLarge,
     RevisionConflict,
 )
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.database import Database
+from ontocurator.storage.repository import Repository
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     if config is not None:
         # Initialize storage and ontology
-        db_path = config.database_path or (config.workspace_dir / "editor.db")
-        db = Database(db_path)
+        db = Database(
+            settings.resolve_database_url(config.database_url, config.workspace_dir),
+            data_dir=config.workspace_dir,
+        )
         repo = Repository(db)
 
         from ontocurator.ontology.registry import OntologyRegistry

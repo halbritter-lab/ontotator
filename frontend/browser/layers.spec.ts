@@ -122,7 +122,10 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await page.locator(".case-navigation").getByRole("button", { name: /Next Case/i }).click();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2/i);
     await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (0)" })).toBeVisible();
-    await page.locator(".layer-controls").getByRole("button", { name: /Mark .* as verified/i }).click();
+    const verify = page.locator(".layer-controls").getByRole("button", { name: /Mark .* as verified/i });
+    await verify.click();
+    // Submit only once the saved draft reports the layer as verified.
+    await expect(verify).toContainText(/verified \(Reset\)/);
     await submitCase(page);
     await page.getByRole("button", { name: /Stay in case/i }).click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
@@ -157,6 +160,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     // 3. Check layer 1 only
     const checkAction = page.locator(".layer-controls").getByRole("button", { name: /Mark .* as verified|als geprüft markieren/i });
     await checkAction.click();
+    await expect(checkAction).toContainText(/verified \(Reset\)/);
 
     // Try submitting again -> still blocked
     await page.getByRole("button", { name: /Finish & Submit Case|Submit Case|Fall abschließen/i }).first().click();
@@ -165,6 +169,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     // 4. Switch to layer 2 and check it
     await layer2.locator('input[type="radio"]').check();
     await checkAction.click();
+    await expect(checkAction).toContainText(/verified \(Reset\)/);
 
     // 5. Now both layers are checked -> submit succeeds
     await submitCase(page);

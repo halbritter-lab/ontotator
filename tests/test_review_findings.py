@@ -9,14 +9,14 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from pg_harness import database_for, database_url_for
 
 from ontocurator.domain.documents import Document
 from ontocurator.domain.errors import InvalidPackage
 from ontocurator.packages.models import ValidatedPackage
 from ontocurator.packages.reader import read_package
 from ontocurator.packages.writer import write_package, write_package_to_stream
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP_PATH = FIXTURES / "hp.json"
@@ -103,7 +103,7 @@ def test_reader_rejects_member_without_manifest_hash(member: str) -> None:
 def test_reimport_same_manifest_with_different_dataset_is_rejected(
     tmp_path: Path,
 ) -> None:
-    repo = Repository(Database(tmp_path / "db.sqlite"))
+    repo = Repository(database_for(tmp_path / "db.sqlite"))
     buf = io.BytesIO()
     write_package_to_stream(_sample_package(), buf)
     original = read_package(io.BytesIO(buf.getvalue()))
@@ -187,7 +187,7 @@ def test_workspace_key_encoding_is_unambiguous_and_backward_compatible(
     tmp_path: Path,
 ) -> None:
     from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
-    from ontocurator.storage.sqlite_repository import _key_str
+    from ontocurator.storage.repository import _key_str
 
     legacy = WorkspaceKey(
         package_id="p",
@@ -209,7 +209,12 @@ def test_workspace_key_encoding_is_unambiguous_and_backward_compatible(
     assert _key_str(first) != _key_str(second)
     assert ":" not in _key_str(first)
 
-    repo = Repository(Database(tmp_path / "db.sqlite"))
+    from test_storage import _sample_package as _project
+
+    repo = Repository(database_for(tmp_path / "db.sqlite"))
+    # Drafts belong to a project (D-e); both keys' projects must exist.
+    repo.import_package(_project(first.package_id))
+    repo.import_package(_project(second.package_id))
     repo.open_draft(first)
 
     def bump(draft: Draft) -> Draft:
@@ -221,61 +226,6 @@ def test_workspace_key_encoding_is_unambiguous_and_backward_compatible(
     )
     assert repo.open_draft(first).revision == 1
     assert repo.open_draft(second).revision == 0
-
-
-# --- Finding 8: database initialisation ------------------------------------ #
-
-
-def test_schema_init_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import sqlite3
-
-    from ontocurator.storage import sqlite_database as database_module
-
-    broken = tmp_path / "broken_schema.sql"
-    real = (Path(database_module.__file__).parent / "schema_v4.sql").read_text(
-        encoding="utf-8"
-    )
-    broken.write_text(real + "\nCREATE TABLE packages (x TEXT);\n", encoding="utf-8")
-    monkeypatch.setattr(database_module, "_get_sql_schema_path", lambda _name: broken)
-
-    db_path = tmp_path / "partial.sqlite"
-    with pytest.raises(sqlite3.Error):
-        Database(db_path)
-
-    if db_path.exists():
-        conn = sqlite3.connect(db_path)
-        tables = {
-            r[0]
-            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        }
-        conn.close()
-        assert "workspace_metadata" not in tables
-
-
-def test_database_reopens_path_with_uri_special_characters(tmp_path: Path) -> None:
-    directory = tmp_path / "ws #1 %41&x"
-    db = Database(directory / "editor.db")
-    db.close()
-    reopened = Database(directory / "editor.db")
-    tables = {
-        r[0]
-        for r in reopened.get_connection().execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )
-    }
-    reopened.close()
-    assert "package_ontology_resources" in tables
-
-
-def test_fresh_schema_contains_ontology_resources_and_no_legacy_migrations() -> None:
-    from ontocurator.storage import sqlite_database as database_module
-
-    storage_dir = Path(database_module.__file__).parent
-    schema = (storage_dir / "schema_v4.sql").read_text(encoding="utf-8")
-    assert "package_ontology_resources" in schema
-    # storage/migrations now holds the Alembic environment; the legacy SQLite
-    # migrations were *.sql files there.
-    assert not list((storage_dir / "migrations").rglob("*.sql"))
 
 
 # --- Finding 4/5: term validation and evidence identity -------------------- #
@@ -577,7 +527,7 @@ def test_test_client_host_is_only_trusted_when_flag_is_set(
     app = create_app(
         AppConfig(
             workspace_dir=tmp_path,
-            database_path=tmp_path / "db.sqlite",
+            database_url=database_url_for(tmp_path / "db.sqlite"),
             session_token="tok",
         )
     )
@@ -602,7 +552,7 @@ def _app(tmp_path: Path, **overrides):  # type: ignore[no-untyped-def]
     workspace = tmp_path / "workspace"
     config = AppConfig(
         workspace_dir=workspace,
-        database_path=workspace / "editor.db",
+        database_url=database_url_for(workspace / "editor.db"),
         session_token="tok",
         **overrides,
     )
@@ -916,7 +866,7 @@ def test_review_confirms_proposal_recorded_with_alt_id(tmp_path: Path) -> None:
         provenance=Provenance(actor=ActorRef(actor_id="m", kind="tool"), method="ner"),
     )
     snap = snapshot(ann, [], doc, profile)
-    repo = Repository(Database(tmp_path / "db.sqlite"))
+    repo = Repository(database_for(tmp_path / "db.sqlite"))
     repo.import_package(
         ValidatedPackage(
             manifest=PackageManifest(

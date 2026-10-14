@@ -421,6 +421,18 @@ def serve(
             show_default=False,
         ),
     ] = None,
+    database_url: Annotated[
+        str | None,
+        typer.Option(
+            "--database-url",
+            help=(
+                "PostgreSQL URL of the application role. Default: "
+                "ONTOCURATOR_DATABASE_URL, with the password from "
+                "ONTOCURATOR_DATABASE_PASSWORD or ONTOCURATOR_DATABASE_PASSWORD_FILE."
+            ),
+            show_default=False,
+        ),
+    ] = None,
     ontology: Annotated[
         list[Path] | None,
         typer.Option(
@@ -728,7 +740,7 @@ def serve(
 
         config = AppConfig(
             workspace_dir=ws,
-            database_path=ws / "editor.db",
+            database_url=database_url,
             ontology_path=ontology_list[0] if ontology_list else None,
             ontology_paths=ontology_list,
             # Translation files lie next to the ontologies. The workspace
@@ -966,6 +978,28 @@ def config_command(
         typer.echo(f"Deleted {legacy}")
 
 
+db_app = typer.Typer(help="Database schema (PostgreSQL).", no_args_is_help=True)
+app.add_typer(db_app, name="db")
+
+
+@db_app.command("upgrade")
+def db_upgrade() -> None:
+    """Upgrade the schema to this version, as the schema owner.
+
+    Reads ONTOCURATOR_MIGRATION_DATABASE_URL and the password from
+    ONTOCURATOR_MIGRATION_DATABASE_PASSWORD or ..._PASSWORD_FILE.
+    """
+    from ontocurator.settings import SettingsError, database_url
+    from ontocurator.storage.schema import upgrade
+
+    try:
+        head = upgrade(database_url(prefix="ONTOCURATOR_MIGRATION_DATABASE"))
+    except SettingsError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Database schema is at revision {head}.")
+
+
 # --------------------------------------------------------------------------- #
 # Zero-CLI entry point (double click / drag & drop / "Open with")
 # --------------------------------------------------------------------------- #
@@ -975,6 +1009,7 @@ PASSTHROUGH_FIRST_ARGS = {
     "version",
     "config",
     "analyze",
+    "db",
     "--help",
     "-h",
     "--install-completion",

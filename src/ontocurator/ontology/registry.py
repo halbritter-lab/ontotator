@@ -30,7 +30,7 @@ from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from ontocurator.storage.sqlite_repository import Repository
+    from ontocurator.storage.repository import Repository
 
 
 @dataclass(frozen=True)

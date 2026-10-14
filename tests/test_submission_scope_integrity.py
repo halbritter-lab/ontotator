@@ -4,6 +4,7 @@ import io
 
 import pytest
 from layered_fixtures import make_layered_package
+from pg_harness import database_for
 from test_review_roundtrip_regressions import registry
 from test_reviews import _setup_review_test_env
 from test_scientific_review_integrity import changed_review, submit
@@ -20,8 +21,7 @@ from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
 from ontocurator.packages.reader import read_package
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 def archive_roundtrip(package):
@@ -37,7 +37,7 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
 ):
     package = make_layered_package("assisted")
     ontologies = registry()
-    original = Repository(Database(tmp_path / "source.db"))
+    original = Repository(database_for(tmp_path / "source.db"))
     original.import_package(package)
     opened = WorkspaceService(original, ontologies).open(
         WorkspaceKey(
@@ -77,7 +77,7 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
     assert [layer.layer_id for layer in projected.manifest.task_profile.layers] == [
         "target-layer"
     ]
-    imported = Repository(Database(tmp_path / "first-import.db"))
+    imported = Repository(database_for(tmp_path / "first-import.db"))
     imported_id = imported.import_package(projected)
     resumed = WorkspaceService(imported, ontologies).open(
         opened.key.model_copy(update={"package_id": imported_id, "scope_id": ""})
@@ -100,7 +100,7 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
     assert continued.snapshots == first.snapshots
     assert second_export.documents == projected.documents
     assert second_export.annotations == projected.annotations
-    second_import = Repository(Database(tmp_path / "second-import.db"))
+    second_import = Repository(database_for(tmp_path / "second-import.db"))
     second_id = second_import.import_package(second_export)
     restored = WorkspaceService(second_import, ontologies).open(
         opened.key.model_copy(update={"package_id": second_id, "scope_id": ""})

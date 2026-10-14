@@ -25,7 +25,7 @@ from ontocurator.ontology.service import OntologyService
 from ontocurator.ontology.translations import babelon_problem, parse_translation_name
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
 from ontocurator.packages.reader import MAX_COMPRESSED_BYTES, PackageReader
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
 
 MAX_ONTOLOGY_UPLOAD_BYTES = 512 * 1024 * 1024  # 512 MiB

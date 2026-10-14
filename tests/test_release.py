@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from pg_harness import database_url_for
 from typer.testing import CliRunner
 
 from ontocurator.api.app import create_app
@@ -200,7 +201,7 @@ def test_static_asset_serving_and_default_path(tmp_path: Path):
 
     config = AppConfig(
         workspace_dir=tmp_path / "ws",
-        database_path=tmp_path / "ws" / "test.db",
+        database_url=database_url_for(tmp_path / "ws" / "test.db"),
         ontology_path=FIXTURE_PATH,
         expected_ontology_ref=_make_ontology_ref(),
         session_token="test-token",
@@ -232,7 +233,7 @@ def test_static_asset_serving_default_embedded_path(tmp_path: Path):
     """Test that when config.web_dir is None, create_app detects src/ontocurator/web."""
     config = AppConfig(
         workspace_dir=tmp_path / "ws",
-        database_path=tmp_path / "ws" / "test.db",
+        database_url=database_url_for(tmp_path / "ws" / "test.db"),
         ontology_path=FIXTURE_PATH,
         expected_ontology_ref=_make_ontology_ref(),
         session_token="test-token",
@@ -267,7 +268,7 @@ def test_offline_end_to_end_lifecycle(tmp_path: Path, offline_network_guard):
 
     config = AppConfig(
         workspace_dir=ws_dir,
-        database_path=db_path,
+        database_url=database_url_for(db_path),
         ontology_path=FIXTURE_PATH,
         expected_ontology_ref=ont_ref,
         session_token="lifecycle-token",
@@ -457,7 +458,7 @@ def test_offline_end_to_end_lifecycle(tmp_path: Path, offline_network_guard):
     # 9. Simulate Server Restart: Reinitialize AppConfig and Database on same workspace
     config_restarted = AppConfig(
         workspace_dir=ws_dir,
-        database_path=db_path,
+        database_url=database_url_for(db_path),
         ontology_path=FIXTURE_PATH,
         expected_ontology_ref=ont_ref,
         session_token="restart-token",

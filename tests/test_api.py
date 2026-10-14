@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
@@ -36,7 +37,7 @@ def app_client(tmp_path: Path):
     db_path = tmp_path / "api_test.db"
     config = AppConfig(
         workspace_dir=tmp_path,
-        database_path=db_path,
+        database_url=database_url_for(db_path),
         ontology_paths=[FIXTURE_PATH, FIXTURE_PATH.parent / "mondo.json"],
         ontology_path=FIXTURE_PATH,
         expected_ontology_ref=_make_ontology_ref(),
@@ -687,7 +688,7 @@ def test_api_retry_lost_response_before_and_after_restart(tmp_path: Path):
     db_path = tmp_path / "restart.db"
     config = AppConfig(
         workspace_dir=tmp_path,
-        database_path=db_path,
+        database_url=database_url_for(db_path),
         ontology_paths=[FIXTURE_PATH, FIXTURE_PATH.parent / "mondo.json"],
         ontology_path=FIXTURE_PATH,
         expected_ontology_ref=_make_ontology_ref(),

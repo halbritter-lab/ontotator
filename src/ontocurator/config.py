@@ -17,7 +17,8 @@ class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     workspace_dir: Path
-    database_path: Path | None = None
+    # PostgreSQL URL of the application role. None: ONTOCURATOR_DATABASE_URL.
+    database_url: str | None = None
     ontology_path: Path | None = None
     ontology_paths: list[Path] = []
     # Folders besides <workspace>/ontologies in which translation files

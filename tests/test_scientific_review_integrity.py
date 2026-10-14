@@ -3,6 +3,7 @@
 import io
 
 import pytest
+from pg_harness import count_rows, database_for, tamper
 from test_reviews import _setup_review_test_env
 
 from ontocurator.application.editing import CreateAnnotationCommand
@@ -13,8 +14,7 @@ from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.packages.reader import read_package
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 def mutation(revision, payload):
@@ -114,7 +114,7 @@ def test_review_round_continues_after_export_reimport(tmp_path):
     ws_key, ref, replacement = changed_review(ctx)
     submitted = submit(ctx, ws_key, 2)
     exported = roundtrip(ctx["exp_svc"].for_workspace(ws_key))
-    clean = Repository(Database(tmp_path / "import.db"))
+    clean = Repository(database_for(tmp_path / "import.db"))
     package_id = clean.import_package(exported)
     svc = WorkspaceService(clean, ctx["ontology"])
     resumed = svc.open(key(ctx).model_copy(update={"package_id": package_id}))
@@ -172,7 +172,7 @@ def test_new_reviewer_targets_latest_version_without_promoting_history(tmp_path)
         first_replacement.annotation_id,
         first_replacement.version,
     ) in package.annotations
-    clean = Repository(Database(tmp_path / "history.db"))
+    clean = Repository(database_for(tmp_path / "history.db"))
     package_id = clean.import_package(roundtrip(package))
     service = WorkspaceService(clean, ctx["ontology"])
     view = service.open(
@@ -345,7 +345,7 @@ def test_restoration_chooses_revision_under_clock_skew(tmp_path):
     package.submissions[first.submission_id] = first.model_copy(
         update={"created_at": "2099-01-01T00:00:00Z"}
     )
-    clean = Repository(Database(tmp_path / "skew.db"))
+    clean = Repository(database_for(tmp_path / "skew.db"))
     package_id = clean.import_package(roundtrip(package))
     restored = WorkspaceService(clean, ctx["ontology"]).open(
         ws_key.model_copy(update={"package_id": package_id, "scope_id": ""})
@@ -359,9 +359,12 @@ def test_status_uses_revision_even_when_last_clock_is_older(tmp_path):
     first = submit(ctx, ws_key, 2)
     submit(ctx, ws_key, 3)
     # Clock ordering is deliberately inconsistent with immutable revisions.
-    ctx["repo"].db.get_connection().execute(
-        "UPDATE submissions SET created_at=? WHERE submission_id=?",
-        ("2099-01-01", first.submission_id),
+    tamper(
+        ctx["repo"].db,
+        "submissions",
+        "UPDATE ontocurator.submissions SET created_at = :at WHERE submission_id = :id",
+        at="2099-01-01",
+        id=first.submission_id,
     )
     assert (
         ctx["repo"].get_document_status(
@@ -465,7 +468,7 @@ def test_new_reviewer_does_not_guess_between_origin_branches(tmp_path):
         }
     )
     package.submissions[branch.submission_id] = branch
-    clean = Repository(Database(tmp_path / "branch.db"))
+    clean = Repository(database_for(tmp_path / "branch.db"))
     package_id = clean.import_package(roundtrip(package))
     service = WorkspaceService(clean, ctx["ontology"])
     with pytest.raises(DomainError, match="AMBIGUOUS_REVIEW_INPUTS"):
@@ -474,9 +477,4 @@ def test_new_reviewer_does_not_guess_between_origin_branches(tmp_path):
         )
     with pytest.raises(DomainError, match="AMBIGUOUS_SUBMISSION_ORIGIN"):
         service.open(key(ctx).model_copy(update={"package_id": package_id}))
-    assert (
-        clean.db.get_connection()
-        .execute("SELECT COUNT(*) FROM workspaces")
-        .fetchone()[0]
-        == 0
-    )
+    assert count_rows(clean, "drafts") == 0

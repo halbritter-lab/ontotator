@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from layered_fixtures import make_layered_package
+from pg_harness import database_for, insert_proposal
 
 from ontocurator.application.editing import (
     CheckLayerCommand,
@@ -23,8 +24,7 @@ from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.packages.reader import read_package
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def test_registry(tmp_path: Path) -> OntologyRegistry:
 def test_null_finding_can_be_submitted_per_layer(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
-    db = Database(tmp_path / "editor.db")
+    db = database_for(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("single")
     repo.import_package(pkg)
@@ -84,7 +84,7 @@ def test_null_finding_can_be_submitted_per_layer(
 def test_two_editable_layers_require_both_checked_to_submit(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
-    db = Database(tmp_path / "editor.db")
+    db = database_for(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("multi_editable")
     repo.import_package(pkg)
@@ -146,7 +146,7 @@ def test_two_editable_layers_require_both_checked_to_submit(
 def test_reference_layer_generates_no_checking_obligation(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
-    db = Database(tmp_path / "editor.db")
+    db = database_for(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("assisted")
     repo.import_package(pkg)
@@ -187,7 +187,7 @@ def test_reference_layer_generates_no_checking_obligation(
 def test_assisted_mode_allows_any_number_of_source_and_target_annotations(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
-    db = Database(tmp_path / "editor.db")
+    db = database_for(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("assisted")
     repo.import_package(pkg)
@@ -249,7 +249,7 @@ def test_assisted_mode_allows_any_number_of_source_and_target_annotations(
 def test_required_axes_and_evidence_on_complete_enforced(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
-    db = Database(tmp_path / "editor.db")
+    db = database_for(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("multi_editable")
     repo.import_package(pkg)
@@ -321,7 +321,7 @@ def test_required_axes_and_evidence_on_complete_enforced(
 def test_review_replacement_must_match_target_layer_and_type(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
-    db = Database(tmp_path / "editor.db")
+    db = database_for(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("multi_editable")
     repo.import_package(pkg)
@@ -351,15 +351,7 @@ def test_review_replacement_must_match_target_layer_and_type(
         ),
     )
     snap = snapshot(ann_obj, [], pkg.documents["doc-beta"], pkg.manifest.task_profile)
-    repo.db.get_connection().execute(
-        "INSERT OR IGNORE INTO annotation_snapshots VALUES (?, ?, ?, ?)",
-        ("ann-target-1", snap.version, "doc-beta", snap.model_dump_json()),
-    )
-    repo.db.get_connection().execute(
-        "INSERT OR IGNORE INTO package_annotations VALUES (?, ?, ?)",
-        ("pkg-scenario-c", "ann-target-1", snap.version),
-    )
-    repo.db.get_connection().commit()
+    insert_proposal(repo, "pkg-scenario-c", snap)
 
     target = AnnotationRef(annotation_id="ann-target-1", version=snap.version)
     target_set = ReviewTargetSet.create([target])
@@ -412,7 +404,7 @@ def test_review_replacement_must_match_target_layer_and_type(
 def test_review_decision_invalidates_only_target_layer_check(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
-    db = Database(tmp_path / "editor.db")
+    db = database_for(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("multi_editable")
     repo.import_package(pkg)
@@ -442,15 +434,7 @@ def test_review_decision_invalidates_only_target_layer_check(
         ),
     )
     snap = snapshot(ann_obj, [], pkg.documents["doc-beta"], pkg.manifest.task_profile)
-    repo.db.get_connection().execute(
-        "INSERT OR IGNORE INTO annotation_snapshots VALUES (?, ?, ?, ?)",
-        ("ann-target-1", snap.version, "doc-beta", snap.model_dump_json()),
-    )
-    repo.db.get_connection().execute(
-        "INSERT OR IGNORE INTO package_annotations VALUES (?, ?, ?)",
-        ("pkg-scenario-c", "ann-target-1", snap.version),
-    )
-    repo.db.get_connection().commit()
+    insert_proposal(repo, "pkg-scenario-c", snap)
 
     target = AnnotationRef(annotation_id="ann-target-1", version=snap.version)
     target_set = ReviewTargetSet.create([target])
@@ -511,7 +495,7 @@ def test_review_decision_invalidates_only_target_layer_check(
 def test_reopen_workspace_after_submission_creates_new_draft_preserving_submission(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
-    db = Database(tmp_path / "editor.db")
+    db = database_for(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("single")
     repo.import_package(pkg)
@@ -582,7 +566,7 @@ def test_reopen_workspace_after_submission_creates_new_draft_preserving_submissi
 def test_independent_export_isolation_and_hash_stability(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
-    db = Database(tmp_path / "editor.db")
+    db = database_for(tmp_path / "editor.db")
     repo = Repository(db)
     pkg = make_layered_package("assisted")
     repo.import_package(pkg)
@@ -654,7 +638,7 @@ def test_independent_export_isolation_and_hash_stability(
     buf.seek(0)
     reloaded = read_package(buf, registry=test_registry)
 
-    db_clean = Database(tmp_path / "clean.db")
+    db_clean = database_for(tmp_path / "clean.db")
     repo_clean = Repository(db_clean)
     imported_id = repo_clean.import_package(reloaded)
     assert imported_id == exported_pkg.manifest.package_id

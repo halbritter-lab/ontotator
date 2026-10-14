@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from pg_harness import database_url_for
 from typer.testing import CliRunner
 
 from ontocurator import config_store
@@ -255,13 +256,17 @@ def test_database_closed_after_server_stops(tmp_path: Path) -> None:
 
     def capture(api_app, sock, on_started=None, finished=None, **_kwargs):
         captured["db"] = api_app.state.repo.db
+        # Leave a pooled connection behind; closing the database drops it.
+        api_app.state.repo.list_manifests()
+        assert captured["db"].engine.pool.checkedin() == 1
 
     with patch("ontocurator.cli.run_server", side_effect=capture):
         result = runner.invoke(
             app, ["serve", "-w", str(tmp_path), "--no-browser", "--port", "0"]
         )
     assert result.exit_code == 0, result.output
-    assert captured["db"]._connections == []
+    assert captured["db"].engine.pool.checkedout() == 0
+    assert captured["db"].engine.pool.checkedin() == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -564,7 +569,11 @@ def _stop_gracefully(proc: subprocess.Popen[str]) -> None:
 
 def test_real_server_single_instance_and_graceful_shutdown(tmp_path: Path) -> None:
     ws = tmp_path / "ws"
-    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    env = {
+        **os.environ,
+        "PYTHONUNBUFFERED": "1",
+        "ONTOCURATOR_DATABASE_URL": database_url_for(ws / "editor.db"),
+    }
     proc = _start_server_process(ws, env)
     try:
         deadline = time.monotonic() + 90

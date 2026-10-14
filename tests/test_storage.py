@@ -2,6 +2,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
+from pg_harness import count_rows, database_for
 
 from ontocurator.domain.annotations import (
     ActorRef,
@@ -34,8 +35,7 @@ from ontocurator.domain.workspace import (
     WorkspaceKey,
 )
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 HP_DIGEST = "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4"
 
@@ -147,7 +147,7 @@ def _sample_package(pkg_id: str = "pkg-1") -> ValidatedPackage:
 
 def test_storage_concurrency_and_revision_protection(tmp_path: Path) -> None:
     db_path = tmp_path / "editor.db"
-    db = Database(db_path)
+    db = database_for(db_path)
     repo = Repository(db)
 
     pkg = _sample_package()
@@ -202,7 +202,7 @@ def test_storage_concurrency_and_revision_protection(tmp_path: Path) -> None:
 
 def test_committed_write_with_lost_response_replays_once(tmp_path: Path) -> None:
     db_path = tmp_path / "editor.db"
-    db = Database(db_path)
+    db = database_for(db_path)
     repo = Repository(db)
 
     pkg = _sample_package()
@@ -273,7 +273,7 @@ def test_committed_write_with_lost_response_replays_once(tmp_path: Path) -> None
 
 def test_package_idempotent_import_and_hash_collision_rejection(tmp_path: Path) -> None:
     db_path = tmp_path / "editor.db"
-    db = Database(db_path)
+    db = database_for(db_path)
     repo = Repository(db)
 
     pkg = _sample_package("pkg-idem")
@@ -294,7 +294,7 @@ def test_package_idempotent_import_and_hash_collision_rejection(tmp_path: Path) 
 
 def test_persistence_across_process_restart(tmp_path: Path) -> None:
     db_path = tmp_path / "editor.db"
-    db1 = Database(db_path)
+    db1 = database_for(db_path)
     repo1 = Repository(db1)
 
     pkg = _sample_package("pkg-restart")
@@ -322,7 +322,7 @@ def test_persistence_across_process_restart(tmp_path: Path) -> None:
     db1.close()
 
     # Restart simulated with new DB connection
-    db2 = Database(db_path)
+    db2 = database_for(db_path)
     repo2 = Repository(db2)
 
     draft2 = repo2.open_draft(key)
@@ -334,7 +334,7 @@ def test_persistence_across_process_restart(tmp_path: Path) -> None:
 
 def test_import_package_rollback_on_failure(tmp_path: Path) -> None:
     db_path = tmp_path / "editor.db"
-    db = Database(db_path)
+    db = database_for(db_path)
     repo = Repository(db)
 
     pkg = _sample_package("pkg-fail")
@@ -354,16 +354,13 @@ def test_import_package_rollback_on_failure(tmp_path: Path) -> None:
         repo.import_package(pkg)
 
     # Verify atomic rollback: no packages or partial data remained
-    c = db.get_connection().cursor()
-    c.execute("SELECT COUNT(*) FROM packages WHERE package_id = 'pkg-fail';")
-    assert c.fetchone()[0] == 0
-    c.execute("SELECT COUNT(*) FROM documents WHERE package_id = 'pkg-fail';")
-    assert c.fetchone()[0] == 0
+    assert count_rows(repo, "projects") == 0
+    assert count_rows(repo, "documents") == 0
 
 
 def test_export_p_import_q_preserves_historical_submission(tmp_path: Path) -> None:
     # 1. DB 1 has package P
-    db1 = Database(tmp_path / "db1.db")
+    db1 = database_for(tmp_path / "db1.db")
     repo1 = Repository(db1)
     pkg_p = _sample_package("pkg-P")
     repo1.import_package(pkg_p)
@@ -416,14 +413,12 @@ def test_export_p_import_q_preserves_historical_submission(tmp_path: Path) -> No
     )
 
     # 2. Fresh DB 2: P is NOT installed, import Q only
-    db2 = Database(tmp_path / "db2.db")
+    db2 = database_for(tmp_path / "db2.db")
     repo2 = Repository(db2)
     repo2.import_package(pkg_q)
 
     # Verify P is not in packages table
-    c2 = db2.get_connection().cursor()
-    c2.execute("SELECT COUNT(*) FROM packages WHERE package_id = 'pkg-P';")
-    assert c2.fetchone()[0] == 0
+    assert repo2.manifest_hash("pkg-P") is None
 
     # Verify submission imported and accessible with original hash/id
     loaded_q = repo2.export_package("pkg-Q")
@@ -443,43 +438,3 @@ def test_export_p_import_q_preserves_historical_submission(tmp_path: Path) -> No
     draft_q = repo2.open_draft(key_q, target_set)
     assert draft_q.revision == 0
     assert draft_q.key.package_id == "pkg-Q"
-
-
-def test_legacy_v2_database_rejected_byte_identically(tmp_path: Path) -> None:
-    import shutil
-
-    from ontocurator.domain.errors import DomainError
-
-    fixtures_dir = Path(__file__).parent / "fixtures" / "legacy_v1"
-    db_source = fixtures_dir / "workspace-v2.sqlite"
-    db_copy = tmp_path / "upgraded.sqlite"
-    shutil.copy2(db_source, db_copy)
-
-    before_bytes = db_copy.read_bytes()
-
-    with pytest.raises(DomainError) as exc_info:
-        Database(db_copy)
-
-    assert exc_info.value.code == "UNSUPPORTED_WORKSPACE_VERSION"
-    assert db_copy.read_bytes() == before_bytes
-
-
-def test_legacy_v1_database_rejected_byte_identically(tmp_path: Path) -> None:
-    import sqlite3
-
-    from ontocurator.domain.errors import DomainError
-
-    db_path = tmp_path / "legacy_v1.sqlite"
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("CREATE TABLE schema_migrations (version INTEGER, applied_at TEXT);")
-    conn.execute("INSERT INTO schema_migrations VALUES (1, '2026-10-01T00:00:00Z');")
-    conn.commit()
-    conn.close()
-
-    before_bytes = db_path.read_bytes()
-
-    with pytest.raises(DomainError) as exc_info:
-        Database(db_path)
-
-    assert exc_info.value.code == "UNSUPPORTED_WORKSPACE_VERSION"
-    assert db_path.read_bytes() == before_bytes

@@ -2,11 +2,12 @@
 
 import hashlib
 import io
-import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
 from layered_fixtures import HP_DIGEST, make_layered_package
+from pg_harness import database_url_for
+from sqlalchemy.exc import OperationalError
 from test_api import app_client as _shared_app_client
 from test_ontology_tree import (
     FIXTURE_PATH,
@@ -153,7 +154,7 @@ def _walk_on(tmp_path, path, term_id):
 
     config = AppConfig(
         workspace_dir=tmp_path,
-        database_path=tmp_path / "graph.db",
+        database_url=database_url_for(tmp_path / "graph.db"),
         ontology_paths=[path],
         session_token="secret-session-token",
     )
@@ -556,7 +557,7 @@ def test_tree_requests_are_refused_in_a_mode_the_installation_does_not_allow(
 ):
     config = AppConfig(
         workspace_dir=tmp_path,
-        database_path=tmp_path / "blinded.db",
+        database_url=database_url_for(tmp_path / "blinded.db"),
         ontology_paths=[FIXTURE_PATH, FIXTURE_PATH.parent / "mondo.json"],
         session_token="secret-session-token",
         distribution=DistributionSettings(allowed_modes=["independent"]),
@@ -767,7 +768,7 @@ def test_a_failing_draft_lookup_does_not_skip_the_layer_check(app_client, monkey
     repo = client.app.state.repo
 
     def busy(*args, **kwargs):
-        raise sqlite3.OperationalError("database is locked")
+        raise OperationalError("open_draft", {}, Exception("connection lost"))
 
     # ann-1 lives in layer-1. With the draft unreadable nobody can tell, so
     # the request must fail rather than go through for layer-2.
@@ -790,7 +791,7 @@ def test_a_failing_draft_lookup_does_not_skip_the_layer_check(app_client, monkey
     with monkeypatch.context() as patched:
         patched.setattr(repo, "open_draft", busy)
         for send in requests:
-            with pytest.raises(sqlite3.OperationalError):
+            with pytest.raises(OperationalError):
                 send()
 
     assert _events(client, ws_key) == []
@@ -965,7 +966,7 @@ def test_details_show_the_names_of_translation_files_that_are_loaded(tmp_path):
     fixtures = FIXTURE_PATH.parent
     config = AppConfig(
         workspace_dir=tmp_path,
-        database_path=tmp_path / "translated.db",
+        database_url=database_url_for(tmp_path / "translated.db"),
         ontology_paths=[FIXTURE_PATH, fixtures / "mondo.json"],
         translation_dirs=[fixtures],
         session_token="secret-session-token",

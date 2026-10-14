@@ -160,3 +160,69 @@ def reset() -> None:
         with _admin.connect() as conn:
             for name in names:
                 conn.execute(text(f"DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
+
+
+def unmigrated_database_url(path: Path | str) -> str:
+    """Owner URL of a new database with the bootstrap but without the schema."""
+    url, admin = server()
+    name = f"ontocurator_empty_{os.getpid()}_{next(_numbers)}"
+    with admin.connect() as conn:
+        conn.execute(text(f"CREATE DATABASE {name} OWNER {OWNER_ROLE}"))
+    engine = create_engine(url.set(database=name), isolation_level="AUTOCOMMIT")
+    with engine.connect() as conn:
+        conn.execute(text("REVOKE CREATE ON SCHEMA public FROM PUBLIC"))
+        conn.execute(text(f"CREATE SCHEMA {SCHEMA} AUTHORIZATION {OWNER_ROLE}"))
+        conn.execute(text(f"GRANT USAGE ON SCHEMA {SCHEMA} TO {APP_ROLE}"))
+    engine.dispose()
+    with _lock:
+        _by_path[str(Path(path).absolute())] = name
+    return url.set(
+        username=OWNER_ROLE, password=PASSWORD, database=name
+    ).render_as_string(hide_password=False)
+
+
+def insert_proposal(repo: Any, package_id: str, snapshot: Any) -> None:
+    """Add an annotation proposal (and its evidence) to a project, as an import does."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from ontocurator.storage.tables import ProposalAnnotationRow
+
+    with repo.db.transaction() as conn:
+        project_id = conn.execute(
+            text(f"SELECT id FROM {SCHEMA}.projects WHERE project_key = :k"),
+            {"k": package_id},
+        ).scalar_one()
+        repo._insert_snapshots(conn, project_id, [snapshot], snapshot.evidence)
+        conn.execute(
+            pg_insert(ProposalAnnotationRow)
+            .values(
+                project_id=project_id,
+                annotation_id=snapshot.annotation.annotation_id,
+                version=snapshot.version,
+            )
+            .on_conflict_do_nothing()
+        )
+
+
+def count_rows(repo: Any, table: str) -> int:
+    """Rows of a schema table, for tests that check nothing was written."""
+    with repo.db.transaction() as conn:
+        return int(
+            conn.execute(text(f"SELECT count(*) FROM {SCHEMA}.{table}")).scalar_one()
+        )
+
+
+def column_values(repo: Any, table: str, column: str) -> list[Any]:
+    """Every value of one column of a schema table."""
+    with repo.db.transaction() as conn:
+        return list(
+            conn.execute(text(f"SELECT {column} FROM {SCHEMA}.{table}")).scalars()
+        )
+
+
+def tamper(db: Database, table: str, statement: str, **params: object) -> None:
+    """Change append-only history as the owner, bypassing its triggers (tests only)."""
+    with owner_engine(db).begin() as conn:
+        conn.execute(text(f"ALTER TABLE {SCHEMA}.{table} DISABLE TRIGGER USER"))
+        conn.execute(text(statement), params)
+        conn.execute(text(f"ALTER TABLE {SCHEMA}.{table} ENABLE TRIGGER USER"))

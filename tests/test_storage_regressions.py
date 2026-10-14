@@ -1,14 +1,14 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+from pg_harness import column_values, database_for, tamper
 from test_storage import _sample_package
 
 from ontocurator.application.exports import ExportService
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 def key_for(package_id="pkg-1"):
@@ -25,7 +25,7 @@ def key_for(package_id="pkg-1"):
 
 
 def test_package_membership_does_not_follow_document_id(tmp_path):
-    repo = Repository(Database(tmp_path / "db"))
+    repo = Repository(database_for(tmp_path / "db"))
     first = _sample_package()
     empty = _sample_package("empty").model_copy(
         update={"annotations": {}, "evidence": {}}
@@ -38,7 +38,7 @@ def test_package_membership_does_not_follow_document_id(tmp_path):
 
 
 def test_parallel_retry_runs_once(tmp_path):
-    repo = Repository(Database(tmp_path / "db"))
+    repo = Repository(database_for(tmp_path / "db"))
     repo.import_package(_sample_package())
     key = key_for()
     repo.open_draft(key)
@@ -59,7 +59,7 @@ def test_parallel_retry_runs_once(tmp_path):
 
 
 def test_imported_submission_has_local_binding_and_unique_export(tmp_path):
-    repo = Repository(Database(tmp_path / "db"))
+    repo = Repository(database_for(tmp_path / "db"))
     package = _sample_package()
     origin = key_for("original")
     submission = Submission(
@@ -84,7 +84,7 @@ def test_imported_submission_has_local_binding_and_unique_export(tmp_path):
 
 
 def test_imported_submission_seeds_draft(tmp_path):
-    repo = Repository(Database(tmp_path / "db"))
+    repo = Repository(database_for(tmp_path / "db"))
     package = _sample_package()
     sub = Submission(
         submission_id="seed",
@@ -111,7 +111,7 @@ def test_export_fails_on_missing_decision_dependency(tmp_path):
     from ontocurator.domain.errors import DomainError
     from ontocurator.domain.review import ReviewDecision
 
-    repo = Repository(Database(tmp_path / "db"))
+    repo = Repository(database_for(tmp_path / "db"))
     package = _sample_package()
     decision = ReviewDecision(
         decision_id="decision",
@@ -135,37 +135,10 @@ def test_export_fails_on_missing_decision_dependency(tmp_path):
         ExportService(repo).for_workspace(key_for())
 
 
-def test_legacy_database_rejected_byte_identically(tmp_path):
-    import sqlite3
-
-    import pytest
-
-    from ontocurator.domain.errors import DomainError
-
-    db_path = tmp_path / "legacy.sqlite"
-    conn = sqlite3.connect(db_path)
-    # Minimal legacy (pre-v4) layout: migration bookkeeping without metadata.
-    conn.executescript(
-        "CREATE TABLE schema_migrations ("
-        "version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);"
-        "CREATE TABLE packages (package_id TEXT PRIMARY KEY, "
-        "manifest_hash TEXT NOT NULL, manifest_json TEXT NOT NULL);"
-    )
-    conn.execute("INSERT INTO schema_migrations VALUES (1, 'now')")
-    conn.commit()
-    conn.close()
-
-    before_bytes = db_path.read_bytes()
-    with pytest.raises(DomainError) as exc_info:
-        Database(db_path)
-    assert exc_info.value.code == "UNSUPPORTED_WORKSPACE_VERSION"
-    assert db_path.read_bytes() == before_bytes
-
-
 def test_imported_search_audit_survives_scoped_export(tmp_path):
     from ontocurator.packages.models import SearchEventRecord
 
-    repo = Repository(Database(tmp_path / "db"))
+    repo = Repository(database_for(tmp_path / "db"))
     package = _sample_package()
     event = SearchEventRecord(
         event_id="lookup",
@@ -188,7 +161,7 @@ def test_import_rejects_conflicting_existing_snapshot_atomically(tmp_path):
 
     from ontocurator.domain.errors import InvalidPackage
 
-    repo = Repository(Database(tmp_path / "db"))
+    repo = Repository(database_for(tmp_path / "db"))
     original = _sample_package()
     repo.import_package(original)
     conflicting = _sample_package("conflicting")
@@ -202,7 +175,7 @@ def test_import_rejects_conflicting_existing_snapshot_atomically(tmp_path):
 
 def test_independent_import_resumes_at_default_api_key(tmp_path):
     for historical_target in (ReviewTargetSet.create([]).target_set_id, "targets-0"):
-        repo = Repository(Database(tmp_path / historical_target))
+        repo = Repository(database_for(tmp_path / historical_target))
         package = _sample_package()
         origin = key_for("origin").model_copy(
             update={"target_set_id": historical_target}
@@ -224,17 +197,15 @@ def test_independent_import_resumes_at_default_api_key(tmp_path):
         assert repo.open_draft(api_key).annotations == sub.snapshots
         assert repo.get_submissions_for_workspace(key_for()) == [sub]
         assert repo.get_submission("resume").origin_key == origin
-        local_key = (
-            repo.db.get_connection()
-            .execute("SELECT local_key FROM imported_submission_bindings")
-            .fetchone()[0]
-        )
+        (local_key,) = column_values(repo, "submissions", "local_key")
         assert local_key.endswith(":targets-0")
-        # Existing databases can still contain the pre-fix canonical binding.
-        from ontocurator.storage.sqlite_repository import _key_str
+        # Earlier databases can still contain the pre-fix canonical binding.
+        from ontocurator.storage.repository import _key_str
 
-        repo.db.get_connection().execute(
-            "UPDATE imported_submission_bindings SET local_key=?",
-            (_key_str(key_for()),),
+        tamper(
+            repo.db,
+            "submissions",
+            "UPDATE ontocurator.submissions SET local_key = :k",
+            k=_key_str(key_for()),
         )
         assert repo.get_submissions_for_workspace(api_key) == [sub]

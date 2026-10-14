@@ -1,8 +1,8 @@
-import hashlib
 from pathlib import Path
 
 import pytest
 from layered_fixtures import make_layered_package
+from pg_harness import database_for
 
 from ontocurator.application.editing import (
     CheckLayerCommand,
@@ -17,8 +17,7 @@ from ontocurator.domain.errors import DomainError, RevisionConflict
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 def _setup_registry_for_package(pkg) -> OntologyRegistry:
@@ -29,50 +28,6 @@ def _setup_registry_for_package(pkg) -> OntologyRegistry:
         elif ont.ontology_id in ("mondo", "ext"):
             registry.register(Path("tests/fixtures/mondo.json"), ont)
     return registry
-
-
-def test_old_database_rejected_unsupported_workspace_version_and_byte_identical(
-    tmp_path: Path,
-) -> None:
-    db_file = tmp_path / "legacy.db"
-    # Create an old version 3 database
-    import sqlite3
-
-    conn = sqlite3.connect(str(db_file))
-    conn.execute(
-        "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT);"
-    )
-    conn.execute("INSERT INTO schema_migrations VALUES (3, '2026-09-01T00:00:00Z');")
-    conn.commit()
-    conn.close()
-
-    original_bytes = db_file.read_bytes()
-    original_sha = hashlib.sha256(original_bytes).hexdigest()
-
-    with pytest.raises(DomainError) as exc_info:
-        Database(db_file)
-
-    assert exc_info.value.code == "UNSUPPORTED_WORKSPACE_VERSION"
-    # Ensure byte-identical (no migrations were run, no bytes altered)
-    after_bytes = db_file.read_bytes()
-    after_sha = hashlib.sha256(after_bytes).hexdigest()
-    assert after_sha == original_sha
-
-
-def test_fresh_database_initializes_v4_format(tmp_path: Path) -> None:
-    db_file = tmp_path / "fresh.db"
-    db = Database(db_file)
-
-    conn = db.get_connection()
-    row = conn.execute(
-        "SELECT value FROM workspace_metadata WHERE key = 'format_version';"
-    ).fetchone()
-    assert row is not None
-    assert row[0] == "ontocurator-workspace/v4"
-
-    mig_row = conn.execute("SELECT MAX(version) FROM schema_migrations;").fetchone()
-    assert mig_row is not None
-    assert mig_row[0] == 4
 
 
 def test_task_scope_construction() -> None:
@@ -103,7 +58,7 @@ def test_task_scope_construction() -> None:
 def test_independent_view_contains_no_imported_annotations_or_term_statuses(
     tmp_path: Path,
 ) -> None:
-    db = Database(tmp_path / "test.db")
+    db = database_for(tmp_path / "test.db")
     repo = Repository(db)
     pkg_b = make_layered_package("assisted")
     repo.import_package(pkg_b)
@@ -126,7 +81,7 @@ def test_independent_view_contains_no_imported_annotations_or_term_statuses(
 
 
 def test_editing_rejects_foreign_scope(tmp_path: Path) -> None:
-    db = Database(tmp_path / "test.db")
+    db = database_for(tmp_path / "test.db")
     repo = Repository(db)
     pkg = make_layered_package("single")
     repo.import_package(pkg)
@@ -148,7 +103,7 @@ def test_editing_rejects_foreign_scope(tmp_path: Path) -> None:
 
 
 def test_editing_rejects_mutation_on_reference_layer(tmp_path: Path) -> None:
-    db = Database(tmp_path / "test.db")
+    db = database_for(tmp_path / "test.db")
     repo = Repository(db)
     pkg = make_layered_package("assisted")
     repo.import_package(pkg)
@@ -186,7 +141,7 @@ def test_editing_rejects_mutation_on_reference_layer(tmp_path: Path) -> None:
 
 
 def test_editing_rejects_invalid_layer_or_type(tmp_path: Path) -> None:
-    db = Database(tmp_path / "test.db")
+    db = database_for(tmp_path / "test.db")
     repo = Repository(db)
     pkg = make_layered_package("single")
     repo.import_package(pkg)
@@ -241,7 +196,7 @@ def test_editing_rejects_invalid_layer_or_type(tmp_path: Path) -> None:
 
 
 def test_copy_on_write_evidence_leaves_source_intact(tmp_path: Path) -> None:
-    db = Database(tmp_path / "test.db")
+    db = database_for(tmp_path / "test.db")
     repo = Repository(db)
     pkg = make_layered_package("single")
     repo.import_package(pkg)
@@ -319,7 +274,7 @@ def test_copy_on_write_evidence_leaves_source_intact(tmp_path: Path) -> None:
 
 
 def test_check_layer_command_and_invalidation(tmp_path: Path) -> None:
-    db = Database(tmp_path / "test.db")
+    db = database_for(tmp_path / "test.db")
     repo = Repository(db)
     pkg = make_layered_package("multi_editable")
     repo.import_package(pkg)
@@ -392,7 +347,7 @@ def test_check_layer_command_and_invalidation(tmp_path: Path) -> None:
 def test_retry_with_lost_response_and_competing_browser_revisions(
     tmp_path: Path,
 ) -> None:
-    db = Database(tmp_path / "test.db")
+    db = database_for(tmp_path / "test.db")
     repo = Repository(db)
     pkg = make_layered_package("single")
     repo.import_package(pkg)

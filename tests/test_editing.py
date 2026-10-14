@@ -2,6 +2,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
+from pg_harness import database_for
 
 from ontocurator.application.editing import (
     AttachMentionCommand,
@@ -27,8 +28,7 @@ from ontocurator.domain.profiles import (
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.service import OntologyService
 from ontocurator.packages.models import PackageManifest, ValidatedPackage
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 
@@ -42,8 +42,7 @@ def _make_ontology_service() -> OntologyService:
 
 def _setup_test_env(tmp_path: Path):
     db_path = tmp_path / "test.db"
-    db = Database(db_path)
-    db.run_migrations()
+    db = database_for(db_path)
     repo = Repository(db)
     ontology = _make_ontology_service()
     workspace_service = WorkspaceService(repo, ontology)

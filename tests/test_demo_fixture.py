@@ -59,11 +59,4 @@ def test_demo_fixture_opens_via_dropped_zip(tmp_path: Path) -> None:
     assert "Warning" not in result.output
     assert "&package_id=demo-klinik-pakete-01" in result.output
     api_app = mock_run.call_args[0][0]
-    assert (
-        len(
-            api_app.state.repo.db.get_connection()
-            .execute("SELECT package_id FROM packages")
-            .fetchall()
-        )
-        == 1
-    )
+    assert len(api_app.state.repo.list_manifests()) == 1

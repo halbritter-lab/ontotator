@@ -39,7 +39,7 @@ from ontocurator.ontology.discovery import is_probable_obo_graph
 from ontocurator.ontology.naming import content_addressed_name
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.packages.reader import PackageReader
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 PROVISIONING_FILENAME = "provisioning.json"
 ONTOLOGIES_DIRNAME = "ontologies"

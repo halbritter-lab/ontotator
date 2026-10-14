@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
@@ -49,7 +50,7 @@ def test_discover_ontologies(tmp_path: Path) -> None:
 def test_get_and_post_ontologies_endpoint(tmp_path: Path) -> None:
     config = AppConfig(
         workspace_dir=tmp_path / "workspace",
-        database_path=tmp_path / "workspace" / "editor.db",
+        database_url=database_url_for(tmp_path / "workspace" / "editor.db"),
         session_token="test-token",
         port=8000,
         host="127.0.0.1",
@@ -94,7 +95,7 @@ def test_get_and_post_ontologies_endpoint(tmp_path: Path) -> None:
 def test_upload_invalid_ontology_returns_400(tmp_path: Path) -> None:
     config = AppConfig(
         workspace_dir=tmp_path / "workspace",
-        database_path=tmp_path / "workspace" / "editor.db",
+        database_url=database_url_for(tmp_path / "workspace" / "editor.db"),
         session_token="test-token",
         port=8000,
         host="127.0.0.1",
@@ -121,7 +122,7 @@ def test_invalid_upload_does_not_overwrite_or_delete_existing_ontology(
 
     config = AppConfig(
         workspace_dir=ws,
-        database_path=ws / "editor.db",
+        database_url=database_url_for(ws / "editor.db"),
         session_token="test-token",
         port=8000,
         host="127.0.0.1",
@@ -149,7 +150,7 @@ def test_ontologies_listed_on_app_startup_from_persistent_config(
     ws = tmp_path / "workspace"
     config_1 = AppConfig(
         workspace_dir=ws,
-        database_path=ws / "editor.db",
+        database_url=database_url_for(ws / "editor.db"),
         session_token="test-token",
         port=8000,
         host="127.0.0.1",
@@ -170,7 +171,7 @@ def test_ontologies_listed_on_app_startup_from_persistent_config(
 
     config_2 = AppConfig(
         workspace_dir=ws,
-        database_path=ws / "editor.db",
+        database_url=database_url_for(ws / "editor.db"),
         ontology_paths=p_cfg.ontology_paths,
         session_token="test-token-2",
         port=8001,

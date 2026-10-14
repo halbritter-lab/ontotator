@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from layered_fixtures import make_layered_package
+from pg_harness import database_for
 
 from ontocurator.application.reviews import DecisionCommand, ReviewService
 from ontocurator.application.submissions import SubmissionService
@@ -21,8 +22,7 @@ from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.packages.reader import read_package
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 def add_proposal(package, *, layer_id="hpo-layer", axes_values=None):
@@ -48,7 +48,7 @@ def add_proposal(package, *, layer_id="hpo-layer", axes_values=None):
 def test_review_targets_exclude_references_but_workspace_keeps_them(tmp_path):
     package = make_layered_package("assisted")
     add_proposal(package, layer_id="target-layer")
-    repo = Repository(Database(tmp_path / "review.db"))
+    repo = Repository(database_for(tmp_path / "review.db"))
     repo.import_package(package)
     registry = OntologyRegistry()
     for name in ("hp", "mondo"):
@@ -123,7 +123,7 @@ def test_invalid_stored_axes_cannot_be_approved(tmp_path, axes_values, operation
     package = make_layered_package("single")
     proposal = add_proposal(package, axes_values=axes_values)
     # Existing stored data must be revalidated even after import is hardened.
-    repo = Repository(Database(tmp_path / "review.db"))
+    repo = Repository(database_for(tmp_path / "review.db"))
     repo.import_package(package)
     target = AnnotationRef(
         annotation_id=proposal.annotation.annotation_id, version=proposal.version

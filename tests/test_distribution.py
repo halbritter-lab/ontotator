@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from pg_harness import database_url_for
 from typer.testing import CliRunner
 
 from ontocurator.api.app import create_app
@@ -115,7 +116,7 @@ def test_settings_file_missing_invalid_and_valid(tmp_path: Path) -> None:
 def _client(tmp_path: Path, distribution: DistributionSettings | None = None):
     config = AppConfig(
         workspace_dir=tmp_path,
-        database_path=tmp_path / "editor.db",
+        database_url=database_url_for(tmp_path / "editor.db"),
         session_token="tok",
         distribution=distribution or DistributionSettings(),
     )

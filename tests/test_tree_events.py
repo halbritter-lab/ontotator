@@ -4,6 +4,7 @@ import io
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from pg_harness import database_for
 from test_storage import _sample_package
 from test_storage_regressions import key_for
 
@@ -12,8 +13,7 @@ from ontocurator.domain.errors import InvalidPackage
 from ontocurator.packages.models import SearchEventRecord
 from ontocurator.packages.reader import PackageReader
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 def _walk(candidates: list[str], **overrides: object) -> SearchEventRecord:
@@ -34,7 +34,7 @@ def _walk(candidates: list[str], **overrides: object) -> SearchEventRecord:
 
 
 def _repo(tmp_path) -> Repository:
-    repo = Repository(Database(tmp_path / "db"))
+    repo = Repository(database_for(tmp_path / "db"))
     repo.import_package(_sample_package())
     return repo
 
@@ -333,7 +333,7 @@ def test_two_exports_of_a_growing_walk_import_in_either_order(tmp_path, order):
     exports["late"] = _through_a_file(ExportService(source).for_workspace(key_for()))
     assert [e.candidates for e in exports["early"].search_events] == [["HP:1", "HP:2"]]
 
-    recipient = Repository(Database(tmp_path / "recipient" / "db"))
+    recipient = Repository(database_for(tmp_path / "recipient" / "db"))
     for name in order:
         recipient.import_package(exports[name])
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from layered_fixtures import make_layered_package
+from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
@@ -21,7 +22,7 @@ def client_at(path, ontology_paths=()):
     app = create_app(
         AppConfig(
             workspace_dir=path,
-            database_path=path / "editor.db",
+            database_url=database_url_for(path / "editor.db"),
             ontology_paths=list(ontology_paths),
             session_token="review-test",
         )

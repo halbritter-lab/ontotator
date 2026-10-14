@@ -4,6 +4,7 @@ import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
+from pg_harness import insert_proposal
 from test_api import _create_sample_package_bytes
 from test_api import app_client as _shared_app_client
 
@@ -95,7 +96,6 @@ def test_review_open_computes_stable_target_identity(app_client):
         Provenance,
         snapshot,
     )
-    from ontocurator.domain.serialization import encode_snapshot
 
     doc = client.app.state.repo.get_document(pkg_id, doc_id)
     profile = client.app.state.repo.get_task_profile(pkg_id)
@@ -111,21 +111,7 @@ def test_review_open_computes_stable_target_identity(app_client):
         ),
     )
     snap = snapshot(ann, [], doc, profile)
-    db_conn = client.app.state.repo.db.get_connection()
-    db_conn.execute(
-        "INSERT INTO annotation_snapshots VALUES (?, ?, ?, ?)",
-        (
-            snap.annotation.annotation_id,
-            snap.version,
-            doc_id,
-            json.dumps(encode_snapshot(snap)),
-        ),
-    )
-    db_conn.execute(
-        "INSERT INTO package_annotations VALUES (?, ?, ?)",
-        (pkg_id, snap.annotation.annotation_id, snap.version),
-    )
-    db_conn.commit()
+    insert_proposal(client.app.state.repo, pkg_id, snap)
 
     inputs = client.post(
         "/api/v1/workspaces/review-inputs",
@@ -189,12 +175,6 @@ def test_search_is_recorded_and_exported(app_client):
     assert event.candidates == ["HP:0001252"]
     assert event.index_identity
     # Inspect persisted server record, not a caller-supplied event.
-    row = (
-        client.app.state.repo.db.get_connection()
-        .execute(
-            "SELECT payload_json FROM search_events WHERE event_id = ?",
-            (event.event_id,),
-        )
-        .fetchone()
-    )
-    assert json.loads(row[0])["ontology_release"] == "2026-06-23"
+    stored = client.app.state.repo.get_search_event(event.event_id)
+    assert stored is not None
+    assert stored.ontology_release == "2026-06-23"

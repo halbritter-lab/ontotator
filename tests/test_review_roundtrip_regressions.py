@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from layered_fixtures import make_layered_package
+from pg_harness import database_for
 
 from ontocurator.application.editing import CreateAnnotationCommand, EditorService
 from ontocurator.application.exports import ExportService
@@ -22,8 +23,7 @@ from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.packages.reader import read_package
 from ontocurator.packages.writer import PackageWriter
-from ontocurator.storage.sqlite_database import Database
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 def registry():
@@ -41,7 +41,7 @@ def envelope(mutation_id, revision, payload):
 
 def test_independent_trimmed_profile_roundtrip_restores_own_submission(tmp_path):
     ontologies = registry()
-    repo = Repository(Database(tmp_path / "original.db"))
+    repo = Repository(database_for(tmp_path / "original.db"))
     package = make_layered_package("assisted")
     repo.import_package(package)
     key = (
@@ -86,7 +86,7 @@ def test_independent_trimmed_profile_roundtrip_restores_own_submission(tmp_path)
     PackageWriter.write_to_stream(exported, stream)
     stream.seek(0)
     reloaded = read_package(stream, registry=ontologies)
-    clean = Repository(Database(tmp_path / "reimport.db"))
+    clean = Repository(database_for(tmp_path / "reimport.db"))
     local_id = clean.import_package(reloaded)
     view = WorkspaceService(clean, ontologies).open(
         key.model_copy(
@@ -121,7 +121,7 @@ def strict_review(tmp_path):
         annotation, [], package.documents["doc-beta"], package.manifest.task_profile
     )
     package.annotations[(annotation.annotation_id, proposal.version)] = proposal
-    repo = Repository(Database(tmp_path / "review.db"))
+    repo = Repository(database_for(tmp_path / "review.db"))
     repo.import_package(package)
     target = AnnotationRef(
         annotation_id=annotation.annotation_id, version=proposal.version

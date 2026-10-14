@@ -1,13 +1,11 @@
 import hashlib
 import json
-import shutil
 from pathlib import Path
 
 import pytest
 
-from ontocurator.domain.errors import DomainError, InvalidPackage
+from ontocurator.domain.errors import InvalidPackage
 from ontocurator.packages.reader import read_package
-from ontocurator.storage.sqlite_database import Database
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "legacy_v1"
 
@@ -30,32 +28,6 @@ def test_frozen_legacy_package_is_cleanly_rejected() -> None:
         read_package(zip_path)
     assert "Unsupported package format version" in str(exc_info.value)
     assert "hpo-editor-work-package/v1" in str(exc_info.value)
-
-
-def test_frozen_v2_workspace_is_cleanly_rejected_and_byte_identical(
-    tmp_path: Path,
-) -> None:
-    expected = _load_expected()
-    db_source = FIXTURES_DIR / "workspace-v2.sqlite"
-    assert db_source.exists()
-
-    # Verify database digest
-    db_sha256 = hashlib.sha256(db_source.read_bytes()).hexdigest()
-    assert db_sha256 == expected["sqlite_sha256"]
-
-    # Copy to tmp_path before opening
-    db_copy = tmp_path / "workspace.sqlite"
-    shutil.copy2(db_source, db_copy)
-
-    # Opening must raise UNSUPPORTED_WORKSPACE_VERSION before running any DDL
-    with pytest.raises(DomainError) as exc_info:
-        Database(db_copy)
-
-    assert exc_info.value.code == "UNSUPPORTED_WORKSPACE_VERSION"
-    assert "Legacy database version 2 is not supported" in str(exc_info.value)
-
-    # Ensure no migrations ran and database file remains byte-identical
-    assert hashlib.sha256(db_copy.read_bytes()).hexdigest() == db_sha256
 
 
 def test_legacy_format_versions_rejected() -> None:

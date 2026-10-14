@@ -340,10 +340,11 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
 
 
 def test_sequential_search_selections_survive_two_export_imports(tmp_path):
+    from pg_harness import database_for
+
     from ontocurator.ontology.registry import OntologyRegistry
     from ontocurator.packages.models import SearchEventRecord
-    from ontocurator.storage.sqlite_database import Database
-    from ontocurator.storage.sqlite_repository import Repository
+    from ontocurator.storage.repository import Repository
 
     ctx = _setup_review_test_env(tmp_path)
     key, _ = review(ctx)
@@ -361,8 +362,7 @@ def test_sequential_search_selections_survive_two_export_imports(tmp_path):
         timestamp="2026-10-01",
     )
     ctx["repo"].save_search_event(query)
-    db = Database(tmp_path / "recipient.db")
-    db.run_migrations()
+    db = database_for(tmp_path / "recipient.db")
     recipient = Repository(db)
     reg = OntologyRegistry()
     reg.register_service(ctx["ontology"])

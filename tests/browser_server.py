@@ -11,6 +11,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import Query
 from fastapi.responses import Response
+from pg_harness import database_url_for
 
 from ontocurator import file_manager
 from ontocurator.api.app import create_app
@@ -230,7 +231,7 @@ if __name__ == "__main__":
         file_manager.open_folder = lambda folder: None
         config = AppConfig(
             workspace_dir=root,
-            database_path=root / "editor.db",
+            database_url=database_url_for(root / "editor.db"),
             ontology_paths=[ONTOLOGY, MONDO_ONTOLOGY],
             session_token="browser-test-token",
             port=PORT,

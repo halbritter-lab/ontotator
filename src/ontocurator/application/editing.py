@@ -37,7 +37,7 @@ from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 class CreateAnnotationCommand(BaseModel):
@@ -306,7 +306,7 @@ class EditingService:
                 isinstance(cmd, (CreateAnnotationCommand, SetTermCommand))
                 and cmd.search_event_id
             ):
-                event = self.repo.get_search_event(cmd.search_event_id)
+                event = self.repo.get_search_event(cmd.search_event_id, key.package_id)
                 # The layer the annotation has after this edit. Two layers can
                 # share an ontology, so the candidates alone do not tell
                 # whether the event was a search or a walk for this layer.

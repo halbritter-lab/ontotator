@@ -14,7 +14,7 @@ from ontocurator.domain.review import ReviewDecision, ReviewOutcome
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
-from ontocurator.storage.sqlite_repository import Repository
+from ontocurator.storage.repository import Repository
 
 
 class DecisionCommand(BaseModel):
