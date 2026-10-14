@@ -51,69 +51,75 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             settings.resolve_database_url(config.database_url, config.workspace_dir),
             data_dir=config.workspace_dir,
         )
-        repo = Repository(db)
+        # Close the engine again if anything after it fails, so a failed
+        # start does not keep pooled connections open.
+        try:
+            repo = Repository(db)
 
-        from ontocurator.ontology.registry import OntologyRegistry
+            from ontocurator.ontology.registry import OntologyRegistry
 
-        registry = OntologyRegistry(
-            base_dir=config.workspace_dir,
-            translation_dirs=[
-                config.workspace_dir / "ontologies",
-                *config.translation_dirs,
-            ],
-        )
-        for p in config.ontology_paths:
-            if p.is_file():
-                registry.register_path(p)
-            else:
-                logger.warning("Configured ontology file not found: %s", p)
-        if config.ontology_path and config.ontology_path.is_file():
-            if config.expected_ontology_ref is not None:
-                from ontocurator.ontology.service import OntologyService
-
-                registry.register_service(
-                    OntologyService.load(
-                        config.ontology_path,
-                        config.expected_ontology_ref,
-                        translation_paths=registry.translation_files(),
-                    )
-                )
-            else:
-                registry.register_path(config.ontology_path)
-        # Eagerly parse registered files; failures are logged and reported by
-        # GET /api/v1/ontologies instead of being silently dropped.
-        registry.load_registered()
-
-        for definition, data in repo.ontology_resources():
-            if registry.get_service(definition.sha256) is None:
-                registry.register_service(
-                    registry.load_resource(
-                        data, definition, registry.translation_files()
-                    )
-                )
-        # A file that cannot be read was already reported while its ontology
-        # loaded. What is left to say: files that belong to no ontology at all.
-        for stray in registry.unassigned_translations():
-            logger.warning(
-                "Translation file %s matches no loaded ontology and is skipped.",
-                stray,
+            registry = OntologyRegistry(
+                base_dir=config.workspace_dir,
+                translation_dirs=[
+                    config.workspace_dir / "ontologies",
+                    *config.translation_dirs,
+                ],
             )
+            for p in config.ontology_paths:
+                if p.is_file():
+                    registry.register_path(p)
+                else:
+                    logger.warning("Configured ontology file not found: %s", p)
+            if config.ontology_path and config.ontology_path.is_file():
+                if config.expected_ontology_ref is not None:
+                    from ontocurator.ontology.service import OntologyService
 
-        app.state.config = config
-        app.state.repo = repo
-        app.state.ontology_registry = registry
-        app.state.provisioning = ProvisioningStatus()
-        app.state.preferences = PreferencesStore(
-            config.workspace_dir / PREFERENCES_FILENAME
-        )
-        app.state.legacy_config = LegacyConfigService(
-            legacy_path=config.legacy_config_path,
-            active_config_path=config.config_path,
-            preconfigured=config.preconfigured,
-            workspace_dir=config.workspace_dir,
-            preferences=app.state.preferences,
-            registry=registry,
-        )
+                    registry.register_service(
+                        OntologyService.load(
+                            config.ontology_path,
+                            config.expected_ontology_ref,
+                            translation_paths=registry.translation_files(),
+                        )
+                    )
+                else:
+                    registry.register_path(config.ontology_path)
+            # Eagerly parse registered files; failures are logged and reported by
+            # GET /api/v1/ontologies instead of being silently dropped.
+            registry.load_registered()
+
+            for definition, data in repo.ontology_resources():
+                if registry.get_service(definition.sha256) is None:
+                    registry.register_service(
+                        registry.load_resource(
+                            data, definition, registry.translation_files()
+                        )
+                    )
+            # A file that cannot be read was already reported while its ontology
+            # loaded. What is left to say: files that belong to no ontology at all.
+            for stray in registry.unassigned_translations():
+                logger.warning(
+                    "Translation file %s matches no loaded ontology and is skipped.",
+                    stray,
+                )
+
+            app.state.config = config
+            app.state.repo = repo
+            app.state.ontology_registry = registry
+            app.state.provisioning = ProvisioningStatus()
+            app.state.preferences = PreferencesStore(
+                config.workspace_dir / PREFERENCES_FILENAME
+            )
+            app.state.legacy_config = LegacyConfigService(
+                legacy_path=config.legacy_config_path,
+                active_config_path=config.config_path,
+                preconfigured=config.preconfigured,
+                workspace_dir=config.workspace_dir,
+                preferences=app.state.preferences,
+                registry=registry,
+            )
+        except BaseException:
+            db.close()
+            raise
 
         # Security middleware for API requests
         @app.middleware("http")

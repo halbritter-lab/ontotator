@@ -3,10 +3,13 @@
 import threading
 from pathlib import Path
 
+import pg_harness
 import pytest
-from pg_harness import database_for
-from sqlalchemy import func, insert, select
+from pg_harness import database_for, database_url_for
+from sqlalchemy import func, insert, select, text
+from sqlalchemy.engine import URL, make_url
 
+from ontocurator import settings
 from ontocurator.storage.database import Database
 from ontocurator.storage.tables import StoredFileRow
 
@@ -61,3 +64,40 @@ def test_the_same_path_reopens_the_same_database(tmp_path: Path) -> None:
 
     assert _count(database_for(tmp_path / "a.db")) == 1
     assert _count(database_for(tmp_path / "b.db")) == 0
+
+
+PASSWORD = "p@ss#w%rd/x:y"
+
+
+@pytest.mark.parametrize("source", ["environment", "explicit"])
+def test_a_password_with_url_characters_survives_the_round_trip(
+    tmp_path: Path, source: str
+) -> None:
+    role = "ontocurator_password_probe"
+    _, admin = pg_harness.server()
+    with admin.connect() as conn:
+        conn.execute(text(f"DROP ROLE IF EXISTS {role}"))
+        conn.execute(text(f"CREATE ROLE {role} LOGIN PASSWORD '{PASSWORD}'"))
+    target = make_url(database_url_for(tmp_path / "a.db"))
+    bare = URL.create(
+        target.drivername,
+        username=role,
+        host=target.host,
+        port=target.port,
+        database=target.database,
+    ).render_as_string()
+    env = {"ONTOCURATOR_DATABASE_PASSWORD": PASSWORD}
+    if source == "environment":
+        resolved = settings.database_url(
+            {**env, "ONTOCURATOR_DATABASE_URL": bare}
+        ).render_as_string(hide_password=False)
+    else:
+        resolved = settings.resolve_database_url(bare, None, env)
+    db = Database(resolved, data_dir=tmp_path / "data")
+    try:
+        with db.transaction() as conn:
+            assert conn.execute(text("SELECT current_user")).scalar_one() == role
+    finally:
+        db.close()
+        with admin.connect() as conn:
+            conn.execute(text(f"DROP ROLE {role}"))

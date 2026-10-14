@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
-from pg_harness import database_for, owner_engine
-from sqlalchemy import text
+from pg_harness import database_for, owner_engine, unmigrated_database_url
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 
-from ontocurator.storage.schema import current_revision, head_revision
+from ontocurator.storage.schema import current_revision, head_revision, upgrade
 from ontocurator.storage.tables import APPEND_ONLY_TABLES, SCHEMA, Base
 
 
@@ -95,3 +95,31 @@ def test_the_application_role_cannot_create_tables(tmp_path: Path) -> None:
         db.engine.begin() as conn,
     ):
         conn.execute(text(f"CREATE TABLE {SCHEMA}.intruder (id int)"))
+
+
+def test_a_failing_migration_leaves_neither_a_version_nor_a_partial_schema(
+    tmp_path: Path,
+) -> None:
+    url = unmigrated_database_url(tmp_path / "fresh.db")
+    engine = create_engine(url)
+    # A late step of the migration (the history trigger function) collides,
+    # after every table was created in the same transaction.
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                f"CREATE FUNCTION {SCHEMA}.forbid_history_change() RETURNS trigger"
+                " LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$"
+            )
+        )
+
+    with pytest.raises(DBAPIError, match="already exists"):
+        upgrade(url)
+
+    with engine.connect() as conn:
+        tables = conn.execute(
+            text("SELECT count(*) FROM pg_tables WHERE schemaname = :s"),
+            {"s": SCHEMA},
+        ).scalar_one()
+        assert tables == 0
+        assert current_revision(conn) is None
+    engine.dispose()

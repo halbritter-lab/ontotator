@@ -942,3 +942,33 @@ def test_selection_from_the_similar_block_records_its_positions(app_client):
     assert selections[0].candidate_routes["HP:0011146"] == "lexical"
     assert selections[0].displayed_position == chosen["display_pos"]
     assert selections[0].ranked_position == chosen["rank"]
+
+
+def test_a_failing_start_closes_the_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ontocurator.ontology.registry import OntologyRegistry
+    from ontocurator.storage.database import Database
+
+    closed: list[Database] = []
+    original_close = Database.close
+
+    def tracking_close(self: Database) -> None:
+        closed.append(self)
+        original_close(self)
+
+    def broken(_self: OntologyRegistry) -> None:
+        raise RuntimeError("ontology start failed")
+
+    monkeypatch.setattr(Database, "close", tracking_close)
+    monkeypatch.setattr(OntologyRegistry, "load_registered", broken)
+    config = AppConfig(
+        workspace_dir=tmp_path,
+        database_url=database_url_for(tmp_path / "start.db"),
+        session_token="test-token",
+    )
+
+    with pytest.raises(RuntimeError, match="ontology start failed"):
+        create_app(config)
+
+    assert len(closed) == 1

@@ -58,6 +58,11 @@ def _start_server() -> URL:
             "postgres -c max_connections=500 -c fsync=off"
             " -c synchronous_commit=off -c full_page_writes=off"
         )
+        e2e_run = os.environ.get("ONTOCURATOR_E2E_RUN")
+        if e2e_run:
+            # The Playwright run removes its own container by this label
+            # (frontend/playwright.teardown.ts); Ryuk stays the fallback.
+            container.with_kwargs(labels={"ontocurator.e2e-run": e2e_run})
         container.start()
     except Exception as exc:  # Docker not running, image not pullable, ...
         raise RuntimeError(

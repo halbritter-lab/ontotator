@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from sqlalchemy.engine import make_url
 
 from ontocurator import settings
 from ontocurator.settings import SettingsError, database_url, read_secret
@@ -93,9 +94,42 @@ def test_an_explicit_url_wins_over_the_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "database_url_provider", lambda _ws: "from-provider")
+    explicit = "postgresql+psycopg://u:pw@db/x"
 
-    assert settings.resolve_database_url("explicit", None) == "explicit"
-    assert settings.resolve_database_url(None, Path("ws")) == "from-provider"
+    assert settings.resolve_database_url(explicit, None, {}) == explicit
+    assert settings.resolve_database_url(None, Path("ws"), {}) == "from-provider"
+
+
+def test_an_explicit_url_takes_the_password_from_its_file(tmp_path: Path) -> None:
+    secret = tmp_path / "pw"
+    secret.write_text("s3cret\n", encoding="utf-8")
+    env = {"ONTOCURATOR_DATABASE_PASSWORD_FILE": str(secret)}
+
+    resolved = settings.resolve_database_url("postgresql://u@db/x", None, env)
+
+    url = make_url(resolved)
+    assert url.drivername == "postgresql+psycopg"
+    assert (url.username, url.password, url.host) == ("u", "s3cret", "db")
+
+
+@pytest.mark.parametrize(
+    ("explicit", "env", "message"),
+    [
+        ("sqlite:///x.db", {}, "must be a postgresql:// URL"),
+        ("not a url with secret-pw", {}, "is not a valid URL"),
+        (
+            "postgresql://u:pw@db/x",
+            {"ONTOCURATOR_DATABASE_PASSWORD": "other"},
+            "already contains a password",
+        ),
+    ],
+)
+def test_an_explicit_url_follows_the_same_rules(
+    explicit: str, env: dict[str, str], message: str
+) -> None:
+    with pytest.raises(SettingsError, match=message) as info:
+        settings.resolve_database_url(explicit, None, env)
+    assert "secret-pw" not in str(info.value)
 
 
 def test_a_malformed_url_is_refused_without_echoing_it() -> None:

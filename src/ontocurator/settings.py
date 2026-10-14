@@ -55,17 +55,26 @@ def database_url(
     raw = env.get(f"{prefix}_URL")
     if not raw:
         raise SettingsError(f"{prefix}_URL is not set")
+    return _complete_url(raw, f"{prefix}_URL", env, prefix)
+
+
+def _complete_url(raw: str, name: str, env: Mapping[str, str], prefix: str) -> URL:
+    """Parse a PostgreSQL URL and add the password of ``<prefix>_PASSWORD[_FILE]``.
+
+    ``name`` names the URL's source in errors; the URL itself is never echoed,
+    since it may contain a password.
+    """
     try:
         url = make_url(raw)
     except ArgumentError:
-        raise SettingsError(f"{prefix}_URL is not a valid URL") from None
+        raise SettingsError(f"{name} is not a valid URL") from None
     if url.drivername == "postgresql":
         url = url.set(drivername="postgresql+psycopg")
     if url.drivername != "postgresql+psycopg":
-        raise SettingsError(f"{prefix}_URL must be a postgresql:// URL")
+        raise SettingsError(f"{name} must be a postgresql:// URL")
     has_setting = f"{prefix}_PASSWORD" in env or f"{prefix}_PASSWORD_FILE" in env
     if url.password is not None and has_setting:
-        raise SettingsError(f"{prefix}_URL already contains a password")
+        raise SettingsError(f"{name} already contains a password")
     password = read_secret(f"{prefix}_PASSWORD", env)
     if password is not None:
         url = url.set(password=password)
@@ -81,6 +90,19 @@ def _from_environment(_workspace: Path | None) -> str:
 database_url_provider: Callable[[Path | None], str] = _from_environment
 
 
-def resolve_database_url(explicit: str | None, workspace: Path | None) -> str:
-    """The explicit URL, else the provider's URL for this workspace."""
-    return explicit or database_url_provider(workspace)
+def resolve_database_url(
+    explicit: str | None,
+    workspace: Path | None,
+    env: Mapping[str, str] | None = None,
+) -> str:
+    """The explicit URL, else the provider's URL for this workspace.
+
+    An explicit URL (``--database-url``) follows the rules of
+    ``ONTOCURATOR_DATABASE_URL``: PostgreSQL only, and the password may come
+    from ``ONTOCURATOR_DATABASE_PASSWORD[_FILE]`` instead of the command line.
+    """
+    if not explicit:
+        return database_url_provider(workspace)
+    env = os.environ if env is None else env
+    url = _complete_url(explicit, "The database URL", env, "ONTOCURATOR_DATABASE")
+    return url.render_as_string(hide_password=False)
