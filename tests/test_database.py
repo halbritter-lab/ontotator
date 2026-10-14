@@ -50,13 +50,33 @@ def test_a_caught_failure_of_a_joined_scope_still_rolls_back_the_chain(
 ) -> None:
     db = database_for(tmp_path / "a.db")
 
-    with pytest.raises(TransactionRollbackOnly), db.transaction() as conn:
+    with pytest.raises(TransactionRollbackOnly) as doomed, db.transaction() as conn:
         conn.execute(insert(StoredFileRow).values(sha256="a" * 64, size=1))
         with pytest.raises(RuntimeError, match="rejected"), db.transaction() as inner:
             inner.execute(insert(StoredFileRow).values(sha256="b" * 64, size=1))
             raise RuntimeError("rejected")
+        with pytest.raises(ValueError, match="later"), db.transaction():
+            raise ValueError("later")
 
     assert _count(db) == 0
+    # The first swallowed failure is the cause, not a later one.
+    cause = doomed.value.__cause__
+    assert isinstance(cause, RuntimeError) and str(cause) == "rejected"
+
+
+def test_a_caught_failure_inside_a_snapshot_does_not_doom_it(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "a.db")
+
+    with db.snapshot() as conn:
+        # Nothing can have been written, so the snapshot may go on reading.
+        with pytest.raises(RuntimeError, match="refused"), db.transaction():
+            raise RuntimeError("refused")
+        with pytest.raises(RuntimeError, match="refused"), db.snapshot():
+            raise RuntimeError("refused")
+        assert (
+            conn.execute(select(func.count()).select_from(StoredFileRow)).scalar_one()
+            == 0
+        )
 
 
 def test_another_thread_gets_its_own_transaction(tmp_path: Path) -> None:

@@ -27,15 +27,15 @@ class SnapshotUnavailable(RuntimeError):
 
 @dataclass
 class _Ambient:
-    """The open transaction of a context, and whether a joined scope failed.
+    """The open transaction of a context, and the first failure of a joined scope.
 
-    ``snapshot`` is true for a REPEATABLE READ transaction: all its statements
-    see the committed state of its first one.
+    ``snapshot`` is true for a read-only REPEATABLE READ transaction: all its
+    statements see the committed state of its first one.
     """
 
     conn: Connection
     snapshot: bool = False
-    rollback_only: bool = False
+    failure: BaseException | None = None
 
 
 class Database:
@@ -46,8 +46,9 @@ class Database:
     commits or rolls back together with it (T2 index decision D-b). An
     exception leaving a joined scope makes the whole transaction rollback-only:
     the writes of the failed call cannot be told apart from the others, so the
-    outermost scope rolls back and raises ``TransactionRollbackOnly`` even if
-    the caller caught the exception.
+    outermost scope rolls back and raises ``TransactionRollbackOnly``, chained
+    to the first such exception, even if the caller caught it. A snapshot has
+    no writes, so a failure inside it does not doom it.
 
     ``snapshot()`` is a read-only REPEATABLE READ transaction for reads that
     must form one consistent view, such as an export.
@@ -79,7 +80,16 @@ class Database:
 
     @contextmanager
     def transaction(self) -> Iterator[Connection]:
-        """The open transaction of this context, or a new one committed at the end."""
+        """The open transaction of this context, or a new one committed at the end.
+
+        Inside an open ``snapshot()`` this joins the snapshot, which is
+        read-only: a write fails at the database.
+
+        Raises:
+            TransactionRollbackOnly: when the scope that opened the transaction
+                ends after an exception left a joined scope, even one the
+                caller caught; the transaction is rolled back instead.
+        """
         current = self._current.get()
         if current is not None:
             with self._joined(current):
@@ -118,11 +128,15 @@ class Database:
     @staticmethod
     @contextmanager
     def _joined(current: _Ambient) -> Iterator[None]:
-        """A scope that joined ``current``: its failure dooms the whole transaction."""
+        """A scope that joined ``current``: its failure dooms a writing transaction.
+
+        A snapshot is read-only, so a failure inside it leaves nothing to undo.
+        """
         try:
             yield
-        except BaseException:
-            current.rollback_only = True
+        except BaseException as exc:
+            if not current.snapshot and current.failure is None:
+                current.failure = exc
             raise
 
     @contextmanager
@@ -132,11 +146,11 @@ class Database:
         token = self._current.set(ambient)
         try:
             yield
-            if ambient.rollback_only:
+            if ambient.failure is not None:
                 raise TransactionRollbackOnly(
                     "A nested database operation failed inside this "
                     "transaction; it was rolled back as a whole"
-                )
+                ) from ambient.failure
         finally:
             self._current.reset(token)
 
