@@ -1,0 +1,49 @@
+"""Content-addressed files on the data volume (T2 D3)."""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import re
+import tempfile
+from pathlib import Path
+
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+
+
+class BlobStore:
+    """``<root>/<first two hex digits>/<sha256>``; written atomically, never changed."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root)
+
+    def path(self, sha256: str) -> Path:
+        if not _SHA256.fullmatch(sha256):
+            raise ValueError(f"not a SHA-256 hex digest: {sha256!r}")
+        return self.root / sha256[:2] / sha256
+
+    def put(self, data: bytes) -> str:
+        """Store ``data`` and return its SHA-256; storing it again changes nothing."""
+        digest = hashlib.sha256(data).hexdigest()
+        target = self.path(digest)
+        if target.is_file():
+            return digest
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".incoming-")
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, target)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
+        return digest
+
+    def get(self, sha256: str) -> bytes:
+        """The stored bytes; ``ValueError`` if they no longer match their hash."""
+        data = self.path(sha256).read_bytes()
+        if hashlib.sha256(data).hexdigest() != sha256:
+            raise ValueError(f"stored file {sha256} is corrupt")
+        return data
