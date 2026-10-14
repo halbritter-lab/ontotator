@@ -1,6 +1,8 @@
 # T0: Tree Term ID and External Link Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Local implementation and reviews completed on 2026-10-14. Corrections and decisions are recorded in [the implementation review](../reviews/2026-10-14-t0-t1-implementation-review.md). The feature branch starts from the current planning branch, as requested by the user.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Every row of the ontology tree, and the detail pane, show the term ID and a link to the term's official page (hpo.jax.org for HPO).
 
@@ -12,7 +14,7 @@
 
 ### Task 0: Worktree setup
 
-- [ ] **Step 1: Create the worktree and install dependencies**
+- [x] **Step 1: Create the worktree and install dependencies**
 
 ```bash
 cd /c/Users/jan-p/Development/ontocurator
@@ -23,7 +25,7 @@ npm --prefix frontend ci
 npx --prefix frontend playwright install chromium
 ```
 
-- [ ] **Step 2: Baseline**
+- [x] **Step 2: Baseline**
 
 Run: `uv run pytest -q && npm --prefix frontend test`
 Expected: everything passes before any change. Stop and report if not.
@@ -58,7 +60,7 @@ All later commands run inside `.worktrees/tree-term-links`.
 - Create: `src/ontocurator/ontology/links.py`
 - Test: `tests/test_ontology_links.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Where a term can be looked up outside Ontocurator."""
@@ -93,12 +95,12 @@ def test_something_that_is_no_curie_has_no_link(term_id: str) -> None:
     assert external_term_url(term_id) is None
 ```
 
-- [ ] **Step 2: Run it and see it fail**
+- [x] **Step 2: Run it and see it fail**
 
 Run: `uv run pytest tests/test_ontology_links.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'ontocurator.ontology.links'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 """Where a term can be looked up outside Ontocurator.
@@ -132,12 +134,12 @@ def external_term_url(term_id: str) -> str | None:
     return template.format(id=quote(term_id, safe=safe))
 ```
 
-- [ ] **Step 4: Run it and see it pass**
+- [x] **Step 4: Run it and see it pass**
 
 Run: `uv run pytest tests/test_ontology_links.py -v`
 Expected: 9 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ontocurator/ontology/links.py tests/test_ontology_links.py
@@ -150,7 +152,7 @@ git commit -m "feat(ontology): map term ids to their external pages"
 - Modify: `src/ontocurator/ontology/tree.py` (`TreeNode` ≈ line 30, `TreeTermDetail` ≈ line 49, `node()` ≈ line 183, `detail()` ≈ line 287)
 - Test: `tests/test_ontology_tree.py` (append)
 
-- [ ] **Step 1: Write the failing tests** (append to `tests/test_ontology_tree.py`)
+- [x] **Step 1: Write the failing tests** (append to `tests/test_ontology_tree.py`)
 
 ```python
 def test_a_node_links_to_the_page_of_its_term() -> None:
@@ -179,12 +181,12 @@ def test_terms_of_other_ontologies_link_to_the_lookup_service(tmp_path: Path) ->
     )
 ```
 
-- [ ] **Step 2: Run them and see them fail**
+- [x] **Step 2: Run them and see them fail**
 
 Run: `uv run pytest tests/test_ontology_tree.py -k "links_to or lookup_service" -v`
 Expected: FAIL with `AttributeError: 'TreeNode' object has no attribute 'external_url'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/ontocurator/ontology/tree.py`, add the import after the existing `from ontocurator.domain.errors import DomainError`:
 
@@ -213,7 +215,7 @@ Change `node()`:
 
 In `detail()`, add `external_url=external_term_url(term.hpo_id),` after `parents=...`.
 
-- [ ] **Step 4: Update the exact expectations in `tests/test_tree_api.py`**
+- [x] **Step 4: Update the exact expectations in `tests/test_tree_api.py`**
 
 These assertions compare whole node dicts and now fail. Add the URL to each expected node:
 
@@ -289,12 +291,12 @@ These assertions compare whole node dicts and now fail. Add the URL to each expe
 
 Then search for any other exact node dicts: `grep -n '"child_count":' tests/*.py`. Add `external_url` to every whole-dict comparison of a node. Leave alone comparisons that only pick fields.
 
-- [ ] **Step 5: Run the tree tests and the tree API tests**
+- [x] **Step 5: Run the tree tests and the tree API tests**
 
 Run: `uv run pytest tests/test_ontology_tree.py tests/test_tree_api.py tests/test_tree_events.py -v`
 Expected: all pass. The tree events log term IDs only, so the logged walks are unchanged.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 uv run ruff check --fix . && uv run ruff format .
@@ -307,14 +309,14 @@ git commit -m "feat(tree): return each term's external page with nodes and detai
 **Files:**
 - Modify: `contracts/openapi.json`, `frontend/src/api/generated.ts` (both generated)
 
-- [ ] **Step 1: Export and generate**
+- [x] **Step 1: Export and generate**
 
 ```bash
 uv run python scripts/export_openapi.py
 npm --prefix frontend run api:generate
 ```
 
-- [ ] **Step 2: Check the result**
+- [x] **Step 2: Check the result**
 
 Run: `git diff --stat contracts/openapi.json frontend/src/api/generated.ts`
 Expected: both changed. `generated.ts` now has `external_url?: string | null;` in `TreeNode` and `TreeTermDetail`.
@@ -322,7 +324,7 @@ Expected: both changed. `generated.ts` now has `external_url?: string | null;` i
 Run: `uv run python scripts/export_openapi.py --check && npm --prefix frontend run api:check`
 Expected: both exit 0.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add contracts/openapi.json frontend/src/api/generated.ts
@@ -338,7 +340,7 @@ git commit -m "build(api): regenerate contract for external term links"
 - Modify: `frontend/src/styles.css` (after `.tree-count` ≈ line 1317)
 - Test: `frontend/tests/termTree.test.tsx`, `frontend/tests/treeState.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `frontend/tests/termTree.test.tsx`, replace the `node` helper and the `data` constant at the top:
 
@@ -426,12 +428,12 @@ Append inside `describe("visibleRows", …)`:
   });
 ```
 
-- [ ] **Step 2: Run them and see them fail**
+- [x] **Step 2: Run them and see them fail**
 
 Run: `npm --prefix frontend test -- --run tests/termTree.test.tsx tests/treeState.test.ts`
 Expected: the new tests and the changed `toEqual` FAIL. The other existing tests pass.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `frontend/src/editor/termLinks.ts`:
 
@@ -524,12 +526,12 @@ In `frontend/src/styles.css`, add after the `.tree-count` rule:
 }
 ```
 
-- [ ] **Step 4: Run them and see them pass**
+- [x] **Step 4: Run them and see them pass**
 
 Run: `npm --prefix frontend test -- --run tests/termTree.test.tsx tests/treeState.test.ts && npm --prefix frontend run typecheck`
 Expected: all pass. The typecheck reports no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/editor/termLinks.ts frontend/src/editor/treeState.ts frontend/src/editor/TermTree.tsx frontend/src/styles.css frontend/tests/termTree.test.tsx frontend/tests/treeState.test.ts
@@ -545,7 +547,7 @@ git commit -m "feat(tree): show term ids and an external link in each tree row"
 
 `.tree-detail__id` keeps containing only the ID. The browser tests at `frontend/browser/tree.spec.ts:136,156` compare its full text and stay valid. The link sits beside it in a wrapper.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `frontend/tests/caseTree.test.tsx`, `mockTree()`, add a field to `detailOf`:
 
@@ -574,12 +576,12 @@ Append inside `describe("the tree in the case screen", …)`:
   });
 ```
 
-- [ ] **Step 2: Run it and see it fail**
+- [x] **Step 2: Run it and see it fail**
 
 Run: `npm --prefix frontend test -- --run tests/caseTree.test.tsx -t "official page"`
 Expected: FAIL, unable to find role "link".
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `frontend/src/editor/TreeBrowser.tsx`, import the helper:
 
@@ -628,12 +630,12 @@ In `frontend/src/styles.css`, add after the `.tree-detail__id` rule:
 }
 ```
 
-- [ ] **Step 4: Run the frontend checks**
+- [x] **Step 4: Run the frontend checks**
 
 Run: `npm --prefix frontend test && npm --prefix frontend run typecheck`
 Expected: all frontend tests pass. The typecheck reports no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/editor/TreeBrowser.tsx frontend/src/styles.css frontend/tests/caseTree.test.tsx
@@ -647,7 +649,7 @@ The spec says the existing tree test is extended. This plan adds a separate test
 **Files:**
 - Modify: `frontend/browser/tree.spec.ts` (inside `test.describe("ontology tree", …)`)
 
-- [ ] **Step 1: Add the test**
+- [x] **Step 1: Add the test**
 
 ```ts
   test("every row shows its term id and links to hpo.jax.org without selecting", async ({ page }) => {
@@ -669,12 +671,12 @@ The spec says the existing tree test is extended. This plan adds a separate test
 
 The popup tries to load hpo.jax.org. If the test environment has no network, the popup still opens and is closed, and the test does not depend on the page loading.
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `npm --prefix frontend run test:e2e -- tree.spec.ts`
 Expected: all tree specs pass, including the new one and the existing `.tree-detail__id` text checks (lines ≈136, 156).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/browser/tree.spec.ts
@@ -686,12 +688,12 @@ git commit -m "test(tree): browser check for term ids and external links"
 **Files:**
 - Modify: `src/ontocurator/web/**`
 
-- [ ] **Step 1: Rebuild**
+- [x] **Step 1: Rebuild**
 
 Run: `uv run --locked python scripts/build_release.py --skip-npm-ci --out-dir dist`
 Expected: it ends after verifying the wheel. `git status` shows changed files under `src/ontocurator/web/`.
 
-- [ ] **Step 2: Full verification**
+- [x] **Step 2: Full verification**
 
 ```bash
 uv run pytest -q
@@ -704,7 +706,7 @@ npm --prefix frontend test
 
 Expected: everything passes with no errors. If a command fails, fix the cause before continuing.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/ontocurator/web
