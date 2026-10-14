@@ -96,3 +96,14 @@ def test_an_explicit_url_wins_over_the_provider(
 
     assert settings.resolve_database_url("explicit", None) == "explicit"
     assert settings.resolve_database_url(None, Path("ws")) == "from-provider"
+
+
+def test_a_malformed_url_is_refused_without_echoing_it() -> None:
+    raw = "not a url with secret-pw"
+    with pytest.raises(
+        SettingsError, match="ONTOCURATOR_DATABASE_URL is not a valid URL"
+    ) as info:
+        database_url({"ONTOCURATOR_DATABASE_URL": raw})
+    assert "secret-pw" not in str(info.value)
+    assert info.value.__cause__ is None
+    assert info.value.__suppress_context__

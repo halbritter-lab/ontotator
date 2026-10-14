@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import ArgumentError
 
 
 class SettingsError(ValueError):
@@ -33,7 +34,9 @@ def read_secret(name: str, env: Mapping[str, str] | None = None) -> str | None:
     try:
         value = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
     except OSError as exc:
-        raise SettingsError(f"Unable to read {name}_FILE: {exc.strerror}") from exc
+        raise SettingsError(
+            f"Unable to read {name}_FILE: {exc.strerror or exc}"
+        ) from exc
     if not value:
         raise SettingsError(f"{name}_FILE is empty")
     return value
@@ -52,7 +55,10 @@ def database_url(
     raw = env.get(f"{prefix}_URL")
     if not raw:
         raise SettingsError(f"{prefix}_URL is not set")
-    url = make_url(raw)
+    try:
+        url = make_url(raw)
+    except ArgumentError:
+        raise SettingsError(f"{prefix}_URL is not a valid URL") from None
     if url.drivername == "postgresql":
         url = url.set(drivername="postgresql+psycopg")
     if url.drivername != "postgresql+psycopg":

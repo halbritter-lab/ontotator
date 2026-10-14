@@ -35,7 +35,19 @@ class BlobStore:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(tmp, target)
+            try:
+                os.replace(tmp, target)
+            except OSError:
+                if not target.is_file():
+                    raise
+                Path(tmp).unlink(missing_ok=True)
+                return digest
+            if os.name != "nt":
+                dir_fd = os.open(target.parent, os.O_RDONLY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
         except BaseException:
             Path(tmp).unlink(missing_ok=True)
             raise
