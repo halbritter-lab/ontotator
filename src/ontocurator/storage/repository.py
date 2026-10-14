@@ -1,0 +1,822 @@
+"""PostgreSQL repository for projects, revisioned drafts and immutable submissions.
+
+A project replaces the desktop editor's work package: ``package_id`` in
+``WorkspaceKey`` and in the method names below is the project key (T2 index
+decision D-e). Every query is filtered by project. Snapshots and submissions
+are append-only (T2 D6): the application role can only insert and read them.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from collections.abc import Callable, Iterable
+from datetime import UTC, datetime
+from typing import Any, Literal
+from urllib.parse import quote
+
+from sqlalchemy import (
+    Connection,
+    Row,
+    and_,
+    delete,
+    exists,
+    func,
+    insert,
+    or_,
+    select,
+    update,
+)
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.axes import AxesConfig
+from ontocurator.domain.canonical import canonical_hash
+from ontocurator.domain.documents import Document, EvidenceSnapshot
+from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
+from ontocurator.domain.profiles import OntologyDefinition, TaskProfile, profile_hash
+from ontocurator.domain.results import latest_submissions
+from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
+from ontocurator.domain.scopes import build_scope
+from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
+from ontocurator.domain.workspace import (
+    Draft,
+    MutationEnvelope,
+    Submission,
+    WorkspaceKey,
+)
+from ontocurator.ontology.conditions import SearchCondition, validate_resources
+from ontocurator.packages.models import (
+    PackageManifest,
+    SearchEventRecord,
+    ValidatedPackage,
+    is_tree_walk,
+)
+from ontocurator.storage.database import Database
+from ontocurator.storage.tables import (
+    AnnotationSnapshotRow,
+    DocumentRow,
+    DraftAnnotationRow,
+    DraftEvidenceRow,
+    DraftRow,
+    EvidenceSnapshotRow,
+    MutationReceiptRow,
+    ProjectResourceRow,
+    ProjectRow,
+    ProjectSearchConditionsRow,
+    ProposalAnnotationRow,
+    ProposalEvidenceRow,
+    ReviewDecisionRow,
+    SearchEventRow,
+    StoredFileRow,
+    SubmissionRow,
+)
+
+_ESCAPED_KEY_PREFIX = "wk2|"
+
+
+def _key_str(key: WorkspaceKey) -> str:
+    """The persisted identity of a workspace key.
+
+    Keys whose components contain no ':' use the ':'-joined form. Any other
+    key is percent-encoded per component and joined with '|' behind a prefix,
+    which keeps the encoding injective.
+    """
+    parts = [
+        key.package_id,
+        key.document_id,
+        key.annotator_id,
+        key.mode,
+        key.scope_id,
+        key.target_set_id,
+    ]
+    if not any(":" in part for part in parts):
+        return ":".join(parts)
+    return _ESCAPED_KEY_PREFIX + "|".join(quote(part, safe="") for part in parts)
+
+
+def _same_tree_walk(stored: SearchEventRecord, incoming: SearchEventRecord) -> bool:
+    """Whether two records are one tree walk seen at two moments.
+
+    A walk only ever gains terms at the end, its two lists gain them together,
+    and it lists every term once.
+    """
+    if not is_tree_walk(stored) or not is_tree_walk(incoming):
+        return False
+    grown = {"candidates", "ranked_ids"}
+    if stored.model_dump(exclude=grown) != incoming.model_dump(exclude=grown):
+        return False
+    earlier, later = sorted((stored, incoming), key=lambda e: len(e.candidates))
+    shown, ranked = len(earlier.candidates), len(earlier.ranked_ids)
+    return (
+        later.candidates[:shown] == earlier.candidates
+        and later.ranked_ids[:ranked] == earlier.ranked_ids
+        and later.candidates[shown:] == later.ranked_ids[ranked:]
+        and len(set(later.candidates)) == len(later.candidates)
+    )
+
+
+def _local_import_key(
+    origin: WorkspaceKey, package_id: str, profile: TaskProfile
+) -> WorkspaceKey:
+    """Bind imported history to the importing project's workspace identity."""
+    return origin.model_copy(
+        update={
+            "package_id": package_id,
+            "scope_id": build_scope(profile, origin.mode).scope_id,
+            "target_set_id": "targets-0"
+            if origin.mode == "independent"
+            else origin.target_set_id,
+        }
+    )
+
+
+def _workspace_aliases(key: WorkspaceKey) -> tuple[str, ...]:
+    """Both historical empty-target and API-default independent bindings."""
+    keys = {_key_str(key)}
+    if key.mode == "independent":
+        for target_id in ("targets-0", ReviewTargetSet.create([]).target_set_id):
+            keys.add(_key_str(key.model_copy(update={"target_set_id": target_id})))
+    return tuple(sorted(keys))
+
+
+def _lock_id(*parts: str) -> int:
+    """A signed 64-bit advisory lock id derived from a name."""
+    digest = hashlib.sha256("\x1f".join(parts).encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big", signed=True)
+
+
+def _submission_payload(submission: Submission) -> dict[str, Any]:
+    payload = submission.model_dump(mode="json")
+    payload["snapshots"] = [encode_snapshot(s) for s in submission.snapshots]
+    return payload
+
+
+def _draft_payload(draft: Draft) -> dict[str, Any]:
+    payload = draft.model_dump(mode="json")
+    payload["annotations"] = [encode_snapshot(a) for a in draft.annotations]
+    return payload
+
+
+class Repository:
+    """Projects, drafts, submissions and search provenance in PostgreSQL."""
+
+    def __init__(self, db: Database) -> None:
+        self.db = db
+
+    # --- projects ---------------------------------------------------------- #
+
+    @staticmethod
+    def _project_id(conn: Connection, package_id: str) -> int | None:
+        return conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == package_id)
+        ).scalar_one_or_none()
+
+    def _require_project(self, conn: Connection, package_id: str) -> int:
+        project_id = self._project_id(conn, package_id)
+        if project_id is None:
+            raise DomainError(
+                "PACKAGE_NOT_FOUND", f"No package found for package '{package_id}'"
+            )
+        return project_id
+
+    @staticmethod
+    def package_manifest_hash(package: ValidatedPackage) -> str:
+        """The hash :meth:`import_package` stores for ``package``."""
+        return canonical_hash(package.manifest.model_dump())
+
+    def import_package(
+        self,
+        package: ValidatedPackage,
+        fallback_axes_config: AxesConfig | None = None,
+    ) -> str:
+        """Create the project of an in-memory seed package, or verify an identical one.
+
+        Re-importing a manifest is idempotent only if every dataset is equal.
+        """
+        del fallback_axes_config  # profiles carry their axes; kept for callers
+        manifest = package.manifest
+        profile = manifest.task_profile
+        if profile is None:
+            raise InvalidPackage(
+                f"Package '{manifest.package_id}' is missing mandatory task profile"
+            )
+        manifest_hash = self.package_manifest_hash(package)
+        profile_sha = manifest.task_profile_sha256 or profile_hash(profile)
+        if manifest.search_conditions is not None:
+            validate_resources(
+                manifest.search_conditions, profile, package.embedded_files
+            )
+        files = {
+            path: (self.db.blobs.put(data), len(data))
+            for path, data in package.embedded_files.items()
+        }
+        with self.db.transaction() as conn:
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock(_lock_id("project", manifest.package_id))
+                )
+            )
+            self._verify_existing_snapshots(conn, package)
+            existing = conn.execute(
+                select(
+                    ProjectRow.id,
+                    ProjectRow.manifest_sha256,
+                    ProjectRow.task_profile_sha256,
+                ).where(ProjectRow.project_key == manifest.package_id)
+            ).one_or_none()
+            if existing is not None:
+                if existing.manifest_sha256 != manifest_hash:
+                    raise InvalidPackage(
+                        f"Package '{manifest.package_id}' exists with "
+                        "different manifest hash"
+                    )
+                if existing.task_profile_sha256 != profile_sha:
+                    raise InvalidPackage(
+                        "Conflicting task profile resolution for existing package"
+                    )
+                self._verify_existing_package_content(conn, existing.id, package)
+                self._store_resources(
+                    conn, existing.id, manifest.search_conditions, files
+                )
+                return manifest.package_id
+            project_id = conn.execute(
+                insert(ProjectRow)
+                .values(
+                    project_key=manifest.package_id,
+                    name=manifest.package_id,
+                    manifest=manifest.model_dump(mode="json"),
+                    manifest_sha256=manifest_hash,
+                    task_profile=profile.model_dump(mode="json"),
+                    task_profile_sha256=profile_sha,
+                )
+                .returning(ProjectRow.id)
+            ).scalar_one()
+            self._insert_project_content(conn, project_id, package, profile)
+            self._store_resources(conn, project_id, manifest.search_conditions, files)
+        return manifest.package_id
+
+    def _insert_project_content(
+        self,
+        conn: Connection,
+        project_id: int,
+        package: ValidatedPackage,
+        profile: TaskProfile,
+    ) -> None:
+        package_id = package.manifest.package_id
+        order = {
+            doc_id: index
+            for index, doc_id in enumerate(package.manifest.document_order)
+        }
+        documents = [
+            {
+                "project_id": project_id,
+                "document_id": doc.document_id,
+                "position": order.get(doc.document_id),
+                "language": doc.language,
+                "text": doc.text,
+                "text_sha256": doc.text_sha256,
+            }
+            for doc in package.documents.values()
+        ]
+        if documents:
+            conn.execute(insert(DocumentRow), documents)
+        self._insert_snapshots(
+            conn, project_id, package.annotations.values(), package.evidence.values()
+        )
+        if package.annotations:
+            conn.execute(
+                insert(ProposalAnnotationRow),
+                [
+                    {"project_id": project_id, "annotation_id": a, "version": v}
+                    for a, v in package.annotations
+                ],
+            )
+        if package.evidence:
+            conn.execute(
+                insert(ProposalEvidenceRow),
+                [
+                    {"project_id": project_id, "evidence_id": e, "version": v}
+                    for e, v in package.evidence
+                ],
+            )
+        for submission in package.submissions.values():
+            local = _local_import_key(submission.origin_key, package_id, profile)
+            self._insert_submission(
+                conn, project_id, submission, local_key=_key_str(local)
+            )
+        for event in package.search_events:
+            local = _local_import_key(event.workspace_key, package_id, profile)
+            self._insert_search_event(
+                conn, project_id, event, local_key=_key_str(local), imported=True
+            )
+
+    def _verify_existing_snapshots(
+        self, conn: Connection, package: ValidatedPackage
+    ) -> None:
+        """Never keep conflicting immutable content under an existing identity.
+
+        Identities are global, as in the desktop workspace: a snapshot,
+        submission or search event of any project with the same identity must
+        have the same content. Two exports of one tree walk keep the longer one.
+        """
+        for (annotation_id, version), snap in package.annotations.items():
+            expected = canonical_hash(encode_snapshot(snap))
+            for stored in conn.execute(
+                select(AnnotationSnapshotRow.payload).where(
+                    AnnotationSnapshotRow.annotation_id == annotation_id,
+                    AnnotationSnapshotRow.version == version,
+                )
+            ).scalars():
+                if canonical_hash(stored) != expected:
+                    raise InvalidPackage("Conflicting immutable snapshot content")
+        for (evidence_id, version), ev in package.evidence.items():
+            expected = canonical_hash(ev.model_dump())
+            for stored in conn.execute(
+                select(EvidenceSnapshotRow.payload).where(
+                    EvidenceSnapshotRow.evidence_id == evidence_id,
+                    EvidenceSnapshotRow.version == version,
+                )
+            ).scalars():
+                if canonical_hash(stored) != expected:
+                    raise InvalidPackage("Conflicting immutable snapshot content")
+        for submission in package.submissions.values():
+            for stored in conn.execute(
+                select(SubmissionRow.payload).where(
+                    SubmissionRow.submission_id == submission.submission_id
+                )
+            ).scalars():
+                if Submission.model_validate(stored) != submission:
+                    raise InvalidPackage("Conflicting immutable submission content")
+        for event in package.search_events:
+            rows = conn.execute(
+                select(SearchEventRow.project_id, SearchEventRow.payload).where(
+                    SearchEventRow.event_id == event.event_id
+                )
+            ).all()
+            for row in rows:
+                existing = SearchEventRecord.model_validate(row.payload)
+                if existing == event:
+                    continue
+                if not _same_tree_walk(existing, event):
+                    raise InvalidPackage("Conflicting search event content")
+                if len(event.candidates) > len(existing.candidates):
+                    conn.execute(
+                        update(SearchEventRow)
+                        .where(
+                            SearchEventRow.project_id == row.project_id,
+                            SearchEventRow.event_id == event.event_id,
+                        )
+                        .values(payload=event.model_dump(mode="json"))
+                    )
+
+    @staticmethod
+    def _verify_existing_package_content(
+        conn: Connection, project_id: int, package: ValidatedPackage
+    ) -> None:
+        """A re-import is idempotent only if its datasets equal the installed ones."""
+        stored_docs = dict(
+            conn.execute(
+                select(DocumentRow.document_id, DocumentRow.text_sha256).where(
+                    DocumentRow.project_id == project_id
+                )
+            )
+            .tuples()
+            .all()
+        )
+        stored_annotations = set(
+            conn.execute(
+                select(
+                    ProposalAnnotationRow.annotation_id, ProposalAnnotationRow.version
+                ).where(ProposalAnnotationRow.project_id == project_id)
+            )
+            .tuples()
+            .all()
+        )
+        stored_evidence = set(
+            conn.execute(
+                select(
+                    ProposalEvidenceRow.evidence_id, ProposalEvidenceRow.version
+                ).where(ProposalEvidenceRow.project_id == project_id)
+            )
+            .tuples()
+            .all()
+        )
+        stored_events = set(
+            conn.execute(
+                select(SearchEventRow.event_id).where(
+                    SearchEventRow.project_id == project_id,
+                    SearchEventRow.imported.is_(True),
+                )
+            ).scalars()
+        )
+        bound_submissions = set(
+            conn.execute(
+                select(SubmissionRow.submission_id).where(
+                    SubmissionRow.project_id == project_id
+                )
+            ).scalars()
+        )
+        if (
+            stored_docs
+            != {d.document_id: d.text_sha256 for d in package.documents.values()}
+            or stored_annotations != set(package.annotations)
+            or stored_evidence != set(package.evidence)
+            or stored_events != {e.event_id for e in package.search_events}
+            or not set(package.submissions) <= bound_submissions
+        ):
+            raise InvalidPackage(
+                f"Package '{package.manifest.package_id}' exists with identical "
+                "manifest but different dataset content"
+            )
+
+    def _store_resources(
+        self,
+        conn: Connection,
+        project_id: int,
+        conditions: list[SearchCondition] | None,
+        files: dict[str, tuple[str, int]],
+    ) -> None:
+        if conditions is not None:
+            existing = self._search_conditions(conn, project_id)
+            if existing is not None and existing != conditions:
+                raise InvalidPackage("Conflicting immutable package search conditions")
+            conn.execute(
+                pg_insert(ProjectSearchConditionsRow)
+                .values(
+                    project_id=project_id,
+                    conditions=[c.model_dump(mode="json") for c in conditions],
+                )
+                .on_conflict_do_nothing()
+            )
+        self._store_files(conn, project_id, files)
+
+    @staticmethod
+    def _store_files(
+        conn: Connection, project_id: int, files: dict[str, tuple[str, int]]
+    ) -> None:
+        if not files:
+            return
+        conn.execute(
+            pg_insert(StoredFileRow).on_conflict_do_nothing(),
+            [{"sha256": sha, "size": size} for sha, size in files.values()],
+        )
+        conn.execute(
+            pg_insert(ProjectResourceRow).on_conflict_do_nothing(),
+            [
+                {"project_id": project_id, "resource_path": path, "sha256": sha}
+                for path, (sha, _size) in files.items()
+            ],
+        )
+
+    @staticmethod
+    def _search_conditions(
+        conn: Connection, project_id: int
+    ) -> list[SearchCondition] | None:
+        stored = conn.execute(
+            select(ProjectSearchConditionsRow.conditions).where(
+                ProjectSearchConditionsRow.project_id == project_id
+            )
+        ).scalar_one_or_none()
+        if stored is None:
+            return None
+        return [SearchCondition.model_validate(c) for c in stored]
+
+    def get_search_conditions(self, package_id: str) -> list[SearchCondition] | None:
+        with self.db.transaction() as conn:
+            project_id = self._project_id(conn, package_id)
+            if project_id is None:
+                return None
+            return self._search_conditions(conn, project_id)
+
+    def capture_search_conditions(
+        self,
+        package_id: str,
+        conditions: list[SearchCondition],
+        resources: dict[str, bytes],
+    ) -> list[SearchCondition]:
+        """Store first-use conditions once; concurrent captures get the first ones."""
+        validate_resources(conditions, self.get_task_profile(package_id), resources)
+        files = {
+            path: (self.db.blobs.put(data), len(data))
+            for path, data in resources.items()
+        }
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, package_id)
+            inserted = conn.execute(
+                pg_insert(ProjectSearchConditionsRow)
+                .values(
+                    project_id=project_id,
+                    conditions=[c.model_dump(mode="json") for c in conditions],
+                )
+                .on_conflict_do_nothing()
+                .returning(ProjectSearchConditionsRow.project_id)
+            ).scalar_one_or_none()
+            if inserted is None:
+                existing = self._search_conditions(conn, project_id)
+                if existing is None:
+                    raise DomainError("SEARCH_CONDITIONS_MISSING", package_id)
+                return existing
+            self._store_files(conn, project_id, files)
+            return conditions
+
+    def get_embedded_files(self, package_id: str) -> dict[str, bytes]:
+        with self.db.transaction() as conn:
+            project_id = self._project_id(conn, package_id)
+            if project_id is None:
+                return {}
+            rows = (
+                conn.execute(
+                    select(
+                        ProjectResourceRow.resource_path, ProjectResourceRow.sha256
+                    ).where(ProjectResourceRow.project_id == project_id)
+                )
+                .tuples()
+                .all()
+            )
+        return {path: self.db.blobs.get(sha) for path, sha in rows}
+
+    def ontology_resources(self) -> list[tuple[OntologyDefinition, bytes]]:
+        """Definitions and bytes of every embedded ontology, for start-up loading."""
+        with self.db.transaction() as conn:
+            rows = (
+                conn.execute(
+                    select(
+                        ProjectRow.task_profile,
+                        ProjectResourceRow.resource_path,
+                        ProjectResourceRow.sha256,
+                    ).join(
+                        ProjectResourceRow,
+                        ProjectResourceRow.project_id == ProjectRow.id,
+                    )
+                )
+                .tuples()
+                .all()
+            )
+        result: list[tuple[OntologyDefinition, bytes]] = []
+        for stored_profile, path, sha in rows:
+            for ont in TaskProfile.model_validate(stored_profile).ontologies:
+                if ont.resource_path == path:
+                    result.append((ont, self.db.blobs.get(sha)))
+        return result
+
+    def get_manifest(self, package_id: str) -> PackageManifest:
+        """The stored manifest of a project."""
+        with self.db.transaction() as conn:
+            stored = conn.execute(
+                select(ProjectRow.manifest).where(ProjectRow.project_key == package_id)
+            ).scalar_one_or_none()
+        if stored is None:
+            raise DomainError(
+                "PACKAGE_NOT_FOUND", f"No package found for package '{package_id}'"
+            )
+        return PackageManifest.model_validate(stored)
+
+    def manifest_hash(self, package_id: str) -> str | None:
+        """Canonical manifest hash of a project, or None if absent."""
+        with self.db.transaction() as conn:
+            return conn.execute(
+                select(ProjectRow.manifest_sha256).where(
+                    ProjectRow.project_key == package_id
+                )
+            ).scalar_one_or_none()
+
+    def list_manifests(self) -> list[PackageManifest]:
+        """Manifests of all projects, newest first."""
+        with self.db.transaction() as conn:
+            stored = (
+                conn.execute(
+                    select(ProjectRow.manifest).order_by(
+                        ProjectRow.created_at.desc(), ProjectRow.id.desc()
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return [PackageManifest.model_validate(m) for m in stored]
+
+    def get_task_profile(self, package_id: str) -> TaskProfile:
+        """The resolved task profile of a project."""
+        with self.db.transaction() as conn:
+            stored = conn.execute(
+                select(ProjectRow.task_profile).where(
+                    ProjectRow.project_key == package_id
+                )
+            ).scalar_one_or_none()
+        if stored is None:
+            raise DomainError(
+                "PACKAGE_NOT_FOUND",
+                f"No package or task profile found for package '{package_id}'",
+            )
+        return TaskProfile.model_validate(stored)
+
+    def get_axes_config(self, package_id: str) -> AxesConfig:
+        """AxesConfig synthesized from the task profile, for older callers."""
+        profile = self.get_task_profile(package_id)
+        name = profile.preset or "custom"
+        for layer in profile.layers:
+            for annotation_type in layer.annotation_types:
+                if annotation_type.axes:
+                    return AxesConfig(definition_name=name, axes=annotation_type.axes)
+        return AxesConfig(definition_name=name, axes=[])
+
+    # --- documents and proposals ------------------------------------------- #
+
+    def get_document(self, package_id: str, document_id: str) -> Document | None:
+        with self.db.transaction() as conn:
+            row = conn.execute(
+                select(
+                    DocumentRow.document_id,
+                    DocumentRow.text,
+                    DocumentRow.language,
+                    DocumentRow.text_sha256,
+                )
+                .join(ProjectRow, ProjectRow.id == DocumentRow.project_id)
+                .where(
+                    ProjectRow.project_key == package_id,
+                    DocumentRow.document_id == document_id,
+                )
+            ).one_or_none()
+        if row is None:
+            return None
+        return Document(
+            document_id=row.document_id,
+            text=row.text,
+            language=row.language,
+            text_sha256=row.text_sha256,
+        )
+
+    def list_documents(self, package_id: str) -> list[Document]:
+        """Documents in the declared order, the rest by ID."""
+        with self.db.transaction() as conn:
+            rows = conn.execute(
+                select(
+                    DocumentRow.document_id,
+                    DocumentRow.text,
+                    DocumentRow.language,
+                    DocumentRow.text_sha256,
+                )
+                .join(ProjectRow, ProjectRow.id == DocumentRow.project_id)
+                .where(ProjectRow.project_key == package_id)
+                .order_by(
+                    DocumentRow.position.asc().nulls_last(), DocumentRow.document_id
+                )
+            ).all()
+        return [
+            Document(
+                document_id=row.document_id,
+                text=row.text,
+                language=row.language,
+                text_sha256=row.text_sha256,
+            )
+            for row in rows
+        ]
+
+    @staticmethod
+    def _insert_snapshots(
+        conn: Connection,
+        project_id: int,
+        annotations: Iterable[AnnotationSnapshot],
+        evidence: Iterable[EvidenceSnapshot],
+    ) -> None:
+        """Insert content-addressed snapshots; known identities are skipped."""
+        annotation_rows = [
+            {
+                "project_id": project_id,
+                "annotation_id": snap.annotation.annotation_id,
+                "version": snap.version,
+                "document_id": snap.document_id,
+                "payload": encode_snapshot(snap),
+            }
+            for snap in annotations
+        ]
+        if annotation_rows:
+            conn.execute(
+                pg_insert(AnnotationSnapshotRow).on_conflict_do_nothing(),
+                annotation_rows,
+            )
+        evidence_rows = [
+            {
+                "project_id": project_id,
+                "evidence_id": ev.mention.evidence_id,
+                "version": ev.version,
+                "document_id": ev.document_id,
+                "payload": ev.model_dump(mode="json"),
+            }
+            for ev in evidence
+        ]
+        if evidence_rows:
+            conn.execute(
+                pg_insert(EvidenceSnapshotRow).on_conflict_do_nothing(), evidence_rows
+            )
+
+    def get_annotation_snapshot(
+        self, annotation_id: str, version: str, package_id: str | None = None
+    ) -> AnnotationSnapshot | None:
+        statement = select(AnnotationSnapshotRow.payload).where(
+            AnnotationSnapshotRow.annotation_id == annotation_id,
+            AnnotationSnapshotRow.version == version,
+        )
+        if package_id is not None:
+            statement = statement.join(
+                ProjectRow, ProjectRow.id == AnnotationSnapshotRow.project_id
+            ).where(ProjectRow.project_key == package_id)
+        with self.db.transaction() as conn:
+            stored = conn.execute(statement.limit(1)).scalar_one_or_none()
+        return None if stored is None else decode_snapshot(stored)
+
+    def get_evidence_snapshot(
+        self, evidence_id: str, version: str, package_id: str | None = None
+    ) -> EvidenceSnapshot | None:
+        statement = select(EvidenceSnapshotRow.payload).where(
+            EvidenceSnapshotRow.evidence_id == evidence_id,
+            EvidenceSnapshotRow.version == version,
+        )
+        if package_id is not None:
+            statement = statement.join(
+                ProjectRow, ProjectRow.id == EvidenceSnapshotRow.project_id
+            ).where(ProjectRow.project_key == package_id)
+        with self.db.transaction() as conn:
+            stored = conn.execute(statement.limit(1)).scalar_one_or_none()
+        return None if stored is None else EvidenceSnapshot.model_validate(stored)
+
+    def list_annotations_for_document(
+        self, package_id: str, document_id: str
+    ) -> list[AnnotationSnapshot]:
+        """The project's proposals for one document, ordered by identity."""
+        with self.db.transaction() as conn:
+            stored = (
+                conn.execute(
+                    select(AnnotationSnapshotRow.payload)
+                    .join(
+                        ProposalAnnotationRow,
+                        and_(
+                            ProposalAnnotationRow.project_id
+                            == AnnotationSnapshotRow.project_id,
+                            ProposalAnnotationRow.annotation_id
+                            == AnnotationSnapshotRow.annotation_id,
+                            ProposalAnnotationRow.version
+                            == AnnotationSnapshotRow.version,
+                        ),
+                    )
+                    .join(ProjectRow, ProjectRow.id == AnnotationSnapshotRow.project_id)
+                    .where(
+                        ProjectRow.project_key == package_id,
+                        AnnotationSnapshotRow.document_id == document_id,
+                    )
+                    .order_by(
+                        AnnotationSnapshotRow.annotation_id,
+                        AnnotationSnapshotRow.version,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return [decode_snapshot(p) for p in stored]
+
+    # --- submissions and search events: insertion -------------------------- #
+
+    @staticmethod
+    def _insert_submission(
+        conn: Connection, project_id: int, submission: Submission, *, local_key: str
+    ) -> None:
+        origin = submission.origin_key
+        conn.execute(
+            pg_insert(SubmissionRow)
+            .values(
+                project_id=project_id,
+                submission_id=submission.submission_id,
+                local_key=local_key,
+                origin_key=_key_str(origin),
+                document_id=origin.document_id,
+                annotator_id=origin.annotator_id,
+                mode=origin.mode,
+                draft_revision=submission.draft_revision,
+                payload=_submission_payload(submission),
+                created_at=submission.created_at,
+            )
+            .on_conflict_do_nothing()
+        )
+
+    @staticmethod
+    def _insert_search_event(
+        conn: Connection,
+        project_id: int,
+        event: SearchEventRecord,
+        *,
+        local_key: str,
+        imported: bool,
+    ) -> None:
+        statement = pg_insert(SearchEventRow).values(
+            project_id=project_id,
+            event_id=event.event_id,
+            workspace_key=_key_str(event.workspace_key),
+            local_key=local_key,
+            imported=imported,
+            annotation_id=event.annotation_id,
+            layer_id=event.layer_id,
+            ontology_sha256=event.ontology_sha256,
+            payload=event.model_dump(mode="json"),
+            timestamp=event.timestamp,
+        )
+        # Imported events may already be known; a locally written one must be new.
+        conn.execute(statement.on_conflict_do_nothing() if imported else statement)
