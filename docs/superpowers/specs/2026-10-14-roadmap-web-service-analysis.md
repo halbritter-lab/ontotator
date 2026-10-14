@@ -325,8 +325,8 @@ Status: Questions 1–8 are answered, see §5. New detailed questions are resolv
 
 | # | Spec | Status |
 |---|---|---|
-| T0 | `2026-10-14-t0-tree-term-id-link-design.md` | design agreed |
-| T1 | `2026-10-14-t1-shared-annotation-format-design.md` | design agreed |
+| T0 | `2026-10-14-t0-tree-term-id-link-design.md` | implemented and reviewed (branch `feat/tree-term-links`) |
+| T1 | `2026-10-14-t1-shared-annotation-format-design.md` | implemented and reviewed in the private repository `janpower/ontospan` (PR #1) |
 | T2 | `2026-10-14-t2-server-foundation-design.md` | design agreed |
 | T3 | `2026-10-14-t3-admin-design.md` | design agreed |
 | T5 | `2026-10-14-t5-variants-translation-review-design.md` | design agreed |
