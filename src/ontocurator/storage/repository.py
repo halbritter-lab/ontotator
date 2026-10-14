@@ -1505,8 +1505,12 @@ class Repository:
     def export_package(
         self, package_id: str, *, include_captured_conditions: bool = True
     ) -> ValidatedPackage:
-        """Everything of a project as an in-memory package."""
-        with self.db.transaction() as conn:
+        """Everything of a project as an in-memory package.
+
+        All reads share one snapshot, so a draft edit committing meanwhile
+        cannot leave an annotation without the evidence version it references.
+        """
+        with self.db.snapshot() as conn:
             project = conn.execute(
                 select(ProjectRow.id, ProjectRow.manifest).where(
                     ProjectRow.project_key == package_id
@@ -1613,6 +1617,7 @@ class Repository:
                 if include_captured_conditions
                 else None
             )
+            stored_files = self.get_embedded_files(package_id)
         if conditions is not None:
             manifest = manifest.model_copy(update={"search_conditions": conditions})
         annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
@@ -1632,11 +1637,11 @@ class Repository:
             for condition in manifest.search_conditions or []
             for item in condition.translations
         }
-        # A first capture can commit after the condition read above. Its bytes
-        # are only part of this export if this manifest observed their declaration.
+        # Captured resources belong to the export only with their conditions
+        # (not when ``include_captured_conditions`` is false).
         embedded_files = {
             path: content
-            for path, content in self.get_embedded_files(package_id).items()
+            for path, content in stored_files.items()
             if not path.startswith("search-resources/") or path in declared
         }
         return ValidatedPackage(

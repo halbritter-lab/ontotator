@@ -8,9 +8,14 @@ import pytest
 from pg_harness import database_for, database_url_for
 from sqlalchemy import func, insert, select, text
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import DBAPIError
 
 from ontocurator import settings
-from ontocurator.storage.database import Database, TransactionRollbackOnly
+from ontocurator.storage.database import (
+    Database,
+    SnapshotUnavailable,
+    TransactionRollbackOnly,
+)
 from ontocurator.storage.tables import StoredFileRow
 
 
@@ -69,6 +74,76 @@ def test_another_thread_gets_its_own_transaction(tmp_path: Path) -> None:
         thread.join()
 
     assert seen == {"same": False}
+
+
+def _insert_elsewhere(db: Database, sha: str) -> None:
+    """Commit a row from another thread, so it is not in this context's transaction."""
+
+    def insert_row() -> None:
+        with db.transaction() as conn:
+            conn.execute(insert(StoredFileRow).values(sha256=sha, size=1))
+
+    thread = threading.Thread(target=insert_row)
+    thread.start()
+    thread.join()
+
+
+def test_a_snapshot_does_not_see_a_commit_made_after_its_first_read(
+    tmp_path: Path,
+) -> None:
+    db = database_for(tmp_path / "a.db")
+
+    with db.snapshot() as conn:
+        before = conn.execute(select(func.count()).select_from(StoredFileRow))
+        _insert_elsewhere(db, "d" * 64)
+        after = conn.execute(select(func.count()).select_from(StoredFileRow))
+        assert (before.scalar_one(), after.scalar_one()) == (0, 0)
+
+    assert _count(db) == 1
+
+
+def test_a_snapshot_refuses_writes(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "a.db")
+
+    with pytest.raises(DBAPIError, match="read-only"), db.snapshot() as conn:
+        conn.execute(insert(StoredFileRow).values(sha256="e" * 64, size=1))
+
+
+def test_calls_inside_a_snapshot_join_it(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "a.db")
+
+    with db.snapshot() as outer, db.transaction() as inner, db.snapshot() as again:
+        assert inner is outer
+        assert again is outer
+
+
+def test_a_snapshot_cannot_join_a_read_committed_transaction(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "a.db")
+
+    with (
+        pytest.raises(SnapshotUnavailable, match="REPEATABLE READ"),
+        db.transaction(),
+        db.snapshot(),
+    ):
+        pass
+
+
+def test_a_pooled_connection_forgets_the_snapshot_settings(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "a.db")
+    setting = text("SELECT current_setting(:name)")
+
+    with db.snapshot() as conn:
+        assert conn.execute(
+            setting, {"name": "transaction_isolation"}
+        ).scalar_one() == ("repeatable read")
+    with db.transaction() as conn:
+        assert conn.execute(
+            setting, {"name": "transaction_isolation"}
+        ).scalar_one() == ("read committed")
+        assert conn.execute(
+            setting, {"name": "transaction_read_only"}
+        ).scalar_one() == ("off")
+    assert db.engine.pool.checkedin() == 1  # the same pooled connection both times
 
 
 def test_the_same_path_reopens_the_same_database(tmp_path: Path) -> None:

@@ -209,3 +209,107 @@ def test_independent_import_resumes_at_default_api_key(tmp_path):
             k=_key_str(key_for()),
         )
         assert repo.get_submissions_for_workspace(api_key) == [sub]
+
+
+def _evidence_edit(package, end):
+    """An edit that sets the draft's only annotation to evidence ending at ``end``."""
+    from ontocurator.domain.annotations import snapshot
+    from ontocurator.domain.documents import (
+        EvidenceMention,
+        EvidenceRef,
+        EvidenceSnapshot,
+        Segment,
+    )
+
+    doc = package.documents["doc-1"]
+    ev = EvidenceSnapshot.create(
+        mention=EvidenceMention(
+            evidence_id="ev-1", segments=[Segment(start=17, end=end)]
+        ),
+        document=doc,
+    )
+    base = next(iter(package.annotations.values())).annotation
+    ann = base.model_copy(
+        update={"evidence_refs": [EvidenceRef(evidence_id="ev-1", version=ev.version)]}
+    )
+    snap = snapshot(ann, [ev], doc, package.manifest.task_profile)
+
+    def operation(draft):
+        draft.annotations = [snap]
+        draft.evidence = [ev]
+        return draft
+
+    return operation, snap, ev
+
+
+def test_export_reads_one_snapshot_while_an_evidence_edit_commits(tmp_path):
+    import io
+    import threading
+
+    from sqlalchemy import event
+
+    from ontocurator.packages.writer import write_package_to_stream
+
+    db = database_for(tmp_path / "db")
+    repo = Repository(db)
+    package = _sample_package()
+    repo.import_package(package.model_copy(update={"annotations": {}, "evidence": {}}))
+    key = key_for()
+    repo.open_draft(key, ReviewTargetSet.create([]))
+    first, first_snap, first_ev = _evidence_edit(package, 26)
+    second, _, second_ev = _evidence_edit(package, 25)
+    assert first_ev.version != second_ev.version
+    repo.run_mutation(
+        key, MutationEnvelope(mutation_id="m1", expected_revision=0, payload={}), first
+    )
+
+    reader = threading.get_ident()
+    edits = []
+
+    def commit_edit_before_the_evidence_read(
+        conn, cursor, statement, parameters, context, executemany
+    ):
+        if (
+            threading.get_ident() != reader
+            or edits
+            or "FROM ontocurator.evidence_snapshots" not in statement
+        ):
+            return
+        envelope = MutationEnvelope(mutation_id="m2", expected_revision=1, payload={})
+        worker = threading.Thread(
+            target=lambda: edits.append(repo.run_mutation(key, envelope, second))
+        )
+        worker.start()
+        worker.join()
+
+    event.listen(
+        db.engine, "before_cursor_execute", commit_edit_before_the_evidence_read
+    )
+    try:
+        exported = repo.export_package("pkg-1")
+    finally:
+        event.remove(
+            db.engine, "before_cursor_execute", commit_edit_before_the_evidence_read
+        )
+
+    assert len(edits) == 1  # the edit committed between the two reads
+    write_package_to_stream(exported, io.BytesIO())
+    assert set(exported.annotations) == {("ann-1", first_snap.version)}
+    assert set(exported.evidence) == {("ev-1", first_ev.version)}
+
+
+def test_export_inside_a_read_committed_transaction_is_refused(tmp_path):
+    import pytest
+
+    from ontocurator.storage.database import SnapshotUnavailable
+
+    db = database_for(tmp_path / "db")
+    repo = Repository(db)
+    repo.import_package(_sample_package())
+
+    with pytest.raises(SnapshotUnavailable), db.transaction():
+        repo.export_package("pkg-1")
+    with db.snapshot():
+        assert set(repo.export_package("pkg-1").annotations) == set(
+            _sample_package().annotations
+        )

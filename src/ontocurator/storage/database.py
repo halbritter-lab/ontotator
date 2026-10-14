@@ -21,11 +21,20 @@ class TransactionRollbackOnly(RuntimeError):
     """A joined scope failed, so the transaction it joined cannot commit."""
 
 
+class SnapshotUnavailable(RuntimeError):
+    """A snapshot was requested inside a transaction that does not provide one."""
+
+
 @dataclass
 class _Ambient:
-    """The open transaction of a context, and whether a joined scope failed."""
+    """The open transaction of a context, and whether a joined scope failed.
+
+    ``snapshot`` is true for a REPEATABLE READ transaction: all its statements
+    see the committed state of its first one.
+    """
 
     conn: Connection
+    snapshot: bool = False
     rollback_only: bool = False
 
 
@@ -39,6 +48,9 @@ class Database:
     the writes of the failed call cannot be told apart from the others, so the
     outermost scope rolls back and raises ``TransactionRollbackOnly`` even if
     the caller caught the exception.
+
+    ``snapshot()`` is a read-only REPEATABLE READ transaction for reads that
+    must form one consistent view, such as an export.
     """
 
     def __init__(
@@ -70,24 +82,63 @@ class Database:
         """The open transaction of this context, or a new one committed at the end."""
         current = self._current.get()
         if current is not None:
-            try:
+            with self._joined(current):
                 yield current.conn
-            except BaseException:
-                current.rollback_only = True
-                raise
             return
-        with self.engine.begin() as conn:
-            ambient = _Ambient(conn)
-            token = self._current.set(ambient)
-            try:
+        with self.engine.begin() as conn, self._ambient(conn, snapshot=False):
+            yield conn
+
+    @contextmanager
+    def snapshot(self) -> Iterator[Connection]:
+        """A read-only transaction whose statements all see one committed state.
+
+        Joins the open transaction of this context only if that is a snapshot
+        too. A READ COMMITTED transaction cannot become one: its isolation is
+        fixed once it ran a statement, and the statements it ran saw other
+        states. Opening a snapshot inside one is a programming error.
+        """
+        current = self._current.get()
+        if current is not None:
+            if not current.snapshot:
+                raise SnapshotUnavailable(
+                    "A REPEATABLE READ snapshot cannot join the open READ "
+                    "COMMITTED transaction; open the snapshot first"
+                )
+            with self._joined(current):
+                yield current.conn
+            return
+        with self.engine.connect() as conn:
+            # Both options are reset when the connection returns to the pool.
+            conn.execution_options(
+                isolation_level="REPEATABLE READ", postgresql_readonly=True
+            )
+            with conn.begin(), self._ambient(conn, snapshot=True):
                 yield conn
-                if ambient.rollback_only:
-                    raise TransactionRollbackOnly(
-                        "A nested database operation failed inside this "
-                        "transaction; it was rolled back as a whole"
-                    )
-            finally:
-                self._current.reset(token)
+
+    @staticmethod
+    @contextmanager
+    def _joined(current: _Ambient) -> Iterator[None]:
+        """A scope that joined ``current``: its failure dooms the whole transaction."""
+        try:
+            yield
+        except BaseException:
+            current.rollback_only = True
+            raise
+
+    @contextmanager
+    def _ambient(self, conn: Connection, *, snapshot: bool) -> Iterator[None]:
+        """Make ``conn`` the open transaction of this context for the outermost scope."""
+        ambient = _Ambient(conn, snapshot=snapshot)
+        token = self._current.set(ambient)
+        try:
+            yield
+            if ambient.rollback_only:
+                raise TransactionRollbackOnly(
+                    "A nested database operation failed inside this "
+                    "transaction; it was rolled back as a whole"
+                )
+        finally:
+            self._current.reset(token)
 
     def close(self) -> None:
         """Close all pooled connections (after the server has stopped)."""
