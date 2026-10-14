@@ -22,6 +22,7 @@ from ontocurator.domain.workspace import (
     WorkspaceKey,
 )
 from ontocurator.packages.models import SearchEventRecord, ValidatedPackage
+from ontocurator.storage.database import TransactionRollbackOnly
 from ontocurator.storage.repository import Repository, _key_str, _lock_id
 from ontocurator.storage.tables import (
     DraftRow,
@@ -569,6 +570,26 @@ def test_a_growing_walk_keeps_every_copy_of_its_id_equal(tmp_path: Path) -> None
         )
         is None
     )
+
+
+def test_a_rejected_import_caught_in_a_callers_transaction_keeps_the_walk(
+    tmp_path: Path,
+) -> None:
+    repo = _seeded(tmp_path)
+    repo.save_search_event(_project_walk("walk-1", _key(), ["HP:1"]))
+    # The longer walk is written to the stored copy before the changed
+    # manifest is refused.
+    changed = _with_event("pkg-a", _project_walk("walk-1", _key(), ["HP:1", "HP:2"]))
+    changed.manifest.created_at = "2026-10-02T00:00:00Z"
+
+    with (
+        pytest.raises(TransactionRollbackOnly),
+        repo.db.transaction(),
+        pytest.raises(InvalidPackage, match="different manifest hash"),
+    ):
+        repo.import_package(changed)
+
+    assert _copies(repo, "walk-1") == [["HP:1"]]
 
 
 def test_an_append_waiting_for_an_import_grows_the_new_copy_too(

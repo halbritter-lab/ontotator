@@ -10,7 +10,7 @@ from sqlalchemy import func, insert, select, text
 from sqlalchemy.engine import URL, make_url
 
 from ontocurator import settings
-from ontocurator.storage.database import Database
+from ontocurator.storage.database import Database, TransactionRollbackOnly
 from ontocurator.storage.tables import StoredFileRow
 
 
@@ -36,6 +36,20 @@ def test_a_failure_rolls_back_everything_written_in_the_chain(tmp_path: Path) ->
         with db.transaction() as inner:
             inner.execute(insert(StoredFileRow).values(sha256="b" * 64, size=1))
         raise RuntimeError("boom")
+
+    assert _count(db) == 0
+
+
+def test_a_caught_failure_of_a_joined_scope_still_rolls_back_the_chain(
+    tmp_path: Path,
+) -> None:
+    db = database_for(tmp_path / "a.db")
+
+    with pytest.raises(TransactionRollbackOnly), db.transaction() as conn:
+        conn.execute(insert(StoredFileRow).values(sha256="a" * 64, size=1))
+        with pytest.raises(RuntimeError, match="rejected"), db.transaction() as inner:
+            inner.execute(insert(StoredFileRow).values(sha256="b" * 64, size=1))
+            raise RuntimeError("rejected")
 
     assert _count(db) == 0
 
