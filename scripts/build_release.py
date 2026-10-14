@@ -35,9 +35,9 @@ from build_common import (
 REQUIRED_WHEEL_FILES = [
     "ontocurator/__init__.py",
     "ontocurator/cli.py",
-    "ontocurator/storage/schema_v4.sql",
-    "ontocurator/storage/ontology_resources.sql",
-    "ontocurator/storage/search_conditions.sql",
+    "ontocurator/storage/migrations/env.py",
+    "ontocurator/storage/migrations/script.py.mako",
+    "ontocurator/storage/migrations/versions/0001_initial.py",
     "ontocurator/web/index.html",
 ]
 

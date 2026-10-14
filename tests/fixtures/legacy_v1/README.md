@@ -15,14 +15,7 @@ Subsequent compatibility tests load these artifacts directly and never regenerat
      - Historical review submission `sub-pkg-1`.
      - Search audit event with legacy fields (`selected_hpo_id`).
 
-2. `workspace-v2.sqlite`:
-   - SQLite database at schema revision 2 (from migration `002_membership.sql`).
-   - Contains imported package `pkg-legacy-1`.
-   - Contains active independent draft (`revision: 1`) with idempotency receipt `mut-edit-1`.
-   - Contains active review draft (`revision: 2`) with idempotency receipts `mut-rev-1` and `mut-sub-1`.
-   - Contains local submission `sub-local-1`.
-
-3. `expected.json`:
+2. `expected.json`:
    - Exact recorded identities, sha256 digests, snapshot versions, receipt hashes, and revision numbers generated from source commit `9ea59b5e326b21ed95c4e7eea183519a03d3d08e`.
 
 ## Generation

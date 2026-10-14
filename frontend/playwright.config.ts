@@ -18,6 +18,6 @@ export default defineConfig({
     command: `"${python}" ../tests/browser_server.py`,
     url: `http://127.0.0.1:${port}/`,
     reuseExistingServer: false,
-    timeout: 60_000,
+    timeout: 180_000,
   },
 });

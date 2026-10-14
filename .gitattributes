@@ -12,3 +12,6 @@ src/ontocurator/web/** -text -diff
 # Check them out as they are stored, so core.autocrlf does not give the
 # fixtures other line ends, and with them another identity, on Windows.
 *.tsv -text
+
+# Shell scripts run in Git Bash on Windows too; a CR at the line end breaks them.
+*.sh text eol=lf

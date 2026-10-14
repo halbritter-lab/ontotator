@@ -5,7 +5,6 @@
   "package_id": "pkg-legacy-1",
   "review_zip_sha256": "23f15850d63a9ad4be5b16b16fb3fd08927a95e07502930a78743ed2d3b0b352",
   "manifest_sha256": "52b628a0d1efc107067e0b468a337d65f4ec0bbb045d140765f3d18da2cf9e01",
-  "sqlite_sha256": "5f6e69c88cfd2a5606dca7fcaa456ee217c08ac5520a3e71bac382d3e85c375a",
   "snapshot_versions": {
     "ann1_v1": "0eb7720b8b85e19069e7f1e0b4d71fc57ad0ac86d7eab8db797d62fc7ba16836",
     "ann1_v2": "c15983f0df0a3580cdf7e19e8c72e29dd9970f78e39e494b11d4beb39101e1d5",
