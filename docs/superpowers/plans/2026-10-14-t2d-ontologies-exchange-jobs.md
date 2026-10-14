@@ -33,12 +33,13 @@
 | Function | Contract |
 |---|---|
 | `document_from_unit(unit: ontospan.AnnotatedDocument) -> Document` | Uses `document.text` (already canonical NFC/LF) and `text_sha256`; keeps `source_text_sha256` for storage |
-| `unit_to_proposals(unit, profile: TaskProfile, document: Document) -> tuple[list[AnnotationSnapshot], list[EvidenceSnapshot]]` | One snapshot per T1 annotation, built with `domain.annotations.snapshot`; see the rules below |
+| `unit_to_proposals(unit, profile: TaskProfile, document: Document, *, bundle_id: str \| None) -> ImportedProposals` | `ImportedProposals(annotations, evidence, notes: dict[annotation_id, list[str]])`. One snapshot per T1 annotation, built with `domain.annotations.snapshot`; see the rules below |
 | `submission_to_unit(submission, document, profile, layers: Sequence[ontospan.Layer], proposals: Mapping[(id, version), AnnotationSnapshot], *, set_id: str) -> tuple[ontospan.AnnotatedDocument, ExportCounts]` | The reverse direction, rules below |
 | `layers_for(profile, pins) -> list[ontospan.Layer]` | One `Layer` per profile layer: `profile` is the pin's `t1_profile`; `OntologyResource(id=ontology_id, version=release, sha256=sha256)`; the pin's `allowed_roots` |
 
 **Import rules (`unit_to_proposals`):**
-- `annotation_id` is `ontospan.annotation_ref(set_id, annotation_id)`, the URN, so ids from several sets never collide. Evidence ids are `"<annotation_id>#m<index>"`.
+- `annotation_id` is `ontospan.annotation_ref(set_id, annotation_id, bundle_id)`, the URN, so ids from several sets and bundles never collide and the producer's ids stay recoverable with `parse_annotation_ref` (T7 O1). `bundle_id` is the manifest's id, or None for a single `.json` unit. Evidence ids are `"<annotation_id>#m<index>"`.
+- `provenance.notes` are returned in `notes` (they are not part of the snapshot, so its hash is unchanged).
 - `layer_id` must be a profile layer, otherwise `DomainError("T1_UNKNOWN_LAYER")`. `type_id` is the layer's `default_type_id`.
 - `axes_values` is `{axis: value.value}`. An axis that the type does not define is `T1_UNKNOWN_AXIS`. `basis` is not stored; the import report counts the dropped values.
 - Each mention becomes an `EvidenceMention(segments, cue_segments)`. A `document_level` annotation has no evidence.
@@ -65,6 +66,7 @@
 
 **Tests:** `tests/test_t1_mapping.py`. They use the T1 sketch unit from the spec (`Keine Krampfanfälle …`) and an HPO profile with the three axes.
 - `test_a_unit_becomes_proposals_with_urn_ids_and_evidence`: 2 snapshots; the ids start with `urn:ontospan:`; the cue segment is kept; the snapshot versions verify (`verify_snapshot`).
+- `test_imported_ids_keep_bundle_set_and_annotation_id` (T7 O1): `parse_annotation_ref(snapshot.annotation_id)` gives the bundle id, the set id and the original annotation id; `notes` holds the provenance notes.
 - `test_a_document_level_annotation_has_no_evidence`.
 - `test_unknown_layers_and_axes_are_refused` (2 cases).
 - `test_modifiers_refuse_the_whole_unit`: the details list the ids.
@@ -78,7 +80,7 @@
 
 ### Task 2: Ontology files, pins and per-worker loading (migration 0004 part 1)
 
-**Create:** `storage/migrations/versions/0004_ontologies_jobs.py` (this task's tables plus `jobs` from Task 3, one migration); `src/ontocurator/ontology/store.py`.
+**Create:** `storage/migrations/versions/0004_ontologies_jobs.py` (this task's tables plus `jobs` from Task 3 and `proposal_sets` from Task 4, one migration); `src/ontocurator/ontology/store.py`.
 
 | Table | Columns | Keys |
 |---|---|---|
@@ -170,16 +172,30 @@ RETURNING id, kind, status, project_id, payload
   - inserts `projects`, using a synthesised `PackageManifest(package_id=key, task_profile=profile, created_at=now)` so existing readers keep working;
   - inserts `project_ontologies`;
   - every profile ontology must be pinned to a known `ontology_files` sha with the same release (`PIN_MISMATCH`).
-- `add_documents_and_proposals(key, documents, annotations, evidence) -> ImportCounts`:
+- `add_documents_and_proposals(key, documents, proposal_sets: Sequence[ImportedSet]) -> ImportCounts`:
   - an existing `document_id` with another `text_sha256` is refused with `DOCUMENT_CONFLICT` (T3 A1);
   - an identical document is skipped;
-  - proposals are inserted with the snapshot identity rules of T2a.
+  - proposals are inserted with the snapshot identity rules of T2a, each with its `proposal_set_id` and `notes`;
+  - a set whose `(bundle_id, annotation_set_id, document_id)` already exists is skipped, so a re-import adds nothing.
+
+**Imported sets (T7 O1, O2, I3, I9).** Migration 0004 also creates:
+
+| Table / change | Columns | Keys |
+|---|---|---|
+| `proposal_sets` (append-only) | `id` bigint identity; `project_id` → projects; `document_id` text; `bundle_id` text null; `manifest_sha256` text null; `annotation_set_id` text; `set_kind` text; `actors` jsonb (the T1 actors with `name`, `version`, `model`, `run_id`); `payload` jsonb (the T1 annotation set as delivered, `model_dump(mode="json")`); `source_sha256` → stored_files (the imported file); `imported_by` → users null; `imported_at` default now(); `job_id` → jobs null | PK id; UNIQUE NULLS NOT DISTINCT (project_id, bundle_id, annotation_set_id, document_id); FK (project_id, document_id) → documents |
+| `proposal_annotations` + | `proposal_set_id` bigint null → proposal_sets; `notes` jsonb default '[]' | ix (project_id, proposal_set_id) |
+
+Add `"proposal_sets"` to `APPEND_ONLY_TABLES` (triggers and `SELECT, INSERT` grants as in T2c Task 1). `ImportedSet` is `(document_id, bundle_id, manifest_sha256, annotation_set_id, set_kind, actors, payload, ImportedProposals)`.
+
+- **Empty sets (O2):** a unit whose annotation set has no annotations creates the document only: no `proposal_sets` row and no proposals. The import result counts it under `documents_only`.
+- **Tool provenance (I3):** every actor of kind `tool` needs `name` and `version`. Otherwise the whole import is refused with `DomainError("T1_TOOL_PROVENANCE", {"units": [document_id, …]})`, in line with Q11.
+- **Bundle identity (I1, I9):** `manifest_sha256` is the SHA-256 of the `manifest.json` bytes as stored in the bundle; a single `.json` unit has neither bundle id nor manifest hash.
 
 **Import handler `t1_import`** (`src/ontocurator/exchange/jobs.py`). The payload is `{project, blob_sha256, filename}`.
 - The blob is a `.zip` or a directory bundle (`ontospan.read_bundle`) or a single `.json` unit (`load_annotated_document`). The validation uses `ObographOntology.load(blob path)` for each pinned ontology, keyed by `ontology_id`.
 - **Pins must match:** for each layer, the ontology id, the version (= release) and the sha256 (if given) must equal the project's pin. The bundle's `allowed_roots` must equal the pin's. Otherwise `PIN_MISMATCH` with the differences listed (T3 A1).
-- Every unit becomes a document plus proposals (Task 1 mapping). One transaction for the whole bundle.
-- Audits `project.import` with `{units, documents_added, documents_skipped, proposals, dropped_basis}`. The result is the same counts plus `warnings` (ontospan report codes).
+- Every unit becomes a document plus, unless its set is empty, one imported set with its proposals (Task 1 mapping). One transaction for the whole bundle.
+- Audits `project.import` with `{bundle_id, manifest_sha256, producers, units, documents_added, documents_skipped, documents_only, sets_added, sets_skipped, proposals, dropped_basis}`. `producers` lists the distinct tool actors as `{name, version, model, run_id}`. The result is the same counts plus `warnings` (ontospan report codes).
 
 **CLI:**
 - `admin projects create KEY --name N [--description D] --profile profile.json [--pin hp=<sha>] [--allowed-roots hp=HP:0000118,…] [--t1-profile hp=hpo-phenotype]`:
@@ -200,6 +216,14 @@ RETURNING id, kind, status, project_id, payload
 - `test_import_is_audited`.
 - `test_the_cli_creates_a_project_and_imports` (`CliRunner`, inline job).
 - `test_only_leads_and_admins_import`: an annotator gets `NOT_ALLOWED` through `ScopedRepository`.
+- `test_an_imported_set_is_recorded_as_delivered` (O1): one `proposal_sets` row per non-empty unit with the bundle id, the manifest hash and the actors; `payload` validates as `ontospan.AnnotationSet` and equals the delivered set; every proposal row points to it.
+- `test_an_empty_set_creates_only_the_document` (O2): no `proposal_sets` row, no proposals, `documents_only == 1`.
+- `test_tool_actors_need_name_and_version` (I3): a set whose tool actor lacks `version` refuses the whole import with `T1_TOOL_PROVENANCE` naming the unit; nothing is written.
+- `test_two_sets_for_one_document_are_kept_apart`: two bundles with a set each for the same document give two `proposal_sets` rows and distinct proposal ids.
+- `test_the_import_audit_names_the_bundle` (I1, I9): the `project.import` details hold `bundle_id`, `manifest_sha256` and `producers`.
+- `test_the_application_cannot_rewrite_imported_sets`: `UPDATE ontocurator.proposal_sets` fails with "permission denied".
+
+`tests/test_schema.py` gains the three append-only cases of `proposal_sets`; update its expected count accordingly.
 
 **Acceptance:** the tests pass. Commit: `feat(exchange): create projects and import T1 bundles as proposals`.
 
@@ -293,3 +317,4 @@ Both copy the blob to `OUT` when run inline and refuse to overwrite an existing 
 | E6 / P1: v2 package format replaced | 6 |
 | T1 F10: contributors only with consent; pseudonyms | 5 |
 | T3 A1 rules already enforced on import (pins, allowed roots, text collisions) | 4 |
+| T7 O1, O2, I1, I3, I9: imported ids and sets kept as delivered, empty sets create documents only, tool provenance required, bundle id and manifest hash audited | 1, 4 |

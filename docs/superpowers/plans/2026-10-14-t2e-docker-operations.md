@@ -259,7 +259,7 @@ if [ "${CHECK_CONTAINERS:-0}" = "1" ]; then uv run python scripts/container_chec
   - add `tests/fixtures/hp.json` with `admin ontologies add` (copied into the container through `docker compose cp`);
   - create project `smoke` from `tests/fixtures/smoke-profile.json` (a new fixture: the HP layer of `tests/layered_fixtures.py` scenario A as `TaskProfile` JSON);
   - add the annotator role;
-  - import `tests/fixtures/smoke-bundle.zip`, a new fixture made with `ontospan.write_bundle` by `scripts/make_smoke_bundle.py` (committed together with the script; two documents, one tool proposal).
+  - import `tests/fixtures/smoke-bundle.zip`, a new fixture made with `ontospan.write_bundle` by `scripts/make_smoke_bundle.py` (committed together with the script; two documents, one tool proposal whose tool actor has `name` and `version`, as T2d Task 4 requires).
 - `frontend/playwright.stack.config.ts`: `testDir: "./browser-stack"`, `baseURL: "http://127.0.0.1:8000"`, no `webServer`, `workers: 1`.
 - `frontend/browser-stack/smoke.spec.ts` with one test, "stack smoke: log in, open the project, annotate, submit":
   - log in as `smoke-annotator`;
@@ -290,7 +290,7 @@ docker compose -f docker-compose.dev.yml down -v
 **Seed (`loadtest/seed.py`):** against the dev stack it creates
 - 30 users `load-01` … `load-30`, all annotators of project `load`;
 - 1 000 synthetic documents of 1 500–3 000 characters, built from HPO labels and filler text with a fixed seed;
-- for each document, 3 tool proposals;
+- for each document, 3 tool proposals, imported as one T1 bundle whose tool actor has `name` and `version` (T2d Task 4);
 - the ontology is the real HPO (`--hpo PATH` to `hp.json` 2026-06-23 or newer). Without it, the script refuses: measurements on the fixture ontology are not representative (E11).
 
 **Workload** (`locustfile.py`, one `HttpUser` per seeded user; each logs in once with CSRF):
