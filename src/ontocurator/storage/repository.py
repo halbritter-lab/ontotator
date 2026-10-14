@@ -211,12 +211,15 @@ class Repository:
             for path, data in package.embedded_files.items()
         }
         with self.db.transaction() as conn:
+            # Content identities are global, so imports of any two projects
+            # check and write them one after the other.
+            conn.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
             conn.execute(
                 select(
                     func.pg_advisory_xact_lock(_lock_id("project", manifest.package_id))
                 )
             )
-            self._verify_existing_snapshots(conn, package)
+            longest = self._verify_existing_snapshots(conn, package)
             existing = conn.execute(
                 select(
                     ProjectRow.id,
@@ -251,7 +254,7 @@ class Repository:
                 )
                 .returning(ProjectRow.id)
             ).scalar_one()
-            self._insert_project_content(conn, project_id, package, profile)
+            self._insert_project_content(conn, project_id, package, profile, longest)
             self._store_resources(conn, project_id, manifest.search_conditions, files)
         return manifest.package_id
 
@@ -261,6 +264,7 @@ class Repository:
         project_id: int,
         package: ValidatedPackage,
         profile: TaskProfile,
+        longest: dict[str, SearchEventRecord],
     ) -> None:
         package_id = package.manifest.package_id
         order = {
@@ -307,17 +311,24 @@ class Repository:
         for event in package.search_events:
             local = _local_import_key(event.workspace_key, package_id, profile)
             self._insert_search_event(
-                conn, project_id, event, local_key=_key_str(local), imported=True
+                conn,
+                project_id,
+                longest.get(event.event_id, event),
+                local_key=_key_str(local),
+                imported=True,
             )
 
     def _verify_existing_snapshots(
         self, conn: Connection, package: ValidatedPackage
-    ) -> None:
+    ) -> dict[str, SearchEventRecord]:
         """Never keep conflicting immutable content under an existing identity.
 
         Identities are global, as in the desktop workspace: a snapshot,
         submission or search event of any project with the same identity must
-        have the same content. Two exports of one tree walk keep the longer one.
+        have the same content. Two exports of one tree walk keep the longer one:
+        shorter stored copies are updated, and the returned map gives, per
+        event ID, a stored copy longer than the incoming event, so that every
+        copy of an event ID stays equal.
         """
         for (annotation_id, version), snap in package.annotations.items():
             expected = canonical_hash(encode_snapshot(snap))
@@ -347,27 +358,38 @@ class Repository:
             ).scalars():
                 if Submission.model_validate(stored) != submission:
                     raise InvalidPackage("Conflicting immutable submission content")
+        longest: dict[str, SearchEventRecord] = {}
         for event in package.search_events:
             rows = conn.execute(
                 select(SearchEventRow.project_id, SearchEventRow.payload).where(
                     SearchEventRow.event_id == event.event_id
                 )
             ).all()
-            for row in rows:
-                existing = SearchEventRecord.model_validate(row.payload)
+            copies = [
+                (row.project_id, SearchEventRecord.model_validate(row.payload))
+                for row in rows
+            ]
+            winner = event
+            for _project_id, existing in copies:
                 if existing == event:
                     continue
                 if not _same_tree_walk(existing, event):
                     raise InvalidPackage("Conflicting search event content")
-                if len(event.candidates) > len(existing.candidates):
+                if len(existing.candidates) > len(winner.candidates):
+                    winner = existing
+            for project_id, existing in copies:
+                if len(winner.candidates) > len(existing.candidates):
                     conn.execute(
                         update(SearchEventRow)
                         .where(
-                            SearchEventRow.project_id == row.project_id,
+                            SearchEventRow.project_id == project_id,
                             SearchEventRow.event_id == event.event_id,
                         )
-                        .values(payload=event.model_dump(mode="json"))
+                        .values(payload=winner.model_dump(mode="json"))
                     )
+            if winner is not event:
+                longest[event.event_id] = winner
+        return longest
 
     @staticmethod
     def _verify_existing_package_content(

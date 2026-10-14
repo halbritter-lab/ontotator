@@ -1,17 +1,21 @@
 """The PostgreSQL repository: projects stay apart, history stays immutable."""
 
 import hashlib
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 from pg_harness import database_for
-from sqlalchemy import select
+from sqlalchemy import func, select
 from test_storage import _sample_package
+from test_storage_regressions import key_for
 
 from ontocurator.domain.documents import Document
 from ontocurator.domain.errors import DomainError, InvalidPackage
-from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import StoredFileRow
+from ontocurator.packages.models import SearchEventRecord, ValidatedPackage
+from ontocurator.storage.repository import Repository, _lock_id
+from ontocurator.storage.tables import SearchEventRow, StoredFileRow
 
 
 def _repo(tmp_path: Path) -> Repository:
@@ -128,3 +132,69 @@ def test_a_failed_import_leaves_nothing_behind(
 
     assert repo.list_manifests() == []
     assert repo.get_document("pkg-a", "doc-1") is None
+
+
+def _walk(candidates: list[str]) -> SearchEventRecord:
+    return SearchEventRecord.model_validate(
+        {
+            "event_id": "walk-1",
+            "workspace_key": key_for(),
+            "annotation_id": "ann-1",
+            "query": "HP:0001250",
+            "route": "browse",
+            "candidates": list(candidates),
+            "ranked_ids": list(candidates),
+            "ontology_release": "2026-06-23",
+            "index_identity": "index",
+            "timestamp": "2026-10-08T10:00:00+00:00",
+        }
+    )
+
+
+def _with_event(package_id: str, event: SearchEventRecord) -> ValidatedPackage:
+    package = _sample_package(package_id)
+    package.search_events = [event]
+    return package
+
+
+@pytest.mark.parametrize("first_length", [3, 2], ids=["longer-first", "shorter-first"])
+def test_every_copy_of_a_tree_walk_keeps_the_longest_state(
+    tmp_path: Path, first_length: int
+) -> None:
+    repo = _repo(tmp_path)
+    terms = ["HP:1", "HP:2", "HP:3"]
+
+    repo.import_package(_with_event("export-1", _walk(terms[:first_length])))
+    repo.import_package(_with_event("export-2", _walk(terms[: 5 - first_length])))
+
+    with repo.db.transaction() as conn:
+        stored = conn.execute(
+            select(SearchEventRow.payload).where(SearchEventRow.event_id == "walk-1")
+        ).scalars()
+        copies = [SearchEventRecord.model_validate(p) for p in stored]
+    assert [c.candidates for c in copies] == [terms, terms]
+    assert [c.ranked_ids for c in copies] == [terms, terms]
+
+
+def test_imports_of_different_projects_wait_for_each_other(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold_the_import_lock() -> None:
+        with repo.db.engine.begin() as conn:
+            conn.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
+            held.set()
+            release.wait(10)
+
+    with ThreadPoolExecutor(2) as pool:
+        holder = pool.submit(hold_the_import_lock)
+        assert held.wait(10)
+        importing = pool.submit(repo.import_package, _sample_package("pkg-a"))
+        try:
+            with pytest.raises(TimeoutError):
+                importing.result(timeout=1)
+        finally:
+            release.set()
+        holder.result(timeout=10)
+        assert importing.result(timeout=10) == "pkg-a"
