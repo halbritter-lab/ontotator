@@ -1366,9 +1366,22 @@ class Repository:
     # --- search events ------------------------------------------------------ #
 
     def save_search_event(self, event: SearchEventRecord) -> None:
-        """Store a new event in the project of its workspace."""
+        """Store a new event in the project of its workspace.
+
+        An event ID is new across all projects, as under the desktop editor's
+        global key: a growing walk updates every copy of its ID, so a second
+        event under a known ID would overwrite another project's event.
+        """
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, event.workspace_key.package_id)
+            # Not locked: local IDs are a fresh uuid4 or a hash over the
+            # workspace and the mutation, so two concurrent local saves never
+            # bring the same new ID. Only imports repeat known IDs.
+            known = conn.execute(
+                select(exists().where(SearchEventRow.event_id == event.event_id))
+            ).scalar_one()
+            if known:
+                raise DomainError("SEARCH_EVENT_EXISTS", {"event_id": event.event_id})
             self._insert_search_event(
                 conn,
                 project_id,
@@ -1516,7 +1529,11 @@ class Repository:
                         DocumentRow.text,
                         DocumentRow.language,
                         DocumentRow.text_sha256,
-                    ).where(DocumentRow.project_id == project_id)
+                    )
+                    .where(DocumentRow.project_id == project_id)
+                    .order_by(
+                        DocumentRow.position.asc().nulls_last(), DocumentRow.document_id
+                    )
                 )
             }
             in_drafts = (

@@ -656,3 +656,37 @@ def test_an_export_contains_proposals_drafts_history_and_events(
     assert exported.evidence == package.evidence
     assert exported.submissions == {"sub-2": submission}
     assert exported.search_events == [event]
+
+
+def test_a_local_search_event_with_a_known_id_is_refused(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    repo.import_package(_sample_package("pkg-b"))
+    repo.save_search_event(_project_walk("walk-1", _key(), ["HP:1"]))
+
+    for key in (_key(), _key("pkg-b")):
+        with pytest.raises(DomainError, match="SEARCH_EVENT_EXISTS"):
+            repo.save_search_event(_project_walk("walk-1", key, ["HP:2"]))
+
+    assert _copies(repo, "walk-1") == [["HP:1"]]
+
+
+def test_an_exported_project_imports_and_exports_unchanged(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    repo.run_mutation(_key(), _envelope("m1", 0), _check)
+    repo.run_mutation(_key(), _envelope("m2", 1), lambda _d: _submission(_key(), 2))
+    repo.save_search_event(_project_walk("walk-1", _key(), ["HP:0001252"]))
+    first = repo.export_package("pkg-a")
+    first.manifest = first.manifest.model_copy(update={"package_id": "pkg-copy"})
+
+    repo.import_package(first)
+    second = repo.export_package("pkg-copy")
+
+    assert second.manifest == first.manifest
+    assert second.documents == first.documents
+    assert second.annotations == first.annotations
+    assert second.evidence == first.evidence
+    assert second.submissions == first.submissions
+    assert list(second.submissions) == ["sub-2"]
+    assert second.search_events == first.search_events
+    assert [e.event_id for e in second.search_events] == ["walk-1"]
+    assert second.embedded_files == first.embedded_files
