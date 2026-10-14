@@ -368,3 +368,129 @@ def test_a_new_draft_resumes_the_latest_submission(tmp_path: Path) -> None:
 
     assert draft.revision == 7
     assert draft.annotations == resumed.snapshots
+
+
+from sqlalchemy.exc import IntegrityError  # noqa: E402
+
+from ontocurator.storage.repository import _key_str  # noqa: E402
+from ontocurator.storage.tables import DraftRow, MutationReceiptRow  # noqa: E402
+
+
+def test_a_failure_in_the_callers_transaction_undoes_the_mutation(
+    tmp_path: Path,
+) -> None:
+    repo = _seeded(tmp_path)
+
+    with (
+        pytest.raises(RuntimeError, match="later step failed"),
+        repo.db.transaction(),
+    ):
+        repo.run_mutation(_key(), _envelope("m1", 0), _check)
+        raise RuntimeError("later step failed")
+
+    draft = repo.open_draft(_key())
+    assert (draft.revision, draft.checked_layer_ids) == (0, [])
+    with repo.db.transaction() as conn:
+        assert (
+            conn.execute(
+                select(func.count()).select_from(MutationReceiptRow)
+            ).scalar_one()
+            == 0
+        )
+
+
+def test_a_retried_submission_replays_the_same_submission(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    submission = _submission(_key(), 1)
+    repo.run_mutation(_key(), _envelope("submit", 0), lambda _d: submission)
+
+    def must_not_run(_draft: Draft) -> Draft:
+        raise AssertionError("a replay must not run the operation")
+
+    assert repo.run_mutation(_key(), _envelope("submit", 0), must_not_run) == submission
+
+
+def test_a_local_submission_with_a_known_id_is_refused(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    repo.run_mutation(_key(), _envelope("submit", 0), lambda _d: _submission(_key(), 1))
+    other = _key(annotator_id="ann-2")
+
+    with pytest.raises(IntegrityError):
+        repo.run_mutation(
+            other, _envelope("submit", 0), lambda _d: _submission(other, 1)
+        )
+
+    assert repo.get_submissions_for_workspace(other) == []
+
+
+def test_opening_a_draft_waits_for_a_running_mutation(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold_the_draft_lock() -> None:
+        with repo.db.engine.begin() as conn:
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock(
+                        _lock_id("draft", "pkg-a", _key_str(_key()))
+                    )
+                )
+            )
+            held.set()
+            release.wait(10)
+
+    with ThreadPoolExecutor(2) as pool:
+        holder = pool.submit(hold_the_draft_lock)
+        assert held.wait(10)
+        opening = pool.submit(repo.open_draft, _key())
+        try:
+            with pytest.raises(TimeoutError):
+                opening.result(timeout=1)
+        finally:
+            release.set()
+        holder.result(timeout=10)
+        assert opening.result(timeout=10).revision == 0
+
+
+def test_two_first_opens_of_one_draft_create_one_row(tmp_path: Path) -> None:
+    repo = _seeded(tmp_path)
+
+    with ThreadPoolExecutor(2) as pool:
+        drafts = list(pool.map(lambda _i: repo.open_draft(_key()), range(2)))
+
+    assert [d.revision for d in drafts] == [0, 0]
+    with repo.db.transaction() as conn:
+        assert (
+            conn.execute(select(func.count()).select_from(DraftRow)).scalar_one() == 1
+        )
+
+
+def test_an_import_waits_for_a_writer_of_a_known_search_event(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    walk = _walk(["HP:1", "HP:2"])
+    repo.import_package(_with_event("export-1", walk))
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold_the_event_row() -> None:
+        with repo.db.engine.begin() as conn:
+            conn.execute(
+                select(SearchEventRow.event_id)
+                .where(SearchEventRow.event_id == "walk-1")
+                .with_for_update()
+            )
+            held.set()
+            release.wait(10)
+
+    with ThreadPoolExecutor(2) as pool:
+        holder = pool.submit(hold_the_event_row)
+        assert held.wait(10)
+        importing = pool.submit(repo.import_package, _with_event("export-2", walk))
+        try:
+            with pytest.raises(TimeoutError):
+                importing.result(timeout=1)
+        finally:
+            release.set()
+        holder.result(timeout=10)
+        assert importing.result(timeout=10) == "export-2"

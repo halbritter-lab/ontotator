@@ -306,7 +306,7 @@ class Repository:
         for submission in package.submissions.values():
             local = _local_import_key(submission.origin_key, package_id, profile)
             self._insert_submission(
-                conn, project_id, submission, local_key=_key_str(local)
+                conn, project_id, submission, local_key=_key_str(local), imported=True
             )
         for event in package.search_events:
             local = _local_import_key(event.workspace_key, package_id, profile)
@@ -360,10 +360,13 @@ class Repository:
                     raise InvalidPackage("Conflicting immutable submission content")
         longest: dict[str, SearchEventRecord] = {}
         for event in package.search_events:
+            # Lock the stored copies so that a concurrent append cannot be
+            # overwritten by the update below.
             rows = conn.execute(
-                select(SearchEventRow.project_id, SearchEventRow.payload).where(
-                    SearchEventRow.event_id == event.event_id
-                )
+                select(SearchEventRow.project_id, SearchEventRow.payload)
+                .where(SearchEventRow.event_id == event.event_id)
+                .order_by(SearchEventRow.project_id)
+                .with_for_update()
             ).all()
             copies = [
                 (row.project_id, SearchEventRecord.model_validate(row.payload))
@@ -799,25 +802,28 @@ class Repository:
 
     @staticmethod
     def _insert_submission(
-        conn: Connection, project_id: int, submission: Submission, *, local_key: str
+        conn: Connection,
+        project_id: int,
+        submission: Submission,
+        *,
+        local_key: str,
+        imported: bool,
     ) -> None:
         origin = submission.origin_key
-        conn.execute(
-            pg_insert(SubmissionRow)
-            .values(
-                project_id=project_id,
-                submission_id=submission.submission_id,
-                local_key=local_key,
-                origin_key=_key_str(origin),
-                document_id=origin.document_id,
-                annotator_id=origin.annotator_id,
-                mode=origin.mode,
-                draft_revision=submission.draft_revision,
-                payload=_submission_payload(submission),
-                created_at=submission.created_at,
-            )
-            .on_conflict_do_nothing()
+        statement = pg_insert(SubmissionRow).values(
+            project_id=project_id,
+            submission_id=submission.submission_id,
+            local_key=local_key,
+            origin_key=_key_str(origin),
+            document_id=origin.document_id,
+            annotator_id=origin.annotator_id,
+            mode=origin.mode,
+            draft_revision=submission.draft_revision,
+            payload=_submission_payload(submission),
+            created_at=submission.created_at,
         )
+        # Imported submissions may already be known; a local one must be new.
+        conn.execute(statement.on_conflict_do_nothing() if imported else statement)
 
     @staticmethod
     def _insert_search_event(
@@ -918,9 +924,28 @@ class Repository:
     def open_draft(
         self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
     ) -> Draft:
-        """Open or initialize the draft of a workspace key."""
+        """Open or initialize the draft of a workspace key.
+
+        Takes the draft lock, so that a draft is never read while a mutation
+        of it is half committed.
+        """
         with self.db.transaction() as conn:
+            self._lock_draft(conn, key)
             return self._open_draft(conn, key, targets)
+
+    @staticmethod
+    def _lock_draft(conn: Connection, key: WorkspaceKey) -> None:
+        """Serialise the readers and writers of one draft until the transaction ends.
+
+        The advisory lock works before the draft row exists.
+        """
+        conn.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    _lock_id("draft", key.package_id, _key_str(key))
+                )
+            )
+        )
 
     def _open_draft(
         self, conn: Connection, key: WorkspaceKey, targets: ReviewTargetSet | None
@@ -1141,13 +1166,7 @@ class Repository:
         request_hash = canonical_hash(envelope.model_dump())
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, key.package_id)
-            conn.execute(
-                select(
-                    func.pg_advisory_xact_lock(
-                        _lock_id("draft", key.package_id, key_string)
-                    )
-                )
-            )
+            self._lock_draft(conn, key)
             receipt = conn.execute(
                 select(
                     MutationReceiptRow.request_hash, MutationReceiptRow.response
@@ -1224,7 +1243,9 @@ class Repository:
                     .where(DraftRow.id == draft_row.id)
                     .values(revision=new_revision, updated_at=now)
                 )
-                self._insert_submission(conn, project_id, result, local_key=key_string)
+                self._insert_submission(
+                    conn, project_id, result, local_key=key_string, imported=False
+                )
                 response = _submission_payload(result)
             else:
                 raise ValueError(f"Unsupported operation return type: {type(result)}")
