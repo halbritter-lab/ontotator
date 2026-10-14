@@ -1,6 +1,6 @@
 # T1: Shared Annotation Format (Ontocurator · Phentrieve · Benchmark)
 
-As of: 2026-10-14 · Status: **Design agreed, review of the file pending** · Part of the roadmap `2026-10-14-roadmap-web-service-analysis.md` (E4, E5, E7)
+As of: 2026-10-14 · Status: **Design agreed** · Part of the roadmap `2026-10-14-roadmap-web-service-analysis.md` (E4, E5, E7)
 
 ## Starting Point
 
@@ -230,6 +230,9 @@ The offsets in the sketch have been verified. The JSON Schema and fixtures of th
   In addition, the chunk-relative offsets of the REST and MCP paths are converted to document offsets (F2).
 - **Benchmark:** `build_editor_packages.py` and the planned editor import (spec §8.2) are switched to this format. The restriction to HP:0000118 is retained as `allowed_roots` as long as guideline R0 applies. Guideline R3 has no `unknown`. The benchmark has to define on import how it handles it, e.g. exclude it or evaluate it as a separate category.
 
-## Open Items
+## Refinements While Planning (2026-10-14)
 
-- Package name, working title `phenotype-annotation-schema`. Since the core is generic, a neutral name would also be possible. The decision is made when the repo is created.
+- **Package name:** `ontospan`, import `ontospan`. Developed under `Development/ontospan`.
+- **Layers inside the unit:** a single annotated document must be self-describing, because Phentrieve writes single units. Therefore `annotation_set.layers[]` declares each layer: `layer_id`, `profile`, ontology resource and `allowed_roots`. The bundle manifest repeats the union of all layers. Units whose layers conflict with each other cannot form a bundle.
+- **Ontology `sha256` is optional in the format.** Tools that know only a release version (e.g. Phentrieve's HPO database) can still write valid units. Ontocurator always sets it, and releases carry it.
+- **Phenopacket export without a hard dependency:** the export builds the protobuf-JSON structure directly. The `[phenopacket]` extra only adds validation against the official `phenopackets` classes.
