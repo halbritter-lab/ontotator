@@ -73,6 +73,9 @@ def test_serve_warns_when_workspace_is_cloud_synced(tmp_path: Path) -> None:
     assert "OneDrive" in result.output
     assert "Warning" in result.output
     assert str(ws.resolve()) in result.output
+    # The database is PostgreSQL now; what sync can disturb are the files there.
+    assert "SQLite" not in result.output
+    assert "database" not in result.output
 
 
 # --- Finding 5: legacy per-user settings are never imported silently ----- #

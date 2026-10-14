@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from ontocurator.domain.errors import (
 )
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import Repository
+from ontocurator.storage.schema import current_revision, head_revision
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,16 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         # Close the engine again if anything after it fails, so a failed
         # start does not keep pooled connections open.
         try:
+            # Migrations run separately as the schema owner (T2 index D-d); a
+            # database that is not at this version's head is refused here, with
+            # a clear error instead of a missing table on the first query.
+            with db.transaction() as conn:
+                current = current_revision(conn)
+            head = head_revision()
+            if current != head:
+                raise DomainError(
+                    "DATABASE_NOT_MIGRATED", {"current": current, "head": head}
+                )
             repo = Repository(db)
 
             from ontocurator.ontology.registry import OntologyRegistry
@@ -118,7 +130,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 registry=registry,
             )
         except BaseException:
-            db.close()
+            # Never let a failing clean-up hide why the start failed.
+            with contextlib.suppress(Exception):
+                db.close()
             raise
 
         # Security middleware for API requests

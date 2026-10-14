@@ -40,3 +40,31 @@ def test_upgrade_without_a_url_explains_what_is_missing(
 
     assert result.exit_code == 1
     assert "ONTOCURATOR_MIGRATION_DATABASE_URL is not set" in result.output
+
+
+def test_serve_on_an_unmigrated_database_points_to_db_upgrade(
+    tmp_path: Path,
+) -> None:
+    from unittest.mock import patch
+
+    url = unmigrated_database_url(tmp_path / "empty.db")
+
+    with patch("ontocurator.cli.run_server") as mock_run:
+        result = runner.invoke(
+            app,
+            [
+                "serve",
+                "-w",
+                str(tmp_path),
+                "--database-url",
+                url,
+                "--no-browser",
+                "--port",
+                "0",
+            ],
+        )
+
+    assert result.exit_code == 1
+    assert "ontocurator db upgrade" in result.output
+    assert url not in result.output
+    mock_run.assert_not_called()

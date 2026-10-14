@@ -10,7 +10,7 @@ on every start, removed on clean shutdown).
 A second launch that cannot take the lock reads the instance file, verifies the
 running server answers an authenticated request, and then just hands over
 (opens the browser / forwards a dropped file) instead of starting a second
-server on the same SQLite database.
+server on the same workspace.
 """
 
 from __future__ import annotations

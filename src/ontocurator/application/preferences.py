@@ -1,8 +1,8 @@
 """Small per-workspace user preferences (last identity, mode per package).
 
-Stored as ``<workspace>/preferences.json`` next to the database rather than in
+Stored as ``<workspace>/preferences.json`` in the data folder rather than in
 the browser, so a freshly unpacked copy on a shared computer never inherits
-the previous person's identity. Kept out of the SQLite schema on purpose: it
+the previous person's identity. Kept out of the database schema on purpose: it
 is convenience state, not curation data, and needs no schema migration.
 """
 

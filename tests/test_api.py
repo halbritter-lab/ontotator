@@ -972,3 +972,65 @@ def test_a_failing_start_closes_the_database(
         create_app(config)
 
     assert len(closed) == 1
+
+
+def test_a_failing_close_does_not_hide_why_the_start_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ontocurator.ontology.registry import OntologyRegistry
+    from ontocurator.storage.database import Database
+
+    original_close = Database.close
+    failures: list[Database] = []
+
+    def failing_close(self: Database) -> None:
+        original_close(self)
+        if not failures:  # the clean-up after the test closes it again
+            failures.append(self)
+            raise RuntimeError("close failed")
+
+    def broken(_self: OntologyRegistry) -> None:
+        raise RuntimeError("ontology start failed")
+
+    monkeypatch.setattr(Database, "close", failing_close)
+    monkeypatch.setattr(OntologyRegistry, "load_registered", broken)
+    config = AppConfig(
+        workspace_dir=tmp_path,
+        database_url=database_url_for(tmp_path / "start.db"),
+        session_token="test-token",
+    )
+
+    with pytest.raises(RuntimeError, match="ontology start failed"):
+        create_app(config)
+    assert len(failures) == 1
+
+
+def test_an_unmigrated_database_is_refused_at_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pg_harness import unmigrated_database_url
+
+    from ontocurator.domain.errors import DomainError
+    from ontocurator.storage.database import Database
+    from ontocurator.storage.schema import head_revision
+
+    closed: list[Database] = []
+    original_close = Database.close
+
+    def tracking_close(self: Database) -> None:
+        closed.append(self)
+        original_close(self)
+
+    monkeypatch.setattr(Database, "close", tracking_close)
+    config = AppConfig(
+        workspace_dir=tmp_path,
+        database_url=unmigrated_database_url(tmp_path / "empty.db"),
+        session_token="test-token",
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        create_app(config)
+
+    assert exc_info.value.code == "DATABASE_NOT_MIGRATED"
+    assert exc_info.value.details == {"current": None, "head": head_revision()}
+    assert len(closed) == 1

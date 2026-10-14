@@ -10,7 +10,8 @@ Location rules (see README "Where your data lives"):
   install location). Config goes to the OS user config dir, the default
   workspace to the local (non-roaming) user data dir, e.g.
   ``%LOCALAPPDATA%\\Ontocurator\\workspace``. ``Documents`` is avoided because it
-  is frequently synced by OneDrive & co., which can corrupt a live SQLite file.
+  is frequently synced by OneDrive & co., which can interfere with files that
+  are being written.
 * **Development mode** - running from source. Config goes to the OS user config
   dir, the default workspace is ``./workspace`` relative to the current
   directory. Pass ``--workspace`` explicitly for anything but local hacking.

@@ -412,7 +412,8 @@ def serve(
             "--workspace",
             "-w",
             help=(
-                "Directory where packages, drafts, and database are stored. "
+                "Data folder for stored files, ontologies, preferences and "
+                "exports (the database is PostgreSQL, see --database-url). "
                 "Default: the saved workspace, else ./workspace when run from "
                 "source, the app folder's workspace/ for the portable build, or "
                 "the local user data folder (e.g. %LOCALAPPDATA%\\Ontocurator\\"
@@ -651,8 +652,8 @@ def serve(
     if sync_provider is not None:
         typer.echo(
             f"Warning: Workspace {ws} is inside a {sync_provider} folder. Cloud "
-            "synchronisation can corrupt the SQLite database while Ontocurator is "
-            "running; use a local folder or pause syncing.",
+            "synchronisation can interfere with the files Ontocurator writes "
+            "there while it is running; use a local folder or pause syncing.",
             err=True,
         )
 
@@ -763,9 +764,13 @@ def serve(
         try:
             api_app = create_app(config)
         except DomainError as exc:
-            if exc.code == "UNKNOWN_DB_VERSION":
+            if exc.code == "DATABASE_NOT_MIGRATED":
+                details = exc.details if isinstance(exc.details, dict) else {}
                 typer.echo(
-                    f"Error: Newer database version detected: {exc.details}",
+                    "Error: The database schema is at revision "
+                    f"{details.get('current') or 'none'}, this version needs "
+                    f"{details.get('head')}. Run 'ontocurator db upgrade' with the "
+                    "schema owner's credentials first.",
                     err=True,
                 )
             else:
@@ -845,8 +850,9 @@ def serve(
             typer.echo(
                 f"  Warning: the data folder is inside a {sync_provider} folder."
             )
-            typer.echo("  Cloud sync can corrupt the open database. Prefer a local")
-            typer.echo("  folder (see README 'Where data lives') or pause syncing.")
+            typer.echo("  Cloud sync can interfere with the files written there.")
+            typer.echo("  Prefer a local folder (see README 'Where data lives') or")
+            typer.echo("  pause syncing.")
         typer.echo(rule)
 
         def _on_started() -> None:
