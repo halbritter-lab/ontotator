@@ -149,3 +149,41 @@ answer; the least surprising option was taken and should be confirmed.
   `succeeded = matches and not locked and user exists` implies). Attempts are not serialised per
   account, so concurrent logins may exceed the limit by the number in flight. An invalid username is
   recorded lower-cased and cut to 128 characters; a user agent is cut to 512.
+- Task 5 (review fix): `login` read the user without a lock, so a password change committed while
+  Argon2 ran found no session to revoke and the session inserted afterwards survived -> `login` locks
+  the user row `FOR NO KEY UPDATE` before it reads the credential, counts attempts and verifies. A
+  password change (`FOR UPDATE` on the user) now waits for such a login and revokes its session. This
+  also serialises the logins of one account (the per-account limit can no longer be exceeded by
+  parallel attempts; the address limit still can, since unknown names lock nothing) and gives a
+  rehashing login and `redeem_code` the same lock order (user, then credential). Test:
+  `test_a_login_during_a_password_change_leaves_no_old_session` (Argon2 held open while the redeem
+  runs). This replaces the earlier note that attempts are not serialised per account.
+- Task 5 (review fix): attempts refused because of a lock counted as failures and extended the lock
+  indefinitely, against Q8 ("for the rest of that window") -> `login_attempts` has a new column
+  `throttled boolean NOT NULL DEFAULT false` (in 0002, which is unreleased, and `tables.py`), set on
+  every attempt made while the account or the address is locked; the lockout counts only
+  `succeeded = false AND throttled = false`. The lock thus ends with the window of the failures that
+  caused it. Test: `test_attempts_while_locked_do_not_extend_the_lock`. This replaces the earlier note
+  that attempts while locked keep the lock.
+- Task 5 (review fix): `login` refuses to run inside an open transaction of its context
+  (`RuntimeError`, via the new `Database.in_transaction()`), because an outer rollback would erase the
+  attempt row and with it the lockout.
+- Task 3/5 (review fix): `needs_rehash` used argon2's `check_needs_rehash`, which is true for any other
+  parameters -> it is true only for a hash weaker than ours (m, t, p, hash or salt length lower), of
+  another type or version, or unparseable, because the first login of a bootstrapped or recovered admin
+  would otherwise replace a stronger supplied hash with a cheaper one. `tests/test_passwords.py`
+  (`test_only_weaker_or_unusable_hashes_need_a_rehash`) and two login tests cover both directions.
+- Task 4/5 (review fix): the function-level import is gone -> `token_digest` and `revoke_user_sessions`
+  live in the dependency-free `auth/tokens.py`; `sessions.py` re-exports `revoke_user_sessions` (the
+  plan's interface) and imports `normalize_username` from `accounts.py` at the top. This replaces the
+  earlier circular-import note.
+- Tasks 4/5 (review fix): new tests for a code refused after a generation bump, the code of an inactive
+  user, the correct password while locked, the 60 s `last_seen_at` throttle, both rehash directions,
+  the lost-session race and the refused ambient transaction. Counts: `tests/test_accounts.py` 20,
+  `tests/test_sessions.py` 17, `tests/test_passwords.py` 26, `tests/test_schema.py` 19.
+
+## Open risks
+
+- Deactivating or demoting the last active system admin is not prevented. Accepted, because the CLI
+  `admin users activate`/`set-admin` (Task 7) can undo it with database access.
+- `login_attempts` is never pruned; it grows by one row per attempt until a retention job exists.

@@ -10,14 +10,14 @@ from pathlib import Path
 
 import pytest
 from pg_harness import column_values, database_for
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ontocurator.auth.accounts import CODE_LIFETIME, AccountService
 from ontocurator.auth.audit import Actor
 from ontocurator.auth.passwords import hash_password
 from ontocurator.auth.sessions import SessionService
 from ontocurator.domain.errors import DomainError, LoginFailed
-from ontocurator.storage.tables import AuditEventRow
+from ontocurator.storage.tables import AuditEventRow, UserRow
 
 PASSWORD = "correct horse battery"
 NEW_PASSWORD = "another long passphrase"
@@ -298,3 +298,29 @@ def test_one_username_created_twice_at_once_is_taken_once(
     failures = [r for r in results if isinstance(r, DomainError)]
     assert [f.code for f in failures] == ["USERNAME_TAKEN"]
     assert [u.username for u in services.accounts.list_users()] == ["alice"]
+
+
+def test_a_code_is_refused_after_the_account_changed(services: Services) -> None:
+    issued = services.accounts.create_user(ADMIN, "alice", "Alice")
+    services.accounts.set_active(ADMIN, "alice", False)
+    services.accounts.set_active(ADMIN, "alice", True)
+
+    with pytest.raises(DomainError) as error:
+        services.accounts.redeem_code("alice", issued.code, PASSWORD)
+
+    assert _code(error) == "CODE_INVALID"
+
+
+def test_the_code_of_an_inactive_user_is_refused(services: Services) -> None:
+    issued = services.accounts.create_user(ADMIN, "alice", "Alice")
+    # Deactivated behind the service's back, so the code's generation still
+    # matches and only the inactive account refuses it.
+    with services.accounts.db.transaction() as conn:
+        conn.execute(
+            update(UserRow).where(UserRow.username == "alice").values(active=False)
+        )
+
+    with pytest.raises(DomainError) as error:
+        services.accounts.redeem_code("alice", issued.code, PASSWORD)
+
+    assert _code(error) == "CODE_INVALID"

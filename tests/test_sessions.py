@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from pg_harness import count_rows, database_for
+from argon2 import PasswordHasher
+from pg_harness import column_values, count_rows, database_for
+from sqlalchemy import update
 
+import ontocurator.auth.sessions as sessions_module
 from ontocurator.auth.accounts import AccountService
 from ontocurator.auth.audit import Actor
 from ontocurator.auth.sessions import SessionService
 from ontocurator.domain.errors import LoginFailed
+from ontocurator.storage.tables import PasswordCredentialRow
 
 PASSWORD = "correct horse battery"
 ADMIN = Actor(None, "test:admin")
@@ -143,3 +148,118 @@ def test_an_unknown_token_resolves_to_nobody(services: Services) -> None:
 
     assert services.sessions.resolve("not-a-token") is None
     assert services.sessions.resolve("") is None
+
+
+def test_the_correct_password_fails_while_the_account_is_locked(
+    services: Services,
+) -> None:
+    for _ in range(5):
+        with pytest.raises(LoginFailed):
+            services.sessions.login("alice", "wrong password!", client_ip="10.0.0.1")
+
+    with pytest.raises(LoginFailed):
+        services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+
+    assert count_rows(services.sessions, "sessions") == 0
+
+
+def test_attempts_while_locked_do_not_extend_the_lock(services: Services) -> None:
+    for _ in range(5):
+        with pytest.raises(LoginFailed):
+            services.sessions.login("alice", "wrong password!", client_ip="10.0.0.1")
+    services.clock.advance(minutes=10)
+    for password in ["wrong password!"] * 5 + [PASSWORD]:
+        with pytest.raises(LoginFailed):
+            services.sessions.login("alice", password, client_ip="10.0.0.1")
+
+    services.clock.advance(minutes=5, seconds=1)
+    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+    assert count_rows(services.sessions, "login_attempts") == 12
+
+
+def test_last_seen_is_written_at_most_once_a_minute(services: Services) -> None:
+    token, _ = services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+    start = services.clock()
+
+    services.clock.advance(seconds=30)
+    services.sessions.resolve(token)
+    assert column_values(services.sessions, "sessions", "last_seen_at") == [start]
+
+    services.clock.advance(seconds=31)
+    services.sessions.resolve(token)
+    assert column_values(services.sessions, "sessions", "last_seen_at") == [
+        start + timedelta(seconds=61)
+    ]
+
+
+def _stored_hash(services: Services) -> str:
+    [stored] = column_values(services.sessions, "password_credentials", "password_hash")
+    return str(stored)
+
+
+def _store_hash(services: Services, password_hash: str) -> None:
+    with services.sessions.db.transaction() as conn:
+        conn.execute(update(PasswordCredentialRow).values(password_hash=password_hash))
+
+
+def test_a_weaker_stored_hash_is_rehashed_at_login(services: Services) -> None:
+    _store_hash(services, PasswordHasher(time_cost=1, memory_cost=8192).hash(PASSWORD))
+
+    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+
+    assert _stored_hash(services).startswith("$argon2id$v=19$m=19456,t=2,p=1$")
+    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+
+
+def test_a_stronger_stored_hash_is_kept_at_login(services: Services) -> None:
+    stronger = PasswordHasher(time_cost=3).hash(PASSWORD)
+    _store_hash(services, stronger)
+
+    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+
+    assert _stored_hash(services) == stronger
+
+
+def test_a_login_during_a_password_change_leaves_no_old_session(
+    services: Services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reset = services.accounts.issue_reset_code(ADMIN, "alice")
+    verifying, release = threading.Event(), threading.Event()
+    real_verify = sessions_module.verify_password
+
+    def slow_verify(stored_hash: str | None, password: str) -> bool:
+        verifying.set()
+        release.wait(timeout=10)
+        return real_verify(stored_hash, password)
+
+    monkeypatch.setattr(sessions_module, "verify_password", slow_verify)
+    logins: list[str] = []
+    login = threading.Thread(
+        target=lambda: logins.append(
+            services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")[0]
+        )
+    )
+    redeem = threading.Thread(
+        target=lambda: services.accounts.redeem_code(
+            "alice", reset.code, "another long passphrase"
+        )
+    )
+
+    login.start()
+    assert verifying.wait(timeout=10)
+    redeem.start()
+    redeem.join(timeout=1)  # without the lock it commits while Argon2 runs
+    release.set()
+    login.join()
+    redeem.join()
+
+    assert len(logins) == 1
+    assert services.sessions.resolve(logins[0]) is None
+
+
+def test_a_login_refuses_to_join_an_open_transaction(services: Services) -> None:
+    with (
+        pytest.raises(RuntimeError, match="transaction"),
+        services.sessions.db.transaction(),
+    ):
+        services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")

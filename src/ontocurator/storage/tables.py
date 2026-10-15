@@ -417,6 +417,8 @@ class LoginAttemptRow(Base):
     username: Mapped[str]
     client_ip: Mapped[str]
     succeeded: Mapped[bool]
+    # Refused because of a lock: recorded, but not counted towards one.
+    throttled: Mapped[bool] = mapped_column(server_default=text("false"))
     at: Mapped[datetime]
 
 

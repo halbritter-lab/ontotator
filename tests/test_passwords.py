@@ -164,7 +164,11 @@ def test_a_supplied_hash_outside_the_policy_is_refused(
         assert_policy(supplied)
 
 
-def test_only_hashes_with_other_parameters_need_a_rehash() -> None:
+def test_only_weaker_or_unusable_hashes_need_a_rehash() -> None:
     assert needs_rehash(OURS) is False
-    assert needs_rehash(PasswordHasher(time_cost=3).hash(PASSWORD)) is True
+    # A stronger supplied hash (bootstrap, recovery) is kept, not downgraded.
+    assert needs_rehash(PasswordHasher(time_cost=3).hash(PASSWORD)) is False
+    assert needs_rehash(PasswordHasher(time_cost=1).hash(PASSWORD)) is True
+    assert needs_rehash(PasswordHasher(memory_cost=8192).hash(PASSWORD)) is True
+    assert needs_rehash(PasswordHasher(type=Type.I).hash(PASSWORD)) is True
     assert needs_rehash("not a hash at all") is True

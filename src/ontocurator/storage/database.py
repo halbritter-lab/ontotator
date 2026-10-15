@@ -106,6 +106,10 @@ class Database:
         with self.engine.begin() as conn, self._ambient(conn, snapshot=False):
             yield conn
 
+    def in_transaction(self) -> bool:
+        """Whether this context has an open transaction or snapshot."""
+        return self._current.get() is not None
+
     @contextmanager
     def snapshot(self) -> Iterator[Connection]:
         """A read-only transaction whose statements all see one committed state.

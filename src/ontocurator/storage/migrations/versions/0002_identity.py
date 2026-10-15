@@ -146,6 +146,13 @@ def upgrade() -> None:
         sa.Column("username", sa.Text(), nullable=False),
         sa.Column("client_ip", sa.Text(), nullable=False),
         sa.Column("succeeded", sa.Boolean(), nullable=False),
+        # Refused because of a lock: recorded, but not counted towards one.
+        sa.Column(
+            "throttled",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
         sa.Column("at", _ts(), nullable=False),
         sa.PrimaryKeyConstraint("id", name="pk_login_attempts"),
         schema=SCHEMA,

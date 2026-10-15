@@ -14,8 +14,9 @@ import contextlib
 import re
 import unicodedata
 
-from argon2 import PasswordHasher, Type
+from argon2 import PasswordHasher, Type, extract_parameters
 from argon2.exceptions import VerifyMismatchError
+from argon2.low_level import ARGON2_VERSION
 
 MEMORY_COST = 19_456  # KiB
 TIME_COST = 2
@@ -110,11 +111,24 @@ def verify_password(stored_hash: str | None, password: str) -> bool:
 
 
 def needs_rehash(stored_hash: str) -> bool:
-    """Whether ``stored_hash`` uses other parameters than ours (or is unusable)."""
+    """Whether ``stored_hash`` is weaker than ours, or not Argon2id v=19 at all.
+
+    A stronger hash is kept: the first login of a bootstrapped or recovered
+    admin must not replace a supplied hash with a cheaper one.
+    """
     try:
-        return _HASHER.check_needs_rehash(stored_hash)
+        params = extract_parameters(stored_hash)
     except Exception:
         return True
+    return (
+        params.type is not Type.ID
+        or params.version != ARGON2_VERSION
+        or params.memory_cost < MEMORY_COST
+        or params.time_cost < TIME_COST
+        or params.parallelism < PARALLELISM
+        or params.hash_len < _HASHER.hash_len
+        or params.salt_len < _HASHER.salt_len
+    )
 
 
 def assert_policy(stored_hash: str) -> None:

@@ -41,7 +41,7 @@ from ontocurator.auth.passwords import (
     check_password_rules,
     hash_password,
 )
-from ontocurator.auth.sessions import revoke_user_sessions, token_digest
+from ontocurator.auth.tokens import revoke_user_sessions, token_digest
 from ontocurator.domain.errors import DomainError
 from ontocurator.storage.database import Database, advisory_lock_id
 from ontocurator.storage.tables import (

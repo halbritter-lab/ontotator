@@ -1,15 +1,15 @@
 """Server-side sessions and login throttling (T2 D2, index D-j, Q6, Q8).
 
 A session token is a random secret held by the browser; the database stores
-only its SHA-256. Every failed login is recorded in ``login_attempts``, and
+only its SHA-256. Every login attempt is recorded in ``login_attempts``, and
 too many failures of one account or from one address within the window lock
-further logins until older failures leave the window. Every failure, whatever
+further logins until those failures leave the window; attempts refused by
+the lock do not extend it. Every failure, whatever
 its reason, raises the same ``LoginFailed``.
 """
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -17,7 +17,12 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Connection, func, insert, select, update
 
+from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.passwords import hash_password, needs_rehash, verify_password
+
+# ``revoke_user_sessions`` is part of this module's interface (T2b plan, Task 5).
+from ontocurator.auth.tokens import revoke_user_sessions as revoke_user_sessions
+from ontocurator.auth.tokens import token_digest
 from ontocurator.domain.errors import DomainError, LoginFailed
 from ontocurator.storage.database import Database
 from ontocurator.storage.tables import (
@@ -58,28 +63,8 @@ class Principal:
     csrf_token: str
 
 
-def token_digest(token: str) -> str:
-    """The stored form of a session token or a single-use code."""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def revoke_user_sessions(
-    conn: Connection, user_id: int, reason: str, at: datetime
-) -> int:
-    """End every open session of ``user_id``; the number of sessions ended."""
-    result = conn.execute(
-        update(SessionRow)
-        .where(SessionRow.user_id == user_id, SessionRow.revoked_at.is_(None))
-        .values(revoked_at=at, revoked_reason=reason)
-    )
-    return result.rowcount
-
-
 def _attempt_name(username: str) -> str:
     """The name a login attempt is counted under, also for invalid input."""
-    # Imported here: ``accounts`` imports this module for revoking sessions.
-    from ontocurator.auth.accounts import normalize_username
-
     try:
         return normalize_username(username)
     except DomainError:
@@ -110,17 +95,37 @@ class SessionService:
     ) -> tuple[str, Principal]:
         """A new session token and its principal.
 
+        The login runs in a transaction of its own and must not be called
+        inside a caller's open transaction: an outer rollback would erase the
+        recorded attempt and with it the lockout.
+
+        The user row is locked (``FOR NO KEY UPDATE``) before anything is
+        read, so the logins of one account run one after another, and a
+        password change waits for a login that read the old hash; the session
+        it created is then revoked with the others.
+
         Raises:
             LoginFailed: for a wrong password, an unknown or inactive user, or
                 a locked account or address. The attempt is committed first,
-                so the failure counts towards the lockout.
+                so the failure counts towards the lockout. An attempt refused
+                because of a lock is recorded as ``throttled`` and does not
+                count, so the lock ends with the window of the failures that
+                caused it.
+            RuntimeError: inside an open transaction of this context.
         """
+        if self.db.in_transaction():
+            raise RuntimeError(
+                "A login commits its attempt on its own; it cannot join an open"
+                " transaction"
+            )
         now = self._now()
         name = _attempt_name(username)
         started: tuple[str, Principal] | None = None
         with self.db.transaction() as conn:
             user = conn.execute(
-                select(UserRow).where(UserRow.username == name)
+                select(UserRow)
+                .where(UserRow.username == name)
+                .with_for_update(key_share=True)
             ).one_or_none()
             stored_hash = None
             if user is not None and user.active:
@@ -135,7 +140,11 @@ class SessionService:
             succeeded = matches and not locked and user is not None
             conn.execute(
                 insert(LoginAttemptRow).values(
-                    username=name, client_ip=client_ip, succeeded=succeeded, at=now
+                    username=name,
+                    client_ip=client_ip,
+                    succeeded=succeeded,
+                    throttled=locked,
+                    at=now,
                 )
             )
             if succeeded and user is not None and stored_hash is not None:
@@ -190,6 +199,7 @@ class SessionService:
             .select_from(LoginAttemptRow)
             .where(
                 LoginAttemptRow.succeeded.is_(False),
+                LoginAttemptRow.throttled.is_(False),
                 LoginAttemptRow.at >= since,
                 LoginAttemptRow.at <= now,
             )
