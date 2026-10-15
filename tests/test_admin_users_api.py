@@ -253,24 +253,25 @@ def test_admin_listing_batches_project_keys_and_roles(app):
 def test_admins_can_edit_each_other_concurrently_without_audit_deadlock(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch, change: str
 ) -> None:
-    """Both targets are locked before either audit checks its actor foreign key."""
+    """Reciprocal edits starting together both commit without audit-lock cycles."""
     import threading
     from concurrent.futures import ThreadPoolExecutor
 
-    from ontocurator.auth import accounts as accounts_module
+    from ontocurator.api import admin_routes
 
     alice = logged_in(app, "alice", system_admin=True)
     bob = logged_in(app, "bobby", system_admin=True)
     action = "user.profile" if change == "profile" else "user.languages"
-    at_audit = threading.Barrier(2)
-    real_audit = accounts_module.record_audit
+    before_authority_locks = threading.Barrier(2)
+    real_require = admin_routes.require_system_admin
 
-    def synchronized_audit(conn, actor, event_action, **kwargs):
-        if event_action == action and kwargs.get("target_id") in {"alice", "bobby"}:
-            at_audit.wait(timeout=10)
-        return real_audit(conn, actor, event_action, **kwargs)
+    def synchronized_authorization(principal):
+        real_require(principal)
+        before_authority_locks.wait(timeout=10)
 
-    monkeypatch.setattr(accounts_module, "record_audit", synchronized_audit)
+    monkeypatch.setattr(
+        admin_routes, "require_system_admin", synchronized_authorization
+    )
     bodies = (
         [{"display_name": "Edited by Bobby"}, {"display_name": "Edited by Alice"}]
         if change == "profile"
