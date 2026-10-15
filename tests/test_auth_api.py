@@ -56,7 +56,7 @@ def _set_cookie(response: Any) -> str:
 
 
 def test_the_api_needs_a_session(app: FastAPI) -> None:
-    response = TestClient(app).get("/api/v1/packages")
+    response = TestClient(app).get("/api/v1/projects")
 
     assert response.status_code == 401
     assert response.json()["code"] == "NOT_AUTHENTICATED"

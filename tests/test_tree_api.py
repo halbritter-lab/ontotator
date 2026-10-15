@@ -4,7 +4,7 @@ import hashlib
 import io
 
 import pytest
-from auth_harness import AutoLoginClient
+from auth_harness import AutoLoginClient, logged_in
 from layered_fixtures import HP_DIGEST, make_layered_package
 from pg_harness import database_url_for
 from sqlalchemy.exc import OperationalError
@@ -20,7 +20,6 @@ from test_ontology_tree import (
 from ontocurator.api.app import create_app
 from ontocurator.application.exports import ExportService
 from ontocurator.config import AppConfig
-from ontocurator.distribution_settings import DistributionSettings
 from ontocurator.domain.profiles import profile_hash
 from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.packages.writer import PackageWriter
@@ -550,18 +549,19 @@ def test_a_layer_outside_the_scope_of_the_workspace_has_no_tree(app_client):
     assert _event(client, browse_id) == before
 
 
-def test_tree_requests_are_refused_in_a_mode_the_installation_does_not_allow(
-    tmp_path,
-):
+def test_tree_requests_are_refused_in_a_mode_the_roles_do_not_give(tmp_path):
     config = AppConfig(
         workspace_dir=tmp_path,
         database_url=database_url_for(tmp_path / "blinded.db"),
         ontology_paths=[FIXTURE_PATH, FIXTURE_PATH.parent / "mondo.json"],
-        distribution=DistributionSettings(allowed_modes=["independent"]),
     )
-    client = AutoLoginClient(create_app(config))
-    _import(client, make_layered_package("assisted"))
-    _, ws_key = _open(client, "pkg-scenario-b", mode="independent")
+    app = create_app(config)
+    _import(AutoLoginClient(app), make_layered_package("assisted"))
+    # An annotator only: independent and assisted, never review.
+    client = logged_in(
+        app, "walker", pseudonym="walker", projects={"pkg-scenario-b": ["annotator"]}
+    )
+    _, ws_key = _open(client, "pkg-scenario-b", annotator="walker")
     fields = {
         "annotation_id": "note-1",
         "layer_id": "target-layer",
@@ -570,18 +570,16 @@ def test_tree_requests_are_refused_in_a_mode_the_installation_does_not_allow(
     browse_id = _tree(client, ws_key, "open", **fields).json()["browse_id"]
     before = _event(client, browse_id)
 
-    for mode in ("assisted", "review"):
-        other = {**ws_key, "mode": mode}
-        for endpoint, extra in (("open", {}), ("node", {"browse_id": browse_id})):
-            resp = _tree(client, other, endpoint, **fields, **extra)
-            assert resp.status_code == 403, (mode, endpoint, resp.text)
-            assert resp.json()["code"] == "MODE_NOT_ALLOWED", (mode, endpoint)
+    other = {**ws_key, "mode": "review"}
+    for endpoint, extra in (("open", {}), ("node", {"browse_id": browse_id})):
+        resp = _tree(client, other, endpoint, **fields, **extra)
+        assert resp.status_code == 403, (endpoint, resp.text)
+        assert resp.json()["code"] == "MODE_NOT_ALLOWED", endpoint
 
-    # Nothing was logged for the refused modes, and the walk did not grow.
+    # Nothing was logged for the refused mode, and the walk did not grow.
     assert [e.event_id for e in _events(client, ws_key)] == [browse_id]
-    for mode in ("assisted", "review"):
-        key = WorkspaceKey.model_validate({**ws_key, "mode": mode})
-        assert client.app.state.repo.get_search_events_for_workspace(key) == []
+    key = WorkspaceKey.model_validate(other)
+    assert client.app.state.repo.get_search_events_for_workspace(key) == []
     assert _event(client, browse_id) == before
 
 

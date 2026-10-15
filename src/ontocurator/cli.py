@@ -22,6 +22,7 @@ import uvicorn
 from ontocurator.api.app import create_app
 from ontocurator.auth.accounts import AccountService, IssuedCode, User
 from ontocurator.auth.audit import Actor
+from ontocurator.authz.memberships import MembershipService
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import DomainError
 from ontocurator.storage.database import Database
@@ -395,8 +396,13 @@ admin_app = typer.Typer(
     no_args_is_help=True,
 )
 users_app = typer.Typer(help="Users and their single-use codes.", no_args_is_help=True)
+projects_app = typer.Typer(
+    help="Projects and their members (roles: lead, annotator, adjudicator).",
+    no_args_is_help=True,
+)
 app.add_typer(admin_app, name="admin")
 admin_app.add_typer(users_app, name="users")
+admin_app.add_typer(projects_app, name="projects")
 
 RECOVERY_INPUT_MAX_BYTES = 8 * 1024
 RECOVERY_KEYS = ("username", "password_hash", "operator", "reason")
@@ -601,6 +607,81 @@ def users_list(ctx: typer.Context) -> None:
         if user.is_system_admin:
             state += ", admin"
         typer.echo(f"{user.username}\t{user.pseudonym}\t{user.display_name}\t{state}")
+
+
+ProjectArgument = Annotated[str, typer.Argument(help="The project key.")]
+
+
+def _plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def _print_roles(username: str, project: str, roles: frozenset[str]) -> None:
+    shown = ", ".join(sorted(roles)) if roles else "no role"
+    typer.echo(f"'{username}' in '{project}': {shown}.")
+
+
+@projects_app.command("list")
+def projects_list(ctx: typer.Context) -> None:
+    """One line per project: key, name, documents and members (tabs)."""
+    from ontocurator.storage.repository import Repository
+
+    with _open_database(ctx) as db:
+        memberships = MembershipService(db)
+        for project in Repository(db).list_projects():
+            members = len(memberships.members(project.project_key))
+            typer.echo(
+                f"{project.project_key}\t{project.name}\t"
+                f"{_plural(project.document_count, 'document')}\t"
+                f"{_plural(members, 'member')}"
+            )
+
+
+@projects_app.command("members")
+def projects_members(ctx: typer.Context, project: ProjectArgument) -> None:
+    """One line per member: username, pseudonym and roles (tabs)."""
+    with _open_database(ctx) as db:
+        members = MembershipService(db).members(project)
+    for username, pseudonym, roles in members:
+        typer.echo(f"{username}\t{pseudonym}\t{', '.join(sorted(roles))}")
+
+
+RoleOption = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--role",
+        help="lead, annotator or adjudicator; repeat for several roles.",
+        show_default=False,
+    ),
+]
+
+
+@projects_app.command("add-member")
+def projects_add_member(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    username: UsernameArgument,
+    role: RoleOption = None,
+) -> None:
+    """Give a user roles in a project; a change ends the user's sessions."""
+    with _open_database(ctx) as db:
+        roles = MembershipService(db).add(Actor.cli(), project, username, role or [])
+    _print_roles(username.strip().lower(), project, roles)
+
+
+@projects_app.command("remove-member")
+def projects_remove_member(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    username: UsernameArgument,
+    role: RoleOption = None,
+) -> None:
+    """Take roles (all without --role) from a user; a change ends their sessions."""
+    with _open_database(ctx) as db:
+        roles = MembershipService(db).remove(
+            Actor.cli(), project, username, role or None
+        )
+    _print_roles(username.strip().lower(), project, roles)
 
 
 @admin_app.command("hash-password")

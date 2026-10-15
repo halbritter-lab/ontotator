@@ -97,21 +97,24 @@ def test_selecting_review_inputs_does_not_export_entire_package(tmp_path, monkey
     submit(ctx, ws_key, 2)
 
     def prohibit_export(*args):
-        pytest.fail(
-            "Review input selection must query only this document's submissions"
-        )
+        pytest.fail("Review input selection must query only this document")
 
     monkeypatch.setattr(ctx["repo"], "export_package", prohibit_export)
     inputs = ctx["ws_svc"].get_review_inputs(ws_key.package_id, ws_key.document_id)
-    assert [
+    # The document's proposals only, never a submitted result (index Q3).
+    proposals = ctx["repo"].list_annotations_for_document(
+        ws_key.package_id, ws_key.document_id
+    )
+    assert inputs == proposals
+    assert replacement not in [
         AnnotationRef(annotation_id=a.annotation.annotation_id, version=a.version)
         for a in inputs
-    ] == [replacement]
+    ]
 
 
 def test_review_round_continues_after_export_reimport(tmp_path):
     ctx = _setup_review_test_env(tmp_path)
-    ws_key, ref, replacement = changed_review(ctx)
+    ws_key, _, replacement = changed_review(ctx)
     submitted = submit(ctx, ws_key, 2)
     exported = roundtrip(ctx["exp_svc"].for_workspace(ws_key))
     clean = Repository(database_for(tmp_path / "import.db"))
@@ -125,8 +128,12 @@ def test_review_round_continues_after_export_reimport(tmp_path):
     fresh = svc.open(
         key(ctx, "new-reviewer").model_copy(update={"package_id": package_id})
     )
-    assert fresh.targets.targets == [replacement]
-    assert ref not in fresh.targets.targets
+    # Another reviewer starts from the proposals of the importing project (an
+    # export carries its annotations as proposals), never from submissions.
+    assert fresh.targets.targets == [
+        AnnotationRef(annotation_id=a.annotation.annotation_id, version=a.version)
+        for a in clean.list_annotations_for_document(package_id, ws_key.document_id)
+    ]
     from ontocurator.application.submissions import SubmissionService
 
     continued = SubmissionService(clean).submit(
@@ -135,54 +142,6 @@ def test_review_round_continues_after_export_reimport(tmp_path):
     )
     assert continued.origin_key == submitted.origin_key
     assert continued.draft_revision > submitted.draft_revision
-
-
-def test_new_reviewer_targets_latest_version_without_promoting_history(tmp_path):
-    from ontocurator.application.editing import SetTermCommand
-
-    ctx = _setup_review_test_env(tmp_path)
-    ws_key, original, first_replacement = changed_review(ctx)
-    first = submit(ctx, ws_key, 2)
-    edited = ctx["edit_svc"].apply(
-        ws_key,
-        mutation(
-            3,
-            SetTermCommand(annotation_id="adopted", term_id="HP:0001252").model_dump(),
-        ),
-    )
-    approved = ctx["rev_svc"].decide(
-        ws_key,
-        mutation(
-            edited.revision,
-            {
-                "target": original.model_dump(),
-                "outcome": "changed",
-                "replacement": {
-                    "annotation_id": "adopted",
-                    "version": edited.annotations[0].version,
-                },
-            },
-        ),
-    )
-    latest = submit(ctx, ws_key, approved.revision)
-    assert latest.draft_revision > first.draft_revision
-    package = ctx["exp_svc"].for_workspace(ws_key)
-    assert (original.annotation_id, original.version) in package.annotations
-    assert (
-        first_replacement.annotation_id,
-        first_replacement.version,
-    ) in package.annotations
-    clean = Repository(database_for(tmp_path / "history.db"))
-    package_id = clean.import_package(roundtrip(package))
-    service = WorkspaceService(clean, ctx["ontology"])
-    view = service.open(
-        key(ctx, "new-reviewer").model_copy(update={"package_id": package_id})
-    )
-    assert view.targets.targets == [latest.decisions[0].replacement]
-    assert (
-        original not in view.targets.targets
-        and first_replacement not in view.targets.targets
-    )
 
 
 def test_decision_switch_discards_adopted_copy_but_keeps_authored_finding(tmp_path):
@@ -454,7 +413,7 @@ def test_reader_rejects_conflicting_equal_revisions_before_import(tmp_path):
         roundtrip(package)
 
 
-def test_new_reviewer_does_not_guess_between_origin_branches(tmp_path):
+def test_a_reviewer_does_not_guess_between_origin_branches(tmp_path):
     ctx = _setup_review_test_env(tmp_path)
     ws_key, _, _ = changed_review(ctx)
     result = submit(ctx, ws_key, 2)
@@ -471,10 +430,6 @@ def test_new_reviewer_does_not_guess_between_origin_branches(tmp_path):
     clean = Repository(database_for(tmp_path / "branch.db"))
     package_id = clean.import_package(roundtrip(package))
     service = WorkspaceService(clean, ctx["ontology"])
-    with pytest.raises(DomainError, match="AMBIGUOUS_REVIEW_INPUTS"):
-        service.open(
-            key(ctx, "new-reviewer").model_copy(update={"package_id": package_id})
-        )
     with pytest.raises(DomainError, match="AMBIGUOUS_SUBMISSION_ORIGIN"):
         service.open(key(ctx).model_copy(update={"package_id": package_id}))
     assert count_rows(clean, "drafts") == 0

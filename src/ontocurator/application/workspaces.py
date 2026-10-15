@@ -16,7 +16,6 @@ from ontocurator.domain.profiles import (
     resolve_layer,
     resolve_ontology,
 )
-from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, Submission, WorkspaceKey
@@ -142,39 +141,17 @@ class WorkspaceService:
     def get_review_inputs(
         self, package_id: str, document_id: str
     ) -> list[AnnotationSnapshot]:
-        """Use current submitted results, or raw proposals before any submission.
+        """The document's proposals on the layers a review may edit.
 
-        Dependency snapshots remain available for provenance and explicit targets;
-        they are never implicitly promoted to current review inputs.
+        Never other members' submissions or drafts: anything not assigned to
+        a reviewer could bias them (index Q3). Their work reaches review only
+        through workflow assignments (T4).
         """
         profile = self.repo.get_task_profile(package_id)
         scope = build_scope(profile, "review")
-        submissions = latest_submissions(
-            self.repo.get_submissions_for_document(package_id, document_id)
-        )
-        origins: dict[tuple[str, str, str], list[Submission]] = {}
-        for submission in submissions:
-            origin = submission.origin_key
-            origins.setdefault(
-                (origin.annotator_id, origin.mode, origin.scope_id), []
-            ).append(submission)
-        if any(len(group) > 1 for group in origins.values()):
-            raise DomainError(
-                "AMBIGUOUS_REVIEW_INPUTS",
-                {
-                    "message": "Multiple submitted origins or rounds require explicit review targets",
-                    "origins": [s.origin_key.model_dump() for s in submissions],
-                },
-            )
-        inputs = (
-            [a for s in submissions for a in s.snapshots]
-            if submissions
-            else self.repo.list_annotations_for_document(package_id, document_id)
-        )
-        unique = {(s.annotation.annotation_id, s.version): s for s in inputs}
         return [
             snap
-            for snap in unique.values()
+            for snap in self.repo.list_annotations_for_document(package_id, document_id)
             if snap.annotation.layer_id in scope.editable_layer_ids
         ]
 

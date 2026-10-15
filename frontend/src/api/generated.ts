@@ -89,7 +89,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/settings": {
+    "/api/v1/projects": {
         parameters: {
             query?: never;
             header?: never;
@@ -97,10 +97,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Settings
-         * @description Effective presets of this installation (ontocurator-settings.json).
+         * List Projects
+         * @description The projects the logged-in user can see, newest first.
          */
-        get: operations["get_settings_api_v1_settings_get"];
+        get: operations["list_projects_api_v1_projects_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -140,17 +140,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Packages
-         * @description List installed packages with metadata and ontology reference.
-         */
-        get: operations["list_packages_api_v1_packages_get"];
+        get?: never;
         put?: never;
         /**
          * Upload Package
          * @description Upload and atomically import a work package archive (system admins).
          *
-         *     Runs in the thread pool (plain ``def``); the body is copied with a size cap.
+         *     A new project gets the uploader as a member with every role, so the
+         *     dashboard flow keeps working until projects are imported by the CLI
+         *     (T2d). Runs in the thread pool (plain ``def``); the body is copied with a
+         *     size cap.
          */
         post: operations["upload_package_api_v1_packages_post"];
         delete?: never;
@@ -170,10 +169,10 @@ export interface paths {
          * List Package Documents
          * @description List documents showing metadata only, without proposal counts.
          *
-         *     The status is the logged-in user's; a system admin may ask for another
-         *     annotator's. In review mode (if allowed) each document says whether it
-         *     has proposals, so review navigation can skip documents there is nothing
-         *     to review in.
+         *     The status is the logged-in user's; a system admin or a lead of the
+         *     project may ask for another annotator's. In review mode, for a user who
+         *     may review, each document says whether it has proposals, so review
+         *     navigation can skip documents there is nothing to review in.
          */
         get: operations["list_package_documents_api_v1_packages__package_id__documents_get"];
         put?: never;
@@ -378,7 +377,8 @@ export interface paths {
          * @description Export all work of one annotator on a package as one v2 work package.
          *
          *     The annotator is the logged-in user (``annotator_id`` omitted or their own
-         *     pseudonym); a system admin may export another annotator's work.
+         *     pseudonym); a system admin or a lead of the project may export another
+         *     annotator's work (Q5).
          *     Includes every document of the package and all of the annotator's
          *     submissions, submitted annotations and search events in ``mode`` (all
          *     modes if omitted). Filename:
@@ -582,16 +582,6 @@ export interface components {
             evidence_policy: "optional" | "required_on_complete";
         };
         /**
-         * AxesConfig
-         * @description Named profile definition containing configured axes.
-         */
-        AxesConfig: {
-            /** Definition Name */
-            definition_name: string;
-            /** Axes */
-            axes?: components["schemas"]["AxisDefinition"][];
-        };
-        /**
          * AxisDefinition
          * @description Definition of an individual annotation contextual axis.
          */
@@ -687,23 +677,6 @@ export interface components {
             decisions?: components["schemas"]["ReviewDecision"][];
             /** Checked Layer Ids */
             checked_layer_ids?: string[];
-        };
-        /**
-         * EffectiveSettings
-         * @description Settings the web UI applies (``GET /api/v1/settings``).
-         */
-        EffectiveSettings: {
-            /** Allowed Modes */
-            allowed_modes: ("independent" | "review" | "assisted")[];
-            /**
-             * Default Mode
-             * @enum {string}
-             */
-            default_mode: "independent" | "review" | "assisted";
-            /** Annotator Id */
-            annotator_id?: string | null;
-            /** Open Package */
-            open_package?: string | null;
         };
         /**
          * EvidenceMention
@@ -922,16 +895,6 @@ export interface components {
             translations?: components["schemas"]["OntologyTranslation"][];
         };
         /**
-         * OntologyRef
-         * @description Reference to pinned HPO ontology release and digest.
-         */
-        OntologyRef: {
-            /** Release */
-            release: string;
-            /** Sha256 */
-            sha256: string;
-        };
-        /**
          * OntologyTranslation
          * @description One language an ontology can be searched in besides English.
          */
@@ -974,43 +937,6 @@ export interface components {
             view: components["schemas"]["WorkspaceView"];
         };
         /**
-         * PackageManifest
-         * @description Manifest describing work package metadata and checksums.
-         */
-        PackageManifest: {
-            /** Package Id */
-            package_id: string;
-            /**
-             * Format Version
-             * @default ontocurator-work-package/v2
-             * @enum {string}
-             */
-            format_version: "ontocurator-work-package/v2" | "ontocurator-work-package/v1" | "hpo-editor-work-package/v1";
-            /** Document Order */
-            document_order?: string[];
-            task_profile?: components["schemas"]["TaskProfile"] | null;
-            /** Task Profile Sha256 */
-            task_profile_sha256?: string | null;
-            ontology?: components["schemas"]["OntologyRef"] | null;
-            /** Axes Definition */
-            axes_definition?: string | null;
-            axes_config?: components["schemas"]["AxesConfig"] | null;
-            /** Axes Config Sha256 */
-            axes_config_sha256?: string | null;
-            /** File Hashes */
-            file_hashes?: {
-                [key: string]: string;
-            };
-            /** Created At */
-            created_at: string;
-            /** Origin Package Id */
-            origin_package_id?: string | null;
-            /** Origin Manifest Hash */
-            origin_manifest_hash?: string | null;
-            /** Search Conditions */
-            search_conditions?: components["schemas"]["SearchCondition"][] | null;
-        };
-        /**
          * Preferences
          * @description A user's preferences returned by ``GET /api/v1/preferences``.
          */
@@ -1041,6 +967,26 @@ export interface components {
             search_languages_by_annotator?: {
                 [key: string]: string[];
             } | null;
+        };
+        /**
+         * ProjectSummary
+         * @description A project on the dashboard, with what the user may do in it.
+         *
+         *     The project key keeps the name ``package_id`` until T3 (index D-e).
+         */
+        ProjectSummary: {
+            /** Package Id */
+            package_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Roles */
+            roles: ("lead" | "annotator" | "adjudicator")[];
+            /** Allowed Modes */
+            allowed_modes: ("independent" | "review" | "assisted")[];
+            /** Document Count */
+            document_count: number;
         };
         /**
          * Provenance
@@ -1179,23 +1125,6 @@ export interface components {
             /** Match Language */
             match_language?: string | null;
         };
-        /** SearchCondition */
-        SearchCondition: {
-            /**
-             * Schema Version
-             * @default ontocurator-search-condition/v1
-             * @constant
-             */
-            schema_version: "ontocurator-search-condition/v1";
-            /** Condition Id */
-            condition_id: string;
-            /** Ontology Sha256 */
-            ontology_sha256: string;
-            /** Translations */
-            translations?: components["schemas"]["TranslationResource"][];
-            index?: components["schemas"]["IndexConfiguration"];
-            runtime: components["schemas"]["RuntimeIdentity"];
-        };
         /** SearchExecution */
         SearchExecution: {
             index?: components["schemas"]["IndexConfiguration"];
@@ -1314,30 +1243,6 @@ export interface components {
             created_at: string;
         };
         /**
-         * TaskProfile
-         * @description Complete specification of task profile, ontologies, layers, and types.
-         */
-        TaskProfile: {
-            /**
-             * Schema
-             * @default ontocurator-task-profile/v1
-             * @constant
-             */
-            schema: "ontocurator-task-profile/v1";
-            /** Profile Id */
-            profile_id: string;
-            /** Version */
-            version: string;
-            /** Ontologies */
-            ontologies: components["schemas"]["OntologyDefinition"][];
-            /** Layers */
-            layers: components["schemas"]["LayerDefinition"][];
-            /** Default Layer Id */
-            default_layer_id: string;
-            /** Preset */
-            preset?: string | null;
-        };
-        /**
          * TaskScope
          * @description Execution scope defining active editable and reference layers for a workspace.
          */
@@ -1398,17 +1303,6 @@ export interface components {
             layer_id: string;
             /** Term Id */
             term_id: string;
-        };
-        /** TranslationResource */
-        TranslationResource: {
-            /** Filename */
-            filename: string;
-            /** Sha256 */
-            sha256: string;
-            /** Resource Path */
-            resource_path: string;
-            /** Languages */
-            languages: string[];
         };
         /**
          * TranslationUploadInfo
@@ -1726,7 +1620,7 @@ export interface operations {
             };
         };
     };
-    get_settings_api_v1_settings_get: {
+    list_projects_api_v1_projects_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1741,7 +1635,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EffectiveSettings"];
+                    "application/json": components["schemas"]["ProjectSummary"][];
                 };
             };
         };
@@ -1795,26 +1689,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_packages_api_v1_packages_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PackageManifest"][];
                 };
             };
         };

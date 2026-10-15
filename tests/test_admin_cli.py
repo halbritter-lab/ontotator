@@ -347,3 +347,72 @@ def test_recovery_refuses_a_readable_input_file(tmp_path: Path) -> None:
     assert "Error: RECOVERY_INPUT_NOT_PRIVATE:" in result.output
     assert new_hash not in result.output
     assert "jdoe" not in result.output
+
+
+def test_members_can_be_added_listed_and_removed(tmp_path: Path) -> None:
+    from layered_fixtures import make_layered_package
+
+    from ontocurator.storage.repository import Repository
+
+    Repository(database_for(tmp_path / "editor.db")).import_package(
+        make_layered_package("single")
+    )
+    created = _admin(tmp_path, "users", "create", "alice", "--display-name", "A")
+    assert created.exit_code == 0, created.output
+
+    added = _admin(
+        tmp_path,
+        "projects",
+        "add-member",
+        "pkg-scenario-a",
+        "alice",
+        "--role",
+        "annotator",
+        "--role",
+        "lead",
+    )
+    assert added.exit_code == 0, added.output
+    assert added.output == "'alice' in 'pkg-scenario-a': annotator, lead.\n"
+    listed = _admin(tmp_path, "projects", "list")
+    assert listed.output == "pkg-scenario-a\tpkg-scenario-a\t2 documents\t1 member\n"
+    members = _admin(tmp_path, "projects", "members", "pkg-scenario-a")
+    assert members.output == "alice\tann-0001\tannotator, lead\n"
+
+    removed = _admin(
+        tmp_path,
+        "projects",
+        "remove-member",
+        "pkg-scenario-a",
+        "alice",
+        "--role",
+        "lead",
+    )
+    assert removed.output == "'alice' in 'pkg-scenario-a': annotator.\n"
+    gone = _admin(tmp_path, "projects", "remove-member", "pkg-scenario-a", "alice")
+    assert gone.output == "'alice' in 'pkg-scenario-a': no role.\n"
+    assert _admin(tmp_path, "projects", "members", "pkg-scenario-a").output == ""
+
+    invalid = _admin(
+        tmp_path, "projects", "add-member", "pkg-scenario-a", "alice", "--role", "boss"
+    )
+    assert invalid.exit_code == 1
+    assert "Error: ROLE_INVALID:" in invalid.output
+    unknown = _admin(
+        tmp_path, "projects", "add-member", "nope", "alice", "--role", "lead"
+    )
+    assert unknown.exit_code == 1
+    assert "Error: PROJECT_NOT_FOUND: There is no project 'nope'." in unknown.output
+
+    accounts = AccountService(database_for(tmp_path / "editor.db"))
+    with accounts.db.transaction() as conn:
+        rows = conn.execute(
+            select(AuditEventRow.action, AuditEventRow.actor_label).where(
+                AuditEventRow.action.like("project.%")
+            )
+        ).all()
+    assert [r.action for r in rows] == [
+        "project.member_add",
+        "project.member_remove",
+        "project.member_remove",
+    ]
+    assert all(r.actor_label.startswith("cli:") for r in rows)

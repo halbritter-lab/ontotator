@@ -176,7 +176,7 @@ def test_invalid_embedded_ontology_does_not_publish_package_or_partial_registry(
             files={"file": ("broken.zip", buffer.getvalue(), "application/zip")},
         )
         assert response.status_code == 422, response.text
-        assert client.get("/api/v1/packages").json() == []
+        assert client.get("/api/v1/projects").json() == []
         assert not client.app.state.ontology_registry.has_ontology(
             profile.ontologies[0].sha256
         )

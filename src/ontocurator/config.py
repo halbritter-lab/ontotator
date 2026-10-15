@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from ontocurator import settings
-from ontocurator.distribution_settings import DistributionSettings
 from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.documents import OntologyRef
 
@@ -30,9 +29,6 @@ class AppConfig(BaseModel):
     port: int = 8000
     web_dir: Path | None = None
     axes_config: AxesConfig | None = None
-    # Mode and identity presets. `serve` no longer reads ontocurator-settings.json,
-    # so these are always the defaults until T2c replaces them with project roles.
-    distribution: DistributionSettings = Field(default_factory=DistributionSettings)
     # The address people open, e.g. https://editor.example.org. It is the only
     # origin accepted for writes; an https origin makes the cookie Secure.
     # None: the origin of each request's own Host header (local use).

@@ -1,8 +1,9 @@
 """Binding requests to the logged-in user's identity.
 
 Everyone works under their own pseudonym: an annotator ID or a workspace key
-that names someone else is refused. A system admin may read other annotators'
-document status and exports (index Q4), but annotates as themselves.
+that names someone else is refused. Whoever may export all work of a project
+(a system admin or a lead, index Q4, Q5) may read other annotators' document
+status and exports there, but annotates as themselves.
 """
 
 from __future__ import annotations
@@ -40,14 +41,14 @@ def own_annotator(
     """The annotator ID a request acts as: the principal's pseudonym.
 
     ``None`` means the principal's own pseudonym. Another ID is refused,
-    unless ``may_read_others`` and the principal is a system admin.
+    unless ``may_read_others`` (the caller asked the policy).
 
     Raises:
         AccessDenied: ``IDENTITY_MISMATCH``.
     """
     if requested is None or requested == principal.pseudonym:
         return principal.pseudonym
-    if may_read_others and principal.is_system_admin:
+    if may_read_others:
         return requested
     raise _mismatch()
 

@@ -40,14 +40,17 @@ from ontocurator.application.workspaces import (
 from ontocurator.auth.audit import Actor
 from ontocurator.auth.preferences import UserPreferencesStore
 from ontocurator.authz.memberships import MembershipService
-from ontocurator.authz.policy import Access
-from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.distribution_settings import (
-    DistributionSettings,
-    EffectiveSettings,
+from ontocurator.authz.policy import (
+    MODE_ACTIONS,
+    Access,
+    Action,
+    Role,
+    allowed_modes,
+    can,
 )
+from ontocurator.authz.scoped import ScopedRepository, project_not_found
 from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.errors import DomainError, ModeNotAllowed, PayloadTooLarge
+from ontocurator.domain.errors import AccessDenied, DomainError, PayloadTooLarge
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import (
@@ -61,7 +64,6 @@ from ontocurator.ontology.provenance import SearchRequest, SearchResult
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
 from ontocurator.packages.models import (
-    PackageManifest,
     SearchEventRecord,
     ValidatedPackage,
 )
@@ -237,25 +239,60 @@ def _preferences_store(request: Request) -> UserPreferencesStore:
     return cast(UserPreferencesStore, request.app.state.preferences)
 
 
-def _distribution(request: Request) -> DistributionSettings:
-    config = getattr(request.app.state, "config", None)
-    return config.distribution if config is not None else DistributionSettings()
+def require_mode(request: Request, package_id: str, mode: WorkspaceMode) -> None:
+    """Refuse a working mode the user's roles in the project do not give.
 
+    A project the user cannot see is not found, as everywhere (E3).
 
-def require_mode_allowed(request: Request, mode: WorkspaceMode) -> None:
-    """Enforce ``allowed_modes`` of the distribution settings (blinding)."""
-    allowed = _distribution(request).effective_allowed_modes()
-    if mode not in allowed:
-        raise ModeNotAllowed(
-            f"The working mode '{mode}' is not available in this installation "
-            f"(allowed: {', '.join(allowed)})."
+    Raises:
+        AccessDenied: ``MODE_NOT_ALLOWED`` (403).
+    """
+    access = get_access(request)
+    if not can(access, Action.VIEW_PROJECT, package_id):
+        raise project_not_found(package_id)
+    if not can(access, MODE_ACTIONS[mode], package_id):
+        raise AccessDenied(
+            "MODE_NOT_ALLOWED",
+            f"Your roles in this project do not include the working mode '{mode}'.",
         )
 
 
-@router.get("/settings")
-def get_settings(request: Request) -> EffectiveSettings:
-    """Effective presets of this installation (ontocurator-settings.json)."""
-    return EffectiveSettings.from_settings(_distribution(request))
+def may_read_others(request: Request, package_id: str) -> bool:
+    """Whether the user may read other annotators' work in the project (Q5)."""
+    return can(get_access(request), Action.EXPORT_ALL_WORK, package_id)
+
+
+class ProjectSummary(BaseModel):
+    """A project on the dashboard, with what the user may do in it.
+
+    The project key keeps the name ``package_id`` until T3 (index D-e).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    package_id: str
+    name: str
+    description: str | None
+    roles: list[Role]
+    allowed_modes: list[WorkspaceMode]
+    document_count: int
+
+
+@router.get("/projects")
+def list_projects(request: Request, repo: RepoDep) -> list[ProjectSummary]:
+    """The projects the logged-in user can see, newest first."""
+    access = get_access(request)
+    return [
+        ProjectSummary(
+            package_id=project.project_key,
+            name=project.name,
+            description=project.description,
+            roles=sorted(access.roles_in(project.project_key)),
+            allowed_modes=allowed_modes(access, project.project_key),
+            document_count=project.document_count,
+        )
+        for project in repo.list_projects()
+    ]
 
 
 @router.get("/preferences")
@@ -291,12 +328,6 @@ def upload_package(
     return {"package_id": manifest.package_id, "manifest": manifest.model_dump()}
 
 
-@router.get("/packages")
-def list_packages(repo: RepoDep) -> list[PackageManifest]:
-    """List installed packages with metadata and ontology reference."""
-    return repo.list_manifests()
-
-
 @router.get("/packages/{package_id}/documents")
 def list_package_documents(
     package_id: str,
@@ -308,15 +339,16 @@ def list_package_documents(
 ) -> list[DocumentSummary]:
     """List documents showing metadata only, without proposal counts.
 
-    The status is the logged-in user's; a system admin may ask for another
-    annotator's. In review mode (if allowed) each document says whether it
-    has proposals, so review navigation can skip documents there is nothing
-    to review in.
+    The status is the logged-in user's; a system admin or a lead of the
+    project may ask for another annotator's. In review mode, for a user who
+    may review, each document says whether it has proposals, so review
+    navigation can skip documents there is nothing to review in.
     """
-    annotator_id = own_annotator(principal, annotator_id, may_read_others=True)
-    reveal = (
-        mode == "review"
-        and "review" in _distribution(request).effective_allowed_modes()
+    annotator_id = own_annotator(
+        principal, annotator_id, may_read_others=may_read_others(request, package_id)
+    )
+    reveal = mode == "review" and can(
+        get_access(request), Action.OPEN_REVIEW, package_id
     )
     return ws_svc.list_documents(
         package_id, annotator_id, mode, reveal_review_inputs=reveal
@@ -359,7 +391,7 @@ def get_review_inputs(
 ) -> list[AnnotationSnapshot]:
     """Get selectable proposal versions for setting up a review round."""
     own_annotator(principal, req.annotator_id)
-    require_mode_allowed(request, req.mode)
+    require_mode(request, req.package_id, req.mode)
     if req.mode != "review":
         raise DomainError(
             "REVIEW_MODE_REQUIRED",
@@ -377,7 +409,7 @@ def open_workspace(
 ) -> OpenWorkspaceResponse:
     """Open or initialize a workspace view of the logged-in user."""
     annotator_id = own_annotator(principal, req.annotator_id)
-    require_mode_allowed(request, req.mode)
+    require_mode(request, req.package_id, req.mode)
     targets = req.targets
     if req.review_round_target_set_id is not None and (
         req.mode != "review" or targets is not None
@@ -417,7 +449,7 @@ def apply_command(
 ) -> Draft:
     """Execute an edit command against a workspace draft."""
     key = own_key(principal, decode_workspace_id(workspace_id))
-    require_mode_allowed(request, key.mode)
+    require_mode(request, key.package_id, key.mode)
     return edit_svc.apply(key, envelope)
 
 
@@ -431,7 +463,7 @@ def record_decision(
 ) -> Draft:
     """Record a reviewer decision against a targeted proposal."""
     key = own_key(principal, decode_workspace_id(workspace_id))
-    require_mode_allowed(request, key.mode)
+    require_mode(request, key.package_id, key.mode)
     return rev_svc.decide(key, envelope)
 
 
@@ -445,7 +477,7 @@ def submit_workspace(
 ) -> Submission:
     """Commit workspace submission upon verification."""
     key = own_key(principal, decode_workspace_id(workspace_id))
-    require_mode_allowed(request, key.mode)
+    require_mode(request, key.package_id, key.mode)
     return sub_svc.submit(key, envelope)
 
 
@@ -476,7 +508,7 @@ def layer_ontology(
     draft belongs to that layer. The workspace must be the logged-in user's.
     """
     own_key(principal_of(request), workspace_key)
-    require_mode_allowed(request, workspace_key.mode)
+    require_mode(request, workspace_key.package_id, workspace_key.mode)
     ws_svc.get_document(workspace_key.package_id, workspace_key.document_id)
     profile = repo.get_task_profile(workspace_key.package_id)
     scope = build_scope(profile, workspace_key.mode)
@@ -605,6 +637,7 @@ def export_workspace(
 )
 def export_package_for_annotator(
     package_id: str,
+    request: Request,
     exp_svc: ExportSvcDep,
     principal: PrincipalDep,
     annotator_id: str | None = None,
@@ -613,13 +646,16 @@ def export_package_for_annotator(
     """Export all work of one annotator on a package as one v2 work package.
 
     The annotator is the logged-in user (``annotator_id`` omitted or their own
-    pseudonym); a system admin may export another annotator's work.
+    pseudonym); a system admin or a lead of the project may export another
+    annotator's work (Q5).
     Includes every document of the package and all of the annotator's
     submissions, submitted annotations and search events in ``mode`` (all
     modes if omitted). Filename:
     ``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.
     """
-    annotator_id = own_annotator(principal, annotator_id, may_read_others=True)
+    annotator_id = own_annotator(
+        principal, annotator_id, may_read_others=may_read_others(request, package_id)
+    )
     pkg = exp_svc.for_package(package_id, annotator_id, mode)
     return _zip_response(pkg, _export_filename(package_id, annotator_id))
 

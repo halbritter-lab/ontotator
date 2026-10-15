@@ -38,7 +38,12 @@ from ontocurator.packages.models import (
     ValidatedPackage,
 )
 from ontocurator.storage.database import Database
-from ontocurator.storage.repository import DraftState, EditEvent, Repository
+from ontocurator.storage.repository import (
+    DraftState,
+    EditEvent,
+    ProjectInfo,
+    Repository,
+)
 from ontocurator.storage.tables import UserRow
 
 # Public methods that touch no project data.
@@ -151,6 +156,13 @@ class ScopedRepository(Repository):
             manifest
             for manifest in super().list_manifests()
             if can(self.access, Action.VIEW_PROJECT, manifest.package_id)
+        ]
+
+    def list_projects(self) -> list[ProjectInfo]:
+        return [
+            project
+            for project in super().list_projects()
+            if can(self.access, Action.VIEW_PROJECT, project.project_key)
         ]
 
     def get_task_profile(self, package_id: str) -> TaskProfile:

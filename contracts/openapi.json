@@ -126,18 +126,22 @@
         }
       }
     },
-    "/api/v1/settings": {
+    "/api/v1/projects": {
       "get": {
-        "summary": "Get Settings",
-        "description": "Effective presets of this installation (ontocurator-settings.json).",
-        "operationId": "get_settings_api_v1_settings_get",
+        "summary": "List Projects",
+        "description": "The projects the logged-in user can see, newest first.",
+        "operationId": "list_projects_api_v1_projects_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EffectiveSettings"
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Projects Api V1 Projects Get"
                 }
               }
             }
@@ -202,30 +206,9 @@
       }
     },
     "/api/v1/packages": {
-      "get": {
-        "summary": "List Packages",
-        "description": "List installed packages with metadata and ontology reference.",
-        "operationId": "list_packages_api_v1_packages_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/PackageManifest"
-                  },
-                  "type": "array",
-                  "title": "Response List Packages Api V1 Packages Get"
-                }
-              }
-            }
-          }
-        }
-      },
       "post": {
         "summary": "Upload Package",
-        "description": "Upload and atomically import a work package archive (system admins).\n\nRuns in the thread pool (plain ``def``); the body is copied with a size cap.",
+        "description": "Upload and atomically import a work package archive (system admins).\n\nA new project gets the uploader as a member with every role, so the\ndashboard flow keeps working until projects are imported by the CLI\n(T2d). Runs in the thread pool (plain ``def``); the body is copied with a\nsize cap.",
         "operationId": "upload_package_api_v1_packages_post",
         "requestBody": {
           "content": {
@@ -276,7 +259,7 @@
     "/api/v1/packages/{package_id}/documents": {
       "get": {
         "summary": "List Package Documents",
-        "description": "List documents showing metadata only, without proposal counts.\n\nThe status is the logged-in user's; a system admin may ask for another\nannotator's. In review mode (if allowed) each document says whether it\nhas proposals, so review navigation can skip documents there is nothing\nto review in.",
+        "description": "List documents showing metadata only, without proposal counts.\n\nThe status is the logged-in user's; a system admin or a lead of the\nproject may ask for another annotator's. In review mode, for a user who\nmay review, each document says whether it has proposals, so review\nnavigation can skip documents there is nothing to review in.",
         "operationId": "list_package_documents_api_v1_packages__package_id__documents_get",
         "parameters": [
           {
@@ -758,7 +741,7 @@
     "/api/v1/packages/{package_id}/export": {
       "get": {
         "summary": "Export Package For Annotator",
-        "description": "Export all work of one annotator on a package as one v2 work package.\n\nThe annotator is the logged-in user (``annotator_id`` omitted or their own\npseudonym); a system admin may export another annotator's work.\nIncludes every document of the package and all of the annotator's\nsubmissions, submitted annotations and search events in ``mode`` (all\nmodes if omitted). Filename:\n``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.",
+        "description": "Export all work of one annotator on a package as one v2 work package.\n\nThe annotator is the logged-in user (``annotator_id`` omitted or their own\npseudonym); a system admin or a lead of the project may export another\nannotator's work (Q5).\nIncludes every document of the package and all of the annotator's\nsubmissions, submitted annotations and search events in ``mode`` (all\nmodes if omitted). Filename:\n``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.",
         "operationId": "export_package_for_annotator_api_v1_packages__package_id__export_get",
         "parameters": [
           {
@@ -1214,28 +1197,6 @@
         "title": "AnnotationTypeDefinition",
         "description": "Definition of an annotation type available in a layer."
       },
-      "AxesConfig": {
-        "properties": {
-          "definition_name": {
-            "type": "string",
-            "title": "Definition Name"
-          },
-          "axes": {
-            "items": {
-              "$ref": "#/components/schemas/AxisDefinition"
-            },
-            "type": "array",
-            "title": "Axes"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "definition_name"
-        ],
-        "title": "AxesConfig",
-        "description": "Named profile definition containing configured axes."
-      },
       "AxisDefinition": {
         "properties": {
           "id": {
@@ -1462,61 +1423,6 @@
         ],
         "title": "Draft",
         "description": "Mutable, revisioned working state of a workspace."
-      },
-      "EffectiveSettings": {
-        "properties": {
-          "allowed_modes": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "independent",
-                "review",
-                "assisted"
-              ]
-            },
-            "type": "array",
-            "title": "Allowed Modes"
-          },
-          "default_mode": {
-            "type": "string",
-            "enum": [
-              "independent",
-              "review",
-              "assisted"
-            ],
-            "title": "Default Mode"
-          },
-          "annotator_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Annotator Id"
-          },
-          "open_package": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Open Package"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "allowed_modes",
-          "default_mode"
-        ],
-        "title": "EffectiveSettings",
-        "description": "Settings the web UI applies (``GET /api/v1/settings``)."
       },
       "EvidenceMention": {
         "properties": {
@@ -1914,26 +1820,6 @@
         ],
         "title": "OntologyInfo"
       },
-      "OntologyRef": {
-        "properties": {
-          "release": {
-            "type": "string",
-            "title": "Release"
-          },
-          "sha256": {
-            "type": "string",
-            "title": "Sha256"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "release",
-          "sha256"
-        ],
-        "title": "OntologyRef",
-        "description": "Reference to pinned HPO ontology release and digest."
-      },
       "OntologyTranslation": {
         "properties": {
           "language": {
@@ -2042,150 +1928,6 @@
         "title": "OpenWorkspaceResponse",
         "description": "Response returned upon opening a workspace."
       },
-      "PackageManifest": {
-        "properties": {
-          "package_id": {
-            "type": "string",
-            "title": "Package Id"
-          },
-          "format_version": {
-            "type": "string",
-            "enum": [
-              "ontocurator-work-package/v2",
-              "ontocurator-work-package/v1",
-              "hpo-editor-work-package/v1"
-            ],
-            "title": "Format Version",
-            "default": "ontocurator-work-package/v2"
-          },
-          "document_order": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Document Order"
-          },
-          "task_profile": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TaskProfile"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "task_profile_sha256": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Task Profile Sha256"
-          },
-          "ontology": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OntologyRef"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "axes_definition": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Axes Definition"
-          },
-          "axes_config": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AxesConfig"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "axes_config_sha256": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Axes Config Sha256"
-          },
-          "file_hashes": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "File Hashes"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "origin_package_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Package Id"
-          },
-          "origin_manifest_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Manifest Hash"
-          },
-          "search_conditions": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/SearchCondition"
-                },
-                "type": "array",
-                "maxItems": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Search Conditions"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "package_id",
-          "created_at"
-        ],
-        "title": "PackageManifest",
-        "description": "Manifest describing work package metadata and checksums."
-      },
       "Preferences": {
         "properties": {
           "last_annotator_id": {
@@ -2280,6 +2022,69 @@
         "type": "object",
         "title": "PreferencesUpdate",
         "description": "Partial update: omitted fields are kept, modes are merged per package."
+      },
+      "ProjectSummary": {
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "roles": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "annotator",
+                "adjudicator"
+              ]
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "allowed_modes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "independent",
+                "review",
+                "assisted"
+              ]
+            },
+            "type": "array",
+            "title": "Allowed Modes"
+          },
+          "document_count": {
+            "type": "integer",
+            "title": "Document Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "package_id",
+          "name",
+          "description",
+          "roles",
+          "allowed_modes",
+          "document_count"
+        ],
+        "title": "ProjectSummary",
+        "description": "A project on the dashboard, with what the user may do in it.\n\nThe project key keeps the name ``package_id`` until T3 (index D-e)."
       },
       "Provenance": {
         "properties": {
@@ -2597,48 +2402,6 @@
         ],
         "title": "SearchCandidate",
         "description": "Single candidate term returned by an ontology search route."
-      },
-      "SearchCondition": {
-        "properties": {
-          "schema_version": {
-            "type": "string",
-            "const": "ontocurator-search-condition/v1",
-            "title": "Schema Version",
-            "default": "ontocurator-search-condition/v1"
-          },
-          "condition_id": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Condition Id"
-          },
-          "ontology_sha256": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Ontology Sha256"
-          },
-          "translations": {
-            "items": {
-              "$ref": "#/components/schemas/TranslationResource"
-            },
-            "type": "array",
-            "maxItems": 128,
-            "title": "Translations"
-          },
-          "index": {
-            "$ref": "#/components/schemas/IndexConfiguration"
-          },
-          "runtime": {
-            "$ref": "#/components/schemas/RuntimeIdentity"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "condition_id",
-          "ontology_sha256",
-          "runtime"
-        ],
-        "title": "SearchCondition"
       },
       "SearchExecution": {
         "properties": {
@@ -2978,64 +2741,6 @@
         "title": "Submission",
         "description": "Immutable local submission record."
       },
-      "TaskProfile": {
-        "properties": {
-          "schema": {
-            "type": "string",
-            "const": "ontocurator-task-profile/v1",
-            "title": "Schema",
-            "default": "ontocurator-task-profile/v1"
-          },
-          "profile_id": {
-            "type": "string",
-            "title": "Profile Id"
-          },
-          "version": {
-            "type": "string",
-            "title": "Version"
-          },
-          "ontologies": {
-            "items": {
-              "$ref": "#/components/schemas/OntologyDefinition"
-            },
-            "type": "array",
-            "title": "Ontologies"
-          },
-          "layers": {
-            "items": {
-              "$ref": "#/components/schemas/LayerDefinition"
-            },
-            "type": "array",
-            "title": "Layers"
-          },
-          "default_layer_id": {
-            "type": "string",
-            "title": "Default Layer Id"
-          },
-          "preset": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Preset"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "profile_id",
-          "version",
-          "ontologies",
-          "layers",
-          "default_layer_id"
-        ],
-        "title": "TaskProfile",
-        "description": "Complete specification of task profile, ontologies, layers, and types."
-      },
       "TaskScope": {
         "properties": {
           "scope_id": {
@@ -3193,45 +2898,6 @@
           "term_id"
         ],
         "title": "TermLookup"
-      },
-      "TranslationResource": {
-        "properties": {
-          "filename": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Filename"
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Sha256"
-          },
-          "resource_path": {
-            "type": "string",
-            "maxLength": 256,
-            "title": "Resource Path"
-          },
-          "languages": {
-            "items": {
-              "type": "string",
-              "pattern": "^[a-z]{2}$"
-            },
-            "type": "array",
-            "maxItems": 32,
-            "minItems": 1,
-            "title": "Languages"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "filename",
-          "sha256",
-          "resource_path",
-          "languages"
-        ],
-        "title": "TranslationResource"
       },
       "TranslationUploadInfo": {
         "properties": {

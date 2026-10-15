@@ -33,7 +33,6 @@ from ontocurator.domain.errors import (
     IncompleteReview,
     InvalidPackage,
     LoginFailed,
-    ModeNotAllowed,
     NotAuthenticated,
     PayloadTooLarge,
     RevisionConflict,
@@ -274,15 +273,6 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=422,
-            content={"code": exc.code, "details": exc.details or str(exc)},
-        )
-
-    @app.exception_handler(ModeNotAllowed)
-    async def mode_not_allowed_handler(
-        _req: Request, exc: ModeNotAllowed
-    ) -> JSONResponse:
-        return JSONResponse(
-            status_code=403,
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 

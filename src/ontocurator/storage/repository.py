@@ -213,6 +213,16 @@ class DraftState:
 
 
 @dataclass(frozen=True)
+class ProjectInfo:
+    """A project as the project list shows it."""
+
+    project_key: str
+    name: str
+    description: str | None
+    document_count: int
+
+
+@dataclass(frozen=True)
 class EditEvent:
     """One row of the edit log (``edit_events``)."""
 
@@ -702,6 +712,24 @@ class Repository:
                 .all()
             )
         return [PackageManifest.model_validate(m) for m in stored]
+
+    def list_projects(self) -> list[ProjectInfo]:
+        """Every project with its document count, newest first."""
+        documents = (
+            select(func.count())
+            .where(DocumentRow.project_id == ProjectRow.id)
+            .scalar_subquery()
+        )
+        with self.db.transaction() as conn:
+            rows = conn.execute(
+                select(
+                    ProjectRow.project_key,
+                    ProjectRow.name,
+                    ProjectRow.description,
+                    documents.label("document_count"),
+                ).order_by(ProjectRow.created_at.desc(), ProjectRow.id.desc())
+            ).all()
+        return [ProjectInfo(**row._asdict()) for row in rows]
 
     def get_task_profile(self, package_id: str) -> TaskProfile:
         """The resolved task profile of a project."""
@@ -1533,7 +1561,11 @@ class Repository:
     def get_submissions_for_document(
         self, package_id: str, document_id: str
     ) -> list[Submission]:
-        """Every submission of the project for one document."""
+        """Every submission of the project for one document.
+
+        Not for review inputs: a reviewer sees the document's proposals only,
+        never other members' work (index Q3). Kept for T4 workflow assignments.
+        """
         with self.db.transaction() as conn:
             stored = (
                 conn.execute(

@@ -45,13 +45,6 @@ class IncompleteReview(DomainError):
         super().__init__("INCOMPLETE_REVIEW", details)
 
 
-class ModeNotAllowed(DomainError):
-    """Raised when a working mode is disabled by the distribution settings."""
-
-    def __init__(self, details: str | dict[str, Any] | None = None) -> None:
-        super().__init__("MODE_NOT_ALLOWED", details)
-
-
 class AccessDenied(DomainError):
     """Raised when the principal may not do or see what it asked for (HTTP 403)."""
 

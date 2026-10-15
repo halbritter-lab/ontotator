@@ -88,6 +88,7 @@ def test_a_member_sees_only_their_projects(db: Database) -> None:
     alice = ScopedRepository(db, _access({"A": {"annotator"}}))
 
     assert [m.package_id for m in alice.list_manifests()] == ["A"]
+    assert [p.project_key for p in alice.list_projects()] == ["A"]
     assert alice.get_document("A", "doc-beta") is not None
     with pytest.raises(DomainError) as error:
         alice.get_document("B", "doc-beta")
@@ -154,8 +155,8 @@ def test_no_public_method_escapes_the_scope() -> None:
     overridden = {name for name in _public_methods() if name in vars(ScopedRepository)}
 
     assert _public_methods() - overridden == PROJECT_FREE
-    # list_manifests filters instead of refusing (see the first test).
-    assert set(CALLS) == overridden - {"list_manifests"}
+    # The two lists filter instead of refusing (see the first test).
+    assert set(CALLS) == overridden - {"list_manifests", "list_projects"}
 
 
 @pytest.mark.parametrize("method", sorted(CALLS))
@@ -309,7 +310,7 @@ def test_the_api_hides_foreign_projects(app: Any) -> None:
     assert missing.status_code == 404
     assert foreign.json()["code"] == missing.json()["code"] == "PROJECT_NOT_FOUND"
     assert foreign.json()["details"].replace("B", "Z") == missing.json()["details"]
-    assert [m["package_id"] for m in alice.get("/api/v1/packages").json()] == ["A"]
+    assert [p["package_id"] for p in alice.get("/api/v1/projects").json()] == ["A"]
 
 
 def test_an_upload_makes_the_uploader_a_member_of_the_new_project(

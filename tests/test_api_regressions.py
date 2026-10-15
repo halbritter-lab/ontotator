@@ -30,7 +30,7 @@ def test_origin_must_match_bound_host_and_port(app_client, origin):
 def test_same_origin_is_allowed(app_client):
     client, _ = app_client
     response = client.get(
-        "/api/v1/packages",
+        "/api/v1/projects",
         headers={"Host": "127.0.0.1:8000", "Origin": "http://127.0.0.1:8000"},
     )
     assert response.status_code == 200
@@ -41,7 +41,7 @@ def _open(client, config, mode="independent", targets=None, scenario=None):
     archive = _create_sample_package_bytes(pkg_scenario)
     with zipfile.ZipFile(io.BytesIO(archive)) as z:
         pkg_id = json.loads(z.read("manifest.json"))["package_id"]
-    installed = {p["package_id"] for p in client.get("/api/v1/packages").json()}
+    installed = {p["package_id"] for p in client.get("/api/v1/projects").json()}
     if pkg_id not in installed:
         # Re-importing is only idempotent for identical content; some tests
         # extend the installed package directly in the database.
