@@ -32,7 +32,12 @@ OWNER_ROLE = "ontocurator_owner"
 APP_ROLE = "ontocurator_app"
 
 # The application role may only read and insert these (T2 D6).
-APPEND_ONLY_TABLES = ("annotation_snapshots", "evidence_snapshots", "submissions")
+APPEND_ONLY_TABLES = (
+    "annotation_snapshots",
+    "evidence_snapshots",
+    "submissions",
+    "audit_events",
+)
 
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
@@ -325,3 +330,130 @@ class MutationReceiptRow(Base):
     request_hash: Mapped[str]
     response: Mapped[dict[str, Any]]
     created_at: Mapped[datetime]
+
+
+# --- Identity (T2b, migration 0002) -------------------------------------
+
+
+class UserRow(Base):
+    """An account; ``pseudonym`` (``ann-0001``, ...) is the same in every project."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    username: Mapped[str] = mapped_column(unique=True)
+    display_name: Mapped[str]
+    email: Mapped[str | None]
+    pseudonym: Mapped[str] = mapped_column(unique=True)
+    orcid: Mapped[str | None]
+    orcid_consent: Mapped[bool] = mapped_column(server_default=text("false"))
+    is_system_admin: Mapped[bool] = mapped_column(server_default=text("false"))
+    active: Mapped[bool] = mapped_column(server_default=text("true"))
+    credential_generation: Mapped[int] = mapped_column(server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class PasswordCredentialRow(Base):
+    """The Argon2id hash of a user's password."""
+
+    __tablename__ = "password_credentials"
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id), primary_key=True
+    )
+    password_hash: Mapped[str]
+    changed_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class SessionRow(Base):
+    """A server-side login session; only the token's SHA-256 is stored."""
+
+    __tablename__ = "sessions"
+    __table_args__ = (Index("ix_sessions_user_id_revoked_at", "user_id", "revoked_at"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    token_sha256: Mapped[str] = mapped_column(unique=True)
+    csrf_token: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    last_seen_at: Mapped[datetime]
+    expires_at: Mapped[datetime]
+    revoked_at: Mapped[datetime | None]
+    revoked_reason: Mapped[str | None]
+    client_ip: Mapped[str | None]
+    user_agent: Mapped[str | None]
+
+
+class OneTimeCodeRow(Base):
+    """A single-use setup or reset code; only its SHA-256 is stored."""
+
+    __tablename__ = "one_time_codes"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    purpose: Mapped[str]  # 'setup' or 'reset'
+    code_sha256: Mapped[str] = mapped_column(unique=True)
+    issued_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    credential_generation: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[datetime]
+    used_at: Mapped[datetime | None]
+
+
+class LoginAttemptRow(Base):
+    """One login attempt, for throttling per account and per client address."""
+
+    __tablename__ = "login_attempts"
+    __table_args__ = (
+        Index("ix_login_attempts_username_at", "username", "at"),
+        Index("ix_login_attempts_client_ip_at", "client_ip", "at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    username: Mapped[str]
+    client_ip: Mapped[str]
+    succeeded: Mapped[bool]
+    at: Mapped[datetime]
+
+
+class AuditEventRow(Base):
+    """An administrative or security event (append-only)."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (Index("ix_audit_events_project_id_at", "project_id", "at"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    at: Mapped[datetime] = mapped_column(server_default=func.now())
+    actor_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id)
+    )
+    actor_label: Mapped[str]
+    action: Mapped[str]
+    target_type: Mapped[str]
+    target_id: Mapped[str]
+    project_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id)
+    )
+    details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'::jsonb"))
+
+
+class UserPreferencesRow(Base):
+    """The editor preferences of one user."""
+
+    __tablename__ = "user_preferences"
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id), primary_key=True
+    )
+    preferences: Mapped[dict[str, Any]]
+
+
+class InstanceStateRow(Base):
+    """Instance-wide state, one JSON value per key."""
+
+    __tablename__ = "instance_state"
+
+    key: Mapped[str] = mapped_column(primary_key=True)
+    value: Mapped[Any] = mapped_column(JSONB)
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())

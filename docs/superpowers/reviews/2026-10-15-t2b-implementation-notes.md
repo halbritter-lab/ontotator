@@ -67,3 +67,13 @@ answer; the least surprising option was taken and should be confirmed.
   `.legacy-config-*` CSS and the `--provision-dir` and `--axes-config` mentions in the docs.
   `scripts/check_wheel.py` now fails if it finds no migrations, and `tests/test_check_wheel.py` loads the
   script with `importlib` instead of changing `sys.path`.
+- Task 2: `tests/test_schema.py` "must now report `16 passed`" -> it reports `17 passed`, because the
+  baseline was 14 (two mapping tests, 3 x 3 append-only cases, three single tests) and `audit_events`
+  adds 3 statement cases to the append-only parametrisation, not 2.
+- Task 2: the plan named the composite indexes only by their columns -> they are named after the
+  `ix_<table>_<columns>` convention (`ix_sessions_user_id_revoked_at`, `ix_login_attempts_username_at`,
+  `ix_login_attempts_client_ip_at`, `ix_audit_events_project_id_at`). Foreign keys use the default
+  `NO ACTION` (users are deactivated, not deleted), `instance_state.value` is `NOT NULL` like every
+  column the table does not mark "null", and `one_time_codes.purpose` has no `CHECK` constraint (the
+  plan lists none; the service validates it). `pseudonym_seq` is not mapped in `tables.py`, since
+  Alembic does not compare sequences.
