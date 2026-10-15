@@ -1,5 +1,6 @@
 # Standalone: docker compose -f docker-compose.dev.yml up -d --build --wait
-# ALL inline credentials below are DEVELOPMENT ONLY. Never deploy this stack.
+# ALL credentials below and in docker/dev-passwords are DEVELOPMENT ONLY.
+# Never deploy this stack.
 x-runtime: &runtime
   restart: unless-stopped
   read_only: true
@@ -116,8 +117,8 @@ secrets:
     file: ${GITHUB_TOKEN_FILE:?Set the path to your read-only GitHub build token file}
 
 configs:
-  # DEVELOPMENT ONLY: hexadecimal credentials accepted by postgres-init.sh.
+  # DEVELOPMENT ONLY public fixtures. Read-only services require file configs.
   owner_password:
-    content: deadbeef0123456789abcdef01234567
+    file: ./docker/dev-passwords/owner-password
   app_password:
-    content: cafebabe0123456789abcdef01234567
+    file: ./docker/dev-passwords/app-password

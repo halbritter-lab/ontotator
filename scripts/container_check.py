@@ -15,6 +15,10 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class DockerCommandError(RuntimeError):
+    """A diagnostic safe to print without exposing Docker's raw output."""
+
+
 def readiness_matches(status: int, body: dict, check: str, expected: bool) -> bool:
     """An unavailable probe must carry both its HTTP and explicit check evidence."""
     return status == 503 and body.get("checks", {}).get(check) is expected
@@ -26,16 +30,66 @@ def production_has_private_app(config: dict) -> bool:
     )
 
 
+def docker_failure(stderr: str) -> str:
+    """Classify known failures without echoing commands, environment or logs."""
+    if "cannot create config" in stderr and "read-only service" in stderr:
+        return "read-only PostgreSQL requires file-backed Compose configs"
+    if any(
+        message in stderr.lower()
+        for message in (
+            "port is already allocated",
+            "address already in use",
+            "ports are not available",
+        )
+    ):
+        return "localhost port collision; rerun to select fresh ports"
+    if "unhealthy" in stderr.lower():
+        return "service healthcheck failed; inspect service status for this project"
+    if "no such image" in stderr.lower() or "pull access denied" in stderr.lower():
+        return "requested image is unavailable locally"
+    if "bind source path does not exist" in stderr.lower():
+        return "required bind-mounted file is missing"
+    return "Docker failed; inspect service status for this project"
+
+
+def service_status(output: str) -> str:
+    """Project-local service state only; never log commands or container metadata."""
+    rows = (
+        json.loads(output)
+        if output.lstrip().startswith("[")
+        else [json.loads(line) for line in output.splitlines() if line.strip()]
+    )
+    summaries = []
+    for row in rows:
+        if row.get("Service") not in {"app", "migrate", "postgres"}:
+            continue
+        state = row.get("State")
+        state = (
+            state
+            if state in {"running", "created", "exited", "restarting", "dead", "paused"}
+            else "unknown"
+        )
+        health = row.get("Health")
+        health = (
+            health if health in {"healthy", "unhealthy", "starting", ""} else "unknown"
+        )
+        code = row.get("ExitCode")
+        code = code if type(code) is int else "unknown"
+        summaries.append(
+            f"{row['Service']} state={state} health={health or 'none'} exit={code}"
+        )
+    return "; ".join(summaries) or "no project containers created"
+
+
 def run(
-    args: list[str], *, env: dict[str, str], check: bool = True
+    args: list[str], *, env: dict[str, str], check: bool = True, stage: str = "docker"
 ) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
         args, cwd=ROOT, env=env, text=True, capture_output=True, timeout=180
     )
     if check and result.returncode:
-        # Commands/configuration may contain credentials. Do not echo Docker output.
-        raise RuntimeError(
-            f"Docker command failed (exit {result.returncode}); check Docker availability, image and port bindings"
+        raise DockerCommandError(
+            f"{stage} (exit {result.returncode}): {docker_failure(result.stderr)}"
         )
     return result
 
@@ -77,7 +131,27 @@ class Stack:
         command = ["docker", "compose", "-p", self.project]
         for file in self.files:
             command += ["-f", file]
-        return run(command + list(args), env=self.env, check=check)
+        operation = next(
+            (
+                arg
+                for arg in args
+                if arg in {"up", "down", "exec", "stop", "start", "config", "ps"}
+            ),
+            "command",
+        )
+        service = (
+            f" service={args[2]}"
+            if len(args) > 2
+            and args[:2] == ("exec", "-T")
+            and args[2] in {"app", "migrate", "postgres"}
+            else ""
+        )
+        return run(
+            command + list(args),
+            env=self.env,
+            check=check,
+            stage=f"compose {operation}{service} project={self.project}",
+        )
 
     def up(self, *, wait: bool = True) -> None:
         for reservation in self.reservations:
@@ -140,7 +214,7 @@ print(json.dumps([response.status, json.load(response)]))
         )
         password = self.directory / "app-password"
         password.write_text("cafebabe0123456789abcdef01234567")
-        override = self.directory / "pending.json"
+        override = self.directory / "pending.yml"
         override.write_text(
             json.dumps(
                 {
@@ -175,6 +249,9 @@ print(json.dumps([response.status, json.load(response)]))
                         },
                     }
                 }
+            ).replace(
+                '"ONTOCURATOR_ADMIN_PASSWORD_HASH": null',
+                '"ONTOCURATOR_ADMIN_PASSWORD_HASH": !reset null',
             )
         )
         self.files.append(str(override))
@@ -291,11 +368,26 @@ def main() -> int:
                     and body["checks"].get("database") is True
                 )
             report("readyz detects pending migrations", pending)
-        except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired):
+        except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+            detail = (
+                str(error)
+                if isinstance(error, DockerCommandError)
+                else type(error).__name__
+            )
             report(
-                "container checks aborted (Docker/image/configuration unavailable)",
+                f"container checks aborted: {detail}",
                 False,
             )
+            try:
+                status = stack.compose("ps", "--all", "--format", "json", check=False)
+                print(
+                    f"Project {stack.project}: {service_status(status.stdout)}",
+                    flush=True,
+                )
+            except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired):
+                print(
+                    f"Project {stack.project}: service status unavailable", flush=True
+                )
         finally:
             try:
                 stack.down()
