@@ -111,25 +111,29 @@ def test_an_earlier_export_of_the_same_walk_imports_and_the_longer_event_stays(
 
     repo.import_package(_export_with(_walk(["HP:1", "HP:2"]), "export-early"))
 
-    stored = repo.get_search_event("walk-1")
+    stored = repo.get_search_event("walk-1", "pkg-1")
     assert stored is not None
     assert stored.candidates == ["HP:1", "HP:2", "HP:3"]
+    # The new project gets the walk of its own package, not another project's.
+    early = repo.get_search_event("walk-1", "export-early")
+    assert early is not None
+    assert early.candidates == ["HP:1", "HP:2"]
 
 
-def test_a_later_export_of_the_same_walk_replaces_the_shorter_event(tmp_path):
+def test_a_later_export_of_the_same_walk_leaves_the_other_project(tmp_path):
     repo = _repo(tmp_path)
     repo.import_package(_export_with(_walk(["HP:1", "HP:2"]), "export-early"))
 
     repo.import_package(_export_with(_walk(["HP:1", "HP:2", "HP:3"]), "export-late"))
 
-    stored = repo.get_search_event("walk-1")
-    assert stored is not None
-    assert stored.candidates == ["HP:1", "HP:2", "HP:3"]
-    assert stored.ranked_ids == ["HP:1", "HP:2", "HP:3"]
-    # Both imported packages now hand out the later state.
-    for package_id in ("export-early", "export-late"):
+    # Each imported package hands out the state it brought.
+    for package_id, candidates in (
+        ("export-early", ["HP:1", "HP:2"]),
+        ("export-late", ["HP:1", "HP:2", "HP:3"]),
+    ):
         events = repo.export_package(package_id).search_events
-        assert [e.candidates for e in events] == [["HP:1", "HP:2", "HP:3"]]
+        assert [e.candidates for e in events] == [candidates]
+        assert [e.ranked_ids for e in events] == [candidates]
 
 
 @pytest.mark.parametrize(
@@ -337,17 +341,24 @@ def test_two_exports_of_a_growing_walk_import_in_either_order(tmp_path, order):
     for name in order:
         recipient.import_package(exports[name])
 
-    stored = recipient.get_search_event("walk-1")
-    assert stored is not None
-    assert stored.candidates == ["HP:1", "HP:2", "HP:3", "HP:4"]
-    assert stored.ranked_ids == stored.candidates
-    assert stored == source.get_search_event("walk-1")
+    # Each export is a project of its own and keeps the state it brought.
+    stored = {
+        name: recipient.get_search_event("walk-1", exports[name].manifest.package_id)
+        for name in order
+    }
+    assert stored["early"] == exports["early"].search_events[0]
+    assert stored["late"] == source.get_search_event("walk-1")
+    assert stored["late"].candidates == ["HP:1", "HP:2", "HP:3", "HP:4"]
+    assert stored["late"].ranked_ids == stored["late"].candidates
     # Importing either file again changes nothing and is not a conflict.
     for name in order:
         recipient.import_package(exports[name])
-    assert recipient.get_search_event("walk-1") == stored
+        assert (
+            recipient.get_search_event("walk-1", exports[name].manifest.package_id)
+            == stored[name]
+        )
     # And the source takes its own earlier export back without losing terms.
     source.import_package(exports["early"])
-    kept = source.get_search_event("walk-1")
+    kept = source.get_search_event("walk-1", "pkg-1")
     assert kept is not None
     assert kept.candidates == ["HP:1", "HP:2", "HP:3", "HP:4"]

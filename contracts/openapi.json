@@ -259,7 +259,7 @@
     "/api/v1/packages/{package_id}/documents": {
       "get": {
         "summary": "List Package Documents",
-        "description": "List documents showing metadata only, without proposal counts.\n\nThe status is the logged-in user's; a system admin or a lead of the\nproject may ask for another annotator's. In review mode, for a user who\nmay review, each document says whether it has proposals, so review\nnavigation can skip documents there is nothing to review in.",
+        "description": "List documents showing metadata only, without proposal counts.\n\nThe status is the logged-in user's; a system admin or a lead of the\nproject may ask for another annotator's. Review mode is refused to a user\nwhose roles do not give it; in it each document says whether it has\nproposals, so review navigation can skip documents there is nothing to\nreview in.\n\nRaises:\n    AccessDenied: ``MODE_NOT_ALLOWED`` (403) for review mode without it.",
         "operationId": "list_package_documents_api_v1_packages__package_id__documents_get",
         "parameters": [
           {

@@ -165,3 +165,50 @@ answer; the most conservative option was taken and should be confirmed.
   Backend 875 passed, 1 skipped (the POSIX-only recovery file permission test on Windows); vitest
   320 passed in 33 files; Playwright 34 passed. The one pytest warning (Starlette's `httpx` test
   client deprecation) predates T2c.
+
+## Review fixes and user decisions (2026-10-15)
+
+- Codex review (`2026-10-15-t2c-codex-review.md`): a tree expansion authorized for project A locked
+  and updated every search-event row with the same event ID, in every project, so a copy of the walk
+  in project B (export of A imported as B) grew although the user had no role in B ->
+  `append_search_event_candidates` locks and updates only the copy in the project of
+  `workspace_key` (without a key, the first copy). Imports follow the same rule: an import no longer
+  updates another project's copy to a longer walk, and a new project stores the walk of its own
+  package instead of a longer copy from another project (which also revealed that project's
+  browsing). A re-import into the same project still keeps the longer state of its own copy. Covered
+  by `tests/test_tree_api.py::test_expanding_a_walk_leaves_its_copy_in_another_project` (Alice is a
+  member of A only, expands a node; B's copy is unchanged) and
+  `tests/test_pg_repository.py::test_a_growing_walk_changes_only_the_copy_of_its_project` (was
+  `test_a_growing_walk_keeps_every_copy_of_its_id_equal`). Changed to the new rule:
+  `test_each_project_keeps_the_tree_walk_it_imported` (was
+  `test_every_copy_of_a_tree_walk_keeps_the_longest_state`),
+  `test_an_append_waiting_for_an_import_leaves_the_new_copy`,
+  `test_an_import_waiting_for_an_append_stores_its_own_walk`, and in `tests/test_tree_events.py`
+  `test_an_earlier_export_of_the_same_walk_imports_and_the_longer_event_stays`,
+  `test_a_later_export_of_the_same_walk_leaves_the_other_project` (was `..._replaces_the_shorter_event`)
+  and `test_two_exports_of_a_growing_walk_import_in_either_order` (lookups name the project).
+- T2a's global event-identity rules (T2a Codex review finding 3: `SEARCH_EVENT_EXISTS` for a local
+  save of an ID known in any project, and the `SEARCH_EVENT_IDENTITY_LOCK` between local saves and
+  imports) stay unchanged. Their stated reason, that a growing walk updates every copy of its ID, no
+  longer holds, but the global ID is still what the import's content check relies on: an imported
+  event must match every stored copy of its ID (a walk: the same walk at another moment), so a local
+  event with a reused ID could still make an honest import fail or an unscoped lookup ambiguous. The
+  docstrings now give that reason. Consequences of per-project growth: copies of one walk may differ
+  in length, so a lookup without a project (`get_search_event(event_id)`, used by tests and no
+  production route) can raise `AMBIGUOUS_SEARCH_EVENT`; and once two projects have grown the same walk
+  apart, an export of either can no longer be imported into a third project ("Conflicting search
+  event content"), which is the conservative outcome. The import still locks every stored copy in
+  project order, so the lock order with appends is unchanged.
+- User decision: a document list request with `mode=review` from a user whose roles in the project do
+  not give review mode (the adjudicator role; system admins follow the existing policy through `can`)
+  is refused with 403 `MODE_NOT_ALLOWED`, the code `POST /workspaces/open` and
+  `POST /workspaces/review-inputs` already return for review mode, instead of 200 with the review
+  inputs hidden. Workspace requests already refused it (`require_mode`). The frontend offers only the
+  modes in `allowed_modes` and ignores a stored mode the roles do not give, so it never asks for the
+  review list in such a project. Covered by
+  `tests/test_project_modes.py::test_the_review_document_list_is_refused_to_annotators` (was
+  `test_document_list_hides_review_inputs_from_annotators`) and the vitest
+  `projectModes.test.tsx` "never asks for the review list in a project whose roles do not give
+  review". The OpenAPI contract and generated types changed only in the route's description.
+- User decision: a system admin who re-uploads an existing project does not become a member (kept).
+- User decision: the project select label stays `name (key)`, the key alone when equal (kept).

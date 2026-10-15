@@ -118,17 +118,23 @@ def test_a_lead_without_annotator_role_cannot_annotate(app: Any) -> None:
     assert lead.get(f"/api/v1/packages/{DEMO_ID}/documents").status_code == 200
 
 
-def test_document_list_hides_review_inputs_from_annotators(app: Any) -> None:
+def test_the_review_document_list_is_refused_to_annotators(app: Any) -> None:
     alice = _member(app, "alice", "annotator")
     bob = _member(app, "bob", "adjudicator")
     path = f"/api/v1/packages/{DEMO_ID}/documents"
 
-    hidden = alice.get(path, params={"mode": "review"})
+    refused = alice.get(path, params={"mode": "review"})
     shown = bob.get(path, params={"mode": "review"})
 
-    assert hidden.status_code == 200, hidden.text
-    assert all(d["has_review_inputs"] is None for d in hidden.json())
+    assert refused.status_code == 403, refused.text
+    assert refused.json()["code"] == "MODE_NOT_ALLOWED"
+    assert shown.status_code == 200, shown.text
     assert any(d["has_review_inputs"] for d in shown.json())
+    # Without review mode the list stays open to the annotator.
+    for params in ({}, {"mode": "independent"}):
+        listed = alice.get(path, params=params)
+        assert listed.status_code == 200, listed.text
+        assert all(d["has_review_inputs"] is None for d in listed.json())
 
 
 def test_mode_commands_are_refused_without_the_role(app: Any) -> None:

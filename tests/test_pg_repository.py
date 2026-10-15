@@ -173,7 +173,7 @@ def _with_event(package_id: str, event: SearchEventRecord) -> ValidatedPackage:
 
 
 @pytest.mark.parametrize("first_length", [3, 2], ids=["longer-first", "shorter-first"])
-def test_every_copy_of_a_tree_walk_keeps_the_longest_state(
+def test_each_project_keeps_the_tree_walk_it_imported(
     tmp_path: Path, first_length: int
 ) -> None:
     repo = _repo(tmp_path)
@@ -187,8 +187,10 @@ def test_every_copy_of_a_tree_walk_keeps_the_longest_state(
             select(SearchEventRow.payload).where(SearchEventRow.event_id == "walk-1")
         ).scalars()
         copies = [SearchEventRecord.model_validate(p) for p in stored]
-    assert [c.candidates for c in copies] == [terms, terms]
-    assert [c.ranked_ids for c in copies] == [terms, terms]
+    # An import changes no other project's copy and takes none from it.
+    first, second = terms[:first_length], terms[: 5 - first_length]
+    assert [c.candidates for c in copies] == [first, second]
+    assert [c.ranked_ids for c in copies] == [first, second]
 
 
 def test_imports_of_different_projects_wait_for_each_other(tmp_path: Path) -> None:
@@ -552,7 +554,7 @@ def test_a_walk_grows_only_for_its_owner(tmp_path: Path) -> None:
     assert stored is not None and stored.candidates == ["HP:0001252", "HP:0001250"]
 
 
-def test_a_growing_walk_keeps_every_copy_of_its_id_equal(tmp_path: Path) -> None:
+def test_a_growing_walk_changes_only_the_copy_of_its_project(tmp_path: Path) -> None:
     repo = _seeded(tmp_path)
     walk = _project_walk("walk-1", _key(), ["HP:1"])
     repo.save_search_event(walk)
@@ -563,8 +565,9 @@ def test_a_growing_walk_keeps_every_copy_of_its_id_equal(tmp_path: Path) -> None
     )
 
     assert grown is not None and grown.candidates == ["HP:1", "HP:2"]
-    assert _copies(repo, "walk-1") == [["HP:1", "HP:2"], ["HP:1", "HP:2"]]
-    assert repo.get_search_event("walk-1") == grown
+    assert _copies(repo, "walk-1") == [["HP:1", "HP:2"], ["HP:1"]]
+    assert repo.get_search_event("walk-1", "pkg-a") == grown
+    assert repo.get_search_event("walk-1", "pkg-b") == walk
     assert (
         repo.append_search_event_candidates(
             "walk-1", ["HP:3"], workspace_key=_key("pkg-c")
@@ -593,7 +596,7 @@ def test_a_rejected_import_caught_in_a_callers_transaction_keeps_the_walk(
     assert _copies(repo, "walk-1") == [["HP:1"]]
 
 
-def test_an_append_waiting_for_an_import_grows_the_new_copy_too(
+def test_an_append_waiting_for_an_import_leaves_the_new_copy(
     tmp_path: Path,
 ) -> None:
     repo = _seeded(tmp_path)
@@ -626,10 +629,10 @@ def test_an_append_waiting_for_an_import_grows_the_new_copy_too(
         grown = appending.result(timeout=10)
 
     assert grown is not None and grown.candidates == ["HP:1", "HP:2"]
-    assert _copies(repo, "walk-1") == [["HP:1", "HP:2"], ["HP:1", "HP:2"]]
+    assert _copies(repo, "walk-1") == [["HP:1", "HP:2"], ["HP:1"]]
 
 
-def test_an_import_waiting_for_an_append_keeps_the_new_terms(tmp_path: Path) -> None:
+def test_an_import_waiting_for_an_append_stores_its_own_walk(tmp_path: Path) -> None:
     repo = _seeded(tmp_path)
     walk = _project_walk("walk-1", _key(), ["HP:1"])
     repo.save_search_event(walk)
@@ -656,7 +659,7 @@ def test_an_import_waiting_for_an_append_keeps_the_new_terms(tmp_path: Path) -> 
         appender.result(timeout=10)
         assert importing.result(timeout=10) == "pkg-b"
 
-    assert _copies(repo, "walk-1") == [["HP:1", "HP:2"], ["HP:1", "HP:2"]]
+    assert _copies(repo, "walk-1") == [["HP:1", "HP:2"], ["HP:1"]]
 
 
 def test_an_export_contains_proposals_drafts_history_and_events(
