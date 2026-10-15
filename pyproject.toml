@@ -31,6 +31,7 @@ onto-curator = "ontocurator.cli:main"
 [dependency-groups]
 dev = [
     "httpx>=0.27,<1",
+    "locust>=2.32,<3",
     "mypy>=1.15,<3",
     "pytest>=8,<10",
     "pytest-cov>=6,<8",
