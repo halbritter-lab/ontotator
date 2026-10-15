@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from pg_harness import database_for
+from psycopg import Error as PsycopgError
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -51,10 +52,12 @@ def test_only_one_active_assignment_per_task(
         # A review is a separate task for the same user and document.
         conn.execute(insert, {**params, "task": "review"})
     with (
-        pytest.raises(IntegrityError, match="uq_assignments_active"),
+        pytest.raises(IntegrityError) as duplicate,
         db.engine.begin() as conn,
     ):
         conn.execute(insert, params)
+    assert isinstance(duplicate.value.orig, PsycopgError)
+    assert duplicate.value.orig.diag.constraint_name == "uq_assignments_active"
     with db.engine.begin() as conn:
         conn.execute(
             text(f"UPDATE {SCHEMA}.assignments SET revoked_at = now() WHERE id = :id"),
@@ -97,7 +100,7 @@ def test_assignments_reject_invalid_values(
         "document_id": "d",
     }
     params[column] = bad
-    with pytest.raises(IntegrityError, match=constraint), db.engine.begin() as conn:
+    with pytest.raises(IntegrityError) as invalid, db.engine.begin() as conn:
         conn.execute(
             text(
                 f"INSERT INTO {SCHEMA}.assignments (project_id, document_id, user_id, task, status)"
@@ -105,6 +108,8 @@ def test_assignments_reject_invalid_values(
             ),
             params,
         )
+    assert isinstance(invalid.value.orig, PsycopgError)
+    assert invalid.value.orig.diag.constraint_name == constraint
 
 
 def test_user_languages_validate_codes_and_cascade(
@@ -118,10 +123,12 @@ def test_user_languages_validate_codes_and_cascade(
         conn.execute(insert, {"user": user_id, "language": "en"})
     for language in ("EN", "eng", "e1", ""):
         with (
-            pytest.raises(IntegrityError, match="ck_user_languages_language"),
+            pytest.raises(IntegrityError) as invalid,
             db.engine.begin() as conn,
         ):
             conn.execute(insert, {"user": user_id, "language": language})
+        assert isinstance(invalid.value.orig, PsycopgError)
+        assert invalid.value.orig.diag.constraint_name == "ck_user_languages_language"
     with db.engine.begin() as conn:
         conn.execute(
             text(f"DELETE FROM {SCHEMA}.users WHERE id = :user"), {"user": user_id}
@@ -160,13 +167,15 @@ def test_uploads_reject_invalid_values(
     administration: tuple[Database, int, int], kind: str, status: str, constraint: str
 ) -> None:
     db, project_id, _user_id = administration
-    with pytest.raises(IntegrityError, match=constraint), db.engine.begin() as conn:
+    with pytest.raises(IntegrityError) as invalid, db.engine.begin() as conn:
         conn.execute(
             text(
                 f"INSERT INTO {SCHEMA}.uploads (project_id, kind, files, status) VALUES (:project, :kind, '[]', :status)"
             ),
             {"project": project_id, "kind": kind, "status": status},
         )
+    assert isinstance(invalid.value.orig, PsycopgError)
+    assert invalid.value.orig.diag.constraint_name == constraint
 
 
 def test_application_can_manage_uploads(

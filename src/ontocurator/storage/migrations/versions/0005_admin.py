@@ -41,7 +41,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("user_id", "language", name="pk_user_languages"),
         sa.CheckConstraint(
-            "language ~ '^[a-z]{2}$'", name="ck_user_languages_language"
+            "language ~ '^[a-z]{2}$'", name=op.f("ck_user_languages_language")
         ),
         schema=SCHEMA,
     )
@@ -114,11 +114,11 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name="pk_assignments"),
         sa.CheckConstraint(
-            "task IN ('annotate', 'review')", name="ck_assignments_task"
+            "task IN ('annotate', 'review')", name=op.f("ck_assignments_task")
         ),
         sa.CheckConstraint(
             "status IN ('open', 'in_progress', 'submitted', 'reopened')",
-            name="ck_assignments_status",
+            name=op.f("ck_assignments_status"),
         ),
         schema=SCHEMA,
     )
@@ -171,10 +171,10 @@ def upgrade() -> None:
             ["commit_job_id"], [f"{SCHEMA}.jobs.id"], name="fk_uploads_commit_job_id"
         ),
         sa.PrimaryKeyConstraint("id", name="pk_uploads"),
-        sa.CheckConstraint("kind IN ('t1', 'text')", name="ck_uploads_kind"),
+        sa.CheckConstraint("kind IN ('t1', 'text')", name=op.f("ck_uploads_kind")),
         sa.CheckConstraint(
             "status IN ('previewing', 'ready', 'invalid', 'committing', 'committed', 'failed', 'discarded')",
-            name="ck_uploads_status",
+            name=op.f("ck_uploads_status"),
         ),
         schema=SCHEMA,
     )
