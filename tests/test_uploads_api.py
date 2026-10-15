@@ -587,3 +587,81 @@ def test_empty_sets_keep_original_tool_producers_in_import_audit(staged, tmp_pat
         {"name": "phentrieve", "version": "1.4.0", "model": "bge-m3", "run_id": "run-7"}
     ]
     assert _count(app, ProposalSetRow) == 0
+
+
+@pytest.mark.parametrize("projection", ["set_provenance", "document_provenance"])
+def test_reversed_sources_keep_canonical_payload_with_its_own_blob(
+    staged, tmp_path, projection
+):
+    from t1_fixtures import annotation
+
+    app, admin = staged
+    first = unit("doc", annotations=[annotation("p1", (6, 19), assertion="present")])
+    chosen = unit("doc", annotations=[annotation("p1", (6, 19), assertion="absent")])
+    first = first.model_copy(
+        update={
+            "document": first.document.model_copy(
+                update={"language": "de", "source_text_sha256": "b" * 64}
+            )
+        }
+    )
+    chosen = chosen.model_copy(
+        update={
+            "document": chosen.document.model_copy(
+                update={"language": "en", "source_text_sha256": "a" * 64}
+            )
+        }
+    )
+    b = bundle(tmp_path / "b.zip", [first], "same-bundle")
+    a = bundle(tmp_path / "a.zip", [chosen], "same-bundle")
+    upload = _ready(
+        app,
+        admin,
+        kind="t1",
+        files=[("files[]", (p.name, p.read_bytes())) for p in (b, a)],
+    )
+    plan = upload["preview"]
+    assert plan["documents"][0]["label"].startswith("a.zip/")
+    assert plan["proposal_sets"][0]["payload"] == chosen.annotation_set.model_dump(
+        mode="json"
+    )
+    job = _commit(app, admin, upload)
+    assert job.status == "succeeded", job.error
+    assert job.result["sets_added"] == job.result["sets_skipped"] == 1
+    with app.state.repo.db.transaction() as conn:
+        if projection == "set_provenance":
+            stored = conn.execute(
+                select(
+                    ProposalSetRow.payload,
+                    ProposalSetRow.manifest_sha256,
+                    ProposalSetRow.source_sha256,
+                )
+            ).one()
+            assert stored.payload == chosen.annotation_set.model_dump(mode="json")
+            assert stored.manifest_sha256 == manifest_sha256(a)
+            assert stored.source_sha256 == hashlib.sha256(a.read_bytes()).hexdigest()
+        else:
+            stored = conn.execute(
+                select(DocumentRow.language, DocumentRow.source_text_sha256)
+            ).one()
+            assert (stored.language, stored.source_text_sha256) == ("en", "a" * 64)
+
+
+def test_preview_with_existing_sets_and_new_set_only_change_is_stale(staged, tmp_path):
+    from t1_fixtures import run_import
+
+    app, admin = staged
+    initial = run_import(
+        app.state.repo.db, bundle(tmp_path / "initial.zip", [unit("known")], "initial")
+    )
+    assert initial.status == "succeeded", initial.error
+    upload = _ready(app, admin)
+    added = run_import(
+        app.state.repo.db, bundle(tmp_path / "next.zip", [unit("known")], "next")
+    )
+    assert added.status == "succeeded", added.error
+    assert added.result["documents_added"] == 0
+    assert added.result["sets_added"] == 1
+    job = _commit(app, admin, upload)
+    assert job.status == "failed" and "UPLOAD_STALE" in job.error
+    assert app.state.repo.get_document("proj", "a") is None

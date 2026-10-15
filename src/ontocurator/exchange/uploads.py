@@ -22,6 +22,7 @@ from ontocurator.exchange.plan import (
     ImportPlan,
     IncomingUnit,
     Issue,
+    PlannedDocument,
     PlannedSet,
     ProjectImportState,
     plan_import,
@@ -169,7 +170,8 @@ def prepare_plan(
     for doc_id, sha in documents.items():
         texts[sha].append(doc_id)
     sets = frozenset(
-        conn.execute(
+        (bundle_id, annotation_set_id, document_id)
+        for bundle_id, annotation_set_id, document_id in conn.execute(
             select(
                 ProposalSetRow.bundle_id,
                 ProposalSetRow.annotation_set_id,
@@ -229,11 +231,29 @@ def apply_plan(
         planned.setdefault(
             (item.bundle_id, item.annotation_set_id, item.document_id), item
         )
+    # For an equal identity the planner orders by label, then its stable input
+    # order. Keep that exact occurrence attached to its original source blob.
+    owners: dict[tuple[str | None, str, str], tuple[str, int, int]] = {}
+    for source_index, (_, units) in enumerate(sources):
+        for unit_index, unit in enumerate(units):
+            if unit.set is None:
+                continue
+            identity = (
+                unit.bundle_id,
+                unit.set.annotation_set_id,
+                unit.document.document_id,
+            )
+            candidate = (unit.label, source_index, unit_index)
+            if identity not in owners or candidate < owners[identity]:
+                owners[identity] = candidate
+    canonical_documents: dict[str, PlannedDocument] = {}
+    for document in plan.documents:
+        canonical_documents.setdefault(document.document_id, document)
     seen: set[tuple[str | None, str, str]] = set()
     actual = {"documents_added": 0, "sets_added": 0, "proposals": 0}
-    for sha, units in sources:
+    for source_index, (sha, units) in enumerate(sources):
         sets = []
-        for unit in units:
+        for unit_index, unit in enumerate(units):
             if unit.set is None:
                 continue
             identity = (
@@ -242,7 +262,11 @@ def apply_plan(
                 unit.document.document_id,
             )
             item = planned[identity]
-            if identity in seen or item.action != "add":
+            if (
+                identity in seen
+                or item.action != "add"
+                or owners[identity][1:] != (source_index, unit_index)
+            ):
                 continue
             seen.add(identity)
             sets.append(
@@ -259,7 +283,19 @@ def apply_plan(
             )
         result = Repository(db).add_documents_and_proposals(
             project,
-            [ImportedDocument(u.document, u.source_text_sha256) for u in units],
+            [
+                ImportedDocument(
+                    unit.document.model_copy(
+                        update={
+                            "language": canonical_documents[
+                                unit.document.document_id
+                            ].language
+                        }
+                    ),
+                    canonical_documents[unit.document.document_id].source_text_sha256,
+                )
+                for unit in units
+            ],
             sets,
             source_sha256=sha,
             imported_by=actor.user_id,

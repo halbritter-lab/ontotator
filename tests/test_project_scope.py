@@ -116,6 +116,8 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     "get_axes_config": lambda r: r.get_axes_config("B"),
     "get_project_rules": lambda r: r.get_project_rules("B"),
     "get_document": lambda r: r.get_document("B", "doc-beta"),
+    "get_proposal_set": lambda r: r.get_proposal_set("B", 1),
+    "proposal_metadata": lambda r: r.proposal_metadata("B", "doc-beta"),
     "list_documents": lambda r: r.list_documents("B"),
     "get_annotation_snapshot": lambda r: r.get_annotation_snapshot("a", "v", "B"),
     "get_evidence_snapshot": lambda r: r.get_evidence_snapshot("e", "v", "B"),
