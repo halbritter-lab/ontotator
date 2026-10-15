@@ -340,18 +340,21 @@ def list_package_documents(
     """List documents showing metadata only, without proposal counts.
 
     The status is the logged-in user's; a system admin or a lead of the
-    project may ask for another annotator's. In review mode, for a user who
-    may review, each document says whether it has proposals, so review
-    navigation can skip documents there is nothing to review in.
+    project may ask for another annotator's. Review mode is refused to a user
+    whose roles do not give it; in it each document says whether it has
+    proposals, so review navigation can skip documents there is nothing to
+    review in.
+
+    Raises:
+        AccessDenied: ``MODE_NOT_ALLOWED`` (403) for review mode without it.
     """
+    if mode == "review":
+        require_mode(request, package_id, mode)
     annotator_id = own_annotator(
         principal, annotator_id, may_read_others=may_read_others(request, package_id)
     )
-    reveal = mode == "review" and can(
-        get_access(request), Action.OPEN_REVIEW, package_id
-    )
     return ws_svc.list_documents(
-        package_id, annotator_id, mode, reveal_review_inputs=reveal
+        package_id, annotator_id, mode, reveal_review_inputs=mode == "review"
     )
 
 

@@ -170,9 +170,13 @@ export interface paths {
          * @description List documents showing metadata only, without proposal counts.
          *
          *     The status is the logged-in user's; a system admin or a lead of the
-         *     project may ask for another annotator's. In review mode, for a user who
-         *     may review, each document says whether it has proposals, so review
-         *     navigation can skip documents there is nothing to review in.
+         *     project may ask for another annotator's. Review mode is refused to a user
+         *     whose roles do not give it; in it each document says whether it has
+         *     proposals, so review navigation can skip documents there is nothing to
+         *     review in.
+         *
+         *     Raises:
+         *         AccessDenied: ``MODE_NOT_ALLOWED`` (403) for review mode without it.
          */
         get: operations["list_package_documents_api_v1_packages__package_id__documents_get"];
         put?: never;

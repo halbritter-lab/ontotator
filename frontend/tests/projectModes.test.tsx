@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../src/api/client";
 import { App } from "../src/App";
@@ -67,6 +67,27 @@ describe("working modes from the project roles", () => {
     const values = Array.from(select.options).map((o) => o.value);
     expect(values).toEqual(["review", "assisted"]);
     await waitFor(() => expect(list).toHaveBeenLastCalledWith("pkg-a", expect.objectContaining({ mode: "review" })));
+  });
+
+  it("never asks for the review list in a project whose roles do not give review", async () => {
+    const list = mockServer({
+      projects: [
+        { package_id: "pkg-a", allowed_modes: ["review"] },
+        { package_id: "pkg-b", allowed_modes: ["independent", "assisted"] },
+      ],
+      modeByPackage: { "pkg-a": "review", "pkg-b": "review" },
+    });
+    render(<App />);
+    await screen.findByRole("table");
+    await waitFor(() => expect(list).toHaveBeenLastCalledWith("pkg-a", expect.objectContaining({ mode: "review" })));
+
+    const project = screen.getByLabelText(/^Project$/i, { selector: "select" });
+    fireEvent.change(project, { target: { value: "pkg-b" } });
+
+    await waitFor(() => expect(list).toHaveBeenLastCalledWith("pkg-b", expect.objectContaining({ mode: "independent" })));
+    const select = screen.getByLabelText(/Working mode/i, { selector: "select" }) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["independent", "assisted"]);
+    expect(list).not.toHaveBeenCalledWith("pkg-b", expect.objectContaining({ mode: "review" }));
   });
 
   it("shows a notice without a working role", async () => {
