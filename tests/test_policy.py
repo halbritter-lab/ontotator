@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from ontocurator.authz.policy import Access, Action, Role, allowed_modes, can
+from ontocurator.authz.policy import Access, Action, Role, allowed_modes, can, may_take
 
 PROJECT = "A"
 
@@ -19,7 +19,11 @@ TABLE: dict[Action, str] = {
     Action.EXPORT_ALL_WORK: "YY---",
     Action.EXPORT_EDIT_LOG: "YY---",
     Action.IMPORT_DOCUMENTS: "YY---",
-    Action.MANAGE_MEMBERS: "Y----",
+    Action.MANAGE_MEMBERS: "YY---",
+    Action.MANAGE_PROJECT_SETTINGS: "YY---",
+    Action.MANAGE_ASSIGNMENTS: "YY---",
+    Action.VIEW_ALL_DOCUMENTS: "YY---",
+    Action.VIEW_PROGRESS: "YY---",
     Action.CREATE_PROJECT: "Y----",
     Action.MANAGE_USERS: "Y----",
     Action.MANAGE_ONTOLOGIES: "Y----",
@@ -94,3 +98,23 @@ def test_system_actions_ignore_the_project() -> None:
     assert not can(lead, Action.CREATE_PROJECT, PROJECT)
     assert not can(lead, Action.CREATE_PROJECT)
     assert can(access(admin=True), Action.CREATE_PROJECT)
+
+
+@pytest.mark.parametrize("admin", [False, True])
+def test_tasks_need_their_role(admin: bool) -> None:
+    annotator = access({PROJECT: frozenset({"annotator"})}, admin=admin)
+    reviewer = access({PROJECT: frozenset({"adjudicator"})}, admin=admin)
+    lead = access({PROJECT: frozenset({"lead"})}, admin=admin)
+    combined = access(
+        {PROJECT: frozenset({"lead", "annotator", "adjudicator"})}, admin=admin
+    )
+
+    assert may_take(annotator, PROJECT, "annotate")
+    assert not may_take(annotator, PROJECT, "review")
+    assert may_take(reviewer, PROJECT, "review")
+    assert not may_take(reviewer, PROJECT, "annotate")
+    for task in ("annotate", "review"):
+        assert not may_take(lead, PROJECT, task)
+        assert not may_take(access(admin=admin), PROJECT, task)
+        assert may_take(combined, PROJECT, task)
+        assert not may_take(combined, "B", task)
