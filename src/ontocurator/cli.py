@@ -855,6 +855,56 @@ IMPORT_COUNTS = (
 )
 
 
+@admin_app.command("assign")
+def assign_documents(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    username: UsernameArgument,
+    document: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--document", help="Document ID; repeat, or omit for all documents."
+        ),
+    ] = None,
+    task: Annotated[str, typer.Option("--task")] = "annotate",
+    confirm_language: Annotated[
+        bool,
+        typer.Option(
+            "--confirm-language",
+            help="Explicitly confirm and audit any language mismatch.",
+        ),
+    ] = False,
+) -> None:
+    """Assign real tasks to a current project member with the matching role."""
+    from typing import cast
+
+    from ontocurator.assignments.service import AssignmentService
+    from ontocurator.authz.policy import Task
+    from ontocurator.storage.repository import Repository
+
+    if task not in {"annotate", "review"}:
+        raise typer.BadParameter("task must be annotate or review")
+    with _open_database(ctx) as db:
+        documents = (
+            document
+            if document is not None
+            else [doc.document_id for doc in Repository(db).list_documents(project)]
+        )
+        service = AssignmentService(db)
+        for document_id in documents:
+            assignment = service.assign(
+                Actor.cli(),
+                project,
+                document_id,
+                username,
+                cast(Task, task),
+                confirm_language=confirm_language,
+            )
+            typer.echo(
+                f"{assignment.id}\t{document_id}\t{assignment.username}\t{assignment.task}\t{assignment.status}"
+            )
+
+
 @admin_app.command("import")
 def import_command(
     ctx: typer.Context,

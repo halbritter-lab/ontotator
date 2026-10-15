@@ -4,6 +4,109 @@
  */
 
 export interface paths {
+    "/api/v1/me/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Tasks */
+        get: operations["my_tasks_api_v1_me_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Assignments */
+        get: operations["list_assignments_api_v1_projects__key__assignments_get"];
+        put?: never;
+        /** Assign */
+        post: operations["assign_api_v1_projects__key__assignments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assignments/{assignment_id}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Assignment */
+        post: operations["open_assignment_api_v1_assignments__assignment_id__open_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assignments/{assignment_id}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reassign */
+        post: operations["reassign_api_v1_assignments__assignment_id__reassign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assignments/{assignment_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen */
+        post: operations["reopen_api_v1_assignments__assignment_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assignments/{assignment_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke */
+        post: operations["revoke_api_v1_assignments__assignment_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/": {
         parameters: {
             query?: never;
@@ -855,6 +958,90 @@ export interface components {
              */
             evidence_policy: "optional" | "required_on_complete";
         };
+        /** AssignRequest */
+        AssignRequest: {
+            /** Rows */
+            rows: components["schemas"]["AssignmentRowRequest"][];
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review";
+            /**
+             * Confirm Language
+             * @default false
+             */
+            confirm_language: boolean;
+            /** Seed */
+            seed?: number | null;
+        };
+        /** AssignResponse */
+        AssignResponse: {
+            /** Created */
+            created: components["schemas"]["AssignmentView"][];
+            /** Refused */
+            refused: components["schemas"]["RefusedAssignment"][];
+        };
+        /** AssignmentOpenResponse */
+        AssignmentOpenResponse: {
+            /** Workspace Id */
+            workspace_id: string;
+            view: components["schemas"]["WorkspaceView"];
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
+            assignment: components["schemas"]["AssignmentView"];
+        };
+        /** AssignmentRowRequest */
+        AssignmentRowRequest: {
+            /** Document Id */
+            document_id: string;
+            /** Username */
+            username: string;
+        };
+        /** AssignmentView */
+        AssignmentView: {
+            /** Id */
+            id: number;
+            /** Project Key */
+            project_key: string;
+            /** Document Id */
+            document_id: string;
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string;
+            /** Pseudonym */
+            pseudonym: string;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "in_progress" | "submitted" | "reopened";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Last Submission Id */
+            last_submission_id: string | null;
+            /** Display Name */
+            display_name: string;
+        };
         /**
          * AxisDefinition
          * @description Definition of an individual annotation contextual axis.
@@ -1422,6 +1609,11 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
             view: components["schemas"]["WorkspaceView"];
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
         };
         /** PasswordChange */
         PasswordChange: {
@@ -1745,6 +1937,26 @@ export interface components {
             /** Assessment */
             assessment?: string | null;
         };
+        /** ReasonRequest */
+        ReasonRequest: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /** ReassignRequest */
+        ReassignRequest: {
+            /** Username */
+            username: string;
+            /**
+             * Confirm Started
+             * @default false
+             */
+            confirm_started: boolean;
+            /**
+             * Confirm Language
+             * @default false
+             */
+            confirm_language: boolean;
+        };
         /** RedeemCodeRequest */
         RedeemCodeRequest: {
             /** Username */
@@ -1753,6 +1965,15 @@ export interface components {
             code: string;
             /** New Password */
             new_password: string;
+        };
+        /** RefusedAssignment */
+        RefusedAssignment: {
+            /** Document Id */
+            document_id: string;
+            /** Username */
+            username: string;
+            /** Code */
+            code: string;
         };
         /**
          * ReviewDecision
@@ -2043,6 +2264,34 @@ export interface components {
             editable_layer_ids: string[];
             /** Reference Layer Ids */
             reference_layer_ids: string[];
+        };
+        /** TaskSummary */
+        TaskSummary: {
+            /** Assignment Id */
+            assignment_id: number;
+            /** Project Key */
+            project_key: string;
+            /** Project Name */
+            project_name: string;
+            /** Document Id */
+            document_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "in_progress" | "submitted" | "reopened";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** TemplateInfo */
         TemplateInfo: {
@@ -2341,6 +2590,232 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    my_tasks_api_v1_me_tasks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSummary"][];
+                };
+            };
+        };
+    };
+    list_assignments_api_v1_projects__key__assignments_get: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                username?: string | null;
+                include_revoked?: boolean;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_api_v1_projects__key__assignments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_assignment_api_v1_assignments__assignment_id__open_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentOpenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reassign_api_v1_assignments__assignment_id__reassign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_api_v1_assignments__assignment_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_api_v1_assignments__assignment_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_users_api_v1_admin_users__get: {
         parameters: {
             query?: never;
