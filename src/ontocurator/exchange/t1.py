@@ -14,6 +14,7 @@ from typing import Any, Literal, TypedDict
 
 import ontospan
 from ontospan.models import Method
+from ontospan.profiles.hpo import AXES as HPO_AXES
 
 from ontocurator.domain.annotations import (
     ActorRef,
@@ -61,14 +62,14 @@ class ImportedProposals:
     """The proposals of one unit.
 
     ``notes`` maps every annotation id to its T1 provenance notes; they are not
-    part of the snapshot. ``dropped_basis`` counts the axis values that arrived
-    with ``basis: defaulted``: the value is stored, the basis is not.
+    part of the snapshot. ``defaulted_axes`` counts the axis values that arrived
+    with ``basis: defaulted``; they stay defaulted (``Annotation.axes_defaulted``).
     """
 
     annotations: list[AnnotationSnapshot]
     evidence: list[EvidenceSnapshot]
     notes: dict[str, list[str]] = field(default_factory=dict)
-    dropped_basis: int = 0
+    defaulted_axes: int = 0
 
 
 @dataclass(frozen=True)
@@ -273,13 +274,43 @@ def _layer_map(profile: TaskProfile) -> dict[str, LayerDefinition]:
     return {layer.layer_id: layer for layer in profile.layers}
 
 
+def check_t1_profile(profile: TaskProfile, pins: Mapping[str, Pin]) -> None:
+    """Refuse axis values a layer's T1 profile does not know (``PROFILE_NOT_T1``).
+
+    Resolved 2026-10-15 (user): in a layer pinned with ``hpo-phenotype`` every
+    axis must be one of T1's and its options a subset of T1's closed list. A
+    profile may hide values (O4) but not add any. ``generic`` layers have no
+    closed lists.
+    """
+    problems: list[dict[str, Any]] = []
+    for layer in profile.layers:
+        pin = pins.get(layer.ontology_id)
+        if pin is None or pin.t1_profile != HPO_PROFILE:
+            continue
+        for annotation_type in layer.annotation_types:
+            for axis in annotation_type.axes:
+                allowed = HPO_AXES.get(axis.id)
+                if allowed is None:
+                    problems.append(
+                        {"layer_id": layer.layer_id, "axis": axis.id, "values": None}
+                    )
+                    continue
+                extra = [value for value in axis.options if value not in allowed]
+                if extra:
+                    problems.append(
+                        {"layer_id": layer.layer_id, "axis": axis.id, "values": extra}
+                    )
+    if problems:
+        raise DomainError("PROFILE_NOT_T1", {"problems": problems})
+
+
 def axis_options(profile: TaskProfile, layer: LayerDefinition) -> dict[str, list[str]]:
     """The values an imported axis may take: the project profile's options.
 
-    **Open question (T2d notes, batch A):** project profiles are not aligned
-    with T1's closed lists (e.g. ``hpo-phenotype``); a value the project
-    profile lacks is refused with ``T1_UNKNOWN_AXIS_VALUE``. This is the only
-    place that decides which values an import accepts.
+    Project profiles of ``hpo-phenotype`` layers are subsets of T1's closed
+    lists (``check_t1_profile``); a value the project hides is refused with
+    ``T1_UNKNOWN_AXIS_VALUE``. This is the only place that decides which
+    values an import accepts.
     """
     return {
         axis.id: list(axis.options)
@@ -330,19 +361,19 @@ def _refuse_unrepresentable(
 
 def imported_axis_values(
     item: ontospan.Annotation,
-) -> tuple[dict[str, str | None], int]:
-    """The axis values an imported annotation keeps, and how many were defaulted.
+) -> tuple[dict[str, str | None], list[str]]:
+    """The axis values of an imported annotation and the axes that were defaulted.
 
-    **Open question (T2d notes, batch A):** a value with ``basis: defaulted``
-    is stored as a plain value, so a later export of the adopted proposal marks
-    it ``chosen``. Dropping defaulted values here instead is the alternative;
-    this is the only place to change.
+    Resolved 2026-10-15 (user): the basis is kept, so a defaulted value is
+    exported as defaulted again and never turns into a choice.
     """
     values: dict[str, str | None] = {
         axis: value.value for axis, value in item.axes.items()
     }
-    dropped = sum(1 for value in item.axes.values() if value.basis == "defaulted")
-    return values, dropped
+    defaulted = sorted(
+        axis for axis, value in item.axes.items() if value.basis == "defaulted"
+    )
+    return values, defaulted
 
 
 def _segments(segments: Sequence[ontospan.Segment]) -> list[Segment]:
@@ -368,7 +399,7 @@ def unit_to_proposals(
     snapshots: list[AnnotationSnapshot] = []
     evidence: list[EvidenceSnapshot] = []
     notes: dict[str, list[str]] = {}
-    dropped_basis = 0
+    defaulted_axes = 0
     for item in aset.annotations:
         annotation_id = ontospan.annotation_ref(
             aset.annotation_set_id, item.annotation_id, bundle_id
@@ -383,8 +414,8 @@ def unit_to_proposals(
                 )
                 validate_segments(document.text, [evidence_mention])
                 own_evidence.append(snapshot_evidence(evidence_mention, document))
-        axes_values, dropped = imported_axis_values(item)
-        dropped_basis += dropped
+        axes_values, defaulted = imported_axis_values(item)
+        defaulted_axes += len(defaulted)
         annotation = Annotation(
             annotation_id=annotation_id,
             document_id=document.document_id,
@@ -392,6 +423,7 @@ def unit_to_proposals(
             type_id=layers[item.layer_id].default_type_id,
             term_id=item.term_id,
             axes_values=axes_values,
+            axes_defaulted=defaulted,
             evidence_refs=[
                 EvidenceRef(evidence_id=e.mention.evidence_id, version=e.version)
                 for e in own_evidence
@@ -408,7 +440,7 @@ def unit_to_proposals(
         snapshots.append(snapshot(annotation, own_evidence, document, profile))
         evidence.extend(own_evidence)
         notes[annotation_id] = list(item.provenance.notes)
-    return ImportedProposals(snapshots, evidence, notes, dropped_basis)
+    return ImportedProposals(snapshots, evidence, notes, defaulted_axes)
 
 
 # --- export -----------------------------------------------------------------
@@ -438,17 +470,19 @@ def _method(provenance: Provenance) -> Method:
 def _axes(
     snap: AnnotationSnapshot, t1_profile: str
 ) -> tuple[dict[str, ontospan.AxisValue], int]:
+    marked = set(snap.annotation.axes_defaulted)
     axes = {
-        axis: ontospan.AxisValue(value=value, basis="chosen")
+        axis: ontospan.AxisValue(
+            value=value, basis="defaulted" if axis in marked else "chosen"
+        )
         for axis, value in snap.annotation.axes_values.items()
         if value
     }
-    defaulted = 0
     if t1_profile == HPO_PROFILE:
         for axis, default in ontospan.default_axes().items():
             if axis not in axes:
                 axes[axis] = default
-                defaulted += 1
+    defaulted = sum(1 for value in axes.values() if value.basis == "defaulted")
     return axes, defaulted
 
 
@@ -475,9 +509,8 @@ def reviewed_provenance(
 ) -> ontospan.Provenance:
     """The provenance of an adopted or edited annotation in a review export.
 
-    **Open question (T2d notes, batch A):** the reviewer is the actor and the
-    proposal is named in ``source_refs``. Keeping the producer as actor is the
-    alternative; this is the only place to change.
+    Confirmed 2026-10-15 (user): the reviewer is the actor and the proposal
+    is named in ``source_refs``. This is the only place that decides it.
     """
     return ontospan.Provenance(actor=reviewer, method=method, source_refs=(source_ref,))
 

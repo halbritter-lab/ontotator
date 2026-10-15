@@ -810,7 +810,7 @@ IMPORT_COUNTS = (
     "sets_added",
     "sets_skipped",
     "proposals",
-    "dropped_basis",
+    "defaulted_axes",
 )
 
 

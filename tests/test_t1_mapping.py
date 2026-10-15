@@ -32,10 +32,11 @@ from ontocurator.domain.profiles import (
     TaskProfile,
 )
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.serialization import verify_snapshot
+from ontocurator.domain.serialization import encode_snapshot, verify_snapshot
 from ontocurator.domain.workspace import Submission, WorkspaceKey
 from ontocurator.exchange.t1 import (
     Pin,
+    check_t1_profile,
     document_from_unit,
     layers_for,
     submission_to_unit,
@@ -279,8 +280,8 @@ def test_a_unit_becomes_proposals_with_urn_ids_and_evidence() -> None:
         actor_id="ann-03", kind="human"
     )
     assert first.annotation.provenance.method == "manual"
-    # Three of the six axis values were defaulted; their basis is not stored.
-    assert imported.dropped_basis == 3
+    # Three of the six axis values were defaulted; the basis is kept (user, Q-basis).
+    assert imported.defaulted_axes == 3
 
 
 def test_imported_ids_keep_bundle_set_and_annotation_id() -> None:
@@ -400,12 +401,13 @@ def test_a_submission_round_trips_through_t1() -> None:
     assert aset.guideline_ref is None
     assert aset.actors == (ontospan.Actor(actor_id="ann-0007", kind="human"),)
     assert aset.created_at == datetime(2026, 10, 15, 9, 30, tzinfo=UTC)
-    assert counts == {"rejected": 0, "uncertain": 0, "defaulted_axes": 0}
+    # The three defaulted values of the sketch stay defaulted (user, 2026-10-15).
+    assert counts == {"rejected": 0, "uncertain": 0, "defaulted_axes": 3}
 
     def essence(annotation: ontospan.Annotation) -> tuple[Any, ...]:
         return (
             annotation.term_id,
-            {k: v.value for k, v in annotation.axes.items()},
+            annotation.axes,
             annotation.mentions,
             annotation.document_level,
         )
@@ -511,8 +513,11 @@ def test_review_decisions_map_to_methods_and_counts() -> None:
     assert edited.provenance.source_refs == (changed.annotation.annotation_id,)
     assert counts["rejected"] == 1
     assert counts["uncertain"] == 1
-    # The new annotation has two empty HPO axes.
-    assert counts["defaulted_axes"] == 2
+    # The new annotation has two empty HPO axes; the adopted proposal keeps
+    # its defaulted experiencer (resolved 2026-10-15, user).
+    assert adopted.axes["experiencer"].basis == "defaulted"
+    assert adopted.axes["assertion"].basis == "chosen"
+    assert counts["defaulted_axes"] == 3
     assert by_term[("HP:0000365", "manual")].document_level is True
     report = ontospan.validate(exported, hp_ontologies())
     assert report.ok, report.errors
@@ -597,3 +602,94 @@ def test_empty_hpo_axes_are_defaulted() -> None:
     [annotation] = exported.annotation_set.annotations
     assert set(annotation.axes) == {"assertion"}
     assert counts["defaulted_axes"] == 0
+
+
+def test_defaulted_axis_values_keep_their_basis() -> None:
+    """Resolved 2026-10-15 (user): the basis is stored and exported faithfully."""
+    unit = sketch_unit()
+    imported = unit_to_proposals(
+        unit, hpo_profile(), document_from_unit(unit), bundle_id=BUNDLE_ID
+    )
+    first, second = sorted(
+        imported.annotations, key=lambda s: s.annotation.annotation_id
+    )
+
+    assert first.annotation.axes_defaulted == ["experiencer"]
+    assert second.annotation.axes_defaulted == ["assertion", "experiencer"]
+    verify_snapshot(first)
+    # Basis is content: the same values chosen are another version.
+    chosen = first.annotation.model_copy(update={"axes_defaulted": []})
+    assert (
+        snapshot(
+            chosen, first.evidence, document_from_unit(unit), hpo_profile()
+        ).version
+        != first.version
+    )
+
+
+def test_a_snapshot_without_defaulted_values_keeps_its_old_version() -> None:
+    document = document_from_unit(sketch_unit())
+    snap = own_snapshot(document, "a1", "HP:0001250", (6, 19), {"assertion": "present"})
+
+    assert "axes_defaulted" not in encode_snapshot(snap)["annotation"]
+    verify_snapshot(snap)
+
+
+def test_setting_axes_makes_only_changed_values_chosen() -> None:
+    document = document_from_unit(sketch_unit())
+    annotation = own_snapshot(
+        document,
+        "a1",
+        "HP:0001250",
+        (6, 19),
+        {"assertion": "present", "experiencer": "patient", "temporality": "current"},
+    ).annotation.model_copy(update={"axes_defaulted": ["assertion", "experiencer"]})
+
+    updated = annotation.with_axes(
+        {"assertion": "absent", "experiencer": "patient", "temporality": "current"}
+    )
+
+    assert updated.axes_values["assertion"] == "absent"
+    assert updated.axes_defaulted == ["experiencer"]
+    assert annotation.with_axes({"assertion": "present"}).axes_defaulted == [
+        "assertion"
+    ]
+
+
+def test_hpo_phenotype_profiles_use_only_t1_values() -> None:
+    """Resolved 2026-10-15 (user): values may be hidden, never added."""
+    check_t1_profile(hpo_profile(), PINS)
+    hidden = hpo_profile()
+    axes_list = hidden.layers[0].annotation_types[0].axes
+    axes_list[1] = axes_list[1].model_copy(update={"options": ["patient", "other"]})
+    check_t1_profile(hidden, PINS)
+
+    added = hpo_profile()
+    axes_list = added.layers[0].annotation_types[0].axes
+    axes_list[2] = axes_list[2].model_copy(
+        update={"options": ["current", "historical", "future"]}
+    )
+    axes_list.append(
+        axes_list[0].model_copy(update={"id": "severity", "options": ["mild"]})
+    )
+    with pytest.raises(DomainError) as error:
+        check_t1_profile(added, PINS)
+    assert error.value.code == "PROFILE_NOT_T1"
+    assert error.value.details == {
+        "problems": [
+            {"layer_id": "hpo", "axis": "temporality", "values": ["future"]},
+            {"layer_id": "hpo", "axis": "severity", "values": None},
+        ]
+    }
+    # A generic layer has no closed lists.
+    check_t1_profile(added, {"hp": Pin(sha256=HP_SHA)})
+
+
+def test_the_example_hpo_profile_fits_t1() -> None:
+    raw = (
+        Path(__file__).parent.parent
+        / "src/ontocurator/profiles/hpo-context-example-v1.json"
+    ).read_text(encoding="utf-8")
+    profile = TaskProfile.model_validate_json(raw)
+
+    check_t1_profile(profile, {"hp": Pin(sha256="0" * 64, t1_profile="hpo-phenotype")})

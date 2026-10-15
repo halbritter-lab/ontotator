@@ -203,7 +203,7 @@ def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     check_importable(delivery.units)
     documents: list[ImportedDocument] = []
     sets: list[ImportedSet] = []
-    dropped_basis = 0
+    defaulted_axes = 0
     for unit in delivery.units:
         document = document_from_unit(unit)
         documents.append(ImportedDocument(document, unit.document.source_text_sha256))
@@ -213,7 +213,7 @@ def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:
         proposals = unit_to_proposals(
             unit, profile, document, bundle_id=delivery.bundle_id
         )
-        dropped_basis += proposals.dropped_basis
+        defaulted_axes += proposals.defaulted_axes
         sets.append(
             ImportedSet(
                 document_id=document.document_id,
@@ -242,7 +242,7 @@ def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:
                 "producers": _producers(delivery.units),
                 "units": len(delivery.units),
                 **counts,
-                "dropped_basis": dropped_basis,
+                "defaulted_axes": defaulted_axes,
             }
         )
         record_audit(

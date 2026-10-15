@@ -444,6 +444,8 @@ export interface components {
             axes_values?: {
                 [key: string]: string | null;
             };
+            /** Axes Defaulted */
+            axes_defaulted?: string[];
             /** Evidence Refs */
             evidence_refs?: components["schemas"]["EvidenceRef"][];
             provenance: components["schemas"]["Provenance"];

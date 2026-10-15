@@ -690,9 +690,7 @@ class EditingService:
         except ValueError as exc:
             raise DomainError("INVALID_AXES", str(exc)) from exc
 
-        updated_ann = existing.annotation.model_copy(
-            update={"axes_values": cmd.axes_values}
-        )
+        updated_ann = existing.annotation.with_axes(cmd.axes_values)
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap

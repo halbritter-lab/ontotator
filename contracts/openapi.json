@@ -859,6 +859,13 @@
             "type": "object",
             "title": "Axes Values"
           },
+          "axes_defaulted": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Axes Defaulted"
+          },
           "evidence_refs": {
             "items": {
               "$ref": "#/components/schemas/EvidenceRef"

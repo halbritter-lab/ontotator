@@ -51,6 +51,7 @@ from ontocurator.exchange.t1 import (
     ImportedSet,
     Pin,
     T1Profile,
+    check_t1_profile,
 )
 from ontocurator.ontology.conditions import SearchCondition, validate_resources
 from ontocurator.packages.models import (
@@ -733,6 +734,7 @@ class Repository:
         otherwise ``PIN_MISMATCH`` lists the differences. A synthesised
         manifest keeps the readers of seed projects working.
         """
+        check_t1_profile(profile, pins)
         differences: list[dict[str, Any]] = []
         defined = {o.ontology_id: o for o in profile.ontologies}
         for ontology_id in sorted(set(pins) - set(defined)):

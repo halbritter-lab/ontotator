@@ -277,6 +277,14 @@ def test_review_submissions_export_adopted_and_edited_annotations(db: Database) 
     )
     assert methods["r1"] == ("edited", "ann-0003", (second.annotation.annotation_id,))
     assert only.annotation_set.blind is False
+    # The imported default stays defaulted through adoption (resolved 2026-10-15).
+    adopted = next(
+        a
+        for a in only.annotation_set.annotations
+        if a.annotation_id == first.annotation.annotation_id
+    )
+    assert adopted.axes["experiencer"].basis == "defaulted"
+    assert adopted.axes["assertion"].basis == "chosen"
     assert job.result is not None
     assert job.result["counts"]["rejected"] == 0
 

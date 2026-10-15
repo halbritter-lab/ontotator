@@ -77,7 +77,7 @@ def test_a_bundle_creates_documents_and_proposals(db: Database, tmp_path: Path) 
     assert job.result["documents_added"] == 2
     assert job.result["sets_added"] == 2
     assert job.result["proposals"] == 3
-    assert job.result["dropped_basis"] == 3
+    assert job.result["defaulted_axes"] == 3
     repo = Repository(db)
     assert [d.document_id for d in repo.list_documents("proj")] == [
         "EN100017",
@@ -173,7 +173,7 @@ def test_import_is_audited(db: Database, tmp_path: Path) -> None:
     assert details["documents_added"] == 2
     assert details["sets_added"] == 2
     assert details["proposals"] == 3
-    assert details["dropped_basis"] == 3
+    assert details["defaulted_axes"] == 3
     assert details["documents_only"] == 0
 
 
@@ -432,3 +432,21 @@ def test_unrepresentable_units_refuse_the_import(db: Database, tmp_path: Path) -
     assert job.error is not None and "T1_UNSUPPORTED" in job.error
     assert "p9" in job.error
     assert _rows(db, DocumentRow.document_id) == []
+
+
+def test_a_project_profile_must_fit_its_t1_profile(tmp_path: Path) -> None:
+    """Resolved 2026-10-15 (user): a profile may hide T1 values, not add any."""
+    from t1_fixtures import PIN
+
+    db = database_for(tmp_path / "editor.db")
+    create_project(db, "ok")
+    profile = hpo_profile()
+    axes = profile.layers[0].annotation_types[0].axes
+    axes[2] = axes[2].model_copy(update={"options": ["current", "future"]})
+    repo = ScopedRepository(db, Access(0, "op", True), OPERATOR)
+
+    with pytest.raises(Exception) as error:
+        repo.create_project("bad", "Bad", None, profile, {"hp": PIN})
+
+    assert getattr(error.value, "code", None) == "PROFILE_NOT_T1"
+    assert "future" in str(error.value)
