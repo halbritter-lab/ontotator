@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ontocurator.domain.annotations import AnnotationRef, AnnotationSnapshot
 from ontocurator.domain.axes import AxisDefinition
+from ontocurator.domain.axis_visibility import editor_profile, legacy_axes_config
 from ontocurator.domain.documents import Document
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import (
@@ -179,7 +180,10 @@ class WorkspaceService:
             key = key.model_copy(update={"scope_id": scope.scope_id})
 
         accessible_layer_ids = scope.editable_layer_ids + scope.reference_layer_ids
-        layers = [resolve_layer(profile, lid) for lid in accessible_layer_ids]
+        visible_profile = editor_profile(
+            profile, self.repo.get_project_rules(key.project_key)
+        )
+        layers = [resolve_layer(visible_profile, lid) for lid in accessible_layer_ids]
         ont_ids = {layer.ontology_id for layer in layers}
         ontologies = [resolve_ontology(profile, oid) for oid in sorted(ont_ids)]
 
@@ -313,7 +317,7 @@ class WorkspaceService:
                 ).status
 
         submissions = self.repo.get_submissions_for_workspace(key)
-        axes_profile = self.repo.get_axes_config(key.project_key)
+        axes_profile = legacy_axes_config(visible_profile)
 
         return WorkspaceView(
             key=key,

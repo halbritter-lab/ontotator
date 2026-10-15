@@ -24,6 +24,7 @@ from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.profiles import TaskProfile
+from ontocurator.domain.project_rules import ProjectRules
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.workspace import (
     Draft,
@@ -253,6 +254,10 @@ class ScopedRepository(Repository):
     def get_axes_config(self, project_key: str) -> AxesConfig:
         self._visible(project_key)
         return super().get_axes_config(project_key)
+
+    def get_project_rules(self, project_key: str) -> ProjectRules:
+        self._visible(project_key)
+        return super().get_project_rules(project_key)
 
     # --- documents and proposals ------------------------------------------- #
 

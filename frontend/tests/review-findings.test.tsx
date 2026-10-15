@@ -196,6 +196,29 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
 describe("A4/A5: review decisions and notes", () => {
   const rejected = { decision_id: "d", target: { annotation_id: "prop", version: "p-v1" }, outcome: "rejected" as const, note: "wrong body site", reviewer_id: "dr-a" };
 
+  it.each([false, true])("same-value axis confirmation binds a changed replacement while preserving explicit rejection=%s", async (explicitRejection) => {
+    const copy = proposal("copy", "c-v1", "HP:0001");
+    copy.annotation.provenance = { actor: { actor_id: "dr-a", kind: "human" as any }, method: "manual", source_refs: ["prop:p-v1"] } as any;
+    const view = reviewView(explicitRejection ? [rejected] : [], [copy], copy.evidence);
+    (copy.annotation as any).axes_defaulted = ["assertion"];
+    view.available_inputs![0].annotation.axes_defaulted = ["assertion"];
+    const updated = { ...copy, version: "c-v2", annotation: { ...copy.annotation, axes_defaulted: [] } };
+    const apply = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1, annotations: [updated] });
+    const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...view.draft, revision: 2, annotations: [updated] });
+    render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText("HP:0001", { selector: '[data-list-key="annotation:copy"] *' }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Assertion value" }));
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    expect(apply.mock.calls[0][1].payload).toEqual(expect.objectContaining({ command: "set_axes", chosen_axis_ids: ["assertion"], axes_values: { assertion: "absent" } }));
+    if (explicitRejection) {
+      await act(async () => { await Promise.resolve(); });
+      expect(decide).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+      expect(decide.mock.calls[0][1].payload).toEqual(expect.objectContaining({ outcome: "changed", replacement: { annotation_id: "copy", version: "c-v2" } }));
+    }
+  });
+
   it("confirms discarding an adopted edited copy before switching away from changed", async () => {
     const copy = proposal("copy", "edited-v2", "HP:0002");
     copy.annotation.provenance = { actor: { actor_id: "dr-a", kind: "human" as any }, method: "manual", source_refs: ["prop:p-v1"] } as any;
