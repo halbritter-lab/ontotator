@@ -40,15 +40,17 @@ from t1_fixtures import HP_PATH, unit
 
 u = unit()  # HPO layer, allowed_roots = ("HP:0000118",)
 a = u.annotation_set.annotations[0].model_copy(update={"term_id": "HP:0000001"})
-u = u.model_copy(update={
-    "annotation_set": u.annotation_set.model_copy(update={"annotations": (a,)})
-})
+u = u.model_copy(
+    update={"annotation_set": u.annotation_set.model_copy(update={"annotations": (a,)})}
+)
 ontologies = {"hp": ontospan.ObographOntology.load(HP_PATH)}
 print([issue.code for issue in ontospan.validate(u).errors])
 print([issue.code for issue in ontospan.validate(u, ontologies).errors])
 with tempfile.TemporaryDirectory() as tmp:
     target = Path(tmp) / "out.zip"
-    ontospan.write_bundle(target, [u], bundle_id="out-of-root", created_at=datetime.now(UTC))
+    ontospan.write_bundle(
+        target, [u], bundle_id="out-of-root", created_at=datetime.now(UTC)
+    )
     print(target.exists())
     try:
         ontospan.read_bundle(target, ontologies)
