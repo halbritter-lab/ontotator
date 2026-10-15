@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -10,14 +11,14 @@ from pathlib import Path
 import pytest
 from argon2 import PasswordHasher
 from pg_harness import column_values, count_rows, database_for
-from sqlalchemy import update
+from sqlalchemy import insert, update
 
 import ontocurator.auth.sessions as sessions_module
 from ontocurator.auth.accounts import AccountService
 from ontocurator.auth.audit import Actor
 from ontocurator.auth.sessions import SessionService
 from ontocurator.domain.errors import LoginFailed
-from ontocurator.storage.tables import PasswordCredentialRow
+from ontocurator.storage.tables import LoginAttemptRow, PasswordCredentialRow
 
 PASSWORD = "correct horse battery"
 ADMIN = Actor(None, "test:admin")
@@ -218,6 +219,51 @@ def test_a_stronger_stored_hash_is_kept_at_login(services: Services) -> None:
     services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
 
     assert _stored_hash(services) == stronger
+
+
+def test_concurrent_failures_from_one_address_stop_at_the_threshold(
+    services: Services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with services.sessions.db.transaction() as conn:
+        conn.execute(
+            insert(LoginAttemptRow),
+            [
+                {
+                    "username": f"nobody{number}",
+                    "client_ip": "10.0.0.9",
+                    "succeeded": False,
+                    "throttled": False,
+                    "at": services.clock(),
+                }
+                for number in range(29)
+            ],
+        )
+    together = threading.Barrier(4)
+    real_verify = sessions_module.verify_password
+
+    def meeting_verify(stored_hash: str | None, password: str) -> bool:
+        # Unserialised, all four have passed the address check by now.
+        with contextlib.suppress(threading.BrokenBarrierError):
+            together.wait(timeout=1)
+        return real_verify(stored_hash, password)
+
+    monkeypatch.setattr(sessions_module, "verify_password", meeting_verify)
+
+    def attempt(number: int) -> None:
+        with contextlib.suppress(LoginFailed):
+            services.sessions.login(
+                f"other{number}", "wrong password!", client_ip="10.0.0.9"
+            )
+
+    threads = [threading.Thread(target=attempt, args=(n,)) for n in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    throttled = column_values(services.sessions, "login_attempts", "throttled")
+    assert throttled.count(False) == 30
+    assert throttled.count(True) == 3
 
 
 def test_a_login_during_a_password_change_leaves_no_old_session(

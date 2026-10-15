@@ -25,7 +25,7 @@ from ontocurator.auth.passwords import hash_password, needs_rehash, verify_passw
 from ontocurator.auth.tokens import revoke_user_sessions as revoke_user_sessions
 from ontocurator.auth.tokens import token_digest
 from ontocurator.domain.errors import DomainError, LoginFailed
-from ontocurator.storage.database import Database
+from ontocurator.storage.database import Database, advisory_lock_id
 from ontocurator.storage.tables import (
     LoginAttemptRow,
     PasswordCredentialRow,
@@ -86,6 +86,11 @@ def _attempt_name(username: str) -> str:
         return _printable(username.strip().lower())[:MAX_RECORDED_USERNAME]
 
 
+def _address_lock(client_ip: str) -> int:
+    """The advisory lock that serialises the logins from one client address."""
+    return advisory_lock_id("login-address", client_ip)
+
+
 class SessionService:
     """Login, session lookup and logout."""
 
@@ -114,10 +119,12 @@ class SessionService:
         inside a caller's open transaction: an outer rollback would erase the
         recorded attempt and with it the lockout.
 
-        The user row is locked (``FOR NO KEY UPDATE``) before anything is
-        read, so the logins of one account run one after another, and a
-        password change waits for a login that read the old hash; the session
-        it created is then revoked with the others.
+        Before anything is read, the login takes an advisory lock on the
+        client address, then the user row (``FOR NO KEY UPDATE``), always in
+        this order. The logins from one address and those of one account run
+        one after another, so neither limit can be passed by concurrent
+        attempts. A password change waits for a login that read the old
+        hash; the session it created is then revoked with the others.
 
         Raises:
             LoginFailed: for a wrong password, an unknown or inactive user, or
@@ -133,10 +140,13 @@ class SessionService:
                 "A login commits its attempt on its own; it cannot join an open"
                 " transaction"
             )
-        now = self._now()
         name = _attempt_name(username)
         started: tuple[str, Principal] | None = None
         with self.db.transaction() as conn:
+            conn.execute(select(func.pg_advisory_xact_lock(_address_lock(client_ip))))
+            # Read after waiting for the locks, so the attempts that committed
+            # meanwhile are inside the window this one is checked against.
+            now = self._now()
             user = conn.execute(
                 select(UserRow)
                 .where(UserRow.username == name)
