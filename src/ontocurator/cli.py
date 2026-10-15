@@ -230,6 +230,20 @@ def serve(
             show_default=False,
         ),
     ] = None,
+    forwarded_allow_ips: Annotated[
+        str | None,
+        typer.Option(
+            "--forwarded-allow-ips",
+            envvar="ONTOCURATOR_FORWARDED_ALLOW_IPS",
+            help=(
+                "Comma-separated addresses of reverse proxies whose "
+                "X-Forwarded-For names the real client (used for login "
+                "throttling). Default: uvicorn's (FORWARDED_ALLOW_IPS or "
+                "127.0.0.1)."
+            ),
+            show_default=False,
+        ),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option(
@@ -344,6 +358,8 @@ def serve(
             port=port,
             log_level="info" if verbose else "warning",
             access_log=verbose,
+            proxy_headers=True,
+            forwarded_allow_ips=forwarded_allow_ips,
         )
     finally:
         repo: Any = getattr(api_app.state, "repo", None)

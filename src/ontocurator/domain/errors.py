@@ -56,6 +56,13 @@ class AccessDenied(DomainError):
     """Raised when the principal may not do or see what it asked for (HTTP 403)."""
 
 
+class NotAuthenticated(DomainError):
+    """Raised when a request has no logged-in principal (HTTP 401)."""
+
+    def __init__(self) -> None:
+        super().__init__("NOT_AUTHENTICATED", "Log in to continue.")
+
+
 LOGIN_FAILED_MESSAGE = (
     "Username or password is wrong, or the account is locked for 15 minutes."
 )

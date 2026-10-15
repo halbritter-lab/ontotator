@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from ontocurator.auth.sessions import Principal
-from ontocurator.domain.errors import AccessDenied
+from ontocurator.domain.errors import AccessDenied, NotAuthenticated
 from ontocurator.domain.workspace import WorkspaceKey
 
 
@@ -21,7 +21,7 @@ def principal_of(request: Request) -> Principal:
     principal = getattr(request.state, "principal", None)
     if not isinstance(principal, Principal):
         # Unreachable behind the middleware; refuse rather than guess.
-        raise AccessDenied("NOT_AUTHENTICATED", "Log in to continue.")
+        raise NotAuthenticated()
     return principal
 
 

@@ -69,7 +69,8 @@ def _start_session(
     token, principal = sessions.login(
         username,
         password,
-        # Behind the proxy this is the address it resolved (T2e).
+        # Behind a proxy named in --forwarded-allow-ips, uvicorn sets this from
+        # X-Forwarded-For (deployment contract: T2e).
         client_ip=request.client.host if request.client else "unknown",
         user_agent=request.headers.get("user-agent"),
     )

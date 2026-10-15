@@ -70,14 +70,15 @@ def _error(status: int, code: str, details: str) -> JSONResponse:
 
 def install_security(
     app: FastAPI,
-    sessions: SessionService,
+    sessions: SessionService | None,
     public_origin: str | None,
     trusted_hosts: Collection[str] | None = None,
 ) -> None:
     """Add the middleware that resolves the session and checks writes.
 
     With ``trusted_hosts``, a request for any other host is refused first,
-    whatever its path (DNS rebinding).
+    whatever its path (DNS rebinding). Without ``sessions`` (the schema-only
+    app) every API request is refused, the public ones included.
     """
 
     @app.middleware("http")
@@ -96,6 +97,8 @@ def install_security(
         path = request.url.path
         if not path.startswith("/api/"):
             return await call_next(request)
+        if sessions is None:
+            return _error(401, "NOT_AUTHENTICATED", "Log in to continue.")
         unsafe = request.method in UNSAFE_METHODS
         if path in PUBLIC_PATHS:  # no session yet
             if unsafe and cross_site(request, public_origin, fail_closed=True):

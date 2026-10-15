@@ -41,6 +41,7 @@ def test_help_lists_the_commands() -> None:
         "--port",
         "--web-dir",
         "--public-origin",
+        "--forwarded-allow-ips",
         "--verbose",
     ):
         assert option in serve_help.output
@@ -166,3 +167,48 @@ def test_serve_on_another_loopback_address_trusts_that_address(
     assert result.exit_code == 0, result.output
     config = run.call_args.args[0].state.config
     assert config.trusted_hosts == ("localhost", "127.0.0.1", "::1", "127.0.0.2")
+
+
+def test_serve_trusts_forwarded_addresses_only_from_the_given_proxies(
+    tmp_path: Path,
+) -> None:
+    with patch("ontocurator.cli.uvicorn.run") as run:
+        result = runner.invoke(
+            app,
+            [
+                "serve",
+                "--data-dir",
+                str(tmp_path / "data"),
+                "--forwarded-allow-ips",
+                "10.0.0.5",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert run.call_args.kwargs["proxy_headers"] is True
+    assert run.call_args.kwargs["forwarded_allow_ips"] == "10.0.0.5"
+
+
+def test_serve_reads_the_forwarded_proxies_from_the_environment(
+    tmp_path: Path,
+) -> None:
+    with patch("ontocurator.cli.uvicorn.run") as run:
+        result = runner.invoke(
+            app,
+            ["serve", "--data-dir", str(tmp_path / "data")],
+            env={"ONTOCURATOR_FORWARDED_ALLOW_IPS": "10.0.0.5,10.0.0.6"},
+        )
+
+    assert result.exit_code == 0, result.output
+    assert run.call_args.kwargs["forwarded_allow_ips"] == "10.0.0.5,10.0.0.6"
+
+
+def test_serve_keeps_uvicorns_forwarded_default_without_the_option(
+    tmp_path: Path,
+) -> None:
+    with patch("ontocurator.cli.uvicorn.run") as run:
+        result = runner.invoke(app, ["serve", "--data-dir", str(tmp_path / "data")])
+
+    assert result.exit_code == 0, result.output
+    # None lets uvicorn use FORWARDED_ALLOW_IPS or its default, 127.0.0.1.
+    assert run.call_args.kwargs["forwarded_allow_ips"] is None

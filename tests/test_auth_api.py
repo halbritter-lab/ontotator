@@ -15,6 +15,7 @@ from pg_harness import database_url_for
 from test_api import FIXTURE_PATH, _create_sample_package_bytes
 
 from ontocurator.api.app import create_app
+from ontocurator.api.identity import PrincipalDep
 from ontocurator.auth.audit import Actor
 from ontocurator.auth.passwords import hash_password
 from ontocurator.config import AppConfig
@@ -501,3 +502,35 @@ def test_a_trusted_host_is_matched_by_its_canonical_name(
     response = TestClient(app).get("/api/v1/auth/me", headers={"Host": host})
 
     assert response.json()["code"] == "NOT_AUTHENTICATED"
+
+
+def test_the_schema_only_app_answers_no_api_request() -> None:
+    """``create_app(None)`` (schema export) has no sessions; it must not fail open."""
+    client = TestClient(create_app(None))
+
+    assert client.get("/openapi.json").status_code == 200
+    listed = client.get("/api/v1/ontologies")
+    assert listed.status_code == 401
+    assert listed.json()["code"] == "NOT_AUTHENTICATED"
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": PASSWORD},
+        headers=ORIGIN,
+    )
+    assert login.status_code == 401
+    assert login.json()["code"] == "NOT_AUTHENTICATED"
+
+
+def test_a_route_reached_without_a_principal_answers_401() -> None:
+    app = create_app(None)
+
+    @app.get("/probe")
+    def probe(principal: PrincipalDep) -> str:
+        return principal.pseudonym
+
+    # Ahead of the static files mounted at "/".
+    app.router.routes.insert(0, app.router.routes.pop())
+    answer = TestClient(app).get("/probe")
+
+    assert answer.status_code == 401
+    assert answer.json()["code"] == "NOT_AUTHENTICATED"

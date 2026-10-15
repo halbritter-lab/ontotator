@@ -33,6 +33,7 @@ from ontocurator.domain.errors import (
     InvalidPackage,
     LoginFailed,
     ModeNotAllowed,
+    NotAuthenticated,
     PayloadTooLarge,
     RevisionConflict,
 )
@@ -203,6 +204,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             raise
 
         install_security(app, sessions, config.public_origin, config.trusted_hosts)
+    else:
+        # Schema export only: no sessions exist, so no API request is answered.
+        install_security(app, None, None)
 
     # FastAPI's own answer without the rejected input, which may be a
     # password, encoded as ASCII JSON, so even a lone surrogate cannot make it
@@ -290,6 +294,15 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     async def access_denied_handler(_req: Request, exc: AccessDenied) -> JSONResponse:
         return JSONResponse(
             status_code=403,
+            content={"code": exc.code, "details": exc.details or str(exc)},
+        )
+
+    @app.exception_handler(NotAuthenticated)
+    async def not_authenticated_handler(
+        _req: Request, exc: NotAuthenticated
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=401,
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 
