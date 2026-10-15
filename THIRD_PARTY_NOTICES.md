@@ -16,6 +16,7 @@ This project incorporates components from the following third-party software:
   - Integrated into isolated namespace under `ontocurator.vendor`.
   - Non-semantic search and lexical indexing retained; dense embeddings, hub and server dependencies excluded.
   - Generalized CURIE parsing, case preservation, dominant prefix detection, and variable-width numeric ID matching without hardcoded HPO assumptions.
+  - Store the fitted lexical matrix in CSC format to avoid repeated ontology-wide sparse conversion during search, preserving TF-IDF scores and ranking.
 
 ## Runtime dependencies
 

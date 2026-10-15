@@ -156,7 +156,9 @@ class LexicalIndex:
         self._vectorizer = TfidfVectorizer(
             analyzer="char_wb", ngram_range=NGRAM_RANGE, sublinear_tf=True
         )
-        self._matrix = sp.csr_matrix(self._vectorizer.fit_transform(self._terms))
+        # CSC transposes to CSR, avoiding a full ontology conversion on each
+        # CSR query-vector multiplication. Keep only this fitted sparse layout.
+        self._matrix = sp.csc_matrix(self._vectorizer.fit_transform(self._terms))
 
     @property
     def ready(self) -> bool:
