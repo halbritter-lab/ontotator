@@ -8,20 +8,26 @@ pseudonym is the annotator the request names, through the real login route.
 from __future__ import annotations
 
 import hashlib
+import io
+import json
 from collections.abc import Iterable, Mapping
-from typing import Any
+from dataclasses import dataclass
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
 from urllib.parse import parse_qs, unquote
 
 import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from ontocurator.api.routes import decode_workspace_id
 from ontocurator.api.security import SESSION_COOKIE
 from ontocurator.application.preferences import normalize_annotator_id
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import ROLES
-from ontocurator.domain.errors import DomainError
+from ontocurator.domain.errors import AccessDenied, DomainError, PayloadTooLarge
 
 PASSWORD = "test-only passphrase"
 ORIGIN = {"Origin": "http://testserver"}
@@ -213,3 +219,92 @@ class AutoLoginClient(TestClient):
             except Exception:  # not a workspace ID (open, review-inputs, ...)
                 pass
         return self.annotator or DEFAULT_ANNOTATOR
+
+
+# --- The retired upload routes (T2d Task 6) -------------------------------- #
+
+
+@dataclass(frozen=True)
+class UploadResult:
+    """What the removed ``POST /api/v1/packages`` answered, without HTTP."""
+
+    status_code: int
+    body: dict[str, Any]
+
+    def json(self) -> dict[str, Any]:
+        return self.body
+
+    @property
+    def text(self) -> str:
+        return json.dumps(self.body, default=str)
+
+
+def _status_of(exc: DomainError) -> int:
+    if isinstance(exc, PayloadTooLarge):
+        return 413
+    if isinstance(exc, AccessDenied):
+        return 403
+    return 404 if exc.code in {"PROJECT_NOT_FOUND", "PACKAGE_NOT_FOUND"} else 422
+
+
+def upload_package(client: TestClient, *, files: Mapping[str, Any]) -> UploadResult:
+    """Import a v2 work package as the client's user, as the old upload did.
+
+    The package is read with the test-only v2 reader and imported through the
+    user's scoped repository: a system admin only, and a new project gets the
+    uploader as a member with every role. Errors answer like the old route:
+    403 for a non-admin, 413 for an oversized body, 422 for an invalid
+    package (``{code, details}``).
+    """
+    from support.v2_import import PackageImportService
+
+    from ontocurator.authz.scoped import ScopedRepository
+
+    if isinstance(client, AutoLoginClient) and client.annotator is None:
+        client.login_as(DEFAULT_ANNOTATOR)
+    me = client.get("/api/v1/auth/me")
+    assert me.status_code == 200, me.text
+    app = cast(FastAPI, client.app)
+    user = app.state.accounts.get_by_username(me.json()["username"])
+    if not user.is_system_admin:
+        return UploadResult(
+            403,
+            {
+                "code": "ADMIN_REQUIRED",
+                "details": "Only a system administrator may do this.",
+            },
+        )
+    repo = ScopedRepository(
+        app.state.repo.db,
+        app.state.memberships.access_for(
+            SimpleNamespace(
+                user_id=user.id,
+                pseudonym=user.pseudonym,
+                is_system_admin=user.is_system_admin,
+            )
+        ),
+        Actor.user(user.id, user.username),
+    )
+    upload = files["file"]
+    data = upload[1] if isinstance(upload, tuple) else upload
+    if not isinstance(data, bytes):
+        data = data.read()
+    try:
+        manifest = PackageImportService(
+            repo, app.state.ontology_registry
+        ).import_upload(io.BytesIO(data))
+    except DomainError as exc:
+        return UploadResult(
+            _status_of(exc), {"code": exc.code, "details": exc.details or str(exc)}
+        )
+    except ValidationError as exc:
+        return UploadResult(422, {"code": "VALIDATION_ERROR", "details": str(exc)})
+    return UploadResult(
+        200, {"package_id": manifest.package_id, "manifest": manifest.model_dump()}
+    )
+
+
+def add_ontology(app: FastAPI, path: Path, *, name: str | None = None) -> Any:
+    """Store an ontology or translation file as the admin CLI does (D5)."""
+    store = app.state.ontology_store
+    return store.add(HARNESS, name or path.name, path.read_bytes())

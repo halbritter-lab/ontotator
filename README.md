@@ -5,7 +5,7 @@ A self-hosted, multi-user web editor for annotating and reviewing biomedical ont
 Designed specifically for clinical curation workflows, Ontocurator supports:
 - **Configured Annotation Layers & Task Profiles**: Fine-grained task configuration via `TaskProfile`: customizable layers (`layers`), annotation types (`annotation_types`), and required ontologies (`ontologies`). Multi-layer workflows allow annotating distinct aspects (e.g. phenotypes, diseases, therapies) independently or jointly.
 - **Zero-Extra-Click Single-Layer Simplicity**: Work packages with a single layer present zero superfluous layer controls, maintaining the exact streamlined ergonomics of dedicated single-ontology curation.
-- **Multi-Ontology Loading & Registry**: Load pinned OBO Graph JSON ontologies via repeatable `--ontology PATH` flags, auto-discovery in `<workspace>/ontologies/`, or upload in the web UI. Local in-memory exact and prefix lexical search with instant results. Official HPO translation files (`hp-<language>.babelon.tsv`, `hp-<language>.synonyms.tsv`) placed next to the ontology or uploaded in the web UI make the terms searchable in that language; each annotator chooses the languages with the flag button in the search box.
+- **Multi-Ontology Loading & Registry**: Load pinned OBO Graph JSON ontologies via repeatable `--ontology PATH` flags, or stored on the data volume with `ontocurator admin ontologies add`. Local in-memory exact and prefix lexical search with instant results. Official HPO translation files (`hp-<language>.babelon.tsv`, `hp-<language>.synonyms.tsv`) placed next to the ontology or stored with `ontocurator admin ontologies add` make the terms searchable in that language; each annotator chooses the languages with the flag button in the search box.
 - **Layer-Scoped Case Navigation & Checkmarks**: Fast document navigation respecting package document order (`document_order`), with layer-specific completion validation and explicit verification checkmarks (`checked_layer_ids`).
 - **Independent Annotation**: Clean-slate annotation without proposal bias, external prediction leakage, or term count exposure.
 - **Origin-Neutral Review**: Identical treatment, actions, validation rules, and status transitions for human proposals and machine/tool predictions.
@@ -80,8 +80,8 @@ ontocurator serve --data-dir ./data --ontology ./hp.json
 ontocurator serve --data-dir ./data --ontology ./hp.json --ontology ./mondo.json
 ```
 
-The server loads the ontologies given via `--ontology` and those uploaded
-earlier (stored in `<data-dir>/ontologies/`) and prints the address
+The server loads the ontologies given via `--ontology` and those stored with
+`ontocurator admin ontologies add` (in the blob store of `<data-dir>`) and prints the address
 `http://<host>:<port>/` to open in the browser, where people log in with the
 username and password an administrator gave them. Stop it with `Ctrl+C`.
 Passwords come from `ONTOCURATOR_MIGRATION_DATABASE_PASSWORD` and
@@ -143,8 +143,27 @@ directly or through a session-mode pooler, never a transaction-mode pooler
 
 Other commands: `ontocurator db upgrade` (schema migrations, as the schema
 owner), `ontocurator admin …` (users and recovery, see above),
-`ontocurator analyze <package.zip>` (analysis JSON of an exported work
-package) and `ontocurator version`.
+`ontocurator version`.
+
+### Projects, import and export
+
+Projects, documents and proposals come in through the CLI in the shared T1
+format (ontospan bundles); the browser has no upload or download. Long imports
+and exports run as jobs: inline by default, or queued for the server's worker
+with `--no-wait`.
+
+```bash
+ontocurator admin ontologies add hp.json hp-de.babelon.tsv
+ontocurator admin projects create ward-7 --name "Ward 7" --profile profile.json \
+    --pin hp=<sha256> --allowed-roots hp=HP:0000118 --t1-profile hp=hpo-phenotype
+ontocurator admin import ward-7 proposals.zip     # a T1 bundle (.zip or folder) or one .json unit
+ontocurator admin export ward-7 results.zip       # latest submissions as a T1 bundle
+ontocurator admin export-edit-log ward-7 edits.jsonl   # pseudonymised edit log
+```
+
+An import takes documents and, from sets of kind `tool_output` made by tools
+(with name and version), proposals. Its layers must match the project's pins
+and allowed roots; anything else refuses the whole import.
 
 ---
 
@@ -162,9 +181,8 @@ listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 1. **Accounts and Sessions**: Every API request needs a login session, held in the HttpOnly, `SameSite=Lax` cookie `ontocurator_session` (`Secure` behind an `https` public origin). The server stores only the token's SHA-256.
 2. **CSRF and Origin Checks**: Every write carries the session's CSRF token in `X-CSRF-Token` and must not come from another site; login and code redemption accept only requests the browser marks as coming from this site.
 3. **Known Hosts Only**: The server answers only to the host of `--public-origin`, or to `localhost`, `127.0.0.1` and `::1` on a loopback address (`HOST_NOT_ALLOWED` otherwise), so a rebound DNS name reaches nothing. A reverse proxy must forward the original `Host` header (nginx: `proxy_set_header Host $host;`); otherwise every request gets 400 `HOST_NOT_ALLOWED`. It must also be named in `--forwarded-allow-ips` (its own address, e.g. `--forwarded-allow-ips 10.0.0.5`): login throttling counts failures per client address, and without it every user appears under the proxy's single address, so 30 failed logins within 15 minutes, from anyone, lock everyone out.
-4. **Own Identity Only**: Everyone annotates under their own pseudonym; a workspace or annotator ID of someone else is refused (`IDENTITY_MISMATCH`). Package and ontology uploads need a system administrator.
+4. **Own Identity Only**: Everyone annotates under their own pseudonym; a workspace or annotator ID of someone else is refused (`IDENTITY_MISMATCH`). Projects, ontologies, imports and exports are managed by an administrator on the command line.
 5. **Zero Runtime Network Calls**: Search operates entirely against the pinned local ontology index. No external dense models, cloud APIs, or telemetry are contacted.
-6. **Streaming ZIP Guard**: Package import enforces 64 MB compressed limit, 256 MB uncompressed limit, path traversal sanitization, and atomic tempfile replacement.
 
 ---
 
@@ -237,6 +255,4 @@ cd ..
 # Build the wheel from the committed web assets and check its contents
 uv run python scripts/check_wheel.py --out-dir dist
 
-# Regenerate the demo work package fixture
-uv run python scripts/create_demo_package.py --output tests/fixtures/demo_package.zip
 ```

@@ -26,7 +26,7 @@ def test_help_lists_the_commands() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0, result.output
-    for command in ("serve", "db", "admin", "analyze", "version"):
+    for command in ("serve", "db", "admin", "version"):
         assert command in result.output
     assert "config" not in result.output
 

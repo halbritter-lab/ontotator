@@ -619,10 +619,11 @@ test.describe("ontology tree", () => {
       });
     }
     // Annotation panel / tree, in px. The panel's content is 500 px high here: it scrolls
-    // on the low screens, fits exactly at 1080 and has its 40 % at 1440.
+    // on the low screens, fits exactly at 1080 and has its 40 % at 1440. (Without the
+    // export button the case header wraps less on narrow screens, T2d.)
     expect(heights).toEqual([
-      "1025x720: 254/382",
-      "1100x700: 251/377",
+      "1025x720: 259/389",
+      "1100x700: 258/388",
       "1280x720: 266/400",
       "1440x900: 423/423",
       "1599x900: 423/423",

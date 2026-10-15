@@ -205,57 +205,6 @@
         }
       }
     },
-    "/api/v1/packages": {
-      "post": {
-        "summary": "Upload Package",
-        "description": "Upload and atomically import a work package archive (system admins).\n\nA new project gets the uploader as a member with every role, so the\ndashboard flow keeps working until projects are imported by the CLI\n(T2d). Runs in the thread pool (plain ``def``); the body is copied with a\nsize cap.",
-        "operationId": "upload_package_api_v1_packages_post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_upload_package_api_v1_packages_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "additionalProperties": true,
-                        "type": "object"
-                      }
-                    ]
-                  },
-                  "type": "object",
-                  "title": "Response Upload Package Api V1 Packages Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/packages/{package_id}/documents": {
       "get": {
         "summary": "List Package Documents",
@@ -700,117 +649,6 @@
         }
       }
     },
-    "/api/v1/workspaces/{workspace_id}/export": {
-      "get": {
-        "summary": "Export Workspace",
-        "description": "Export scoped workspace package as downloadable ZIP.\n\nFilename: ``<package_id>__<annotator_id>__<document_id>__<YYYYMMDD-HHMMSS>.zip``.",
-        "operationId": "export_workspace_api_v1_workspaces__workspace_id__export_get",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Workspace Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/packages/{package_id}/export": {
-      "get": {
-        "summary": "Export Package For Annotator",
-        "description": "Export all work of one annotator on a package as one v2 work package.\n\nThe annotator is the logged-in user (``annotator_id`` omitted or their own\npseudonym); a system admin or a lead of the project may export another\nannotator's work (Q5).\nIncludes every document of the package and all of the annotator's\nsubmissions, submitted annotations and search events in ``mode`` (all\nmodes if omitted). Filename:\n``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.",
-        "operationId": "export_package_for_annotator_api_v1_packages__package_id__export_get",
-        "parameters": [
-          {
-            "name": "package_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Package Id"
-            }
-          },
-          {
-            "name": "annotator_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Annotator Id"
-            }
-          },
-          {
-            "name": "mode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "independent",
-                    "review",
-                    "assisted"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Mode"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/zip": {}
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/packages/{package_id}/ontologies": {
       "get": {
         "summary": "Package Ontologies",
@@ -871,51 +709,6 @@
                   },
                   "type": "array",
                   "title": "Response List Ontologies Api V1 Ontologies Get"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Upload Ontology",
-        "description": "Upload an ontology (``.json``) or a translation file (``.tsv``).\n\nThe file goes to the ontology store (blob store and ``ontology_files``,\naudited as ``ontology.add``) and is registered at every start. A\ntranslation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) replaces a file\nof that name, and the ontology it belongs to is reloaded. System admins\nonly. Until T3 this route stays for the web UI; the admin CLI is the\nsupported way (D5).",
-        "operationId": "upload_ontology_api_v1_ontologies_post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_upload_ontology_api_v1_ontologies_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/OntologyInfo"
-                    },
-                    {
-                      "$ref": "#/components/schemas/TranslationUploadInfo"
-                    }
-                  ],
-                  "title": "Response Upload Ontology Api V1 Ontologies Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1229,34 +1022,6 @@
         ],
         "title": "AxisDefinition",
         "description": "Definition of an individual annotation contextual axis."
-      },
-      "Body_upload_ontology_api_v1_ontologies_post": {
-        "properties": {
-          "file": {
-            "type": "string",
-            "contentMediaType": "application/octet-stream",
-            "title": "File"
-          }
-        },
-        "type": "object",
-        "required": [
-          "file"
-        ],
-        "title": "Body_upload_ontology_api_v1_ontologies_post"
-      },
-      "Body_upload_package_api_v1_packages_post": {
-        "properties": {
-          "file": {
-            "type": "string",
-            "contentMediaType": "application/octet-stream",
-            "title": "File"
-          }
-        },
-        "type": "object",
-        "required": [
-          "file"
-        ],
-        "title": "Body_upload_package_api_v1_packages_post"
       },
       "CurrentUser": {
         "properties": {
@@ -2898,49 +2663,6 @@
           "term_id"
         ],
         "title": "TermLookup"
-      },
-      "TranslationUploadInfo": {
-        "properties": {
-          "filename": {
-            "type": "string",
-            "title": "Filename"
-          },
-          "language": {
-            "type": "string",
-            "title": "Language"
-          },
-          "languages": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Languages"
-          },
-          "assigned": {
-            "type": "boolean",
-            "title": "Assigned"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
-          "ontologies": {
-            "items": {
-              "$ref": "#/components/schemas/OntologyInfo"
-            },
-            "type": "array",
-            "title": "Ontologies"
-          }
-        },
-        "type": "object",
-        "required": [
-          "filename",
-          "language",
-          "assigned",
-          "message"
-        ],
-        "title": "TranslationUploadInfo",
-        "description": "Answer to the upload of a translation file (``.tsv``)."
       },
       "TreeLevel": {
         "properties": {

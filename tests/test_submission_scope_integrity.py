@@ -5,13 +5,14 @@ import io
 import pytest
 from layered_fixtures import make_layered_package
 from pg_harness import database_for
+from support.v2_exports import ExportService
+from support.v2_reader import read_package
+from support.v2_writer import PackageWriter
 from test_review_roundtrip_regressions import registry
 from test_reviews import _setup_review_test_env
 from test_scientific_review_integrity import changed_review, submit
 
-from ontocurator.application.analysis import analyze_package
 from ontocurator.application.editing import CreateAnnotationCommand, EditorService
-from ontocurator.application.exports import ExportService
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.workspaces import WorkspaceService
 from ontocurator.domain.annotations import AnnotationRef, snapshot
@@ -19,8 +20,6 @@ from ontocurator.domain.errors import InvalidPackage
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
-from ontocurator.packages.reader import read_package
-from ontocurator.packages.writer import PackageWriter
 from ontocurator.storage.repository import Repository
 
 
@@ -106,12 +105,18 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
         opened.key.model_copy(update={"package_id": second_id, "scope_id": ""})
     )
     assert restored.draft.revision == continued.draft_revision
-    result = analyze_package(second_import.export_package(second_id))
-    assert result["ambiguities"] == []
-    row = next(row for row in result["rows"] if row["document_id"] == "doc-beta")
-    assert row["status"] == ("positive" if positive else "checked_negative")
-    assert row["origin_key"] == first.origin_key.model_dump()
-    assert row["draft_revision"] == continued.draft_revision
+    exported = second_import.export_package(second_id)
+    newest = max(
+        (
+            s
+            for s in exported.submissions.values()
+            if s.origin_key.document_id == "doc-beta"
+        ),
+        key=lambda s: s.draft_revision,
+    )
+    assert newest.origin_key == first.origin_key
+    assert newest.draft_revision == continued.draft_revision
+    assert bool(newest.snapshots) == positive
 
 
 @pytest.mark.parametrize("legacy_scope", [False, True])

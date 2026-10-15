@@ -4,15 +4,15 @@ import json
 from pathlib import Path
 
 import pytest
-from auth_harness import AutoLoginClient
+from auth_harness import AutoLoginClient, upload_package
 from pg_harness import database_url_for
+from support.v2_writer import PackageWriter
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
 from ontocurator.domain.documents import (
     OntologyRef,
 )
-from ontocurator.packages.writer import PackageWriter
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "hp.json"
 
@@ -49,8 +49,8 @@ def app_client(tmp_path: Path):
 
 def test_term_labels_resolve_from_package_layer_without_search_event(app_client):
     client, _ = app_client
-    imported = client.post(
-        "/api/v1/packages",
+    imported = upload_package(
+        client,
         files={
             "file": (
                 "package.zip",
@@ -102,7 +102,7 @@ def test_full_package_review_and_export_lifecycle(app_client):
 
     # 1. Upload work package
     files = {"file": ("package.zip", pkg_bytes, "application/zip")}
-    resp = client.post("/api/v1/packages", files=files)
+    resp = upload_package(client, files=files)
     assert resp.status_code == 200
     data = resp.json()
     assert data["package_id"] == "pkg-scenario-a"
@@ -216,18 +216,12 @@ def test_full_package_review_and_export_lifecycle(app_client):
     assert resp.status_code == 200
     assert resp.json()["submission_id"] == sub_id
 
-    # 9. Export scoped package
-    resp = client.get(f"/api/v1/workspaces/{ws_id}/export")
-    assert resp.status_code == 200
-    assert resp.headers["content-type"] == "application/zip"
-    assert len(resp.content) > 0
-
 
 def test_document_list_with_position_and_status(app_client):
     client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("single")
-    client.post(
-        "/api/v1/packages",
+    upload_package(
+        client,
         files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
 
@@ -318,8 +312,8 @@ def test_document_list_with_position_and_status(app_client):
 def test_rejected_foreign_layer_commands_and_search(app_client):
     client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("single")
-    client.post(
-        "/api/v1/packages",
+    upload_package(
+        client,
         files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
 
@@ -370,8 +364,8 @@ def test_rejected_foreign_layer_commands_and_search(app_client):
 def test_search_discards_mismatched_annotation_layer(app_client):
     client, _ = app_client
     pkg_bytes = _create_sample_package_bytes("multi_editable")
-    client.post(
-        "/api/v1/packages",
+    upload_package(
+        client,
         files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
 
@@ -440,8 +434,8 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
     PackageWriter.write_to_stream(
         pkg, buffer, embedded_files={"ontologies/mondo.json": secondary_bytes}
     )
-    imported = client.post(
-        "/api/v1/packages",
+    imported = upload_package(
+        client,
         files={"file": ("package.zip", buffer.getvalue(), "application/zip")},
     )
     assert imported.status_code == 200, imported.text
@@ -546,8 +540,8 @@ def test_revision_conflict_409_and_domain_error_422(app_client):
     pkg_bytes = _create_sample_package_bytes("single")
 
     # Upload
-    client.post(
-        "/api/v1/packages",
+    upload_package(
+        client,
         files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
 
@@ -600,8 +594,8 @@ def test_api_create_term_with_term_id_and_alias_conflict(app_client):
 
     pkg_bytes = _create_sample_package_bytes("single")
 
-    client.post(
-        "/api/v1/packages",
+    upload_package(
+        client,
         files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
 
@@ -670,8 +664,8 @@ def test_api_retry_lost_response_before_and_after_restart(tmp_path: Path):
 
     # Upload & open
     pkg_bytes = _create_sample_package_bytes("single")
-    client.post(
-        "/api/v1/packages",
+    upload_package(
+        client,
         files={"file": ("package.zip", pkg_bytes, "application/zip")},
     )
     res = client.post(
@@ -741,9 +735,7 @@ def test_document_list_flags_review_inputs_only_in_review_mode(app_client):
         ("demo.zip", demo),
         ("single.zip", _create_sample_package_bytes("single")),
     ):
-        resp = client.post(
-            "/api/v1/packages", files={"file": (name, data, "application/zip")}
-        )
+        resp = upload_package(client, files={"file": (name, data, "application/zip")})
         assert resp.status_code == 200, resp.text
 
     def flags(package_id: str, mode: str | None) -> list[bool | None]:
@@ -770,7 +762,7 @@ def test_auto_search_records_the_route_of_each_candidate(app_client):
             "application/zip",
         )
     }
-    assert client.post("/api/v1/packages", files=files).status_code == 200
+    assert upload_package(client, files=files).status_code == 200
     opened = client.post(
         "/api/v1/workspaces/open",
         json={
@@ -853,7 +845,7 @@ def test_selection_from_the_similar_block_records_its_positions(app_client):
             "application/zip",
         )
     }
-    assert client.post("/api/v1/packages", files=files).status_code == 200
+    assert upload_package(client, files=files).status_code == 200
     opened = client.post(
         "/api/v1/workspaces/open",
         json={

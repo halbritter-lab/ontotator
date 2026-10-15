@@ -1,8 +1,6 @@
-import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 import { importPackage, LAUNCH_URL, openCase } from "./helpers";
 
-const GERMAN = fileURLToPath(new URL("../../tests/fixtures/hp-de.babelon.tsv", import.meta.url));
 const ANNOTATOR = "lang-tester";
 
 const startSearch = async (page: Page, query: string) => {
@@ -11,15 +9,13 @@ const startSearch = async (page: Page, query: string) => {
 };
 const seizure = (page: Page) => page.locator(".candidate-card").filter({ hasText: "HP:0001250" });
 
-// Use a package not captured by earlier specs. Upload before its first case
-// opens; previously captured packages retain their own search resources.
-test("translations: upload, search in German, switch the language off, selection survives a reload", async ({ page }) => {
+// Use a package not captured by earlier specs. Add the translation before its
+// first case opens; captured packages retain their own search resources.
+test("translations: add a file, search in German, switch the language off, selection survives a reload", async ({ page }) => {
+  // The administrator adds the file on the server (D5); the page shows it after a reload.
+  const added = await page.request.post("/__test_translation__?name=hp-de.babelon.tsv");
+  expect(added.ok()).toBeTruthy();
   await importPackage(page, "?scenario=translations", "translation-fixture", ANNOTATOR);
-
-  await page.locator('input[type="file"][accept=".json,.tsv"]').setInputFiles(GERMAN);
-  await expect(page.getByRole("status", { name: "Import result" })).toContainText(
-    "hp-de.babelon.tsv was added. HP 2026-06-23: de 4 terms.",
-  );
   await expect(page.locator(".app-header")).toContainText("HP 2026-06-23 · de 4 terms");
 
   await openCase(page);

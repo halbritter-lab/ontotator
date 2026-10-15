@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from auth_harness import HARNESS, logged_in
+from auth_harness import HARNESS, logged_in, upload_package
 from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
@@ -28,8 +28,8 @@ def app(tmp_path: Path) -> Any:
     )
     app = create_app(config)
     root = logged_in(app, "root", system_admin=True)
-    uploaded = root.post(
-        "/api/v1/packages",
+    uploaded = upload_package(
+        root,
         files={"file": ("demo.zip", DEMO_PACKAGE.read_bytes(), "application/zip")},
     )
     assert uploaded.status_code == 200, uploaded.text
@@ -234,17 +234,12 @@ def test_a_lead_reads_other_members_work_and_an_annotator_does_not(app: Any) -> 
     assert _open(alice, "independent").status_code == 200
     lead = _member(app, "lead", "lead")
     bob = _member(app, "bob", "annotator")
-    path = f"/api/v1/packages/{DEMO_ID}/export"
-    params = {"annotator_id": "alice"}
+    path = f"/api/v1/packages/{DEMO_ID}/documents"
+    params = {"annotator_id": "alice", "mode": "independent"}
 
     by_lead = lead.get(path, params=params)
     by_bob = bob.get(path, params=params)
-    status = lead.get(
-        f"/api/v1/packages/{DEMO_ID}/documents",
-        params={"annotator_id": "alice", "mode": "independent"},
-    )
 
     assert by_lead.status_code == 200, by_lead.text
-    assert status.status_code == 200, status.text
     assert by_bob.status_code == 403
     assert by_bob.json()["code"] == "IDENTITY_MISMATCH"

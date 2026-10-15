@@ -2,9 +2,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from pg_harness import column_values, database_for, tamper
+from support.v2_exports import ExportService
 from test_storage import _sample_package
 
-from ontocurator.application.exports import ExportService
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
@@ -247,8 +247,7 @@ def test_export_reads_one_snapshot_while_an_evidence_edit_commits(tmp_path):
     import threading
 
     from sqlalchemy import event
-
-    from ontocurator.packages.writer import write_package_to_stream
+    from support.v2_writer import write_package_to_stream
 
     db = database_for(tmp_path / "db")
     repo = Repository(db)

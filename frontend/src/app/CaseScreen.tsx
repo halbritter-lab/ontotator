@@ -508,11 +508,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     : "Saved";
   const statusIsError = queueState === "conflict" || queueState === "error" || isOffline;
 
-  const downloadExport = async () => {
-    try { await queueRef.current.flush(); await api.downloadExport(workspaceId); }
-    catch (error) { reportError(error); }
-  };
-
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (["saving", "dirty", "error"].includes(queueRef.current.getState())) {
@@ -1469,14 +1464,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           )}
 
           <button
-            onClick={downloadExport}
-            className="btn btn-secondary btn-sm"
-            title="Export case data as ZIP"
-          >
-            📥 Export (.zip)
-          </button>
-
-          <button
             type="button"
             className="btn btn-primary btn-sm"
             onClick={handleSubmitWorkspace}
@@ -1985,13 +1972,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 Review next case (Case {nextDoc.position}) →
               </button>
             )}
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={downloadExport}
-            >
-              📥 Download export
-            </button>
             <button
               type="button"
               className="btn btn-secondary"

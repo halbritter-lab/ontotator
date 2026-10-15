@@ -10,12 +10,10 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from layered_fixtures import make_layered_package
+from support.ontology_upload import OntologyUploadService
+from support.v2_import import PackageImportService
 
-from ontocurator.application.uploads import (
-    OntologyUploadService,
-    PackageImportService,
-    TranslationUploadService,
-)
+from ontocurator.application.uploads import TranslationUploadService
 from ontocurator.domain.profiles import OntologyDefinition
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService

@@ -9,15 +9,17 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from auth_harness import AutoLoginClient
+from auth_harness import HARNESS, AutoLoginClient, UploadResult, upload_package
 from fastapi.testclient import TestClient
 from layered_fixtures import make_layered_package
 from pg_harness import database_url_for
+from support.v2_writer import PackageWriter
 
 from ontocurator.api.app import create_app
+from ontocurator.api.routes import _ontology_info
 from ontocurator.config import AppConfig
+from ontocurator.domain.errors import DomainError
 from ontocurator.ontology.service import OntologyService
-from ontocurator.packages.writer import PackageWriter
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HP = FIXTURES / "hp.json"
@@ -63,8 +65,8 @@ def _open_single(client: TestClient, embedded: bool = False) -> Any:
     resources = {"ontologies/hp.json": HP.read_bytes()} if embedded else {}
     stream = io.BytesIO()
     PackageWriter.write_to_stream(package, stream, embedded_files=resources)
-    imported = client.post(
-        "/api/v1/packages",
+    imported = upload_package(
+        client,
         files={"file": ("cases.zip", stream.getvalue(), "application/zip")},
     )
     assert imported.status_code == 200, imported.text
@@ -213,10 +215,37 @@ def test_search_event_records_the_active_languages(tmp_path: Path) -> None:
 # --- upload ----------------------------------------------------------------- #
 
 
-def _upload(client: TestClient, name: str, data: bytes) -> Any:
-    return client.post(
-        "/api/v1/ontologies",
-        files={"file": (name, data, "text/tab-separated-values")},
+def _upload(client: TestClient, name: str, data: bytes) -> UploadResult:
+    """Add a file through the ontology store, as the admin CLI does (D5).
+
+    The upload route is gone (T2d); the answer keeps what the store reports:
+    a failure is 400 (500 if it is not the file's fault) with ``detail``.
+    """
+    store = client.app.state.ontology_store  # type: ignore[attr-defined]
+    registry = client.app.state.ontology_registry  # type: ignore[attr-defined]
+    try:
+        if not name.lower().endswith(".tsv"):
+            row, service = store.add_ontology(HARNESS, name, data)
+            info = _ontology_info(row.sha256, service, None)
+            return UploadResult(200, info.model_dump())
+        _row, stored = store.add_translation(HARNESS, name, data)
+    except DomainError as exc:
+        server_side = ("TRANSLATION_RELOAD_FAILED", "TRANSLATION_STORE_FAILED")
+        status = 500 if exc.code in server_side else 400
+        return UploadResult(status, {"detail": str(exc)})
+    infos = [
+        _ontology_info(sha, svc, registry.registered_path(sha)).model_dump()
+        for sha, svc in stored.services.items()
+    ]
+    return UploadResult(
+        200,
+        {
+            "filename": stored.path.name,
+            "file_language": stored.language,
+            "languages": list(stored.languages),
+            "assigned": bool(infos),
+            "ontologies": infos,
+        },
     )
 
 
@@ -232,9 +261,8 @@ def test_uploading_a_translation_reloads_the_ontology(tmp_path: Path) -> None:
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["filename"] == "hp-de.babelon.tsv"
-    assert body["language"] == "de"
+    assert body["languages"] == ["de"]
     assert body["assigned"] is True
-    assert body["message"] == "hp-de.babelon.tsv was added. HP 2026-06-23: de 4 terms."
     assert [item["ontology_id"] for item in body["ontologies"]] == ["hp"]
     assert body["ontologies"][0]["translations"] == [
         {"language": "de", "filenames": ["hp-de.babelon.tsv"], "term_count": 4}
@@ -324,7 +352,6 @@ def test_upload_without_a_matching_ontology_is_stored_with_a_notice(
     body = response.json()
     assert body["assigned"] is False
     assert body["ontologies"] == []
-    assert "no loaded ontology has the prefix 'HP'" in body["message"]
     stored = tmp_path / "workspace" / "translations" / "hp-de.babelon.tsv"
     assert stored.read_bytes() == DE.read_bytes()
     assert _listed(client)["mondo"]["translations"] == []
@@ -335,10 +362,7 @@ def test_upload_without_a_matching_ontology_is_stored_with_a_notice(
     assert not (stored.parent / "hp-es.babelon.tsv").exists()
 
     # The ontology that arrives later picks the stored file up.
-    added = client.post(
-        "/api/v1/ontologies",
-        files={"file": ("hp.json", HP.read_bytes(), "application/json")},
-    )
+    added = _upload(client, "hp.json", HP.read_bytes())
     assert added.status_code == 200, added.text
     assert added.json()["translations"] == [
         {"language": "de", "filenames": ["hp-de.babelon.tsv"], "term_count": 4}
@@ -415,9 +439,7 @@ def test_uploading_a_file_with_a_byte_order_mark_works(tmp_path: Path) -> None:
     response = _upload(client, "hp-de.babelon.tsv", marked)
 
     assert response.status_code == 200, response.text
-    assert response.json()["message"] == (
-        "hp-de.babelon.tsv was added. HP 2026-06-23: de 4 terms."
-    )
+    assert response.json()["languages"] == ["de"]
     # Stored as it was sent, mark included.
     stored = tmp_path / "workspace" / "translations" / "hp-de.babelon.tsv"
     assert stored.read_bytes() == marked
@@ -446,20 +468,14 @@ def test_the_answer_names_the_language_of_the_content_not_of_the_file_name(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["filename"] == "hp-fr.babelon.tsv"
-    assert (body["language"], body["languages"]) == ("de", ["de"])
-    assert body["message"] == (
-        "hp-fr.babelon.tsv was added. HP 2026-06-23: de 4 terms. "
-        "The file name says 'fr', but the names in the file are marked as 'de' "
-        "and are searched as 'de'."
-    )
+    assert (body["file_language"], body["languages"]) == ("fr", ["de"])
     assert _listed(client)["hp"]["translations"] == [
         {"language": "de", "filenames": ["hp-fr.babelon.tsv"], "term_count": 4}
     ]
 
     # Name and content agree: nothing is added to the message.
     agreeing = _upload(client, "hp-es.babelon.tsv", ES.read_bytes()).json()
-    assert (agreeing["language"], agreeing["languages"]) == ("es", ["es"])
-    assert "file name says" not in agreeing["message"]
+    assert (agreeing["file_language"], agreeing["languages"]) == ("es", ["es"])
 
     # No language column: the name is all there is, and it is right.
     plain = _upload(
@@ -468,8 +484,7 @@ def test_the_answer_names_the_language_of_the_content_not_of_the_file_name(
         b"subject_id\tpredicate_id\ttranslation_value\n"
         b"HP:0001284\trdfs:label\tAreflexie\n",
     ).json()
-    assert (plain["language"], plain["languages"]) == ("nl", ["nl"])
-    assert "file name says" not in plain["message"]
+    assert (plain["file_language"], plain["languages"]) == ("nl", ["nl"])
 
     # Two languages in one file, one of them the one in the name.
     mixed = _upload(
@@ -479,11 +494,7 @@ def test_the_answer_names_the_language_of_the_content_not_of_the_file_name(
         b"HP:0001284\trdfs:label\tit\tAreflessia\n"
         b"HP:0001250\trdfs:label\tpt\tConvulsao\n",
     ).json()
-    assert (mixed["language"], mixed["languages"]) == ("it", ["it", "pt"])
-    assert mixed["message"].endswith(
-        "The file name says 'it', but the names in the file are marked as "
-        "'it', 'pt' and are searched as such."
-    )
+    assert (mixed["file_language"], mixed["languages"]) == ("it", ["it", "pt"])
 
 
 def test_an_unassigned_upload_reports_the_language_of_its_name(tmp_path: Path) -> None:
@@ -492,20 +503,8 @@ def test_an_unassigned_upload_reports_the_language_of_its_name(tmp_path: Path) -
     body = _upload(client, "hp-fr.babelon.tsv", DE.read_bytes()).json()
 
     # Nothing was loaded, so nothing is known beyond the name.
-    assert (body["assigned"], body["language"], body["languages"]) == (False, "fr", [])
-    assert "file name says" not in body["message"]
-
-
-def test_ontology_json_upload_still_answers_with_the_ontology(tmp_path: Path) -> None:
-    client = _client(tmp_path)
-
-    response = client.post(
-        "/api/v1/ontologies",
-        files={"file": ("hp.json", HP.read_bytes(), "application/json")},
+    assert (body["assigned"], body["file_language"], body["languages"]) == (
+        False,
+        "fr",
+        [],
     )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["ontology_id"] == "hp"
-    assert body["translations"] == []
-    assert "filename" not in body

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from auth_harness import PASSWORD, ensure_user, logged_in
+from auth_harness import PASSWORD, ensure_user, logged_in, upload_package
 from layered_fixtures import make_layered_package
 from pg_harness import database_for, database_url_for
 from sqlalchemy import select
@@ -327,15 +327,15 @@ def test_an_upload_makes_the_uploader_a_member_of_the_new_project(
 ) -> None:
     import io
 
-    from ontocurator.packages.writer import PackageWriter
+    from support.v2_writer import PackageWriter
 
     ensure_user(app, "root", system_admin=True)
     root = logged_in(app, "root")
     buf = io.BytesIO()
     PackageWriter.write_to_stream(_package("C"), buf)
 
-    response = root.post(
-        "/api/v1/packages",
+    response = upload_package(
+        root,
         files={"file": ("c.zip", buf.getvalue(), "application/zip")},
     )
 

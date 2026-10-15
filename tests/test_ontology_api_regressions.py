@@ -6,13 +6,14 @@ import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from auth_harness import AutoLoginClient
+from auth_harness import AutoLoginClient, upload_package
 from layered_fixtures import make_layered_package
 from pg_harness import database_url_for
+from support.v2_exports import workspace_export_zip
+from support.v2_writer import PackageWriter
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
-from ontocurator.packages.writer import PackageWriter
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -47,8 +48,8 @@ def archive(scenario, embedded=False):
 
 
 def upload(client, data):
-    response = client.post(
-        "/api/v1/packages", files={"file": ("cases.zip", data, "application/zip")}
+    response = upload_package(
+        client, files={"file": ("cases.zip", data, "application/zip")}
     )
     assert response.status_code == 200, response.text
     return response.json()["package_id"]
@@ -127,9 +128,7 @@ def test_embedded_ontology_survives_restart_and_export_without_cli_files(tmp_pat
             ]
             == "HP:0001250"
         )
-        response = client.get(f"/api/v1/workspaces/{workspace['workspace_id']}/export")
-        assert response.status_code == 200, response.text
-        exported = response.content
+        exported = workspace_export_zip(client.app, workspace["workspace_id"])
         with zipfile.ZipFile(io.BytesIO(exported)) as zipped:
             assert (
                 zipped.read("ontologies/hp.json") == (FIXTURES / "hp.json").read_bytes()
@@ -171,8 +170,8 @@ def test_invalid_embedded_ontology_does_not_publish_package_or_partial_registry(
         },
     )
     with client_at(tmp_path) as client:
-        response = client.post(
-            "/api/v1/packages",
+        response = upload_package(
+            client,
             files={"file": ("broken.zip", buffer.getvalue(), "application/zip")},
         )
         assert response.status_code == 422, response.text
@@ -186,8 +185,7 @@ def test_independent_export_does_not_embed_reference_ontology(tmp_path):
     with client_at(tmp_path) as client:
         package_id = upload(client, archive("assisted", embedded=True))
         workspace = open_case(client, package_id)
-        exported = client.get(f"/api/v1/workspaces/{workspace['workspace_id']}/export")
-        assert exported.status_code == 200, exported.text
-        with zipfile.ZipFile(io.BytesIO(exported.content)) as zipped:
+        exported = workspace_export_zip(client.app, workspace["workspace_id"])
+        with zipfile.ZipFile(io.BytesIO(exported)) as zipped:
             assert "ontologies/hp.json" in zipped.namelist()
             assert "ontologies/mondo.json" not in zipped.namelist()

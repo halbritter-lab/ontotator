@@ -8,7 +8,6 @@ import json
 import os
 import stat
 import sys
-import tempfile
 from collections.abc import Iterator
 from datetime import UTC
 from importlib import metadata
@@ -48,73 +47,6 @@ def get_version() -> str:
 def version() -> None:
     """Print current version of Ontocurator."""
     typer.echo(get_version())
-
-
-@app.command("analyze")
-def analyze_command(
-    package: Annotated[Path, typer.Argument(help="Exported v2 work package ZIP.")],
-    output: Annotated[
-        Path | None,
-        typer.Option(
-            "--output", "-o", help="Write analysis JSON here; otherwise print it."
-        ),
-    ] = None,
-    annotator: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--annotator",
-            help="Expected annotator ID (repeatable); absent work is reported.",
-        ),
-    ] = None,
-    mode: Annotated[
-        str | None,
-        typer.Option("--mode", help="Filter independent, review or assisted work."),
-    ] = None,
-) -> None:
-    """Extract current results and missing/negative/uncertain states for analysis."""
-    from typing import cast
-
-    from ontocurator.application.analysis import analyze_package
-    from ontocurator.domain.workspace import WorkspaceMode
-    from ontocurator.packages.reader import read_package
-
-    if output is not None and output.resolve() == package.resolve():
-        raise typer.BadParameter(
-            "must differ from the input package", param_hint="--output"
-        )
-
-    if mode is not None and mode not in {"independent", "review", "assisted"}:
-        raise typer.BadParameter(
-            "must be independent, review or assisted", param_hint="--mode"
-        )
-    try:
-        dataset = analyze_package(
-            read_package(package),
-            annotator_ids=annotator,
-            mode=cast(WorkspaceMode | None, mode),
-        )
-        encoded = json.dumps(dataset, ensure_ascii=False, indent=2) + "\n"
-        if output is None:
-            typer.echo(encoded, nl=False)
-        else:
-            tmp_path: Path | None = None
-            try:
-                with tempfile.NamedTemporaryFile(
-                    mode="w",
-                    encoding="utf-8",
-                    dir=output.parent,
-                    suffix=".analysis.tmp",
-                    delete=False,
-                ) as handle:
-                    tmp_path = Path(handle.name)
-                    handle.write(encoded)
-                os.replace(tmp_path, output)
-            finally:
-                if tmp_path is not None and tmp_path.exists():
-                    tmp_path.unlink()
-    except (DomainError, OSError) as exc:
-        typer.echo(f"Analysis failed: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
 
 
 def _default_web_dir() -> Path | None:

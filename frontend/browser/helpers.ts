@@ -8,14 +8,14 @@ export const TEST_PASSWORD = "browser test passphrase";
 export const usernameFor = (pseudonym: string) => pseudonym.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
 
 /**
- * Create the system admin ``pseudonym`` (idempotent; test-only route of the
- * browser server) and log in through the login screen.
+ * Create the user ``pseudonym`` with every role in ``projects`` (idempotent;
+ * test-only route of the browser server) and log in through the login screen.
  */
-export async function loginAs(page: Page, pseudonym: string) {
+export async function loginAs(page: Page, pseudonym: string, projects: string[] = []) {
   const username = usernameFor(pseudonym);
-  const created = await page.request.post(
-    `/__test_user__?username=${encodeURIComponent(username)}&pseudonym=${encodeURIComponent(pseudonym)}`,
-  );
+  const query = new URLSearchParams({ username, pseudonym });
+  if (projects.length) query.set("projects", projects.join(","));
+  const created = await page.request.post(`/__test_user__?${query.toString()}`);
   expect(created.ok()).toBeTruthy();
   await page.goto(LAUNCH_URL);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
@@ -31,17 +31,15 @@ export async function openCase(page: Page) {
   await expect(page.locator(".status-badge")).toBeVisible();
 }
 
-/** Log in as ``annotator`` and import a synthetic package through the dashboard. */
-export async function importPackage(page: Page, query: string, packageId: string, annotator: string) {
-  await loginAs(page, annotator);
-  const fixture = await page.request.get(`/__synthetic_fixture__${query}`);
-  expect(fixture.ok()).toBeTruthy();
-  await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
-    name: "synthetic.zip",
-    mimeType: "application/zip",
-    buffer: await fixture.body(),
-  });
-  await expect(page.getByRole("status", { name: "Import result" })).toContainText(`Package '${packageId}' imported`);
+/**
+ * Log in as ``annotator`` with every role in the seeded project ``packageId``
+ * and select it on the dashboard. The browser server seeds every scenario at
+ * start-up (``_scenario`` names the one the spec relies on).
+ */
+export async function importPackage(page: Page, _scenario: string, packageId: string, annotator: string) {
+  await loginAs(page, annotator, [packageId]);
+  await expect(page.locator("#package-select")).toBeVisible();
+  await page.locator("#package-select").selectOption(packageId);
   await expect(page.locator("#package-select")).toHaveValue(packageId);
 }
 

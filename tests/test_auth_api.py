@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from auth_harness import ORIGIN, PASSWORD, ensure_user, logged_in
+from auth_harness import ORIGIN, PASSWORD, ensure_user, logged_in, upload_package
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
@@ -204,8 +204,8 @@ def test_the_first_admin_comes_from_the_configured_hash(tmp_path: Path) -> None:
 
 def test_nobody_works_under_another_identity(app: FastAPI) -> None:
     admin = logged_in(app, "root", system_admin=True)
-    uploaded = admin.post(
-        "/api/v1/packages",
+    uploaded = upload_package(
+        admin,
         files={
             "file": ("p.zip", _create_sample_package_bytes("single"), "application/zip")
         },
@@ -243,20 +243,6 @@ def test_nobody_works_under_another_identity(app: FastAPI) -> None:
     )
     assert command.status_code == 403
     assert command.json()["code"] == "IDENTITY_MISMATCH"
-
-
-def test_only_a_system_admin_uploads_packages(app: FastAPI) -> None:
-    client = logged_in(app, "alice")
-
-    response = client.post(
-        "/api/v1/packages",
-        files={
-            "file": ("p.zip", _create_sample_package_bytes("single"), "application/zip")
-        },
-    )
-
-    assert response.status_code == 403
-    assert response.json()["code"] == "ADMIN_REQUIRED"
 
 
 # --- Follow-up review: malformed input, hosts, identity binding ------------- #
@@ -364,24 +350,12 @@ def test_a_start_without_any_user_warns_about_the_missing_admin(
     assert "ONTOCURATOR_ADMIN_PASSWORD_HASH" in caplog.text
 
 
-def test_only_a_system_admin_uploads_ontologies(app: FastAPI) -> None:
-    client = logged_in(app, "alice")
-
-    response = client.post(
-        "/api/v1/ontologies",
-        files={"file": ("hp.json", FIXTURE_PATH.read_bytes(), "application/json")},
-    )
-
-    assert response.status_code == 403
-    assert response.json()["code"] == "ADMIN_REQUIRED"
-
-
 @pytest.fixture
 def alices_workspace(app: FastAPI) -> dict[str, Any]:
     """A package, alice's open workspace and logged-in clients."""
     admin = logged_in(app, "root", system_admin=True)
-    uploaded = admin.post(
-        "/api/v1/packages",
+    uploaded = upload_package(
+        admin,
         files={
             "file": ("p.zip", _create_sample_package_bytes("single"), "application/zip")
         },
@@ -402,13 +376,10 @@ def alices_workspace(app: FastAPI) -> dict[str, Any]:
     }
 
 
-@pytest.mark.parametrize(
-    "url", ["/packages/{package}/documents", "/packages/{package}/export"]
-)
 def test_only_a_system_admin_reads_another_annotators_work(
-    alices_workspace: dict[str, Any], url: str
+    alices_workspace: dict[str, Any],
 ) -> None:
-    path = "/api/v1" + url.format(package=PACKAGE)
+    path = f"/api/v1/packages/{PACKAGE}/documents"
     params = {"annotator_id": "alice"}
 
     by_bob = alices_workspace["bob"].get(path, params=params)
@@ -432,7 +403,6 @@ KEY = "<alice's workspace key>"
 @pytest.mark.parametrize(
     ("method", "url", "body"),
     [
-        ("get", "/workspaces/{id}/export", None),
         ("get", "/workspaces/{id}/submissions/sub-1", None),
         ("post", "/workspaces/{id}/decisions", ENVELOPE),
         ("post", "/workspaces/{id}/submit", ENVELOPE),
@@ -452,7 +422,7 @@ KEY = "<alice's workspace key>"
             },
         ),
     ],
-    ids=["export", "submission", "decision", "submit", "search", "tree"],
+    ids=["submission", "decision", "submit", "search", "tree"],
 )
 def test_nobody_reaches_another_annotators_workspace(
     alices_workspace: dict[str, Any],

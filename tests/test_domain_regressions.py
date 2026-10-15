@@ -1,5 +1,7 @@
 import pytest
-from test_packages import _create_sample_package
+from support.v2_reader import read_package
+from support.v2_samples import _create_sample_package
+from support.v2_writer import write_package
 from test_reviews import _setup_review_test_env
 
 from ontocurator.application.reviews import DecisionCommand
@@ -7,8 +9,6 @@ from ontocurator.domain.annotations import AnnotationRef
 from ontocurator.domain.errors import DomainError, InvalidPackage
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.packages.reader import read_package
-from ontocurator.packages.writer import write_package
 
 
 def review(ctx, reviewer="one"):

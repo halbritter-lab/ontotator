@@ -1,21 +1,22 @@
-"""Real local backend for Playwright; synthetic data and temporary storage only."""
+"""Real local backend for Playwright; synthetic data and temporary storage only.
+
+Every scenario project is seeded at start-up (T2d: there is no upload in the
+product any more). Test-only routes create users with project memberships,
+add a fixture translation and import a T1 bundle.
+"""
 
 import hashlib
-import io
-import json
 import os
+import re
 import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import Query, Request
-from fastapi.responses import Response
+from fastapi import HTTPException, Query, Request
 from pg_harness import database_url_for
 from sqlalchemy import select
-from starlette.concurrency import run_in_threadpool
-from starlette.middleware.base import RequestResponseEndpoint
 
 from ontocurator.api.app import create_app
 from ontocurator.auth.accounts import AccountService
@@ -44,11 +45,17 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from ontocurator.auth.sessions import Principal  # noqa: E402
+from support.v2_import import PackageImportService  # noqa: E402
+
 from ontocurator.packages.models import PackageManifest, ValidatedPackage  # noqa: E402
-from ontocurator.packages.writer import PackageWriter  # noqa: E402
 from ontocurator.storage.tables import ProjectRow  # noqa: E402
 from tests.layered_fixtures import HP_DIGEST, make_layered_package  # noqa: E402
+from tests.t1_fixtures import (  # noqa: E402
+    bundle,
+    create_project,
+    run_import,
+    unit,
+)
 
 ONTOLOGY = ROOT / "tests/fixtures/hp.json"
 MONDO_ONTOLOGY = ROOT / "tests/fixtures/mondo.json"
@@ -61,7 +68,7 @@ def fixture_package(
     package_id: str = "browser-fixture",
     created_at: str = "2026-10-01T00:00:00Z",
     proposals: list[tuple[str, str, int, int]] | None = None,
-) -> bytes:
+) -> ValidatedPackage:
     hp_ont = OntologyDefinition(
         ontology_id="hp",
         label="Human Phenotype Ontology",
@@ -152,9 +159,7 @@ def fixture_package(
         annotations=annotations,
         evidence=evidence,
     )
-    result = io.BytesIO()
-    PackageWriter.write_to_stream(pkg, result)
-    return result.getvalue()
+    return pkg
 
 
 # 30 tool proposals: enough to overflow the case sidebar at any window height.
@@ -164,7 +169,7 @@ MANY_PROPOSALS = [
 ]
 
 
-def scenario_package(scenario: str) -> bytes:
+def scenario_package(scenario: str) -> ValidatedPackage:
     fixture_scenario = "assisted" if scenario == "review_references" else scenario
     pkg = make_layered_package(fixture_scenario)  # type: ignore[arg-type]
     if scenario == "review_references":
@@ -185,9 +190,30 @@ def scenario_package(scenario: str) -> bytes:
             annotation, [], pkg.documents["doc-beta"], pkg.manifest.task_profile
         )
         pkg.annotations[(annotation.annotation_id, proposal.version)] = proposal
-    result = io.BytesIO()
-    PackageWriter.write_to_stream(pkg, result)
-    return result.getvalue()
+    return pkg
+
+
+def seed_packages() -> list[ValidatedPackage]:
+    """Every project the specs use, oldest first."""
+    return [
+        fixture_package(),
+        fixture_package(package_id="pkg-many-proposals", proposals=MANY_PROPOSALS),
+        fixture_package(package_id="translation-fixture"),
+        *(
+            scenario_package(scenario)
+            for scenario in (
+                "single",
+                "assisted",
+                "multi_editable",
+                "review_references",
+            )
+        ),
+    ]
+
+
+T1_PROJECT = "t1-browser"
+# Fixture files ``/__test_translation__`` may add.
+TRANSLATION_NAME = re.compile(r"[a-z]+-[a-z]{2}\.babelon\.tsv")
 
 
 if __name__ == "__main__":
@@ -203,28 +229,27 @@ if __name__ == "__main__":
             web_dir=ROOT / "frontend/dist",
         )
         app = create_app(config)
+        importer = PackageImportService(app.state.repo, app.state.ontology_registry)
+        for package in seed_packages():
+            importer.import_package(package)
 
-        @app.get("/__synthetic_fixture__")
-        def fixture(scenario: str | None = Query(None)) -> Response:
-            if scenario in (
-                "single",
-                "assisted",
-                "multi_editable",
-                "review_references",
-            ):
-                data = scenario_package(scenario)
-            elif scenario == "many_proposals":
-                data = fixture_package(
-                    package_id="pkg-many-proposals", proposals=MANY_PROPOSALS
+        def grant_all(user_id: int, username: str, project_key: str) -> None:
+            """Every role in the project, without ending the user's sessions."""
+            with app.state.repo.db.transaction() as conn:
+                project_id = conn.execute(
+                    select(ProjectRow.id).where(ProjectRow.project_key == project_key)
+                ).scalar_one_or_none()
+                if project_id is None:
+                    raise HTTPException(404, f"no project {project_key!r}")
+                grant_roles(
+                    conn,
+                    Actor.cli(),
+                    project_id,
+                    user_id,
+                    username,
+                    ROLES,
+                    datetime.now(UTC),
                 )
-            elif scenario == "translations":
-                data = fixture_package(package_id="translation-fixture")
-            else:
-                data = fixture_package()
-            return Response(data, media_type="application/zip")
-
-        # The explicit test-only routes must precede the static catch-all.
-        app.router.routes.insert(0, app.router.routes.pop())
 
         @app.post("/__test_user__")
         def test_user(
@@ -233,10 +258,13 @@ if __name__ == "__main__":
             pseudonym: str = Query(...),
             setup: bool = Query(False),
             display_name: str | None = Query(None),
+            projects: str | None = Query(None),
         ) -> dict[str, str]:
-            """Create a system admin called ``username`` with ``pseudonym``.
+            """Create the user ``username`` with ``pseudonym`` (no system admin).
 
             The display name is ``display_name``, by default the pseudonym.
+            ``projects`` (comma-separated keys) gives the user every role there,
+            also when the user exists already.
 
             With ``setup`` the user keeps a fresh setup (or, if it exists, reset)
             code, which is returned for the login screen to redeem. Otherwise the
@@ -250,15 +278,19 @@ if __name__ == "__main__":
                     Actor.cli(),
                     username,
                     display_name or pseudonym,
-                    system_admin=True,
                     pseudonym=pseudonym,
                 )
                 if not setup:
                     accounts.redeem_code(username, issued.code, TEST_PASSWORD)
-            elif setup:
-                issued = accounts.issue_reset_code(Actor.cli(), username)
+                user = issued.user
             else:
-                return {"username": existing.username, "pseudonym": existing.pseudonym}
+                user = existing
+            for key in filter(None, (projects or "").split(",")):
+                grant_all(user.id, user.username, key)
+            if existing is not None:
+                if not setup:
+                    return {"username": user.username, "pseudonym": user.pseudonym}
+                issued = accounts.issue_reset_code(Actor.cli(), username)
             if setup:
                 return {"code": issued.code}
             return {
@@ -268,50 +300,35 @@ if __name__ == "__main__":
 
         app.router.routes.insert(0, app.router.routes.pop())
 
-        def join_project(principal: Principal, project_key: str) -> None:
-            """Every role in the project, without ending the browser's session."""
-            with app.state.repo.db.transaction() as conn:
-                project_id = conn.execute(
-                    select(ProjectRow.id).where(ProjectRow.project_key == project_key)
-                ).scalar_one()
-                grant_roles(
-                    conn,
-                    Actor.cli(),
-                    project_id,
-                    principal.user_id,
-                    principal.username,
-                    ROLES,
-                    datetime.now(UTC),
+        @app.post("/__test_translation__")
+        def test_translation(name: str = Query(...)) -> dict[str, str]:
+            """Add a fixture translation file as the admin CLI does (D5)."""
+            if not TRANSLATION_NAME.fullmatch(name):
+                raise HTTPException(400, "not a fixture translation")
+            path = ROOT / "tests/fixtures" / name
+            stored = app.state.ontology_store.add(Actor.cli(), name, path.read_bytes())
+            return {"sha256": stored.sha256}
+
+        app.router.routes.insert(0, app.router.routes.pop())
+
+        @app.post("/__test_import__")
+        def test_import(username: str = Query(...)) -> dict[str, object]:
+            """Import a T1 bundle into ``t1-browser`` inline; the user joins it."""
+            db = app.state.repo.db
+            if app.state.repo.manifest_hash(T1_PROJECT) is None:
+                create_project(db, T1_PROJECT)
+            with tempfile.TemporaryDirectory() as folder:
+                job = run_import(
+                    db,
+                    bundle(Path(folder) / "t1.zip", [unit("t1-case")], "browser-t1"),
+                    T1_PROJECT,
                 )
+            if job.status != "succeeded":
+                raise HTTPException(500, job.error)
+            user = app.state.accounts.get_by_username(username)
+            grant_all(user.id, user.username, T1_PROJECT)
+            return dict(job.result or {})
 
-        @app.middleware("http")
-        async def uploader_joins_the_project(
-            request: Request, call_next: RequestResponseEndpoint
-        ) -> Response:
-            """A test user who uploads a package works in its project (T2c).
-
-            The server makes only the creator of a new project a member; the
-            specs share one server, so their users also upload projects that
-            another spec created first.
-            """
-            response = await call_next(request)
-            if (
-                request.method != "POST"
-                or request.url.path != "/api/v1/packages"
-                or response.status_code != 200
-            ):
-                return response
-            body = b"".join(
-                [chunk async for chunk in response.body_iterator]  # type: ignore[attr-defined]
-            )
-            principal = getattr(request.state, "principal", None)
-            if isinstance(principal, Principal):
-                key = json.loads(body)["package_id"]
-                await run_in_threadpool(join_project, principal, key)
-            return Response(
-                body,
-                status_code=response.status_code,
-                headers=dict(response.headers),
-            )
+        app.router.routes.insert(0, app.router.routes.pop())
 
         uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")

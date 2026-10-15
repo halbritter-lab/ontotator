@@ -3,7 +3,10 @@
 import io
 
 import pytest
+from auth_harness import upload_package
 from pg_harness import count_rows, database_for, tamper
+from support.v2_reader import read_package
+from support.v2_writer import PackageWriter
 from test_reviews import _setup_review_test_env
 
 from ontocurator.application.editing import CreateAnnotationCommand
@@ -12,8 +15,6 @@ from ontocurator.domain.annotations import AnnotationRef
 from ontocurator.domain.errors import DomainError, InvalidPackage
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
-from ontocurator.packages.reader import read_package
-from ontocurator.packages.writer import PackageWriter
 from ontocurator.storage.repository import Repository
 
 
@@ -237,8 +238,8 @@ def test_round_selection_api_resumes_selected_round_and_rejects_incompatible_req
     client, _ = _app(tmp_path / "api", ontology_paths=[HP_PATH])
     stream = io.BytesIO()
     PackageWriter.write_to_stream(ctx["repo"].export_package("pkg-rev-1"), stream)
-    imported = client.post(
-        "/api/v1/packages",
+    imported = upload_package(
+        client,
         files={"file": ("proposals.zip", stream.getvalue(), "application/zip")},
     )
     assert imported.status_code == 200, imported.text
