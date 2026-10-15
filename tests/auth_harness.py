@@ -8,8 +8,9 @@ pseudonym is the annotator the request names, through the real login route.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable, Mapping
 from typing import Any
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, unquote
 
 import httpx
 from fastapi import FastAPI
@@ -19,6 +20,8 @@ from ontocurator.api.routes import decode_workspace_id
 from ontocurator.api.security import SESSION_COOKIE
 from ontocurator.application.preferences import normalize_annotator_id
 from ontocurator.auth.audit import Actor
+from ontocurator.authz.policy import ROLES
+from ontocurator.domain.errors import DomainError
 
 PASSWORD = "test-only passphrase"
 ORIGIN = {"Origin": "http://testserver"}
@@ -47,6 +50,22 @@ def ensure_user(
     accounts.redeem_code(username, issued.code, PASSWORD)
 
 
+def grant(
+    app: FastAPI, username: str, project: str, roles: Iterable[str] = ROLES
+) -> bool:
+    """Make ``username`` a member of ``project``; False if there is no such project.
+
+    A new role ends the user's sessions (D2), so log in again afterwards.
+    """
+    try:
+        app.state.memberships.add(HARNESS, project, username, roles)
+    except DomainError as exc:
+        if exc.code != "PROJECT_NOT_FOUND":
+            raise
+        return False
+    return True
+
+
 def log_in(client: TestClient, username: str) -> dict[str, Any]:
     """Log ``client`` in as ``username``; it sends the CSRF token from now on."""
     # The page's own origin: http://testserver unless the client has another.
@@ -68,9 +87,15 @@ def logged_in(
     *,
     system_admin: bool = False,
     pseudonym: str | None = None,
+    projects: Mapping[str, Iterable[str]] | None = None,
 ) -> TestClient:
-    """A new client, logged in as ``username`` (created if needed)."""
+    """A new client, logged in as ``username`` (created if needed).
+
+    ``projects`` gives the user these roles per project key first.
+    """
     ensure_user(app, username, system_admin=system_admin, pseudonym=pseudonym)
+    for project, roles in (projects or {}).items():
+        assert grant(app, username, project, roles), f"no project '{project}'"
     client = TestClient(app)
     log_in(client, username)
     return client
@@ -98,12 +123,14 @@ class AutoLoginClient(TestClient):
     ``json["workspace_key"]["annotator_id"]``, the ``annotator_id`` query
     parameter, the annotator of a ``/api/v1/workspaces/<id>/...`` path, and
     otherwise the user logged in last (``"tester"`` at first). Every harness
-    user is a system admin, so uploads keep working.
+    user is a system admin, so uploads keep working, and a member with every
+    role of the project a request names (see ``_project_of``).
     """
 
     def __init__(self, app: Any, **kwargs: Any) -> None:
         super().__init__(app, **kwargs)
         self.annotator: str | None = None
+        self.memberships: set[tuple[str, str]] = set()
 
     def request(
         self, method: str, url: httpx._types.URLTypes, **kwargs: Any
@@ -113,7 +140,9 @@ class AutoLoginClient(TestClient):
             "/api/v1/auth/"
         ):
             annotator = self._annotator_of(target, kwargs)
-            if annotator != self.annotator:
+            project = self._project_of(target, kwargs)
+            joined = project is not None and self._join(annotator, project)
+            if joined or annotator != self.annotator:
                 self.login_as(annotator)
         return super().request(method, url, **kwargs)
 
@@ -124,6 +153,37 @@ class AutoLoginClient(TestClient):
         self.cookies.delete(SESSION_COOKIE)
         log_in(self, username)
         self.annotator = annotator
+
+    def _join(self, annotator: str, project: str) -> bool:
+        """Give the annotator's user every role in ``project`` once; True if new."""
+        if (annotator, project) in self.memberships:
+            return False
+        username = username_for(annotator)
+        ensure_user(self.app, username, system_admin=True, pseudonym=annotator)
+        if not grant(self.app, username, project):
+            return False  # not imported yet; the next request tries again
+        self.memberships.add((annotator, project))
+        return True
+
+    @staticmethod
+    def _project_of(target: httpx.URL, kwargs: dict[str, Any]) -> str | None:
+        """The project key a request names, if any."""
+        body = kwargs.get("json")
+        if isinstance(body, dict):
+            if isinstance(body.get("package_id"), str):
+                return str(body["package_id"])
+            key = body.get("workspace_key")
+            if isinstance(key, dict) and isinstance(key.get("package_id"), str):
+                return str(key["package_id"])
+        parts = target.path.split("/")
+        if len(parts) > 4 and parts[1:4] == ["api", "v1", "packages"]:
+            return unquote(parts[4])
+        if len(parts) > 4 and parts[1:4] == ["api", "v1", "workspaces"]:
+            try:
+                return decode_workspace_id(parts[4]).package_id
+            except Exception:  # not a workspace ID (open, review-inputs, ...)
+                return None
+        return None
 
     def _annotator_of(self, target: httpx.URL, kwargs: dict[str, Any]) -> str:
         body = kwargs.get("json")

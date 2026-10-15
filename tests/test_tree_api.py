@@ -24,6 +24,7 @@ from ontocurator.distribution_settings import DistributionSettings
 from ontocurator.domain.profiles import profile_hash
 from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.packages.writer import PackageWriter
+from ontocurator.storage.repository import Repository
 
 app_client = _shared_app_client
 
@@ -759,7 +760,6 @@ def test_a_failing_draft_lookup_does_not_skip_the_layer_check(app_client, monkey
         },
     )
     assert created.status_code == 200, created.text
-    repo = client.app.state.repo
 
     def busy(*args, **kwargs):
         raise OperationalError("open_draft", {}, Exception("connection lost"))
@@ -783,7 +783,8 @@ def test_a_failing_draft_lookup_does_not_skip_the_layer_check(app_client, monkey
         ),
     ]
     with monkeypatch.context() as patched:
-        patched.setattr(repo, "open_draft", busy)
+        # On the class: each request reads through its own scoped repository.
+        patched.setattr(Repository, "open_draft", busy)
         for send in requests:
             with pytest.raises(OperationalError):
                 send()

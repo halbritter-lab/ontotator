@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import secrets
 from collections.abc import Collection
-from contextvars import ContextVar
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response
@@ -20,18 +19,14 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import RequestResponseEndpoint
 
-from ontocurator.auth.sessions import Principal, SessionService
+from ontocurator.auth.context import current_principal as current_principal
+from ontocurator.auth.sessions import SessionService
 
 SESSION_COOKIE = "ontocurator_session"
 CSRF_HEADER = "x-csrf-token"
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 PUBLIC_PATHS = frozenset({"/api/v1/auth/login", "/api/v1/auth/redeem-code"})
 CROSS_SITE_MESSAGE = "The request does not come from this site."
-
-# The principal of the running request, visible below the routes (index D-k).
-current_principal: ContextVar[Principal | None] = ContextVar(
-    "ontocurator_principal", default=None
-)
 
 
 def expected_origin(request: Request, public_origin: str | None) -> str:

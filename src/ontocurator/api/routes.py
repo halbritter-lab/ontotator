@@ -37,7 +37,11 @@ from ontocurator.application.workspaces import (
     WorkspaceService,
     WorkspaceView,
 )
+from ontocurator.auth.audit import Actor
 from ontocurator.auth.preferences import UserPreferencesStore
+from ontocurator.authz.memberships import MembershipService
+from ontocurator.authz.policy import Access
+from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.distribution_settings import (
     DistributionSettings,
     EffectiveSettings,
@@ -150,8 +154,31 @@ class TermLabel(TermLookup):
 # --- Dependencies ------------------------------------------------------------- #
 
 
+def get_access(request: Request) -> Access:
+    """The logged-in user's access, read once per request."""
+    access = getattr(request.state, "access", None)
+    if not isinstance(access, Access):
+        memberships = cast(MembershipService, request.app.state.memberships)
+        access = memberships.access_for(principal_of(request))
+        request.state.access = access
+    return access
+
+
 def get_repo(request: Request) -> Repository:
-    return request.app.state.repo  # type: ignore[no-any-return]
+    """The repository of this request: only the projects the user can see (E3).
+
+    ``app.state.repo`` stays unscoped for start-up work and the CLI.
+    """
+    repo = getattr(request.state, "repo", None)
+    if not isinstance(repo, ScopedRepository):
+        principal = principal_of(request)
+        repo = ScopedRepository(
+            cast(Repository, request.app.state.repo).db,
+            get_access(request),
+            Actor.user(principal.user_id, principal.username),
+        )
+        request.state.repo = repo
+    return repo
 
 
 def get_ontology(request: Request) -> OntologyRegistry:
@@ -254,7 +281,10 @@ def upload_package(
 ) -> dict[str, str | dict[str, object]]:
     """Upload and atomically import a work package archive (system admins).
 
-    Runs in the thread pool (plain ``def``); the body is copied with a size cap.
+    A new project gets the uploader as a member with every role, so the
+    dashboard flow keeps working until projects are imported by the CLI
+    (T2d). Runs in the thread pool (plain ``def``); the body is copied with a
+    size cap.
     """
     require_system_admin(principal)
     manifest = PackageImportService(repo, ontology).import_upload(file.file)

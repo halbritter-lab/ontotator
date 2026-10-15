@@ -25,6 +25,7 @@ from ontocurator.api.tree_routes import router as tree_router
 from ontocurator.auth.accounts import AccountService
 from ontocurator.auth.preferences import UserPreferencesStore
 from ontocurator.auth.sessions import SessionService
+from ontocurator.authz.memberships import MembershipService
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import (
     AccessDenied,
@@ -43,6 +44,9 @@ from ontocurator.storage.repository import Repository
 from ontocurator.storage.schema import current_revision, head_revision
 
 logger = logging.getLogger(__name__)
+
+# Answered with 404, so a non-member cannot tell "missing" from "not yours".
+NOT_FOUND_CODES = frozenset({"PROJECT_NOT_FOUND", "PACKAGE_NOT_FOUND"})
 
 
 async def _keep_lease(lease: RuntimeLease) -> None:
@@ -191,6 +195,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             app.state.repo = repo
             app.state.ontology_registry = registry
             app.state.accounts = accounts
+            app.state.memberships = MembershipService(db)
             app.state.sessions = sessions
             app.state.preferences = UserPreferencesStore(db)
             app.state.runtime_lease = RuntimeLease(db.engine)
@@ -316,7 +321,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @app.exception_handler(DomainError)
     async def domain_error_handler(_req: Request, exc: DomainError) -> JSONResponse:
         return JSONResponse(
-            status_code=422,
+            # A foreign project looks like a missing one (E3).
+            status_code=404 if exc.code in NOT_FOUND_CODES else 422,
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 

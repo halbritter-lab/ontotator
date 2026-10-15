@@ -23,6 +23,8 @@ from ontocurator.config import AppConfig
 ADMIN = Actor(None, "test:admin")
 PACKAGE = "pkg-scenario-a"
 DOCUMENT = "doc-beta"
+# Non-admin harness users work in the package as annotators (T2c memberships).
+MEMBER = {PACKAGE: ["annotator"]}
 
 
 def _app(tmp_path: Path, **config: Any) -> FastAPI:
@@ -209,8 +211,8 @@ def test_nobody_works_under_another_identity(app: FastAPI) -> None:
         },
     )
     assert uploaded.status_code == 200, uploaded.text
-    alice = logged_in(app, "alice", pseudonym="alice")
-    bob = logged_in(app, "bob", pseudonym="bob")
+    alice = logged_in(app, "alice", pseudonym="alice", projects=MEMBER)
+    bob = logged_in(app, "bob", pseudonym="bob", projects=MEMBER)
     request = {"package_id": PACKAGE, "document_id": DOCUMENT, "mode": "independent"}
 
     opened = alice.post("/api/v1/workspaces/open", json=request)
@@ -385,7 +387,7 @@ def alices_workspace(app: FastAPI) -> dict[str, Any]:
         },
     )
     assert uploaded.status_code == 200, uploaded.text
-    alice = logged_in(app, "alice", pseudonym="alice")
+    alice = logged_in(app, "alice", pseudonym="alice", projects=MEMBER)
     opened = alice.post(
         "/api/v1/workspaces/open",
         json={"package_id": PACKAGE, "document_id": DOCUMENT, "mode": "independent"},
@@ -394,7 +396,7 @@ def alices_workspace(app: FastAPI) -> dict[str, Any]:
     return {
         "admin": admin,
         "alice": alice,
-        "bob": logged_in(app, "bob", pseudonym="bob"),
+        "bob": logged_in(app, "bob", pseudonym="bob", projects=MEMBER),
         "id": opened.json()["workspace_id"],
         "key": opened.json()["view"]["key"],
     }

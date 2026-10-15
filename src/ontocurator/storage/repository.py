@@ -194,10 +194,14 @@ class Repository:
         self,
         package: ValidatedPackage,
         fallback_axes_config: AxesConfig | None = None,
+        *,
+        on_create: Callable[[Connection, int], None] | None = None,
     ) -> str:
         """Create the project of an in-memory seed package, or verify an identical one.
 
         Re-importing a manifest is idempotent only if every dataset is equal.
+        ``on_create`` runs with the new project's ID in the creating
+        transaction, and only when the project is new.
         """
         del fallback_axes_config  # profiles carry their axes; kept for callers
         manifest = package.manifest
@@ -266,6 +270,8 @@ class Repository:
             ).scalar_one()
             self._insert_project_content(conn, project_id, package, profile, longest)
             self._store_resources(conn, project_id, manifest.search_conditions, files)
+            if on_create is not None:
+                on_create(conn, project_id)
         return manifest.package_id
 
     def _insert_project_content(
