@@ -513,6 +513,29 @@ def test_documents_filter_by_language_status_and_prefix(project):
     )
 
 
+def test_document_and_progress_keep_nullable_stored_position(project):
+    app, lead, _, pid = project
+    with app.state.repo.db.transaction() as conn:
+        conn.execute(
+            update(DocumentRow)
+            .where(DocumentRow.project_id == pid, DocumentRow.document_id == "second")
+            .values(position=None)
+        )
+    documents = lead.get(f"{BASE}/documents")
+    progress = lead.get(f"{BASE}/progress")
+    assert documents.status_code == progress.status_code == 200
+    assert [(d["document_id"], d["position"]) for d in documents.json()] == [
+        (DOC, 9),
+        ("second", None),
+    ]
+    assert [
+        (d["document_id"], d["position"]) for d in progress.json()["documents"]
+    ] == [(DOC, 9), ("second", None)]
+    filtered = lead.get(f"{BASE}/documents", params={"q": "second"})
+    assert filtered.status_code == 200
+    assert filtered.json()[0]["position"] is None
+
+
 def test_document_filters_preserve_current_assignment_visibility(project):
     app, _, worker, pid = project
     _assignment(app, pid, DOC, "worker", "open")
