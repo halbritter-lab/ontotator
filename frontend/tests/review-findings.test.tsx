@@ -182,6 +182,19 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     render(<CaseScreen view={baseView()} workspaceId="ws" onClose={vi.fn()} />);
     expect(screen.getByTestId("annotator-identity").textContent).toContain("dr-a");
   });
+
+  it("shows the display name with the pseudonym; only the name has a bounded width", () => {
+    const name = "Maximiliane Schmidt-Rottluff";
+    render(<CaseScreen view={baseView()} workspaceId="ws" onClose={vi.fn()} annotatorName={name} />);
+    const badge = screen.getByTestId("annotator-identity");
+    expect(badge.textContent).toBe(`Annotating as ${name} (dr-a)`);
+    expect(badge.title).toBe(`${name} (dr-a): your annotations and decisions are saved under this pseudonym`);
+    // The CSS class .identity-name cuts the name with an ellipsis; the pseudonym is outside it.
+    const cut = screen.getByTestId("annotator-name");
+    expect(cut.className).toBe("identity-name");
+    expect(cut.textContent).toBe(name);
+    expect(badge.querySelector("strong")!.textContent).toBe(`${name} (dr-a)`);
+  });
 });
 
 describe("Export", () => {

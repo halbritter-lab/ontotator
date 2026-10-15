@@ -223,8 +223,11 @@ if __name__ == "__main__":
             username: str = Query(...),
             pseudonym: str = Query(...),
             setup: bool = Query(False),
+            display_name: str | None = Query(None),
         ) -> dict[str, str]:
             """Create a system admin called ``username`` with ``pseudonym``.
+
+            The display name is ``display_name``, by default the pseudonym.
 
             With ``setup`` the user keeps a fresh setup (or, if it exists, reset)
             code, which is returned for the login screen to redeem. Otherwise the
@@ -237,7 +240,7 @@ if __name__ == "__main__":
                 issued = accounts.create_user(
                     Actor.cli(),
                     username,
-                    pseudonym,
+                    display_name or pseudonym,
                     system_admin=True,
                     pseudonym=pseudonym,
                 )

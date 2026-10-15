@@ -451,16 +451,22 @@ answer; the least surprising option was taken and should be confirmed.
   created and coded through `AccountService` with `Actor.cli()`, so the audit trail is the CLI's.
 - Task 9: the login test only checks that "Log out" brings back the form -> it also checks that
   `current-user` is gone after the refused login and after the logout.
-- Task 9 **[user-flow choice]**: the case badge "Annotating as name (pseudonym)" (Task 8) made the case
-  header need a third line at 1025 px, the narrowest three-column window, so
-  `tree.spec.ts` "in the three-column layout the tree is under the annotation panel at every width"
-  failed (annotation panel 242 px instead of at least 250; header 114 px instead of 84, measured with
-  a throw-away probe spec; a realistic "Alice Example (ann-0007)" gives the same 114 px) -> the badge
-  shows the pseudonym alone, as before T2b, and its title reads "<name> (<pseudonym>): your
-  annotations and decisions are saved under this pseudonym"; the dashboard header still shows
-  "display name · pseudonym". The test was right (it guards the layout), so the app changed. A
-  shrinking badge (ellipsis on the name, `min-width: 0` on the header title) was tried and dropped: it
-  either hid the pseudonym or wrapped the other header items.
+- Task 9 (Q10): the case badge "Annotating as name (pseudonym)" (Task 8) made the case header need
+  a third line at 1025 px, the narrowest three-column window, so `tree.spec.ts` "in the three-column
+  layout the tree is under the annotation panel at every width" failed (annotation panel 242 px
+  instead of at least 250; header 114 px instead of 84). The test was right (it guards the layout),
+  so the app changed, keeping Q10's text -> the display name sits in `span.identity-name`
+  (`inline-block`, `max-width: 16ch`, `6ch` below 1280 px, ellipsis), the pseudonym is never cut, and
+  the identity badge is not upper-cased (`text-transform: none`, normal letter spacing); the title
+  reads "<name> (<pseudonym>): your annotations and decisions are saved under this pseudonym".
+  Measured with a throw-away probe spec at 1025 px: an upper-cased badge needs a third line even with
+  the name cut to 4ch (246 px badge; the limit is about 217 px), the sentence-case badge with 12ch
+  does too (231-262 px), with 6ch it fits (217 px, header 84 px, as before T2b); at 1100, 1279, 1280
+  and 1440 px a long name changes no header height. An interim version that showed the pseudonym
+  alone was replaced, because it dropped Q10's display name. `/__test_user__` takes an optional
+  `display_name`, and the 1025 px layout test now runs as "Maximiliane Schmidt-Rottluff"; new unit
+  test "shows the display name with the pseudonym; only the name has a bounded width"
+  (`review-findings.test.tsx`).
 - Task 9: the browser server logs "There is no user yet, so nobody can log in." at start, because
   its users only appear through `/__test_user__`; left as is.
 - Task 9: after the rebuild, `grep -rnE "Authorization|Bearer|SESSION_TOKEN|ALLOW_TEST_CLIENT_HOST|session_token|verify_security" src tests --exclude-dir=__pycache__`

@@ -128,7 +128,7 @@ export interface CaseScreenProps {
   onReload?: () => Promise<void>;
   /** Called after a successful submission (e.g. to refresh the case list). */
   onSubmitted?: () => void | Promise<void>;
-  /** The logged-in user's display name, named in the identity badge's title. */
+  /** The logged-in user's display name, shown with the pseudonym. */
   annotatorName?: string;
 }
 
@@ -1415,15 +1415,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               ? "Assisted annotation"
               : "Annotate from scratch"}
           </span>
-          {/* The pseudonym alone: with the display name the header needs a third line
-              in the narrowest three-column window. The name is in the title. */}
+          {/* The display name has a bounded width (full text in the title), so the header
+              does not need another line; the pseudonym is never shortened. */}
           <span
-            className="badge"
+            className="badge identity-badge"
             data-testid="annotator-identity"
             title={`${annotatorName ? `${annotatorName} (${view.key.annotator_id})` : view.key.annotator_id}: your annotations and decisions are saved under this pseudonym`}
             style={{ background: "var(--bg-secondary)", color: "var(--text-main)", fontSize: "0.78rem" }}
           >
-            Annotating as <strong>{view.key.annotator_id}</strong>
+            Annotating as{" "}
+            <strong>
+              {annotatorName ? (
+                <>
+                  <span className="identity-name" data-testid="annotator-name">{annotatorName}</span>{" "}
+                  ({view.key.annotator_id})
+                </>
+              ) : view.key.annotator_id}
+            </strong>
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

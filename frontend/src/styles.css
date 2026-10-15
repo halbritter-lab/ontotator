@@ -82,6 +82,29 @@ body {
   white-space: nowrap;
 }
 
+/* The case header's "Annotating as Name (pseudonym)": the name is cut to a
+   bounded width (the title has it in full) so that the header keeps two lines
+   in the narrowest three-column window; the pseudonym is never cut. */
+.identity-badge {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.identity-name {
+  display: inline-block;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+@media (max-width: 1279px) {
+  .identity-name {
+    max-width: 6ch;
+  }
+}
+
 .badge-independent {
   background-color: var(--primary-light);
   color: var(--primary);

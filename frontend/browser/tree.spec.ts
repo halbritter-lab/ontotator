@@ -539,7 +539,13 @@ test.describe("ontology tree", () => {
   });
 
   test("in the three-column layout the tree is under the annotation panel at every width, never beside it", async ({ page }) => {
+    // A long display name: the case header's identity badge must not take another line.
+    const user = await page.request.post(
+      `/__test_user__?username=tree-wide&pseudonym=tree-wide&display_name=${encodeURIComponent("Maximiliane Schmidt-Rottluff")}`,
+    );
+    expect(user.ok()).toBeTruthy();
     await openWithSeizure(page, "tree-wide");
+    await expect(page.getByTestId("annotator-name")).toHaveText("Maximiliane Schmidt-Rottluff");
     const sizes = [
       // 1025 px is the narrowest window with three columns. The header already
       // needs a second line there, which the 20 px of extra height make up for.
