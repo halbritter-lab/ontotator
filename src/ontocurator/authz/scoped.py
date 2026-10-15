@@ -583,7 +583,9 @@ class ScopedRepository(Repository):
     def save_search_event(self, event: SearchEventRecord) -> None:
         self._document(event.workspace_key.project_key, event.workspace_key.document_id)
         self._visible(event.workspace_key.project_key)
-        super().save_search_event(event)
+        with self.db.transaction() as conn:
+            self._before_workspace_locks(conn, event.workspace_key)
+            super().save_search_event(event)
 
     def get_search_event(
         self, event_id: str, project_key: str | None = None
@@ -617,13 +619,31 @@ class ScopedRepository(Repository):
         if workspace_key is None:
             raise _project_required()
         self._document(workspace_key.project_key, workspace_key.document_id)
-        return super().append_search_event_candidates(
-            event_id,
-            term_ids,
-            workspace_key=workspace_key,
-            annotation_id=annotation_id,
-            layer_id=layer_id,
-        )
+        with self.db.transaction() as conn:
+            self._before_workspace_locks(conn, workspace_key)
+            project_id = self._require_project(conn, workspace_key.project_key)
+            # A visible supplied workspace must never authorize locking or
+            # growing an unrelated persisted event. Association is immutable;
+            # the base writer also rechecks it after its event-row lock.
+            owner = select(SearchEventRow.event_id).where(
+                SearchEventRow.project_id == project_id,
+                SearchEventRow.event_id == event_id,
+                SearchEventRow.payload["workspace_key"]
+                == workspace_key.model_dump(mode="json"),
+            )
+            if annotation_id is not None:
+                owner = owner.where(SearchEventRow.annotation_id == annotation_id)
+            if layer_id is not None:
+                owner = owner.where(SearchEventRow.layer_id == layer_id)
+            if conn.execute(owner).first() is None:
+                return None
+            return super().append_search_event_candidates(
+                event_id,
+                term_ids,
+                workspace_key=workspace_key,
+                annotation_id=annotation_id,
+                layer_id=layer_id,
+            )
 
     def get_search_events_for_workspace(
         self, key: WorkspaceKey
