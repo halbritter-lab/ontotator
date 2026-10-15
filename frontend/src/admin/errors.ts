@@ -2,6 +2,7 @@ import { ApiError } from "../api/client";
 
 /** Messages grow with their consumers; this is not a backend-code catalog. */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
+  PASSWORD_WRONG: "The current password is wrong.",
   NOT_AUTHENTICATED: "Your session has ended. Please log in again.",
   NOT_ALLOWED: "You do not have permission to do this.",
   PROJECT_NOT_FOUND: "You do not have access to this project, or it no longer exists.",

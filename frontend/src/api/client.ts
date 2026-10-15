@@ -37,6 +37,10 @@ export type TaskSummary = components["schemas"]["TaskSummary"];
 export type AssignmentWorkspace = components["schemas"]["AssignmentOpenResponse"];
 /** The logged-in user; `csrf_token` goes back in `X-CSRF-Token` with every write. */
 export type CurrentUser = components["schemas"]["CurrentUser"];
+export type Profile = components["schemas"]["Profile"];
+/** PATCH distinguishes omitted defaults from explicit null/false values. */
+export type OwnProfilePatch = Partial<components["schemas"]["ProfilePatch"]>;
+export type PasswordChange = components["schemas"]["PasswordChange"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
@@ -241,6 +245,23 @@ export class ApiClient {
     const user = await this.request<CurrentUser>("/api/v1/auth/me", { method: "GET" });
     this.setCsrfToken(user.csrf_token);
     return user;
+  }
+
+  async getProfile(): Promise<Profile> {
+    return this.request<Profile>("/api/v1/me/profile", { method: "GET" });
+  }
+
+  async updateOwnProfile(change: OwnProfilePatch): Promise<Profile> {
+    return this.request<Profile>("/api/v1/me/profile", {
+      method: "PATCH", body: JSON.stringify(change),
+    });
+  }
+
+  async changePassword(current: string, next: string): Promise<void> {
+    const change: PasswordChange = { current_password: current, new_password: next };
+    return this.request<void>("/api/v1/me/password", {
+      method: "POST", body: JSON.stringify(change),
+    });
   }
 
   /** Log in; the server sets the session cookie. Stores the CSRF token. */
