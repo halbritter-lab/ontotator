@@ -1,0 +1,122 @@
+# Standalone: docker compose -f docker-compose.dev.yml up -d --build --wait
+# ALL inline credentials below are DEVELOPMENT ONLY. Never deploy this stack.
+x-runtime: &runtime
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+x-build: &build
+  context: .
+  secrets: [github_token]
+
+services:
+  postgres:
+    <<: *runtime
+    image: postgres:16.15-alpine3.24@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    user: "70:70"
+    environment:
+      POSTGRES_DB: ontocurator
+      POSTGRES_USER: ontocurator_bootstrap
+      POSTGRES_PASSWORD: development-only-bootstrap
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-ontocurator.sh:ro
+    configs:
+      - source: owner_password
+        target: /run/postgres/owner-password
+      - source: app_password
+        target: /run/postgres/app-password
+    tmpfs:
+      - /tmp:size=64m
+      - /var/run/postgresql:size=16m,uid=70,gid=70
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    healthcheck:
+      test: [CMD, pg_isready, -U, ontocurator_bootstrap, -d, ontocurator]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports: ["127.0.0.1:55432:5432"]
+    networks: [backend]
+
+  migrate:
+    <<: *runtime
+    build: *build
+    image: ontocurator-dev:local
+    command: [db, upgrade]
+    restart: "no"
+    environment:
+      ONTOCURATOR_ENV: development
+      ONTOCURATOR_MIGRATION_DATABASE_URL: postgresql://ontocurator_owner:deadbeef0123456789abcdef01234567@postgres:5432/ontocurator
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    healthcheck:
+      disable: true
+    networks: [backend]
+
+  app:
+    <<: *runtime
+    build: *build
+    image: ontocurator-dev:local
+    init: false
+    # The image normally prefixes commands with ontocurator; retain only tini
+    # when invoking the development factory directly.
+    entrypoint: [/usr/bin/tini, --]
+    command: [python, -m, uvicorn, ontocurator.api.server:app_from_env, --factory, --host, 0.0.0.0, --port, "8000", --workers, "2", --no-proxy-headers]
+    environment:
+      ONTOCURATOR_ENV: development
+      ONTOCURATOR_PUBLIC_ORIGIN: http://127.0.0.1:8000
+      ONTOCURATOR_DATABASE_URL: postgresql://ontocurator_app:cafebabe0123456789abcdef01234567@postgres:5432/ontocurator
+      ONTOCURATOR_DATA_DIR: /data
+      # DEVELOPMENT ONLY: admin / development-only-password (Argon2id policy).
+      # Compose escapes literal dollar signs as $$.
+      ONTOCURATOR_ADMIN_PASSWORD_HASH: $$argon2id$$v=19$$m=19456,t=2,p=1$$9JHO3+VFkY+sdmMU07T4cg$$U3OQKXAew6vo6eGHZYm4Qcf2S+j06b5TyuRBlrLHuLs
+    volumes:
+      - ontocurator-data:/data
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    stop_grace_period: 35s
+    ports: ["127.0.0.1:8000:8000"]
+    networks: [edge, backend]
+
+volumes:
+  postgres-data:
+  ontocurator-data:
+
+networks:
+  edge:
+  backend:
+    internal: true
+
+secrets:
+  github_token:
+    file: ${GITHUB_TOKEN_FILE:?Set the path to your read-only GitHub build token file}
+
+configs:
+  # DEVELOPMENT ONLY: hexadecimal credentials accepted by postgres-init.sh.
+  owner_password:
+    content: deadbeef0123456789abcdef01234567
+  app_password:
+    content: cafebabe0123456789abcdef01234567
