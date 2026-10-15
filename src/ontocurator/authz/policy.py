@@ -1,0 +1,113 @@
+"""The one policy: what a user may do, system-wide and per project (T2 P5, E9).
+
+``can`` is the only place that decides. A system admin holds the system-wide
+rights and sees every project and its exports without a membership; working
+in a mode needs the matching project role, for a system admin as well
+(index Q2, Q4). A user's rights in a project are the union of their roles
+there (E9); rights never carry over to another project.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import Literal, get_args
+
+from ontocurator.domain.workspace import WorkspaceMode
+
+Role = Literal["lead", "annotator", "adjudicator"]
+ROLES: tuple[Role, ...] = get_args(Role)
+
+
+class Action(StrEnum):
+    """Everything the policy decides about."""
+
+    VIEW_PROJECT = "view_project"
+    OPEN_INDEPENDENT = "open_independent"
+    OPEN_ASSISTED = "open_assisted"
+    OPEN_REVIEW = "open_review"
+    EXPORT_OWN_WORK = "export_own_work"
+    EXPORT_ALL_WORK = "export_all_work"
+    EXPORT_EDIT_LOG = "export_edit_log"
+    IMPORT_DOCUMENTS = "import_documents"
+    MANAGE_MEMBERS = "manage_members"
+    CREATE_PROJECT = "create_project"
+    MANAGE_USERS = "manage_users"
+    MANAGE_ONTOLOGIES = "manage_ontologies"
+
+
+@dataclass(frozen=True)
+class Access:
+    """Who asks: the user, the system admin flag and the roles per project key."""
+
+    user_id: int
+    pseudonym: str
+    is_system_admin: bool
+    roles: Mapping[str, frozenset[Role]] = field(default_factory=dict)
+
+    def roles_in(self, project_key: str) -> frozenset[Role]:
+        return self.roles.get(project_key, frozenset())
+
+
+# Actions that concern the whole installation, not a project.
+SYSTEM_ACTIONS = frozenset(
+    {Action.CREATE_PROJECT, Action.MANAGE_USERS, Action.MANAGE_ONTOLOGIES}
+)
+# Project actions a system admin may take without a membership (Q4, Q5).
+ADMIN_PROJECT_ACTIONS = frozenset(
+    {
+        Action.VIEW_PROJECT,
+        Action.EXPORT_OWN_WORK,
+        Action.EXPORT_ALL_WORK,
+        Action.EXPORT_EDIT_LOG,
+        Action.IMPORT_DOCUMENTS,
+        Action.MANAGE_MEMBERS,
+    }
+)
+# Project actions per role (Q2: working modes need the matching role).
+ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
+    "lead": frozenset(
+        {
+            Action.VIEW_PROJECT,
+            Action.EXPORT_OWN_WORK,
+            Action.EXPORT_ALL_WORK,
+            Action.EXPORT_EDIT_LOG,
+            Action.IMPORT_DOCUMENTS,
+        }
+    ),
+    "annotator": frozenset(
+        {
+            Action.VIEW_PROJECT,
+            Action.OPEN_INDEPENDENT,
+            Action.OPEN_ASSISTED,
+            Action.EXPORT_OWN_WORK,
+        }
+    ),
+    "adjudicator": frozenset(
+        {Action.VIEW_PROJECT, Action.OPEN_REVIEW, Action.EXPORT_OWN_WORK}
+    ),
+}
+MODE_ACTIONS: dict[WorkspaceMode, Action] = {
+    "independent": Action.OPEN_INDEPENDENT,
+    "assisted": Action.OPEN_ASSISTED,
+    "review": Action.OPEN_REVIEW,
+}
+# The order modes are offered in.
+MODE_ORDER: tuple[WorkspaceMode, ...] = ("independent", "review", "assisted")
+
+
+def can(access: Access, action: Action, project_key: str | None = None) -> bool:
+    """Whether ``access`` may take ``action`` (in ``project_key``)."""
+    if action in SYSTEM_ACTIONS:
+        return access.is_system_admin
+    if access.is_system_admin and action in ADMIN_PROJECT_ACTIONS:
+        return True
+    if project_key is None:
+        return False
+    return any(action in ROLE_ACTIONS[role] for role in access.roles_in(project_key))
+
+
+def allowed_modes(access: Access, project_key: str) -> list[WorkspaceMode]:
+    """The working modes ``access`` may open in ``project_key``, in offer order."""
+    return [mode for mode in MODE_ORDER if can(access, MODE_ACTIONS[mode], project_key)]
