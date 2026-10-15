@@ -278,23 +278,17 @@ class OntologyRegistry:
             (item.filename, item.sha256, item.languages, item.content)
             for item in base.translations
         )
-        if captured == loaded:
-            # Uploads replace services; searches only read the ontology and use
-            # the lexical index's own lock for selected-language subset caches.
-            # Pin metadata on a separate view, never on the ambient service.
-            service = copy.copy(base)
-            service.translations = list(base.translations)
-            service.skipped_translations = []
-            service.languages = list(base.languages)
-            service.translation_counts = dict(base.translation_counts)
-        else:
-            with TemporaryDirectory(prefix="ontocurator-search-") as directory:
-                paths = []
-                for item in condition.translations:
-                    path = Path(directory) / item.filename
-                    path.write_bytes(resources[item.resource_path])
-                    paths.append(path)
-                service = base.with_translations(paths)
+        with TemporaryDirectory(prefix="ontocurator-search-") as directory:
+            paths = []
+            for item in condition.translations:
+                path = Path(directory) / item.filename
+                path.write_bytes(resources[item.resource_path])
+                paths.append(path)
+            service = (
+                base.pinned_view(paths)
+                if captured == loaded
+                else base.with_translations(paths)
+            )
         actual = [
             (t.filename, t.sha256, list(t.languages)) for t in service.translations
         ]

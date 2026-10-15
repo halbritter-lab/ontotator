@@ -109,19 +109,29 @@ def test_same_condition_build_is_single_flight_and_failure_can_retry(
 
 
 @pytest.mark.parametrize("translated", [False, True])
-def test_exact_resources_share_index_without_mutating_base(translated: bool) -> None:
+def test_exact_resources_share_fitted_data_without_mutating_base(
+    translated: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
     repo, registry, base = _environment(translated)
+    from ontocurator.vendor.hpo_span_annotator.lexical import LexicalIndex
+
+    def unexpected_fit(self: LexicalIndex) -> None:
+        pytest.fail("equal resources must reuse the fitted index")
+
+    monkeypatch.setattr(LexicalIndex, "build", unexpected_fit)
     view = registry.for_package_layer(repo, "package", "hpo-layer")
     assert view is not base
-    assert view.ontology is base.ontology
-    assert view.engine is base.engine
+    assert view.ontology is not base.ontology
+    assert view.engine.lexical._matrix is base.engine.lexical._matrix
+    assert view.engine.lexical._vectorizer is base.engine.lexical._vectorizer
     assert view.search_condition is not None
     assert base.search_condition is None
     assert view.languages == (["de"] if translated else [])
+    monkeypatch.undo()
     replacement = base.with_translations([])
     registry.publish({base.ref.sha256: replacement})
     assert view.languages == (["de"] if translated else [])
-    assert view.engine is base.engine
+    assert view.engine.lexical._matrix is base.engine.lexical._matrix
     assert replacement.search_condition is None
 
 
@@ -263,7 +273,10 @@ def test_independent_conditions_build_concurrently(
             )
         )
     assert services[0].search_condition != services[1].search_condition
-    assert all(service.engine is base.engine for service in services)
+    assert all(
+        service.engine.lexical._matrix is base.engine.lexical._matrix
+        for service in services
+    )
     assert all(service.runtime_drift() for service in services)
     assert not registry._package_builds
 
@@ -283,7 +296,7 @@ def test_eviction_keeps_active_views_valid_and_rebuild_coordination_bounded() ->
     assert active.search_condition == conditions["0"]
     rebuilt = registry.for_package_layer(repo, "0", "hpo-layer")
     assert rebuilt is not active
-    assert rebuilt.engine is active.engine
+    assert rebuilt.engine.lexical._matrix is active.engine.lexical._matrix
 
 
 def test_changed_resource_bytes_are_checked_even_when_metadata_matches() -> None:
@@ -357,3 +370,96 @@ def test_blocked_cold_edit_releases_connection_for_unrelated_draft(
         finally:
             release.set()
         assert blocked.result(timeout=5).revision == 1
+
+
+@pytest.mark.parametrize("warm_subset", [False, True])
+def test_pinned_reads_keep_captured_terms_after_ambient_mutation(
+    warm_subset: bool,
+) -> None:
+    repo, registry, base = _environment(True)
+    if warm_subset:
+        base.engine.lexical.search("Seizure", 10, languages=[])
+    view = registry.for_package_layer(repo, "package", "hpo-layer")
+    term = base.ontology.terms["HP:0001250"]
+    term.label = "Ambient label"
+    term.definition = "Ambient definition"
+    term.synonyms.append(("hasExactSynonym", "Ambient synonym"))
+    term.parents.clear()
+    term.translations["de"].append("Ambient translation")
+    term.translations["es"] = ["Ambient Spanish"]
+
+    assert view.validate_term("hp:0001250").label == "Seizure"
+    assert view.ontology.get("HP:0001250").parents == ["HP:0000707"]
+    assert view.ontology.get("HP:0001250").translations == {"de": ["Krampfanfall"]}
+    hits = [
+        view.engine.search("Seizure", path="exact")["hits"][0],
+        view._translated.exact("Krampfanfall", ["de"])[0],
+        view.engine.lexical.search("Seizure", 10)[0],
+        view.engine.lexical.search("Seizure", 10, languages=[])[0],
+    ]
+    for hit in hits:
+        assert hit["hpo_id"] == "HP:0001250"
+        assert hit["label"] == "Seizure"
+        assert hit["definition"] != "Ambient definition"
+        assert "Ambient synonym" not in hit["synonyms"]
+    assert not view._translated.exact("Ambient translation", ["de"])
+    if warm_subset:
+        assert (
+            view.engine.lexical._subset_indexes[()]._matrix
+            is not base.engine.lexical._subset_indexes[()]._matrix
+        )
+
+
+@pytest.mark.parametrize("evicted", [False, True])
+def test_captured_translation_bytes_restore_names_before_pinned_build(
+    evicted: bool,
+) -> None:
+    repo, registry, base = _environment(True)
+    if evicted:
+        registry.for_package_layer(repo, "package", "hpo-layer")
+        registry._package_services.clear()
+    base.ontology.terms["HP:0001250"].translations = {
+        "de": ["Changed German"],
+        "es": ["Ambient Spanish"],
+    }
+    view = registry.for_package_layer(repo, "package", "hpo-layer")
+    assert view.ontology.get("HP:0001250").translations == {"de": ["Krampfanfall"]}
+    assert view._translated.exact("Krampfanfall", ["de"])[0]["label"] == "Seizure"
+    assert not view._translated.exact("Changed German", ["de"])
+    assert (
+        view.engine.lexical.search("Krampfanfall", 10)[0]["matched_term"]
+        == "Krampfanfall"
+    )
+    assert view.engine.lexical._matrix is base.engine.lexical._matrix
+
+
+@pytest.mark.parametrize("evicted", [False, True])
+def test_pinned_subset_rejects_ambient_names_fitted_after_capture(
+    evicted: bool,
+) -> None:
+    repo, registry, initial = _environment(True)
+    base = initial.with_translations(
+        [FIXTURES / "hp-de.babelon.tsv", FIXTURES / "hp-es.babelon.tsv"]
+    )
+    registry.register_service(base)
+    condition = base.capture_condition()
+    repo.get_search_conditions = lambda _: [condition]
+    repo.get_embedded_files = lambda _: {
+        f"search-resources/{item.sha256}/{item.filename}": item.content
+        for item in base.translations
+    }
+    if evicted:
+        registry.for_package_layer(repo, "package", "hpo-layer")
+        registry._package_services.clear()
+    base.ontology.terms["HP:0001250"].translations["de"] = ["AmbientUncapturedName"]
+    ambient = base.engine.lexical.search("AmbientUncapturedName", 10, languages=["de"])
+    assert ambient[0]["matched_term"] == "AmbientUncapturedName"
+
+    view = registry.for_package_layer(repo, "package", "hpo-layer")
+    assert view._translated.exact("Krampfanfall", ["de"])[0]["label"] == "Seizure"
+    assert not view._translated.exact("AmbientUncapturedName", ["de"])
+    hits = view.engine.lexical.search("AmbientUncapturedName", 10, languages=["de"])
+    assert all(hit["matched_term"] != "AmbientUncapturedName" for hit in hits)
+    captured = view.engine.lexical.search("Krampfanfall", 10, languages=["de"])
+    assert captured[0]["matched_term"] == "Krampfanfall"
+    assert view.engine.lexical._matrix is base.engine.lexical._matrix

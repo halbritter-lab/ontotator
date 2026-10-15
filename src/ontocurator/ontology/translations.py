@@ -9,6 +9,7 @@ lives here, outside the vendored code.
 from __future__ import annotations
 
 import codecs
+import copy
 import csv
 import hashlib
 import re
@@ -240,6 +241,23 @@ class LanguageLexicalIndex(LexicalIndex):
         )
         self._subset_indexes: OrderedDict[tuple[str, ...], LexicalIndex] = OrderedDict()
         self._subset_lock = threading.RLock()
+
+    def with_ontology(self, ontology: Ontology) -> LanguageLexicalIndex:
+        """Bind fitted data to isolated terms, with a separate subset LRU.
+
+        Matrices, vectorizers and string rows are read-only during queries.
+        Ambient subsets may have been fitted after term mutation, so they
+        cannot establish the captured fitting corpus. Start with an empty LRU;
+        subset misses fit against the supplied ontology and cannot populate or
+        evict another view's cache.
+        """
+        with self._subset_lock:
+            view = copy.copy(self)
+            view.ontology = ontology
+            view.languages = list(self.languages)
+            view._subset_lock = threading.RLock()
+            view._subset_indexes = OrderedDict()
+        return view
 
     def build(self) -> None:
         with self._subset_lock:
