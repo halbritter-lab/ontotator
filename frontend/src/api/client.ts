@@ -46,6 +46,7 @@ export type TermLabel = TermLookup & { label: string | null };
 
 export type OntologyTranslation = components["schemas"]["OntologyTranslation"];
 export type AdminOntology = components["schemas"]["AdminOntology"];
+export type OntologyUploadResult = components["schemas"]["OntologyUploadResult"];
 
 export interface OntologyInfo {
   ontology_id: string;
@@ -163,10 +164,10 @@ export class ApiClient {
     return this.request<AdminOntology[]>("/api/v1/admin/ontologies/", { method: "GET" });
   }
 
-  async adminUploadOntologies(files: readonly File[]): Promise<AdminOntology[]> {
+  async adminUploadOntologies(files: readonly File[]): Promise<OntologyUploadResult[]> {
     const body = new FormData();
     for (const file of files) body.append("files[]", file);
-    return this.request<AdminOntology[]>("/api/v1/admin/ontologies/", { method: "POST", body });
+    return this.request<OntologyUploadResult[]>("/api/v1/admin/ontologies/upload-results", { method: "POST", body });
   }
 
   async listMyTasks(): Promise<TaskSummary[]> {

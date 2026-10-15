@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type AdminOntology } from "../api/client";
+import { api, ApiError, type AdminOntology, type OntologyUploadResult } from "../api/client";
 import { routeHref, type Route } from "../app/router";
 import { Button, DataTable, EmptyState, Field, InlineMessage, Toolbar, type Column } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
@@ -13,7 +13,7 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
   const [selection, setSelection] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [uploadError, setUploadError] = useState<unknown>();
-  const [uploaded, setUploaded] = useState(false);
+  const [outcomes, setOutcomes] = useState<OntologyUploadResult[] | null>(null);
   const [copying, setCopying] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<unknown>();
@@ -43,10 +43,10 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
   const submit = async () => {
     if (uploading.current || loading || inventory === null || !selection.length) return;
     const epoch = lifetime.current;
-    uploading.current = true; setBusy(true); setUploadError(undefined); setUploaded(false);
+    uploading.current = true; setBusy(true); setUploadError(undefined); setOutcomes(null);
     try {
-      await api.adminUploadOntologies(selection);
-      if (lifetime.current === epoch) setUploaded(true);
+      const results = await api.adminUploadOntologies(selection);
+      if (lifetime.current === epoch) setOutcomes(results);
     } catch (error: unknown) {
       if (lifetime.current === epoch) setUploadError(error);
     } finally {
@@ -90,13 +90,18 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
       }}>{key}</a></li>;
     })}</ul> : "Not pinned" },
   ];
+  const outcomeLabels: Record<OntologyUploadResult["status"], string> = { added: "Added", already_present: "Already present" };
+  const outcomeColumns: Column<OntologyUploadResult & { inputIndex: number }>[] = [
+    { id: "filename", header: "Uploaded file", cell: result => result.filename },
+    { id: "status", header: "Result", cell: result => outcomeLabels[result.status] },
+  ];
 
   return <div className="density-compact">
     <section className="detail-section">
       <h1>Ontologies</h1>
       <Field id="ontology-files" label="Ontology files" hint="OBO Graph JSON ontologies and Babelon translation files">
         <input type="file" className="form-control" accept=".json,.tsv" multiple disabled={busy} onChange={event => {
-          setSelection(Array.from(event.target.files ?? [])); setUploadError(undefined); setUploaded(false);
+          setSelection(Array.from(event.target.files ?? [])); setUploadError(undefined); setOutcomes(null);
         }} />
       </Field>
       <p>Files are stored individually. If an upload fails, earlier files may already be available below.</p>
@@ -108,7 +113,7 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
         <ErrorNotice error={uploadError} />
         {uploadError instanceof ApiError && uploadError.code === "INVALID_ONTOLOGY" && <p>{uploadError.message}</p>}
       </>}
-      {uploaded && !busy && <InlineMessage tone="success">Upload processed. Check the inventory below.</InlineMessage>}
+      {outcomes !== null && <DataTable label="Upload results" rows={outcomes.map((result, inputIndex) => ({ ...result, inputIndex }))} columns={outcomeColumns} rowKey={result => String(result.inputIndex)} />}
     </section>
     <section className="detail-section" aria-label="Ontology inventory">
       <h2>Uploaded files</h2>

@@ -1,20 +1,24 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiClient, onCsrfRejected, onSessionExpired } from "../src/api/client";
+import { ApiClient, onCsrfRejected, onSessionExpired, type OntologyUploadResult } from "../src/api/client";
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("ontology administration transport", () => {
   it("keeps the public inventory distinct and sends multiple native multipart files with session CSRF", async () => {
     const rows = [{ filename: "hp.json", sha256: "a".repeat(64) }];
-    const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => rows });
+    const outcomes: OntologyUploadResult[] = [{ filename: "alias.json", status: "already_present", ontology: rows[0] as OntologyUploadResult["ontology"] }];
+    const fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => rows })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => outcomes })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => rows });
     vi.stubGlobal("fetch", fetch);
     const client = new ApiClient(); client.setCsrfToken("csrf");
     expect(await client.adminListOntologies()).toEqual(rows);
     const files = [new File(["{}"], "hp.json"), new File(["term\tlabel"], "hp-de.tsv")];
-    expect(await client.adminUploadOntologies(files)).toEqual(rows);
+    expect(await client.adminUploadOntologies(files)).toEqual(outcomes);
     await client.listOntologies();
     expect(fetch.mock.calls.map(([url, options]) => [url, options.method])).toEqual([
-      ["/api/v1/admin/ontologies/", "GET"], ["/api/v1/admin/ontologies/", "POST"], ["/api/v1/ontologies", "GET"],
+      ["/api/v1/admin/ontologies/", "GET"], ["/api/v1/admin/ontologies/upload-results", "POST"], ["/api/v1/ontologies", "GET"],
     ]);
     const options = fetch.mock.calls[1][1];
     expect(options.body).toBeInstanceOf(FormData);
