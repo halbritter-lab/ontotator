@@ -152,3 +152,17 @@ def test_serve_on_a_public_address_needs_a_public_origin(tmp_path: Path) -> None
     assert result.exit_code == 1
     assert "--public-origin" in result.output
     run.assert_not_called()
+
+
+def test_serve_on_another_loopback_address_trusts_that_address(
+    tmp_path: Path,
+) -> None:
+    with patch("ontocurator.cli.uvicorn.run") as run:
+        result = runner.invoke(
+            app,
+            ["serve", "--data-dir", str(tmp_path / "data"), "--host", "127.0.0.2"],
+        )
+
+    assert result.exit_code == 0, result.output
+    config = run.call_args.args[0].state.config
+    assert config.trusted_hosts == ("localhost", "127.0.0.1", "::1", "127.0.0.2")

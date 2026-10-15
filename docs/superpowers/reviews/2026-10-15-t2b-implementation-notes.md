@@ -279,6 +279,23 @@ answer; the least surprising option was taken and should be confirmed.
   ontology upload by a non-admin (403 `ADMIN_REQUIRED`); the logout cookie deletion with `Path=/`;
   the re-login revocation; trusted hosts; the start warning; malformed login and redemption input.
   The identity tests passed without code changes; the binding was already in place.
+- Task 6 (re-review): on a loopback `--host` other than the three names (e.g. `127.0.0.2`) the
+  bound address itself was not trusted, so the server refused its own address -> `_trusted_hosts`
+  adds the normalised bound address (IPv6 in compressed form) to `localhost`, `127.0.0.1`, `::1`.
+  Test: `test_serve_on_another_loopback_address_trusts_that_address`.
+- Task 6 (re-review): the `RequestValidationError` handler repeated each error's `input`, which can
+  be a password -> it drops `input` like the `ValidationError` handler; the rest of FastAPI's
+  `{"detail": [...]}` body is unchanged. Test: `test_a_validation_error_does_not_repeat_the_password`
+  (an over-long password), and the surrogate test checks that nothing is echoed.
+- Task 6 (re-review): an internationalised host never matched, since browsers send punycode ->
+  `settings.ascii_host` lower-cases and IDNA-encodes a non-ASCII name (Python's `idna` codec,
+  IDNA 2003); `canonical_origin` and `AppConfig.trusted_hosts` use it, so
+  `https://Bücher.Example` becomes `https://xn--bcher-kva.example`. The Host header itself is only
+  lower-cased (it arrives in punycode). Tests: a canonical-origin case and
+  `test_a_trusted_host_is_matched_by_its_canonical_name` (upper-case Host, `[::1]:8000`, punycode,
+  a trusted host configured in Unicode).
+- Task 6 (re-review): README -> a reverse proxy must forward the original `Host` header
+  (`proxy_set_header Host $host;`), or every request gets 400 `HOST_NOT_ALLOWED`.
 
 ## Open risks
 
@@ -290,3 +307,5 @@ answer; the least surprising option was taken and should be confirmed.
   the route's admin check runs, so any logged-in user can make the server receive up to the size
   limit. The `Secure` cookie flag needs `--public-origin https://…`; behind a TLS-terminating proxy
   without it the cookie is sent without `Secure` (the deployment contract is T2e).
+- A client may still create an annotation with `actor_kind="tool"` and any `actor_id`, i.e.
+  attribute work to a tool or model. Restricting tool provenance belongs to T2c's roles and policy.

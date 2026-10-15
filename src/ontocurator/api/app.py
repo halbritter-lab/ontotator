@@ -157,14 +157,19 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
         install_security(app, sessions, config.public_origin, config.trusted_hosts)
 
-    # FastAPI's own answer, encoded as ASCII JSON: the errors echo the input,
-    # and a lone surrogate in it would otherwise make the answer a 500.
+    # FastAPI's own answer without the rejected input, which may be a
+    # password, encoded as ASCII JSON, so even a lone surrogate cannot make it
+    # a 500.
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(
         _req: Request, exc: RequestValidationError
     ) -> Response:
+        errors = [
+            {name: value for name, value in error.items() if name != "input"}
+            for error in exc.errors()
+        ]
         return Response(
-            json.dumps({"detail": jsonable_encoder(exc.errors())}),
+            json.dumps({"detail": jsonable_encoder(errors)}),
             status_code=422,
             media_type="application/json",
         )

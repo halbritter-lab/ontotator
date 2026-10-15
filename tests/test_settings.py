@@ -150,6 +150,7 @@ def test_a_malformed_url_is_refused_without_echoing_it() -> None:
         ("HTTPS://Editor.Example:443/", "https://editor.example"),
         ("http://localhost:8000", "http://localhost:8000"),
         ("http://[::1]:80", "http://[::1]"),
+        ("https://Bücher.Example", "https://xn--bcher-kva.example"),
     ],
 )
 def test_a_public_origin_is_made_canonical(value: str, origin: str) -> None:

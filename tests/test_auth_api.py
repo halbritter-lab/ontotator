@@ -304,7 +304,11 @@ def test_a_lone_surrogate_is_invalid_input_not_a_server_error(
     response = _post_raw(TestClient(app), url, body)
 
     assert response.status_code == 422, response.text
-    assert response.json()["detail"][0]["type"] == "string_unicode"
+    error = response.json()["detail"][0]
+    assert error["type"] == "string_unicode"
+    # The answer never repeats what was sent (it may be a password).
+    assert "input" not in error
+    assert "ud800" not in response.text
 
 
 def test_a_write_with_the_token_from_a_foreign_origin_is_refused(
@@ -465,3 +469,35 @@ def test_nobody_reaches_another_annotators_workspace(
 
     assert response.status_code == 403, response.text
     assert response.json()["code"] == "IDENTITY_MISMATCH"
+
+
+def test_a_validation_error_does_not_repeat_the_password(app: FastAPI) -> None:
+    response = TestClient(app).post(
+        "/api/v1/auth/login",
+        # Too long, so the password itself fails validation.
+        json={"username": "alice", "password": "secret passphrase " * 100},
+        headers=ORIGIN,
+    )
+
+    assert response.status_code == 422
+    assert "secret passphrase" not in response.text
+
+
+@pytest.mark.parametrize(
+    ("trusted", "host"),
+    [
+        (("editor.example",), "EDITOR.Example:8443"),
+        (("localhost", "127.0.0.1", "::1"), "[::1]:8000"),
+        (("xn--bcher-kva.example",), "xn--bcher-kva.example"),
+        (("Bücher.Example",), "xn--bcher-kva.example"),
+    ],
+    ids=["upper-case", "ipv6-with-port", "punycode", "configured-as-unicode"],
+)
+def test_a_trusted_host_is_matched_by_its_canonical_name(
+    tmp_path: Path, trusted: tuple[str, ...], host: str
+) -> None:
+    app = _app(tmp_path, trusted_hosts=trusted)
+
+    response = TestClient(app).get("/api/v1/auth/me", headers={"Host": host})
+
+    assert response.json()["code"] == "NOT_AUTHENTICATED"

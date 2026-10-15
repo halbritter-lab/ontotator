@@ -41,6 +41,7 @@ class AppConfig(BaseModel):
     admin_password_hash: str | None = None
     # Host names (without port) the server answers to; any other Host header
     # gets 400 HOST_NOT_ALLOWED, so a rebound DNS name reaches nothing.
+    # Matched lower-case, IDN names in punycode (as browsers send them).
     # None: every host (tests); `serve` always sets them.
     trusted_hosts: tuple[str, ...] | None = None
 
@@ -52,4 +53,4 @@ class AppConfig(BaseModel):
     @field_validator("trusted_hosts")
     @classmethod
     def _lower_case_hosts(cls, value: tuple[str, ...] | None) -> tuple[str, ...] | None:
-        return None if value is None else tuple(host.lower() for host in value)
+        return None if value is None else tuple(map(settings.ascii_host, value))

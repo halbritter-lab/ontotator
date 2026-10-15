@@ -133,13 +133,19 @@ def _trusted_hosts(host: str, public_origin: str | None) -> tuple[str, ...] | No
     """The host names the server answers to; None if it must not start.
 
     With a public origin only its host, else on a loopback address the
-    loopback names. A server on another address needs a public origin, or a
-    rebound DNS name could reach it.
+    loopback names plus the bound address itself (e.g. ``127.0.0.2``). A
+    server on another address needs a public origin, or a rebound DNS name
+    could reach it.
     """
     if public_origin is not None:
         name = urlsplit(public_origin).hostname
         return (name,) if name else None
-    return LOOPBACK_NAMES if _is_loopback(host) else None
+    if not _is_loopback(host):
+        return None
+    bound = host.strip("[]").lower()
+    with contextlib.suppress(ValueError):
+        bound = str(ipaddress.ip_address(bound))
+    return LOOPBACK_NAMES if bound in LOOPBACK_NAMES else (*LOOPBACK_NAMES, bound)
 
 
 def _base_url(host: str, port: int) -> str:

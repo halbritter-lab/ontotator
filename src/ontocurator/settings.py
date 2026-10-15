@@ -43,11 +43,27 @@ def read_secret(name: str, env: Mapping[str, str] | None = None) -> str | None:
     return value
 
 
+def ascii_host(name: str) -> str:
+    """A host name as browsers send it: lower-case, IDN labels in punycode.
+
+    Raises:
+        SettingsError: for a name IDNA cannot encode.
+    """
+    lowered = name.strip().lower()
+    if lowered.isascii():
+        return lowered
+    try:
+        return lowered.encode("idna").decode("ascii")
+    except UnicodeError:
+        raise SettingsError(f"The host name '{name}' is not valid") from None
+
+
 def canonical_origin(value: str) -> str:
     """``scheme://host[:port]`` of a public origin such as ``https://ex.org``.
 
-    The scheme and host are lower-cased and a default port is dropped, so the
-    result equals the ``Origin`` header a browser sends for that site. A
+    The scheme and host are lower-cased, an internationalised host is
+    written in punycode and a default port is dropped, so the result equals
+    the ``Origin`` header a browser sends for that site. A
     trailing ``/`` is accepted; any other path, a query, a fragment or
     credentials are not.
 
@@ -75,6 +91,11 @@ def canonical_origin(value: str) -> str:
     host = parts.hostname
     if ":" in host:
         host = f"[{host}]"
+    else:
+        try:
+            host = ascii_host(host)
+        except SettingsError:
+            raise SettingsError(f"The public origin {problem}") from None
     default_port = 443 if parts.scheme == "https" else 80
     suffix = "" if port in (None, default_port) else f":{port}"
     return f"{parts.scheme}://{host}{suffix}"
