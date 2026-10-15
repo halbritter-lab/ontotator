@@ -332,7 +332,7 @@ Status: Questions 1–8 are answered, see §5. New detailed questions are resolv
 | T5 | `2026-10-14-t5-variants-translation-review-design.md` | design agreed |
 | T4 | `2026-10-14-t4-workflows-merge-design.md` | design agreed |
 | T6 | UI overhaul with Impeccable | open. The Impeccable skill is not installed in the current environment. |
-| T7 | `2026-10-14-t7-integrations-design.md` | plan written (`docs/superpowers/plans/2026-10-15-t7-integrations.md`) |
+| T7 | `2026-10-14-t7-integrations-design.md` | plan written (`docs/superpowers/plans/2026-10-15-t7-integrations.md`), **parked** until a concrete consumer need (2026-10-15) |
 
 Changes to the roadmap made while specifying:
 - The format allows all HPO terms (including history and interventions) and modifiers. MAxO is planned (T1 F5–F7).

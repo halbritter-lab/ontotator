@@ -1,5 +1,7 @@
 # T7: Integration Interfaces Implementation Plan
 
+> **Status (2026-10-15): parked.** No part of the core roadmap depends on T7. The plan is picked up when a concrete need appears, e.g. the first consumer reading a release. Q33 is resolved and moved into T3a (see there); Q34 stays open until T7 resumes.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Lean format: files, interfaces, tables, test cases and acceptance criteria per task. Implementers write the code test-first; code appears only where it defines a contract.
 
 **Goal:**

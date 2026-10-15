@@ -244,6 +244,8 @@ Grants: full DML for the application role on all four; `GRANT USAGE, SELECT ON A
 - `IncomingUnit`: `label` (file name or bundle path); `document: Document`; `source_text_sha256`; `normalised: bool`; `bundle_id`; `manifest_sha256`; and `set: IncomingSet | None`.
 - `IncomingSet`: `annotation_set_id`, `set_kind`, `actors`, `payload`, `proposals: ImportedProposals`. It is `None` for plain text and for an empty set (O2).
 
+> **Resolved Q33 (2026-10-15, user: whether human annotations must be imported is not known yet):** an import may carry empty sets of any kind (documents only, O2) and non-empty sets of kind `tool_output` whose actors are all tools. A non-empty set of any other kind (`individual`, `stage_result`, `adjudicated`, `release`) refuses the whole import with error `T1_SET_KIND`, and the preview lists the affected units. Keep `set_kind` an open text column validated in one place, so a future kind (e.g. imported human annotations for review) can be added without a schema change. Tests: `test_an_import_with_a_human_set_is_refused_and_lists_the_units`, `test_the_ontospan_release_bundle_is_refused_as_input`.
+
 **T1 reader** `read_t1_upload(path, pins, profile) -> tuple[list[IncomingUnit], list[Issue]]`:
 - It wraps T2d's `read_bundle` / `load_annotated_document` and the pin check (`PIN_MISMATCH`).
 - It applies `unit_to_proposals(…, bundle_id=…)`.
