@@ -156,3 +156,21 @@ Ruff check and jobs-module mypy passed; the test wrapping was subsequently forma
 The scoped reviewer ran `git diff 25e1d31..7dda5bf --check` successfully and did not
 rerun tests, as requested. This review closes the code finding, but does not replace
 the separately required complete gate or change the earlier failed gate evidence.
+
+## Final full gate (2026-10-15)
+
+At `b2a2876`, after the pinned-ontology export fix and its clean scoped re-review,
+`C:/Program Files/Git/bin/bash.exe scripts/check.sh` completed with exit 0:
+
+- Ruff check and formatting, mypy, OpenAPI drift, TypeScript typecheck/API drift,
+  lock/wheel contents: passed.
+- Frontend: 32 files, 315 tests passed. The earlier intermittent tree focus
+  assertion did not recur in this full run; no speculative timing fix was made.
+- PostgreSQL backend: 914 passed, 1 skipped (POSIX-only recovery permissions),
+  1 existing Starlette/httpx deprecation warning; 420.97 seconds.
+- Playwright: 34 passed, 1.9 minutes.
+- Script summary: 575 seconds; `All local checks passed.`
+
+The original final confirmation requirement is fulfilled. Runtime ontology
+addition across already-running workers is being checked separately during T2e
+stack integration; this gate covers the T2d branch above.
