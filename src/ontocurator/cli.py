@@ -923,6 +923,66 @@ def import_command(
         typer.echo(f"warnings: {', '.join(result['warnings'])}")
 
 
+def _export(
+    ctx: typer.Context, kind: str, project: str, out: Path, *, wait: bool
+) -> None:
+    """Run an export job and copy its file to ``out``, which must not exist."""
+    if wait and out.exists():
+        _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+    with _open_database(ctx) as db:
+        job = _run_job(db, kind, {"project": project}, wait=wait)
+        if job is None:
+            return
+        data = db.blobs.get(job.result["sha256"])
+    try:
+        with out.open("xb") as handle:
+            handle.write(data)
+    except FileExistsError:
+        _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+    result = job.result
+    if kind == "t1_export":
+        counts = result["counts"]
+        typer.echo(
+            f"Wrote {out}: {_plural(result['units'], 'unit')}, "
+            f"{counts['rejected']} rejected and {counts['uncertain']} uncertain "
+            f"decisions left out, {counts['defaulted_axes']} axes defaulted."
+        )
+    else:
+        typer.echo(f"Wrote {out}: {_plural(result['events'], 'event')}.")
+
+
+OutOption = Annotated[
+    Path,
+    typer.Argument(help="The file to write; it must not exist.", dir_okay=False),
+]
+NoWaitOption = Annotated[
+    bool,
+    typer.Option("--no-wait", help="Only queue the job for the server's worker."),
+]
+
+
+@admin_app.command("export")
+def export_command(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    out: OutOption,
+    no_wait: NoWaitOption = False,
+) -> None:
+    """Export the latest submissions as a T1 bundle (ZIP)."""
+    _export(ctx, "t1_export", project, out, wait=not no_wait)
+
+
+@admin_app.command("export-edit-log")
+def export_edit_log_command(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    out: OutOption,
+    no_wait: NoWaitOption = False,
+) -> None:
+    """Export the project's edit log as pseudonymised JSONL."""
+    _export(ctx, "edit_log_export", project, out, wait=not no_wait)
+
+
 def _ontology_store(db: Database) -> OntologyStore:
     return OntologyStore(db, OntologyRegistry(), db.data_dir)
 

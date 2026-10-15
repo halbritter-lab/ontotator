@@ -81,6 +81,7 @@ from ontocurator.storage.tables import (
     SearchEventRow,
     StoredFileRow,
     SubmissionRow,
+    UserRow,
 )
 
 _ESCAPED_KEY_PREFIX = "wk2|"
@@ -230,6 +231,23 @@ class ProjectInfo:
     name: str
     description: str | None
     document_count: int
+
+
+@dataclass(frozen=True)
+class ProjectExport:
+    """What a T1 export reads from a project (T2d Task 5).
+
+    ``submissions`` holds the latest submission per document, annotator and
+    mode; ``contributors`` the (pseudonym, name, ORCID) of the consenting
+    annotators among them.
+    """
+
+    profile: TaskProfile
+    pins: dict[str, Pin]
+    documents: dict[str, ImportedDocument]
+    submissions: list[Submission]
+    proposals: dict[tuple[str, str], AnnotationSnapshot]
+    contributors: list[tuple[str, str, str | None]]
 
 
 @dataclass(frozen=True)
@@ -803,15 +821,18 @@ class Repository:
     def project_pins(self, package_id: str) -> dict[str, Pin]:
         """The project's pinned ontologies by ontology id."""
         with self.db.transaction() as conn:
-            project_id = self._require_project(conn, package_id)
-            rows = conn.execute(
-                select(
-                    ProjectOntologyRow.ontology_id,
-                    ProjectOntologyRow.sha256,
-                    ProjectOntologyRow.allowed_roots,
-                    ProjectOntologyRow.t1_profile,
-                ).where(ProjectOntologyRow.project_id == project_id)
-            ).all()
+            return self._pins(conn, self._require_project(conn, package_id))
+
+    @staticmethod
+    def _pins(conn: Connection, project_id: int) -> dict[str, Pin]:
+        rows = conn.execute(
+            select(
+                ProjectOntologyRow.ontology_id,
+                ProjectOntologyRow.sha256,
+                ProjectOntologyRow.allowed_roots,
+                ProjectOntologyRow.t1_profile,
+            ).where(ProjectOntologyRow.project_id == project_id)
+        ).all()
         return {
             row.ontology_id: Pin(
                 sha256=row.sha256,
@@ -969,6 +990,158 @@ class Repository:
             if on_done is not None:
                 on_done(conn, project_id, counts)
         return counts
+
+    # --- exports (T2d) ------------------------------------------------------ #
+
+    def t1_export_content(self, package_id: str) -> ProjectExport:
+        """What a T1 export of the project needs, read in one snapshot.
+
+        Per document, annotator and mode only the latest submission is kept:
+        the latest revision of each origin, then the one recorded last.
+        """
+        with self.db.snapshot() as conn:
+            project = conn.execute(
+                select(ProjectRow.id, ProjectRow.task_profile).where(
+                    ProjectRow.project_key == package_id
+                )
+            ).one_or_none()
+            if project is None:
+                raise DomainError(
+                    "PACKAGE_NOT_FOUND", f"No package found for package '{package_id}'"
+                )
+            documents = {
+                row.document_id: ImportedDocument(
+                    Document(
+                        document_id=row.document_id,
+                        text=row.text,
+                        language=row.language,
+                        text_sha256=row.text_sha256,
+                    ),
+                    row.source_text_sha256,
+                )
+                for row in conn.execute(
+                    select(
+                        DocumentRow.document_id,
+                        DocumentRow.text,
+                        DocumentRow.language,
+                        DocumentRow.text_sha256,
+                        DocumentRow.source_text_sha256,
+                    ).where(DocumentRow.project_id == project.id)
+                )
+            }
+            submission_rows = conn.execute(
+                select(
+                    SubmissionRow.document_id,
+                    SubmissionRow.annotator_id,
+                    SubmissionRow.mode,
+                    SubmissionRow.recorded_at,
+                    SubmissionRow.payload,
+                )
+                .where(SubmissionRow.project_id == project.id)
+                .order_by(SubmissionRow.recorded_at, SubmissionRow.submission_id)
+            ).all()
+            proposal_payloads = (
+                conn.execute(
+                    select(AnnotationSnapshotRow.payload)
+                    .join(
+                        ProposalAnnotationRow,
+                        and_(
+                            ProposalAnnotationRow.project_id
+                            == AnnotationSnapshotRow.project_id,
+                            ProposalAnnotationRow.annotation_id
+                            == AnnotationSnapshotRow.annotation_id,
+                            ProposalAnnotationRow.version
+                            == AnnotationSnapshotRow.version,
+                        ),
+                    )
+                    .where(AnnotationSnapshotRow.project_id == project.id)
+                )
+                .scalars()
+                .all()
+            )
+            annotators = {row.annotator_id for row in submission_rows}
+            contributors = [
+                (row.pseudonym, row.display_name, row.orcid)
+                for row in conn.execute(
+                    select(UserRow.pseudonym, UserRow.display_name, UserRow.orcid)
+                    .where(
+                        UserRow.orcid_consent.is_(True),
+                        UserRow.pseudonym.in_(sorted(annotators)),
+                    )
+                    .order_by(UserRow.pseudonym)
+                )
+            ]
+            pins = self._pins(conn, project.id)
+        groups: dict[tuple[str, str, str], list[Submission]] = {}
+        recorded: dict[str, datetime] = {}
+        for row in submission_rows:
+            submission = Submission.model_validate(row.payload)
+            recorded[submission.submission_id] = row.recorded_at
+            groups.setdefault((row.document_id, row.annotator_id, row.mode), []).append(
+                submission
+            )
+        submissions = [
+            max(
+                latest_submissions(group),
+                key=lambda s: (recorded[s.submission_id], s.draft_revision),
+            )
+            for _key, group in sorted(groups.items())
+        ]
+        proposals: dict[tuple[str, str], AnnotationSnapshot] = {}
+        for payload in proposal_payloads:
+            snap = decode_snapshot(payload)
+            proposals[(snap.annotation.annotation_id, snap.version)] = snap
+        return ProjectExport(
+            profile=TaskProfile.model_validate(project.task_profile),
+            pins=pins,
+            documents=documents,
+            submissions=submissions,
+            proposals=proposals,
+            contributors=contributors,
+        )
+
+    def edit_log(self, package_id: str) -> list[dict[str, Any]]:
+        """Every edit event of the project in id order, pseudonymised (D6).
+
+        No user id and no session id: the annotator is the draft's pseudonym;
+        ``at`` is UTC to the second.
+        """
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, package_id)
+            rows = conn.execute(
+                select(
+                    EditEventRow.id,
+                    EditEventRow.at,
+                    DraftRow.document_id,
+                    DraftRow.annotator_id,
+                    DraftRow.mode,
+                    EditEventRow.kind,
+                    EditEventRow.revision_before,
+                    EditEventRow.revision_after,
+                    EditEventRow.command,
+                    EditEventRow.state,
+                    EditEventRow.submission_id,
+                )
+                .join(DraftRow, DraftRow.id == EditEventRow.draft_id)
+                .where(EditEventRow.project_id == project_id)
+                .order_by(EditEventRow.id)
+            ).all()
+        return [
+            {
+                "event": row.id,
+                "at": row.at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "document_id": row.document_id,
+                "annotator": row.annotator_id,
+                "mode": row.mode,
+                "kind": row.kind,
+                "revision_before": row.revision_before,
+                "revision_after": row.revision_after,
+                "command": row.command,
+                "state": row.state,
+                "submission_id": row.submission_id,
+            }
+            for row in rows
+        ]
 
     def get_manifest(self, package_id: str) -> PackageManifest:
         """The stored manifest of a project."""

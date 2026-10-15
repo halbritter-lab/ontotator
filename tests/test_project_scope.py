@@ -102,6 +102,8 @@ CALLS: dict[str, Callable[[Repository], object]] = {
         "B", "B", None, _package("B").manifest.task_profile, {}
     ),
     "project_pins": lambda r: r.project_pins("B"),
+    "t1_export_content": lambda r: r.t1_export_content("B"),
+    "edit_log": lambda r: r.edit_log("B"),
     "add_documents_and_proposals": lambda r: r.add_documents_and_proposals(
         "B", [], [], source_sha256="0" * 64
     ),

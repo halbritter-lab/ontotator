@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from sqlalchemy import Connection, select
 
@@ -42,6 +42,7 @@ from ontocurator.storage.database import Database
 from ontocurator.storage.repository import (
     DraftState,
     EditEvent,
+    ProjectExport,
     ProjectInfo,
     Repository,
 )
@@ -391,6 +392,20 @@ class ScopedRepository(Repository):
         return super().export_package(
             package_id, include_captured_conditions=include_captured_conditions
         )
+
+    def t1_export_content(self, package_id: str) -> ProjectExport:
+        self._visible(package_id)
+        if not can(self.access, Action.EXPORT_ALL_WORK, package_id):
+            raise AccessDenied("NOT_ALLOWED", "You may not export this project.")
+        return super().t1_export_content(package_id)
+
+    def edit_log(self, package_id: str) -> list[dict[str, Any]]:
+        self._visible(package_id)
+        if not can(self.access, Action.EXPORT_EDIT_LOG, package_id):
+            raise AccessDenied(
+                "NOT_ALLOWED", "You may not export the edit log of this project."
+            )
+        return super().edit_log(package_id)
 
     # --- edit log ----------------------------------------------------------- #
 

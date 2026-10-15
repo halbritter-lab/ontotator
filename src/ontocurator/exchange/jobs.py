@@ -9,9 +9,12 @@ a system admin (Q5).
 from __future__ import annotations
 
 import hashlib
+import json
+import tempfile
 import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,17 +28,20 @@ from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
 from ontocurator.exchange.t1 import (
+    ExportCounts,
     ImportCounts,
     ImportedDocument,
     ImportedSet,
     check_importable,
     document_from_unit,
+    layers_for,
     pin_differences,
+    submission_to_unit,
     unit_to_proposals,
 )
 from ontocurator.jobs.queue import Handler, Job, JobContext
 from ontocurator.storage.database import Database
-from ontocurator.storage.tables import JobRow, StoredFileRow, UserRow
+from ontocurator.storage.tables import JobRow, ProjectRow, StoredFileRow, UserRow
 
 MANIFEST = "manifest.json"
 # How many ontospan issues a failed job names in its error.
@@ -261,4 +267,118 @@ def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     return {**summary, "warnings": warnings}
 
 
-HANDLERS: dict[str, Handler] = {"t1_import": t1_import}
+def _project_id(db: Database, project: str) -> int:
+    with db.transaction() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == project)
+        ).scalar_one()
+    return int(project_id)
+
+
+def _audit(
+    db: Database,
+    actor: Actor,
+    action: str,
+    project: str,
+    details: dict[str, Any],
+) -> None:
+    project_id = _project_id(db, project)
+    with db.transaction() as conn:
+        record_audit(
+            conn,
+            actor,
+            action,
+            target_type="project",
+            target_id=project,
+            project_id=project_id,
+            details=details,
+        )
+
+
+def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
+    """Export the latest submissions of a project as a validated T1 bundle (D5).
+
+    One ``individual`` set per document, annotator and mode (Q12). Only
+    annotators who consented are named as contributors (T1 F10). A unit that
+    does not validate fails the job with the ontospan codes. The ZIP goes to
+    the blob store; audited as ``project.export``.
+    """
+    db = ctx.db
+    project = job.payload["project"]
+    actor, access = requester(db, job)
+    content = ScopedRepository(db, access, actor).t1_export_content(project)
+    if not content.submissions:
+        raise DomainError("EXPORT_EMPTY", f"Project '{project}' has no submissions.")
+    layers = layers_for(content.profile, content.pins)
+    units: list[ontospan.AnnotatedDocument] = []
+    counts: ExportCounts = {"rejected": 0, "uncertain": 0, "defaulted_axes": 0}
+    for submission in content.submissions:
+        key = submission.origin_key
+        stored = content.documents[key.document_id]
+        unit, unit_counts = submission_to_unit(
+            submission,
+            stored.document,
+            content.profile,
+            layers,
+            content.proposals,
+            set_id=f"{project}:{key.annotator_id}:{key.mode}:{submission.submission_id}",
+            source_text_sha256=stored.source_text_sha256,
+        )
+        units.append(unit)
+        for name in counts:
+            counts[name] += unit_counts[name]  # type: ignore[literal-required]
+    now = datetime.now(UTC).replace(microsecond=0)
+    bundle_id = f"{project}-{now:%Y%m%dT%H%M%SZ}"
+    contributors = [
+        ontospan.Contributor(actor_id=pseudonym, name=name, orcid=orcid)
+        for pseudonym, name, orcid in content.contributors
+    ]
+    with tempfile.TemporaryDirectory(prefix="ontocurator-export-") as tmp:
+        target = Path(tmp) / f"{bundle_id}.zip"
+        try:
+            ontospan.write_bundle(
+                target,
+                units,
+                bundle_id=bundle_id,
+                created_at=now,
+                contributors=contributors,
+            )
+        except ontospan.FormatError as exc:
+            raise _invalid(exc.report) from None
+        sha = store_file(db, target.read_bytes())
+    result = {
+        "sha256": sha,
+        "bundle_id": bundle_id,
+        "units": len(units),
+        "contributors": len(contributors),
+        "counts": dict(counts),
+    }
+    _audit(db, actor, "project.export", project, {**result, "job_id": job.id})
+    return result
+
+
+def edit_log_export(job: Job, ctx: JobContext) -> dict[str, Any]:
+    """Write the project's edit log as pseudonymised JSONL (D6, Q14).
+
+    One line per event in id order; no user ids and no session ids. Audited
+    as ``project.edit_log_export``.
+    """
+    db = ctx.db
+    project = job.payload["project"]
+    actor, access = requester(db, job)
+    events = ScopedRepository(db, access, actor).edit_log(project)
+    data = "".join(
+        json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
+        for event in events
+    ).encode("utf-8")
+    sha = store_file(db, data)
+    result = {"sha256": sha, "events": len(events)}
+    _audit(db, actor, "project.edit_log_export", project, {**result, "job_id": job.id})
+    return result
+
+
+HANDLERS: dict[str, Handler] = {
+    "t1_import": t1_import,
+    "t1_export": t1_export,
+    "edit_log_export": edit_log_export,
+}
