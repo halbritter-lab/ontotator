@@ -524,6 +524,7 @@ def submission_to_unit(
     *,
     set_id: str,
     source_text_sha256: str | None = None,
+    guideline_ref: str | None = None,
 ) -> tuple[ontospan.AnnotatedDocument, ExportCounts]:
     """One ``individual`` set with the annotator's resulting annotations (Q12).
 
@@ -612,7 +613,7 @@ def submission_to_unit(
             actors=(reviewer,),
             created_at=_created_at(submission.created_at),
             blind=key.mode == "independent",
-            guideline_ref=None,
+            guideline_ref=guideline_ref,
             layers=tuple(layers),
             annotations=tuple(annotations),
         ),

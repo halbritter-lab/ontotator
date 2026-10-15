@@ -304,9 +304,13 @@ class OntologyRegistry:
     def ensure_package_conditions(
         self, repo: Repository, project_key: str
     ) -> list[SearchCondition]:
+        from ontocurator.projects.runtime import project_state
+
         conditions = repo.get_search_conditions(project_key)
         if conditions is not None:
             return conditions
+        with repo.db.transaction() as conn:
+            structure = project_state(conn, project_key)[0]
         profile = repo.get_task_profile(project_key)
         resources: dict[str, bytes] = {}
         # Capture immutable loaded content while an upload cannot swap services.
@@ -327,7 +331,9 @@ class OntologyRegistry:
                         for item in service.translations
                     }
                 )
-        return repo.capture_search_conditions(project_key, conditions, resources)
+        return repo.capture_search_conditions(
+            project_key, conditions, resources, expected_structure=structure
+        )
 
     def for_package_layer(
         self, repo: Repository, project_key: str, layer_id: str

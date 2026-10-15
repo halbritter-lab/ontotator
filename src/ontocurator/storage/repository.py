@@ -249,6 +249,7 @@ class ProjectExport:
     submissions: list[Submission]
     proposals: dict[tuple[str, str], AnnotationSnapshot]
     contributors: list[tuple[str, str, str | None]]
+    guideline_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -649,14 +650,30 @@ class Repository:
         project_key: str,
         conditions: list[SearchCondition],
         resources: dict[str, bytes],
+        *,
+        expected_structure: str | None = None,
     ) -> list[SearchCondition]:
         """Store first-use conditions once; concurrent captures get the first ones."""
-        validate_resources(conditions, self.get_task_profile(project_key), resources)
         files = {
             path: (self.db.blobs.put(data), len(data))
             for path, data in resources.items()
         }
         with self.db.transaction() as conn:
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock_shared(_lock_id("project", project_key))
+                )
+            )
+            if expected_structure is not None:
+                from ontocurator.projects.runtime import project_state
+
+                if project_state(conn, project_key)[0] != expected_structure:
+                    raise RevisionConflict(
+                        "Project structure changed while capturing search conditions; retry."
+                    )
+            validate_resources(
+                conditions, self.get_task_profile(project_key), resources
+            )
             project_id = self._require_project(conn, project_key)
             inserted = conn.execute(
                 pg_insert(ProjectSearchConditionsRow)
@@ -1003,9 +1020,12 @@ class Repository:
         """
         with self.db.snapshot() as conn:
             project = conn.execute(
-                select(ProjectRow.id, ProjectRow.task_profile).where(
-                    ProjectRow.project_key == project_key
-                )
+                select(
+                    ProjectRow.id,
+                    ProjectRow.task_profile,
+                    ProjectRow.guideline_url,
+                    ProjectRow.guideline_version,
+                ).where(ProjectRow.project_key == project_key)
             ).one_or_none()
             if project is None:
                 raise DomainError(
@@ -1100,6 +1120,9 @@ class Repository:
             submissions=submissions,
             proposals=proposals,
             contributors=contributors,
+            guideline_ref=f"{project.guideline_url}@{project.guideline_version}"
+            if project.guideline_url and project.guideline_version
+            else None,
         )
 
     def edit_log(self, project_key: str) -> list[dict[str, Any]]:
@@ -1736,6 +1759,8 @@ class Repository:
         key: WorkspaceKey,
         envelope: MutationEnvelope,
         operation: Callable[[Draft], Draft | Submission],
+        *,
+        before_operation: Callable[[Connection], None] | None = None,
     ) -> Draft | Submission:
         """Run ``operation`` on the draft at the expected revision, exactly once.
 
@@ -1750,6 +1775,15 @@ class Repository:
         key_string = _key_str(key)
         request_hash = canonical_hash(envelope.model_dump())
         with self.db.transaction() as conn:
+            # Shared across independent drafts, exclusive against structural
+            # changes/imports. Always acquire before the per-draft lock.
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock_shared(
+                        _lock_id("project", key.project_key)
+                    )
+                )
+            )
             project_id = self._require_project(conn, key.project_key)
             self._lock_draft(conn, key)
             receipt = conn.execute(
@@ -1778,6 +1812,8 @@ class Repository:
                     f"REVISION_CONFLICT: Expected revision "
                     f"{envelope.expected_revision}, current is {current_revision}"
                 )
+            if before_operation is not None:
+                before_operation(conn)
             draft = self._open_draft(conn, key, None)
             # Taken before the operation, which may change the draft in place.
             state_before = DraftState.of(draft)

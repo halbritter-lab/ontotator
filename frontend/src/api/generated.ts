@@ -56,6 +56,144 @@ export interface paths {
         patch: operations["patch_user_api_v1_admin_users__username__patch"];
         trace?: never;
     };
+    "/api/v1/admin/ontologies/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ontologies */
+        get: operations["list_ontologies_api_v1_admin_ontologies__get"];
+        put?: never;
+        /** Upload Ontologies */
+        post: operations["upload_ontologies_api_v1_admin_ontologies__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Templates */
+        get: operations["templates_api_v1_projects_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Project */
+        post: operations["create_project_api_v1_projects__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Settings */
+        get: operations["settings_api_v1_projects__key__settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Settings */
+        patch: operations["update_settings_api_v1_projects__key__settings_patch"];
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Pins */
+        put: operations["update_pins_api_v1_projects__key__pins_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Profile */
+        put: operations["update_profile_api_v1_projects__key__profile_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Members */
+        get: operations["members_api_v1_projects__key__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/members/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Member */
+        put: operations["set_member_api_v1_projects__key__members__username__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/profile": {
         parameters: {
             query?: never;
@@ -506,6 +644,28 @@ export interface components {
              */
             kind: "human" | "tool";
         };
+        /** AdminOntology */
+        AdminOntology: {
+            /** Sha256 */
+            sha256: string;
+            /** Kind */
+            kind: string;
+            /** Prefix */
+            prefix: string;
+            /** Release */
+            release: string | null;
+            /** Filename */
+            filename: string;
+            /** Language */
+            language: string | null;
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
+            /** Projects */
+            projects: string[];
+        };
         /** AdminUser */
         AdminUser: {
             /** Username */
@@ -626,6 +786,11 @@ export interface components {
              */
             allow_empty: boolean;
         };
+        /** Body_upload_ontologies_api_v1_admin_ontologies__post */
+        Body_upload_ontologies_api_v1_admin_ontologies__post: {
+            /** Files[] */
+            "files[]": string[];
+        };
         /** CodeResponse */
         CodeResponse: {
             /** Code */
@@ -635,6 +800,22 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+        };
+        /** CreateProjectRequest */
+        CreateProjectRequest: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Languages */
+            languages?: string[];
+            /** Template */
+            template?: string | null;
+            profile?: components["schemas"]["TaskProfile"] | null;
+            /** Pins */
+            pins: components["schemas"]["ProjectPin"][];
         };
         /** CreateUserRequest */
         CreateUserRequest: {
@@ -890,6 +1071,29 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** Member */
+        Member: {
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Pseudonym */
+            pseudonym: string;
+            /** Roles */
+            roles: string[];
+            /** Languages */
+            languages: string[];
+        };
+        /** MemberChange */
+        MemberChange: {
+            /** Roles */
+            roles: string[];
+            /**
+             * Revoke Assignments
+             * @default false
+             */
+            revoke_assignments: boolean;
+        };
         /**
          * MutationEnvelope
          * @description Request envelope identifying a write attempt across retries.
@@ -1020,6 +1224,23 @@ export interface components {
             /** Languages */
             languages?: string[];
         };
+        /** PinnedOntology */
+        PinnedOntology: {
+            /** Ontology Id */
+            ontology_id: string;
+            /** Sha256 */
+            sha256: string;
+            /** Allowed Roots */
+            allowed_roots?: string[];
+            /**
+             * T1 Profile
+             * @default generic
+             * @enum {string}
+             */
+            t1_profile: "generic" | "hpo-phenotype";
+            /** Release */
+            release: string;
+        };
         /**
          * Preferences
          * @description A user's preferences returned by ``GET /api/v1/preferences``.
@@ -1088,6 +1309,108 @@ export interface components {
             /** Languages */
             languages?: string[];
         };
+        /** ProjectPin */
+        ProjectPin: {
+            /** Ontology Id */
+            ontology_id: string;
+            /** Sha256 */
+            sha256: string;
+            /** Allowed Roots */
+            allowed_roots?: string[];
+            /**
+             * T1 Profile
+             * @default generic
+             * @enum {string}
+             */
+            t1_profile: "generic" | "hpo-phenotype";
+        };
+        /** ProjectSettings */
+        ProjectSettings: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Languages */
+            languages?: string[];
+            /** Guideline Url */
+            guideline_url?: string | null;
+            /** Guideline Version */
+            guideline_version?: string | null;
+            /**
+             * Require Chosen Axes
+             * @default false
+             */
+            require_chosen_axes: boolean;
+            /**
+             * Adjudicator Not Annotator
+             * @default false
+             */
+            adjudicator_not_annotator: boolean;
+            /**
+             * Contiguous Mentions Only
+             * @default false
+             */
+            contiguous_mentions_only: boolean;
+            /** Hidden Axis Values */
+            hidden_axis_values?: {
+                [key: string]: {
+                    [key: string]: string[];
+                };
+            };
+            /** Project Key */
+            project_key: string;
+            profile: components["schemas"]["TaskProfile"];
+            /** Pins */
+            pins: components["schemas"]["PinnedOntology"][];
+            /** Locked */
+            locked: boolean;
+            /** Axis Defaults */
+            axis_defaults: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
+        };
+        /** ProjectSettingsChange */
+        ProjectSettingsChange: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Languages */
+            languages?: string[];
+            /** Guideline Url */
+            guideline_url?: string | null;
+            /** Guideline Version */
+            guideline_version?: string | null;
+            /**
+             * Require Chosen Axes
+             * @default false
+             */
+            require_chosen_axes: boolean;
+            /**
+             * Adjudicator Not Annotator
+             * @default false
+             */
+            adjudicator_not_annotator: boolean;
+            /**
+             * Contiguous Mentions Only
+             * @default false
+             */
+            contiguous_mentions_only: boolean;
+            /** Hidden Axis Values */
+            hidden_axis_values?: {
+                [key: string]: {
+                    [key: string]: string[];
+                };
+            };
+        };
         /**
          * ProjectSummary
          * @description A project on the dashboard, with what the user may do in it.
@@ -1105,6 +1428,8 @@ export interface components {
             allowed_modes: ("independent" | "review" | "assisted")[];
             /** Document Count */
             document_count: number;
+            /** Can Manage */
+            can_manage: boolean;
         };
         /**
          * Provenance
@@ -1361,6 +1686,30 @@ export interface components {
             created_at: string;
         };
         /**
+         * TaskProfile
+         * @description Complete specification of task profile, ontologies, layers, and types.
+         */
+        TaskProfile: {
+            /**
+             * Schema
+             * @default ontocurator-task-profile/v1
+             * @constant
+             */
+            schema: "ontocurator-task-profile/v1";
+            /** Profile Id */
+            profile_id: string;
+            /** Version */
+            version: string;
+            /** Ontologies */
+            ontologies: components["schemas"]["OntologyDefinition"][];
+            /** Layers */
+            layers: components["schemas"]["LayerDefinition"][];
+            /** Default Layer Id */
+            default_layer_id: string;
+            /** Preset */
+            preset?: string | null;
+        };
+        /**
          * TaskScope
          * @description Execution scope defining active editable and reference layers for a workspace.
          */
@@ -1376,6 +1725,15 @@ export interface components {
             editable_layer_ids: string[];
             /** Reference Layer Ids */
             reference_layer_ids: string[];
+        };
+        /** TemplateInfo */
+        TemplateInfo: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Required Ontology Ids */
+            required_ontology_ids: string[];
         };
         /**
          * TermLabel
@@ -1729,6 +2087,315 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ontologies_api_v1_admin_ontologies__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOntology"][];
+                };
+            };
+        };
+    };
+    upload_ontologies_api_v1_admin_ontologies__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_ontologies_api_v1_admin_ontologies__post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOntology"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    templates_api_v1_projects_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateInfo"][];
+                };
+            };
+        };
+    };
+    create_project_api_v1_projects__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settings_api_v1_projects__key__settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_settings_api_v1_projects__key__settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectSettingsChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_pins_api_v1_projects__key__pins_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectPin"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_profile_api_v1_projects__key__profile_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskProfile"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    members_api_v1_projects__key__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_member_api_v1_projects__key__members__username__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
                 };
             };
             /** @description Validation Error */

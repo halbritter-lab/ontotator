@@ -254,6 +254,7 @@ class ProjectSummary(BaseModel):
     roles: list[Role]
     allowed_modes: list[WorkspaceMode]
     document_count: int
+    can_manage: bool
 
 
 @router.get("/projects")
@@ -268,6 +269,7 @@ def list_projects(request: Request, repo: RepoDep) -> list[ProjectSummary]:
             roles=sorted(access.roles_in(project.project_key)),
             allowed_modes=allowed_modes(access, project.project_key),
             document_count=project.document_count,
+            can_manage=can(access, Action.MANAGE_PROJECT_SETTINGS, project.project_key),
         )
         for project in repo.list_projects()
     ]
