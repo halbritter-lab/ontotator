@@ -43,7 +43,9 @@ def project(tmp_path):
     create_project(db)
     imported = run_import(db, bundle(tmp_path / "in.zip", [unit(DOC), unit("second")]))
     assert imported.status == "succeeded", imported.error
-    lead = logged_in(app, "lead", projects={"proj": ["lead"]}, assignments=[])
+    lead = logged_in(
+        app, "lead", pseudonym="blind-lead", projects={"proj": ["lead"]}, assignments=[]
+    )
     worker = logged_in(
         app,
         "worker",
@@ -165,7 +167,7 @@ def test_progress_counts_per_document_and_person(project):
         {
             "assignment_id": submitted,
             "username": "lead",
-            "pseudonym": "lead",
+            "pseudonym": "blind-lead",
             "task": "review",
             "status": "submitted",
         },
@@ -594,7 +596,28 @@ def test_document_list_preserves_legacy_status_semantics(tmp_path, mode, scenari
     if scenario in {"newer", "origins", "checked", "round"}:
         if scenario == "round":
             local = local.model_copy(update={"target_set_id": "another-round"})
-        repo.open_draft(local)
+        if scenario == "origins":
+            # Restoration correctly refuses multiple origins. Project the
+            # existing local-draft state directly, as the legacy batch-status
+            # regression does, without weakening that restoration guard.
+            with repo.db.transaction() as conn:
+                pid = conn.execute(select(ProjectRow.id)).scalar_one()
+                conn.execute(
+                    insert(DraftRow).values(
+                        project_id=pid,
+                        draft_key=_key_str(local),
+                        document_id=local.document_id,
+                        annotator_id=local.annotator_id,
+                        mode=mode,
+                        scope_id=local.scope_id,
+                        target_set_id=local.target_set_id,
+                        targets=ReviewTargetSet.create([]).model_dump(),
+                        revision=0,
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+        else:
+            repo.open_draft(local)
         with repo.db.transaction() as conn:
             if scenario in {"newer", "round"}:
                 conn.execute(update(DraftRow).values(revision=8))
@@ -604,8 +627,6 @@ def test_document_list_preserves_legacy_status_semantics(tmp_path, mode, scenari
         first = _submission(key, 3)
         with repo.db.transaction() as conn:
             pid = conn.execute(select(ProjectRow.id)).scalar_one()
-            from ontocurator.storage.repository import _key_str
-
             for identifier in ["first", "second"]:
                 payload = first.model_copy(
                     update={"submission_id": identifier}
