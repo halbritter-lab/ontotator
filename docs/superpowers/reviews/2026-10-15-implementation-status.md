@@ -12,7 +12,7 @@ no main merge, push or deployment has occurred.
 - [x] T2e: reviewed Docker/Compose/health/operations implementation and functional container acceptance.
 - [x] T6a: all ten design-foundation tasks, final review, bundled assets/fonts and integrated acceptance.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
-- [ ] T3a: administration backend in progress (3/10 tasks accepted: project-key rename, schema/policy, users/profile API); projects/settings/members in preparation.
+- [ ] T3a: administration backend in progress (4/10 tasks accepted: project-key rename, schema/policy, users/profile API, projects/settings/members); project rules and uploads in preparation.
 - [ ] T3b: administration UI.
 - [ ] T5: variants and translation-review application workflows; the format-1.1 prerequisite is already complete.
 - [ ] T4a: workflows and stage tasks.
@@ -35,4 +35,8 @@ schema/policy slice passed independent review and 123 focused PostgreSQL/policy
 tests after correcting its exact migration constraint names. The subsequent
 [users/profile slice](2026-10-15-t3a-users-review.md) passed review and 127 focused
 PostgreSQL/auth tests after a reproduced audit-lock deadlock was corrected.
-Later T3a tasks remain open.
+The [project administration slice](2026-10-15-t3a-projects-review.md) passed
+independent scoped review after thirteen reproduced concurrency failures were
+fixed; all thirteen regressions and 113 affected tests then passed, with one
+expected Windows skip. A separate administrator-write authorization follow-up
+is undergoing verification. Later T3a tasks remain open.
