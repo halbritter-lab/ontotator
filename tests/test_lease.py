@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from pg_harness import database_for
-from sqlalchemy import Engine, text
+from sqlalchemy import Connection, Engine, text
+from sqlalchemy.exc import OperationalError
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
@@ -84,6 +85,40 @@ def test_a_lost_lease_connection_is_noticed_and_replaced(tmp_path: Path) -> None
         assert not _alone(db.engine)
     finally:
         lease.release()
+    assert _alone(db.engine)
+
+
+def test_a_failed_reconnection_is_retried_by_later_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = database_for(tmp_path / "editor.db")
+    lease = RuntimeLease(db.engine)
+    lease.acquire()
+    real_lock = lease._lock_on_new_connection
+    attempts: list[int] = []
+
+    def database_down_once() -> Connection:
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise OperationalError("SELECT 1", {}, Exception("database down"))
+        return real_lock()
+
+    monkeypatch.setattr(lease, "_lock_on_new_connection", database_down_once)
+    try:
+        _kill_session(db.engine, lease)
+
+        with pytest.raises(OperationalError):
+            lease.check()  # noticed, but the database is still down
+        assert not lease.held
+        assert _alone(db.engine)  # a recovery could run now: check must not pass
+
+        assert lease.check() is False  # the database is back: taken again
+        assert lease.held
+        assert not _alone(db.engine)
+        assert lease.check() is True
+    finally:
+        lease.release()
+    assert lease.check() is True  # released on purpose: nothing to keep
     assert _alone(db.engine)
 
 

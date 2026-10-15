@@ -58,6 +58,9 @@ class RuntimeLease:
         self.engine = engine
         self.check_interval = check_interval
         self._conn: Connection | None = None
+        # Set from ``acquire`` until ``release``: the lease must be held, and
+        # every check takes it again until it is.
+        self._required = False
         self._lock = threading.Lock()
 
     @property
@@ -68,39 +71,44 @@ class RuntimeLease:
     def acquire(self) -> None:
         """Take the shared lease; waits while a recovery holds it exclusively."""
         with self._lock:
+            self._required = True
             if self._conn is None:
                 self._conn = self._lock_on_new_connection()
 
     def check(self) -> bool:
         """Whether the lease connection is alive; if not, take the lease again.
 
-        Returns True when nothing had to be done (or nothing is held), False
-        after the lease was taken again on a fresh connection.
+        Returns True when nothing had to be done (or the lease is not
+        required), False after the lease was taken again on a fresh
+        connection. While the lease is required but not held, a check never
+        returns True.
 
         Raises:
             SQLAlchemyError: the lease cannot be taken again (database down);
                 the next check tries again.
         """
         with self._lock:
+            if not self._required:
+                return True
             conn = self._conn
-            if conn is None:
-                return True
-            try:
-                conn.execute(text("SELECT 1"))
-                return True
-            except Exception:
-                logger.error(
-                    "The runtime lease was lost with its database session; "
-                    "taking it again."
-                )
-                _discard(conn)
-                self._conn = None
+            if conn is not None:
+                try:
+                    conn.execute(text("SELECT 1"))
+                    return True
+                except Exception:
+                    logger.error(
+                        "The runtime lease was lost with its database session; "
+                        "taking it again."
+                    )
+                    _discard(conn)
+                    self._conn = None
             self._conn = self._lock_on_new_connection()
             return False
 
     def release(self) -> None:
         """Give the lease back and close its connection; safe if never acquired."""
         with self._lock:
+            self._required = False
             conn, self._conn = self._conn, None
             if conn is not None:
                 _end(conn, "SELECT pg_advisory_unlock_shared(:k)")
