@@ -52,7 +52,7 @@ describe("My tasks component", () => {
     await screen.findAllByTestId("task-row");
     const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
     expect(select.id).toBe("project-select");
-    expect(within(select).getByRole("option", { name: "Project Q" })).toBeDefined();
+    expect(within(select).getByRole("option", { name: "Project Q (q)" })).toBeDefined();
     fireEvent.change(select, { target: { value: "q" } });
     expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q" });
     expect(select.value).toBe("");
@@ -73,12 +73,45 @@ describe("My tasks component", () => {
     expect(screen.getByText("Reopened")).toBeDefined();
   });
 
+  it("distinguishes duplicate project names for filters and same-document task context", async () => {
+    const onNavigate = vi.fn();
+    vi.mocked(api.listMyTasks).mockResolvedValue([
+      { ...task(11, "open", "p", "Research"), document_id: "shared-doc" },
+      { ...task(12, "open", "q", "Research"), document_id: "shared-doc" },
+    ]);
+    render(<MyTasks projects={[project("p", "Research"), project("q", "Research")]} onNavigate={onNavigate} />);
+    const rows = await screen.findAllByTestId("task-row");
+    const select = screen.getByRole("combobox", { name: "Project" });
+    expect((within(select).getByRole("option", { name: "Research (p)" }) as HTMLOptionElement).value).toBe("p");
+    expect((within(select).getByRole("option", { name: "Research (q)" }) as HTMLOptionElement).value).toBe("q");
+    expect(within(rows[0]).getByText("Research (p)")).toBeDefined();
+    expect(within(rows[1]).getByText("Research (q)")).toBeDefined();
+    expect(rows[0].getAttribute("aria-label")).toBe("Research (p): shared-doc");
+    expect(rows[1].getAttribute("aria-label")).toBe("Research (q): shared-doc");
+    fireEvent.change(select, { target: { value: "q" } });
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q" });
+    fireEvent.click(within(rows[1]).getByRole("button", { name: "Open" }));
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "task", assignmentId: 12 });
+  });
+
+  it("distinguishes duplicate project names in all-managed empty-state assignment links", async () => {
+    const onNavigate = vi.fn();
+    vi.mocked(api.listMyTasks).mockResolvedValue([]);
+    render(<MyTasks projects={[project("p", "Research", true), project("q", "Research", true)]} onNavigate={onNavigate} />);
+    const first = await screen.findByRole("link", { name: "Assign documents in Research (p)" });
+    const second = screen.getByRole("link", { name: "Assign documents in Research (q)" });
+    expect(first.getAttribute("href")).toBe("#/projects/p/documents");
+    expect(second.getAttribute("href")).toBe("#/projects/q/documents");
+    fireEvent.click(second);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "q" });
+  });
+
   it("keeps a selected empty project visible by its current project summary name", async () => {
     render(<MyTasks project="empty%/project" projects={[project("empty%/project", "Empty project", true)]} onNavigate={vi.fn()} />);
     await screen.findByText("No documents are assigned to you yet.");
     const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
     expect(select.value).toBe("empty%/project");
-    expect(select.selectedOptions[0].textContent).toBe("Empty project");
+    expect(select.selectedOptions[0].textContent).toBe("Empty project (empty%/project)");
     expect(screen.getByRole("link", { name: "Assign documents" }).getAttribute("href")).toBe("#/projects/empty%25%2Fproject/documents");
   });
 
@@ -114,8 +147,8 @@ describe("My tasks component", () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([]);
     const onNavigate = vi.fn();
     render(<MyTasks projects={[project("p", "Project P", true), project("q", "Project Q", true), project("r", "Other")]} onNavigate={onNavigate} />);
-    const first = await screen.findByRole("link", { name: "Assign documents in Project P" });
-    const second = screen.getByRole("link", { name: "Assign documents in Project Q" });
+    const first = await screen.findByRole("link", { name: "Assign documents in Project P (p)" });
+    const second = screen.getByRole("link", { name: "Assign documents in Project Q (q)" });
     expect(screen.getAllByRole("link")).toHaveLength(2);
     fireEvent.click(first);
     expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p" });

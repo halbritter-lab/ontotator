@@ -16,6 +16,8 @@ const statusLabels: Record<TaskSummary["status"], string> = {
   open: "Open", reopened: "Reopened", in_progress: "In progress", submitted: "Submitted",
 };
 
+const projectLabel = (name: string, key: string): string => name === key ? name : `${name} (${key})`;
+
 export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.Element {
   const [state, setState] = useState<TaskState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
@@ -45,9 +47,10 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
 
   const tasks = state.kind === "ready" ? state.tasks : [];
   const filtered = project === undefined ? tasks : tasks.filter(task => task.project_key === project);
-  const options = new Map(tasks.map(task => [task.project_key, task.project_name]));
+  const options = new Map(tasks.map(task => [task.project_key, projectLabel(task.project_name, task.project_key)]));
   if (project !== undefined && !options.has(project)) {
-    options.set(project, projects.find(item => item.project_key === project)?.name ?? (project || "Empty project filter"));
+    const selected = projects.find(item => item.project_key === project);
+    options.set(project, selected ? projectLabel(selected.name, selected.project_key) : project || "Empty project filter");
   }
   // Keep even an empty raw query distinct from All projects without reserving
   // any actual project key as a magic value.
@@ -56,7 +59,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
   const managed = projects.filter(item => item.can_manage && (project === undefined || item.project_key === project));
   const columns: Column<TaskSummary>[] = [
     { id: "document", header: "Document", cell: task => task.document_id },
-    { id: "project", header: "Project", cell: task => task.project_name },
+    { id: "project", header: "Project", cell: task => projectLabel(task.project_name, task.project_key) },
     { id: "language", header: "Language", cell: task => task.language },
     { id: "task", header: "Task", cell: task => task.task === "annotate" ? "Annotate" : "Review" },
     { id: "status", header: "Status", cell: task => <StatusBadge status={task.status}>{statusLabels[task.status]}</StatusBadge> },
@@ -70,7 +73,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         onNavigate(route);
-      }}>{project === undefined ? `Assign documents in ${item.name}` : "Assign documents"}</a>;
+      }}>{project === undefined ? `Assign documents in ${projectLabel(item.name, item.project_key)}` : "Assign documents"}</a>;
     })}</Toolbar>
   } />;
   return <section aria-label="My tasks">
@@ -86,7 +89,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
         {[...options].map(([key, name]) => <option key={key} value={key}>{name}</option>)}
       </Select>
       <p aria-label="Task counts">Open: {filtered.filter(task => task.status === "open" || task.status === "reopened").length} · In progress: {filtered.filter(task => task.status === "in_progress").length} · Submitted: {filtered.filter(task => task.status === "submitted").length}</p>
-      {filtered.length === 0 ? empty : <DataTable label="My tasks" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${task.project_name}: ${task.document_id}` })} />}
+      {filtered.length === 0 ? empty : <DataTable label="My tasks" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${task.document_id}` })} />}
     </>}
   </section>;
 }
