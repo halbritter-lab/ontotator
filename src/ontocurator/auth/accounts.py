@@ -835,14 +835,20 @@ class AccountService:
 
     @staticmethod
     def _lock_user(conn: Connection, username: str) -> Row[Any]:
-        """The user row, locked until the transaction ends.
+        """Serialize account writes without blocking audit actor foreign keys.
+
+        Account mutations do not change referenced keys. NO KEY UPDATE keeps
+        concurrent mutations exclusive while allowing the KEY SHARE taken by
+        an audit insert when two administrators act on each other's accounts.
 
         Raises:
             DomainError: ``USERNAME_INVALID`` or ``USER_NOT_FOUND``.
         """
         name = normalize_username(username)
         row = conn.execute(
-            select(UserRow).where(UserRow.username == name).with_for_update()
+            select(UserRow)
+            .where(UserRow.username == name)
+            .with_for_update(key_share=True)
         ).one_or_none()
         if row is None:
             raise DomainError("USER_NOT_FOUND", f"There is no user '{name}'.")
