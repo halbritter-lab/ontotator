@@ -12,7 +12,7 @@ no main merge, push or deployment has occurred.
 - [x] T2e: reviewed Docker/Compose/health/operations implementation and functional container acceptance.
 - [x] T6a: all ten design-foundation tasks, final review, bundled assets/fonts and integrated acceptance.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
-- [ ] T3a: administration backend in progress (5/10 tasks accepted: project-key rename, schema/policy, users/profile API, projects/settings/members, project rules); uploads and assignments in preparation.
+- [ ] T3a: administration backend in progress (6/10 tasks accepted: project-key rename, schema/policy, users/profile API, projects/settings/members, project rules, upload preview/commit); assignments in preparation.
 - [ ] T3b: administration UI.
 - [ ] T5: variants and translation-review application workflows; the format-1.1 prerequisite is already complete.
 - [ ] T4a: workflows and stage tasks.
@@ -44,4 +44,7 @@ also passed independent review, 160 affected tests plus one Windows skip,
 and 38 final focused tests. The
 [project rules slice](2026-10-15-t3a-rules-review.md) passed independent review,
 55 pure/service tests, 64 frontend tests, three new database regressions and
-affected scope/submission checks. Later T3a tasks remain open.
+affected scope/submission checks. The
+[staged upload slice](2026-10-15-t3a-uploads-review.md) passed independent
+integration and scoped fix review, with 96 final targeted tests after correcting
+existing-set hashing and duplicate-source provenance. Later T3a tasks remain open.
