@@ -150,7 +150,8 @@ def adjudicated_method(decision, group) -> Literal["adopted", "merged", "edited"
         return "edited"
     if decision.action == "confirmed" and len(group.contributors) >= 2:
         return "merged"
-    return "adopted"           # taken, or confirmed with a single contributor
+    return "adopted"  # taken, or confirmed with a single contributor
+
 
 source_refs = [m.ref for m in group.members] + imported_origins(group.members)
 ```

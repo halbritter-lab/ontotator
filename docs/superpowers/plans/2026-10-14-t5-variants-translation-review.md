@@ -48,17 +48,24 @@ Work in the ontospan repository: `git -C ../ontospan worktree add .worktrees/for
 **Models (the contract):**
 
 ```python
-VariantOrigin = Literal["native", "machine_translation", "human_translation", "correction"]
+VariantOrigin = Literal[
+    "native", "machine_translation", "human_translation", "correction"
+]
+
 
 class Variant(_Model):
     version: int = Field(ge=1)
     origin: VariantOrigin
-    derived_from: str | None = Field(default=None, pattern=SHA256)  # text_sha256 of the source / previous version
+    derived_from: str | None = Field(
+        default=None, pattern=SHA256
+    )  # text_sha256 of the source / previous version
+
 
 class TranslationCheck(_Model):
     code: str = Field(min_length=1)
     passed: bool
     detail: str | None = None
+
 
 class Translation(_Model):
     provider: str = Field(min_length=1)
@@ -67,18 +74,22 @@ class Translation(_Model):
     recipe: str | None = None
     checks: tuple[TranslationCheck, ...] = ()
 
+
 class Document(_Model):  # existing fields unchanged, plus:
     case_id: str | None = Field(default=None, min_length=1)
     variant: Variant | None = None
     translation: Translation | None = None
 
+
 class Producer(_Model):
     name: str = Field(min_length=1)
     version: str = Field(min_length=1)
 
+
 class SupersededRelease(_Model):
     bundle_id: str = Field(min_length=1)
     manifest_sha256: str = Field(pattern=SHA256)
+
 
 class ReleaseInfo(_Model):
     name: str = Field(min_length=1)
@@ -86,6 +97,7 @@ class ReleaseInfo(_Model):
     project_id: str | None = None
     producer: Producer | None = None
     supersedes: tuple[SupersededRelease, ...] = ()
+
 
 class Manifest(_Model):  # existing fields unchanged, plus:
     release: ReleaseInfo | None = None
@@ -187,15 +199,15 @@ Export the new names from `ontospan/__init__.py` (`Variant`, `VariantOrigin`, `T
 ```python
 @dataclass(frozen=True)
 class PlannedVariant:
-    document_id: str            # internal id (D-o)
+    document_id: str  # internal id (D-o)
     external_id: str
     language: str
     case_id: str
     version: int
     origin: VariantOrigin
-    derived_from: str | None    # internal id of the source / previous version
-    derived_in_upload: bool     # the source arrives in the same upload
-    translation: dict | None    # the 1.1 translation object as delivered
+    derived_from: str | None  # internal id of the source / previous version
+    derived_in_upload: bool  # the source arrives in the same upload
+    translation: dict | None  # the 1.1 translation object as delivered
     status: TranslationStatus | None
     failed_checks: tuple[str, ...]
 ```
@@ -297,9 +309,14 @@ The existing document list (T3a) gains `case_id`, `external_id`, `version`, `ori
 **Decision table (V1; the contract):**
 
 ```python
-ReviewDecisionCode = Literal["accepted_unchanged", "accepted_corrected", "query", "rejected"]
-ClinicalCategory = Literal["omission", "addition", "assertion", "value", "anatomy", "terminology", "source"]
+ReviewDecisionCode = Literal[
+    "accepted_unchanged", "accepted_corrected", "query", "rejected"
+]
+ClinicalCategory = Literal[
+    "omission", "addition", "assertion", "value", "anatomy", "terminology", "source"
+]
 REVIEW_POLICY = "ontocurator-translation-review/v1"
+
 
 class ReviewForm(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -308,7 +325,10 @@ class ReviewForm(BaseModel):
     categories: list[ClinicalCategory] = []
     rationale: str | None = None
 
-def check_review(form: ReviewForm, *, machine_text: str, proposed_text: str) -> list[str]:
+
+def check_review(
+    form: ReviewForm, *, machine_text: str, proposed_text: str
+) -> list[str]:
     """Issue codes; empty means valid. Texts are compared after canonical_text()."""
     issues: list[str] = []
     changed = canonical_text(proposed_text) != canonical_text(machine_text)
@@ -317,15 +337,22 @@ def check_review(form: ReviewForm, *, machine_text: str, proposed_text: str) -> 
     explained = bool(form.categories) and bool((form.rationale or "").strip())
     match form.decision:
         case "accepted_unchanged":
-            if changed: issues.append("TEXT_CHANGED")
-            if form.clinical_change: issues.append("CLINICAL_CHANGE_NOT_ALLOWED")
+            if changed:
+                issues.append("TEXT_CHANGED")
+            if form.clinical_change:
+                issues.append("CLINICAL_CHANGE_NOT_ALLOWED")
         case "accepted_corrected":
-            if not changed: issues.append("TEXT_UNCHANGED")
+            if not changed:
+                issues.append("TEXT_UNCHANGED")
         case "query" | "rejected":
-            if not form.clinical_change: issues.append("CLINICAL_CHANGE_REQUIRED")
-    if form.clinical_change and not form.categories: issues.append("CATEGORY_REQUIRED")
-    if form.clinical_change and not (form.rationale or "").strip(): issues.append("RATIONALE_REQUIRED")
-    if not form.clinical_change and form.categories: issues.append("CATEGORIES_WITHOUT_CHANGE")
+            if not form.clinical_change:
+                issues.append("CLINICAL_CHANGE_REQUIRED")
+    if form.clinical_change and not form.categories:
+        issues.append("CATEGORY_REQUIRED")
+    if form.clinical_change and not (form.rationale or "").strip():
+        issues.append("RATIONALE_REQUIRED")
+    if not form.clinical_change and form.categories:
+        issues.append("CATEGORIES_WITHOUT_CHANGE")
     return issues
 ```
 
@@ -433,11 +460,15 @@ A review is allowed from any status; `status_before` records it. A reopened revi
 ```python
 @dataclass(frozen=True)
 class TextMap:
-    blocks: tuple[tuple[int, int, int], ...]   # (old_start, new_start, length) of equal blocks
+    blocks: tuple[
+        tuple[int, int, int], ...
+    ]  # (old_start, new_start, length) of equal blocks
+
 
 def text_map(old: str, new: str) -> TextMap:
     matcher = difflib.SequenceMatcher(None, old, new, autojunk=False)
     return TextMap(tuple((a, b, n) for a, b, n in matcher.get_matching_blocks() if n))
+
 
 def map_span(m: TextMap, start: int, end: int) -> tuple[int, int] | None:
     """The span in the new text, or None if it touches a changed region."""

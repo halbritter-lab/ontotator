@@ -81,17 +81,31 @@ Set up: `git -C ../ontospan worktree add .worktrees/offsets-integration -b feat/
 ```python
 class OffsetError(FormatError):
     """A raw offset or span that cannot be mapped; ``.code`` is the issue code."""
+
     code: str
+
 
 @dataclass(frozen=True)
 class OffsetMap:
     canonical: str
-    identity: bool                       # canonical_text(raw) == raw
-    def position(self, raw_offset: int) -> int: ...                                     # Task 2
-    def span(self, raw_start: int, raw_end: int, *, snippet: str | None = None) -> tuple[int, int]: ...
-    def span_utf16(self, u16_start: int, u16_end: int, *, snippet: str | None = None) -> tuple[int, int]: ...
-    def segment(self, raw_start: int, raw_end: int, *, snippet: str | None = None,
-                utf16: bool = False) -> Segment: ...                                    # ontospan.segment(canonical, …)
+    identity: bool  # canonical_text(raw) == raw
+
+    def position(self, raw_offset: int) -> int: ...  # Task 2
+    def span(
+        self, raw_start: int, raw_end: int, *, snippet: str | None = None
+    ) -> tuple[int, int]: ...
+    def span_utf16(
+        self, u16_start: int, u16_end: int, *, snippet: str | None = None
+    ) -> tuple[int, int]: ...
+    def segment(
+        self,
+        raw_start: int,
+        raw_end: int,
+        *,
+        snippet: str | None = None,
+        utf16: bool = False,
+    ) -> Segment: ...  # ontospan.segment(canonical, …)
+
 
 def canonicalize_with_offsets(raw: str) -> tuple[str, OffsetMap]: ...
 ```
@@ -188,16 +202,35 @@ The map stores the run boundaries as two sorted tuples (raw and canonical starts
 class ReleaseView:
     manifest: Manifest
     units: tuple[AnnotatedDocument, ...]
-    def finals(self) -> list[AnnotatedDocument]: ...        # set_kind "release", in bundle order
-    def sets_for(self, unit: AnnotatedDocument) -> list[AnnotatedDocument]: ...  # same document_id and text_sha256
-    def resolve(self, unit: AnnotatedDocument, ref: str) -> tuple[AnnotatedDocument, Annotation] | None: ...
-    def origins(self, unit: AnnotatedDocument, annotation: Annotation, *,
-                set_kind: SetKind | None = None) -> list[tuple[AnnotatedDocument, Annotation]]: ...
+
+    def finals(
+        self,
+    ) -> list[AnnotatedDocument]: ...  # set_kind "release", in bundle order
+    def sets_for(
+        self, unit: AnnotatedDocument
+    ) -> list[AnnotatedDocument]: ...  # same document_id and text_sha256
+    def resolve(
+        self, unit: AnnotatedDocument, ref: str
+    ) -> tuple[AnnotatedDocument, Annotation] | None: ...
+    def origins(
+        self,
+        unit: AnnotatedDocument,
+        annotation: Annotation,
+        *,
+        set_kind: SetKind | None = None,
+    ) -> list[tuple[AnnotatedDocument, Annotation]]:
+        ...
         # transitive over source_refs (breadth first, each annotation once); optionally filtered by set kind
 
+
 def check_lineage(units: Sequence[AnnotatedDocument]) -> ValidationReport: ...
-def read_release(path: Path, ontologies: Mapping[str, OntologyView] | None = None, *,
-                 report: ValidationReport | None = None) -> ReleaseView: ...
+def read_release(
+    path: Path,
+    ontologies: Mapping[str, OntologyView] | None = None,
+    *,
+    report: ValidationReport | None = None,
+) -> ReleaseView:
+    ...
     # read_bundle + the release rules below; raises FormatError on any error
 ```
 

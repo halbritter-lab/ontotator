@@ -136,7 +136,8 @@ class StageState:
     stage_type: StageType
     k: int
     status: Literal["pending", "active", "complete", "skipped"]
-    has_result: bool            # a stage_results row exists for this stage
+    has_result: bool  # a stage_results row exists for this stage
+
 
 @dataclass(frozen=True)
 class AssignmentState:
@@ -144,15 +145,35 @@ class AssignmentState:
     document_stage_id: int
     status: Literal["open", "in_progress", "submitted", "reopened"]
 
-Event = (Started | Released | Skipped | Inserted | ReopenedTo
-         | DeclaredFinal | ParticipantAdded)          # frozen dataclasses, see the table
-Transition = (Activate | Complete | MarkSkipped | ResetToPending
-              | RevokeStageAssignments | ReopenStageAssignments
-              | SetFinal | ClearFinal | SetK | StageCompleted)
 
-def advance(stages: Sequence[StageState],
-            assignments: Sequence[AssignmentState],   # active ones only
-            event: Event) -> list[Transition]: ...
+Event = (
+    Started
+    | Released
+    | Skipped
+    | Inserted
+    | ReopenedTo
+    | DeclaredFinal
+    | ParticipantAdded
+)  # frozen dataclasses, see the table
+Transition = (
+    Activate
+    | Complete
+    | MarkSkipped
+    | ResetToPending
+    | RevokeStageAssignments
+    | ReopenStageAssignments
+    | SetFinal
+    | ClearFinal
+    | SetK
+    | StageCompleted
+)
+
+
+def advance(
+    stages: Sequence[StageState],
+    assignments: Sequence[AssignmentState],  # active ones only
+    event: Event,
+) -> list[Transition]: ...
 ```
 
 `advance` never reads the database. `WorkflowService` loads the states under `SELECT … FOR UPDATE` of the document's `document_stages` rows, calls `advance`, applies the transitions in order and audits the event. One transaction covers the whole operation.
@@ -335,8 +356,9 @@ Notes on the transitions:
 **Lineage rule:** this is the contract.
 
 ```python
-def lineage(parent_ref: str, parent: AnnotationSnapshot,
-            is_imported: Callable[[str], bool]) -> list[str]:
+def lineage(
+    parent_ref: str, parent: AnnotationSnapshot, is_imported: Callable[[str], bool]
+) -> list[str]:
     """Direct parent first, then the parent's imported origins (O3).
 
     An imported origin is a ref that names an annotation of a proposal set
@@ -408,7 +430,7 @@ For revise and adjudicate stages, `proposal_policy` governs only the late-propos
 **Blind flag (T1 F10):** this is the contract.
 
 ```python
-blind = not draft.foreign_seen   # nothing foreign was visible at any point of this draft
+blind = not draft.foreign_seen  # nothing foreign was visible at any point of this draft
 ```
 
 - `Submission` gains `blind: bool | None = None`. It is set at submit for stage drafts.

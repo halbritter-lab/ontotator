@@ -160,9 +160,9 @@ The sets are linked by identical `text_sha256` (T1 F3) and by `source_refs` (O3)
 The helper is for converters that bring offsets measured on a non-canonical or UTF-16 text. Ontocurator itself only accepts canonical bundles.
 
 ```python
-canonical, offset_map = canonicalize_with_offsets(raw)            # raw: str
-start, end = offset_map.span(raw_start, raw_end)                   # code points
-start, end = offset_map.span_utf16(u16_start, u16_end)             # UTF-16 (XMI, JavaScript)
+canonical, offset_map = canonicalize_with_offsets(raw)  # raw: str
+start, end = offset_map.span(raw_start, raw_end)  # code points
+start, end = offset_map.span_utf16(u16_start, u16_end)  # UTF-16 (XMI, JavaScript)
 ```
 
 **Fast path:** if `canonical_text(raw) == raw`, the map is the identity.

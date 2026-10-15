@@ -45,11 +45,17 @@ The pairs are sorted. Together with the content-addressed snapshot tables this r
 The grants and triggers are the contract:
 
 ```python
-op.execute(f"CREATE TRIGGER edit_events_append_only BEFORE UPDATE OR DELETE ON {SCHEMA}.edit_events"
-           f" FOR EACH ROW EXECUTE FUNCTION {SCHEMA}.forbid_history_change()")
-op.execute(f"CREATE TRIGGER edit_events_no_truncate BEFORE TRUNCATE ON {SCHEMA}.edit_events"
-           f" FOR EACH STATEMENT EXECUTE FUNCTION {SCHEMA}.forbid_history_change()")
-op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {SCHEMA}.project_memberships TO {APP_ROLE}")
+op.execute(
+    f"CREATE TRIGGER edit_events_append_only BEFORE UPDATE OR DELETE ON {SCHEMA}.edit_events"
+    f" FOR EACH ROW EXECUTE FUNCTION {SCHEMA}.forbid_history_change()"
+)
+op.execute(
+    f"CREATE TRIGGER edit_events_no_truncate BEFORE TRUNCATE ON {SCHEMA}.edit_events"
+    f" FOR EACH STATEMENT EXECUTE FUNCTION {SCHEMA}.forbid_history_change()"
+)
+op.execute(
+    f"GRANT SELECT, INSERT, UPDATE, DELETE ON {SCHEMA}.project_memberships TO {APP_ROLE}"
+)
 op.execute(f"GRANT SELECT, INSERT ON {SCHEMA}.edit_events TO {APP_ROLE}")
 op.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA {SCHEMA} TO {APP_ROLE}")
 ```

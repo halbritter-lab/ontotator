@@ -549,7 +549,10 @@ def test_the_application_role_cannot_change_history(
 ) -> None:
     db = database_for(tmp_path / "a.db")
 
-    with pytest.raises(DBAPIError, match="permission denied"), db.engine.begin() as conn:
+    with (
+        pytest.raises(DBAPIError, match="permission denied"),
+        db.engine.begin() as conn,
+    ):
         conn.execute(text(statement.format(t=f"{SCHEMA}.{table}")))
 
 
@@ -584,7 +587,10 @@ def test_even_the_schema_owner_cannot_change_history(tmp_path: Path) -> None:
 def test_the_application_role_cannot_create_tables(tmp_path: Path) -> None:
     db = database_for(tmp_path / "a.db")
 
-    with pytest.raises(DBAPIError, match="permission denied"), db.engine.begin() as conn:
+    with (
+        pytest.raises(DBAPIError, match="permission denied"),
+        db.engine.begin() as conn,
+    ):
         conn.execute(text(f"CREATE TABLE {SCHEMA}.intruder (id int)"))
 ```
 
@@ -727,9 +733,7 @@ class ProjectRow(Base):
 
     __tablename__ = "projects"
 
-    id: Mapped[int] = mapped_column(
-        BigInteger, Identity(always=True), primary_key=True
-    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     project_key: Mapped[str] = mapped_column(unique=True)
     name: Mapped[str]
     manifest: Mapped[dict[str, Any]]
@@ -872,9 +876,7 @@ class DraftRow(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(
-        BigInteger, Identity(always=True), primary_key=True
-    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
     draft_key: Mapped[str]
     document_id: Mapped[str]
@@ -968,9 +970,7 @@ class SearchEventRow(Base):
     __tablename__ = "search_events"
     __table_args__ = (
         Index("ix_search_events_project_local_key", "project_id", "local_key"),
-        Index(
-            "ix_search_events_project_workspace_key", "project_id", "workspace_key"
-        ),
+        Index("ix_search_events_project_workspace_key", "project_id", "workspace_key"),
     )
 
     project_id: Mapped[int] = mapped_column(
@@ -1249,7 +1249,9 @@ def upgrade() -> None:
         sa.Column("scope_id", sa.Text(), nullable=False),
         sa.Column("target_set_id", sa.Text(), nullable=False),
         sa.Column("targets", _jsonb(), nullable=False),
-        sa.Column("revision", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column(
+            "revision", sa.Integer(), server_default=sa.text("0"), nullable=False
+        ),
         sa.Column(
             "checked_layer_ids",
             _jsonb(),
@@ -1324,9 +1326,7 @@ def upgrade() -> None:
         sa.Column("draft_revision", sa.Integer(), nullable=False),
         sa.Column("payload", _jsonb(), nullable=False),
         sa.Column("created_at", sa.Text(), nullable=False),
-        sa.Column(
-            "recorded_at", _ts(), server_default=sa.func.now(), nullable=False
-        ),
+        sa.Column("recorded_at", _ts(), server_default=sa.func.now(), nullable=False),
         _project_fk("submissions"),
         sa.PrimaryKeyConstraint("project_id", "submission_id", name="pk_submissions"),
         schema=SCHEMA,
@@ -1689,8 +1689,7 @@ def database_url_for(path: Path | str) -> str:
             with admin.connect() as conn:
                 conn.execute(
                     text(
-                        f"CREATE DATABASE {name} TEMPLATE {TEMPLATE}"
-                        f" OWNER {OWNER_ROLE}"
+                        f"CREATE DATABASE {name} TEMPLATE {TEMPLATE} OWNER {OWNER_ROLE}"
                     )
                 )
             _by_path[key] = name
@@ -1970,7 +1969,18 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from urllib.parse import quote
 
-from sqlalchemy import Connection, Row, and_, delete, exists, func, insert, or_, select, update
+from sqlalchemy import (
+    Connection,
+    Row,
+    and_,
+    delete,
+    exists,
+    func,
+    insert,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ontocurator.domain.annotations import AnnotationSnapshot
@@ -2339,8 +2349,9 @@ class Repository:
         )
         stored_evidence = set(
             conn.execute(
-                select(ProposalEvidenceRow.evidence_id, ProposalEvidenceRow.version)
-                .where(ProposalEvidenceRow.project_id == project_id)
+                select(
+                    ProposalEvidenceRow.evidence_id, ProposalEvidenceRow.version
+                ).where(ProposalEvidenceRow.project_id == project_id)
             )
             .tuples()
             .all()
@@ -2488,7 +2499,10 @@ class Repository:
                         ProjectRow.task_profile,
                         ProjectResourceRow.resource_path,
                         ProjectResourceRow.sha256,
-                    ).join(ProjectResourceRow, ProjectResourceRow.project_id == ProjectRow.id)
+                    ).join(
+                        ProjectResourceRow,
+                        ProjectResourceRow.project_id == ProjectRow.id,
+                    )
                 )
                 .tuples()
                 .all()
@@ -2598,7 +2612,9 @@ class Repository:
                 )
                 .join(ProjectRow, ProjectRow.id == DocumentRow.project_id)
                 .where(ProjectRow.project_key == package_id)
-                .order_by(DocumentRow.position.asc().nulls_last(), DocumentRow.document_id)
+                .order_by(
+                    DocumentRow.position.asc().nulls_last(), DocumentRow.document_id
+                )
             ).all()
         return [
             Document(
@@ -2828,7 +2844,9 @@ def _key(package_id: str = "pkg-a", annotator_id: str = "ann-1") -> WorkspaceKey
 
 
 def _envelope(mutation_id: str, expected: int) -> MutationEnvelope:
-    return MutationEnvelope(mutation_id=mutation_id, expected_revision=expected, payload={})
+    return MutationEnvelope(
+        mutation_id=mutation_id, expected_revision=expected, payload={}
+    )
 
 
 def _check(draft: Draft) -> Draft:
@@ -2984,499 +3002,510 @@ Expected: the seven tests of Task 5 pass; the new ones fail with `AttributeError
 Append to `src/ontocurator/storage/repository.py` (inside `class Repository`, after `_insert_search_event`):
 
 ```python
+# --- drafts and mutations ---------------------------------------------- #
 
-    # --- drafts and mutations ---------------------------------------------- #
 
-    def list_workspace_keys(
-        self,
-        package_id: str,
-        annotator_id: str,
-        mode: str | None = None,
-        document_id: str | None = None,
-    ) -> list[WorkspaceKey]:
-        """Workspace identities of one annotator: opened drafts and submissions."""
-        profile = self.get_task_profile(package_id)
-        with self.db.transaction() as conn:
-            project_id = self._require_project(conn, package_id)
-            drafts = select(
-                DraftRow.document_id,
-                DraftRow.mode,
-                DraftRow.scope_id,
-                DraftRow.target_set_id,
-            ).where(
-                DraftRow.project_id == project_id, DraftRow.annotator_id == annotator_id
-            )
-            submissions = select(SubmissionRow.payload).where(
-                SubmissionRow.project_id == project_id,
-                SubmissionRow.annotator_id == annotator_id,
-            )
-            if mode is not None:
-                drafts = drafts.where(DraftRow.mode == mode)
-                submissions = submissions.where(SubmissionRow.mode == mode)
-            if document_id is not None:
-                drafts = drafts.where(DraftRow.document_id == document_id)
-                submissions = submissions.where(SubmissionRow.document_id == document_id)
-            draft_rows = conn.execute(drafts).all()
-            payloads = conn.execute(submissions).scalars().all()
-        keys: dict[str, WorkspaceKey] = {}
-        for row in draft_rows:
-            key = WorkspaceKey(
-                package_id=package_id,
-                document_id=row.document_id,
-                annotator_id=annotator_id,
-                mode=row.mode,
-                scope_id=row.scope_id,
-                target_set_id=row.target_set_id,
-            )
-            keys[_key_str(key)] = key
-        for payload in payloads:
-            origin = WorkspaceKey.model_validate(payload["origin_key"])
-            key = (
-                origin
-                if origin.package_id == package_id
-                else _local_import_key(origin, package_id, profile)
-            )
-            keys.setdefault(_key_str(key), key)
-        return sorted(
-            keys.values(),
-            key=lambda k: (k.document_id, k.mode, k.scope_id, k.target_set_id),
+def list_workspace_keys(
+    self,
+    package_id: str,
+    annotator_id: str,
+    mode: str | None = None,
+    document_id: str | None = None,
+) -> list[WorkspaceKey]:
+    """Workspace identities of one annotator: opened drafts and submissions."""
+    profile = self.get_task_profile(package_id)
+    with self.db.transaction() as conn:
+        project_id = self._require_project(conn, package_id)
+        drafts = select(
+            DraftRow.document_id,
+            DraftRow.mode,
+            DraftRow.scope_id,
+            DraftRow.target_set_id,
+        ).where(
+            DraftRow.project_id == project_id, DraftRow.annotator_id == annotator_id
         )
+        submissions = select(SubmissionRow.payload).where(
+            SubmissionRow.project_id == project_id,
+            SubmissionRow.annotator_id == annotator_id,
+        )
+        if mode is not None:
+            drafts = drafts.where(DraftRow.mode == mode)
+            submissions = submissions.where(SubmissionRow.mode == mode)
+        if document_id is not None:
+            drafts = drafts.where(DraftRow.document_id == document_id)
+            submissions = submissions.where(SubmissionRow.document_id == document_id)
+        draft_rows = conn.execute(drafts).all()
+        payloads = conn.execute(submissions).scalars().all()
+    keys: dict[str, WorkspaceKey] = {}
+    for row in draft_rows:
+        key = WorkspaceKey(
+            package_id=package_id,
+            document_id=row.document_id,
+            annotator_id=annotator_id,
+            mode=row.mode,
+            scope_id=row.scope_id,
+            target_set_id=row.target_set_id,
+        )
+        keys[_key_str(key)] = key
+    for payload in payloads:
+        origin = WorkspaceKey.model_validate(payload["origin_key"])
+        key = (
+            origin
+            if origin.package_id == package_id
+            else _local_import_key(origin, package_id, profile)
+        )
+        keys.setdefault(_key_str(key), key)
+    return sorted(
+        keys.values(),
+        key=lambda k: (k.document_id, k.mode, k.scope_id, k.target_set_id),
+    )
 
-    @staticmethod
-    def _draft_row(conn: Connection, project_id: int, key_string: str) -> Row[Any] | None:
-        return conn.execute(
-            select(
-                DraftRow.id,
-                DraftRow.revision,
-                DraftRow.checked_layer_ids,
-                DraftRow.targets,
-            ).where(DraftRow.project_id == project_id, DraftRow.draft_key == key_string)
-        ).one_or_none()
 
-    def open_draft(
-        self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
-    ) -> Draft:
-        """Open or initialize the draft of a workspace key."""
-        with self.db.transaction() as conn:
-            return self._open_draft(conn, key, targets)
+@staticmethod
+def _draft_row(conn: Connection, project_id: int, key_string: str) -> Row[Any] | None:
+    return conn.execute(
+        select(
+            DraftRow.id,
+            DraftRow.revision,
+            DraftRow.checked_layer_ids,
+            DraftRow.targets,
+        ).where(DraftRow.project_id == project_id, DraftRow.draft_key == key_string)
+    ).one_or_none()
 
-    def _open_draft(
-        self, conn: Connection, key: WorkspaceKey, targets: ReviewTargetSet | None
-    ) -> Draft:
-        project_id = self._require_project(conn, key.package_id)
-        key_string = _key_str(key)
+
+def open_draft(
+    self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
+) -> Draft:
+    """Open or initialize the draft of a workspace key."""
+    with self.db.transaction() as conn:
+        return self._open_draft(conn, key, targets)
+
+
+def _open_draft(
+    self, conn: Connection, key: WorkspaceKey, targets: ReviewTargetSet | None
+) -> Draft:
+    project_id = self._require_project(conn, key.package_id)
+    key_string = _key_str(key)
+    row = self._draft_row(conn, project_id, key_string)
+    if row is None:
+        self._create_draft(conn, project_id, key, key_string, targets)
         row = self._draft_row(conn, project_id, key_string)
         if row is None:
-            self._create_draft(conn, project_id, key, key_string, targets)
-            row = self._draft_row(conn, project_id, key_string)
-            if row is None:
-                raise DomainError("DRAFT_NOT_CREATED", key_string)
-        annotations = (
-            conn.execute(
-                select(AnnotationSnapshotRow.payload)
-                .join(
-                    DraftAnnotationRow,
-                    and_(
-                        DraftAnnotationRow.annotation_id
-                        == AnnotationSnapshotRow.annotation_id,
-                        DraftAnnotationRow.version == AnnotationSnapshotRow.version,
-                    ),
-                )
-                .where(
-                    DraftAnnotationRow.draft_id == row.id,
-                    AnnotationSnapshotRow.project_id == project_id,
-                )
-                .order_by(DraftAnnotationRow.annotation_id, DraftAnnotationRow.version)
-            )
-            .scalars()
-            .all()
-        )
-        evidence = (
-            conn.execute(
-                select(EvidenceSnapshotRow.payload)
-                .join(
-                    DraftEvidenceRow,
-                    and_(
-                        DraftEvidenceRow.evidence_id == EvidenceSnapshotRow.evidence_id,
-                        DraftEvidenceRow.version == EvidenceSnapshotRow.version,
-                    ),
-                )
-                .where(
-                    DraftEvidenceRow.draft_id == row.id,
-                    EvidenceSnapshotRow.project_id == project_id,
-                )
-                .order_by(DraftEvidenceRow.evidence_id, DraftEvidenceRow.version)
-            )
-            .scalars()
-            .all()
-        )
-        decisions = (
-            conn.execute(
-                select(ReviewDecisionRow.payload)
-                .where(ReviewDecisionRow.draft_id == row.id)
-                .order_by(ReviewDecisionRow.position)
-            )
-            .scalars()
-            .all()
-        )
-        return Draft(
-            key=key,
-            targets=ReviewTargetSet.model_validate(row.targets),
-            revision=int(row.revision),
-            annotations=[decode_snapshot(p) for p in annotations],
-            evidence=[EvidenceSnapshot.model_validate(p) for p in evidence],
-            decisions=[ReviewDecision.model_validate(p) for p in decisions],
-            checked_layer_ids=list(row.checked_layer_ids),
-        )
-
-    def _create_draft(
-        self,
-        conn: Connection,
-        project_id: int,
-        key: WorkspaceKey,
-        key_string: str,
-        targets: ReviewTargetSet | None,
-    ) -> None:
-        """Create the draft row; a new draft resumes the latest submission of its key."""
-        effective = targets if targets is not None else ReviewTargetSet.create([])
-        draft_id = conn.execute(
-            pg_insert(DraftRow)
-            .values(
-                project_id=project_id,
-                draft_key=key_string,
-                document_id=key.document_id,
-                annotator_id=key.annotator_id,
-                mode=key.mode,
-                scope_id=key.scope_id,
-                target_set_id=key.target_set_id,
-                targets=effective.model_dump(mode="json"),
-                updated_at=datetime.now(UTC),
-            )
-            .on_conflict_do_nothing(index_elements=["project_id", "draft_key"])
-            .returning(DraftRow.id)
-        ).scalar_one_or_none()
-        if draft_id is None:
-            return  # created by a concurrent request; the caller reads it
-        submissions = self._submissions_for_workspace(conn, project_id, key)
-        if not submissions:
-            return
-        current = latest_submissions(submissions)
-        if len(current) != 1:
-            raise DomainError(
-                "AMBIGUOUS_SUBMISSION_ORIGIN",
-                {
-                    "message": "Cannot restore multiple submission origins into one draft",
-                    "origins": [s.origin_key.model_dump() for s in current],
-                },
-            )
-        latest = current[0]
-        confirmed = {
-            (d.target.annotation_id, d.target.version)
-            for d in latest.decisions
-            if d.outcome == "confirmed"
-        }
-        annotations = [
-            a
-            for a in latest.snapshots
-            if key.mode != "review"
-            or (a.annotation.annotation_id, a.version) not in confirmed
-        ]
-        evidence = [ev for a in annotations for ev in a.evidence]
-        decisions = [
-            # Rebind the local decision identity to this workspace.
-            d.model_copy(
-                update={
-                    "decision_id": canonical_hash(
-                        {"workspace": key.model_dump(), "target": d.target.model_dump()}
-                    )
-                }
-            )
-            for d in latest.decisions
-        ]
-        self._insert_snapshots(conn, project_id, annotations, evidence)
-        self._write_draft_content(conn, draft_id, annotations, evidence, decisions)
+            raise DomainError("DRAFT_NOT_CREATED", key_string)
+    annotations = (
         conn.execute(
-            update(DraftRow)
-            .where(DraftRow.id == draft_id)
-            .values(
-                targets=latest.targets.model_dump(mode="json"),
-                revision=latest.draft_revision,
-                checked_layer_ids=list(latest.checked_layer_ids),
+            select(AnnotationSnapshotRow.payload)
+            .join(
+                DraftAnnotationRow,
+                and_(
+                    DraftAnnotationRow.annotation_id
+                    == AnnotationSnapshotRow.annotation_id,
+                    DraftAnnotationRow.version == AnnotationSnapshotRow.version,
+                ),
             )
+            .where(
+                DraftAnnotationRow.draft_id == row.id,
+                AnnotationSnapshotRow.project_id == project_id,
+            )
+            .order_by(DraftAnnotationRow.annotation_id, DraftAnnotationRow.version)
+        )
+        .scalars()
+        .all()
+    )
+    evidence = (
+        conn.execute(
+            select(EvidenceSnapshotRow.payload)
+            .join(
+                DraftEvidenceRow,
+                and_(
+                    DraftEvidenceRow.evidence_id == EvidenceSnapshotRow.evidence_id,
+                    DraftEvidenceRow.version == EvidenceSnapshotRow.version,
+                ),
+            )
+            .where(
+                DraftEvidenceRow.draft_id == row.id,
+                EvidenceSnapshotRow.project_id == project_id,
+            )
+            .order_by(DraftEvidenceRow.evidence_id, DraftEvidenceRow.version)
+        )
+        .scalars()
+        .all()
+    )
+    decisions = (
+        conn.execute(
+            select(ReviewDecisionRow.payload)
+            .where(ReviewDecisionRow.draft_id == row.id)
+            .order_by(ReviewDecisionRow.position)
+        )
+        .scalars()
+        .all()
+    )
+    return Draft(
+        key=key,
+        targets=ReviewTargetSet.model_validate(row.targets),
+        revision=int(row.revision),
+        annotations=[decode_snapshot(p) for p in annotations],
+        evidence=[EvidenceSnapshot.model_validate(p) for p in evidence],
+        decisions=[ReviewDecision.model_validate(p) for p in decisions],
+        checked_layer_ids=list(row.checked_layer_ids),
+    )
+
+
+def _create_draft(
+    self,
+    conn: Connection,
+    project_id: int,
+    key: WorkspaceKey,
+    key_string: str,
+    targets: ReviewTargetSet | None,
+) -> None:
+    """Create the draft row; a new draft resumes the latest submission of its key."""
+    effective = targets if targets is not None else ReviewTargetSet.create([])
+    draft_id = conn.execute(
+        pg_insert(DraftRow)
+        .values(
+            project_id=project_id,
+            draft_key=key_string,
+            document_id=key.document_id,
+            annotator_id=key.annotator_id,
+            mode=key.mode,
+            scope_id=key.scope_id,
+            target_set_id=key.target_set_id,
+            targets=effective.model_dump(mode="json"),
+            updated_at=datetime.now(UTC),
+        )
+        .on_conflict_do_nothing(index_elements=["project_id", "draft_key"])
+        .returning(DraftRow.id)
+    ).scalar_one_or_none()
+    if draft_id is None:
+        return  # created by a concurrent request; the caller reads it
+    submissions = self._submissions_for_workspace(conn, project_id, key)
+    if not submissions:
+        return
+    current = latest_submissions(submissions)
+    if len(current) != 1:
+        raise DomainError(
+            "AMBIGUOUS_SUBMISSION_ORIGIN",
+            {
+                "message": "Cannot restore multiple submission origins into one draft",
+                "origins": [s.origin_key.model_dump() for s in current],
+            },
+        )
+    latest = current[0]
+    confirmed = {
+        (d.target.annotation_id, d.target.version)
+        for d in latest.decisions
+        if d.outcome == "confirmed"
+    }
+    annotations = [
+        a
+        for a in latest.snapshots
+        if key.mode != "review"
+        or (a.annotation.annotation_id, a.version) not in confirmed
+    ]
+    evidence = [ev for a in annotations for ev in a.evidence]
+    decisions = [
+        # Rebind the local decision identity to this workspace.
+        d.model_copy(
+            update={
+                "decision_id": canonical_hash(
+                    {"workspace": key.model_dump(), "target": d.target.model_dump()}
+                )
+            }
+        )
+        for d in latest.decisions
+    ]
+    self._insert_snapshots(conn, project_id, annotations, evidence)
+    self._write_draft_content(conn, draft_id, annotations, evidence, decisions)
+    conn.execute(
+        update(DraftRow)
+        .where(DraftRow.id == draft_id)
+        .values(
+            targets=latest.targets.model_dump(mode="json"),
+            revision=latest.draft_revision,
+            checked_layer_ids=list(latest.checked_layer_ids),
+        )
+    )
+
+
+@staticmethod
+def _write_draft_content(
+    conn: Connection,
+    draft_id: int,
+    annotations: list[AnnotationSnapshot],
+    evidence: list[EvidenceSnapshot],
+    decisions: list[ReviewDecision],
+) -> None:
+    """Insert the content rows of a draft whose previous rows are gone."""
+    if annotations:
+        conn.execute(
+            pg_insert(DraftAnnotationRow).on_conflict_do_nothing(),
+            [
+                {
+                    "draft_id": draft_id,
+                    "annotation_id": a.annotation.annotation_id,
+                    "version": a.version,
+                }
+                for a in annotations
+            ],
+        )
+    if evidence:
+        conn.execute(
+            pg_insert(DraftEvidenceRow).on_conflict_do_nothing(),
+            [
+                {
+                    "draft_id": draft_id,
+                    "evidence_id": e.mention.evidence_id,
+                    "version": e.version,
+                }
+                for e in evidence
+            ],
+        )
+    if decisions:
+        conn.execute(
+            insert(ReviewDecisionRow),
+            [
+                {
+                    "draft_id": draft_id,
+                    "decision_id": d.decision_id,
+                    "position": position,
+                    "target_id": d.target.annotation_id,
+                    "target_version": d.target.version,
+                    "outcome": d.outcome,
+                    "replacement_id": d.replacement.annotation_id
+                    if d.replacement
+                    else None,
+                    "replacement_version": d.replacement.version
+                    if d.replacement
+                    else None,
+                    "note": d.note,
+                    "reviewer_id": d.reviewer_id,
+                    "payload": d.model_dump(mode="json"),
+                }
+                for position, d in enumerate(decisions)
+            ],
         )
 
-    @staticmethod
-    def _write_draft_content(
-        conn: Connection,
-        draft_id: int,
-        annotations: list[AnnotationSnapshot],
-        evidence: list[EvidenceSnapshot],
-        decisions: list[ReviewDecision],
-    ) -> None:
-        """Insert the content rows of a draft whose previous rows are gone."""
-        if annotations:
-            conn.execute(
-                pg_insert(DraftAnnotationRow).on_conflict_do_nothing(),
-                [
-                    {
-                        "draft_id": draft_id,
-                        "annotation_id": a.annotation.annotation_id,
-                        "version": a.version,
-                    }
-                    for a in annotations
-                ],
-            )
-        if evidence:
-            conn.execute(
-                pg_insert(DraftEvidenceRow).on_conflict_do_nothing(),
-                [
-                    {
-                        "draft_id": draft_id,
-                        "evidence_id": e.mention.evidence_id,
-                        "version": e.version,
-                    }
-                    for e in evidence
-                ],
-            )
-        if decisions:
-            conn.execute(
-                insert(ReviewDecisionRow),
-                [
-                    {
-                        "draft_id": draft_id,
-                        "decision_id": d.decision_id,
-                        "position": position,
-                        "target_id": d.target.annotation_id,
-                        "target_version": d.target.version,
-                        "outcome": d.outcome,
-                        "replacement_id": d.replacement.annotation_id
-                        if d.replacement
-                        else None,
-                        "replacement_version": d.replacement.version
-                        if d.replacement
-                        else None,
-                        "note": d.note,
-                        "reviewer_id": d.reviewer_id,
-                        "payload": d.model_dump(mode="json"),
-                    }
-                    for position, d in enumerate(decisions)
-                ],
-            )
 
-    def run_mutation(
-        self,
-        key: WorkspaceKey,
-        envelope: MutationEnvelope,
-        operation: Callable[[Draft], Draft | Submission],
-    ) -> Draft | Submission:
-        """Run ``operation`` on the draft at the expected revision, exactly once.
+def run_mutation(
+    self,
+    key: WorkspaceKey,
+    envelope: MutationEnvelope,
+    operation: Callable[[Draft], Draft | Submission],
+) -> Draft | Submission:
+    """Run ``operation`` on the draft at the expected revision, exactly once.
 
-        Writers of one draft are serialised by a transaction-scoped advisory
-        lock. A retried mutation ID with the same payload replays the stored
-        response; with another payload it is a conflict.
-        """
-        key_string = _key_str(key)
-        request_hash = canonical_hash(envelope.model_dump())
-        with self.db.transaction() as conn:
-            project_id = self._require_project(conn, key.package_id)
-            conn.execute(
-                select(
-                    func.pg_advisory_xact_lock(
-                        _lock_id("draft", key.package_id, key_string)
-                    )
+    Writers of one draft are serialised by a transaction-scoped advisory
+    lock. A retried mutation ID with the same payload replays the stored
+    response; with another payload it is a conflict.
+    """
+    key_string = _key_str(key)
+    request_hash = canonical_hash(envelope.model_dump())
+    with self.db.transaction() as conn:
+        project_id = self._require_project(conn, key.package_id)
+        conn.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    _lock_id("draft", key.package_id, key_string)
                 )
             )
-            receipt = conn.execute(
-                select(MutationReceiptRow.request_hash, MutationReceiptRow.response).where(
-                    MutationReceiptRow.project_id == project_id,
-                    MutationReceiptRow.workspace_key == key_string,
-                    MutationReceiptRow.mutation_id == envelope.mutation_id,
-                )
-            ).one_or_none()
-            if receipt is not None:
-                if receipt.request_hash != request_hash:
-                    raise RevisionConflict(
-                        "Mutation ID reused with different payload: "
-                        f"{envelope.mutation_id}"
-                    )
-                if "submission_id" in receipt.response:
-                    return Submission.model_validate(receipt.response)
-                return Draft.model_validate(receipt.response)
-
-            row = self._draft_row(conn, project_id, key_string)
-            current_revision = 0 if row is None else int(row.revision)
-            if current_revision != envelope.expected_revision:
+        )
+        receipt = conn.execute(
+            select(MutationReceiptRow.request_hash, MutationReceiptRow.response).where(
+                MutationReceiptRow.project_id == project_id,
+                MutationReceiptRow.workspace_key == key_string,
+                MutationReceiptRow.mutation_id == envelope.mutation_id,
+            )
+        ).one_or_none()
+        if receipt is not None:
+            if receipt.request_hash != request_hash:
                 raise RevisionConflict(
-                    f"REVISION_CONFLICT: Expected revision "
-                    f"{envelope.expected_revision}, current is {current_revision}"
+                    f"Mutation ID reused with different payload: {envelope.mutation_id}"
                 )
-            result = operation(self._open_draft(conn, key, None))
-            draft_row = self._draft_row(conn, project_id, key_string)
-            if draft_row is None:
-                raise DomainError("DRAFT_NOT_CREATED", key_string)
-            now = datetime.now(UTC)
-            new_revision = current_revision + 1
-            response: dict[str, Any]
-            if isinstance(result, Draft):
-                result.revision = new_revision
-                conn.execute(
-                    update(DraftRow)
-                    .where(DraftRow.id == draft_row.id)
-                    .values(
-                        revision=new_revision,
-                        checked_layer_ids=list(result.checked_layer_ids),
-                        updated_at=now,
-                    )
-                )
-                conn.execute(
-                    delete(DraftAnnotationRow).where(
-                        DraftAnnotationRow.draft_id == draft_row.id
-                    )
-                )
-                conn.execute(
-                    delete(DraftEvidenceRow).where(
-                        DraftEvidenceRow.draft_id == draft_row.id
-                    )
-                )
-                conn.execute(
-                    delete(ReviewDecisionRow).where(
-                        ReviewDecisionRow.draft_id == draft_row.id
-                    )
-                )
-                self._insert_snapshots(
-                    conn, project_id, result.annotations, result.evidence
-                )
-                self._write_draft_content(
-                    conn,
-                    draft_row.id,
-                    result.annotations,
-                    result.evidence,
-                    result.decisions,
-                )
-                response = _draft_payload(result)
-            elif isinstance(result, Submission):
-                conn.execute(
-                    update(DraftRow)
-                    .where(DraftRow.id == draft_row.id)
-                    .values(revision=new_revision, updated_at=now)
-                )
-                self._insert_submission(conn, project_id, result, local_key=key_string)
-                response = _submission_payload(result)
-            else:
-                raise ValueError(f"Unsupported operation return type: {type(result)}")
+            if "submission_id" in receipt.response:
+                return Submission.model_validate(receipt.response)
+            return Draft.model_validate(receipt.response)
+
+        row = self._draft_row(conn, project_id, key_string)
+        current_revision = 0 if row is None else int(row.revision)
+        if current_revision != envelope.expected_revision:
+            raise RevisionConflict(
+                f"REVISION_CONFLICT: Expected revision "
+                f"{envelope.expected_revision}, current is {current_revision}"
+            )
+        result = operation(self._open_draft(conn, key, None))
+        draft_row = self._draft_row(conn, project_id, key_string)
+        if draft_row is None:
+            raise DomainError("DRAFT_NOT_CREATED", key_string)
+        now = datetime.now(UTC)
+        new_revision = current_revision + 1
+        response: dict[str, Any]
+        if isinstance(result, Draft):
+            result.revision = new_revision
             conn.execute(
-                insert(MutationReceiptRow).values(
-                    project_id=project_id,
-                    workspace_key=key_string,
-                    mutation_id=envelope.mutation_id,
-                    request_hash=request_hash,
-                    response=response,
-                    created_at=now,
+                update(DraftRow)
+                .where(DraftRow.id == draft_row.id)
+                .values(
+                    revision=new_revision,
+                    checked_layer_ids=list(result.checked_layer_ids),
+                    updated_at=now,
                 )
             )
-            return result
-
-    def get_document_status(
-        self,
-        package_id: str,
-        document_id: str,
-        annotator_id: str,
-        mode: str,
-    ) -> Literal["not_started", "in_progress", "completed"]:
-        """Progress of one annotator in one mode on one document."""
-        keys = self.list_workspace_keys(package_id, annotator_id, mode, document_id)
-        any_completed = False
-        with self.db.transaction() as conn:
-            project_id = self._require_project(conn, package_id)
-            for key in keys:
-                current = latest_submissions(
-                    self._submissions_for_workspace(conn, project_id, key)
+            conn.execute(
+                delete(DraftAnnotationRow).where(
+                    DraftAnnotationRow.draft_id == draft_row.id
                 )
-                row = self._draft_row(conn, project_id, _key_str(key))
-                if current:
-                    any_completed = True
-                    # Never compare a draft revision across unrelated origins.
-                    if row is not None and (
-                        len(current) != 1 or row.revision > current[0].draft_revision
-                    ):
-                        return "in_progress"
-                    continue
-                if row is None:
-                    continue
-                if row.revision > 0 or row.checked_layer_ids:
-                    return "in_progress"
-                has_content = conn.execute(
-                    select(
-                        exists().where(DraftAnnotationRow.draft_id == row.id)
-                        | exists().where(ReviewDecisionRow.draft_id == row.id)
-                    )
-                ).scalar_one()
-                if has_content:
-                    return "in_progress"
-        return "completed" if any_completed else "not_started"
+            )
+            conn.execute(
+                delete(DraftEvidenceRow).where(
+                    DraftEvidenceRow.draft_id == draft_row.id
+                )
+            )
+            conn.execute(
+                delete(ReviewDecisionRow).where(
+                    ReviewDecisionRow.draft_id == draft_row.id
+                )
+            )
+            self._insert_snapshots(
+                conn, project_id, result.annotations, result.evidence
+            )
+            self._write_draft_content(
+                conn,
+                draft_row.id,
+                result.annotations,
+                result.evidence,
+                result.decisions,
+            )
+            response = _draft_payload(result)
+        elif isinstance(result, Submission):
+            conn.execute(
+                update(DraftRow)
+                .where(DraftRow.id == draft_row.id)
+                .values(revision=new_revision, updated_at=now)
+            )
+            self._insert_submission(conn, project_id, result, local_key=key_string)
+            response = _submission_payload(result)
+        else:
+            raise ValueError(f"Unsupported operation return type: {type(result)}")
+        conn.execute(
+            insert(MutationReceiptRow).values(
+                project_id=project_id,
+                workspace_key=key_string,
+                mutation_id=envelope.mutation_id,
+                request_hash=request_hash,
+                response=response,
+                created_at=now,
+            )
+        )
+        return result
 
-    # --- submissions -------------------------------------------------------- #
 
-    @staticmethod
-    def _submissions_for_workspace(
-        conn: Connection, project_id: int, key: WorkspaceKey
-    ) -> list[Submission]:
+def get_document_status(
+    self,
+    package_id: str,
+    document_id: str,
+    annotator_id: str,
+    mode: str,
+) -> Literal["not_started", "in_progress", "completed"]:
+    """Progress of one annotator in one mode on one document."""
+    keys = self.list_workspace_keys(package_id, annotator_id, mode, document_id)
+    any_completed = False
+    with self.db.transaction() as conn:
+        project_id = self._require_project(conn, package_id)
+        for key in keys:
+            current = latest_submissions(
+                self._submissions_for_workspace(conn, project_id, key)
+            )
+            row = self._draft_row(conn, project_id, _key_str(key))
+            if current:
+                any_completed = True
+                # Never compare a draft revision across unrelated origins.
+                if row is not None and (
+                    len(current) != 1 or row.revision > current[0].draft_revision
+                ):
+                    return "in_progress"
+                continue
+            if row is None:
+                continue
+            if row.revision > 0 or row.checked_layer_ids:
+                return "in_progress"
+            has_content = conn.execute(
+                select(
+                    exists().where(DraftAnnotationRow.draft_id == row.id)
+                    | exists().where(ReviewDecisionRow.draft_id == row.id)
+                )
+            ).scalar_one()
+            if has_content:
+                return "in_progress"
+    return "completed" if any_completed else "not_started"
+
+
+# --- submissions -------------------------------------------------------- #
+
+
+@staticmethod
+def _submissions_for_workspace(
+    conn: Connection, project_id: int, key: WorkspaceKey
+) -> list[Submission]:
+    stored = (
+        conn.execute(
+            select(SubmissionRow.payload)
+            .where(
+                SubmissionRow.project_id == project_id,
+                SubmissionRow.local_key.in_(_workspace_aliases(key)),
+            )
+            .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
+        )
+        .scalars()
+        .all()
+    )
+    return [Submission.model_validate(p) for p in stored]
+
+
+def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
+    """Submissions bound to this workspace key, oldest first."""
+    with self.db.transaction() as conn:
+        project_id = self._project_id(conn, key.package_id)
+        if project_id is None:
+            return []
+        return self._submissions_for_workspace(conn, project_id, key)
+
+
+def get_submissions_for_document(
+    self, package_id: str, document_id: str
+) -> list[Submission]:
+    """Every submission of the project for one document."""
+    with self.db.transaction() as conn:
         stored = (
             conn.execute(
                 select(SubmissionRow.payload)
+                .join(ProjectRow, ProjectRow.id == SubmissionRow.project_id)
                 .where(
-                    SubmissionRow.project_id == project_id,
-                    SubmissionRow.local_key.in_(_workspace_aliases(key)),
+                    ProjectRow.project_key == package_id,
+                    SubmissionRow.document_id == document_id,
                 )
                 .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
             )
             .scalars()
             .all()
         )
-        return [Submission.model_validate(p) for p in stored]
+    return [Submission.model_validate(p) for p in stored]
 
-    def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
-        """Submissions bound to this workspace key, oldest first."""
-        with self.db.transaction() as conn:
-            project_id = self._project_id(conn, key.package_id)
-            if project_id is None:
-                return []
-            return self._submissions_for_workspace(conn, project_id, key)
 
-    def get_submissions_for_document(
-        self, package_id: str, document_id: str
-    ) -> list[Submission]:
-        """Every submission of the project for one document."""
-        with self.db.transaction() as conn:
-            stored = (
-                conn.execute(
-                    select(SubmissionRow.payload)
-                    .join(ProjectRow, ProjectRow.id == SubmissionRow.project_id)
-                    .where(
-                        ProjectRow.project_key == package_id,
-                        SubmissionRow.document_id == document_id,
-                    )
-                    .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
-                )
-                .scalars()
-                .all()
-            )
-        return [Submission.model_validate(p) for p in stored]
-
-    def get_submission(
-        self, submission_id: str, package_id: str | None = None
-    ) -> Submission | None:
-        """A submission by ID, within a project when ``package_id`` is given."""
-        statement = select(SubmissionRow.payload).where(
-            SubmissionRow.submission_id == submission_id
-        )
-        if package_id is not None:
-            statement = statement.join(
-                ProjectRow, ProjectRow.id == SubmissionRow.project_id
-            ).where(ProjectRow.project_key == package_id)
-        with self.db.transaction() as conn:
-            stored = conn.execute(statement.limit(1)).scalar_one_or_none()
-        return None if stored is None else Submission.model_validate(stored)
+def get_submission(
+    self, submission_id: str, package_id: str | None = None
+) -> Submission | None:
+    """A submission by ID, within a project when ``package_id`` is given."""
+    statement = select(SubmissionRow.payload).where(
+        SubmissionRow.submission_id == submission_id
+    )
+    if package_id is not None:
+        statement = statement.join(
+            ProjectRow, ProjectRow.id == SubmissionRow.project_id
+        ).where(ProjectRow.project_key == package_id)
+    with self.db.transaction() as conn:
+        stored = conn.execute(statement.limit(1)).scalar_one_or_none()
+    return None if stored is None else Submission.model_validate(stored)
 ```
 
 - [ ] **Step 4: Run the tests and see them pass**
@@ -3589,263 +3618,268 @@ Expected: the new tests fail with `AttributeError: 'Repository' object has no at
 Append to `src/ontocurator/storage/repository.py` (inside `class Repository`, after `get_submission`):
 
 ```python
+# --- search events ------------------------------------------------------ #
 
-    # --- search events ------------------------------------------------------ #
 
-    def save_search_event(self, event: SearchEventRecord) -> None:
-        """Store a new event in the project of its workspace."""
-        with self.db.transaction() as conn:
-            project_id = self._require_project(conn, event.workspace_key.package_id)
-            self._insert_search_event(
-                conn,
-                project_id,
-                event,
-                local_key=_key_str(event.workspace_key),
-                imported=False,
-            )
+def save_search_event(self, event: SearchEventRecord) -> None:
+    """Store a new event in the project of its workspace."""
+    with self.db.transaction() as conn:
+        project_id = self._require_project(conn, event.workspace_key.package_id)
+        self._insert_search_event(
+            conn,
+            project_id,
+            event,
+            local_key=_key_str(event.workspace_key),
+            imported=False,
+        )
 
-    def get_search_event(
-        self, event_id: str, package_id: str | None = None
-    ) -> SearchEventRecord | None:
-        """The event with this ID; within a project when ``package_id`` is given.
 
-        Without a project, an ID stored in several projects must have the same
-        content everywhere; otherwise the lookup is ambiguous.
-        """
-        statement = select(SearchEventRow.payload).where(
+def get_search_event(
+    self, event_id: str, package_id: str | None = None
+) -> SearchEventRecord | None:
+    """The event with this ID; within a project when ``package_id`` is given.
+
+    Without a project, an ID stored in several projects must have the same
+    content everywhere; otherwise the lookup is ambiguous.
+    """
+    statement = select(SearchEventRow.payload).where(
+        SearchEventRow.event_id == event_id
+    )
+    with self.db.transaction() as conn:
+        if package_id is not None:
+            project_id = self._project_id(conn, package_id)
+            if project_id is None:
+                return None
+            statement = statement.where(SearchEventRow.project_id == project_id)
+        stored = conn.execute(statement).scalars().all()
+    events = [SearchEventRecord.model_validate(p) for p in stored]
+    if not events:
+        return None
+    if any(e != events[0] for e in events[1:]):
+        raise DomainError("AMBIGUOUS_SEARCH_EVENT", {"event_id": event_id})
+    return events[0]
+
+
+def append_search_event_candidates(
+    self,
+    event_id: str,
+    term_ids: Iterable[str],
+    *,
+    workspace_key: WorkspaceKey | None = None,
+    annotation_id: str | None = None,
+    layer_id: str | None = None,
+) -> SearchEventRecord | None:
+    """Add newly shown terms to a stored tree walk, in order of first appearance.
+
+    Only a walk grows. ``workspace_key``, ``annotation_id`` and ``layer_id``
+    name the owner the caller acts for; the event must belong to each one
+    that is given. Returns None, and stores nothing, for an unknown event
+    and for one that fails these checks. The row is locked while it grows,
+    so two requests of one walk cannot lose each other's terms.
+    """
+    with self.db.transaction() as conn:
+        statement = select(SearchEventRow.project_id, SearchEventRow.payload).where(
             SearchEventRow.event_id == event_id
         )
-        with self.db.transaction() as conn:
-            if package_id is not None:
-                project_id = self._project_id(conn, package_id)
-                if project_id is None:
-                    return None
-                statement = statement.where(SearchEventRow.project_id == project_id)
-            stored = conn.execute(statement).scalars().all()
-        events = [SearchEventRecord.model_validate(p) for p in stored]
-        if not events:
-            return None
-        if any(e != events[0] for e in events[1:]):
-            raise DomainError("AMBIGUOUS_SEARCH_EVENT", {"event_id": event_id})
-        return events[0]
-
-    def append_search_event_candidates(
-        self,
-        event_id: str,
-        term_ids: Iterable[str],
-        *,
-        workspace_key: WorkspaceKey | None = None,
-        annotation_id: str | None = None,
-        layer_id: str | None = None,
-    ) -> SearchEventRecord | None:
-        """Add newly shown terms to a stored tree walk, in order of first appearance.
-
-        Only a walk grows. ``workspace_key``, ``annotation_id`` and ``layer_id``
-        name the owner the caller acts for; the event must belong to each one
-        that is given. Returns None, and stores nothing, for an unknown event
-        and for one that fails these checks. The row is locked while it grows,
-        so two requests of one walk cannot lose each other's terms.
-        """
-        with self.db.transaction() as conn:
-            statement = select(SearchEventRow.project_id, SearchEventRow.payload).where(
-                SearchEventRow.event_id == event_id
-            )
-            if workspace_key is not None:
-                project_id = self._project_id(conn, workspace_key.package_id)
-                if project_id is None:
-                    return None
-                statement = statement.where(SearchEventRow.project_id == project_id)
-            rows = conn.execute(statement.with_for_update()).all()
-            if len(rows) != 1:
-                return None
-            event = SearchEventRecord.model_validate(rows[0].payload)
-            if (
-                not is_tree_walk(event)
-                or (workspace_key is not None and event.workspace_key != workspace_key)
-                or (annotation_id is not None and event.annotation_id != annotation_id)
-                or (layer_id is not None and event.layer_id != layer_id)
-            ):
-                return None
-            known = set(event.candidates)
-            added = [t for t in dict.fromkeys(term_ids) if t not in known]
-            if added:
-                event.candidates = [*event.candidates, *added]
-                event.ranked_ids = [*event.ranked_ids, *added]
-                conn.execute(
-                    update(SearchEventRow)
-                    .where(
-                        SearchEventRow.project_id == rows[0].project_id,
-                        SearchEventRow.event_id == event_id,
-                    )
-                    .values(payload=event.model_dump(mode="json"))
-                )
-            return event
-
-    def get_search_events_for_workspace(
-        self, key: WorkspaceKey
-    ) -> list[SearchEventRecord]:
-        """Events written in, or imported into, this workspace, in written order."""
-        aliases = _workspace_aliases(key)
-        with self.db.transaction() as conn:
-            project_id = self._project_id(conn, key.package_id)
+        if workspace_key is not None:
+            project_id = self._project_id(conn, workspace_key.package_id)
             if project_id is None:
-                return []
-            stored = (
-                conn.execute(
-                    select(SearchEventRow.payload)
-                    .where(
-                        SearchEventRow.project_id == project_id,
-                        or_(
-                            SearchEventRow.workspace_key.in_(aliases),
-                            SearchEventRow.local_key.in_(aliases),
-                        ),
-                    )
-                    .order_by(SearchEventRow.seq)
-                )
-                .scalars()
-                .all()
-            )
-        return [SearchEventRecord.model_validate(p) for p in stored]
-
-    # --- export ------------------------------------------------------------- #
-
-    def export_package(
-        self, package_id: str, *, include_captured_conditions: bool = True
-    ) -> ValidatedPackage:
-        """Everything of a project as an in-memory package."""
-        with self.db.transaction() as conn:
-            project = conn.execute(
-                select(ProjectRow.id, ProjectRow.manifest).where(
-                    ProjectRow.project_key == package_id
-                )
-            ).one_or_none()
-            if project is None:
-                raise InvalidPackage(f"Package '{package_id}' not found")
-            project_id = project.id
-            manifest = PackageManifest.model_validate(project.manifest)
-            documents = {
-                row.document_id: Document(
-                    document_id=row.document_id,
-                    text=row.text,
-                    language=row.language,
-                    text_sha256=row.text_sha256,
-                )
-                for row in conn.execute(
-                    select(
-                        DocumentRow.document_id,
-                        DocumentRow.text,
-                        DocumentRow.language,
-                        DocumentRow.text_sha256,
-                    ).where(DocumentRow.project_id == project_id)
-                )
-            }
-            in_drafts = (
-                exists()
-                .where(DraftRow.project_id == project_id)
-                .where(DraftAnnotationRow.draft_id == DraftRow.id)
-                .where(DraftAnnotationRow.annotation_id == AnnotationSnapshotRow.annotation_id)
-                .where(DraftAnnotationRow.version == AnnotationSnapshotRow.version)
-            )
-            proposed = (
-                exists()
-                .where(ProposalAnnotationRow.project_id == project_id)
+                return None
+            statement = statement.where(SearchEventRow.project_id == project_id)
+        rows = conn.execute(statement.with_for_update()).all()
+        if len(rows) != 1:
+            return None
+        event = SearchEventRecord.model_validate(rows[0].payload)
+        if (
+            not is_tree_walk(event)
+            or (workspace_key is not None and event.workspace_key != workspace_key)
+            or (annotation_id is not None and event.annotation_id != annotation_id)
+            or (layer_id is not None and event.layer_id != layer_id)
+        ):
+            return None
+        known = set(event.candidates)
+        added = [t for t in dict.fromkeys(term_ids) if t not in known]
+        if added:
+            event.candidates = [*event.candidates, *added]
+            event.ranked_ids = [*event.ranked_ids, *added]
+            conn.execute(
+                update(SearchEventRow)
                 .where(
-                    ProposalAnnotationRow.annotation_id
-                    == AnnotationSnapshotRow.annotation_id
+                    SearchEventRow.project_id == rows[0].project_id,
+                    SearchEventRow.event_id == event_id,
                 )
-                .where(ProposalAnnotationRow.version == AnnotationSnapshotRow.version)
+                .values(payload=event.model_dump(mode="json"))
             )
-            annotation_payloads = (
-                conn.execute(
-                    select(AnnotationSnapshotRow.payload).where(
-                        AnnotationSnapshotRow.project_id == project_id,
-                        or_(proposed, in_drafts),
-                    )
+        return event
+
+
+def get_search_events_for_workspace(self, key: WorkspaceKey) -> list[SearchEventRecord]:
+    """Events written in, or imported into, this workspace, in written order."""
+    aliases = _workspace_aliases(key)
+    with self.db.transaction() as conn:
+        project_id = self._project_id(conn, key.package_id)
+        if project_id is None:
+            return []
+        stored = (
+            conn.execute(
+                select(SearchEventRow.payload)
+                .where(
+                    SearchEventRow.project_id == project_id,
+                    or_(
+                        SearchEventRow.workspace_key.in_(aliases),
+                        SearchEventRow.local_key.in_(aliases),
+                    ),
                 )
-                .scalars()
-                .all()
+                .order_by(SearchEventRow.seq)
             )
-            evidence_in_drafts = (
-                exists()
-                .where(DraftRow.project_id == project_id)
-                .where(DraftEvidenceRow.draft_id == DraftRow.id)
-                .where(DraftEvidenceRow.evidence_id == EvidenceSnapshotRow.evidence_id)
-                .where(DraftEvidenceRow.version == EvidenceSnapshotRow.version)
-            )
-            evidence_proposed = (
-                exists()
-                .where(ProposalEvidenceRow.project_id == project_id)
-                .where(ProposalEvidenceRow.evidence_id == EvidenceSnapshotRow.evidence_id)
-                .where(ProposalEvidenceRow.version == EvidenceSnapshotRow.version)
-            )
-            evidence_payloads = (
-                conn.execute(
-                    select(EvidenceSnapshotRow.payload).where(
-                        EvidenceSnapshotRow.project_id == project_id,
-                        or_(evidence_proposed, evidence_in_drafts),
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            submission_payloads = (
-                conn.execute(
-                    select(SubmissionRow.payload)
-                    .where(SubmissionRow.project_id == project_id)
-                    .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
-                )
-                .scalars()
-                .all()
-            )
-            event_payloads = (
-                conn.execute(
-                    select(SearchEventRow.payload)
-                    .where(SearchEventRow.project_id == project_id)
-                    .order_by(SearchEventRow.seq)
-                )
-                .scalars()
-                .all()
-            )
-            conditions = (
-                self._search_conditions(conn, project_id)
-                if include_captured_conditions
-                else None
-            )
-        if conditions is not None:
-            manifest = manifest.model_copy(update={"search_conditions": conditions})
-        annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
-        for payload in annotation_payloads:
-            snap = decode_snapshot(payload)
-            annotations[(snap.annotation.annotation_id, snap.version)] = snap
-        evidence: dict[tuple[str, str], EvidenceSnapshot] = {}
-        for payload in evidence_payloads:
-            ev = EvidenceSnapshot.model_validate(payload)
-            evidence[(ev.mention.evidence_id, ev.version)] = ev
-        submissions = {
-            s.submission_id: s
-            for s in (Submission.model_validate(p) for p in submission_payloads)
-        }
-        declared = {
-            item.resource_path
-            for condition in manifest.search_conditions or []
-            for item in condition.translations
-        }
-        # A first capture can commit after the condition read above. Its bytes
-        # are only part of this export if this manifest observed their declaration.
-        embedded_files = {
-            path: content
-            for path, content in self.get_embedded_files(package_id).items()
-            if not path.startswith("search-resources/") or path in declared
-        }
-        return ValidatedPackage(
-            manifest=manifest,
-            documents=documents,
-            annotations=annotations,
-            evidence=evidence,
-            submissions=submissions,
-            search_events=[SearchEventRecord.model_validate(p) for p in event_payloads],
-            embedded_files=embedded_files,
+            .scalars()
+            .all()
         )
+    return [SearchEventRecord.model_validate(p) for p in stored]
+
+
+# --- export ------------------------------------------------------------- #
+
+
+def export_package(
+    self, package_id: str, *, include_captured_conditions: bool = True
+) -> ValidatedPackage:
+    """Everything of a project as an in-memory package."""
+    with self.db.transaction() as conn:
+        project = conn.execute(
+            select(ProjectRow.id, ProjectRow.manifest).where(
+                ProjectRow.project_key == package_id
+            )
+        ).one_or_none()
+        if project is None:
+            raise InvalidPackage(f"Package '{package_id}' not found")
+        project_id = project.id
+        manifest = PackageManifest.model_validate(project.manifest)
+        documents = {
+            row.document_id: Document(
+                document_id=row.document_id,
+                text=row.text,
+                language=row.language,
+                text_sha256=row.text_sha256,
+            )
+            for row in conn.execute(
+                select(
+                    DocumentRow.document_id,
+                    DocumentRow.text,
+                    DocumentRow.language,
+                    DocumentRow.text_sha256,
+                ).where(DocumentRow.project_id == project_id)
+            )
+        }
+        in_drafts = (
+            exists()
+            .where(DraftRow.project_id == project_id)
+            .where(DraftAnnotationRow.draft_id == DraftRow.id)
+            .where(
+                DraftAnnotationRow.annotation_id == AnnotationSnapshotRow.annotation_id
+            )
+            .where(DraftAnnotationRow.version == AnnotationSnapshotRow.version)
+        )
+        proposed = (
+            exists()
+            .where(ProposalAnnotationRow.project_id == project_id)
+            .where(
+                ProposalAnnotationRow.annotation_id
+                == AnnotationSnapshotRow.annotation_id
+            )
+            .where(ProposalAnnotationRow.version == AnnotationSnapshotRow.version)
+        )
+        annotation_payloads = (
+            conn.execute(
+                select(AnnotationSnapshotRow.payload).where(
+                    AnnotationSnapshotRow.project_id == project_id,
+                    or_(proposed, in_drafts),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        evidence_in_drafts = (
+            exists()
+            .where(DraftRow.project_id == project_id)
+            .where(DraftEvidenceRow.draft_id == DraftRow.id)
+            .where(DraftEvidenceRow.evidence_id == EvidenceSnapshotRow.evidence_id)
+            .where(DraftEvidenceRow.version == EvidenceSnapshotRow.version)
+        )
+        evidence_proposed = (
+            exists()
+            .where(ProposalEvidenceRow.project_id == project_id)
+            .where(ProposalEvidenceRow.evidence_id == EvidenceSnapshotRow.evidence_id)
+            .where(ProposalEvidenceRow.version == EvidenceSnapshotRow.version)
+        )
+        evidence_payloads = (
+            conn.execute(
+                select(EvidenceSnapshotRow.payload).where(
+                    EvidenceSnapshotRow.project_id == project_id,
+                    or_(evidence_proposed, evidence_in_drafts),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        submission_payloads = (
+            conn.execute(
+                select(SubmissionRow.payload)
+                .where(SubmissionRow.project_id == project_id)
+                .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
+            )
+            .scalars()
+            .all()
+        )
+        event_payloads = (
+            conn.execute(
+                select(SearchEventRow.payload)
+                .where(SearchEventRow.project_id == project_id)
+                .order_by(SearchEventRow.seq)
+            )
+            .scalars()
+            .all()
+        )
+        conditions = (
+            self._search_conditions(conn, project_id)
+            if include_captured_conditions
+            else None
+        )
+    if conditions is not None:
+        manifest = manifest.model_copy(update={"search_conditions": conditions})
+    annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
+    for payload in annotation_payloads:
+        snap = decode_snapshot(payload)
+        annotations[(snap.annotation.annotation_id, snap.version)] = snap
+    evidence: dict[tuple[str, str], EvidenceSnapshot] = {}
+    for payload in evidence_payloads:
+        ev = EvidenceSnapshot.model_validate(payload)
+        evidence[(ev.mention.evidence_id, ev.version)] = ev
+    submissions = {
+        s.submission_id: s
+        for s in (Submission.model_validate(p) for p in submission_payloads)
+    }
+    declared = {
+        item.resource_path
+        for condition in manifest.search_conditions or []
+        for item in condition.translations
+    }
+    # A first capture can commit after the condition read above. Its bytes
+    # are only part of this export if this manifest observed their declaration.
+    embedded_files = {
+        path: content
+        for path, content in self.get_embedded_files(package_id).items()
+        if not path.startswith("search-resources/") or path in declared
+    }
+    return ValidatedPackage(
+        manifest=manifest,
+        documents=documents,
+        annotations=annotations,
+        evidence=evidence,
+        submissions=submissions,
+        search_events=[SearchEventRecord.model_validate(p) for p in event_payloads],
+        embedded_files=embedded_files,
+    )
 ```
 
 - [ ] **Step 4: Move every test import to the top of the file**
@@ -3867,7 +3901,12 @@ from test_storage import _sample_package
 from ontocurator.domain.documents import Document
 from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
 from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import Draft, MutationEnvelope, Submission, WorkspaceKey
+from ontocurator.domain.workspace import (
+    Draft,
+    MutationEnvelope,
+    Submission,
+    WorkspaceKey,
+)
 from ontocurator.packages.models import SearchEventRecord
 from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import StoredFileRow
@@ -3952,18 +3991,18 @@ Uploaded and embedded files now live in `<workspace>/blobs/`.
 In `src/ontocurator/cli.py`, add this parameter to `serve` directly after the `workspace` parameter:
 
 ```python
-    database_url: Annotated[
-        str | None,
-        typer.Option(
-            "--database-url",
-            help=(
-                "PostgreSQL URL of the application role. Default: "
-                "ONTOCURATOR_DATABASE_URL, with the password from "
-                "ONTOCURATOR_DATABASE_PASSWORD or ONTOCURATOR_DATABASE_PASSWORD_FILE."
-            ),
-            show_default=False,
+database_url: Annotated[
+    str | None,
+    typer.Option(
+        "--database-url",
+        help=(
+            "PostgreSQL URL of the application role. Default: "
+            "ONTOCURATOR_DATABASE_URL, with the password from "
+            "ONTOCURATOR_DATABASE_PASSWORD or ONTOCURATOR_DATABASE_PASSWORD_FILE."
         ),
-    ] = None,
+        show_default=False,
+    ),
+] = (None,)
 ```
 
 In the `AppConfig(...)` call inside `serve`, replace `database_path=ws / "editor.db",` with `database_url=database_url,`.
@@ -4006,9 +4045,7 @@ In `src/ontocurator/application/editing.py`, replace
 with
 
 ```python
-                event = self.repo.get_search_event(
-                    cmd.search_event_id, key.package_id
-                )
+event = self.repo.get_search_event(cmd.search_event_id, key.package_id)
 ```
 
 In `src/ontocurator/api/tree_routes.py`, replace
@@ -4357,15 +4394,15 @@ Expected: no output.
 In `scripts/build_release.py`, replace the three `ontocurator/storage/*.sql` entries of `REQUIRED_WHEEL_FILES` with:
 
 ```python
-    "ontocurator/storage/migrations/env.py",
-    "ontocurator/storage/migrations/script.py.mako",
-    "ontocurator/storage/migrations/versions/0001_initial.py",
+("ontocurator/storage/migrations/env.py",)
+("ontocurator/storage/migrations/script.py.mako",)
+("ontocurator/storage/migrations/versions/0001_initial.py",)
 ```
 
 In `scripts/build_standalone.py`, replace the three `--add-data=...sql...` lines with:
 
 ```python
-        f"--add-data={STORAGE_DIR / 'migrations'}{sep}ontocurator/storage/migrations",
+(f"--add-data={STORAGE_DIR / 'migrations'}{sep}ontocurator/storage/migrations",)
 ```
 
 In `tests/test_standalone_packaging.py`:

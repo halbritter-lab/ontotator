@@ -66,10 +66,15 @@
 
 ```python
 uvicorn.run(
-    "ontocurator.api.server:app_from_env", factory=True,
-    host="0.0.0.0", port=8000, workers=settings.workers,
-    proxy_headers=True, forwarded_allow_ips=",".join(settings.trusted_proxies),
-    access_log=True, timeout_graceful_shutdown=30,
+    "ontocurator.api.server:app_from_env",
+    factory=True,
+    host="0.0.0.0",
+    port=8000,
+    workers=settings.workers,
+    proxy_headers=True,
+    forwarded_allow_ips=",".join(settings.trusted_proxies),
+    access_log=True,
+    timeout_graceful_shutdown=30,
 )
 ```
 

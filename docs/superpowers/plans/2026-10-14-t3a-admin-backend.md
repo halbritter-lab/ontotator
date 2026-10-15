@@ -262,9 +262,13 @@ Grants: full DML for the application role on all four; `GRANT USAGE, SELECT ON A
 **Planner** (pure, no database; index D-r):
 
 ```python
-def plan_import(units: Sequence[IncomingUnit], state: ProjectImportState,
-                profile: TaskProfile, rules: ProjectRules,
-                reader_issues: Sequence[Issue]) -> ImportPlan: ...
+def plan_import(
+    units: Sequence[IncomingUnit],
+    state: ProjectImportState,
+    profile: TaskProfile,
+    rules: ProjectRules,
+    reader_issues: Sequence[Issue],
+) -> ImportPlan: ...
 ```
 
 - `ProjectImportState`: `documents: Mapping[str, str]` (document_id → text_sha256), `texts: Mapping[str, list[str]]` (text_sha256 → document_ids) and `sets: frozenset[tuple[str | None, str, str]]` (bundle_id, set id, document_id).
@@ -426,25 +430,36 @@ class Candidate:
     user_id: int
     username: str
     languages: frozenset[str]
-    load: int                      # active assignments not yet submitted
+    load: int  # active assignments not yet submitted
+
 
 @dataclass(frozen=True)
 class DocumentItem:
     document_id: str
     language: str
-    excluded_user_ids: frozenset[int]   # already assigned this task, or barred by adjudicator_not_annotator
+    excluded_user_ids: frozenset[
+        int
+    ]  # already assigned this task, or barred by adjudicator_not_annotator
+
 
 @dataclass(frozen=True)
 class DistributionProposal:
-    rows: tuple[tuple[str, int], ...]           # (document_id, user_id)
-    unassignable: tuple[Unassignable, ...]      # (document_id, reason, eligible_count)
+    rows: tuple[tuple[str, int], ...]  # (document_id, user_id)
+    unassignable: tuple[Unassignable, ...]  # (document_id, reason, eligible_count)
     seed: int
     per_document: int
 
-def propose_distribution(documents: Sequence[DocumentItem], candidates: Sequence[Candidate], *,
-                         per_document: int, seed: int,
-                         required_languages: Callable[[DocumentItem], frozenset[str]] = lambda d: frozenset({d.language}),
-                         ) -> DistributionProposal: ...
+
+def propose_distribution(
+    documents: Sequence[DocumentItem],
+    candidates: Sequence[Candidate],
+    *,
+    per_document: int,
+    seed: int,
+    required_languages: Callable[[DocumentItem], frozenset[str]] = lambda d: frozenset(
+        {d.language}
+    ),
+) -> DistributionProposal: ...
 ```
 
 **Rules** (the contract):

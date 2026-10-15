@@ -109,13 +109,26 @@ The migration also creates `SEQUENCE ontocurator.pseudonym_seq`, which yields th
 ```python
 op.execute(f"CREATE SEQUENCE {SCHEMA}.pseudonym_seq")
 # ... create_table calls, names as in tables.py (pk_users, uq_users_username, ...)
-op.execute(f"CREATE TRIGGER audit_events_append_only BEFORE UPDATE OR DELETE ON {SCHEMA}.audit_events"
-           f" FOR EACH ROW EXECUTE FUNCTION {SCHEMA}.forbid_history_change()")
-op.execute(f"CREATE TRIGGER audit_events_no_truncate BEFORE TRUNCATE ON {SCHEMA}.audit_events"
-           f" FOR EACH STATEMENT EXECUTE FUNCTION {SCHEMA}.forbid_history_change()")
-for table in ("users", "password_credentials", "sessions", "one_time_codes",
-              "login_attempts", "user_preferences", "instance_state"):
-    op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {SCHEMA}.{table} TO {APP_ROLE}")
+op.execute(
+    f"CREATE TRIGGER audit_events_append_only BEFORE UPDATE OR DELETE ON {SCHEMA}.audit_events"
+    f" FOR EACH ROW EXECUTE FUNCTION {SCHEMA}.forbid_history_change()"
+)
+op.execute(
+    f"CREATE TRIGGER audit_events_no_truncate BEFORE TRUNCATE ON {SCHEMA}.audit_events"
+    f" FOR EACH STATEMENT EXECUTE FUNCTION {SCHEMA}.forbid_history_change()"
+)
+for table in (
+    "users",
+    "password_credentials",
+    "sessions",
+    "one_time_codes",
+    "login_attempts",
+    "user_preferences",
+    "instance_state",
+):
+    op.execute(
+        f"GRANT SELECT, INSERT, UPDATE, DELETE ON {SCHEMA}.{table} TO {APP_ROLE}"
+    )
 op.execute(f"GRANT SELECT, INSERT ON {SCHEMA}.audit_events TO {APP_ROLE}")
 # New sequences (pseudonym_seq and identity sequences) need the grant again:
 op.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA {SCHEMA} TO {APP_ROLE}")
@@ -289,16 +302,24 @@ SESSION_COOKIE = "ontocurator_session"
 CSRF_HEADER = "x-csrf-token"
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 PUBLIC_PATHS = frozenset({"/api/v1/auth/login", "/api/v1/auth/redeem-code"})
-current_principal: ContextVar[Principal | None] = ContextVar("ontocurator_principal", default=None)
+current_principal: ContextVar[Principal | None] = ContextVar(
+    "ontocurator_principal", default=None
+)
+
 
 def expected_origin(request, public_origin):
     return public_origin or f"{request.url.scheme}://{request.headers.get('host', '')}"
 
+
 def cross_site(request, public_origin, *, fail_closed: bool) -> bool:
-    origin = request.headers.get("origin"); fetch_site = request.headers.get("sec-fetch-site")
-    if origin is not None and origin != expected_origin(request, public_origin): return True
-    if fetch_site is not None and fetch_site not in ("same-origin", "none"): return True
-    return fail_closed and origin is None and fetch_site is None   # Limin: fail closed
+    origin = request.headers.get("origin")
+    fetch_site = request.headers.get("sec-fetch-site")
+    if origin is not None and origin != expected_origin(request, public_origin):
+        return True
+    if fetch_site is not None and fetch_site not in ("same-origin", "none"):
+        return True
+    return fail_closed and origin is None and fetch_site is None  # Limin: fail closed
+
 
 def install_security(app, sessions, public_origin):
     @app.middleware("http")
@@ -307,7 +328,7 @@ def install_security(app, sessions, public_origin):
         if not path.startswith("/api/"):
             return await call_next(request)
         unsafe = request.method in UNSAFE_METHODS
-        if path in PUBLIC_PATHS:                       # no session yet
+        if path in PUBLIC_PATHS:  # no session yet
             if unsafe and cross_site(request, public_origin, fail_closed=True):
                 return _error(403, "CROSS_SITE_REQUEST", "...")
             return await call_next(request)
@@ -322,7 +343,7 @@ def install_security(app, sessions, public_origin):
             if not secrets.compare_digest(sent.encode(), principal.csrf_token.encode()):
                 return _error(403, "CSRF_FAILED", "The page is out of date; reload it.")
         request.state.principal = principal
-        reset = current_principal.set(principal)      # index D-k: visible below the routes
+        reset = current_principal.set(principal)  # index D-k: visible below the routes
         try:
             return await call_next(request)
         finally:
