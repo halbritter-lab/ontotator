@@ -77,3 +77,10 @@ answer; the least surprising option was taken and should be confirmed.
   column the table does not mark "null", and `one_time_codes.purpose` has no `CHECK` constraint (the
   plan lists none; the service validates it). `pseudonym_seq` is not mapped in `tables.py`, since
   Alembic does not compare sequences.
+- Task 3: the plan only said "never raises" -> `verify_password` also falls back to the dummy hash when
+  the stored hash is unusable (any error other than a mismatch), so a broken hash costs the same Argon2
+  run as a wrong password; `needs_rehash` returns `True` for an unparseable hash. The dummy hash is
+  computed lazily once (`functools.cache`), not at import. `argon2-cffi` resolved to 25.1.0 (with
+  `argon2-cffi-bindings`, `cffi`, `pycparser`, all MIT/BSD); `scripts/license_notices.py` derives the
+  runtime closure from installed metadata, so neither it, `THIRD_PARTY_NOTICES.md` nor
+  `tests/test_license_notices.py` needed a change.
