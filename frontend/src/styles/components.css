@@ -638,6 +638,14 @@ textarea.form-control {
 .shell-breadcrumb a { color: var(--accent); }
 .shell-body { display: flex; flex: 1; min-height: 0; }
 .app-nav { flex: 0 0 14rem; padding: var(--space-5); border-right: 1px solid var(--border); overflow: auto; }
+.shell-nav-list { list-style: none; margin: 0; padding: 0; }
+.shell-nav-list li + li { margin-top: var(--space-1); }
+.shell-nav-group { margin-top: var(--space-5); }
+.shell-nav-group h2 { margin: 0 0 var(--space-2); font-size: var(--size-sm); line-height: var(--leading-sm); font-weight: var(--weight-strong); color: var(--text-muted); overflow-wrap: anywhere; }
+.shell-nav-link { display: block; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); font-size: var(--size-md); line-height: var(--leading-md); color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+.shell-nav-link:hover { background: var(--surface-sunken); text-decoration: underline; }
+.shell-nav-link[aria-current] { color: var(--accent); background: var(--accent-light); font-weight: var(--weight-strong); }
+.shell-nav-link:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
 .shell-main { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: auto; }
 .shell-main > * { flex-shrink: 0; }
 .shell-main.density-reading { overflow: hidden; }

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import type { CurrentUser } from "../api/client";
 import { Button } from "./Button";
 import { ShortcutHelpHost } from "./ShortcutHelp";
@@ -16,8 +16,12 @@ export interface AppShellProps {
 }
 
 export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = "Sections", density = "compact", children }: AppShellProps): JSX.Element {
+  const mainRef = useRef<HTMLElement>(null);
   return <div className="shell">
-    <a className="skip-link" href="#main">Skip to content</a>
+    <a className="skip-link" href="#main" onClick={(event) => {
+      event.preventDefault();
+      mainRef.current?.focus();
+    }}>Skip to content</a>
     <header className="app-header shell-header">
       <div className="shell-heading">
         <span className="shell-product">Ontocurator</span>
@@ -38,7 +42,7 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
     </header>
     <div className="shell-body">
       {nav != null && nav !== false && <nav className="app-nav" aria-label={navLabel}>{nav}</nav>}
-      <main id="main" tabIndex={-1} className={`shell-main density-${density}`}>{children}</main>
+      <main ref={mainRef} id="main" tabIndex={-1} className={`shell-main density-${density}`}>{children}</main>
     </div>
     <ShortcutHelpHost />
   </div>;
