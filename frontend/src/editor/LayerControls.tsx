@@ -1,3 +1,5 @@
+import { Select } from "../ui/Select";
+import { Button } from "../ui/Button";
 import React from "react";
 import type { LayerDefinition, TaskScope } from "../api/client";
 import type { LayerSelection } from "./layerState";
@@ -113,10 +115,10 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
               <label htmlFor="active-type-select" className="layer-controls__label">
                 Annotation type for {activeLayer.label ?? (activeLayer as any).name ?? activeLayer.layer_id}
               </label>
-              <select
+              <Select label={null}
                 id="active-type-select"
                 aria-label="Annotation type"
-                className="form-select form-select-sm"
+                className="form-select-sm"
                 value={selection.activeTypeId ?? ""}
                 onChange={(e) => onSetActiveType(e.target.value)}
                 disabled={disabled}
@@ -126,7 +128,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     {typeDef.label ?? (typeDef as any).name ?? typeDef.type_id}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
 
@@ -135,7 +137,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
             const isChecked = checkedLayerIds.includes(activeLayer.layer_id);
             const activeName = activeLayer.label ?? (activeLayer as any).name ?? activeLayer.layer_id;
             return (
-              <button
+              <Button
                 type="button"
                 className={`btn btn-sm btn-secondary layer-controls__verify${isChecked ? " is-checked" : ""}`}
                 onClick={() => onCheckLayer(activeLayer.layer_id, !isChecked)}
@@ -143,7 +145,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                 aria-label={`Mark ${activeName} as verified`}
               >
                 {isChecked ? <><IconCheck />{activeName} verified (Reset)</> : `Mark ${activeName} as verified`}
-              </button>
+              </Button>
             );
           })()}
         </div>

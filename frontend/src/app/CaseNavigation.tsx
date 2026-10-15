@@ -1,3 +1,6 @@
+import { IconButton } from "../ui/IconButton";
+import { IconChevronLeft, IconChevronRight } from "../ui/icons";
+import { Select } from "../ui/Select";
 import React from "react";
 import type { DocumentSummary } from "../api/client";
 import { adjacentCase, canOpenCase, sharedIdPrefix } from "./caseOrder";
@@ -64,22 +67,19 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         overflow: "hidden",
       }}
     >
-      <button
+      <IconButton label="Previous Case" icon={<IconChevronLeft />}
         type="button"
-        className="btn btn-secondary btn-sm"
-        aria-label="Previous Case"
+        variant="secondary" size="sm"
         onClick={handlePrev}
         disabled={!hasPrev || disabled}
         title="Previous Case (Alt + ←)"
         style={{ border: "none", borderRadius: 0, padding: "4px 10px", fontSize: "0.95rem" }}
-      >
-        ‹
-      </button>
+      />
 
       {total > 1 ? (
-        <select
+        <Select id="case-navigation-select" label={null}
           aria-label="Select case"
-          className="form-select form-select-sm"
+          className="form-select-sm"
           value={currentDocumentId}
           onChange={handleSelect}
           disabled={disabled}
@@ -108,7 +108,7 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
               </option>
             );
           })}
-        </select>
+        </Select>
       ) : (
         <span
           style={{
@@ -126,17 +126,14 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         </span>
       )}
 
-      <button
+      <IconButton label="Next Case" icon={<IconChevronRight />}
         type="button"
-        className="btn btn-secondary btn-sm"
-        aria-label="Next Case"
+        variant="secondary" size="sm"
         onClick={handleNext}
         disabled={!hasNext || disabled}
         title="Next Case (Alt + →)"
         style={{ border: "none", borderRadius: 0, padding: "4px 10px", fontSize: "0.95rem" }}
-      >
-        ›
-      </button>
+      />
     </div>
   );
 };

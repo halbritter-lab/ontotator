@@ -73,6 +73,14 @@ const cross = (as: string[], bs: string[]): Array<[string, string]> =>
   as.flatMap((a) => bs.map((b) => [a, b] as [string, string]));
 
 describe("design tokens", () => {
+  it("no_colour_literals_in_components", () => {
+    const offenders = filesUnder(src).filter((path) => path.endsWith(".tsx")).flatMap((path) => {
+      const matches = readFileSync(path, "utf8").match(/#[0-9a-fA-F]{3,8}\b|rgba?\(/g);
+      return matches ? [`${relative(src, path)}: ${matches.join(", ")}`] : [];
+    });
+    expect(offenders).toEqual([]);
+  });
+
   it("no_legacy_token_names_remain", () => {
     const legacy = /--(?:bg-primary|bg-surface|bg-secondary|border-color|text-main|primary[\w-]*|span-[\w-]*)\b/g;
     const offenders = filesUnder(src).flatMap((path) => {

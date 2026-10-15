@@ -1,7 +1,7 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
-import { api, ValidationError, type Draft } from "../src/api/client";
+import { api, ConflictError, ValidationError, type Draft } from "../src/api/client";
 
 it("never pre-fills clinical axis values (no assertion default for HPO terms)", () => {
   const axes = [
@@ -108,6 +108,68 @@ describe("CaseScreen integration", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe("editor logout guard", () => {
+    const setup = (pending = false, transport = false) => {
+      const view = structuredClone(sampleView);
+      view.layers!.push({ ...view.layers![0], layer_id: "disease", label: "Disease", access: "reference" });
+      const leaveGuardRef = { current: null as ((proceed: () => void) => void) | null };
+      const onLogout = vi.fn();
+      let resolve!: (draft: Draft) => void;
+      let reject!: (error: unknown) => void;
+      const save = new Promise<Draft>((res, rej) => { resolve = res; reject = rej; });
+      const command = transport
+        ? vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(await save), { status: 200, headers: { "Content-Type": "application/json" } }))
+        : vi.spyOn(api, "applyCommand").mockReturnValue(save);
+      const rendered = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} leaveGuardRef={leaveGuardRef} />);
+      if (pending) fireEvent.click(screen.getByRole("button", { name: /Mark .* as verified/i }));
+      return { view, leaveGuardRef, onLogout, resolve, reject, command, rendered };
+    };
+
+    it("logout_with_pending_changes_asks_first_and_cancel_keeps_the_session", async () => {
+      const state = setup(true);
+      act(() => state.leaveGuardRef.current?.(state.onLogout));
+      expect(await screen.findByRole("dialog", { name: "Unsaved changes" })).toBeDefined();
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(state.onLogout).not.toHaveBeenCalled();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.getByRole("button", { name: /Finish & Submit Case/ })).toBeDefined();
+      act(() => state.leaveGuardRef.current?.(state.onLogout));
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(state.onLogout).not.toHaveBeenCalled();
+    });
+
+    it("save_and_log_out_flushes_the_draft_before_logging_out", async () => {
+      const state = setup(true, true);
+      act(() => state.leaveGuardRef.current?.(state.onLogout));
+      fireEvent.click(await screen.findByRole("button", { name: "Save and log out" }));
+      await waitFor(() => expect(state.command).toHaveBeenCalledWith("/api/v1/workspaces/ws/commands", expect.objectContaining({ method: "POST" })));
+      expect(state.onLogout).not.toHaveBeenCalled();
+      state.resolve({ ...state.view.draft, revision: 1, checked_layer_ids: ["phenotype"] });
+      await waitFor(() => expect(state.onLogout).toHaveBeenCalledOnce());
+    });
+
+    it.each([new TypeError("Failed to fetch"), new ValidationError("Save refused"), new ConflictError()])("a_failed_flush_does_not_log_out: %s", async (error) => {
+      const state = setup(true);
+      act(() => state.leaveGuardRef.current?.(state.onLogout));
+      fireEvent.click(await screen.findByRole("button", { name: "Save and log out" }));
+      state.reject(error);
+      await screen.findAllByRole("alert");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(state.onLogout).not.toHaveBeenCalled();
+      if (error instanceof ValidationError) expect(screen.getByRole("alert").textContent).toBe("Save refused");
+    });
+
+    it("logout_without_changes_has_no_dialog", () => {
+      const state = setup();
+      act(() => state.leaveGuardRef.current?.(state.onLogout));
+      expect(state.onLogout).toHaveBeenCalledOnce();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      state.rendered.unmount();
+      expect(state.leaveGuardRef.current).toBeNull();
+    });
   });
 
   it("renders document text and empty annotations list initially", () => {

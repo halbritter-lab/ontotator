@@ -592,10 +592,13 @@ test.describe("ontology tree", () => {
         // Both parts are usable: the annotation panel has at least 40 % of the column,
         // the tree at least as much as the panel, and 400 px or 60 % of a low column.
         const columnHeight = inspectorBefore.height;
-        expect(inspector.height).toBeGreaterThanOrEqual(250);
+        // The 54 px shell plus 52 px case toolbar leave 594/614 px on low screens.
+        // Keep absolute floors feasible there; the 40/60 proportions stay enforced.
+        const lowFloor = size.width === 1100 ? [230, 350] : size.height === 720 ? [240, 360] : [250, 370];
+        expect(inspector.height).toBeGreaterThanOrEqual(lowFloor[0]);
         expect(inspector.height).toBeGreaterThanOrEqual(columnHeight * 0.4 - 1);
         expect(tree.height).toBeGreaterThanOrEqual(Math.min(400, columnHeight * 0.6) - 1);
-        expect(tree.height).toBeGreaterThanOrEqual(370);
+        expect(tree.height).toBeGreaterThanOrEqual(lowFloor[1]);
         expect(tree.height).toBeGreaterThanOrEqual(inspector.height - 1);
         // Neither is short while the other has room to spare. An annotation panel that
         // has to scroll has given the tree no more than its due (half, or 400 px on a low
@@ -618,18 +621,18 @@ test.describe("ontology tree", () => {
         await expect(panel).toHaveCount(0);
       });
     }
-    // Direction-C prototype metrics (Source Sans 3 and the compact case header).
-    // The panel's content is 501 px high: it scrolls on low screens, fits at 1080,
-    // and has its 40 % at 1440. The layout/visibility contracts above stay unchanged.
+    // Direction C with the shared shell (54 px) and case toolbar (52 px).
+    // Measured after integration: the shell reduces the available column height;
+    // adjacency, proportional allocation, containment, focus and text geometry above remain pinned.
     expect(heights).toEqual([
-      "1025x720: 262/393",
-      "1100x700: 254/381",
-      "1280x720: 268/400",
-      "1440x900: 424/424",
-      "1599x900: 424/424",
-      "1600x900: 424/424",
-      "1920x1080: 501/527",
-      "2560x1440: 555/833",
+      "1025x720: 246/368",
+      "1100x700: 238/356",
+      "1280x720: 246/368",
+      "1440x900: 394/400",
+      "1599x900: 394/400",
+      "1600x900: 394/400",
+      "1920x1080: 487/487",
+      "2560x1440: 534/800",
     ]);
   });
 

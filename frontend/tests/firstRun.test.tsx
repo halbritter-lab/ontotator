@@ -86,6 +86,22 @@ describe("annotator identity", () => {
 });
 
 describe("editor and page polish", () => {
+  it("editor_shell_routes_logout_through_the_leave_guard", async () => {
+    loggedInAs("JPL");
+    vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
+    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
+    vi.spyOn(api, "listOntologies").mockResolvedValue([]);
+    vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: view() } as any);
+    const onLogout = vi.fn();
+    render(<App onLogout={onLogout} />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/i }));
+    await screen.findByRole("group", { name: "Case" });
+    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+    expect(onLogout).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("shows 'Saved' without the revision number (revision in the tooltip)", () => {
     render(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} />);
     const status = screen.getByRole("status");

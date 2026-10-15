@@ -1,3 +1,4 @@
+import { Button } from "../ui/Button";
 import React, { useEffect, useRef, useState } from "react";
 import type { SearchCandidate } from "../api/client";
 import { SearchLanguageButton } from "./SearchLanguageButton";
@@ -116,14 +117,14 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             autoComplete="off"
           />
           {queryInput && (
-            <button
+            <Button
               type="button"
-              className="btn btn-secondary btn-sm"
+              variant="secondary" size="sm"
               onClick={handleClear}
               title="Clear search"
             >
               ✕
-            </button>
+            </Button>
           )}
           {languageControl && <SearchLanguageButton control={languageControl} />}
         </div>

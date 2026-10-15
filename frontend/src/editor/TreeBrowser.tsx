@@ -1,3 +1,7 @@
+import { IconButton } from "../ui/IconButton";
+import { IconClose } from "../ui/icons";
+import { InlineMessage } from "../ui/InlineMessage";
+import { Button } from "../ui/Button";
 import { viewLabel } from "./termLinks";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, type TreeTermDetail } from "../api/client";
@@ -205,9 +209,7 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
       <section ref={sectionRef} className="tree-browser" role="region" aria-label="Ontology tree">
         <header className="tree-browser__header">
           <h2>Ontology tree</h2>
-          <button type="button" className="btn btn-secondary btn-sm" aria-label="Close tree" onClick={onClose}>
-            ✕
-          </button>
+          <IconButton label="Close tree" icon={<IconClose />} size="sm" onClick={onClose} />
         </header>
 
         {startStatus && START_NOTICE[startStatus] && (
@@ -216,9 +218,9 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
           </div>
         )}
         {error && (
-          <div className="tree-error" role="alert">
+          <InlineMessage tone="error">
             {error}
-          </div>
+          </InlineMessage>
         )}
 
         <div className="tree-browser__body">
@@ -319,16 +321,16 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
               )}
             </div>
             <div className="tree-detail__actions">
-              <button
+              <Button
                 type="button"
-                className="btn btn-primary"
+                variant="primary"
                 disabled={!canUse}
                 onClick={() => {
                   void assignTerm();
                 }}
               >
                 Use this term
-              </button>
+              </Button>
               {hint && <span className="tree-detail__hint">{hint}</span>}
             </div>
           </div>

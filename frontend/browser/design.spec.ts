@@ -28,6 +28,7 @@ async function shoot(page: Page, name: string) {
     const documentTab = page.getByRole("navigation", { name: "Select view" }).getByRole("button", { name: "Document" });
     if (await documentTab.isVisible()) await documentTab.click();
     await page.evaluate(() => document.fonts.ready);
+    await checkContrastAndTextSize(page);
     const dir = resolve(screenshotDir(), `${viewport.width}x${viewport.height}`);
     mkdirSync(dir, { recursive: true });
     await page.screenshot({ path: resolve(dir, `${name}.png`) });

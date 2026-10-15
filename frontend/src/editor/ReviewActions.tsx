@@ -1,3 +1,6 @@
+import { IconButton } from "../ui/IconButton";
+import { Select } from "../ui/Select";
+import { Button } from "../ui/Button";
 import React, { useEffect, useRef, useState } from "react";
 import type { AnnotationSnapshot } from "../api/client";
 import type { components } from "../api/generated";
@@ -192,15 +195,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             <span className="badge decision-tag decision-tag--open">Pending</span>
           )}
           {onDeselect && (
-            <button
-              type="button"
-              className="btn btn-quiet btn-sm btn-icon"
-              onClick={onDeselect}
-              title="Clear selection"
-              aria-label="Clear selection"
-            >
-              <IconClose />
-            </button>
+            <IconButton label="Clear selection" icon={<IconClose />} variant="quiet" size="sm" onClick={onDeselect} />
           )}
         </div>
       </div>
@@ -254,9 +249,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       {target.is_unknown && <p role="alert">Unknown term cannot be confirmed.</p>}
       {/* 4 Action Buttons: a quiet ruled grid; the chosen outcome is filled. */}
       <div className="decision-grid">
-        <button
+        <Button
           type="button"
-          className="btn decision-btn decision-btn--confirmed"
+          variant="secondary" className="decision-btn decision-btn--confirmed"
           aria-pressed={pressed("confirmed")}
           onClick={() => handleOutcomeClick("confirmed")}
           disabled={target.is_obsolete || target.is_unknown}
@@ -264,22 +259,22 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         >
           <span className="decision-btn__label"><IconCheck />Confirm</span>
           <kbd className="kbd">1</kbd>
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
-          className="btn decision-btn decision-btn--rejected"
+          variant="secondary" className="decision-btn decision-btn--rejected"
           aria-pressed={pressed("rejected")}
           onClick={() => handleOutcomeClick("rejected")}
           title={pressed("rejected") ? "Click to clear rejection (Key: 2)" : "Reject proposal (Key: 2)"}
         >
           <span className="decision-btn__label"><IconClose />Reject</span>
           <kbd className="kbd">2</kbd>
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
-          className="btn decision-btn decision-btn--changed"
+          variant="secondary" className="decision-btn decision-btn--changed"
           aria-pressed={pressed("changed")}
           onClick={() => {
             if (currentDecision?.outcome === "changed" && currentDecision.replacement?.annotation_id && onEditReplacement) {
@@ -298,32 +293,32 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         >
           <span className="decision-btn__label"><IconPencil />Edit & Replace</span>
           <kbd className="kbd">3</kbd>
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
-          className="btn decision-btn decision-btn--uncertain"
+          variant="secondary" className="decision-btn decision-btn--uncertain"
           aria-pressed={pressed("uncertain")}
           onClick={() => handleOutcomeClick("uncertain")}
           title={pressed("uncertain") ? "Click to clear uncertain status (Key: 4)" : "Clinically or textually undecidable (Key: 4)"}
         >
           <span className="decision-btn__label"><IconQuestion />Uncertain</span>
           <kbd className="kbd">4</kbd>
-        </button>
+        </Button>
       </div>
 
       {/* Reset Decision Button */}
       {currentDecision && (
         <div className="review-actions__row">
-          <button
+          <Button
             type="button"
-            className="btn btn-quiet btn-sm"
+            variant="quiet" size="sm"
             onClick={handleClearDecision}
             title="Reset decision for this proposal (back to open)"
           >
             <IconUndo />
             Reset decision (open)
-          </button>
+          </Button>
         </div>
       )}
 
@@ -349,14 +344,14 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             );
           })()}
           {currentDecision.replacement && onEditReplacement && (
-            <button
+            <Button
               type="button"
-              className="btn btn-primary btn-sm"
+              variant="primary" size="sm"
               onClick={() => onEditReplacement(currentDecision.replacement!.annotation_id)}
             >
               <IconPencil />
               Edit replacement annotation
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -365,7 +360,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       {draftAnnotations.length > 0 && (
         <div className="review-actions__row">
           {!showReplacementSelect ? (
-            <button
+            <Button
               type="button"
               className="link-button"
               onClick={() => {
@@ -379,23 +374,23 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
               }}
             >
               Assign replacement from draft...
-            </button>
+            </Button>
           ) : (
             <div className="review-actions__block">
               <div className="review-actions__block-head">
                 <label htmlFor="replacement-select" className="form-label">
                   Select replacement annotation:
                 </label>
-                <button
+                <Button
                   type="button"
-                  className="btn btn-quiet btn-sm"
+                  variant="quiet" size="sm"
                   onClick={() => setShowReplacementSelect(false)}
                 >
                   <IconClose />
                   Close
-                </button>
+                </Button>
               </div>
-              <select
+              <Select label={null}
                 id="replacement-select"
                 aria-label="Select replacement annotation"
                 className="form-select"
@@ -418,15 +413,15 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
                       </option>
                     );
                   })}
-              </select>
-              <button
+              </Select>
+              <Button
                 type="button"
-                className="btn btn-primary btn-sm"
+                variant="primary" size="sm"
                 onClick={handleConfirmChanged}
                 disabled={!selectedReplacementId}
               >
                 Confirm replacement
-              </button>
+              </Button>
             </div>
           )}
         </div>

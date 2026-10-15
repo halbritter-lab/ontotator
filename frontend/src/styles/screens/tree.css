@@ -117,8 +117,7 @@
   font-weight: 600;
 }
 
-.tree-notice,
-.tree-error {
+.tree-notice {
   flex-shrink: 0;
   padding: 6px 12px;
   font-size: 0.82rem;
@@ -127,11 +126,6 @@
 
 .tree-notice {
   background: var(--warning-light);
-}
-
-.tree-error {
-  background: var(--danger-light);
-  color: var(--danger);
 }
 
 .tree-loading {
@@ -335,4 +329,9 @@
 .tree-browser__header h2 {
   font-size: var(--size-sm);
   color: var(--text-muted);
+}
+
+/* Keep the selected term readable when the shell wraps at tablet widths. */
+@media (min-width: 701px) and (max-width: 1024px) {
+  .tree-detail__body { min-height: 60px; }
 }

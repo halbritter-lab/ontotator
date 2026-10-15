@@ -1,3 +1,6 @@
+import { Toolbar } from "../ui/Toolbar";
+import { InlineMessage } from "../ui/InlineMessage";
+import { Button } from "../ui/Button";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   api,
@@ -104,6 +107,7 @@ export interface CaseScreenProps {
   onSubmitted?: () => void | Promise<void>;
   /** The logged-in user's display name, shown with the pseudonym. */
   annotatorName?: string;
+  leaveGuardRef?: React.MutableRefObject<((proceed: () => void) => void) | null>;
 }
 
 export const CaseScreen: React.FC<CaseScreenProps> = ({
@@ -115,6 +119,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onReload,
   onSubmitted,
   annotatorName,
+  leaveGuardRef,
 }) => {
   const [pendingAnnotation, setPendingAnnotation] = useState<{
     annotationId: string;
@@ -147,6 +152,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     typeof navigator !== "undefined" && navigator.onLine === false,
   );
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [logoutProceed, setLogoutProceed] = useState<(() => void) | null>(null);
+  const [logoutSaving, setLogoutSaving] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   // "Finish & Submit" was clicked and waits for pending saves before it validates.
   const [submitPending, setSubmitPending] = useState(false);
@@ -402,6 +409,35 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const request = confirmRequest;
     setConfirmRequest(null);
     request?.resolve(ok);
+  };
+
+  useEffect(() => {
+    if (!leaveGuardRef) return;
+    leaveGuardRef.current = (proceed) => {
+      const queue = queueRef.current;
+      if (queue.pendingCount() === 0 && queue.getState() !== "saving") proceed();
+      else setLogoutProceed(() => proceed);
+    };
+    return () => { leaveGuardRef.current = null; };
+  }, [leaveGuardRef]);
+
+  const saveAndLogout = async () => {
+    if (!logoutProceed || logoutSaving) return;
+    setLogoutSaving(true);
+    const rejectedBefore = queueRef.current.rejectedCount();
+    try {
+      await queueRef.current.flush();
+      if (queueRef.current.rejectedCount() !== rejectedBefore) {
+        setActionError((current) => current ?? "A change could not be saved; you are still logged in.");
+        return;
+      }
+      logoutProceed();
+    } catch (error) {
+      reportError(error);
+    } finally {
+      setLogoutSaving(false);
+      setLogoutProceed(null);
+    }
   };
 
   /**
@@ -1309,16 +1345,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   return (
     <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
-      <header className="app-header">
+      <Toolbar className="case-toolbar" label="Case">
         <div className="app-title">
-          <button
+          <Button
             type="button"
-            className="btn btn-quiet btn-sm"
+            variant="quiet" size="sm"
             onClick={() => { void leaveCase(onClose); }}
             title="Back to dashboard"
           >
             ← Dashboard
-          </button>
+          </Button>
           {documentList && documentList.length > 0 && onNavigateCase ? (
             <CaseNavigation
               documents={documentList}
@@ -1382,19 +1418,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             variant="quiet" size="sm" title="Keyboard shortcuts (?)" />
 
           {queueState === "error" && (
-            <button
+            <Button
               type="button"
-              className="btn btn-secondary btn-sm"
+              variant="secondary" size="sm"
               onClick={() => queueRef.current.retry()}
             >
               <IconRetry />
               Retry
-            </button>
+            </Button>
           )}
 
-          <button
+          <Button
             type="button"
-            className="btn btn-primary btn-sm"
+            variant="primary" size="sm"
             onClick={handleSubmitWorkspace}
             disabled={submitPending}
             aria-busy={submitPending}
@@ -1402,36 +1438,30 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           >
             <IconCheck />
             Finish & Submit Case
-          </button>
+          </Button>
         </div>
-      </header>
+      </Toolbar>
 
       {queueState === "conflict" && (
-        <div
-          role="alert"
-          aria-label="Revision conflict"
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", background: "var(--warning-light)", borderBottom: "1px solid var(--border)" }}
-        >
+        <InlineMessage tone="error" aria-label="Revision conflict">
           <span>
             <strong>Case was changed elsewhere.</strong> Your latest edit was not saved. Reload the case to continue;
             unsaved edits in this window ({queueRef.current.pendingCount()}) will be discarded.
           </span>
           {onReload ? (
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => { void reloadCase(); }} disabled={isReloading}>
+            <Button type="button" variant="primary" size="sm" onClick={() => { void reloadCase(); }} disabled={isReloading}>
               {isReloading ? "Reloading..." : "Reload case"}
-            </button>
+            </Button>
           ) : (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => { void leaveCase(onClose); }}>
+            <Button type="button" variant="secondary" size="sm" onClick={() => { void leaveCase(onClose); }}>
               Back to dashboard
-            </button>
+            </Button>
           )}
-        </div>
+        </InlineMessage>
       )}
 
       {(actionError || submitError) && (
-        <div role="alert" style={{ color: "var(--danger)", padding: 12, background: "var(--danger-light)", borderBottom: "1px solid var(--border)" }}>
-          {actionError ?? submitError}
-        </div>
+        <InlineMessage tone="error">{actionError ?? submitError}</InlineMessage>
       )}
       <nav className="mobile-pane-tabs" aria-label="Select view">
         {([ ["list", "List"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
@@ -1520,7 +1550,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                               const displayText = replLabel ? `${replLabel} (${replTermId})` : replTermId;
                               return (
                                 <div className="doc-meta__line">
-                                  <button
+                                  <Button
                                     type="button"
                                     className="replaced-link"
                                     onClick={(e) => {
@@ -1536,7 +1566,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                     title="Jump to replacement annotation in draft"
                                   >
                                     Replaced by: <strong>{displayText}</strong>
-                                  </button>
+                                  </Button>
                                   {" "}<AiBadge provenance={t.provenance} />
                                 </div>
                               );
@@ -1579,14 +1609,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <div className="sidebar-section">
               <div className="sidebar-header sidebar-header--actions">
                 <span>Curated Annotations ({visibleAnnotations.length})</span>
-                <button
+                <Button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  variant="secondary" size="sm"
                   onClick={handleStartSpanless}
                   title="Create new annotation via ontology search"
                 >
                   + New Annotation
-                </button>
+                </Button>
               </div>
               <ul className="doc-list">
                 {visibleAnnotations.map((annSnap) => {
@@ -1636,10 +1666,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
           {(view.submissions ?? []).length > 0 && <div className="detail-section">
             <h3>Previous Submissions</h3>
-            {view.submissions!.map(submission => <button type="button" className="btn btn-secondary btn-sm"
+            {view.submissions!.map(submission => <Button type="button" variant="secondary" size="sm"
               key={submission.submission_id} onClick={() => setHistorySubmission(submission)}>
               {submission.created_at} · {submission.submission_id}
-            </button>)}
+            </Button>)}
           </div>}
 
           {/* Submission Box at bottom of sidebar */}
@@ -1712,7 +1742,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
                   languages={searchLanguagesFor(pendingAnnotation.layerId)}
                   onSelectCandidate={(candidate, searchId) => { void createPendingAnnotation(candidate.term_id, searchId); }} />
-                <button type="button" className="btn btn-secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</button>
+                <Button type="button" variant="secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</Button>
               </div>
             </section>
           ) : view.key.mode === "review" && selectedTarget ? (
@@ -1838,9 +1868,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         {historySubmission.decisions.map(decision => <p key={refKey(decision.target)}>
           {decision.target.annotation_id} ({decision.target.version}): {decision.outcome} {decision.note}
         </p>)}
-        <button type="button" className="btn btn-secondary" onClick={() => setHistorySubmission(null)}>
+        <Button type="button" variant="secondary" onClick={() => setHistorySubmission(null)}>
           Close
-        </button>
+        </Button>
       </Dialog>}
 
       {completedSubmission && <Dialog open title="Case submitted" heading="✓ Case successfully submitted!">
@@ -1848,31 +1878,31 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <p>Timestamp: {completedSubmission.created_at}</p>
         <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
           {nextDoc && onNavigateCase && (
-            <button
+            <Button
               type="button"
-              className="btn btn-primary"
+              variant="primary"
               onClick={() => {
                 setCompletedSubmission(null);
                 void leaveCase(() => onNavigateCase(nextDoc.document_id));
               }}
             >
               Review next case (Case {nextDoc.position}) →
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="secondary"
             onClick={() => setCompletedSubmission(null)}
           >
             Stay in case
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="secondary"
             onClick={() => { setCompletedSubmission(null); void leaveCase(onClose); }}
           >
             Back to dashboard
-          </button>
+          </Button>
         </div>
       </Dialog>}
 
@@ -1912,20 +1942,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           </p>
         )}
         <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <button
+          <Button
             type="button"
-            className="btn btn-primary"
+            variant="primary"
             disabled={!textCheckedConfirmed || (view.key.mode === "review" && openReviewTargets.length > 0)}
             onClick={() => { void confirmSubmit(); }}
           >
             Submit case
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={() => setSubmitDialogOpen(false)}>
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setSubmitDialogOpen(false)}>
             Cancel
-          </button>
+          </Button>
         </div>
       </Dialog>
 
+      <ConfirmDialog open={!!logoutProceed} title="Unsaved changes"
+        message={<p>Your latest changes are not saved yet.</p>} confirmLabel="Save and log out"
+        busy={logoutSaving} onConfirm={() => { void saveAndLogout(); }} onCancel={() => setLogoutProceed(null)} />
       {confirmRequest && <ConfirmDialog open title={confirmRequest.title} message={<p>{confirmRequest.message}</p>}
         confirmLabel={confirmRequest.confirmLabel} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}
       <ShortcutHelpHost />

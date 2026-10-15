@@ -1,6 +1,6 @@
 /* Header */
 
-.app-header {
+.case-toolbar {
   background: var(--surface-raised);
   border-bottom: 1px solid var(--border);
   padding: 12px 20px;
@@ -580,7 +580,7 @@
 /* Responsive behavior */
 
 @media (max-width: 1024px) {
-  .app-header {
+  .case-toolbar {
     flex-wrap: wrap;
     gap: 8px;
   }
@@ -617,11 +617,11 @@
 }
 
 @media (max-width: 700px) {
-  .app-header > div:last-child {
+  .case-toolbar > div:last-child {
     flex-wrap: wrap;
     max-width: 100%;
   }
-  .app-header .btn,
+  .case-toolbar .btn,
 .case-navigation .btn {
     white-space: nowrap;
   }
@@ -814,7 +814,7 @@
 
 /* Case header: flat, on the paper, one filled action. */
 
-.app-header {
+.case-toolbar {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: var(--space-2) var(--space-5);
@@ -1073,7 +1073,7 @@
 
 /* Case header: groups separated by space and one hairline, not by boxes. */
 
-.app-header {
+.case-toolbar {
   gap: var(--space-4);
   min-height: 52px;
 }
@@ -1590,4 +1590,15 @@
   color: var(--text-muted);
   font-size: var(--size-sm);
   line-height: var(--leading-sm);
+}
+
+/* Shared fields retain the compact navigation and existing visible labels. */
+.case-toolbar .case-navigation > .form-group {
+  margin: 0;
+  min-width: 0;
+}
+.case-toolbar .form-label:empty,
+.detail-pane .form-label:empty,
+.layer-controls .form-label:empty {
+  display: none;
 }

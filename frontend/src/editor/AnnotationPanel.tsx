@@ -1,3 +1,6 @@
+import { IconButton } from "../ui/IconButton";
+import { Select } from "../ui/Select";
+import { Button } from "../ui/Button";
 import React, { useState } from "react";
 import type { AnnotationSnapshot, SearchCandidate } from "../api/client";
 import type { components } from "../api/generated";
@@ -134,14 +137,14 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             </span>
           </div>
           {onNavigateTarget && (
-            <button
+            <Button
               type="button"
-              className="btn btn-secondary btn-sm"
+              variant="secondary" size="sm"
               style={{ padding: "2px 8px", fontSize: "0.75rem", background: "var(--surface)" }}
               onClick={onNavigateTarget}
             >
               View review target
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -157,34 +160,26 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               <TermName termId={currentTerm} label={termLabel} />
             </h2>
             {onShowInTree && currentTerm && (
-              <button
+              <Button
                 type="button"
-                className="btn btn-secondary btn-sm annotation-tree-button"
+                variant="secondary" size="sm" className="annotation-tree-button"
                 onClick={onShowInTree}
                 title="Show this term in the ontology tree: broader and narrower terms"
               >
                 Show in tree
-              </button>
+              </Button>
             )}
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <button
+            <Button
               type="button"
-              className="btn btn-secondary btn-sm"
+              variant="secondary" size="sm"
               onClick={() => setShowSearch(!showSearch)}
             >
               {showSearch ? "Close search" : "Change term"}
-            </button>
+            </Button>
             {onDeselect && (
-              <button
-                type="button"
-                className="btn btn-quiet btn-sm btn-icon"
-                onClick={onDeselect}
-                title="Clear selection"
-                aria-label="Clear selection"
-              >
-                <IconClose />
-              </button>
+              <IconButton label="Clear selection" icon={<IconClose />} variant="quiet" size="sm" onClick={onDeselect} />
             )}
           </div>
         </div>
@@ -241,12 +236,12 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <select id={`axis-select-${axis.id}`} aria-label={axis.label}
-                    className="form-select" value={val} onChange={(e) => updateAxis(e.target.value)}>
+                  <Select label={null} id={`axis-select-${axis.id}`} aria-label={axis.label}
+                    value={val} onChange={(e) => updateAxis(e.target.value)}>
                     {axis.allow_empty && <option value="">Not specified</option>}
                     {!axis.allow_empty && <option value="" disabled>Please select</option>}
                     {axis.options.map((option) => <option key={option} value={option}>{option}</option>)}
-                  </select>
+                  </Select>
                 )}
               </fieldset>
             );
@@ -258,15 +253,15 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
       <div className="detail-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <h3>Mentions ({linkedEvidence.length})</h3>
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary btn-sm"
+            variant="secondary" size="sm"
             onClick={() => onSetIntent("new_mention")}
             aria-pressed={isAttachingMention}
             title="Highlight text to add an additional mention for this term"
           >
             {isAttachingMention ? "Select text…" : "+ Add Mention"}
-          </button>
+          </Button>
         </div>
 
         {linkedEvidence.length === 0 ? (
@@ -321,22 +316,22 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                   {confirmDetachId === ev.mention.evidence_id ? (
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }} role="group" aria-label="Confirm mention removal">
                       <span style={{ fontSize: "0.75rem" }}>Remove?</span>
-                      <button
+                      <Button
                         type="button"
-                        className="btn btn-danger btn-sm"
+                        variant="danger" size="sm"
                         onClick={() => { setConfirmDetachId(null); onDetachMention(ev.mention.evidence_id); }}
                       >
                         Yes, remove
-                      </button>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setConfirmDetachId(null)}>
+                      </Button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmDetachId(null)}>
                         Cancel
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                   <div style={{ display: "flex", gap: 4 }}>
-                    <button
+                    <Button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      variant="secondary" size="sm"
                       onClick={() => {
                         onSelectEvidence(ev.mention.evidence_id);
                         onSetIntent("extend_mention");
@@ -344,15 +339,15 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                       title="Add another text segment to this mention"
                     >
                       + Segment
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="btn btn-danger btn-sm"
+                      variant="danger" size="sm"
                       onClick={() => setConfirmDetachId(ev.mention.evidence_id)}
                       title="Detach mention from this annotation"
                     >
                       Remove
-                    </button>
+                    </Button>
                   </div>
                   )}
                 </div>
@@ -368,29 +363,29 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           <div role="group" aria-label="Confirm deletion" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: "0.85rem" }}>Delete this annotation and all its mentions?</span>
             <div style={{ display: "flex", gap: 6 }}>
-              <button
+              <Button
                 type="button"
-                className="btn btn-danger"
+                variant="danger"
                 style={{ flex: 1 }}
                 onClick={() => { setConfirmDelete(false); onDeleteAnnotation(ann.annotation_id); }}
               >
                 Yes, delete
-              </button>
-              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setConfirmDelete(false)}>
+              </Button>
+              <Button type="button" variant="secondary" style={{ flex: 1 }} onClick={() => setConfirmDelete(false)}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
-          <button
+          <Button
             type="button"
-            className="btn btn-danger"
+            variant="danger"
             style={{ width: "100%" }}
             onClick={() => setConfirmDelete(true)}
           >
             <IconTrash />
             Delete Annotation
-          </button>
+          </Button>
         )}
       </div>
     </div>

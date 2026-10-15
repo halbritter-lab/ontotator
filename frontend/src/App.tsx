@@ -107,6 +107,7 @@ export interface AppProps {
 
 export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const documentRequest = useRef(0);
+  const leaveGuardRef = useRef<((proceed: () => void) => void) | null>(null);
 
   const [packages, setPackagesState] = useState<ProjectSummary[]>([]);
   const [packagesLoaded, setPackagesLoaded] = useState(false);
@@ -375,7 +376,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
     const currentDocId = activeWorkspace.view.document.document_id;
     const reload = () => openCase(currentDocId, { forceRemount: true, roundId: mode === "review" ? activeWorkspace.view.key.target_set_id : undefined });
     return (
-      <AppShell user={user ?? null} density="reading" breadcrumb={[{ label: packages.find((p) => p.package_id === selectedPackageId)?.name || selectedPackageId || "Project" }, { label: `Case ${currentDocId}` }]}>
+      <AppShell user={user ?? null} onLogout={onLogout ? () => leaveGuardRef.current ? leaveGuardRef.current(onLogout) : onLogout() : undefined} density="reading" breadcrumb={[{ label: packages.find((p) => p.package_id === selectedPackageId)?.name || selectedPackageId || "Project" }, { label: `Case ${currentDocId}` }]}>
         <CaseErrorBoundary
           key={`${activeWorkspace.workspace_id}:${workspaceNonce}`}
           onBackToDashboard={() => { void closeWorkspace(); }}
@@ -385,6 +386,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
             key={`${activeWorkspace.workspace_id}:${workspaceNonce}`}
             view={activeWorkspace.view}
             workspaceId={activeWorkspace.workspace_id}
+            leaveGuardRef={leaveGuardRef}
             documentList={documents}
             annotatorName={user?.display_name}
             onNavigateCase={(docId) => openCase(docId)}
