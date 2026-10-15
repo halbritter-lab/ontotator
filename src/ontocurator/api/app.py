@@ -105,13 +105,14 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
             logger.warning("Could not release the runtime lease.", exc_info=True)
 
 
-def create_app(config: AppConfig | None = None) -> FastAPI:
+def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> FastAPI:
     """Instantiate configured FastAPI application for local editor."""
     app = FastAPI(
         title="Ontocurator Local API",
         version="0.1.0",
-        docs_url="/docs",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if expose_docs else None,
+        redoc_url="/redoc" if expose_docs else None,
+        openapi_url="/openapi.json" if expose_docs else None,
         lifespan=_runtime_lease,
     )
     app.state.draining = False

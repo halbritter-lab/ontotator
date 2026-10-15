@@ -30,10 +30,15 @@ def check_readiness(app: FastAPI) -> dict[str, bool]:
     """
     checks = _unavailable()
     repo = getattr(app.state, "repo", None)
-    if repo is None:
+    url = (
+        repo.db.engine.url
+        if repo is not None
+        else getattr(app.state, "health_database_url", None)
+    )
+    if url is None:
         return checks
     engine = create_engine(
-        repo.db.engine.url,
+        url,
         poolclass=NullPool,
         connect_args={"connect_timeout": 2, "options": "-c statement_timeout=2000"},
         hide_parameters=True,
@@ -43,7 +48,11 @@ def check_readiness(app: FastAPI) -> dict[str, bool]:
             conn.execute(text("SELECT 1"))
             checks["database"] = True
             checks["schema"] = current_revision(conn) == head_revision()
-            if checks["schema"] and app.state.ontologies_ready.is_set():
+            if (
+                checks["schema"]
+                and repo is not None
+                and app.state.ontologies_ready.is_set()
+            ):
                 pinned = set(
                     conn.execute(select(ProjectOntologyRow.sha256).distinct()).scalars()
                 )

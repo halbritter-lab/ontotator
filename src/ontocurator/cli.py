@@ -96,6 +96,12 @@ def _base_url(host: str, port: int) -> str:
 
 @app.command()
 def serve(
+    production: Annotated[
+        bool,
+        typer.Option(
+            "--production", help="Serve using production environment settings only."
+        ),
+    ] = False,
     data_dir: Annotated[
         Path,
         typer.Option(
@@ -195,6 +201,28 @@ def serve(
     ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE.
     """
     from ontocurator import settings
+
+    if production:
+        # Uvicorn's spawned workers read the same enforced environment. Merely
+        # validating an overridden mapping here would leave the factory in dev.
+        os.environ["ONTOCURATOR_ENV"] = "production"
+        try:
+            runtime = settings.server_settings()
+        except settings.SettingsError as exc:
+            typer.echo(f"Error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        uvicorn.run(
+            "ontocurator.api.server:app_from_env",
+            factory=True,
+            host="0.0.0.0",
+            port=8000,
+            workers=runtime.workers,
+            proxy_headers=True,
+            forwarded_allow_ips=",".join(runtime.trusted_proxies),
+            access_log=True,
+            timeout_graceful_shutdown=30,
+        )
+        return
 
     try:
         canonical_public_origin = (
