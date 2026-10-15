@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from pg_harness import column_values, database_for
-from sqlalchemy import insert, select, update
+from sqlalchemy import insert, select, text, update
 
 from ontocurator.auth.accounts import CODE_LIFETIME, AccountService
 from ontocurator.auth.audit import Actor
@@ -174,6 +176,8 @@ def test_the_password_rules_apply_when_a_code_is_redeemed(services: Services) ->
 
 
 def test_changes_revoke_sessions(services: Services) -> None:
+    # Another admin stays, so alice may lose the role again (last-admin rule).
+    services.accounts.create_user(ADMIN, "keeper", "Keeper", system_admin=True)
     _ready_user(services)
     token, _ = services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
 
@@ -243,6 +247,7 @@ def test_recovery_sets_a_new_admin_password_and_records_the_operator(
 
 
 def test_every_change_is_audited(services: Services) -> None:
+    services.accounts.create_user(ADMIN, "keeper", "Keeper", system_admin=True)
     services.accounts.create_user(ADMIN, "alice", "Alice")
     services.accounts.issue_reset_code(ADMIN, "alice")
     services.accounts.set_system_admin(ADMIN, "alice", True)
@@ -253,6 +258,7 @@ def test_every_change_is_audited(services: Services) -> None:
 
     assert sorted(actions) == [
         "user.active",
+        "user.create",
         "user.create",
         "user.reset_code",
         "user.system_admin",
@@ -437,3 +443,106 @@ def test_a_new_user_never_inherits_the_annotator_id_of_stored_work(
     # Claiming a historical identity stays an explicit choice of an admin.
     claimed = services.accounts.create_user(ADMIN, "bob", "Bob", pseudonym="ann-0002")
     assert claimed.user.pseudonym == "ann-0002"
+
+
+# --- The last active system admin (never leave the system without one) ---
+
+
+def _admins(services: Services) -> list[str]:
+    return [
+        u.username
+        for u in services.accounts.list_users()
+        if u.active and u.is_system_admin
+    ]
+
+
+def test_the_last_active_admin_can_be_neither_demoted_nor_deactivated(
+    services: Services,
+) -> None:
+    services.accounts.create_user(ADMIN, "root", "Root", system_admin=True)
+    services.accounts.create_user(ADMIN, "alice", "Alice")
+
+    for change in (
+        lambda: services.accounts.set_system_admin(ADMIN, "root", False),
+        lambda: services.accounts.set_active(ADMIN, "root", False),
+    ):
+        with pytest.raises(DomainError) as error:
+            change()
+        assert _code(error) == "LAST_SYSTEM_ADMIN"
+
+    assert _admins(services) == ["root"]
+    actions = column_values(services.accounts, "audit_events", "action")
+    assert "user.system_admin" not in actions
+    assert "user.active" not in actions
+    # Users who are not the last active admin change as before.
+    services.accounts.set_active(ADMIN, "alice", False)
+    services.accounts.set_system_admin(ADMIN, "alice", True)
+    services.accounts.set_system_admin(ADMIN, "alice", False)
+
+
+def test_an_admin_may_go_while_another_active_admin_stays(services: Services) -> None:
+    services.accounts.create_user(ADMIN, "root", "Root", system_admin=True)
+    services.accounts.create_user(ADMIN, "second", "Second", system_admin=True)
+    services.accounts.create_user(ADMIN, "dormant", "Dormant", system_admin=True)
+    services.accounts.set_active(ADMIN, "dormant", False)
+
+    services.accounts.set_system_admin(ADMIN, "second", False)
+
+    # An inactive admin does not count; nor does demoting it change anything.
+    with pytest.raises(DomainError) as error:
+        services.accounts.set_active(ADMIN, "root", False)
+    assert _code(error) == "LAST_SYSTEM_ADMIN"
+    services.accounts.set_system_admin(ADMIN, "dormant", False)
+    assert _admins(services) == ["root"]
+
+
+def _wait_until_blocked_or_done(services: Services, future: Future[object]) -> None:
+    """Return once ``future`` finished or a session of the database waits for a lock."""
+    deadline = time.monotonic() + 10
+    while not future.done():
+        with services.accounts.db.engine.connect() as conn:
+            waiting = conn.execute(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+                )
+            ).scalar_one()
+        if waiting:
+            return
+        assert time.monotonic() < deadline, "neither finished nor waiting"
+        time.sleep(0.01)
+
+
+@pytest.mark.parametrize("second", ["demote", "deactivate"])
+def test_two_admins_removed_at_once_leave_one(services: Services, second: str) -> None:
+    services.accounts.create_user(ADMIN, "alice", "Alice", system_admin=True)
+    services.accounts.create_user(ADMIN, "bob", "Bob", system_admin=True)
+    changed = threading.Event()
+    release = threading.Event()
+
+    def demote_alice_and_hold() -> None:
+        # Alice is demoted, but the change is not committed yet.
+        with services.accounts.db.transaction():
+            services.accounts.set_system_admin(ADMIN, "alice", False)
+            changed.set()
+            release.wait(10)
+
+    def remove_bob() -> object:
+        if second == "demote":
+            return services.accounts.set_system_admin(ADMIN, "bob", False)
+        return services.accounts.set_active(ADMIN, "bob", False)
+
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(demote_alice_and_hold)
+        assert changed.wait(10)
+        removing = pool.submit(remove_bob)
+        try:
+            _wait_until_blocked_or_done(services, removing)
+        finally:
+            release.set()
+        first.result(timeout=10)
+        with pytest.raises(DomainError) as error:
+            removing.result(timeout=10)
+
+    assert _code(error) == "LAST_SYSTEM_ADMIN"
+    assert _admins(services) == ["bob"]

@@ -10,6 +10,9 @@ is recovered offline. Every change is audited in its own transaction.
 remembers the generation it was issued under and is refused once the
 generation moved on. Setting a password, changing the admin flag or the
 activation bumps it and ends all sessions of the user.
+
+The installation always keeps an active system admin: demoting or
+deactivating the last one is refused with ``LAST_SYSTEM_ADMIN``.
 """
 
 from __future__ import annotations
@@ -69,6 +72,10 @@ ADMIN_USERNAME = "admin"
 ADMIN_DISPLAY_NAME = "Administrator"
 BOOTSTRAP_KEY = "admin_bootstrapped"
 BOOTSTRAP_LOCK = advisory_lock_id("bootstrap-admin")
+# Serialises every change that could remove an active system admin, so two
+# concurrent removals cannot both see the other admin still in place.
+# Lock order: this lock, then the user row.
+SYSTEM_ADMINS_LOCK = advisory_lock_id("system-admins")
 CODE_INVALID_MESSAGE = (
     "The code is not valid. It may be mistyped, used, expired or replaced;"
     " ask an administrator for a new one."
@@ -419,7 +426,8 @@ class AccountService:
         """Grant or withdraw the system admin role; a change ends all sessions.
 
         Raises:
-            DomainError: ``USER_NOT_FOUND``.
+            DomainError: ``USER_NOT_FOUND``, or ``LAST_SYSTEM_ADMIN`` when
+                the user is the last active system admin.
         """
         return self._set_flag(
             actor, username, "is_system_admin", on, "user.system_admin"
@@ -429,7 +437,8 @@ class AccountService:
         """Activate or deactivate a user; a change ends all sessions.
 
         Raises:
-            DomainError: ``USER_NOT_FOUND``.
+            DomainError: ``USER_NOT_FOUND``, or ``LAST_SYSTEM_ADMIN`` when
+                the user is the last active system admin.
         """
         return self._set_flag(actor, username, "active", active, "user.active")
 
@@ -438,9 +447,24 @@ class AccountService:
     ) -> User:
         now = self._now()
         with self.db.transaction() as conn:
+            if not value:
+                # Lock first, then read: a concurrent removal has committed
+                # (or not started) by the time the admins are counted below.
+                conn.execute(select(func.pg_advisory_xact_lock(SYSTEM_ADMINS_LOCK)))
             row = self._lock_user(conn, username)
             if getattr(row, column) == value:
                 return _user(row)  # nothing changes, nothing to audit
+            if (
+                not value
+                and row.active
+                and row.is_system_admin
+                and not self._other_active_admins(conn, row.id)
+            ):
+                raise DomainError(
+                    "LAST_SYSTEM_ADMIN",
+                    f"'{row.username}' is the last active system admin. Make "
+                    "another user a system admin first.",
+                )
             conn.execute(
                 update(UserRow).where(UserRow.id == row.id).values({column: value})
             )
@@ -455,6 +479,21 @@ class AccountService:
                 at=now,
             )
             return _user(self._lock_user(conn, row.username))
+
+    @staticmethod
+    def _other_active_admins(conn: Connection, user_id: int) -> bool:
+        """Whether an active system admin other than ``user_id`` exists."""
+        return bool(
+            conn.execute(
+                select(
+                    exists().where(
+                        UserRow.id != user_id,
+                        UserRow.active.is_(True),
+                        UserRow.is_system_admin.is_(True),
+                    )
+                )
+            ).scalar()
+        )
 
     # The first admin and the offline recovery
 

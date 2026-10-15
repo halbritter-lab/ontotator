@@ -98,6 +98,11 @@ def test_a_taken_username_is_an_error(tmp_path: Path) -> None:
 
 
 def test_reset_deactivate_and_admin_flag(tmp_path: Path) -> None:
+    # Another active admin, so bob may lose the role (last-admin rule).
+    root = _admin(
+        tmp_path, "users", "create", "root", "--display-name", "R", "--system-admin"
+    )
+    assert root.exit_code == 0, root.output
     created = _admin(
         tmp_path,
         "users",
@@ -128,7 +133,9 @@ def test_reset_deactivate_and_admin_flag(tmp_path: Path) -> None:
     assert off.output == "'bob': active=no, system admin=yes.\n"
     listed = _admin(tmp_path, "users", "list")
     assert listed.exit_code == 0, listed.output
-    assert listed.output == "bob\tbb-7\tBob B.\tinactive, admin\n"
+    assert listed.output == (
+        "bob\tbb-7\tBob B.\tinactive, admin\nroot\tann-0001\tR\tactive, admin\n"
+    )
     refused = _admin(tmp_path, "users", "reset-code", "bob")
     assert refused.exit_code == 1
     assert "Error: USER_INACTIVE: 'bob' is deactivated." in refused.output
@@ -137,11 +144,30 @@ def test_reset_deactivate_and_admin_flag(tmp_path: Path) -> None:
     assert on.output == "'bob': active=yes, system admin=yes.\n"
     admin_off = _admin(tmp_path, "users", "set-admin", "bob", "--off")
     assert admin_off.output == "'bob': active=yes, system admin=no.\n"
-    assert _admin(tmp_path, "users", "list").output == "bob\tbb-7\tBob B.\tactive\n"
+    assert _admin(tmp_path, "users", "list").output == (
+        "bob\tbb-7\tBob B.\tactive\nroot\tann-0001\tR\tactive, admin\n"
+    )
 
     unknown = _admin(tmp_path, "users", "deactivate", "nobody")
     assert unknown.exit_code == 1
     assert "Error: USER_NOT_FOUND: There is no user 'nobody'." in unknown.output
+
+
+def test_the_last_active_admin_is_kept(tmp_path: Path) -> None:
+    created = _admin(
+        tmp_path, "users", "create", "root", "--display-name", "R", "--system-admin"
+    )
+    assert created.exit_code == 0, created.output
+
+    for args in (("deactivate", "root"), ("set-admin", "root", "--off")):
+        refused = _admin(tmp_path, "users", *args)
+        assert refused.exit_code == 1
+        assert (
+            "Error: LAST_SYSTEM_ADMIN: 'root' is the last active system admin."
+            in refused.output
+        )
+    listed = _admin(tmp_path, "users", "list")
+    assert listed.output == "root\tann-0001\tR\tactive, admin\n"
 
 
 def test_hash_password_prints_an_argon2id_hash(tmp_path: Path) -> None:
