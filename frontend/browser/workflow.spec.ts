@@ -1,18 +1,27 @@
 import { expect, test, type Page } from "@playwright/test";
-import { importPackage, LAUNCH_URL, mentionWithOffsets, openCase, selectText, submitCase } from "./helpers";
+import {
+  importPackage,
+  LAUNCH_URL,
+  loginAs,
+  mentionWithOffsets,
+  openCase,
+  selectText,
+  submitCase,
+  TEST_PASSWORD,
+} from "./helpers";
 
 const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
 
-test("first run: guide, import from the guide and required identity", async ({ page }) => {
+test("first run: log in, import from the guide, open a case without typing initials", async ({ page }) => {
   // Show the dashboard as a fresh installation sees it (no packages yet).
   await page.route("**/api/v1/packages", (route) =>
     route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback(),
   );
-  await page.goto(LAUNCH_URL);
+  await loginAs(page, "first-run");
   const guide = page.getByRole("region", { name: "Get started" });
   await expect(guide).toBeVisible();
   await expect(guide).toContainText("Import work package (.zip)");
-  await expect(guide).toContainText("Enter your initials");
+  await expect(guide).not.toContainText(/initials/i);
   await expect(page.locator("#mode-select")).toHaveCount(0);
   await page.unroute("**/api/v1/packages");
 
@@ -23,22 +32,39 @@ test("first run: guide, import from the guide and required identity", async ({ p
   await expect(page.getByRole("status", { name: "Import result" })).toContainText("Package 'browser-fixture' imported");
   await expect(guide).toHaveCount(0);
 
-  // An identity is required before a case can be opened ...
-  const identity = page.getByLabel(/Your initials \/ ID/i);
-  await identity.fill("");
-  await identity.press("Enter");
-  await expect(page.getByRole("button", { name: /^Open case$/i })).toBeDisabled();
-  await expect(page.getByText("Required. Your annotations are saved under this name.")).toBeVisible();
-  // ... and has to be confirmed once per page session.
-  await identity.fill("first-run");
-  await page.getByRole("button", { name: /^Open case$/i }).click();
-  const dialog = page.getByRole("dialog", { name: "You are annotating as first-run" });
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Change initials" }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(identity).toBeFocused();
-  await openCase(page, { identity: "first-run" });
+  // The identity comes from the session: nothing asks for initials or a confirmation.
+  await openCase(page);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByTestId("annotator-identity")).toContainText("first-run");
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 0");
+});
+
+test("login: a wrong password is refused; a setup code sets the password and logs in", async ({ page }) => {
+  const username = "login-flow";
+  const created = await page.request.post(`/__test_user__?username=${username}&pseudonym=${username}&setup=true`);
+  expect(created.ok()).toBeTruthy();
+  const { code } = (await created.json()) as { code: string };
+
+  await page.goto(LAUNCH_URL);
+  const login = page.getByRole("form", { name: "Log in to Ontocurator" });
+  await login.getByLabel("Username").fill(username);
+  await login.getByLabel("Password").fill("not the password at all");
+  await login.getByRole("button", { name: "Log in", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Username or password is wrong");
+  await expect(page.getByTestId("current-user")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "I have a setup or reset code" }).click();
+  const setup = page.getByRole("form", { name: "Set your password" });
+  await setup.getByLabel("Username").fill(username);
+  await setup.getByLabel("Setup or reset code").fill(code);
+  await setup.getByLabel("New password", { exact: true }).fill(TEST_PASSWORD);
+  await setup.getByLabel("Repeat the new password").fill(TEST_PASSWORD);
+  await setup.getByRole("button", { name: "Set password and log in" }).click();
+  await expect(page.getByTestId("current-user")).toContainText(username);
+
+  await page.getByRole("button", { name: "Log out" }).click();
+  await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
+  await expect(page.getByTestId("current-user")).toHaveCount(0);
 });
 
 test("real backend: review, resume, reload, submit and authenticated export", async ({ page }) => {

@@ -648,7 +648,8 @@ test.describe("ontology tree", () => {
     await page.reload();
     await page.locator("#package-select").selectOption("browser-fixture");
     await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
-    await expect(page.getByTestId("dashboard-identity")).toHaveText("tree-reload");
+    // The session cookie survives the reload: still logged in, no login form.
+    await expect(page.getByTestId("current-user")).toBeVisible();
     await page.locator("#mode-select").selectOption("independent");
     await openCase(page, { identity: "tree-reload" });
     await expect(revision(page)).toHaveAttribute("title", "Revision 1");

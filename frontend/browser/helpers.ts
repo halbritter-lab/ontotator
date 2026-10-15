@@ -1,25 +1,39 @@
 import { expect, type Page } from "@playwright/test";
 
-export const LAUNCH_URL = "/#token=browser-test-token";
+export const LAUNCH_URL = "/";
+/** The password ``tests/browser_server.py`` sets for every test user. */
+export const TEST_PASSWORD = "browser test passphrase";
+
+/** The username of a test user: the pseudonym, lower-cased, other characters as "-". */
+export const usernameFor = (pseudonym: string) => pseudonym.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
 
 /**
- * Click the single "Open case" action. The first open in a page session must
- * ask "You are annotating as <identity>" (required identity confirmation);
- * later opens in the same page session must not ask again.
+ * Create the system admin ``pseudonym`` (idempotent; test-only route of the
+ * browser server) and log in through the login screen.
  */
-export async function openCase(page: Page, opts: { identity?: string } = {}) {
+export async function loginAs(page: Page, pseudonym: string) {
+  const username = usernameFor(pseudonym);
+  const created = await page.request.post(
+    `/__test_user__?username=${encodeURIComponent(username)}&pseudonym=${encodeURIComponent(pseudonym)}`,
+  );
+  expect(created.ok()).toBeTruthy();
+  await page.goto(LAUNCH_URL);
+  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  await form.getByLabel("Username").fill(username);
+  await form.getByLabel("Password").fill(TEST_PASSWORD);
+  await form.getByRole("button", { name: "Log in", exact: true }).click();
+  await expect(page.getByTestId("current-user")).toContainText(pseudonym);
+}
+
+/** Click the single "Open case" action; the identity comes from the session, so nothing asks. */
+export async function openCase(page: Page, _opts: { identity?: string } = {}) {
   await page.getByRole("button", { name: /^Open case$/i }).click();
-  if (opts.identity) {
-    const dialog = page.getByRole("dialog", { name: new RegExp(`You are annotating as ${opts.identity}`) });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: /Yes, continue/i }).click();
-  }
   await expect(page.locator(".status-badge")).toBeVisible();
 }
 
-/** Import a synthetic package through the dashboard and enter the identity. */
+/** Log in as ``annotator`` and import a synthetic package through the dashboard. */
 export async function importPackage(page: Page, query: string, packageId: string, annotator: string) {
-  await page.goto(LAUNCH_URL);
+  await loginAs(page, annotator);
   const fixture = await page.request.get(`/__synthetic_fixture__${query}`);
   expect(fixture.ok()).toBeTruthy();
   await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
@@ -29,10 +43,6 @@ export async function importPackage(page: Page, query: string, packageId: string
   });
   await expect(page.getByRole("status", { name: "Import result" })).toContainText(`Package '${packageId}' imported`);
   await expect(page.locator("#package-select")).toHaveValue(packageId);
-  const identity = page.getByLabel(/Your initials \/ ID/i);
-  await identity.fill(annotator);
-  await identity.press("Enter");
-  await expect(page.getByTestId("dashboard-identity")).toHaveText(annotator);
 }
 
 /** "Finish & Submit Case", tick "Entire text checked" and confirm. */

@@ -443,6 +443,28 @@ answer; the least surprising option was taken and should be confirmed.
   reload it.") moved from an `App` prop to a fixed, dismissable `role="status"` banner rendered by
   the gate (`.session-notice`), so they show over the case view as well; `App` has no
   `sessionNotice` prop any more. Counts: `tests/session.test.tsx` 14, full vitest 318 in 33 files.
+- Task 9: "remove the token from `AppConfig`" in `tests/browser_server.py` -> nothing left to do,
+  because Task 6 had already removed it.
+- Task 9: `/__test_user__` "is idempotent" -> a new user gets `display_name` = pseudonym; for an
+  existing user `setup=false` changes nothing (no new password, so its open sessions stay valid) and
+  `setup=true` issues a reset code, which `redeem-code` accepts like a setup code. Every user is
+  created and coded through `AccountService` with `Actor.cli()`, so the audit trail is the CLI's.
+- Task 9: the login test only checks that "Log out" brings back the form -> it also checks that
+  `current-user` is gone after the refused login and after the logout.
+- Task 9 **[user-flow choice]**: the case badge "Annotating as name (pseudonym)" (Task 8) made the case
+  header need a third line at 1025 px, the narrowest three-column window, so
+  `tree.spec.ts` "in the three-column layout the tree is under the annotation panel at every width"
+  failed (annotation panel 242 px instead of at least 250; header 114 px instead of 84, measured with
+  a throw-away probe spec; a realistic "Alice Example (ann-0007)" gives the same 114 px) -> the badge
+  shows the pseudonym alone, as before T2b, and its title reads "<name> (<pseudonym>): your
+  annotations and decisions are saved under this pseudonym"; the dashboard header still shows
+  "display name · pseudonym". The test was right (it guards the layout), so the app changed. A
+  shrinking badge (ellipsis on the name, `min-width: 0` on the header title) was tried and dropped: it
+  either hid the pseudonym or wrapped the other header items.
+- Task 9: the browser server logs "There is no user yet, so nobody can log in." at start, because
+  its users only appear through `/__test_user__`; left as is.
+- Task 9: after the rebuild, `grep -rnE "Authorization|Bearer|SESSION_TOKEN|ALLOW_TEST_CLIENT_HOST|session_token|verify_security" src tests --exclude-dir=__pycache__`
+  prints nothing (the Task 6 entry above expected this).
 
 ## Open risks
 

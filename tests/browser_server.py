@@ -8,11 +8,13 @@ import tempfile
 from pathlib import Path
 
 import uvicorn
-from fastapi import Query
+from fastapi import Query, Request
 from fastapi.responses import Response
 from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
+from ontocurator.auth.accounts import AccountService
+from ontocurator.auth.audit import Actor
 from ontocurator.config import AppConfig
 from ontocurator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
 from ontocurator.domain.documents import (
@@ -42,6 +44,8 @@ from tests.layered_fixtures import HP_DIGEST, make_layered_package  # noqa: E402
 ONTOLOGY = ROOT / "tests/fixtures/hp.json"
 MONDO_ONTOLOGY = ROOT / "tests/fixtures/mondo.json"
 PORT = int(os.environ.get("HPO_E2E_PORT", "18765"))
+# The password of every user that ``/__test_user__`` sets up (frontend/browser/helpers.ts).
+TEST_PASSWORD = "browser test passphrase"
 
 
 def fixture_package(
@@ -210,6 +214,45 @@ if __name__ == "__main__":
                 data = fixture_package()
             return Response(data, media_type="application/zip")
 
-        # The explicit test-only route must precede the static catch-all.
+        # The explicit test-only routes must precede the static catch-all.
+        app.router.routes.insert(0, app.router.routes.pop())
+
+        @app.post("/__test_user__")
+        def test_user(
+            request: Request,
+            username: str = Query(...),
+            pseudonym: str = Query(...),
+            setup: bool = Query(False),
+        ) -> dict[str, str]:
+            """Create a system admin called ``username`` with ``pseudonym``.
+
+            With ``setup`` the user keeps a fresh setup (or, if it exists, reset)
+            code, which is returned for the login screen to redeem. Otherwise the
+            code is redeemed with ``TEST_PASSWORD`` at once; an existing user is
+            left as it is, so a repeated call changes nothing.
+            """
+            accounts: AccountService = request.app.state.accounts
+            existing = accounts.get_by_username(username)
+            if existing is None:
+                issued = accounts.create_user(
+                    Actor.cli(),
+                    username,
+                    pseudonym,
+                    system_admin=True,
+                    pseudonym=pseudonym,
+                )
+                if not setup:
+                    accounts.redeem_code(username, issued.code, TEST_PASSWORD)
+            elif setup:
+                issued = accounts.issue_reset_code(Actor.cli(), username)
+            else:
+                return {"username": existing.username, "pseudonym": existing.pseudonym}
+            if setup:
+                return {"code": issued.code}
+            return {
+                "username": issued.user.username,
+                "pseudonym": issued.user.pseudonym,
+            }
+
         app.router.routes.insert(0, app.router.routes.pop())
         uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")

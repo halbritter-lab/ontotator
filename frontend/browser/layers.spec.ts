@@ -132,7 +132,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
 
-    // Returning to the case with references from the dashboard works (no second identity prompt).
+    // Returning to the case with references from the dashboard works.
     await page.getByRole("button", { name: "← Dashboard" }).click();
     await openCase(page);
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
