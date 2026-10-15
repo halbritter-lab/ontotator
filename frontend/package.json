@@ -13,6 +13,7 @@
     "api:generate": "openapi-typescript ../contracts/openapi.json -o src/api/generated.ts",
     "api:check": "node scripts/check-api-drift.js",
     "test:e2e": "npm run build && playwright test",
+    "test:stack": "playwright test -c playwright.stack.config.ts",
     "test:components": "vitest run tests/e2e"
   },
   "dependencies": {
