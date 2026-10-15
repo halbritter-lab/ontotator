@@ -107,16 +107,16 @@ def test_full_package_review_and_export_lifecycle(app_client):
     data = resp.json()
     assert data["project_key"] == "pkg-scenario-a"
 
-    # 2. List documents (metadata only, no proposal counts, 1-indexed position)
+    # 2. List documents (metadata only, no proposal counts, stored position)
     resp = client.get("/api/v1/projects/pkg-scenario-a/documents")
     assert resp.status_code == 200
     docs = resp.json()
     assert len(docs) == 2
     assert docs[0]["document_id"] == "doc-beta"
-    assert docs[0]["position"] == 1
+    assert docs[0]["position"] == 0
     assert docs[0]["status"] == "not_started"
     assert docs[1]["document_id"] == "doc-alpha"
-    assert docs[1]["position"] == 2
+    assert docs[1]["position"] == 1
     assert docs[1]["status"] == "not_started"
     assert "annotations_count" not in docs[0]
     assert "proposals" not in docs[0]
@@ -233,10 +233,10 @@ def test_document_list_with_position_and_status(app_client):
     docs = res.json()
     assert len(docs) == 2
     assert docs[0]["document_id"] == "doc-beta"
-    assert docs[0]["position"] == 1
+    assert docs[0]["position"] == 0
     assert docs[0]["status"] == "not_started"
     assert docs[1]["document_id"] == "doc-alpha"
-    assert docs[1]["position"] == 2
+    assert docs[1]["position"] == 1
     assert docs[1]["status"] == "not_started"
 
     # Alice opens doc-beta and adds an annotation
