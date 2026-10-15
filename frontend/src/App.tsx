@@ -185,7 +185,9 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const refreshDocuments = async (pkgId: string, opts: { annotator: string; mode: WorkspaceMode; resetSelection?: boolean }) => {
     const requestId = ++documentRequest.current;
     try {
-      const docs = await api.listDocuments(pkgId, { annotator_id: opts.annotator, mode: opts.mode });
+      const rawDocs = await api.listDocuments(pkgId, { annotator_id: opts.annotator, mode: opts.mode });
+      // Legacy case labels use one-based ordinals in the server's list order.
+      const docs = rawDocs.map((doc, index) => ({ ...doc, position: index + 1 }));
       if (requestId !== documentRequest.current) return docs;
       setDocuments(docs);
       setSelectedDocId((current) => {
