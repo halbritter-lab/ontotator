@@ -112,6 +112,7 @@ class OpenWorkspaceResponse(BaseModel):
 
     workspace_id: str
     view: WorkspaceView
+    read_only: bool = False
 
 
 class TermLookup(BaseModel):
@@ -397,9 +398,12 @@ def open_workspace(
         target_set_id=target_set_id,
     )
     view = ws_svc.open(key, targets)
+    assert isinstance(ws_svc.repo, ScopedRepository)
+    assignment = ws_svc.repo.workspace_assignment(view.key)
     return OpenWorkspaceResponse(
         workspace_id=encode_workspace_id(view.key),
         view=view,
+        read_only=assignment.status == "submitted",
     )
 
 

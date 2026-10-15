@@ -11,14 +11,24 @@ either overridden here or listed in ``PROJECT_FREE``; a test enforces that.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, func, select, update
 
+from ontocurator.assignments.service import TASK_FOR_MODE, Assignment, AssignmentService
 from ontocurator.auth.audit import Actor, record_audit
+from ontocurator.auth.authority import lock_user_authority
 from ontocurator.authz.memberships import grant_roles
-from ontocurator.authz.policy import ROLES, Access, Action, can
+from ontocurator.authz.policy import ROLES, Access, Action, can, may_take
+from ontocurator.authz.visibility import (
+    DocumentFilter,
+    current_access,
+    project_document_filters,
+    require_document,
+    visible_documents,
+)
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.documents import Document, EvidenceSnapshot
@@ -46,8 +56,17 @@ from ontocurator.storage.repository import (
     ProjectExport,
     ProjectInfo,
     Repository,
+    _lock_id,
 )
-from ontocurator.storage.tables import UserRow
+from ontocurator.storage.tables import (
+    AnnotationSnapshotRow,
+    AssignmentRow,
+    EvidenceSnapshotRow,
+    ProposalSetRow,
+    SearchEventRow,
+    SubmissionRow,
+    UserRow,
+)
 
 # Public methods that touch no project data.
 PROJECT_FREE = frozenset({"ontology_resources", "package_manifest_hash"})
@@ -80,6 +99,91 @@ class ScopedRepository(Repository):
     def _visible(self, project_key: str) -> None:
         if not can(self.access, Action.VIEW_PROJECT, project_key):
             raise project_not_found(project_key)
+
+    def _document(self, project_key: str, document_id: str) -> None:
+        self._visible(project_key)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            require_document(conn, self.access, project_id, project_key, document_id)
+
+    def _documents(self, project_key: str) -> DocumentFilter:
+        self._visible(project_key)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            return visible_documents(conn, self.access, project_id, project_key)
+
+    def workspace_assignment(self, key: WorkspaceKey) -> Assignment:
+        """The workspace's current authorized assignment, with storage encapsulated."""
+        self._visible(key.project_key)
+        with self.db.transaction() as conn:
+            return self.require_workable(conn, key)
+
+    def require_workable(
+        self, conn: Connection, key: WorkspaceKey, *, mutation: bool = False
+    ) -> Assignment:
+        project_id = self._require_project(conn, key.project_key)
+        access = current_access(conn, self.access, project_id, key.project_key)
+        require_document(conn, access, project_id, key.project_key, key.document_id)
+        if key.annotator_id != access.pseudonym:
+            raise AccessDenied("IDENTITY_MISMATCH")
+        if not may_take(access, key.project_key, TASK_FOR_MODE[key.mode]):
+            raise AccessDenied("MODE_NOT_ALLOWED")
+        assignment = AssignmentService.active_for(
+            conn, project_id, key.document_id, access.user_id, TASK_FOR_MODE[key.mode]
+        )
+        if assignment is None:
+            raise AccessDenied("ASSIGNMENT_REQUIRED")
+        if mutation and assignment.status == "submitted":
+            raise DomainError("ASSIGNMENT_SUBMITTED")
+        return assignment
+
+    def _before_workspace_locks(self, conn: Connection, key: WorkspaceKey) -> None:
+        conn.execute(
+            select(
+                func.pg_advisory_xact_lock_shared(_lock_id("members", key.project_key))
+            )
+        )
+        conn.execute(
+            select(
+                func.pg_advisory_xact_lock_shared(_lock_id("project", key.project_key))
+            )
+        )
+        lock_user_authority(conn, self.access.user_id)
+        # Revocation uses project EXCLUSIVE, so this assignment stays valid
+        # through commit without a global command mutex.
+        self.require_workable(conn, key)
+
+    def _before_new_mutation(self, conn: Connection, key: WorkspaceKey) -> None:
+        assignment = self.require_workable(conn, key, mutation=True)
+        conn.execute(
+            select(AssignmentRow.id)
+            .where(AssignmentRow.id == assignment.id)
+            .with_for_update(key_share=True)
+        ).one()
+        # Another compatible draft can submit the same task while this row
+        # lock waits (for example legacy assisted versus independent).
+        self.require_workable(conn, key, mutation=True)
+
+    def _after_new_mutation(
+        self,
+        conn: Connection,
+        key: WorkspaceKey,
+        result: Draft | Submission,
+        at: datetime,
+    ) -> None:
+        assignment = self.require_workable(conn, key, mutation=True)
+        values: dict[str, Any] = {"updated_at": at}
+        if isinstance(result, Submission):
+            values.update(status="submitted", last_submission_id=result.submission_id)
+        elif assignment.status == "open":
+            values["status"] = "in_progress"
+        else:
+            return
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == assignment.id)
+            .values(**values)
+        )
 
     # --- projects ---------------------------------------------------------- #
 
@@ -231,24 +335,56 @@ class ScopedRepository(Repository):
 
     def get_manifest(self, project_key: str) -> PackageManifest:
         self._visible(project_key)
-        return super().get_manifest(project_key)
+        manifest = super().get_manifest(project_key)
+        visibility = self._documents(project_key)
+        if visibility.all:
+            return manifest
+        return manifest.model_copy(
+            update={
+                "document_order": [
+                    doc
+                    for doc in manifest.document_order
+                    if doc in visibility.document_ids
+                ],
+                "file_hashes": {},
+            }
+        )
 
     def manifest_hash(self, project_key: str) -> str | None:
         self._visible(project_key)
         return super().manifest_hash(project_key)
 
     def list_manifests(self) -> list[PackageManifest]:
+        with self.db.transaction() as conn:
+            filters = project_document_filters(conn, self.access)
         return [
             manifest
+            if filters[manifest.package_id].all
+            else manifest.model_copy(
+                update={
+                    "document_order": [
+                        doc
+                        for doc in manifest.document_order
+                        if doc in filters[manifest.package_id].document_ids
+                    ],
+                    "file_hashes": {},
+                }
+            )
             for manifest in super().list_manifests()
-            if can(self.access, Action.VIEW_PROJECT, manifest.package_id)
+            if manifest.package_id in filters
         ]
 
     def list_projects(self) -> list[ProjectInfo]:
+        with self.db.transaction() as conn:
+            filters = project_document_filters(conn, self.access)
         return [
             project
+            if filters[project.project_key].all
+            else replace(
+                project, document_count=len(filters[project.project_key].document_ids)
+            )
             for project in super().list_projects()
-            if can(self.access, Action.VIEW_PROJECT, project.project_key)
+            if project.project_key in filters
         ]
 
     def get_task_profile(self, project_key: str) -> TaskProfile:
@@ -266,12 +402,18 @@ class ScopedRepository(Repository):
     # --- documents and proposals ------------------------------------------- #
 
     def get_document(self, project_key: str, document_id: str) -> Document | None:
+        self._document(project_key, document_id)
         self._visible(project_key)
         return super().get_document(project_key, document_id)
 
     def list_documents(self, project_key: str) -> list[Document]:
         self._visible(project_key)
-        return super().list_documents(project_key)
+        visibility = self._documents(project_key)
+        return [
+            doc
+            for doc in super().list_documents(project_key)
+            if visibility.all or doc.document_id in visibility.document_ids
+        ]
 
     def get_annotation_snapshot(
         self, annotation_id: str, version: str, project_key: str | None = None
@@ -279,6 +421,17 @@ class ScopedRepository(Repository):
         if project_key is None:
             raise _project_required()
         self._visible(project_key)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            owner = conn.execute(
+                select(AnnotationSnapshotRow.document_id).where(
+                    AnnotationSnapshotRow.project_id == project_id,
+                    AnnotationSnapshotRow.annotation_id == annotation_id,
+                    AnnotationSnapshotRow.version == version,
+                )
+            ).scalar_one_or_none()
+            if owner is not None:
+                require_document(conn, self.access, project_id, project_key, owner)
         return super().get_annotation_snapshot(annotation_id, version, project_key)
 
     def get_evidence_snapshot(
@@ -287,11 +440,23 @@ class ScopedRepository(Repository):
         if project_key is None:
             raise _project_required()
         self._visible(project_key)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            owner = conn.execute(
+                select(EvidenceSnapshotRow.document_id).where(
+                    EvidenceSnapshotRow.project_id == project_id,
+                    EvidenceSnapshotRow.evidence_id == evidence_id,
+                    EvidenceSnapshotRow.version == version,
+                )
+            ).scalar_one_or_none()
+            if owner is not None:
+                require_document(conn, self.access, project_id, project_key, owner)
         return super().get_evidence_snapshot(evidence_id, version, project_key)
 
     def list_annotations_for_document(
         self, project_key: str, document_id: str
     ) -> list[AnnotationSnapshot]:
+        self._document(project_key, document_id)
         self._visible(project_key)
         return super().list_annotations_for_document(project_key, document_id)
 
@@ -299,11 +464,21 @@ class ScopedRepository(Repository):
 
     def get_proposal_set(self, project_key: str, set_id: int) -> dict[str, Any]:
         self._visible(project_key)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            owner = conn.execute(
+                select(ProposalSetRow.document_id).where(
+                    ProposalSetRow.project_id == project_id, ProposalSetRow.id == set_id
+                )
+            ).scalar_one_or_none()
+            if owner is not None:
+                require_document(conn, self.access, project_id, project_key, owner)
         return super().get_proposal_set(project_key, set_id)
 
     def proposal_metadata(
         self, project_key: str, document_id: str
     ) -> dict[tuple[str, str], dict[str, Any]]:
+        self._document(project_key, document_id)
         self._visible(project_key)
         return super().proposal_metadata(project_key, document_id)
 
@@ -315,11 +490,21 @@ class ScopedRepository(Repository):
         document_id: str | None = None,
     ) -> list[WorkspaceKey]:
         self._visible(project_key)
-        return super().list_workspace_keys(project_key, annotator_id, mode, document_id)
+        visibility = self._documents(project_key)
+        if document_id is not None:
+            self._document(project_key, document_id)
+        return [
+            key
+            for key in super().list_workspace_keys(
+                project_key, annotator_id, mode, document_id
+            )
+            if visibility.all or key.document_id in visibility.document_ids
+        ]
 
     def open_draft(
         self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
     ) -> Draft:
+        self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().open_draft(key, targets)
 
@@ -331,6 +516,7 @@ class ScopedRepository(Repository):
         *,
         before_operation: Callable[[Connection], None] | None = None,
     ) -> Draft | Submission:
+        self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().run_mutation(
             key, envelope, operation, before_operation=before_operation
@@ -343,6 +529,7 @@ class ScopedRepository(Repository):
         annotator_id: str,
         mode: str,
     ) -> Literal["not_started", "in_progress", "completed"]:
+        self._document(project_key, document_id)
         self._visible(project_key)
         return super().get_document_status(project_key, document_id, annotator_id, mode)
 
@@ -352,19 +539,30 @@ class ScopedRepository(Repository):
         self, project_key: str, annotator_id: str, mode: str
     ) -> dict[str, Literal["not_started", "in_progress", "completed"]]:
         self._visible(project_key)
-        return super().get_document_statuses(project_key, annotator_id, mode)
+        visibility = self._documents(project_key)
+        return {
+            doc: status
+            for doc, status in super()
+            .get_document_statuses(project_key, annotator_id, mode)
+            .items()
+            if visibility.all or doc in visibility.document_ids
+        }
 
     def review_input_document_ids(self, project_key: str) -> set[str]:
         self._visible(project_key)
-        return super().review_input_document_ids(project_key)
+        visibility = self._documents(project_key)
+        docs = super().review_input_document_ids(project_key)
+        return docs if visibility.all else docs & visibility.document_ids
 
     def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
+        self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().get_submissions_for_workspace(key)
 
     def get_submissions_for_document(
         self, project_key: str, document_id: str
     ) -> list[Submission]:
+        self._document(project_key, document_id)
         self._visible(project_key)
         return super().get_submissions_for_document(project_key, document_id)
 
@@ -374,13 +572,26 @@ class ScopedRepository(Repository):
         if project_key is None:
             raise _project_required()
         self._visible(project_key)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            owner = conn.execute(
+                select(SubmissionRow.document_id).where(
+                    SubmissionRow.project_id == project_id,
+                    SubmissionRow.submission_id == submission_id,
+                )
+            ).scalar_one_or_none()
+            if owner is not None:
+                require_document(conn, self.access, project_id, project_key, owner)
         return super().get_submission(submission_id, project_key)
 
     # --- search events ------------------------------------------------------ #
 
     def save_search_event(self, event: SearchEventRecord) -> None:
+        self._document(event.workspace_key.project_key, event.workspace_key.document_id)
         self._visible(event.workspace_key.project_key)
-        super().save_search_event(event)
+        with self.db.transaction() as conn:
+            self._before_workspace_locks(conn, event.workspace_key)
+            super().save_search_event(event)
 
     def get_search_event(
         self, event_id: str, project_key: str | None = None
@@ -388,6 +599,18 @@ class ScopedRepository(Repository):
         if project_key is None:
             raise _project_required()
         self._visible(project_key)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            owner = conn.execute(
+                select(
+                    SearchEventRow.payload["workspace_key"]["document_id"].astext
+                ).where(
+                    SearchEventRow.project_id == project_id,
+                    SearchEventRow.event_id == event_id,
+                )
+            ).scalar_one_or_none()
+            if owner is not None:
+                require_document(conn, self.access, project_id, project_key, owner)
         return super().get_search_event(event_id, project_key)
 
     def append_search_event_candidates(
@@ -401,18 +624,37 @@ class ScopedRepository(Repository):
     ) -> SearchEventRecord | None:
         if workspace_key is None:
             raise _project_required()
-        self._visible(workspace_key.project_key)
-        return super().append_search_event_candidates(
-            event_id,
-            term_ids,
-            workspace_key=workspace_key,
-            annotation_id=annotation_id,
-            layer_id=layer_id,
-        )
+        self._document(workspace_key.project_key, workspace_key.document_id)
+        with self.db.transaction() as conn:
+            self._before_workspace_locks(conn, workspace_key)
+            project_id = self._require_project(conn, workspace_key.project_key)
+            # A visible supplied workspace must never authorize locking or
+            # growing an unrelated persisted event. Association is immutable;
+            # the base writer also rechecks it after its event-row lock.
+            owner = select(SearchEventRow.event_id).where(
+                SearchEventRow.project_id == project_id,
+                SearchEventRow.event_id == event_id,
+                SearchEventRow.payload["workspace_key"]
+                == workspace_key.model_dump(mode="json"),
+            )
+            if annotation_id is not None:
+                owner = owner.where(SearchEventRow.annotation_id == annotation_id)
+            if layer_id is not None:
+                owner = owner.where(SearchEventRow.layer_id == layer_id)
+            if conn.execute(owner).first() is None:
+                return None
+            return super().append_search_event_candidates(
+                event_id,
+                term_ids,
+                workspace_key=workspace_key,
+                annotation_id=annotation_id,
+                layer_id=layer_id,
+            )
 
     def get_search_events_for_workspace(
         self, key: WorkspaceKey
     ) -> list[SearchEventRecord]:
+        self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().get_search_events_for_workspace(key)
 
@@ -422,6 +664,8 @@ class ScopedRepository(Repository):
         self, project_key: str, *, include_captured_conditions: bool = True
     ) -> ValidatedPackage:
         self._visible(project_key)
+        if not self._documents(project_key).all:
+            raise AccessDenied("NOT_ALLOWED", "You may not export all project data.")
         return super().export_package(
             project_key, include_captured_conditions=include_captured_conditions
         )
@@ -443,9 +687,11 @@ class ScopedRepository(Repository):
     # --- edit log ----------------------------------------------------------- #
 
     def edit_events(self, key: WorkspaceKey) -> list[EditEvent]:
+        self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().edit_events(key)
 
     def draft_state_at(self, key: WorkspaceKey, revision: int) -> DraftState:
+        self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().draft_state_at(key, revision)

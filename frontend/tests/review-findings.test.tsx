@@ -121,7 +121,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     const view = reviewView();
     view.targets = { target_set_id: "empty", targets: [] };
     view.available_inputs = [];
-    const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view });
+    const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: /^Open case$/i }));
     await confirmIdentity();
@@ -136,7 +136,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     const open = vi.spyOn(api, "openWorkspace")
       .mockRejectedValueOnce(new ApiError(422, "Select the review round to resume", "AMBIGUOUS_REVIEW_ROUND", { rounds: ["round-a", "round-b"] } as any))
-      .mockResolvedValue({ workspace_id: "ws", view: reviewView() });
+      .mockResolvedValue({ read_only: false, workspace_id: "ws", view: reviewView() });
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: /^Open case$/i }));
     await confirmIdentity();
@@ -171,7 +171,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /Opening/i })[0]);
     expect(open).toHaveBeenCalledTimes(1);
     expect(open.mock.calls[0][0].document_id).toBe("doc-1");
-    await act(async () => finishOpen({ workspace_id: "ws", view: baseView() }));
+    await act(async () => finishOpen({ read_only: false, workspace_id: "ws", view: baseView() }));
   });
 
   it("shows the annotator identity in the case header", () => {

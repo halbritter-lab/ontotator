@@ -311,7 +311,7 @@ it("lets the server resolve review targets only after opening explicitly chosen 
  vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", ontology: { release: "test" } }] as any);
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([proposal("v1", "HP:1"), proposal("v2", "HP:2")]);
- const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: baseView() });
+ const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view: baseView() });
  render(<App/>);
  await waitFor(() => expect(screen.getByRole("button", { name: /Open case/i }).hasAttribute("disabled")).toBe(false));
  // No auto mode detection and no proposal prefetch on package selection.
@@ -337,7 +337,7 @@ it("opens a review workspace without any review targets", async () => {
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
  asAnnotator("dr-a");
- const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: baseView() });
+ const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view: baseView() });
  render(<App/>);
  await waitFor(() => expect(screen.getByRole("button", { name: /Open case/i }).hasAttribute("disabled")).toBe(false));
  fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });

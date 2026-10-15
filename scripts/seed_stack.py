@@ -136,6 +136,15 @@ def seed(stack: RunningStack) -> None:
         or "proposals: 1" not in imported.stdout
     ):
         raise RuntimeError("Smoke import did not create two documents and one proposal")
+    stack.exec(
+        "app",
+        "ontocurator",
+        "admin",
+        "assign",
+        "smoke",
+        "smoke-annotator",
+        "--confirm-language",
+    )
     print(
         "Seeded synthetic smoke project (two documents, one tool proposal).", flush=True
     )

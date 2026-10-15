@@ -316,6 +316,10 @@ if __name__ == "__main__":
             web_dir=ROOT / "frontend/dist",
         )
         app = create_app(config)
+        for ontology_path in (ONTOLOGY, MONDO_ONTOLOGY):
+            app.state.ontology_store.add(
+                Actor.cli(), ontology_path.name, ontology_path.read_bytes()
+            )
         importer = PackageImportService(app.state.repo, app.state.ontology_registry)
         for package in seed_packages():
             importer.import_package(package)
@@ -374,6 +378,9 @@ if __name__ == "__main__":
                 user = existing
             for key in filter(None, (projects or "").split(",")):
                 grant_all(user.id, user.username, key)
+                from auth_harness import provision_assignments
+
+                provision_assignments(app, user.username, key, ROLES)
             if existing is not None:
                 if not setup:
                     return {"username": user.username, "pseudonym": user.pseudonym}
@@ -384,6 +391,18 @@ if __name__ == "__main__":
                 "username": issued.user.username,
                 "pseudonym": issued.user.pseudonym,
             }
+
+        app.router.routes.insert(0, app.router.routes.pop())
+
+        @app.post("/__test_ontology__")
+        def test_ontology(name: str = Query(...)) -> dict[str, str]:
+            """Register only the public ontology fixtures through the real store."""
+            if name not in {"hp.json", "mondo.json"}:
+                raise HTTPException(400, "not a fixture ontology")
+            stored = app.state.ontology_store.add(
+                Actor.cli(), name, (ROOT / "tests/fixtures" / name).read_bytes()
+            )
+            return {"sha256": stored.sha256}
 
         app.router.routes.insert(0, app.router.routes.pop())
 
@@ -414,6 +433,9 @@ if __name__ == "__main__":
                 raise HTTPException(500, job.error)
             user = app.state.accounts.get_by_username(username)
             grant_all(user.id, user.username, T1_PROJECT)
+            from auth_harness import provision_assignments
+
+            provision_assignments(app, user.username, T1_PROJECT, ROLES)
             return dict(job.result or {})
 
         app.router.routes.insert(0, app.router.routes.pop())
