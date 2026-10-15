@@ -4,6 +4,93 @@
  */
 
 export interface paths {
+    "/api/v1/admin/users/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Users */
+        get: operations["list_users_api_v1_admin_users__get"];
+        put?: never;
+        /** Create User */
+        post: operations["create_user_api_v1_admin_users__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{username}/reset-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Code */
+        post: operations["reset_code_api_v1_admin_users__username__reset_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch User */
+        patch: operations["patch_user_api_v1_admin_users__username__patch"];
+        trace?: never;
+    };
+    "/api/v1/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Profile */
+        get: operations["get_profile_api_v1_me_profile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Profile */
+        patch: operations["patch_profile_api_v1_me_profile_patch"];
+        trace?: never;
+    };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Password */
+        post: operations["change_password_api_v1_me_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -419,6 +506,25 @@ export interface components {
              */
             kind: "human" | "tool";
         };
+        /** AdminUser */
+        AdminUser: {
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string | null;
+            /** Pseudonym */
+            pseudonym: string;
+            /** Is System Admin */
+            is_system_admin: boolean;
+            /** Active */
+            active: boolean;
+            /** Languages */
+            languages: string[];
+            /** Projects */
+            projects: components["schemas"]["UserProject"][];
+        };
         /**
          * Annotation
          * @description Annotation entity referencing ontology term, layer, type, context axes and evidence.
@@ -519,6 +625,43 @@ export interface components {
              * @default true
              */
             allow_empty: boolean;
+        };
+        /** CodeResponse */
+        CodeResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** CreateUserRequest */
+        CreateUserRequest: {
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email?: string | null;
+            /**
+             * System Admin
+             * @default false
+             */
+            system_admin: boolean;
+            /** Languages */
+            languages?: string[];
+        };
+        /** CreatedUser */
+        CreatedUser: {
+            /** Code */
+            code: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            user: components["schemas"]["AdminUser"];
         };
         /**
          * CurrentUser
@@ -848,6 +991,35 @@ export interface components {
             workspace_id: string;
             view: components["schemas"]["WorkspaceView"];
         };
+        /** PasswordChange */
+        PasswordChange: {
+            /** Current Password */
+            current_password: string;
+            /** New Password */
+            new_password: string;
+        };
+        /** PatchUserRequest */
+        PatchUserRequest: {
+            /**
+             * Display Name
+             * @default
+             */
+            display_name: string;
+            /** Email */
+            email?: string | null;
+            /**
+             * Active
+             * @default false
+             */
+            active: boolean;
+            /**
+             * Is System Admin
+             * @default false
+             */
+            is_system_admin: boolean;
+            /** Languages */
+            languages?: string[];
+        };
         /**
          * Preferences
          * @description A user's preferences returned by ``GET /api/v1/preferences``.
@@ -879,6 +1051,42 @@ export interface components {
             search_languages_by_annotator?: {
                 [key: string]: string[];
             } | null;
+        };
+        /** Profile */
+        Profile: {
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string | null;
+            /** Pseudonym */
+            pseudonym: string;
+            /** Orcid */
+            orcid: string | null;
+            /** Orcid Consent */
+            orcid_consent: boolean;
+            /** Languages */
+            languages: string[];
+        };
+        /** ProfilePatch */
+        ProfilePatch: {
+            /**
+             * Display Name
+             * @default
+             */
+            display_name: string;
+            /** Email */
+            email?: string | null;
+            /** Orcid */
+            orcid?: string | null;
+            /**
+             * Orcid Consent
+             * @default false
+             */
+            orcid_consent: boolean;
+            /** Languages */
+            languages?: string[];
         };
         /**
          * ProjectSummary
@@ -1325,6 +1533,13 @@ export interface components {
             /** External Url */
             external_url?: string | null;
         };
+        /** UserProject */
+        UserProject: {
+            /** Project Key */
+            project_key: string;
+            /** Roles */
+            roles: string[];
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1408,6 +1623,209 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_users_api_v1_admin_users__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"][];
+                };
+            };
+        };
+    };
+    create_user_api_v1_admin_users__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_code_api_v1_admin_users__username__reset_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_user_api_v1_admin_users__username__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_profile_api_v1_me_profile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+        };
+    };
+    patch_profile_api_v1_me_profile_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfilePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_password_api_v1_me_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     login_api_v1_auth_login_post: {
         parameters: {
             query?: never;

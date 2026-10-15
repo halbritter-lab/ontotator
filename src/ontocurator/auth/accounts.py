@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 import secrets
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -31,6 +31,7 @@ from sqlalchemy import (
     delete,
     exists,
     func,
+    insert,
     select,
     union,
     update,
@@ -44,6 +45,7 @@ from ontocurator.auth.passwords import (
     assert_policy,
     check_password_rules,
     hash_password,
+    verify_password,
 )
 from ontocurator.auth.tokens import revoke_user_sessions, token_digest
 from ontocurator.domain.errors import DomainError
@@ -53,11 +55,14 @@ from ontocurator.storage.tables import (
     AnnotationSnapshotRow,
     DraftRow,
     InstanceStateRow,
+    LoginAttemptRow,
     OneTimeCodeRow,
     PasswordCredentialRow,
     ReviewDecisionRow,
     SearchEventRow,
+    SessionRow,
     SubmissionRow,
+    UserLanguageRow,
     UserRow,
 )
 
@@ -96,6 +101,8 @@ class User:
     pseudonym: str
     is_system_admin: bool
     active: bool
+    orcid: str | None = None
+    orcid_consent: bool = False
 
 
 @dataclass(frozen=True)
@@ -126,6 +133,41 @@ def normalize_username(value: str) -> str:
     return username
 
 
+class _Unset:
+    """Distinguish an omitted profile value from an explicit nullable clear."""
+
+
+UNSET = _Unset()
+
+
+def normalize_display_name(value: str) -> str:
+    display = value.strip()
+    if not 1 <= len(display) <= 120:
+        raise DomainError(
+            "DISPLAY_NAME_INVALID", "The display name has 1 to 120 characters."
+        )
+    return display
+
+
+def normalize_languages(values: Iterable[str]) -> frozenset[str]:
+    languages = frozenset(value.lower() for value in values)
+    if any(re.fullmatch(r"[a-z]{2}", value) is None for value in languages):
+        raise DomainError("LANGUAGE_INVALID", "Languages use two-letter codes.")
+    return languages
+
+
+def validate_orcid(value: str) -> str:
+    if re.fullmatch(r"[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]", value):
+        digits = value.replace("-", "")
+        total = 0
+        for digit in digits[:-1]:
+            total = (total + int(digit)) * 2
+        check = (12 - total % 11) % 11
+        if digits[-1] == ("X" if check == 10 else str(check)):
+            return value
+    raise DomainError("ORCID_INVALID", "The ORCID format or checksum is invalid.")
+
+
 def _user(row: Row[Any]) -> User:
     return User(
         id=row.id,
@@ -135,6 +177,8 @@ def _user(row: Row[Any]) -> User:
         pseudonym=row.pseudonym,
         is_system_admin=row.is_system_admin,
         active=row.active,
+        orcid=row.orcid,
+        orcid_consent=row.orcid_consent,
     )
 
 
@@ -201,6 +245,197 @@ class AccountService:
             rows = conn.execute(select(UserRow).order_by(UserRow.username)).all()
         return [_user(row) for row in rows]
 
+    def languages_of(self, user_ids: Iterable[int]) -> dict[int, frozenset[str]]:
+        languages: dict[int, set[str]] = {user_id: set() for user_id in user_ids}
+        if languages:
+            with self.db.transaction() as conn:
+                for row in conn.execute(
+                    select(UserLanguageRow).where(
+                        UserLanguageRow.user_id.in_(languages)
+                    )
+                ):
+                    languages[row.user_id].add(row.language)
+        return {key: frozenset(values) for key, values in languages.items()}
+
+    def set_languages(
+        self, actor: Actor, username: str, languages: Iterable[str]
+    ) -> None:
+        normalized = normalize_languages(languages)
+        with self.db.transaction() as conn:
+            user = self._lock_user(conn, username)
+            conn.execute(
+                delete(UserLanguageRow).where(UserLanguageRow.user_id == user.id)
+            )
+            if normalized:
+                conn.execute(
+                    insert(UserLanguageRow),
+                    [
+                        {"user_id": user.id, "language": value}
+                        for value in sorted(normalized)
+                    ],
+                )
+            record_audit(
+                conn,
+                actor,
+                "user.languages",
+                target_type="user",
+                target_id=user.username,
+                at=self._now(),
+            )
+
+    def update_profile(
+        self,
+        actor: Actor,
+        username: str,
+        *,
+        display_name: str | _Unset = UNSET,
+        email: str | _Unset | None = UNSET,
+        orcid: str | _Unset | None = UNSET,
+        orcid_consent: bool | _Unset = UNSET,
+    ) -> User:
+        changes: dict[str, Any] = {}
+        if not isinstance(display_name, _Unset):
+            changes["display_name"] = normalize_display_name(display_name)
+        if not isinstance(email, _Unset):
+            changes["email"] = email.strip() or None if email is not None else None
+        if not isinstance(orcid, _Unset):
+            changes["orcid"] = validate_orcid(orcid) if orcid is not None else None
+        if not isinstance(orcid_consent, _Unset):
+            changes["orcid_consent"] = orcid_consent
+        now = self._now()
+        with self.db.transaction() as conn:
+            user = self._lock_user(conn, username)
+            changes = {
+                key: value
+                for key, value in changes.items()
+                if getattr(user, key) != value
+            }
+            if changes:
+                conn.execute(
+                    update(UserRow)
+                    .where(UserRow.id == user.id)
+                    .values(**changes, updated_at=now)
+                )
+                record_audit(
+                    conn,
+                    actor,
+                    "user.profile",
+                    target_type="user",
+                    target_id=user.username,
+                    details={"fields": sorted(changes)},
+                    at=now,
+                )
+            return _user(self._lock_user(conn, user.username))
+
+    def change_password(
+        self,
+        user_id: int,
+        current: str,
+        new: str,
+        *,
+        keep_session_id: int,
+        client_ip: str = "unknown",
+    ) -> None:
+        """Change credentials atomically; commit a failed attempt before raising.
+
+        Like login, this operation must own its transaction. Address/name locks
+        precede the user row, so login and credential changes cannot deadlock.
+        """
+        from ontocurator.auth.login_attempts import (
+            SessionPolicy,
+            address_lock,
+            login_locked,
+            username_lock,
+        )
+
+        if self.db.in_transaction():
+            raise RuntimeError(
+                "A password change commits its attempt on its own; it cannot join an open transaction"
+            )
+        with self.db.transaction() as conn:
+            username = conn.execute(
+                select(UserRow.username).where(UserRow.id == user_id)
+            ).scalar_one_or_none()
+        if username is None:
+            raise DomainError("USER_NOT_FOUND", "The user no longer exists.")
+        wrong = False
+        with self.db.transaction() as conn:
+            conn.execute(select(func.pg_advisory_xact_lock(address_lock(client_ip))))
+            conn.execute(select(func.pg_advisory_xact_lock(username_lock(username))))
+            user = self._lock_user(conn, username)
+            now = self._now()
+            session = conn.execute(
+                select(SessionRow)
+                .where(SessionRow.id == keep_session_id)
+                .with_for_update()
+            ).one_or_none()
+            if (
+                not user.active
+                or session is None
+                or session.user_id != user_id
+                or session.revoked_at is not None
+                or session.expires_at <= now
+                or now - session.last_seen_at > SessionPolicy().idle
+            ):
+                raise DomainError(
+                    "SESSION_INVALID", "The current session is no longer active."
+                )
+            stored_hash = conn.execute(
+                select(PasswordCredentialRow.password_hash).where(
+                    PasswordCredentialRow.user_id == user_id
+                )
+            ).scalar_one_or_none()
+            locked = login_locked(conn, username, client_ip, now, SessionPolicy())
+            matches = verify_password(stored_hash, current)
+            if not matches or locked:
+                conn.execute(
+                    insert(LoginAttemptRow).values(
+                        username=username,
+                        client_ip=client_ip,
+                        succeeded=False,
+                        throttled=locked,
+                        at=now,
+                    )
+                )
+                wrong = True
+            else:
+                try:
+                    check_password_rules(username, new)
+                except PasswordRuleError as exc:
+                    raise _password_rules(exc) from None
+                conn.execute(
+                    update(PasswordCredentialRow)
+                    .where(PasswordCredentialRow.user_id == user_id)
+                    .values(password_hash=hash_password(new), changed_at=now)
+                )
+                conn.execute(
+                    update(UserRow)
+                    .where(UserRow.id == user_id)
+                    .values(
+                        credential_generation=UserRow.credential_generation + 1,
+                        updated_at=now,
+                    )
+                )
+                conn.execute(
+                    update(SessionRow)
+                    .where(
+                        SessionRow.user_id == user_id,
+                        SessionRow.id != keep_session_id,
+                        SessionRow.revoked_at.is_(None),
+                    )
+                    .values(revoked_at=now, revoked_reason="password_set")
+                )
+                record_audit(
+                    conn,
+                    Actor.user(user_id, username),
+                    "user.password_set",
+                    target_type="user",
+                    target_id=username,
+                    at=now,
+                )
+        if wrong:
+            raise DomainError("PASSWORD_WRONG", "The current password is incorrect.")
+
     # Users and codes
 
     def create_user(
@@ -221,9 +456,7 @@ class AccountService:
                 ``PSEUDONYM_TAKEN``.
         """
         name = normalize_username(username)
-        display = display_name.strip()
-        if not display:
-            raise DomainError("DISPLAY_NAME_INVALID", "The display name is empty.")
+        display = normalize_display_name(display_name)
         given_pseudonym = None
         if pseudonym is not None:
             try:
@@ -602,14 +835,20 @@ class AccountService:
 
     @staticmethod
     def _lock_user(conn: Connection, username: str) -> Row[Any]:
-        """The user row, locked until the transaction ends.
+        """Serialize account writes without blocking audit actor foreign keys.
+
+        Account mutations do not change referenced keys. NO KEY UPDATE keeps
+        concurrent mutations exclusive while allowing the KEY SHARE taken by
+        an audit insert when two administrators act on each other's accounts.
 
         Raises:
             DomainError: ``USERNAME_INVALID`` or ``USER_NOT_FOUND``.
         """
         name = normalize_username(username)
         row = conn.execute(
-            select(UserRow).where(UserRow.username == name).with_for_update()
+            select(UserRow)
+            .where(UserRow.username == name)
+            .with_for_update(key_share=True)
         ).one_or_none()
         if row is None:
             raise DomainError("USER_NOT_FOUND", f"There is no user '{name}'.")
