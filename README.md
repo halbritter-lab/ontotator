@@ -103,7 +103,7 @@ in `ONTOCURATOR_ADMIN_PASSWORD_HASH` (or the file named by
 | `--host` | | `127.0.0.1` (env `ONTOCURATOR_HOST`) | Address to bind |
 | `--port` | | `8000` (env `ONTOCURATOR_PORT`) | Port to bind |
 | `--web-dir` | | `None` | Custom directory containing built web assets (defaults to embedded) |
-| `--public-origin` | | env `ONTOCURATOR_PUBLIC_ORIGIN` | The address people open (e.g. `https://editor.example.org`); writes must come from it, and with `https` the session cookie is `Secure` |
+| `--public-origin` | | env `ONTOCURATOR_PUBLIC_ORIGIN` | The address people open (e.g. `https://editor.example.org`); writes must come from it, only its host is served, and with `https` the session cookie is `Secure`. Required when `--host` is not a loopback address |
 | `--verbose` | `-v` | `false` | Log every HTTP request |
 
 Other commands: `ontocurator db upgrade` (schema migrations, as the schema
@@ -125,9 +125,10 @@ listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 1. **Accounts and Sessions**: Every API request needs a login session, held in the HttpOnly, `SameSite=Lax` cookie `ontocurator_session` (`Secure` behind an `https` public origin). The server stores only the token's SHA-256.
 2. **CSRF and Origin Checks**: Every write carries the session's CSRF token in `X-CSRF-Token` and must not come from another site; login and code redemption accept only requests the browser marks as coming from this site.
-3. **Own Identity Only**: Everyone annotates under their own pseudonym; a workspace or annotator ID of someone else is refused (`IDENTITY_MISMATCH`). Package and ontology uploads need a system administrator.
-4. **Zero Runtime Network Calls**: Search operates entirely against the pinned local ontology index. No external dense models, cloud APIs, or telemetry are contacted.
-5. **Streaming ZIP Guard**: Package import enforces 64 MB compressed limit, 256 MB uncompressed limit, path traversal sanitization, and atomic tempfile replacement.
+3. **Known Hosts Only**: The server answers only to the host of `--public-origin`, or to `localhost`, `127.0.0.1` and `::1` on a loopback address (`HOST_NOT_ALLOWED` otherwise), so a rebound DNS name reaches nothing.
+4. **Own Identity Only**: Everyone annotates under their own pseudonym; a workspace or annotator ID of someone else is refused (`IDENTITY_MISMATCH`). Package and ontology uploads need a system administrator.
+5. **Zero Runtime Network Calls**: Search operates entirely against the pinned local ontology index. No external dense models, cloud APIs, or telemetry are contacted.
+6. **Streaming ZIP Guard**: Package import enforces 64 MB compressed limit, 256 MB uncompressed limit, path traversal sanitization, and atomic tempfile replacement.
 
 ---
 

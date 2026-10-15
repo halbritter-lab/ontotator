@@ -27,7 +27,7 @@ from ontocurator.domain.documents import (
     snapshot_evidence,
     validate_segments,
 )
-from ontocurator.domain.errors import DomainError
+from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.profiles import (
     TaskProfile,
     resolve_layer,
@@ -278,8 +278,16 @@ class EditingService:
     def apply(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
         """Transactionally execute an edit command against a workspace draft."""
         cmd = self.parse_command(envelope.payload)
-        if isinstance(cmd, CreateAnnotationCommand) and cmd.actor_id is None:
-            cmd = cmd.model_copy(update={"actor_id": key.annotator_id})
+        if isinstance(cmd, CreateAnnotationCommand):
+            if cmd.actor_id is None:
+                cmd = cmd.model_copy(update={"actor_id": key.annotator_id})
+            elif cmd.actor_kind == "human" and cmd.actor_id != key.annotator_id:
+                # A person annotates only as the workspace's annotator; a tool's
+                # proposal names the tool.
+                raise AccessDenied(
+                    "IDENTITY_MISMATCH",
+                    "A human annotation is attributed to the workspace's annotator.",
+                )
         doc = self.repo.get_document(key.package_id, key.document_id)
         if doc is None:
             raise DomainError(

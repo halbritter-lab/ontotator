@@ -60,7 +60,11 @@ def _sessions(request: Request) -> SessionService:
 def _start_session(
     request: Request, response: Response, username: str, password: str
 ) -> CurrentUser:
-    """Log in and set the session cookie; raises ``LoginFailed``."""
+    """Log in and set the session cookie; raises ``LoginFailed``.
+
+    A session the request still carried (a re-login) is ended, since the new
+    cookie replaces it and it would otherwise stay open until it expires.
+    """
     sessions = _sessions(request)
     token, principal = sessions.login(
         username,
@@ -69,6 +73,10 @@ def _start_session(
         client_ip=request.client.host if request.client else "unknown",
         user_agent=request.headers.get("user-agent"),
     )
+    previous = request.cookies.get(SESSION_COOKIE)
+    replaced = sessions.resolve(previous) if previous else None
+    if replaced is not None:
+        sessions.logout(replaced.session_id)
     response.set_cookie(
         SESSION_COOKIE,
         token,

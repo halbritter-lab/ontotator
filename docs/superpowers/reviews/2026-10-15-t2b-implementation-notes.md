@@ -236,9 +236,57 @@ answer; the least surprising option was taken and should be confirmed.
 - Task 6: `npm --prefix frontend run typecheck` passed with the regenerated `generated.ts` unchanged
   otherwise; no frontend code was touched. The Playwright suite was not run (expected to fail until
   Task 9).
+- Task 6 (review fix): a login whose username had a NUL gave a 500 (PostgreSQL cannot store NUL) ->
+  `_attempt_name` and the stored user agent replace control characters and lone surrogates with
+  U+FFFD instead of dropping them, because dropping could turn invalid input (`ali\0ce`) into a real
+  username and log in as `alice`; U+FFFD can never occur in a username, so the answer stays the
+  uniform 401 `LOGIN_FAILED` and the attempt is recorded. `/redeem-code` with a NUL in the username or
+  the code already gave 422 `CODE_INVALID` (the username is normalised before any query); tests now
+  pin both. `token_digest` encodes with `surrogatepass`, so a code with a lone surrogate gets a digest
+  that matches nothing.
+- Task 6 (review fix): a JSON body with a lone surrogate (`"\ud800"`) gave a 500 on every route,
+  because FastAPI's 422 echoes the input and the response could not be encoded -> a
+  `RequestValidationError` handler returns FastAPI's usual body `{"detail": [...]}` as ASCII JSON.
+  Such a login is therefore a 422 (`string_unicode`), not a 401: it is refused before the route runs
+  and is not recorded as an attempt. The body format of request-validation errors is unchanged.
+- Task 6 (review fix): `CreateAnnotationCommand.actor_id` came from the client, so a human annotation
+  could be attributed to another pseudonym -> `EditorService.apply` refuses `actor_kind == "human"`
+  with an `actor_id` other than the workspace key's annotator with `AccessDenied("IDENTITY_MISMATCH")`
+  (403). `AccessDenied` is a `DomainError` in `domain/errors.py`, so the application layer raises it
+  directly; only `api/app.py` maps it to 403. `None` still means the workspace's annotator, and
+  `tool` actors keep any ID. The frontend never sends `actor_id` (it only displays provenance), so the
+  UI is unaffected. `test_create_annotation_and_provenance_equivalence[human]` now names the
+  workspace's annotator; new test `test_a_human_annotation_cannot_name_another_annotator`.
+- Task 6 (review fix): without `public_origin` the Host header was trusted, so a rebound DNS name
+  passed the login origin check (and could lock out 127.0.0.1) -> `AppConfig.trusted_hosts:
+  tuple[str, ...] | None = None` (lower-cased); when set, the security middleware answers every request
+  (any path, before the session check) whose Host name, port ignored, is not in it with 400
+  `{code: "HOST_NOT_ALLOWED", details}`. The middleware was chosen over Starlette's
+  `TrustedHostMiddleware`, whose 400 is plain text. `serve` sets it: the host of `--public-origin`;
+  without it on a loopback `--host` `localhost`, `127.0.0.1` and `::1`; without it on any other
+  address it refuses to start (exit 1) and asks for `--public-origin`. Tests and the default config
+  keep `None`. `auth_harness.log_in` now sends the client's own base URL as `Origin`, so a client on
+  `http://127.0.0.1:8123` logs in (the CLI serve test uses it).
+- Task 6 (review fix): `/login` and `/redeem-code` end the session of a valid cookie the request
+  carried, after the new login succeeded (a failed login leaves it open), because the new cookie
+  replaces it and it would otherwise stay usable until it expires.
+- Task 6 (review fix): a start with no admin hash and no user at all logs a warning that nobody can
+  log in and names `ONTOCURATOR_ADMIN_PASSWORD_HASH[_FILE]`.
+- Task 6 (review fix): new tests close the review's gaps: a write with a valid CSRF token from a
+  foreign Origin (403 `CROSS_SITE_REQUEST`); Q4 for the document list and the package export
+  (another annotator: 403 for a non-admin, 200 for a system admin and for the annotator); `own_key`
+  on workspace export, submission, decision, submit, search and tree (403 `IDENTITY_MISMATCH`);
+  ontology upload by a non-admin (403 `ADMIN_REQUIRED`); the logout cookie deletion with `Path=/`;
+  the re-login revocation; trusted hosts; the start warning; malformed login and redemption input.
+  The identity tests passed without code changes; the binding was already in place.
 
 ## Open risks
 
 - Deactivating or demoting the last active system admin is not prevented. Accepted, because the CLI
   `admin users activate`/`set-admin` (Task 7) can undo it with database access.
 - `login_attempts` is never pruned; it grows by one row per attempt until a retention job exists.
+- `/docs` and `/openapi.json` are public (no session needed); they describe the API but expose no
+  data. Upload bodies (`POST /packages`, `POST /ontologies`) are spooled to a temporary file before
+  the route's admin check runs, so any logged-in user can make the server receive up to the size
+  limit. The `Secure` cookie flag needs `--public-origin https://…`; behind a TLS-terminating proxy
+  without it the cookie is sent without `Secure` (the deployment contract is T2e).

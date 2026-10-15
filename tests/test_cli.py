@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from auth_harness import AutoLoginClient
+from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
 from ontocurator.cli import app
@@ -111,7 +112,43 @@ def test_serve_starts_the_app_on_the_given_address(tmp_path: Path) -> None:
     assert config.port == 8123
     assert "http://127.0.0.1:8123/" in result.output
     assert "#token=" not in result.output
+    # A loopback server answers only to loopback names (no DNS rebinding).
+    assert config.trusted_hosts == ("localhost", "127.0.0.1", "::1")
+    assert TestClient(api_app).get("/api/v1/ontologies").status_code == 400
 
-    client = AutoLoginClient(api_app)
+    client = AutoLoginClient(api_app, base_url="http://127.0.0.1:8123")
     listed = client.get("/api/v1/ontologies").json()
     assert [item["ontology_id"] for item in listed] == ["hp"]
+
+
+def test_serve_trusts_only_the_host_of_the_public_origin(tmp_path: Path) -> None:
+    with patch("ontocurator.cli.uvicorn.run") as run:
+        result = runner.invoke(
+            app,
+            [
+                "serve",
+                "--data-dir",
+                str(tmp_path / "data"),
+                "--host",
+                "0.0.0.0",
+                "--public-origin",
+                "https://Editor.Example/",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    config = run.call_args.args[0].state.config
+    assert config.public_origin == "https://editor.example"
+    assert config.trusted_hosts == ("editor.example",)
+
+
+def test_serve_on_a_public_address_needs_a_public_origin(tmp_path: Path) -> None:
+    with patch("ontocurator.cli.uvicorn.run") as run:
+        result = runner.invoke(
+            app,
+            ["serve", "--data-dir", str(tmp_path / "data"), "--host", "0.0.0.0"],
+        )
+
+    assert result.exit_code == 1
+    assert "--public-origin" in result.output
+    run.assert_not_called()

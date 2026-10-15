@@ -11,6 +11,7 @@ its reason, raises the same ``LoginFailed``.
 from __future__ import annotations
 
 import secrets
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -37,6 +38,8 @@ LAST_SEEN_RESOLUTION = timedelta(seconds=60)
 # Longer input is cut before it is recorded as an attempt.
 MAX_RECORDED_USERNAME = 128
 MAX_RECORDED_USER_AGENT = 512
+# Stands in for characters that cannot be stored (see ``_printable``).
+REPLACEMENT = "\N{REPLACEMENT CHARACTER}"
 
 
 @dataclass(frozen=True)
@@ -63,12 +66,24 @@ class Principal:
     csrf_token: str
 
 
+def _printable(value: str) -> str:
+    """``value`` with control characters and lone surrogates replaced by U+FFFD.
+
+    PostgreSQL cannot store NUL, and a lone surrogate cannot be encoded at all;
+    either would turn a failed login into a server error. The replacement
+    character cannot occur in a username, so a cleaned name never matches one.
+    """
+    return "".join(
+        REPLACEMENT if unicodedata.category(ch) in ("Cc", "Cs") else ch for ch in value
+    )
+
+
 def _attempt_name(username: str) -> str:
     """The name a login attempt is counted under, also for invalid input."""
     try:
         return normalize_username(username)
     except DomainError:
-        return username.strip().lower()[:MAX_RECORDED_USERNAME]
+        return _printable(username.strip().lower())[:MAX_RECORDED_USERNAME]
 
 
 class SessionService:
@@ -166,7 +181,7 @@ class SessionService:
                         last_seen_at=now,
                         expires_at=now + self.policy.absolute,
                         client_ip=client_ip,
-                        user_agent=user_agent[:MAX_RECORDED_USER_AGENT]
+                        user_agent=_printable(user_agent[:MAX_RECORDED_USER_AGENT])
                         if user_agent
                         else None,
                     )

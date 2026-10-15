@@ -16,7 +16,7 @@ from ontocurator.domain.documents import (
     OntologyRef,
     Segment,
 )
-from ontocurator.domain.errors import DomainError
+from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.profiles import (
     AnnotationTypeDefinition,
     AxisDefinition,
@@ -116,6 +116,8 @@ def test_create_annotation_and_provenance_equivalence(tmp_path: Path, actor_kind
     )
     view = ws_svc.open(ws_key)
     ws_key = view.key
+    # A human annotation may only name the workspace's annotator; a tool any ID.
+    actor_id = "annotator-1" if actor_kind == "human" else "agent-tool"
 
     cmd = CreateAnnotationCommand(
         annotation_id="ann-1",
@@ -126,7 +128,7 @@ def test_create_annotation_and_provenance_equivalence(tmp_path: Path, actor_kind
         evidence_id="ev-1",
         segments=[Segment(start=27, end=36)],  # "hypotonia"
         actor_kind=actor_kind,
-        actor_id=f"agent-{actor_kind}",
+        actor_id=actor_id,
     )
     envelope = MutationEnvelope(
         mutation_id="mut-1",
@@ -142,7 +144,40 @@ def test_create_annotation_and_provenance_equivalence(tmp_path: Path, actor_kind
     assert snap.annotation.annotation_id == "ann-1"
     assert snap.annotation.term_id == "HP:0001252"
     assert snap.annotation.provenance.actor.kind == actor_kind
-    assert snap.annotation.provenance.actor.actor_id == f"agent-{actor_kind}"
+    assert snap.annotation.provenance.actor.actor_id == actor_id
+
+
+def test_a_human_annotation_cannot_name_another_annotator(tmp_path: Path) -> None:
+    _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
+    ws_key = ws_svc.open(
+        WorkspaceKey(
+            package_id="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    ).key
+    cmd = CreateAnnotationCommand(
+        annotation_id="ann-1",
+        layer_id="hpo-layer",
+        type_id="phenotype",
+        term_id="HP:0001252",
+        axes_values={"assertion": "present"},
+        actor_kind="human",
+        actor_id="annotator-2",
+    )
+
+    with pytest.raises(AccessDenied) as error:
+        edit_svc.apply(
+            ws_key,
+            MutationEnvelope(
+                mutation_id="mut-1", expected_revision=0, payload=cmd.model_dump()
+            ),
+        )
+
+    assert error.value.code == "IDENTITY_MISMATCH"
+    assert ws_svc.open(ws_key).draft.revision == 0
 
 
 def test_create_annotation_attributes_workspace_annotator_by_default(tmp_path: Path):

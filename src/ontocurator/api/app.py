@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
@@ -68,14 +71,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             repo = Repository(db)
             accounts = AccountService(db)
             sessions = SessionService(db)
-            if (
-                accounts.bootstrap_admin(config.admin_password_hash) == "already_done"
-                and config.admin_password_hash is not None
-            ):
+            bootstrap = accounts.bootstrap_admin(config.admin_password_hash)
+            if bootstrap == "already_done" and config.admin_password_hash is not None:
                 logger.warning(
                     "ONTOCURATOR_ADMIN_PASSWORD_HASH is ignored: the first "
                     "administrator was created before. Use 'ontocurator admin' "
                     "to change passwords, and remove the setting."
+                )
+            elif bootstrap == "not_configured" and not accounts.list_users():
+                logger.warning(
+                    "There is no user yet, so nobody can log in. Set "
+                    "ONTOCURATOR_ADMIN_PASSWORD_HASH (or ..._FILE) to the Argon2id "
+                    "hash of the first administrator's password and restart."
                 )
 
             from ontocurator.ontology.registry import OntologyRegistry
@@ -148,7 +155,19 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 db.close()
             raise
 
-        install_security(app, sessions, config.public_origin)
+        install_security(app, sessions, config.public_origin, config.trusted_hosts)
+
+    # FastAPI's own answer, encoded as ASCII JSON: the errors echo the input,
+    # and a lone surrogate in it would otherwise make the answer a 500.
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_handler(
+        _req: Request, exc: RequestValidationError
+    ) -> Response:
+        return Response(
+            json.dumps({"detail": jsonable_encoder(exc.errors())}),
+            status_code=422,
+            media_type="application/json",
+        )
 
     # Service-level command parsing must report client validation failures as 422.
     @app.exception_handler(ValidationError)

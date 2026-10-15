@@ -39,8 +39,17 @@ class AppConfig(BaseModel):
     public_origin: str | None = None
     # Argon2id hash of the first administrator's password (created once).
     admin_password_hash: str | None = None
+    # Host names (without port) the server answers to; any other Host header
+    # gets 400 HOST_NOT_ALLOWED, so a rebound DNS name reaches nothing.
+    # None: every host (tests); `serve` always sets them.
+    trusted_hosts: tuple[str, ...] | None = None
 
     @field_validator("public_origin")
     @classmethod
     def _canonical_origin(cls, value: str | None) -> str | None:
         return None if value is None else settings.canonical_origin(value)
+
+    @field_validator("trusted_hosts")
+    @classmethod
+    def _lower_case_hosts(cls, value: tuple[str, ...] | None) -> tuple[str, ...] | None:
+        return None if value is None else tuple(host.lower() for host in value)

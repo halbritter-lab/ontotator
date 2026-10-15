@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -142,6 +144,7 @@ def test_logout_ends_the_session(app: FastAPI) -> None:
 
     assert response.status_code == 204
     assert 'ontocurator_session=""' in _set_cookie(response)
+    assert "path=/" in _set_cookie(response).lower()
     assert client.get("/api/v1/auth/me").status_code == 401
     # The old cookie is useless, also when a client keeps sending it.
     stale = TestClient(app, cookies={"ontocurator_session": token})
@@ -251,3 +254,214 @@ def test_only_a_system_admin_uploads_packages(app: FastAPI) -> None:
 
     assert response.status_code == 403
     assert response.json()["code"] == "ADMIN_REQUIRED"
+
+
+# --- Follow-up review: malformed input, hosts, identity binding ------------- #
+
+
+def _post_raw(client: TestClient, url: str, body: dict[str, str]) -> Any:
+    """POST ``body`` as ASCII JSON, so lone surrogates survive the encoding."""
+    return client.post(
+        url,
+        content=json.dumps(body),
+        headers={**ORIGIN, "Content-Type": "application/json"},
+    )
+
+
+def test_a_malformed_login_is_an_ordinary_failure(app: FastAPI) -> None:
+    ensure_user(app, "alice")
+
+    response = _post_raw(
+        TestClient(app),
+        "/api/v1/auth/login",
+        {"username": "ali\x00ce", "password": PASSWORD},
+    )
+
+    assert response.status_code == 401, response.text
+    assert response.json()["code"] == "LOGIN_FAILED"
+
+
+@pytest.mark.parametrize("field", ["username", "code"])
+def test_a_malformed_redemption_gets_the_code_answer(app: FastAPI, field: str) -> None:
+    issued = app.state.accounts.create_user(ADMIN, "carol", "Carol Example")
+    body = {"username": "carol", "code": issued.code, "new_password": PASSWORD}
+    body[field] = body[field][:2] + "\x00" + body[field][2:]
+
+    response = _post_raw(TestClient(app), "/api/v1/auth/redeem-code", body)
+
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "CODE_INVALID"
+
+
+@pytest.mark.parametrize("url", ["/api/v1/auth/login", "/api/v1/auth/redeem-code"])
+def test_a_lone_surrogate_is_invalid_input_not_a_server_error(
+    app: FastAPI, url: str
+) -> None:
+    body = {"username": "ali\ud800ce", "password": PASSWORD}
+    if url.endswith("redeem-code"):
+        body = {"username": "carol", "code": "x\ud800", "new_password": PASSWORD}
+
+    response = _post_raw(TestClient(app), url, body)
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"][0]["type"] == "string_unicode"
+
+
+def test_a_write_with_the_token_from_a_foreign_origin_is_refused(
+    app: FastAPI,
+) -> None:
+    client = logged_in(app, "alice")
+
+    response = client.put(
+        "/api/v1/preferences", json={}, headers={"Origin": "http://evil.example"}
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "CROSS_SITE_REQUEST"
+
+
+def test_a_new_login_ends_the_session_the_request_came_with(app: FastAPI) -> None:
+    client = logged_in(app, "alice")
+    old = client.cookies.get("ontocurator_session")
+    ensure_user(app, "bob")
+
+    response = _login(client, "bob", headers=ORIGIN)
+
+    assert response.status_code == 200, response.text
+    assert client.get("/api/v1/auth/me").json()["username"] == "bob"
+    stale = TestClient(app, cookies={"ontocurator_session": old})
+    assert stale.get("/api/v1/auth/me").status_code == 401
+
+
+def test_only_trusted_hosts_are_served(tmp_path: Path) -> None:
+    app = _app(tmp_path, trusted_hosts=("editor.example",))
+
+    rebound = TestClient(app).get("/api/v1/auth/me")
+    page = TestClient(app).get("/docs")
+    trusted = TestClient(app, base_url="http://editor.example:8443")
+
+    assert rebound.status_code == page.status_code == 400
+    assert rebound.json() == {
+        "code": "HOST_NOT_ALLOWED",
+        "details": "This server does not answer to the host 'testserver'.",
+    }
+    assert trusted.get("/api/v1/auth/me").json()["code"] == "NOT_AUTHENTICATED"
+
+
+def test_a_start_without_any_user_warns_about_the_missing_admin(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="ontocurator.api.app"):
+        _app(tmp_path)
+
+    assert "ONTOCURATOR_ADMIN_PASSWORD_HASH" in caplog.text
+
+
+def test_only_a_system_admin_uploads_ontologies(app: FastAPI) -> None:
+    client = logged_in(app, "alice")
+
+    response = client.post(
+        "/api/v1/ontologies",
+        files={"file": ("hp.json", FIXTURE_PATH.read_bytes(), "application/json")},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "ADMIN_REQUIRED"
+
+
+@pytest.fixture
+def alices_workspace(app: FastAPI) -> dict[str, Any]:
+    """A package, alice's open workspace and logged-in clients."""
+    admin = logged_in(app, "root", system_admin=True)
+    uploaded = admin.post(
+        "/api/v1/packages",
+        files={
+            "file": ("p.zip", _create_sample_package_bytes("single"), "application/zip")
+        },
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    alice = logged_in(app, "alice", pseudonym="alice")
+    opened = alice.post(
+        "/api/v1/workspaces/open",
+        json={"package_id": PACKAGE, "document_id": DOCUMENT, "mode": "independent"},
+    )
+    assert opened.status_code == 200, opened.text
+    return {
+        "admin": admin,
+        "alice": alice,
+        "bob": logged_in(app, "bob", pseudonym="bob"),
+        "id": opened.json()["workspace_id"],
+        "key": opened.json()["view"]["key"],
+    }
+
+
+@pytest.mark.parametrize(
+    "url", ["/packages/{package}/documents", "/packages/{package}/export"]
+)
+def test_only_a_system_admin_reads_another_annotators_work(
+    alices_workspace: dict[str, Any], url: str
+) -> None:
+    path = "/api/v1" + url.format(package=PACKAGE)
+    params = {"annotator_id": "alice"}
+
+    by_bob = alices_workspace["bob"].get(path, params=params)
+    by_admin = alices_workspace["admin"].get(path, params=params)
+    by_alice = alices_workspace["alice"].get(path, params=params)
+
+    assert by_bob.status_code == 403
+    assert by_bob.json()["code"] == "IDENTITY_MISMATCH"
+    assert by_admin.status_code == 200, by_admin.text
+    assert by_alice.status_code == 200, by_alice.text
+
+
+ENVELOPE = {
+    "mutation_id": "bob-1",
+    "expected_revision": 0,
+    "payload": {"command": "submit_workspace", "checked_layer_ids": []},
+}
+KEY = "<alice's workspace key>"
+
+
+@pytest.mark.parametrize(
+    ("method", "url", "body"),
+    [
+        ("get", "/workspaces/{id}/export", None),
+        ("get", "/workspaces/{id}/submissions/sub-1", None),
+        ("post", "/workspaces/{id}/decisions", ENVELOPE),
+        ("post", "/workspaces/{id}/submit", ENVELOPE),
+        (
+            "post",
+            "/search",
+            {"workspace_key": KEY, "annotation_id": "a-1", "query": "seizure"},
+        ),
+        (
+            "post",
+            "/terms/tree/open",
+            {
+                "workspace_key": KEY,
+                "annotation_id": "a-1",
+                "layer_id": "hpo-layer",
+                "term_id": "HP:0001250",
+            },
+        ),
+    ],
+    ids=["export", "submission", "decision", "submit", "search", "tree"],
+)
+def test_nobody_reaches_another_annotators_workspace(
+    alices_workspace: dict[str, Any],
+    method: str,
+    url: str,
+    body: dict[str, Any] | None,
+) -> None:
+    path = "/api/v1" + url.format(id=alices_workspace["id"])
+    kwargs: dict[str, Any] = {}
+    if body is not None:
+        kwargs["json"] = {
+            name: alices_workspace["key"] if value == KEY else value
+            for name, value in body.items()
+        }
+
+    response = getattr(alices_workspace["bob"], method)(path, **kwargs)
+
+    assert response.status_code == 403, response.text
+    assert response.json()["code"] == "IDENTITY_MISMATCH"

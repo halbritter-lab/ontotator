@@ -11,7 +11,9 @@ write only when the browser says it comes from this site (``Origin`` or
 from __future__ import annotations
 
 import secrets
+from collections.abc import Collection
 from contextvars import ContextVar
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -54,19 +56,43 @@ def cross_site(
     return fail_closed and origin is None and fetch_site is None
 
 
+def host_name(request: Request) -> str | None:
+    """The host of the ``Host`` header, lower-case and without port, or None."""
+    try:
+        return urlsplit(f"//{request.headers.get('host', '')}").hostname
+    except ValueError:
+        return None
+
+
 def _error(status: int, code: str, details: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"code": code, "details": details})
 
 
 def install_security(
-    app: FastAPI, sessions: SessionService, public_origin: str | None
+    app: FastAPI,
+    sessions: SessionService,
+    public_origin: str | None,
+    trusted_hosts: Collection[str] | None = None,
 ) -> None:
-    """Add the middleware that resolves the session and checks writes."""
+    """Add the middleware that resolves the session and checks writes.
+
+    With ``trusted_hosts``, a request for any other host is refused first,
+    whatever its path (DNS rebinding).
+    """
 
     @app.middleware("http")
     async def authenticate(
         request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
+        if trusted_hosts is not None:
+            name = host_name(request)
+            if name not in trusted_hosts:
+                shown = name or request.headers.get("host", "")
+                return _error(
+                    400,
+                    "HOST_NOT_ALLOWED",
+                    f"This server does not answer to the host '{shown[:100]}'.",
+                )
         path = request.url.path
         if not path.startswith("/api/"):
             return await call_next(request)

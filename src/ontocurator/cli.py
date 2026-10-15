@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import json
 import os
 import tempfile
 from importlib import metadata
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 import typer
 import uvicorn
@@ -115,6 +117,31 @@ def _default_web_dir() -> Path | None:
     return None
 
 
+LOOPBACK_NAMES = ("localhost", "127.0.0.1", "::1")
+
+
+def _is_loopback(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
+def _trusted_hosts(host: str, public_origin: str | None) -> tuple[str, ...] | None:
+    """The host names the server answers to; None if it must not start.
+
+    With a public origin only its host, else on a loopback address the
+    loopback names. A server on another address needs a public origin, or a
+    rebound DNS name could reach it.
+    """
+    if public_origin is not None:
+        name = urlsplit(public_origin).hostname
+        return (name,) if name else None
+    return LOOPBACK_NAMES if _is_loopback(host) else None
+
+
 def _base_url(host: str, port: int) -> str:
     return f"http://[{host}]:{port}" if ":" in host else f"http://{host}:{port}"
 
@@ -215,6 +242,15 @@ def serve(
     except settings.SettingsError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
+    trusted_hosts = _trusted_hosts(host, canonical_public_origin)
+    if trusted_hosts is None:
+        typer.echo(
+            f"Error: {host} is not a loopback address. Give --public-origin (or "
+            "ONTOCURATOR_PUBLIC_ORIGIN), the address people open, e.g. "
+            "https://editor.example.org.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
     ontology_paths: list[Path] = []
     for path in ontology or []:
@@ -262,6 +298,7 @@ def serve(
         web_dir=resolved_web_dir,
         public_origin=canonical_public_origin,
         admin_password_hash=admin_password_hash,
+        trusted_hosts=trusted_hosts,
     )
 
     try:

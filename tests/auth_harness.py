@@ -49,10 +49,12 @@ def ensure_user(
 
 def log_in(client: TestClient, username: str) -> dict[str, Any]:
     """Log ``client`` in as ``username``; it sends the CSRF token from now on."""
+    # The page's own origin: http://testserver unless the client has another.
+    origin = str(client.base_url).rstrip("/")
     response = client.post(
         "/api/v1/auth/login",
         json={"username": username, "password": PASSWORD},
-        headers=ORIGIN,
+        headers={"Origin": origin},
     )
     assert response.status_code == 200, response.text
     user: dict[str, Any] = response.json()

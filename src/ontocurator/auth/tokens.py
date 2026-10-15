@@ -11,8 +11,12 @@ from ontocurator.storage.tables import SessionRow
 
 
 def token_digest(token: str) -> str:
-    """The stored form of a session token or a single-use code."""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    """The stored form of a session token or a single-use code.
+
+    ``surrogatepass``: a mistyped code with a lone surrogate gets a digest that
+    matches nothing, instead of an encoding error.
+    """
+    return hashlib.sha256(token.encode("utf-8", "surrogatepass")).hexdigest()
 
 
 def revoke_user_sessions(

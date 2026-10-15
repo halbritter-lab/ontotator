@@ -263,3 +263,28 @@ def test_a_login_refuses_to_join_an_open_transaction(services: Services) -> None
         services.sessions.db.transaction(),
     ):
         services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+
+
+@pytest.mark.parametrize("username", ["ali\x00ce", "ali\ud800ce", "ali\x07ce"])
+def test_a_username_with_control_characters_is_an_ordinary_failure(
+    services: Services, username: str
+) -> None:
+    with pytest.raises(LoginFailed):
+        services.sessions.login(username, PASSWORD, client_ip="10.0.0.1")
+
+    # Recorded with a replacement character, which no username can contain.
+    assert column_values(services.sessions, "login_attempts", "username") == [
+        "ali\ufffdce"
+    ]
+
+
+def test_control_characters_in_the_user_agent_are_not_stored(
+    services: Services,
+) -> None:
+    services.sessions.login(
+        "alice", PASSWORD, client_ip="10.0.0.1", user_agent="py\x00test\x1b/1"
+    )
+
+    assert column_values(services.sessions, "sessions", "user_agent") == [
+        "py\ufffdtest\ufffd/1"
+    ]
