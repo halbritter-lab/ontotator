@@ -1127,8 +1127,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     try {
       await queueRef.current.flush();
     } catch (error) { reportError(error); return; } finally { setSubmitPending(false); }
-    // A save the server refused already shows its error; do not continue to submit.
-    if (queueRef.current.rejectedCount() !== rejectedBefore) return;
+    // A save the server refused shows its own error, but a later edit clears that one;
+    // keep the reason why the case was not submitted.
+    if (queueRef.current.rejectedCount() !== rejectedBefore) {
+      setSubmitError("A change could not be saved; the case was not submitted.");
+      return;
+    }
 
     const checkedIds = latestDraft.current.checked_layer_ids ?? [];
     const unchecked = editableLayerIds.filter((id) => !checkedIds.includes(id));

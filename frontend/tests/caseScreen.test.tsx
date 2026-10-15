@@ -557,5 +557,44 @@ describe("CaseScreen integration", () => {
       await waitFor(() => expect(finishButton().getAttribute("aria-busy")).not.toBe("true"));
       expect(screen.queryByRole("dialog", { name: /Submit case/i })).toBeNull();
     });
+
+    it("still explains the stopped submit after a later edit clears the save error", async () => {
+      const view = twoLayerView();
+      view.draft = { ...view.draft, checked_layer_ids: ["phenotype"] };
+      const save = deferred<Draft>();
+      vi.spyOn(api, "applyCommand")
+        .mockReturnValueOnce(save.promise)
+        .mockResolvedValueOnce({ ...view.draft, revision: 1, checked_layer_ids: [] });
+      render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      fireEvent.click(finishButton());
+      save.reject(new ValidationError("Layer cannot be changed"));
+      await screen.findByText("Layer cannot be changed");
+      await waitFor(() => expect(finishButton().getAttribute("aria-busy")).not.toBe("true"));
+
+      // A new edit clears the error of the refused save; the stopped submit stays explained.
+      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      await waitFor(() =>
+        expect(screen.getByRole("alert").textContent).toBe("A change could not be saved; the case was not submitted."),
+      );
+      expect(screen.queryByRole("dialog", { name: /Submit case/i })).toBeNull();
+    });
+
+    it("reports an unreachable server during the wait and opens no submit dialog", async () => {
+      const view = twoLayerView();
+      const save = deferred<Draft>();
+      vi.spyOn(api, "applyCommand").mockReturnValue(save.promise);
+      render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      fireEvent.click(finishButton());
+      save.reject(new TypeError("Failed to fetch"));
+
+      expect((await screen.findByRole("alert")).textContent).toMatch(/Pending changes could not be saved/);
+      expect(screen.getByRole("status").textContent).toMatch(/Offline – changes not saved/);
+      await waitFor(() => expect(finishButton().getAttribute("aria-busy")).not.toBe("true"));
+      expect(screen.queryByRole("dialog", { name: /Submit case/i })).toBeNull();
+    });
   });
 });
