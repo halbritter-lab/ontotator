@@ -317,7 +317,7 @@ def list_package_documents(
         AccessDenied: ``MODE_NOT_ALLOWED`` (403) for review mode without it.
     """
     return project_documents(
-        request.app.state.repo.db,
+        request.app.state.repo,
         Actor.user(principal.user_id, principal.username),
         get_access(request),
         project_key,

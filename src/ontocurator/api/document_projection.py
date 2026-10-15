@@ -180,7 +180,7 @@ def _legacy_statuses(
 
 
 def project_documents(
-    db: Database,
+    repo: Repository,
     actor: Actor,
     access: Access,
     key: str,
@@ -191,6 +191,7 @@ def project_documents(
     status: AssignmentFilter | None,
     q: str | None,
 ) -> list[ProjectDocumentSummary]:
+    db = repo.db
     with db.transaction() as conn:
         project_id = authorized_project(conn, key, actor, Action.VIEW_PROJECT)
         fresh = current_access(conn, access, project_id, key)
