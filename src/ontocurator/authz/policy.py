@@ -1,6 +1,6 @@
 """The one policy: what a user may do, system-wide and per project (T2 P5, E9).
 
-``can`` is the only place that decides. A system admin holds the system-wide
+``can`` decides action rights; ``may_take`` decides task roles. An admin holds
 rights and sees every project and its exports without a membership; working
 in a mode needs the matching project role, for a system admin as well
 (index Q2, Q4). A user's rights in a project are the union of their roles
@@ -18,6 +18,11 @@ from ontocurator.domain.workspace import WorkspaceMode
 
 Role = Literal["lead", "annotator", "adjudicator"]
 ROLES: tuple[Role, ...] = get_args(Role)
+Task = Literal["annotate", "review"]
+TASK_ROLES: Mapping[Task, frozenset[Role]] = {
+    "annotate": frozenset({"annotator"}),
+    "review": frozenset({"adjudicator"}),
+}
 
 
 class Action(StrEnum):
@@ -32,6 +37,10 @@ class Action(StrEnum):
     EXPORT_EDIT_LOG = "export_edit_log"
     IMPORT_DOCUMENTS = "import_documents"
     MANAGE_MEMBERS = "manage_members"
+    MANAGE_PROJECT_SETTINGS = "manage_project_settings"
+    MANAGE_ASSIGNMENTS = "manage_assignments"
+    VIEW_ALL_DOCUMENTS = "view_all_documents"
+    VIEW_PROGRESS = "view_progress"
     CREATE_PROJECT = "create_project"
     MANAGE_USERS = "manage_users"
     MANAGE_ONTOLOGIES = "manage_ontologies"
@@ -63,6 +72,10 @@ ADMIN_PROJECT_ACTIONS = frozenset(
         Action.EXPORT_EDIT_LOG,
         Action.IMPORT_DOCUMENTS,
         Action.MANAGE_MEMBERS,
+        Action.MANAGE_PROJECT_SETTINGS,
+        Action.MANAGE_ASSIGNMENTS,
+        Action.VIEW_ALL_DOCUMENTS,
+        Action.VIEW_PROGRESS,
     }
 )
 # Project actions per role (Q2: working modes need the matching role).
@@ -74,6 +87,11 @@ ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
             Action.EXPORT_ALL_WORK,
             Action.EXPORT_EDIT_LOG,
             Action.IMPORT_DOCUMENTS,
+            Action.MANAGE_MEMBERS,
+            Action.MANAGE_PROJECT_SETTINGS,
+            Action.MANAGE_ASSIGNMENTS,
+            Action.VIEW_ALL_DOCUMENTS,
+            Action.VIEW_PROGRESS,
         }
     ),
     "annotator": frozenset(
@@ -111,3 +129,8 @@ def can(access: Access, action: Action, project_key: str | None = None) -> bool:
 def allowed_modes(access: Access, project_key: str) -> list[WorkspaceMode]:
     """The working modes ``access`` may open in ``project_key``, in offer order."""
     return [mode for mode in MODE_ORDER if can(access, MODE_ACTIONS[mode], project_key)]
+
+
+def may_take(access: Access, project_key: str, task: Task) -> bool:
+    """Whether the user holds a task role in this project, including admins."""
+    return bool(access.roles_in(project_key) & TASK_ROLES[task])

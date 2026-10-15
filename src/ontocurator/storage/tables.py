@@ -13,6 +13,7 @@ from typing import Any, ClassVar
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -74,6 +75,22 @@ class ProjectRow(Base):
     manifest_sha256: Mapped[str]
     task_profile: Mapped[dict[str, Any]]
     task_profile_sha256: Mapped[str]
+    languages: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
+    guideline_url: Mapped[str | None]
+    guideline_version: Mapped[str | None]
+    require_chosen_axes: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false")
+    )
+    adjudicator_not_annotator: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false")
+    )
+    contiguous_mentions_only: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false")
+    )
+    hidden_axis_values: Mapped[dict[str, Any]] = mapped_column(
+        server_default=text("'{}'::jsonb")
+    )
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
@@ -646,3 +663,88 @@ class ProposalSetRow(Base):
     imported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
     imported_at: Mapped[datetime] = mapped_column(server_default=func.now())
     job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(JobRow.id))
+
+
+# --- Administration (T3a, migration 0005) -------------------------------
+
+
+class UserLanguageRow(Base):
+    """A user's supported language codes."""
+
+    __tablename__ = "user_languages"
+    __table_args__ = (CheckConstraint("language ~ '^[a-z]{2}$'", name="language"),)
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id, ondelete="CASCADE"), primary_key=True
+    )
+    language: Mapped[str] = mapped_column(primary_key=True)
+
+
+class AssignmentRow(Base):
+    """A task for one user and document; revocation preserves earlier assignments."""
+
+    __tablename__ = "assignments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_id", "document_id"],
+            [f"{SCHEMA}.documents.project_id", f"{SCHEMA}.documents.document_id"],
+        ),
+        CheckConstraint("task IN ('annotate', 'review')", name="task"),
+        CheckConstraint(
+            "status IN ('open', 'in_progress', 'submitted', 'reopened')", name="status"
+        ),
+        Index(
+            "uq_assignments_active",
+            "project_id",
+            "document_id",
+            "user_id",
+            "task",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+        Index("ix_assignments_project_id_user_id", "project_id", "user_id"),
+        Index("ix_assignments_project_id_document_id", "project_id", "document_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    document_id: Mapped[str]
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    task: Mapped[str]
+    status: Mapped[str] = mapped_column(server_default=text("'open'"))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    revoked_at: Mapped[datetime | None]
+    revoked_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    last_submission_id: Mapped[str | None]
+
+
+class UploadRow(Base):
+    """A staged document upload and its preview/commit jobs."""
+
+    __tablename__ = "uploads"
+    __table_args__ = (
+        CheckConstraint("kind IN ('t1', 'text')", name="kind"),
+        CheckConstraint(
+            "status IN ('previewing', 'ready', 'invalid', 'committing', 'committed', 'failed', 'discarded')",
+            name="status",
+        ),
+        Index("ix_uploads_project_id_created_at", "project_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    kind: Mapped[str]
+    files: Mapped[list[Any]]
+    language: Mapped[str | None]
+    status: Mapped[str]
+    preview: Mapped[dict[str, Any] | None]
+    plan_sha256: Mapped[str | None]
+    preview_job_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(JobRow.id)
+    )
+    commit_job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(JobRow.id))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
