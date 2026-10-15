@@ -39,6 +39,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/assignments/proposal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose Assignments */
+        post: operations["propose_assignments_api_v1_projects__key__assignments_proposal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{assignment_id}/open": {
         parameters: {
             query?: never;
@@ -1042,6 +1059,7 @@ export interface components {
             confirm_language: boolean;
             /** Seed */
             seed?: number | null;
+            context?: components["schemas"]["DistributionContextView"] | null;
         };
         /** AssignResponse */
         AssignResponse: {
@@ -1245,6 +1263,22 @@ export interface components {
             is_system_admin: boolean;
             /** Csrf Token */
             csrf_token: string;
+        };
+        /** DistributionContextView */
+        DistributionContextView: {
+            /** Document Ids */
+            document_ids: string[];
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review";
+            /** Per Document */
+            per_document: number;
+            /** Seed */
+            seed: number;
+            /** State Sha256 */
+            state_sha256: string;
         };
         /**
          * Document
@@ -2105,6 +2139,48 @@ export interface components {
             /** Can Manage */
             can_manage: boolean;
         };
+        /** ProposalRequest */
+        ProposalRequest: {
+            /** Document Ids */
+            document_ids: string[];
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review";
+            /**
+             * Per Document
+             * @default 1
+             */
+            per_document: number;
+            /** Seed */
+            seed?: number | null;
+        };
+        /** ProposalResponse */
+        ProposalResponse: {
+            /** Rows */
+            rows: components["schemas"]["ProposalRow"][];
+            /** Unassignable */
+            unassignable: components["schemas"]["UnassignableDocument"][];
+            /** Seed */
+            seed: number;
+            /** Per Document */
+            per_document: number;
+            context: components["schemas"]["DistributionContextView"];
+        };
+        /** ProposalRow */
+        ProposalRow: {
+            /** Document Id */
+            document_id: string;
+            /** Language */
+            language: string;
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Load Before */
+            load_before: number;
+        };
         /** ProposalSetView */
         ProposalSetView: {
             /** Id */
@@ -2663,6 +2739,20 @@ export interface components {
             /** External Url */
             external_url?: string | null;
         };
+        /** UnassignableDocument */
+        UnassignableDocument: {
+            /** Document Id */
+            document_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "NO_READER" | "TOO_FEW_READERS";
+            /** Eligible Count */
+            eligible_count: number;
+        };
         /** UploadCreated */
         UploadCreated: {
             /** Upload Id */
@@ -2872,6 +2962,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssignResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_assignments_api_v1_projects__key__assignments_proposal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalResponse"];
                 };
             };
             /** @description Validation Error */

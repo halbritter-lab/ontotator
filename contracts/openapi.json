@@ -168,6 +168,58 @@
         }
       }
     },
+    "/api/v1/projects/{key}/assignments/proposal": {
+      "post": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Propose Assignments",
+        "operationId": "propose_assignments_api_v1_projects__key__assignments_proposal_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assignments/{assignment_id}/open": {
       "post": {
         "tags": [
@@ -2746,6 +2798,16 @@
               }
             ],
             "title": "Seed"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DistributionContextView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -3277,6 +3339,50 @@
         ],
         "title": "CurrentUser",
         "description": "The logged-in user, as the editor shows it (index Q10)."
+      },
+      "DistributionContextView": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review"
+            ],
+            "title": "Task"
+          },
+          "per_document": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Per Document"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed"
+          },
+          "state_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "State Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids",
+          "task",
+          "per_document",
+          "seed",
+          "state_sha256"
+        ],
+        "title": "DistributionContextView"
       },
       "Document": {
         "properties": {
@@ -5248,6 +5354,121 @@
         "title": "ProjectSummary",
         "description": "A project on the dashboard, with what the user may do in it."
       },
+      "ProposalRequest": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review"
+            ],
+            "title": "Task"
+          },
+          "per_document": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Per Document",
+            "default": 1
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids",
+          "task"
+        ],
+        "title": "ProposalRequest"
+      },
+      "ProposalResponse": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "unassignable": {
+            "items": {
+              "$ref": "#/components/schemas/UnassignableDocument"
+            },
+            "type": "array",
+            "title": "Unassignable"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed"
+          },
+          "per_document": {
+            "type": "integer",
+            "title": "Per Document"
+          },
+          "context": {
+            "$ref": "#/components/schemas/DistributionContextView"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows",
+          "unassignable",
+          "seed",
+          "per_document",
+          "context"
+        ],
+        "title": "ProposalResponse"
+      },
+      "ProposalRow": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "load_before": {
+            "type": "integer",
+            "title": "Load Before"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "language",
+          "username",
+          "display_name",
+          "load_before"
+        ],
+        "title": "ProposalRow"
+      },
       "ProposalSetView": {
         "properties": {
           "id": {
@@ -6666,6 +6887,38 @@
         ],
         "title": "TreeTermDetail",
         "description": "What the detail pane shows for the selected node."
+      },
+      "UnassignableDocument": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "NO_READER",
+              "TOO_FEW_READERS"
+            ],
+            "title": "Reason"
+          },
+          "eligible_count": {
+            "type": "integer",
+            "title": "Eligible Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "language",
+          "reason",
+          "eligible_count"
+        ],
+        "title": "UnassignableDocument"
       },
       "UploadCreated": {
         "properties": {

@@ -1,6 +1,6 @@
 # Implementation status
 
-Status after the reviewed combined-source gate at `a17fb6a` on 2026-10-15.
+Status after the reviewed T3a distribution slice at `6860074` on 2026-10-15.
 Administration continues on `feat/t3a-admin-backend` from that integrated source;
 no main merge, push or deployment has occurred.
 
@@ -12,7 +12,7 @@ no main merge, push or deployment has occurred.
 - [x] T2e: reviewed Docker/Compose/health/operations implementation and functional container acceptance.
 - [x] T6a: all ten design-foundation tasks, final review, bundled assets/fonts and integrated acceptance.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
-- [ ] T3a: administration backend in progress (6/10 tasks accepted: project-key rename, schema/policy, users/profile API, projects/settings/members, project rules, upload preview/commit); assignments in preparation.
+- [ ] T3a: administration backend in progress (8/10 tasks accepted: project-key rename, schema/policy, users/profile API, projects/settings/members, project rules, upload preview/commit, assignments/visibility, reproducible distribution); progress/export runtime checks follow.
 - [ ] T3b: administration UI.
 - [ ] T5: variants and translation-review application workflows; the format-1.1 prerequisite is already complete.
 - [ ] T4a: workflows and stage tasks.
@@ -47,4 +47,10 @@ and 38 final focused tests. The
 affected scope/submission checks. The
 [staged upload slice](2026-10-15-t3a-uploads-review.md) passed independent
 integration and scoped fix review, with 96 final targeted tests after correcting
-existing-set hashing and duplicate-source provenance. Later T3a tasks remain open.
+existing-set hashing and duplicate-source provenance. The subsequent
+[assignment and visibility slice](2026-10-15-t3a-assignments-review.md) passed
+independent review and its complete local gate: 1,386 backend tests with one
+expected POSIX skip, 441 frontend tests and all 39 browser scenarios.
+The [distribution slice](2026-10-15-t3a-distribution-review.md) then passed
+independent review and 117 actual new/affected cases. Progress/exports and the
+final combined/container gate remain open.
