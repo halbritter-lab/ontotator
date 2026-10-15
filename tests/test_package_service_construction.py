@@ -406,7 +406,7 @@ def test_pinned_reads_keep_captured_terms_after_ambient_mutation(
     if warm_subset:
         assert (
             view.engine.lexical._subset_indexes[()]._matrix
-            is base.engine.lexical._subset_indexes[()]._matrix
+            is not base.engine.lexical._subset_indexes[()]._matrix
         )
 
 
@@ -430,4 +430,36 @@ def test_captured_translation_bytes_restore_names_before_pinned_build(
         view.engine.lexical.search("Krampfanfall", 10)[0]["matched_term"]
         == "Krampfanfall"
     )
+    assert view.engine.lexical._matrix is base.engine.lexical._matrix
+
+
+@pytest.mark.parametrize("evicted", [False, True])
+def test_pinned_subset_rejects_ambient_names_fitted_after_capture(
+    evicted: bool,
+) -> None:
+    repo, registry, initial = _environment(True)
+    base = initial.with_translations(
+        [FIXTURES / "hp-de.babelon.tsv", FIXTURES / "hp-es.babelon.tsv"]
+    )
+    registry.register_service(base)
+    condition = base.capture_condition()
+    repo.get_search_conditions = lambda _: [condition]
+    repo.get_embedded_files = lambda _: {
+        f"search-resources/{item.sha256}/{item.filename}": item.content
+        for item in base.translations
+    }
+    if evicted:
+        registry.for_package_layer(repo, "package", "hpo-layer")
+        registry._package_services.clear()
+    base.ontology.terms["HP:0001250"].translations["de"] = ["AmbientUncapturedName"]
+    ambient = base.engine.lexical.search("AmbientUncapturedName", 10, languages=["de"])
+    assert ambient[0]["matched_term"] == "AmbientUncapturedName"
+
+    view = registry.for_package_layer(repo, "package", "hpo-layer")
+    assert view._translated.exact("Krampfanfall", ["de"])[0]["label"] == "Seizure"
+    assert not view._translated.exact("AmbientUncapturedName", ["de"])
+    hits = view.engine.lexical.search("AmbientUncapturedName", 10, languages=["de"])
+    assert all(hit["matched_term"] != "AmbientUncapturedName" for hit in hits)
+    captured = view.engine.lexical.search("Krampfanfall", 10, languages=["de"])
+    assert captured[0]["matched_term"] == "Krampfanfall"
     assert view.engine.lexical._matrix is base.engine.lexical._matrix

@@ -246,9 +246,10 @@ class LanguageLexicalIndex(LexicalIndex):
         """Bind fitted data to isolated terms, with a separate subset LRU.
 
         Matrices, vectorizers and string rows are read-only during queries.
-        Cached subsets can reuse those fits too, but every result-producing
-        view must read the supplied ontology. Later subset misses fit against
-        that ontology and cannot populate or evict another view's cache.
+        Ambient subsets may have been fitted after term mutation, so they
+        cannot establish the captured fitting corpus. Start with an empty LRU;
+        subset misses fit against the supplied ontology and cannot populate or
+        evict another view's cache.
         """
         with self._subset_lock:
             view = copy.copy(self)
@@ -256,11 +257,6 @@ class LanguageLexicalIndex(LexicalIndex):
             view.languages = list(self.languages)
             view._subset_lock = threading.RLock()
             view._subset_indexes = OrderedDict()
-            for languages, index in self._subset_indexes.items():
-                subset = copy.copy(index)
-                subset.ontology = ontology
-                subset.languages = list(index.languages)
-                view._subset_indexes[languages] = subset
         return view
 
     def build(self) -> None:

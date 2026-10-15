@@ -214,7 +214,8 @@ class OntologyService:
 
         Resource equality is checked by the registry before calling this. Terms
         and their lookup references are isolated; expensive lexical fits are
-        shared through views bound to this snapshot, including cached subsets.
+        shared through views bound to this snapshot. Selected-language subsets
+        fit independently against the captured terms.
         """
         ontology = self._untranslated_snapshot()
         loaded, skipped = apply_translations(ontology, translation_paths)
