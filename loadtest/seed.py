@@ -211,7 +211,9 @@ def main() -> None:
         "--compose-project",
         help="Required when seeding; explicit disposable Compose project",
     )
-    parser.add_argument("--compose-file", type=Path, default=Path("docker-compose.yml"))
+    parser.add_argument(
+        "--compose-file", type=Path, default=Path("docker-compose.dev.yml")
+    )
     parser.add_argument("--host", default="http://127.0.0.1:8000")
     parser.add_argument(
         "--password",
@@ -311,7 +313,7 @@ def main() -> None:
             ).raise_for_status()
         admin("projects", "add-member", "load", username, "--role", "annotator")
     print(
-        f"Seeded {args.compose_project}: 30 users, 1000 documents, 3000 proposals; HPO {release}. Restart app workers before warmup so uploaded ontology is registered."
+        f"Seeded {args.compose_project}: 30 users, 1000 documents, 3000 proposals; HPO {release}. Workers load uploaded ontologies automatically on first use; warm up before measurement."
     )
 
 

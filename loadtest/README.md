@@ -12,15 +12,14 @@ From the repository root (PowerShell example):
 uv sync --dev --locked
 # Supply a synthetic password of at least 12 characters through your environment.
 # ONTOCURATOR_LOAD_PASSWORD must match for seeding and Locust.
-uv run python loadtest/seed.py --hpo C:/path/to/hp.json --compose-project t2e-load-unique --compose-file docker-compose.yml --host http://127.0.0.1:8000
-# Workers register uploaded ontology files at startup.
-docker compose -f docker-compose.yml -p t2e-load-unique restart app
+uv run python loadtest/seed.py --hpo C:/path/to/hp.json --compose-project t2e-load-unique --compose-file docker-compose.dev.yml --host http://127.0.0.1:8000
 ```
 
 Start the dev stack beforehand with its normal database/admin bootstrap settings.
 `--compose-project` is mandatory for seeding; `--compose-file` and `--host` target
-the same stack. The service is named `app`, and its CLI obtains the database and
-data directory from the service environment. Seeding uses `docker compose cp`
+the same stack. `--compose-file` defaults to `docker-compose.dev.yml`; override it
+explicitly for another Compose configuration. The service is named `app`, and
+its CLI obtains the database and data directory from the service environment. Seeding uses `docker compose cp`
 plus `ontocurator admin` for the project, users, memberships and one T1 import,
 and HTTP code redemption for passwords. It does not start or stop containers.
 Rerun against a fresh project/volume: existing users/projects intentionally cause
@@ -38,8 +37,9 @@ and a tool actor named `ontocurator-load`, version `1.0.0`. The T1 bundle, pinne
 profile and Locust manifest are under `loadtest/results/seed/` by default; use
 `--out` to change that and `--load-manifest` when invoking Locust.
 
-Warm the restarted stack and its lazy indexes separately, then take a fresh
-five-minute measurement. Keep the warmup artifacts separate from the report:
+Workers discover uploaded ontologies automatically and load them on first use.
+Warm the stack and its lazy indexes separately, then take a fresh five-minute
+measurement. Keep the warmup artifacts separate from the report:
 
 ```powershell
 uv run locust -f loadtest/locustfile.py --headless -u 30 -r 5 -t 1m --host http://127.0.0.1:8000 --csv loadtest/results/warmup
