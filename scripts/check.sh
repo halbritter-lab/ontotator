@@ -52,7 +52,9 @@ step "TypeScript API drift" npm --prefix frontend run api:check
 # Packages the committed web assets: no npm ci, no rewrite of src/ontocurator/web.
 step "release build (wheel contents)" uv run python scripts/build_release.py \
     --skip-frontend --skip-npm-ci --out-dir "$wheel_dir"
-step "frontend unit tests" npm --prefix frontend test
+# Bounded workers: one jsdom worker per core exhausted memory on a 16 GB machine
+# with Docker running. Override with CHECK_VITEST_WORKERS.
+step "frontend unit tests" npm --prefix frontend test -- \n    --maxWorkers="${CHECK_VITEST_WORKERS:-4}" --minWorkers=1
 step "backend tests (PostgreSQL)" uv run pytest -q
 step "browser tests (Playwright)" npm --prefix frontend run test:e2e
 
