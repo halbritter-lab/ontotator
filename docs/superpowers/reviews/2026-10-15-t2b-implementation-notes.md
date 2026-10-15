@@ -471,6 +471,25 @@ answer; the least surprising option was taken and should be confirmed.
   its users only appear through `/__test_user__`; left as is.
 - Task 9: after the rebuild, `grep -rnE "Authorization|Bearer|SESSION_TOKEN|ALLOW_TEST_CLIENT_HOST|session_token|verify_security" src tests --exclude-dir=__pycache__`
   prints nothing (the Task 6 entry above expected this).
+- Final review: `serve --forwarded-allow-ips` (env `ONTOCURATOR_FORWARDED_ALLOW_IPS`) is passed to
+  `uvicorn.run(..., proxy_headers=True, forwarded_allow_ips=…)`; unset passes `None`, which keeps
+  uvicorn's default (`FORWARDED_ALLOW_IPS` or 127.0.0.1). Login throttling keeps reading
+  `request.client.host`, which uvicorn then sets from `X-Forwarded-For` of a trusted proxy.
+- Final review: the unreachable fallback in `identity.principal_of` raises the new
+  `NotAuthenticated` domain error, mapped to 401 `NOT_AUTHENTICATED` like the middleware, instead
+  of a 403 `AccessDenied`.
+- Final review: `create_app(None)` (schema export) now installs the security middleware with no
+  session service, which answers every `/api/` request, login included, with 401
+  `NOT_AUTHENTICATED`; `/openapi.json` and the schema are unchanged.
+- Final review: `openCase` in `frontend/browser/helpers.ts` takes no identity argument any more,
+  and `App.tsx` drops the `identity` option of `openCase`, the `identity` of the round selection
+  and the parameter of `handleOpenWorkspace`; the identity is read from the logged-in user only.
+- Final review: the inline style of the case header's identity badge (background, colour, font
+  size) moved into `.identity-badge`; embedded assets rebuilt.
+- Final review: README (intro, architecture diagram, proxy note, `--forwarded-allow-ips` row) and
+  `docs/scientific-workflow.md` describe the login model; the annotator ID is the logged-in user's
+  pseudonym. The README's "Persistence & Storage" section and the "V4 Workspace Storage" bullet
+  still describe SQLite (T2a material, not part of this cleanup).
 
 ## Open risks
 
@@ -484,3 +503,12 @@ answer; the least surprising option was taken and should be confirmed.
   without it the cookie is sent without `Secure` (the deployment contract is T2e).
 - A client may still create an annotation with `actor_kind="tool"` and any `actor_id`, i.e.
   attribute work to a tool or model. Restricting tool provenance belongs to T2c's roles and policy.
+- `.github/workflows/ci.yml` still calls the deleted `scripts/build_release.py` and would need a
+  PostgreSQL service; left untouched by instruction (no CI, index R2).
+- The backend still has `last_annotator_id` (preferences) and the `/settings` presets; the
+  frontend no longer needs them. T2c should remove them.
+- The browser fixture (`/__test_user__`) creates only system admins, so Playwright never exercises
+  the non-admin UI; that is covered by unit tests only.
+- Behind a reverse proxy, `--forwarded-allow-ips` must name the proxy's address. Otherwise login
+  throttling sees every client as the proxy's single address, and 30 failed logins within 15
+  minutes, from anyone, lock everyone out. The deployment contract is finalised in T2e.

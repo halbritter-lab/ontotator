@@ -70,7 +70,7 @@ test("login: a wrong password is refused; a setup code sets the password and log
 test("real backend: review, resume, reload, submit and authenticated export", async ({ page }) => {
   await importFixture(page, "browser-reviewer");
   await page.locator("#mode-select").selectOption("review");
-  await openCase(page, { identity: "browser-reviewer" });
+  await openCase(page);
   await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
   await page.locator(".doc-item").filter({ hasText: "HP:0001252" }).click();
   await expect(page.getByLabel(/Proposal details/i)).toContainText("present");
@@ -103,7 +103,7 @@ test("real backend: review, resume, reload, submit and authenticated export", as
 test("real backend: invalid input does not block correction", async ({ page }) => {
   await importFixture(page, "browser-independent");
   await page.locator("#mode-select").selectOption("independent");
-  await openCase(page, { identity: "browser-independent" });
+  await openCase(page);
   await expect(page.getByText(/Review Proposals/i)).toHaveCount(0);
   await page.getByRole("button", { name: /\+ New Annotation/i }).click();
   await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
@@ -117,7 +117,7 @@ test("real backend: invalid input does not block correction", async ({ page }) =
 test("real backend: repeated and discontinuous evidence preserves Unicode offsets", async ({ page }) => {
   await importFixture(page, "browser-spans");
   await page.locator("#mode-select").selectOption("independent");
-  await openCase(page, { identity: "browser-spans" });
+  await openCase(page);
   await selectText(page, 0, 9);
   await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();

@@ -1,6 +1,6 @@
 # Ontocurator (`ontocurator`)
 
-A standalone, secure, offline web-based editor for annotating and reviewing biomedical ontology concepts (such as the Human Phenotype Ontology (HPO), MONDO Disease Ontology, Gene Ontology (GO), and arbitrary OBO Foundry ontologies) on clinical text documents.
+A self-hosted, multi-user web editor for annotating and reviewing biomedical ontology concepts (such as the Human Phenotype Ontology (HPO), MONDO Disease Ontology, Gene Ontology (GO), and arbitrary OBO Foundry ontologies) on clinical text documents. People log in with a username and password; the server stores its data in PostgreSQL and needs no internet access at runtime.
 
 Designed specifically for clinical curation workflows, Ontocurator supports:
 - **Configured Annotation Layers & Task Profiles**: Fine-grained task configuration via `TaskProfile`: customizable layers (`layers`), annotation types (`annotation_types`), and required ontologies (`ontologies`). Multi-layer workflows allow annotating distinct aspects (e.g. phenotypes, diseases, therapies) independently or jointly.
@@ -24,21 +24,22 @@ Designed specifically for clinical curation workflows, Ontocurator supports:
                       |       Web Browser (Same-Origin)       |
                       |   React 18 SPA (Embedded Static Web)  |
                       +-------------------+-------------------+
-                                          | Loopback HTTP (127.0.0.1)
-                                          | Bearer Token Authentication
+                                          | HTTP(S), username/password login
+                                          | Session cookie + CSRF token
                                           v
 +-----------------------------------------------------------------------------------+
 | FastAPI Backend Application (`ontocurator`)                                       |
 |                                                                                   |
 |  +--------------------+  +----------------------+  +---------------------------+  |
 |  |   API & Security   |  | Application Services |  | Ontology Registry         |  |
-|  | Loopback & Token   |  | Workspaces, Editing, |  | In-memory lexical & exact |  |
-|  | Rebinding Guard    |  | Reviews, Submissions |  | Repeatable --ontology     |  |
+|  | Sessions, CSRF &   |  | Workspaces, Editing, |  | In-memory lexical & exact |  |
+|  | Origin checks,     |  | Reviews, Submissions |  | Repeatable --ontology     |  |
+|  | Trusted hosts      |  |                      |  |                           |  |
 |  +--------------------+  +----------------------+  +---------------------------+  |
 |                                     |                                             |
 |  +----------------------------------v------------------------------------------+  |
-|  | SQLite Storage (`editor.db` via WAL & PRAGMA foreign_keys = ON)              |  |
-|  | Schema v4 with TaskProfile, revision conflicts (409), idempotency receipts  |  |
+|  | PostgreSQL Storage (application role; schema via `ontocurator db upgrade`)  |  |
+|  | Accounts, sessions, TaskProfile, revision conflicts (409), idempotency      |  |
 |  +-----------------------------------------------------------------------------+  |
 +-----------------------------------------------------------------------------------+
 ```
@@ -137,6 +138,7 @@ directly or through a session-mode pooler, never a transaction-mode pooler
 | `--port` | | `8000` (env `ONTOCURATOR_PORT`) | Port to bind |
 | `--web-dir` | | `None` | Custom directory containing built web assets (defaults to embedded) |
 | `--public-origin` | | env `ONTOCURATOR_PUBLIC_ORIGIN` | The address people open (e.g. `https://editor.example.org`); writes must come from it, only its host is served, and with `https` the session cookie is `Secure`. Required when `--host` is not a loopback address |
+| `--forwarded-allow-ips` | | env `ONTOCURATOR_FORWARDED_ALLOW_IPS` | Comma-separated addresses of reverse proxies whose `X-Forwarded-For` header names the real client (default: uvicorn's, `FORWARDED_ALLOW_IPS` or `127.0.0.1`) |
 | `--verbose` | `-v` | `false` | Log every HTTP request |
 
 Other commands: `ontocurator db upgrade` (schema migrations, as the schema
@@ -159,7 +161,7 @@ listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 1. **Accounts and Sessions**: Every API request needs a login session, held in the HttpOnly, `SameSite=Lax` cookie `ontocurator_session` (`Secure` behind an `https` public origin). The server stores only the token's SHA-256.
 2. **CSRF and Origin Checks**: Every write carries the session's CSRF token in `X-CSRF-Token` and must not come from another site; login and code redemption accept only requests the browser marks as coming from this site.
-3. **Known Hosts Only**: The server answers only to the host of `--public-origin`, or to `localhost`, `127.0.0.1` and `::1` on a loopback address (`HOST_NOT_ALLOWED` otherwise), so a rebound DNS name reaches nothing. A reverse proxy must forward the original `Host` header (nginx: `proxy_set_header Host $host;`); otherwise every request gets 400 `HOST_NOT_ALLOWED`.
+3. **Known Hosts Only**: The server answers only to the host of `--public-origin`, or to `localhost`, `127.0.0.1` and `::1` on a loopback address (`HOST_NOT_ALLOWED` otherwise), so a rebound DNS name reaches nothing. A reverse proxy must forward the original `Host` header (nginx: `proxy_set_header Host $host;`); otherwise every request gets 400 `HOST_NOT_ALLOWED`. It must also be named in `--forwarded-allow-ips` (its own address, e.g. `--forwarded-allow-ips 10.0.0.5`): login throttling counts failures per client address, and without it every user appears under the proxy's single address, so 30 failed logins within 15 minutes, from anyone, lock everyone out.
 4. **Own Identity Only**: Everyone annotates under their own pseudonym; a workspace or annotator ID of someone else is refused (`IDENTITY_MISMATCH`). Package and ontology uploads need a system administrator.
 5. **Zero Runtime Network Calls**: Search operates entirely against the pinned local ontology index. No external dense models, cloud APIs, or telemetry are contacted.
 6. **Streaming ZIP Guard**: Package import enforces 64 MB compressed limit, 256 MB uncompressed limit, path traversal sanitization, and atomic tempfile replacement.

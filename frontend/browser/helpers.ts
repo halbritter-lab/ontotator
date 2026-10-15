@@ -26,7 +26,7 @@ export async function loginAs(page: Page, pseudonym: string) {
 }
 
 /** Click the single "Open case" action; the identity comes from the session, so nothing asks. */
-export async function openCase(page: Page, _opts: { identity?: string } = {}) {
+export async function openCase(page: Page) {
   await page.getByRole("button", { name: /^Open case$/i }).click();
   await expect(page.locator(".status-badge")).toBeVisible();
 }

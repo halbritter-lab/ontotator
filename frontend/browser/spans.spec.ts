@@ -7,7 +7,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
   test("review mode: proposal evidence spans are precisely marked with DOM metadata and visual highlights", async ({ page }) => {
     await importFixture(page, "reviewer-spans-proof");
     await page.locator("#mode-select").selectOption("review");
-    await openCase(page, { identity: "reviewer-spans-proof" });
+    await openCase(page);
     await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
 
     // 1. Select and verify that first proposal (HP:0001252 Hypotonia, span [0:9]) is active
@@ -49,7 +49,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
   test("independent mode: selecting text creates marked evidence spans with active highlight and handles picking", async ({ page }) => {
     await importFixture(page, "curator-spans-proof");
     await page.locator("#mode-select").selectOption("independent");
-    await openCase(page, { identity: "curator-spans-proof" });
+    await openCase(page);
 
     // Text is "Hypotonia and seizure. A😀é\r\nB"
     // Select "Hypotonia" (offsets 0 to 9)

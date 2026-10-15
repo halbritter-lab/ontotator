@@ -15,7 +15,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   test("Scenario A: Single-layer baseline has zero extra interaction controls and preserves document order", async ({ page }) => {
     await importScenario(page, "single", "user-scenario-a");
     await page.locator("#mode-select").selectOption("independent");
-    await openCase(page, { identity: "user-scenario-a" });
+    await openCase(page);
 
     // 1. Zero extra layer controls rendered
     await expect(page.locator(".layer-controls")).toHaveCount(0);
@@ -60,7 +60,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   test("Scenario B: Assisted mode with reference layer (cannot activate reference, visibility toggle)", async ({ page }) => {
     await importScenario(page, "assisted", "user-scenario-b");
     await page.locator("#mode-select").selectOption("assisted");
-    await openCase(page, { identity: "user-scenario-b" });
+    await openCase(page);
 
     // 1. Layer controls visible because package has 2 layers
     await expect(page.locator(".layer-controls")).toBeVisible();
@@ -109,7 +109,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   test("Review excludes reference targets and permits returning to a case with references", async ({ page }) => {
     await importScenario(page, "review_references", "review-reference-navigation");
     await page.locator("#mode-select").selectOption("review");
-    await openCase(page, { identity: "review-reference-navigation" });
+    await openCase(page);
     // Reference annotations are not review targets: only the one proposal is listed.
     await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (1)" })).toBeVisible();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
@@ -143,7 +143,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   test("Scenario C: Multi-editable layers require both layers checked before completion", async ({ page }) => {
     await importScenario(page, "multi_editable", "user-scenario-c");
     await page.locator("#mode-select").selectOption("independent");
-    await openCase(page, { identity: "user-scenario-c" });
+    await openCase(page);
 
     // 1. Both layers are visible in layer controls
     await expect(page.locator(".layer-controls")).toBeVisible();

@@ -39,7 +39,7 @@ async function openWithSeizure(page: Page, annotator: string, size = { width: 12
   await page.setViewportSize(size);
   await importPackage(page, "", "browser-fixture", annotator);
   await page.locator("#mode-select").selectOption("independent");
-  await openCase(page, { identity: annotator });
+  await openCase(page);
   await expect(revision(page)).toHaveAttribute("title", "Revision 0");
   await annotate(page, 14, 21, "Seizure", SEIZURE, 1);
   await expect(page.locator(".inspector-pane h2")).toContainText(SEIZURE);
@@ -657,7 +657,7 @@ test.describe("ontology tree", () => {
     // The session cookie survives the reload: still logged in, no login form.
     await expect(page.getByTestId("current-user")).toBeVisible();
     await page.locator("#mode-select").selectOption("independent");
-    await openCase(page, { identity: "tree-reload" });
+    await openCase(page);
     await expect(revision(page)).toHaveAttribute("title", "Revision 1");
     // Nothing is open until it is asked for.
     await expect(treePanel(page)).toHaveCount(0);

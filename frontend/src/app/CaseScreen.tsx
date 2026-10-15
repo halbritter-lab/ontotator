@@ -1421,7 +1421,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             className="badge identity-badge"
             data-testid="annotator-identity"
             title={`${annotatorName ? `${annotatorName} (${view.key.annotator_id})` : view.key.annotator_id}: your annotations and decisions are saved under this pseudonym`}
-            style={{ background: "var(--bg-secondary)", color: "var(--text-main)", fontSize: "0.78rem" }}
           >
             Annotating as{" "}
             <strong>

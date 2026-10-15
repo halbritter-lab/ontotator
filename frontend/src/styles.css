@@ -86,6 +86,9 @@ body {
    bounded width (the title has it in full) so that the header keeps two lines
    in the narrowest three-column window; the pseudonym is never cut. */
 .identity-badge {
+  background: var(--bg-secondary);
+  color: var(--text-main);
+  font-size: 0.78rem;
   text-transform: none;
   letter-spacing: normal;
 }

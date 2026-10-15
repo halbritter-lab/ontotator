@@ -52,15 +52,16 @@ the importing machine's global translation files.
 1. Choose a small package containing positive findings, a genuine negative
    case, a case without proposals, and a difficult case likely to produce an
    uncertain review. Include at least one repeated or discontinuous mention.
-2. Give two annotators separate local workspaces and the same original package,
-   ontology, application and guideline. Use distinct stable annotator IDs.
+2. Give two annotators their own user accounts and the same original package,
+   ontology, application and guideline. The annotator ID is the logged-in
+   user's pseudonym, so each person works under their own ID.
 3. Each annotator works independently in the configured mode. In review, every
    text remains inspectable even when no proposals exist. Before submission,
    confirm that the whole text and each required layer were checked.
 4. Reopen one submitted case, make a correction and submit again. Export the
    whole package for each annotator, retaining both exports unchanged.
-5. Import one export into a fresh workspace. Open the same annotator's review
-   and verify that its target set, decisions and approved counterversions are
+5. Import one export into a fresh database. Log in as the same annotator, open
+   their review and verify that its target set, decisions and approved counterversions are
    restored. Multiple rounds require explicit round selection. A different
    reviewer starts from the submitted current results, not historical originals
    retained solely as dependencies.
@@ -124,5 +125,5 @@ and unknown-axis treatment in the study protocol. The adapter deliberately
 computes no agreement statistic and designates no participant as ground truth.
 
 Preserve uncertain targets and ambiguous branches for adjudication outside the
-automatic extraction. Hashes establish content identity; local annotator IDs are
-labels and do not authenticate a person's identity.
+automatic extraction. Hashes establish content identity; the annotator ID is the
+logged-in user's pseudonym, so it names the account that did the work.

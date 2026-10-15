@@ -22,7 +22,7 @@ test("translations: upload, search in German, switch the language off, selection
   );
   await expect(page.locator(".app-header")).toContainText("HP 2026-06-23 · de 4 terms");
 
-  await openCase(page, { identity: ANNOTATOR });
+  await openCase(page);
   await startSearch(page, "Krampfanfall");
   await expect(page.locator(".candidate-card").first()).toContainText("Seizure");
   await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
@@ -47,7 +47,7 @@ test("translations: upload, search in German, switch the language off, selection
   await page.goto("about:blank");
   await page.goto(LAUNCH_URL);
   await expect(page.locator("#package-select")).toHaveValue("translation-fixture");
-  await openCase(page, { identity: ANNOTATOR });
+  await openCase(page);
   await startSearch(page, "Krampfanfall");
   await expect(page.getByRole("button", { name: "Search languages: EN", exact: true })).toBeVisible();
   await expect(seizure(page)).toHaveCount(0);

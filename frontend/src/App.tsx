@@ -109,7 +109,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const user = givenUser !== undefined ? givenUser : fetchedUser;
   const annotatorId = user?.pseudonym ?? "";
   const isAdmin = user?.is_system_admin === true;
-  const [roundSelection, setRoundSelection] = useState<{ docId: string; identity: string; rounds: string[] } | null>(null);
+  const [roundSelection, setRoundSelection] = useState<{ docId: string; rounds: string[] } | null>(null);
   const [selectedRound, setSelectedRound] = useState("");
   const [mode, setMode] = useState<WorkspaceMode>("independent");
   const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -336,9 +336,9 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
    * Open a case. In review mode, all review proposals for the case are loaded here
    * (and only here). Throws on failure.
    */
-  const openCase = async (docId: string, opts: { forceRemount?: boolean; identity?: string; roundId?: string } = {}) => {
+  const openCase = async (docId: string, opts: { forceRemount?: boolean; roundId?: string } = {}) => {
     if (!selectedPackageId) throw new Error("No work package selected.");
-    const identity = opts.identity ?? annotatorRef.current;
+    const identity = annotatorRef.current;
     if (!identity) throw new Error("Log in to open cases.");
     let res: OpenWorkspaceResponse;
     try {
@@ -355,7 +355,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
           && typeof err.details === "object" && Array.isArray(err.details.rounds)
           && err.details.rounds.every((id) => typeof id === "string")) {
         setSelectedRound("");
-        setRoundSelection({ docId, identity, rounds: err.details.rounds as string[] });
+        setRoundSelection({ docId, rounds: err.details.rounds as string[] });
         return;
       }
       throw err;
@@ -368,13 +368,13 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   };
 
   /** Dashboard entry point: errors are shown on the dashboard. */
-  const handleOpenWorkspace = async (docId: string, identity: string) => {
+  const handleOpenWorkspace = async (docId: string) => {
     if (!selectedPackageId || isOpening) return;
     setError(null);
     setSelectedDocId(docId);
     setIsOpening(true);
     try {
-      await openCase(docId, { identity });
+      await openCase(docId);
     } catch (err: unknown) {
       reportError("Error opening case", err);
     } finally {
@@ -385,10 +385,9 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   /** "Open case": works under the logged-in user's pseudonym. */
   const requestOpen = (docIdToOpen?: string) => {
     const targetDoc = docIdToOpen ?? selectedDocId;
-    const identity = annotatorRef.current;
-    if (!selectedPackageId || !targetDoc || isOpening || !identity) return;
+    if (!selectedPackageId || !targetDoc || isOpening || !annotatorRef.current) return;
     setSelectedDocId(targetDoc);
-    void handleOpenWorkspace(targetDoc, identity);
+    void handleOpenWorkspace(targetDoc);
   };
 
   const handleExportPackage = async () => {
@@ -450,7 +449,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
             <button type="button" className="btn btn-secondary" onClick={() => setRoundSelection(null)}>Cancel</button>
             <button type="button" className="btn btn-primary" disabled={!selectedRound || isOpening} onClick={async () => {
               setIsOpening(true);
-              try { await openCase(roundSelection.docId, { identity: roundSelection.identity, roundId: selectedRound }); }
+              try { await openCase(roundSelection.docId, { roundId: selectedRound }); }
               catch (err) { reportError("Error opening review round", err); }
               finally { setIsOpening(false); }
             }}>Resume round</button>
