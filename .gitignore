@@ -49,3 +49,8 @@ workspace/
 .worktrees/
 worktrees/
 .superpowers/
+
+# Private deployment configuration and generated load-test artifacts
+/secrets/
+/.env*
+/loadtest/results/
