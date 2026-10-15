@@ -274,12 +274,30 @@ def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass
         chosen_axis_ids=["assertion"],
     )
     assert draft.annotations[0].annotation.axes_defaulted == []
+    # A content change invalidates the previous approval. The editor records
+    # a fresh changed decision against the exact confirmed snapshot.
+    assert draft.decisions == []
+    draft = ReviewService(repo, ontology).decide(
+        view.key,
+        MutationEnvelope(
+            mutation_id="confirmed-replacement",
+            expected_revision=5,
+            payload={
+                "target": target.model_dump(),
+                "outcome": "changed",
+                "replacement": {
+                    "annotation_id": "copy",
+                    "version": draft.annotations[0].version,
+                },
+            },
+        ),
+    )
     assert draft.decisions[0].replacement.version == draft.annotations[0].version
     submitted = service.submit(
         view.key,
         MutationEnvelope(
             mutation_id="submit",
-            expected_revision=5,
+            expected_revision=6,
             payload={"checked_layer_ids": ["hpo-layer"]},
         ),
     )
