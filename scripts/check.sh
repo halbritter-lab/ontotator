@@ -59,6 +59,10 @@ step "frontend unit tests" npm --prefix frontend test -- \
 step "backend tests (PostgreSQL)" uv run pytest -q
 step "browser tests (Playwright)" npm --prefix frontend run test:e2e
 
+if [ "${CHECK_CONTAINERS:-0}" = "1" ]; then
+    step "container checks" uv run python scripts/container_check.py
+fi
+
 echo ""
 echo "Summary:"
 printf '  %s\n' "${summary[@]}"
