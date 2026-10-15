@@ -1,5 +1,7 @@
 """System administrator user management; clear codes appear only on issue."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 
 from fastapi import APIRouter, Request
@@ -14,8 +16,10 @@ from ontocurator.auth.accounts import (
     normalize_languages,
 )
 from ontocurator.auth.audit import Actor
-from ontocurator.domain.errors import DomainError
-from ontocurator.storage.tables import ProjectMembershipRow, ProjectRow
+from ontocurator.auth.authority import lock_user_authority
+from ontocurator.auth.sessions import Principal, SessionService
+from ontocurator.domain.errors import AccessDenied, DomainError, NotAuthenticated
+from ontocurator.storage.tables import ProjectMembershipRow, ProjectRow, SessionRow
 
 router = APIRouter(prefix="/api/v1/admin/users", tags=["admin-users"])
 
@@ -99,6 +103,57 @@ def admin_users(accounts: AccountService, users: list[User]) -> list[AdminUser]:
     ]
 
 
+@contextmanager
+def _admin_write(
+    principal: Principal,
+    request: Request,
+    *,
+    target_username: str | None = None,
+    removes_admin: bool = False,
+) -> Iterator[User | None]:
+    """Keep fresh actor authority through this HTTP write's commit.
+
+    AccountService remains a trusted CLI/application interface. The HTTP boundary
+    checks current authority after waiting for sorted actor/target row locks.
+    """
+    accounts: AccountService = request.app.state.accounts
+    with accounts.db.transaction() as conn:
+        if removes_admin:
+            # Existing flag-removal lock must precede *all* user row locks.
+            conn.execute(select(func.pg_advisory_xact_lock(SYSTEM_ADMINS_LOCK)))
+        target = (
+            accounts.get_by_username(target_username)
+            if target_username is not None
+            else None
+        )
+        actor = lock_user_authority(
+            conn, principal.user_id, target_user_id=target.id if target else None
+        )
+        if not actor["active"] or not actor["is_system_admin"]:
+            raise AccessDenied(
+                "ADMIN_REQUIRED", "Only a system administrator may do this."
+            )
+        session = conn.execute(
+            select(SessionRow).where(
+                SessionRow.id == principal.session_id,
+                SessionRow.user_id == principal.user_id,
+                SessionRow.revoked_at.is_(None),
+            )
+        ).one_or_none()
+        sessions: SessionService = request.app.state.sessions
+        # Match resolution's injected clock, including time spent waiting above.
+        now = sessions._now()
+        if (
+            session is None
+            or session.expires_at <= now
+            or now - session.last_seen_at > sessions.policy.idle
+        ):
+            raise NotAuthenticated()
+        if target_username is not None and target is None:
+            raise DomainError("USER_NOT_FOUND", "The user does not exist.")
+        yield target
+
+
 @router.get("/")
 def list_users(principal: PrincipalDep, request: Request) -> list[AdminUser]:
     require_system_admin(principal)
@@ -115,7 +170,7 @@ def create_user(
     accounts: AccountService = request.app.state.accounts
     languages = normalize_languages(body.languages)
     actor = Actor.user(principal.user_id, principal.username)
-    with accounts.db.transaction():
+    with _admin_write(principal, request):
         issued = accounts.create_user(
             actor,
             body.username,
@@ -134,10 +189,11 @@ def reset_code(
 ) -> CodeResponse:
     require_system_admin(principal)
     accounts: AccountService = request.app.state.accounts
-    issued = accounts.issue_reset_code(
-        Actor.user(principal.user_id, principal.username), username
-    )
-    return CodeResponse(code=issued.code, expires_at=issued.expires_at)
+    with _admin_write(principal, request, target_username=username):
+        issued = accounts.issue_reset_code(
+            Actor.user(principal.user_id, principal.username), username
+        )
+        return CodeResponse(code=issued.code, expires_at=issued.expires_at)
 
 
 @router.patch("/{username}")
@@ -151,13 +207,14 @@ def patch_user(
     # Validate the whole replacement before touching flags or profile fields.
     if "languages" in fields:
         normalize_languages(body.languages)
-    with accounts.db.transaction() as conn:
-        # Any flag removal takes the shared admin lock before *any* user lock.
-        if fields.get("active") is False or fields.get("is_system_admin") is False:
-            conn.execute(select(func.pg_advisory_xact_lock(SYSTEM_ADMINS_LOCK)))
-        user = accounts.get_by_username(username)
-        if user is None:
-            raise DomainError("USER_NOT_FOUND", "The user does not exist.")
+    with _admin_write(
+        principal,
+        request,
+        target_username=username,
+        removes_admin=fields.get("active") is False
+        or fields.get("is_system_admin") is False,
+    ) as user:
+        assert user is not None
         if user.id == principal.user_id and (
             fields.get("active") is False or fields.get("is_system_admin") is False
         ):
