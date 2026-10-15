@@ -336,7 +336,9 @@ app.add_typer(db_app, name="db")
 
 
 @db_app.command("upgrade")
-def db_upgrade() -> None:
+def db_upgrade(
+    target: str = typer.Option("head", envvar="ONTOCURATOR_MIGRATE_TARGET"),
+) -> None:
     """Upgrade the schema to this version, as the schema owner.
 
     Reads ONTOCURATOR_MIGRATION_DATABASE_URL and the password from
@@ -346,8 +348,10 @@ def db_upgrade() -> None:
     from ontocurator.storage.schema import upgrade
 
     try:
-        head = upgrade(database_url(prefix="ONTOCURATOR_MIGRATION_DATABASE"))
-    except SettingsError as exc:
+        head = upgrade(
+            database_url(prefix="ONTOCURATOR_MIGRATION_DATABASE"), target=target
+        )
+    except (SettingsError, ValueError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"Database schema is at revision {head}.")

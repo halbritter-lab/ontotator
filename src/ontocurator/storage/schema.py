@@ -42,13 +42,27 @@ def current_revision(connection: Connection) -> str | None:
     return context.get_current_revision()
 
 
-def upgrade(url: str | URL) -> str:
-    """Upgrade to head as the schema owner and return the head revision."""
+def upgrade(url: str | URL, target: str = "head") -> str:
+    """Upgrade forward to an exact revision (or head) as the schema owner."""
+    scripts = ScriptDirectory.from_config(alembic_config())
+    revisions = {revision.revision for revision in scripts.walk_revisions()}
+    resolved = head_revision() if target == "head" else target
+    if resolved not in revisions:
+        raise ValueError("Migration target must be head or an exact known revision")
     engine = create_engine(url)
     try:
         with engine.begin() as conn:
             conn.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": UPGRADE_LOCK})
-            command.upgrade(alembic_config(conn), "head")
+            current = current_revision(conn)
+            ancestors = {
+                revision.revision
+                for revision in scripts.iterate_revisions(resolved, "base")
+            }
+            if current is not None and current not in ancestors:
+                raise ValueError(
+                    "Migration target must move forward from the current revision"
+                )
+            command.upgrade(alembic_config(conn), resolved)
     finally:
         engine.dispose()
-    return head_revision()
+    return resolved

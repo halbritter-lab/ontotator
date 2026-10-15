@@ -44,7 +44,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    ports: ["127.0.0.1:55432:5432"]
+    ports: ["127.0.0.1:${ONTOCURATOR_DEV_PG_PORT:-55432}:5432"]
     networks: [backend]
 
   migrate:
@@ -55,6 +55,7 @@ services:
     restart: "no"
     environment:
       ONTOCURATOR_ENV: development
+      ONTOCURATOR_MIGRATE_TARGET: ${ONTOCURATOR_MIGRATE_TARGET:-head}
       ONTOCURATOR_MIGRATION_DATABASE_URL: postgresql://ontocurator_owner:deadbeef0123456789abcdef01234567@postgres:5432/ontocurator
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -79,7 +80,7 @@ services:
     command: [python, -m, uvicorn, ontocurator.api.server:app_from_env, --factory, --host, 0.0.0.0, --port, "8000", --workers, "2", --no-proxy-headers]
     environment:
       ONTOCURATOR_ENV: development
-      ONTOCURATOR_PUBLIC_ORIGIN: http://127.0.0.1:8000
+      ONTOCURATOR_PUBLIC_ORIGIN: http://127.0.0.1:${ONTOCURATOR_DEV_PORT:-8000}
       ONTOCURATOR_DATABASE_URL: postgresql://ontocurator_app:cafebabe0123456789abcdef01234567@postgres:5432/ontocurator
       ONTOCURATOR_DATA_DIR: /data
       # DEVELOPMENT ONLY: admin / development-only-password (Argon2id policy).
@@ -98,7 +99,7 @@ services:
     cpus: 2.0
     pids_limit: 256
     stop_grace_period: 35s
-    ports: ["127.0.0.1:8000:8000"]
+    ports: ["127.0.0.1:${ONTOCURATOR_DEV_PORT:-8000}:8000"]
     networks: [edge, backend]
 
 volumes:
