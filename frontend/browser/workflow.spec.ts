@@ -14,7 +14,7 @@ const importFixture = (page: Page, annotator: string) => importPackage(page, "",
 
 test("first run: log in, import from the guide, open a case without typing initials", async ({ page }) => {
   // Show the dashboard as a fresh installation sees it (no packages yet).
-  await page.route("**/api/v1/packages", (route) =>
+  await page.route("**/api/v1/projects", (route) =>
     route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback(),
   );
   await loginAs(page, "first-run");
@@ -23,7 +23,7 @@ test("first run: log in, import from the guide, open a case without typing initi
   await expect(guide).toContainText("Import work package (.zip)");
   await expect(guide).not.toContainText(/initials/i);
   await expect(page.locator("#mode-select")).toHaveCount(0);
-  await page.unroute("**/api/v1/packages");
+  await page.unroute("**/api/v1/projects");
 
   const fixture = await page.request.get("/__synthetic_fixture__");
   const chooser = page.waitForEvent("filechooser");

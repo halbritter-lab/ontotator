@@ -5,7 +5,12 @@
 
 import type { components } from "./generated";
 
-export type PackageManifest = components["schemas"]["PackageManifest"];
+/** The manifest an upload answers with; the contract leaves it untyped. */
+export interface PackageManifest {
+  package_id?: string;
+  document_order?: string[];
+  [key: string]: unknown;
+}
 export type DocumentSummary = components["schemas"]["DocumentSummary"];
 export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
@@ -25,7 +30,6 @@ export type TreeOpenResponse = components["schemas"]["TreeOpenResponse"];
 export type TreeNodeRequest = components["schemas"]["TreeNodeRequest"];
 export type TreeNodeResponse = components["schemas"]["TreeNodeResponse"];
 export type AxisDefinition = components["schemas"]["AxisDefinition"];
-export type AxesConfig = components["schemas"]["AxesConfig"];
 export type AxesValues = Record<string, string | null>;
 export type Axes = AxesValues;
 export type LayerDefinition = components["schemas"]["LayerDefinition"];
@@ -34,7 +38,7 @@ export type AnnotationTypeDefinition = components["schemas"]["AnnotationTypeDefi
 export type OntologyDefinition = components["schemas"]["OntologyDefinition"];
 export type Preferences = components["schemas"]["Preferences"];
 export type PreferencesUpdate = components["schemas"]["PreferencesUpdate"];
-export type EffectiveSettings = components["schemas"]["EffectiveSettings"];
+export type ProjectSummary = components["schemas"]["ProjectSummary"];
 /** The logged-in user; `csrf_token` goes back in `X-CSRF-Token` with every write. */
 export type CurrentUser = components["schemas"]["CurrentUser"];
 export type TermLookup = { layer_id: string; term_id: string };
@@ -302,11 +306,6 @@ export class ApiClient {
     );
   }
 
-  /** Presets of this installation (ontocurator-settings.json). */
-  async getSettings(): Promise<EffectiveSettings> {
-    return this.request<EffectiveSettings>("/api/v1/settings", { method: "GET" });
-  }
-
   async getPreferences(): Promise<Preferences> {
     return this.request<Preferences>("/api/v1/preferences", { method: "GET" });
   }
@@ -319,8 +318,12 @@ export class ApiClient {
     });
   }
 
-  async listPackages(): Promise<PackageManifest[]> {
-    return this.request<PackageManifest[]>("/api/v1/packages", {
+  /**
+   * The projects the logged-in user can see, with their roles and working
+   * modes. Keeps its name until the T3 rename (index D-e).
+   */
+  async listPackages(): Promise<ProjectSummary[]> {
+    return this.request<ProjectSummary[]>("/api/v1/projects", {
       method: "GET",
     });
   }

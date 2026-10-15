@@ -13,7 +13,6 @@ const jsonResponse = (status: number, body: unknown) => ({
 const notLoggedIn = () => new AuthError("Log in to continue.", undefined, "NOT_AUTHENTICATED", 401);
 
 const oneCaseServer = () => {
-  vi.spyOn(api, "getSettings").mockResolvedValue({ allowed_modes: ["independent", "review", "assisted"], default_mode: "independent" } as any);
   vi.spyOn(api, "getPreferences").mockResolvedValue({ mode_by_package: {} } as any);
   vi.spyOn(api, "listOntologies").mockResolvedValue([]);
   vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);

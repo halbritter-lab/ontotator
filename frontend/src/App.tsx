@@ -6,7 +6,7 @@ import {
   type CurrentUser,
   type DocumentSummary,
   type OpenWorkspaceResponse,
-  type PackageManifest,
+  type ProjectSummary,
   type OntologyInfo,
 } from "./api/client";
 import type { components } from "./api/generated";
@@ -60,17 +60,21 @@ const isMode = (value: unknown): value is WorkspaceMode =>
 
 const ALL_MODES: WorkspaceMode[] = ["independent", "review", "assisted"];
 
-/** Presets of a preconfigured installation (ontocurator-settings.json). */
-export interface AppSettings {
-  allowedModes: WorkspaceMode[];
-  defaultMode: WorkspaceMode;
-  openPackage: string | null;
-}
-const DEFAULT_SETTINGS: AppSettings = {
-  allowedModes: ALL_MODES,
-  defaultMode: "independent",
-  openPackage: null,
+/**
+ * The working modes the user's roles give in a project. A project without the
+ * field (an older server or test mock) allows every mode.
+ */
+const modesOf = (project: ProjectSummary | undefined): WorkspaceMode[] => {
+  if (!project) return ALL_MODES;
+  if (!Array.isArray(project.allowed_modes)) return ALL_MODES;
+  return project.allowed_modes.filter(isMode);
 };
+
+/** "Name (key)", or the key alone when the project has no name of its own. */
+const projectLabel = (project: ProjectSummary) =>
+  project.name && project.name !== project.package_id
+    ? `${project.name} (${project.package_id})`
+    : project.package_id;
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -99,7 +103,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const ontologyInputRef = useRef<HTMLInputElement>(null);
   const missingOntologyInputRef = useRef<HTMLInputElement>(null);
 
-  const [packages, setPackages] = useState<PackageManifest[]>([]);
+  const [packages, setPackagesState] = useState<ProjectSummary[]>([]);
   const [packagesLoaded, setPackagesLoaded] = useState(false);
   const [selectedPackageId, setSelectedPackageIdState] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
@@ -112,18 +116,23 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const [roundSelection, setRoundSelection] = useState<{ docId: string; rounds: string[] } | null>(null);
   const [selectedRound, setSelectedRound] = useState("");
   const [mode, setMode] = useState<WorkspaceMode>("independent");
-  const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   // Async flows (start-up) must see current values, not stale closures.
   const annotatorRef = useRef(annotatorId);
   annotatorRef.current = annotatorId;
   const selectedPackageRef = useRef<string | null>(null);
   const modeByPackageRef = useRef<Record<string, WorkspaceMode>>({});
-  const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS);
+  const packagesRef = useRef<ProjectSummary[]>([]);
+  const setPackages = (list: ProjectSummary[]) => {
+    packagesRef.current = list;
+    setPackagesState(list);
+  };
   const setSelectedPackageId = (id: string | null) => {
     selectedPackageRef.current = id;
     setSelectedPackageIdState(id);
   };
+  const modesOfPackage = (pkgId: string | null) =>
+    modesOf(packagesRef.current.find((p) => p.package_id === pkgId));
 
   // Dashboard filter & search
   const [statusFilter, setStatusFilter] = useState<"all" | "not_started" | "in_progress" | "completed">("all");
@@ -158,26 +167,6 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
       setOntologies(list);
     } catch {
       // Ignored if API not ready
-    }
-  };
-
-  /** Installation presets; older servers without the endpoint keep the defaults. */
-  const loadSettings = async () => {
-    try {
-      const raw = await api.getSettings();
-      const allowed = (raw?.allowed_modes ?? []).filter(isMode);
-      const allowedModes = allowed.length > 0 ? allowed : ALL_MODES;
-      const next: AppSettings = {
-        allowedModes,
-        defaultMode: isMode(raw?.default_mode) && allowedModes.includes(raw.default_mode)
-          ? raw.default_mode
-          : allowedModes[0],
-        openPackage: raw?.open_package || null,
-      };
-      settingsRef.current = next;
-      setSettingsState(next);
-    } catch {
-      // Keep the defaults (session problems are reported by the other requests).
     }
   };
 
@@ -216,8 +205,9 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   // Selecting a package never touches review inputs (blinding): it only lists cases.
   const handleSelectPackage = async (pkgId: string) => {
     const stored = modeByPackageRef.current[pkgId];
-    const { allowedModes, defaultMode } = settingsRef.current;
-    const nextMode: WorkspaceMode = isMode(stored) && allowedModes.includes(stored) ? stored : defaultMode;
+    const allowedModes = modesOfPackage(pkgId);
+    const nextMode: WorkspaceMode =
+      isMode(stored) && allowedModes.includes(stored) ? stored : (allowedModes[0] ?? "independent");
     setDocuments([]);
     setSelectedPackageId(pkgId);
     setSelectedDocId(null);
@@ -232,16 +222,15 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
       setPackages(list);
       setPackagesLoaded(true);
       const preferred = preferredPackageId && list.some((p) => p.package_id === preferredPackageId) ? preferredPackageId : null;
+      // The project selected last, otherwise the first (newest).
       const current = selectedPackageRef.current;
-      const preset = settingsRef.current.openPackage;
       const next = preferred
         ?? (current && list.some((p) => p.package_id === current) ? current : null)
-        ?? (preset && list.some((p) => p.package_id === preset) ? preset : null)
         ?? list[0]?.package_id
         ?? null;
       return next ? await handleSelectPackage(next) : null;
     } catch (err: unknown) {
-      reportError("Error loading packages", err);
+      reportError("Error loading projects", err);
       return null;
     }
   };
@@ -253,7 +242,6 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
       annotatorRef.current = me?.pseudonym ?? "";
       setFetchedUser(me);
     }
-    await loadSettings();
     await loadPreferences();
     await loadPackages();
     void loadOntologies();
@@ -266,7 +254,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   }, []);
 
   const handleChangeMode = (nextMode: WorkspaceMode) => {
-    if (!settingsRef.current.allowedModes.includes(nextMode)) return;
+    if (!modesOfPackage(selectedPackageRef.current).includes(nextMode)) return;
     setMode(nextMode);
     if (selectedPackageId) {
       modeByPackageRef.current = { ...modeByPackageRef.current, [selectedPackageId]: nextMode };
@@ -433,6 +421,8 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const completedCount = documents.filter((d) => d.status === "completed").length;
 
   const hasPackages = packages.length > 0;
+  const allowedModes = modesOf(packages.find((p) => p.package_id === selectedPackageId));
+  const noWorkingRole = selectedPackageId !== null && allowedModes.length === 0;
   const showGuide = packagesLoaded && !hasPackages;
 
   const roundSelectionDialog = (
@@ -692,7 +682,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
             >
               <div className="form-group" style={{ margin: 0 }}>
                 <label htmlFor="package-select" className="form-label" style={{ marginBottom: 4 }}>
-                  Work package
+                  Project
                 </label>
                 <select
                   id="package-select"
@@ -702,14 +692,14 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
                 >
                   {packages.map((pkg) => (
                     <option key={pkg.package_id} value={pkg.package_id}>
-                      {pkg.package_id} {pkg.ontology?.release ? `(Release: ${pkg.ontology.release})` : ""}
+                      {projectLabel(pkg)}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
-                {settings.allowedModes.length === 1 ? (
+                {noWorkingRole ? null : allowedModes.length === 1 ? (
                   <>
                     <div className="form-label" style={{ marginBottom: 4 }}>
                       Working mode
@@ -717,7 +707,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
                     <div className="fixed-mode" data-testid="fixed-mode">
                       {modeLabels[mode]}
                     </div>
-                    <div className="field-hint">{modeExplanations[mode]} Set for this installation.</div>
+                    <div className="field-hint">{modeExplanations[mode]} Set by your role in this project.</div>
                   </>
                 ) : (
                   <>
@@ -730,7 +720,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
                       value={mode}
                       onChange={(e) => handleChangeMode(e.target.value as WorkspaceMode)}
                     >
-                      {settings.allowedModes.map((m) => (
+                      {allowedModes.map((m) => (
                         <option key={m} value={m} style={m === "assisted" ? { display: "none" } : undefined}>
                           {modeLabels[m]}
                         </option>
@@ -759,7 +749,11 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
             </div>
 
             {/* Hero: selected case (defaults to the case to continue) with the one primary action */}
-            {heroDoc && (
+            {noWorkingRole ? (
+              <div className="dashboard-hero" role="status" data-testid="no-working-role">
+                You have no working role in this project.
+              </div>
+            ) : heroDoc && (
               <div className="dashboard-hero">
                 <div>
                   <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)", fontWeight: 700 }}>

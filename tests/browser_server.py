@@ -2,19 +2,26 @@
 
 import hashlib
 import io
+import json
 import os
 import sys
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
 from fastapi import Query, Request
 from fastapi.responses import Response
 from pg_harness import database_url_for
+from sqlalchemy import select
+from starlette.concurrency import run_in_threadpool
+from starlette.middleware.base import RequestResponseEndpoint
 
 from ontocurator.api.app import create_app
 from ontocurator.auth.accounts import AccountService
 from ontocurator.auth.audit import Actor
+from ontocurator.authz.memberships import grant_roles
+from ontocurator.authz.policy import ROLES
 from ontocurator.config import AppConfig
 from ontocurator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
 from ontocurator.domain.documents import (
@@ -37,8 +44,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from ontocurator.auth.sessions import Principal  # noqa: E402
 from ontocurator.packages.models import PackageManifest, ValidatedPackage  # noqa: E402
 from ontocurator.packages.writer import PackageWriter  # noqa: E402
+from ontocurator.storage.tables import ProjectRow  # noqa: E402
 from tests.layered_fixtures import HP_DIGEST, make_layered_package  # noqa: E402
 
 ONTOLOGY = ROOT / "tests/fixtures/hp.json"
@@ -258,4 +267,51 @@ if __name__ == "__main__":
             }
 
         app.router.routes.insert(0, app.router.routes.pop())
+
+        def join_project(principal: Principal, project_key: str) -> None:
+            """Every role in the project, without ending the browser's session."""
+            with app.state.repo.db.transaction() as conn:
+                project_id = conn.execute(
+                    select(ProjectRow.id).where(ProjectRow.project_key == project_key)
+                ).scalar_one()
+                grant_roles(
+                    conn,
+                    Actor.cli(),
+                    project_id,
+                    principal.user_id,
+                    principal.username,
+                    ROLES,
+                    datetime.now(UTC),
+                )
+
+        @app.middleware("http")
+        async def uploader_joins_the_project(
+            request: Request, call_next: RequestResponseEndpoint
+        ) -> Response:
+            """A test user who uploads a package works in its project (T2c).
+
+            The server makes only the creator of a new project a member; the
+            specs share one server, so their users also upload projects that
+            another spec created first.
+            """
+            response = await call_next(request)
+            if (
+                request.method != "POST"
+                or request.url.path != "/api/v1/packages"
+                or response.status_code != 200
+            ):
+                return response
+            body = b"".join(
+                [chunk async for chunk in response.body_iterator]  # type: ignore[attr-defined]
+            )
+            principal = getattr(request.state, "principal", None)
+            if isinstance(principal, Principal):
+                key = json.loads(body)["package_id"]
+                await run_in_threadpool(join_project, principal, key)
+            return Response(
+                body,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+            )
+
         uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")

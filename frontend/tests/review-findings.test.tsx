@@ -115,10 +115,9 @@ afterEach(() => {
 });
 
 describe("A1/A7: dashboard blinding, identity and persistence", () => {
-  it("opens a zero-proposal case in a review-only distribution without constructing fresh targets", async () => {
+  it("opens a zero-proposal case for a review-only role without constructing fresh targets", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "getSettings").mockResolvedValue({ allowed_modes: ["review"], default_mode: "review" } as any);
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", allowed_modes: ["review"] }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue([{ ...docs[0], has_review_inputs: false }]);
     const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
     const view = reviewView();
@@ -135,8 +134,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
 
   it("requires and sends explicit round selection when resuming is ambiguous", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "getSettings").mockResolvedValue({ allowed_modes: ["review"], default_mode: "review" } as any);
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", allowed_modes: ["review"] }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     const open = vi.spyOn(api, "openWorkspace")
       .mockRejectedValueOnce(new ApiError(422, "Select the review round to resume", "AMBIGUOUS_REVIEW_ROUND", { rounds: ["round-a", "round-b"] } as any))
