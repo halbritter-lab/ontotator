@@ -12,8 +12,9 @@ from alembic import command
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from layered_fixtures import make_layered_package
-from pg_harness import database_url_for, unmigrated_database_url
-from sqlalchemy import create_engine, insert, select
+from pg_harness import database_for, database_url_for, unmigrated_database_url
+from sqlalchemy import create_engine, event, insert, select
+from t1_fixtures import HP_PATH, HP_SHA, create_project
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
@@ -61,6 +62,113 @@ def test_readyz_fails_while_ontologies_load(app: FastAPI) -> None:
         "ok": False,
         "checks": {"database": True, "schema": True, "ontologies": False},
     }
+
+
+@pytest.mark.parametrize("blob", ["valid", "missing", "corrupt"])
+def test_startup_readiness_requires_usable_persisted_pin(
+    tmp_path: Path, blob: str
+) -> None:
+    db = database_for(tmp_path / "editor.db", data_dir=tmp_path)
+    create_project(db)
+    path = db.blobs.path(HP_SHA)
+    if blob == "missing":
+        path.unlink()
+    elif blob == "corrupt":
+        path.write_bytes(b"changed bytes")
+    application = create_app(AppConfig(workspace_dir=tmp_path))
+    assert application.state.ontologies_ready.wait(10)
+    with TestClient(application) as client:
+        assert client.get("/livez").status_code == 200
+        response = client.get("/readyz")
+        assert response.status_code == (200 if blob == "valid" else 503)
+        assert response.json() == {
+            "ok": blob == "valid",
+            "checks": {
+                "database": True,
+                "schema": True,
+                "ontologies": blob == "valid",
+            },
+        }
+        if blob != "valid":
+            path.write_bytes(HP_PATH.read_bytes())
+            time.sleep(1.05)
+            assert client.get("/readyz").status_code == 200
+
+
+@pytest.mark.parametrize("initially_missing", [False, True])
+def test_readiness_loads_cli_hot_added_pin_and_recovers(
+    app: FastAPI, initially_missing: bool
+) -> None:
+    from ontocurator.ontology.service import OntologyService
+
+    # A CLI process has a separate registry; it does not warm this worker.
+    create_project(app.state.repo.db)
+    path = app.state.repo.db.blobs.path(HP_SHA)
+    if initially_missing:
+        path.unlink()
+    registry = app.state.ontology_registry
+    assert registry.services() == []
+    with TestClient(app) as client:
+        assert client.get("/readyz").status_code == (503 if initially_missing else 200)
+        if initially_missing:
+            path.write_bytes(HP_PATH.read_bytes())
+            time.sleep(1.05)
+            assert client.get("/readyz").status_code == 200
+        assert [sha for sha, _ in registry.services()] == [HP_SHA]
+        # Readiness uses the loaded object, never rehashes or rebuilds it.
+        with patch.object(
+            OntologyService, "load", side_effect=AssertionError("reload")
+        ):
+            time.sleep(1.05)
+            assert client.get("/readyz").status_code == 200
+
+
+def test_cold_pin_load_releases_health_connection_and_shares_deadline(
+    app: FastAPI,
+) -> None:
+    from ontocurator.api import health
+    from ontocurator.ontology.service import OntologyService
+
+    create_project(app.state.repo.db)
+    started = threading.Event()
+    release = threading.Event()
+    active_connections: list[object] = []
+    original_load = OntologyService.load
+
+    def health_engine(*args, **kwargs):  # type: ignore[no-untyped-def]
+        engine = create_engine(*args, **kwargs)
+        event.listen(
+            engine, "checkout", lambda *args: active_connections.append(object())
+        )
+        event.listen(engine, "checkin", lambda *args: active_connections.pop())
+        return engine
+
+    def slow_load(*args, **kwargs):  # type: ignore[no-untyped-def]
+        assert not active_connections
+        started.set()
+        assert release.wait(10)
+        return original_load(*args, **kwargs)
+
+    with (
+        patch.object(health, "create_engine", side_effect=health_engine),
+        patch.object(OntologyService, "load", side_effect=slow_load) as load,
+        TestClient(app) as client,
+        ThreadPoolExecutor(max_workers=1) as requests,
+    ):
+        first = requests.submit(client.get, "/readyz")
+        try:
+            assert started.wait(5)
+            assert client.get("/livez").status_code == 200
+            assert first.result(timeout=3).status_code == 503
+            assert client.get("/readyz").status_code == 503
+            assert load.call_count == 1
+        finally:
+            release.set()
+        deadline = time.monotonic() + 5
+        while client.get("/readyz").status_code != 200:
+            assert time.monotonic() < deadline
+            time.sleep(0.05)
+        assert load.call_count == 1
 
 
 @pytest.mark.parametrize("pinned", [True, False])
