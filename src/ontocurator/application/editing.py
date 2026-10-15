@@ -27,7 +27,7 @@ from ontocurator.domain.documents import (
     snapshot_evidence,
     validate_segments,
 )
-from ontocurator.domain.errors import AccessDenied, DomainError
+from ontocurator.domain.errors import AccessDenied, DomainError, RevisionConflict
 from ontocurator.domain.profiles import (
     TaskProfile,
     resolve_layer,
@@ -37,6 +37,7 @@ from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
+from ontocurator.projects.runtime import project_state, require_state
 from ontocurator.storage.repository import Repository
 
 
@@ -291,6 +292,8 @@ class EditingService:
                     "IDENTITY_MISMATCH",
                     "A human annotation is attributed to the workspace's annotator.",
                 )
+        with self.repo.db.transaction() as conn:
+            prepared_state = project_state(conn, key.project_key)
         doc = self.repo.get_document(key.project_key, key.document_id)
         if doc is None:
             raise DomainError(
@@ -307,9 +310,18 @@ class EditingService:
             )
 
         services: dict[str, OntologyService | Exception] = {}
+        preparation_error: RevisionConflict | None = None
         if isinstance(cmd, (CreateAnnotationCommand, SetTermCommand)):
             if self.registry is not None:
-                self.registry.ensure_package_conditions(self.repo, key.project_key)
+                try:
+                    self.registry.ensure_package_conditions(self.repo, key.project_key)
+                except RevisionConflict as exc:
+                    # A known receipt must still replay if capture raced a
+                    # structural edit. Reject fresh commands under the lock.
+                    preparation_error = exc
+                with self.repo.db.transaction() as conn:
+                    conditions_state = project_state(conn, key.project_key)[1]
+                prepared_state = (prepared_state[0], conditions_state)
             # Set-term's layer comes from the locked draft. Resolve all editable
             # layers first rather than trusting an unlocked draft read. Keep
             # strong references so LRU eviction cannot cause a build in operation.
@@ -382,7 +394,14 @@ class EditingService:
                 self.repo.save_search_event(event)
             return result
 
-        result = self.repo.run_mutation(key, envelope, operation)
+        result = self.repo.run_mutation(
+            key,
+            envelope,
+            operation,
+            before_operation=lambda conn: require_state(
+                conn, key.project_key, prepared_state, preparation_error
+            ),
+        )
         if not isinstance(result, Draft):
             raise ValueError(f"Expected Draft from run_mutation, got {type(result)}")
         return result

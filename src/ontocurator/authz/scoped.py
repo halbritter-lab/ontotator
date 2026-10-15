@@ -217,9 +217,13 @@ class ScopedRepository(Repository):
         project_key: str,
         conditions: list[SearchCondition],
         resources: dict[str, bytes],
+        *,
+        expected_structure: str | None = None,
     ) -> list[SearchCondition]:
         self._visible(project_key)
-        return super().capture_search_conditions(project_key, conditions, resources)
+        return super().capture_search_conditions(
+            project_key, conditions, resources, expected_structure=expected_structure
+        )
 
     def get_embedded_files(self, project_key: str) -> dict[str, bytes]:
         self._visible(project_key)
@@ -314,9 +318,13 @@ class ScopedRepository(Repository):
         key: WorkspaceKey,
         envelope: MutationEnvelope,
         operation: Callable[[Draft], Draft | Submission],
+        *,
+        before_operation: Callable[[Connection], None] | None = None,
     ) -> Draft | Submission:
         self._visible(key.project_key)
-        return super().run_mutation(key, envelope, operation)
+        return super().run_mutation(
+            key, envelope, operation, before_operation=before_operation
+        )
 
     def get_document_status(
         self,

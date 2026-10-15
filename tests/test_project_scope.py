@@ -246,7 +246,9 @@ def test_membership_changes_are_audited_and_end_sessions(db: Database) -> None:
     # Nothing new: no audit row, the session stays.
     memberships.add(ADMIN, "A", "alice", ["lead"])
     assert sessions.resolve(token) is not None
-    assert memberships.remove(ADMIN, "A", "alice", ["lead"]) == {"annotator"}
+    # Removing the last lead is an administrator exception; the CLI actor
+    # represents the installation operator, unlike this fixture's test actor.
+    assert memberships.remove(Actor.cli(), "A", "alice", ["lead"]) == {"annotator"}
     assert sessions.resolve(token) is None
     assert memberships.remove(ADMIN, "A", "alice") == frozenset()
     with db.transaction() as conn:

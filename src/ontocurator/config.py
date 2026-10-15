@@ -40,6 +40,14 @@ class AppConfig(BaseModel):
     # Matched lower-case, IDN names in punycode (as browsers send them).
     # None: every host (tests); `serve` always sets them.
     trusted_hosts: tuple[str, ...] | None = None
+    max_ontology_bytes: int = 300 * 1024 * 1024
+
+    @field_validator("max_ontology_bytes")
+    @classmethod
+    def _positive_ontology_limit(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("max_ontology_bytes must be positive")
+        return value
 
     @field_validator("public_origin")
     @classmethod
