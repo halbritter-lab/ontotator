@@ -57,6 +57,14 @@ class OntologyFile:
     uploaded_at: datetime
 
 
+@dataclass(frozen=True)
+class OntologyAddResult:
+    """A stored file and whether this call inserted its metadata row."""
+
+    ontology: OntologyFile
+    created: bool
+
+
 def _base_name(filename: str) -> str:
     return filename.replace("\\", "/").rsplit("/", 1)[-1]
 
@@ -107,10 +115,26 @@ class OntologyStore:
             return self.add_translation(actor, filename, data)[0]
         return self.add_ontology(actor, filename, data)[0]
 
+    def add_with_result(
+        self, actor: Actor, filename: str, data: bytes
+    ) -> OntologyAddResult:
+        """Add a file with its actual INSERT outcome, including conflict losers."""
+        if _base_name(filename).lower().endswith(".tsv"):
+            item, _translation, created = self._add_translation(actor, filename, data)
+        else:
+            item, _service, created = self._add_ontology(actor, filename, data)
+        return OntologyAddResult(item, created)
+
     def add_ontology(
         self, actor: Actor, filename: str, data: bytes
     ) -> tuple[OntologyFile, OntologyService]:
         """Parse, store and register an OBO Graph JSON ontology."""
+        item, service, _created = self._add_ontology(actor, filename, data)
+        return item, service
+
+    def _add_ontology(
+        self, actor: Actor, filename: str, data: bytes
+    ) -> tuple[OntologyFile, OntologyService, bool]:
         name = _base_name(filename)
         digest = hashlib.sha256(data).hexdigest()
         known = self._get(digest)
@@ -122,8 +146,9 @@ class OntologyStore:
         # built with them before another change starts.
         with self.registry.changing():
             service = self._parse(name, data, digest)
+            created = False
             if known is None:
-                known = self._insert(
+                known, created = self._insert_with_result(
                     actor,
                     data,
                     kind="ontology",
@@ -134,7 +159,7 @@ class OntologyStore:
                 )
             self.registry.register_path(self.db.blobs.path(digest))
             self.registry.register_service(service)
-        return known, service
+        return known, service, created
 
     def _parse(self, name: str, data: bytes, digest: str) -> OntologyService:
         loaded = self._loaded(digest)
@@ -170,6 +195,12 @@ class OntologyStore:
         The ontologies of its prefix are rebuilt with the file before anything
         is stored, so a file that cannot be used changes nothing.
         """
+        item, translation, _created = self._add_translation(actor, filename, data)
+        return item, translation
+
+    def _add_translation(
+        self, actor: Actor, filename: str, data: bytes
+    ) -> tuple[OntologyFile, StoredTranslation, bool]:
         name = _base_name(filename).lower()
         parsed = parse_translation_name(name)
         if parsed is None:
@@ -188,8 +219,9 @@ class OntologyStore:
         stored = TranslationUploadService(self.registry, self.translations_dir).store(
             io.BytesIO(data), name
         )
+        created = False
         if known is None:
-            known = self._insert(
+            known, created = self._insert_with_result(
                 actor,
                 data,
                 kind="translation",
@@ -198,7 +230,7 @@ class OntologyStore:
                 filename=name,
                 language=language,
             )
-        return known, stored
+        return known, stored, created
 
     def _insert(
         self,
@@ -211,6 +243,27 @@ class OntologyStore:
         filename: str,
         language: str | None,
     ) -> OntologyFile:
+        return self._insert_with_result(
+            actor,
+            data,
+            kind=kind,
+            prefix=prefix,
+            release=release,
+            filename=filename,
+            language=language,
+        )[0]
+
+    def _insert_with_result(
+        self,
+        actor: Actor,
+        data: bytes,
+        *,
+        kind: str,
+        prefix: str,
+        release: str | None,
+        filename: str,
+        language: str | None,
+    ) -> tuple[OntologyFile, bool]:
         digest = self.db.blobs.put(data)
         with self.db.transaction() as conn:
             conn.execute(
@@ -250,7 +303,7 @@ class OntologyStore:
             row = conn.execute(
                 select(*_FILE_COLUMNS).where(OntologyFileRow.sha256 == digest)
             ).one()
-            return _file(row)
+            return _file(row), inserted is not None
 
     # --- reading ----------------------------------------------------------
 

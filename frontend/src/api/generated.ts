@@ -194,6 +194,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/ontologies/upload-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Ontology Results */
+        post: operations["upload_ontology_results_api_v1_admin_ontologies_upload_results_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/progress": {
         parameters: {
             query?: never;
@@ -1087,6 +1104,11 @@ export interface components {
              */
             status: "open" | "in_progress" | "submitted" | "reopened";
         };
+        /** AssignmentOpenRequest */
+        AssignmentOpenRequest: {
+            /** Review Round Target Set Id */
+            review_round_target_set_id?: string | null;
+        };
         /** AssignmentOpenResponse */
         AssignmentOpenResponse: {
             /** Workspace Id */
@@ -1178,6 +1200,11 @@ export interface components {
         };
         /** Body_upload_ontologies_api_v1_admin_ontologies__post */
         Body_upload_ontologies_api_v1_admin_ontologies__post: {
+            /** Files[] */
+            "files[]": string[];
+        };
+        /** Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post */
+        Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post: {
             /** Files[] */
             "files[]": string[];
         };
@@ -1716,6 +1743,17 @@ export interface components {
             filenames: string[];
             /** Term Count */
             term_count: number;
+        };
+        /** OntologyUploadResult */
+        OntologyUploadResult: {
+            /** Filename */
+            filename: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "already_present";
+            ontology: components["schemas"]["AdminOntology"];
         };
         /**
          * OpenWorkspaceRequest
@@ -3019,7 +3057,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssignmentOpenRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -3305,6 +3347,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminOntology"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_ontology_results_api_v1_admin_ontologies_upload_results_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OntologyUploadResult"][];
                 };
             };
             /** @description Validation Error */

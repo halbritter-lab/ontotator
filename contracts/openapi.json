@@ -238,6 +238,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AssignmentOpenRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -627,6 +644,51 @@
                   },
                   "type": "array",
                   "title": "Response Upload Ontologies Api V1 Admin Ontologies  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/ontologies/upload-results": {
+      "post": {
+        "tags": [
+          "admin-ontologies"
+        ],
+        "summary": "Upload Ontology Results",
+        "operationId": "upload_ontology_results_api_v1_admin_ontologies_upload_results_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OntologyUploadResult"
+                  },
+                  "type": "array",
+                  "title": "Response Upload Ontology Results Api V1 Admin Ontologies Upload Results Post"
                 }
               }
             }
@@ -2885,6 +2947,24 @@
         ],
         "title": "Assignee"
       },
+      "AssignmentOpenRequest": {
+        "properties": {
+          "review_round_target_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Round Target Set Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AssignmentOpenRequest"
+      },
       "AssignmentOpenResponse": {
         "properties": {
           "workspace_id": {
@@ -3117,6 +3197,23 @@
           "files[]"
         ],
         "title": "Body_upload_ontologies_api_v1_admin_ontologies__post"
+      },
+      "Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post": {
+        "properties": {
+          "files[]": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files[]"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files[]"
+        ],
+        "title": "Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post"
       },
       "CodeResponse": {
         "properties": {
@@ -4316,6 +4413,32 @@
         ],
         "title": "OntologyTranslation",
         "description": "One language an ontology can be searched in besides English."
+      },
+      "OntologyUploadResult": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "added",
+              "already_present"
+            ],
+            "title": "Status"
+          },
+          "ontology": {
+            "$ref": "#/components/schemas/AdminOntology"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "status",
+          "ontology"
+        ],
+        "title": "OntologyUploadResult"
       },
       "OpenWorkspaceRequest": {
         "properties": {
