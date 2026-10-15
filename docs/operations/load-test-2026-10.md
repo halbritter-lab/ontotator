@@ -138,10 +138,64 @@ timeout/traceback matches. These observations support CPU saturation rather
 than recurrence of the baseline swap/pool collapse. They do not exclude brief
 unobserved waits or identify the specific function consuming CPU.
 
-The dashboard still loads complete text and constructs validated `Document`
-objects for metadata; lexical scoring and endpoint model/SQL conversions are
-other candidate costs. Their CPU contributions have not been measured. A
-separate temporary diagnostic build will collect sampled per-route CPU/wall and
-SQL/function profiles before another optimization decision. Instrumented
-latencies will be diagnostic only. P9 remains open; no resource, pool, workload
-or target relaxation has been used.
+At this checkpoint the dashboard's full-text `Document` construction, lexical
+scoring and endpoint model/SQL work were candidates without measured function
+attribution. The separate diagnostics below investigate them. Instrumented
+latencies are diagnostic only. P9 remains open; no resource, pool, workload or
+target relaxation has been used.
+
+## Diagnostic attribution and sparse-layout experiment
+
+The initial concurrent function-profiler attempts produced absent or impossible
+function timings and were rejected. They do not support an optimization claim.
+Their ignored drivers remain disabled and their original artifacts are retained.
+An alternative uses ordinary wall/thread-CPU clocks around twelve fixed sync
+boundaries, with same-thread child subtraction, bounded numeric output and
+concurrency/conservation checks. Independent local validation passed, including
+160 concurrent nested-router requests and all twelve boundaries.
+
+Diagnostic image `sha256:880cdd5440f8d2107c3af5058d40116d7b266f95da328dd87baed68b8e98fccb`
+inherits the unchanged `0d51f54` image above. Its own project used the same HPO,
+30 accounts, 1,000 documents and CPU/RAM limits. Seeding passed in 171.89 seconds;
+the 61.11-second warmup exited 1 on its latency targets. The strict diagnostic
+gate then stopped: one HTTP 400 request lacked an endpoint record, producing
+one invalid-record and one status-error count. It occurred at phase offset
+61.016 seconds, close to client shutdown; its cause is not established. The
+server log summary had zero ERROR/traceback/timeout matches. No separate measured
+diagnostic phase ran, and owned containers/volumes were removed.
+
+The other 1,261 completed HTTP 200 requests have finite, nonnegative timings and
+zero conservation/thread/exception counters. An explicitly labelled analysis of
+completed responses after phase offset 20 seconds excludes that HTTP 400 and
+the initial completion window. This is a short diagnostic slice, not acceptance:
+
+| Operation | Completed requests | Selected sync CPU ms/request | Largest exclusive selected stage |
+|---|---:|---:|---|
+| Search | 342 | 92.155 | Lexical search: 51.541 ms |
+| Open | 131 | 38.555 | SQL execution: 15.191 ms |
+| Write | 537 | 46.843 | SQL execution: 21.458 ms |
+| Dashboard | 65 | 87.632 | Full document load/construction: 42.955 ms |
+
+These boundaries omit async validation/serialization, background/native worker
+CPU and some transaction/fetch details. Inclusive parent/child times are not
+added together. Evidence is retained in
+`build/p9-stages/20261015-190912/`, including the failed gate and excluded status;
+the analysis does not turn that gate green.
+
+A further offline experiment used one Linux Python process and one profiler,
+with sequential lexical calls and no server/concurrent Python profilers. On the
+same real HPO, 24 fixed-seed substring queries took 0.835 seconds elapsed and
+0.835 seconds main-thread CPU; summed profiler self time was also 0.835 seconds.
+Twenty-four full sparse-layout conversions consumed 0.776 seconds, whereas
+argsort consumed 0.008 seconds. The CSR matrix had shape 44,814 by 71,657,
+3,041,487 nonzero values and 36,677,104 bytes of sparse storage.
+
+Converting the fitted matrix once to CSC preserves the existing sparse scoring
+operation while avoiding this full conversion per query. An in-memory probe
+returned exactly identical hit dictionaries, including scores, for all 24
+queries. One-time conversion took about 0.031 seconds and subsequent calls about
+0.029 seconds total. The before loop was profiled and the after loop was not;
+that ratio is not a controlled speedup measurement. Artifacts are under
+`build/p9-lexical-serial/`. A narrow source fix, regression tests, review and a
+fresh unchanged-workload P9 run are required before acceptance. No production
+latency or memory improvement is claimed from this experiment.
