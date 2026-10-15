@@ -83,3 +83,19 @@ matching captured resources, moves cold resolution before mutation transactions,
 and batches status facts while retaining authorization and status semantics.
 Focused regressions and review precede a rebuilt image and another full P9 run
 under the same limits. Until that measurement passes, P9 remains open.
+
+## Focused batch-query evidence
+
+The batch-status follow-up (`b1f5452`, reviewed and integrated separately) used
+SQLAlchemy `before_cursor_execute` around the real workspace listing against
+PostgreSQL. Fixture preparation and authentication are excluded from these
+counts. At 1,000 empty documents, independent and assisted listings each went
+from **5,001 to 5 executed statements**, and review listings with proposal
+presence from **6,001 to 6**. The new counts are also 5/6 at one document. A
+1,000-document fixture with populated revision-1 drafts executes 5 statements.
+
+Independent expected-status tests cover checked layers, draft content, later
+edits, multiple submission origins, imported workspace aliases and review
+rounds; scope tests cover project and user visibility. These focused checks
+establish the reduced query count and tested semantics. They do not establish
+latency, memory limits or full-workload acceptance.

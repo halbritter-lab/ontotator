@@ -303,13 +303,34 @@ class EditingService:
                 f"Workspace scope_id '{key.scope_id}' does not match expected '{scope.scope_id}'",
             )
 
-        if self.registry is not None and isinstance(
-            cmd, (CreateAnnotationCommand, SetTermCommand)
-        ):
-            self.registry.ensure_package_conditions(self.repo, key.package_id)
+        services: dict[str, OntologyService | Exception] = {}
+        if isinstance(cmd, (CreateAnnotationCommand, SetTermCommand)):
+            if self.registry is not None:
+                self.registry.ensure_package_conditions(self.repo, key.package_id)
+            # Set-term's layer comes from the locked draft. Resolve all editable
+            # layers first rather than trusting an unlocked draft read. Keep
+            # strong references so LRU eviction cannot cause a build in operation.
+            layers = scope.editable_layer_ids
+            if isinstance(cmd, CreateAnnotationCommand):
+                layers = []
+                if cmd.layer_id is not None:
+                    if cmd.layer_id in scope.editable_layer_ids:
+                        layers = [cmd.layer_id]
+                elif len(scope.editable_layer_ids) == 1:
+                    layers = scope.editable_layer_ids
+            for layer_id in layers:
+                try:
+                    services[layer_id] = self._get_service_for_layer(
+                        key.package_id, layer_id
+                    )
+                except Exception as exc:
+                    # Defer a resolution failure to the original validation
+                    # point. Receipt replay and revision/layer/type checks must
+                    # keep their precedence, and an unused layer cannot fail an edit.
+                    services[layer_id] = exc
 
         def operation(draft: Draft) -> Draft:
-            result = self._execute_edit(draft, cmd, doc, profile, scope)
+            result = self._execute_edit(draft, cmd, doc, profile, scope, services)
             if (
                 isinstance(cmd, (CreateAnnotationCommand, SetTermCommand))
                 and cmd.search_event_id
@@ -372,13 +393,14 @@ class EditingService:
         doc: Document,
         profile: TaskProfile,
         scope: TaskScope,
+        services: dict[str, OntologyService | Exception],
     ) -> Draft:
         if isinstance(cmd, CheckLayerCommand):
             return self._check_layer(draft, cmd, scope)
         if isinstance(cmd, CreateAnnotationCommand):
-            return self._create_annotation(draft, cmd, doc, profile, scope)
+            return self._create_annotation(draft, cmd, doc, profile, scope, services)
         if isinstance(cmd, SetTermCommand):
-            return self._set_term(draft, cmd, doc, profile, scope)
+            return self._set_term(draft, cmd, doc, profile, scope, services)
         if isinstance(cmd, SetAxesCommand):
             return self._set_axes(draft, cmd, doc, profile, scope)
         if isinstance(cmd, AttachMentionCommand):
@@ -414,8 +436,7 @@ class EditingService:
 
     def _validate_term_for_layer(
         self,
-        package_id: str,
-        layer_id: str,
+        service: OntologyService | Exception,
         term_id: str,
     ) -> str:
         """Reject obsolete/unknown terms; return the primary term ID.
@@ -423,7 +444,8 @@ class EditingService:
         Alternative (merged) IDs and case variants resolve to the primary ID,
         which is what gets stored.
         """
-        service = self._get_service_for_layer(package_id, layer_id)
+        if isinstance(service, Exception):
+            raise service
         status = service.validate_term(term_id)
         if status.status == "obsolete":
             hint = f"; use '{status.replaced_by}' instead" if status.replaced_by else ""
@@ -438,13 +460,15 @@ class EditingService:
             )
         return status.term_id
 
-    def _primary_term_id(self, package_id: str, layer_id: str, term_id: str) -> str:
+    def _primary_term_id(
+        self, service: OntologyService | Exception, term_id: str
+    ) -> str:
         """Primary ID for an alternative ID or case variant, without rejecting
         obsolete or unknown terms (adopted proposals may carry those)."""
         try:
-            status = self._get_service_for_layer(package_id, layer_id).validate_term(
-                term_id
-            )
+            if isinstance(service, Exception):
+                raise service
+            status = service.validate_term(term_id)
         except DomainError:
             return term_id
         return term_id if status.status == "unknown" else status.term_id
@@ -498,6 +522,7 @@ class EditingService:
         doc: Document,
         profile: TaskProfile,
         scope: TaskScope,
+        services: dict[str, OntologyService | Exception],
     ) -> Draft:
         target_layer = cmd.layer_id
         if target_layer is None:
@@ -538,13 +563,9 @@ class EditingService:
         if self._is_verified_adoption(draft, cmd, doc, target_layer):
             # Store the primary ID like a normal creation; provenance still
             # points at the adopted source annotation.
-            term_id = self._primary_term_id(
-                draft.key.package_id, target_layer, cmd.term_id
-            )
+            term_id = self._primary_term_id(services[target_layer], cmd.term_id)
         else:
-            term_id = self._validate_term_for_layer(
-                draft.key.package_id, target_layer, cmd.term_id
-            )
+            term_id = self._validate_term_for_layer(services[target_layer], cmd.term_id)
 
         if any(
             a.annotation.annotation_id == cmd.annotation_id for a in draft.annotations
@@ -619,6 +640,7 @@ class EditingService:
         doc: Document,
         profile: TaskProfile,
         scope: TaskScope,
+        services: dict[str, OntologyService | Exception],
     ) -> Draft:
         existing = next(
             (
@@ -640,9 +662,7 @@ class EditingService:
                 f"Annotation '{cmd.annotation_id}' belongs to reference layer '{layer_id}'",
             )
 
-        term_id = self._validate_term_for_layer(
-            draft.key.package_id, layer_id, cmd.term_id
-        )
+        term_id = self._validate_term_for_layer(services[layer_id], cmd.term_id)
         updated_ann = existing.annotation.model_copy(update={"term_id": term_id})
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [

@@ -101,26 +101,29 @@ class WorkspaceService:
         review proposals; callers must only request this for review mode.
         """
         docs = self.repo.list_documents(package_id)
+        if not docs:
+            return []
+        statuses = (
+            self.repo.get_document_statuses(package_id, annotator_id, mode)
+            if annotator_id and mode
+            else {}
+        )
+        review_documents = (
+            self.repo.review_input_document_ids(package_id)
+            if reveal_review_inputs
+            else set()
+        )
         summaries: list[DocumentSummary] = []
         for idx, d in enumerate(docs, start=1):
-            status: Literal["not_started", "in_progress", "completed"] = "not_started"
-            if annotator_id and mode:
-                status = self.repo.get_document_status(
-                    package_id, d.document_id, annotator_id, mode
-                )
             summaries.append(
                 DocumentSummary(
                     document_id=d.document_id,
                     language=d.language,
                     text_length=len(d.text),
                     position=idx,
-                    status=status,
+                    status=statuses.get(d.document_id, "not_started"),
                     has_review_inputs=(
-                        bool(
-                            self.repo.list_annotations_for_document(
-                                package_id, d.document_id
-                            )
-                        )
+                        d.document_id in review_documents
                         if reveal_review_inputs
                         else None
                     ),
