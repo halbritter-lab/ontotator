@@ -618,17 +618,18 @@ test.describe("ontology tree", () => {
         await expect(panel).toHaveCount(0);
       });
     }
-    // Annotation panel / tree, in px. The panel's content is 500 px high here: it scrolls
-    // on the low screens, fits exactly at 1080 and has its 40 % at 1440.
+    // Direction-C prototype metrics (Source Sans 3 and the compact case header).
+    // The panel's content is 501 px high: it scrolls on low screens, fits at 1080,
+    // and has its 40 % at 1440. The layout/visibility contracts above stay unchanged.
     expect(heights).toEqual([
-      "1025x720: 254/382",
-      "1100x700: 251/377",
-      "1280x720: 266/400",
-      "1440x900: 423/423",
-      "1599x900: 423/423",
-      "1600x900: 423/423",
-      "1920x1080: 500/526",
-      "2560x1440: 554/832",
+      "1025x720: 262/393",
+      "1100x700: 254/381",
+      "1280x720: 268/400",
+      "1440x900: 424/424",
+      "1599x900: 424/424",
+      "1600x900: 424/424",
+      "1920x1080: 501/527",
+      "2560x1440: 555/833",
     ]);
   });
 
