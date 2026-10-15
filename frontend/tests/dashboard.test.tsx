@@ -51,7 +51,7 @@ describe("Curation Dashboard Start Screen", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("ontocurator")).toBeDefined();
+      expect(screen.getByText("Ontocurator")).toBeDefined();
       const table = screen.getByRole("table");
       expect(within(table).getByText("doc-001")).toBeDefined();
       expect(within(table).getByText("doc-002")).toBeDefined();

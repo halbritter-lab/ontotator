@@ -10,6 +10,14 @@ import {
   type OntologyInfo,
 } from "./api/client";
 import type { components } from "./api/generated";
+import { AppShell } from "./ui/AppShell";
+import { Button } from "./ui/Button";
+import { Select } from "./ui/Select";
+import { TextInput } from "./ui/TextInput";
+import { DataTable } from "./ui/DataTable";
+import { StatusBadge } from "./ui/StatusBadge";
+import { InlineMessage } from "./ui/InlineMessage";
+import { EmptyState } from "./ui/EmptyState";
 import { Dialog } from "./ui/Dialog";
 import { CaseScreen } from "./app/CaseScreen";
 import { CaseErrorBoundary } from "./app/ErrorBoundary";
@@ -367,7 +375,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
     const currentDocId = activeWorkspace.view.document.document_id;
     const reload = () => openCase(currentDocId, { forceRemount: true, roundId: mode === "review" ? activeWorkspace.view.key.target_set_id : undefined });
     return (
-      <>
+      <AppShell user={user ?? null} density="reading" breadcrumb={[{ label: packages.find((p) => p.package_id === selectedPackageId)?.name || selectedPackageId || "Project" }, { label: `Case ${currentDocId}` }]}>
         <CaseErrorBoundary
           key={`${activeWorkspace.workspace_id}:${workspaceNonce}`}
           onBackToDashboard={() => { void closeWorkspace(); }}
@@ -388,316 +396,81 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
           />
         </CaseErrorBoundary>
         {roundSelectionDialog}
-      </>
+      </AppShell>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
+    <AppShell user={user ?? null} onLogout={onLogout}
+      breadcrumb={selectedPackageId ? [{ label: packages.find((p) => p.package_id === selectedPackageId)?.name || selectedPackageId }] : undefined}
+      actions={ontologyLabels.length > 0 && <span className="ontology-summary">Ontologies: {ontologyLabels.join(", ")}</span>}
+    >
       {roundSelectionDialog}
-      {/* App Header */}
-      <header className="app-header">
-        <div className="app-title" style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <span>ontocurator</span>
-          <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontWeight: 400 }}>
-            Clinical Curation Workbench
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {ontologyLabels.length > 0 && (
-            <span
-              style={{
-                fontSize: "0.78rem",
-                color: "var(--text-muted)",
-                background: "var(--surface-sunken)",
-                padding: "3px 8px",
-                borderRadius: 4,
-                whiteSpace: "nowrap",
-              }}
-            >
-              Ontologies: {ontologyLabels.join(", ")}
-            </span>
-          )}
-          {user && (
-            <span className="current-user" data-testid="current-user" title={`Logged in as ${user.username}`}>
-              {user.display_name} · {user.pseudonym}
-            </span>
-          )}
-          {user && onLogout && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onLogout}>
-              Log out
-            </button>
-          )}
-        </div>
-      </header>
-
-      {/* Main Dashboard View */}
       <div className="dashboard-container">
-        {error && (
-          <div
-            style={{
-              padding: "12px 16px",
-              background: "var(--danger-light)",
-              color: "var(--danger)",
-              borderRadius: "var(--radius)",
-              marginBottom: 20,
-              fontSize: "0.9rem",
-            }}
-          >
-            {error}
+        {error && <InlineMessage tone="error">{error}</InlineMessage>}
+        {showGuide && <section id="getting-started-title" className="getting-started" aria-label="Get started">
+          <EmptyState title="Get started">No projects are available to you yet. Ask an administrator to add you to a project.</EmptyState>
+        </section>}
+        {hasPackages && <>
+          <div className="dashboard-settings">
+            <Select id="package-select" label="Project" value={selectedPackageId ?? ""} onChange={(e) => { void handleSelectPackage(e.target.value); }}>
+              {packages.map((pkg) => <option key={pkg.package_id} value={pkg.package_id}>{projectLabel(pkg)}</option>)}
+            </Select>
+            {noWorkingRole ? null : allowedModes.length === 1 ? <div className="form-group">
+              <div className="form-label">Working mode</div>
+              <div className="fixed-mode" data-testid="fixed-mode">{modeLabels[mode]}</div>
+              <div className="field-hint">{modeExplanations[mode]} Set by your role in this project.</div>
+            </div> : <Select id="mode-select" label="Working mode" hint={modeExplanations[mode]} value={mode} onChange={(e) => handleChangeMode(e.target.value as WorkspaceMode)}>
+              {allowedModes.map((m) => <option key={m} value={m} hidden={m === "assisted"}>{modeLabels[m]}</option>)}
+            </Select>}
           </div>
-        )}
-
-        {showGuide && (
-          <section className="getting-started" aria-labelledby="getting-started-title">
-            <h2 id="getting-started-title">Get started</h2>
-            <p>No projects are available to you yet. Ask an administrator to add you to a project.</p>
-          </section>
-        )}
-
-        {hasPackages && (
-          <>
-            {/* Package and mode */}
-            <div
-              style={{
-                background: "var(--surface-raised)",
-                padding: "16px 20px",
-                borderRadius: "var(--radius)",
-                border: "1px solid var(--border)",
-                marginBottom: 20,
-                display: "grid",
-                gridTemplateColumns: "1.2fr 1fr",
-                gap: 16,
-                alignItems: "start",
-              }}
-            >
-              <div className="form-group" style={{ margin: 0 }}>
-                <label htmlFor="package-select" className="form-label" style={{ marginBottom: 4 }}>
-                  Project
-                </label>
-                <select
-                  id="package-select"
-                  className="form-select"
-                  value={selectedPackageId ?? ""}
-                  onChange={(e) => { void handleSelectPackage(e.target.value); }}
-                >
-                  {packages.map((pkg) => (
-                    <option key={pkg.package_id} value={pkg.package_id}>
-                      {projectLabel(pkg)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group" style={{ margin: 0 }}>
-                {noWorkingRole ? null : allowedModes.length === 1 ? (
-                  <>
-                    <div className="form-label" style={{ marginBottom: 4 }}>
-                      Working mode
-                    </div>
-                    <div className="fixed-mode" data-testid="fixed-mode">
-                      {modeLabels[mode]}
-                    </div>
-                    <div className="field-hint">{modeExplanations[mode]} Set by your role in this project.</div>
-                  </>
-                ) : (
-                  <>
-                    <label htmlFor="mode-select" className="form-label" style={{ marginBottom: 4 }}>
-                      Working mode
-                    </label>
-                    <select
-                      id="mode-select"
-                      className="form-select"
-                      value={mode}
-                      onChange={(e) => handleChangeMode(e.target.value as WorkspaceMode)}
-                    >
-                      {allowedModes.map((m) => (
-                        <option key={m} value={m} style={m === "assisted" ? { display: "none" } : undefined}>
-                          {modeLabels[m]}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="field-hint">{modeExplanations[mode]}</div>
-                  </>
-                )}
-              </div>
+          <div hidden>
+            <select id="doc-select" aria-label="Clinical Case (Document)" value={selectedDocId ?? ""} onChange={(e) => setSelectedDocId(e.target.value)}>
+              {documents.map((doc) => <option key={doc.document_id} value={doc.document_id}>Case {doc.position}: {doc.document_id}</option>)}
+            </select>
+          </div>
+          {noWorkingRole ? <div className="dashboard-hero" role="status" data-testid="no-working-role">You have no working role in this project.</div> : heroDoc && <section className="dashboard-hero" aria-label="Selected case">
+            <div className="dashboard-case-summary">
+              <h1>Case {heroDoc.position}: <span className="case-id">{heroDoc.document_id}</span></h1>
+              <p className="dashboard-resume">{heroDoc.status === "in_progress" ? "Continue where you left off" : "Selected case"}</p>
+              <div className="dashboard-case-meta">{heroDoc.language.toUpperCase()} • {heroDoc.text_length} chars • Status: <StatusBadge status={heroDoc.status}>{statusLabels[heroDoc.status] ?? heroDoc.status}</StatusBadge>{" • "}{modeLabels[mode]}</div>
             </div>
-
-            {/* Hidden fallback select for strict document test compatibility */}
-            <div style={{ display: "none" }}>
-              <select
-                id="doc-select"
-                aria-label="Clinical Case (Document)"
-                value={selectedDocId ?? ""}
-                onChange={(e) => setSelectedDocId(e.target.value)}
-              >
-                {documents.map((doc) => (
-                  <option key={doc.document_id} value={doc.document_id}>
-                    Case {doc.position}: {doc.document_id}
-                  </option>
-                ))}
-              </select>
+            <div className="dashboard-open">
+              <Button variant="primary" disabled={isOpening || !annotatorId} onClick={() => requestOpen(heroDoc.document_id)}>{isOpening ? "Opening..." : "Open case"}</Button>
+              {!annotatorId && <span className="field-hint">Log in to open cases.</span>}
             </div>
-
-            {/* Hero: selected case (defaults to the case to continue) with the one primary action */}
-            {noWorkingRole ? (
-              <div className="dashboard-hero" role="status" data-testid="no-working-role">
-                You have no working role in this project.
-              </div>
-            ) : heroDoc && (
-              <div className="dashboard-hero">
-                <div>
-                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--accent)", fontWeight: 700 }}>
-                    {heroDoc.status === "in_progress" ? "Continue where you left off" : "Selected case"}
-                  </div>
-                  <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text)", marginTop: 2 }}>
-                    Case {heroDoc.position}: <span style={{ fontFamily: "var(--font-mono)" }}>{heroDoc.document_id}</span>
-                  </div>
-                  <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: 3 }}>
-                    {heroDoc.language.toUpperCase()} • {heroDoc.text_length} chars • Status: <strong>{statusLabels[heroDoc.status] ?? heroDoc.status}</strong>
-                    {" • "}{modeLabels[mode]}
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ padding: "8px 18px", fontWeight: 600 }}
-                    disabled={isOpening || !annotatorId}
-                    onClick={() => requestOpen(heroDoc.document_id)}
-                  >
-                    {isOpening ? "Opening..." : "Open case"}
-                  </button>
-                  {!annotatorId && (
-                    <span className="field-hint">Log in to open cases.</span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Cases Data Table Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div className="dashboard-tabs">
-                <button
-                  type="button"
-                  className={`dashboard-tab ${statusFilter === "all" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("all")}
-                >
-                  All ({documents.length})
-                </button>
-                <button
-                  type="button"
-                  className={`dashboard-tab ${statusFilter === "not_started" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("not_started")}
-                >
-                  Open ({openCount})
-                </button>
-                <button
-                  type="button"
-                  className={`dashboard-tab ${statusFilter === "in_progress" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("in_progress")}
-                >
-                  In Progress ({inProgressCount})
-                </button>
-                <button
-                  type="button"
-                  className={`dashboard-tab ${statusFilter === "completed" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("completed")}
-                >
-                  Completed ({completedCount})
-                </button>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <input
-                  type="search"
-                  placeholder="Filter cases by ID..."
-                  className="form-control"
-                  style={{ width: 220, fontSize: "0.82rem", padding: "5px 10px" }}
-                  value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                />
-              </div>
+          </section>}
+          <div className="dashboard-table-controls">
+            <div className="dashboard-tabs">
+              {([
+                ["all", `All (${documents.length})`], ["not_started", `Open (${openCount})`],
+                ["in_progress", `In Progress (${inProgressCount})`], ["completed", `Completed (${completedCount})`],
+              ] as const).map(([filter, label]) => <button type="button" key={filter} className={`dashboard-tab ${statusFilter === filter ? "active" : ""}`} onClick={() => setStatusFilter(filter)}>{label}</button>)}
             </div>
-
-            {/* Cases Table: click selects, double-click or Enter opens */}
-            <table className="dashboard-table" aria-label="Clinical Cases">
-              <thead>
-                <tr>
-                  <th style={{ width: 48 }}>#</th>
-                  <th>Case ID</th>
-                  <th>Language</th>
-                  <th>Length</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDocuments.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: "center", color: "var(--text-muted)", padding: 24 }}>
-                      No cases found for the selected filter.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredDocuments.map((doc) => {
-                    const isSelected = doc.document_id === selectedDocId;
-                    return (
-                      <tr
-                        key={doc.document_id}
-                        className={isSelected ? "is-selected" : undefined}
-                        style={{ cursor: "pointer" }}
-                        tabIndex={0}
-                        aria-selected={isSelected}
-                        title="Click to select, double-click to open"
-                        onClick={() => setSelectedDocId(doc.document_id)}
-                        onDoubleClick={() => requestOpen(doc.document_id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            requestOpen(doc.document_id);
-                          } else if (e.key === " ") {
-                            e.preventDefault();
-                            setSelectedDocId(doc.document_id);
-                          }
-                        }}
-                      >
-                        <td style={{ fontWeight: 600, color: "var(--text-muted)" }}>{doc.position}</td>
-                        <td style={{ fontWeight: 600, fontFamily: "var(--font-mono)" }}>{doc.document_id}</td>
-                        <td>{doc.language.toUpperCase()}</td>
-                        <td>{doc.text_length.toLocaleString("en-US")} chars</td>
-                        <td>
-                          <span
-                            className="badge"
-                            style={{
-                              fontSize: "0.75rem",
-                              fontWeight: 600,
-                              backgroundColor:
-                                doc.status === "completed"
-                                  ? "var(--success-light)"
-                                  : doc.status === "in_progress"
-                                  ? "var(--accent-light)"
-                                  : "#f1f5f9",
-                              color:
-                                doc.status === "completed"
-                                  ? "var(--success)"
-                                  : doc.status === "in_progress"
-                                  ? "var(--accent)"
-                                  : "#64748b",
-                            }}
-                          >
-                            {statusLabels[doc.status] ?? doc.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </>
-        )}
+            <div className="dashboard-search"><TextInput id="case-filter" label="Filter cases by ID" type="search" placeholder="Filter cases by ID..." value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} /></div>
+          </div>
+          <DataTable label="Clinical Cases" className="dashboard-table" rows={filteredDocuments} rowKey={(doc) => doc.document_id}
+            empty={<div className="dashboard-empty">No cases found for the selected filter.</div>}
+            columns={[
+              { id: "position", header: "#", width: "3rem", cell: (doc) => <span className="case-position">{doc.position}</span> },
+              { id: "document", header: "Case ID", cell: (doc) => <span className="case-id">{doc.document_id}</span> },
+              { id: "language", header: "Language", cell: (doc) => doc.language.toUpperCase() },
+              { id: "length", header: "Length", cell: (doc) => `${doc.text_length.toLocaleString("en-US")} chars` },
+              { id: "status", header: "Status", cell: (doc) => <StatusBadge status={doc.status}>{statusLabels[doc.status] ?? doc.status}</StatusBadge> },
+            ]}
+            rowProps={(doc) => ({
+              selected: doc.document_id === selectedDocId, tabIndex: 0,
+              title: "Click to select, double-click to open",
+              onClick: () => setSelectedDocId(doc.document_id),
+              onDoubleClick: () => requestOpen(doc.document_id),
+              onKeyDown: (e) => {
+                if (e.key === "Enter") { e.preventDefault(); requestOpen(doc.document_id); }
+                else if (e.key === " ") { e.preventDefault(); setSelectedDocId(doc.document_id); }
+              },
+            })}
+          />
+        </>}
       </div>
-
-    </div>
+    </AppShell>
   );
 };

@@ -10,6 +10,8 @@ import {
 } from "../api/client";
 import { LoginScreen } from "./LoginScreen";
 
+import { InlineMessage } from "../ui/InlineMessage";
+
 type GateState =
   | { kind: "checking" }
   | { kind: "anonymous"; notice?: string }
@@ -135,7 +137,7 @@ export const AuthGate: React.FC = () => {
     return (
       <main className="session-lost" aria-busy="true" aria-label="Checking your session">
         <div className="session-lost-card">
-          <p className="session-lost-muted">Checking your session...</p>
+          <InlineMessage tone="info">Checking your session...</InlineMessage>
         </div>
       </main>
     );
@@ -151,11 +153,8 @@ export const AuthGate: React.FC = () => {
         <App key={user.username} user={user} onLogout={() => { void logout(); }} />
       </div>
       {notice && (
-        <div role="status" className="notice notice-info session-notice">
-          <span>{notice}</span>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setNoticeDismissed(true)} aria-label="Dismiss message">
-            ✕
-          </button>
+        <div className="session-notice">
+          <InlineMessage tone="info" onDismiss={() => setNoticeDismissed(true)}>{notice}</InlineMessage>
         </div>
       )}
       {state.kind === "expired" && (

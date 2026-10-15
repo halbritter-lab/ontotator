@@ -327,7 +327,7 @@ describe("the login gate", () => {
 
     logInThrough(await screen.findByRole("dialog", { name: "Log in to Ontocurator" }), "bob");
 
-    expect((await screen.findByTestId("current-user")).textContent).toBe("Bob · ann-0009");
+    await waitFor(() => expect(screen.getByTestId("current-user").textContent).toBe("Bob · ann-0009"));
     expect(screen.queryByRole("dialog", { name: "Log in to Ontocurator" })).toBeNull();
     expect(screen.queryByTestId("annotator-identity")).toBeNull();
     expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(1);

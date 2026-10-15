@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api, AuthError, type CurrentUser } from "../api/client";
 
+import { Button } from "../ui/Button";
+import { TextInput } from "../ui/TextInput";
+import { InlineMessage } from "../ui/InlineMessage";
+
 interface LoginScreenProps {
   /** Shown above the form, e.g. why the previous session ended. */
   notice?: string | null;
@@ -91,27 +95,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
   };
 
   const alert = problem && (
-    <p role="alert" className="field-hint field-hint-error">
+    <InlineMessage tone="error">
       {problem}
-    </p>
+    </InlineMessage>
   );
 
   const card = (
     <div className="session-lost-card login-card">
       {notice && (
-        <p role="status" className="session-lost-muted">
+        <InlineMessage tone="info">
           {notice}
-        </p>
+        </InlineMessage>
       )}
       {view === "login" ? (
         <form aria-labelledby="login-title" onSubmit={submitLogin} className="login-form">
           <h1 id="login-title" ref={headingRef} tabIndex={-1}>Log in to Ontocurator</h1>
-          {info && <p role="status" className="field-hint">{info}</p>}
-          <label htmlFor="login-username" className="form-label">Username</label>
-          <input
+          {info && <InlineMessage tone="info">{info}</InlineMessage>}
+          <TextInput
             id="login-username"
+            label="Username"
+            aria-label="Username"
             ref={firstFieldRef}
-            className="form-control"
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
@@ -119,31 +123,31 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
-          <label htmlFor="login-password" className="form-label">Password</label>
-          <input
+          <TextInput
             id="login-password"
+            label="Password"
+            aria-label="Password"
             type="password"
-            className="form-control"
             autoComplete="current-password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
           {alert}
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <Button type="submit" variant="primary" disabled={busy}>
             Log in
-          </button>
-          <button type="button" className="login-link" onClick={() => switchTo("code")}>
+          </Button>
+          <Button variant="quiet" className="login-link" onClick={() => switchTo("code")}>
             I have a setup or reset code
-          </button>
+          </Button>
         </form>
       ) : (
         <form aria-labelledby="code-title" onSubmit={submitCode} className="login-form">
           <h1 id="code-title" ref={headingRef} tabIndex={-1}>Set your password</h1>
-          <label htmlFor="code-username" className="form-label">Username</label>
-          <input
+          <TextInput
             id="code-username"
-            className="form-control"
+            label="Username"
+            aria-label="Username"
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
@@ -151,10 +155,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
-          <label htmlFor="code-value" className="form-label">Setup or reset code</label>
-          <input
+          <TextInput
             id="code-value"
-            className="form-control"
+            label="Setup or reset code"
+            aria-label="Setup or reset code"
             autoComplete="one-time-code"
             autoCapitalize="none"
             spellCheck={false}
@@ -162,35 +166,34 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
             value={code}
             onChange={(e) => setCode(e.target.value)}
           />
-          <label htmlFor="code-new-password" className="form-label">New password</label>
-          <input
+          <TextInput
             id="code-new-password"
+            label="New password"
+            aria-label="New password"
             type="password"
-            className="form-control"
             autoComplete="new-password"
-            aria-describedby="code-new-password-hint"
+            hint="At least 12 characters."
             required
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
           />
-          <div id="code-new-password-hint" className="field-hint">At least 12 characters.</div>
-          <label htmlFor="code-repeat-password" className="form-label">Repeat the new password</label>
-          <input
+          <TextInput
             id="code-repeat-password"
+            label="Repeat the new password"
+            aria-label="Repeat the new password"
             type="password"
-            className="form-control"
             autoComplete="new-password"
             required
             value={repeatPassword}
             onChange={(e) => setRepeatPassword(e.target.value)}
           />
           {alert}
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <Button type="submit" variant="primary" disabled={busy}>
             Set password and log in
-          </button>
-          <button type="button" className="login-link" onClick={() => switchTo("login")}>
+          </Button>
+          <Button variant="quiet" className="login-link" onClick={() => switchTo("login")}>
             Back to login
-          </button>
+          </Button>
         </form>
       )}
     </div>

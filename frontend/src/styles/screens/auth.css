@@ -1,103 +1,18 @@
-/* Full-page login and session notices */
-
-.session-lost {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: var(--surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  overflow: auto;
-}
-
-.session-lost-card {
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 32px 36px;
-  max-width: 600px;
-  box-shadow: 0 10px 25px -5px var(--session-card-shadow-colour);
-}
-
-.session-lost-card h1 {
-  font-size: 1.4rem;
-  margin-bottom: 12px;
-}
-
-.session-lost-card p {
-  font-size: 0.98rem;
-  line-height: 1.5;
-  margin-bottom: 12px;
-}
-
-.session-lost-muted {
-  color: var(--text-muted);
-  font-size: 0.9rem !important;
-}
-
-/* Login and code forms (LoginScreen), on the full-page card above */
-
-.login-overlay {
-  /* After the session ended: the editor stays visible underneath. */
-  background: var(--overlay-scrim);
-}
-
-.login-card {
-  width: 100%;
-  max-width: 420px;
-}
-
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.login-form .form-label {
-  margin: 8px 0 0;
-}
-
-.login-form .btn-primary {
-  margin-top: 14px;
-}
-
-.login-link {
-  background: none;
-  border: none;
-  padding: 6px 0;
-  color: var(--accent);
-  font-size: 0.88rem;
-  cursor: pointer;
-  align-self: flex-start;
-}
-
-.login-link:hover {
-  text-decoration: underline;
-}
-
-/* The editor inside the login gate (made inert while the login dialog is open) */
-
-.app-shell {
-  height: 100%;
-}
-
-/* Session notices of the login gate, over the editor */
-
-.session-notice {
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 900;
-  max-width: min(640px, calc(100vw - 32px));
-}
-
-/* The logged-in user in the dashboard header: display name · pseudonym */
-
-.current-user {
-  font-size: 0.82rem;
-  color: var(--text);
-  white-space: nowrap;
+/* Full-page login and session notices share the application's paper surface. */
+.session-lost { position: fixed; inset: 0; z-index: 1000; background: var(--surface); display: flex; align-items: center; justify-content: center; padding: var(--space-5); overflow: auto; }
+.session-lost-card { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-6); max-width: 600px; margin: auto; }
+.session-lost-card h1 { font-family: var(--font-serif); font-size: var(--size-2xl); line-height: var(--leading-2xl); font-weight: var(--weight-strong); margin: 0 0 var(--space-5); }
+.session-lost-card > .notice { margin-bottom: var(--space-5); }
+.login-overlay { background: var(--overlay-scrim); }
+.login-card { width: 100%; max-width: 440px; }
+.login-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.login-form .form-group { margin: 0; }
+.login-form .btn-primary { margin-top: var(--space-2); }
+.login-link { align-self: flex-start; font-size: var(--size-md); }
+.app-shell { height: 100%; }
+.session-notice { position: fixed; top: var(--space-3); left: 50%; transform: translateX(-50%); z-index: 900; max-width: min(640px, calc(100vw - 32px)); }
+.current-user { font-size: var(--size-sm); color: var(--text); overflow-wrap: anywhere; }
+@media (max-width: 699px) {
+  .session-lost { padding: var(--space-4); }
+  .session-lost-card { padding: var(--space-5); }
 }

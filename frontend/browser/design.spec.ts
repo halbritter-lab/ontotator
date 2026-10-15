@@ -35,6 +35,32 @@ async function shoot(page: Page, name: string) {
   if (original) await page.setViewportSize(original);
 }
 
+async function checkContrastAndTextSize(page: Page) {
+  const results = await new AxeBuilder({ page }).withRules(["color-contrast"]).analyze();
+  const violations = results.violations.flatMap((v) =>
+    v.nodes.map((n) => `${n.target.join(" ")}: ${n.failureSummary ?? ""}`),
+  );
+  expect(violations).toEqual([]);
+
+  const tooSmall = await page.evaluate(() => {
+    const found: string[] = [];
+    for (const element of Array.from(document.body.querySelectorAll<HTMLElement>("*"))) {
+      const ownText = Array.from(element.childNodes).some(
+        (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "",
+      );
+      if (!ownText) continue;
+      const box = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      if (box.width === 0 || box.height === 0 || style.visibility === "hidden") continue;
+      if (parseFloat(style.fontSize) < 12) {
+        found.push(`${element.tagName.toLowerCase()}.${element.className}: ${style.fontSize} "${(element.textContent ?? "").trim().slice(0, 40)}"`);
+      }
+    }
+    return found;
+  });
+  expect(tooSmall).toEqual([]);
+}
+
 async function openReview(page: Page, query: string, packageId: string, annotator: string) {
   await importPackage(page, query, packageId, annotator);
   await page.locator("#mode-select").selectOption("review");
@@ -85,6 +111,17 @@ async function openStates(page: Page, annotator: string) {
 }
 
 test.describe("Design direction C", () => {
+  test("design: login and dashboard", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
+    await shoot(page, "login");
+    await checkContrastAndTextSize(page);
+    await importPackage(page, "", "browser-fixture", "design-dashboard");
+    await expect(page.getByRole("table", { name: "Clinical Cases" })).toBeVisible();
+    await shoot(page, "dashboard-compact-table");
+    await checkContrastAndTextSize(page);
+  });
+
   test("design: editor in reading density", async ({ page }) => {
     await openReview(page, "?scenario=many_proposals", "pkg-many-proposals", "design-many");
     await shoot(page, "editor-review-many");
@@ -133,35 +170,16 @@ test.describe("Design direction C", () => {
 
   test("design: WCAG AA contrast and text size on the editor", async ({ page }) => {
     await openStates(page, "design-contrast");
-    const results = await new AxeBuilder({ page }).withRules(["color-contrast"]).analyze();
-    const violations = results.violations.flatMap((v) =>
-      v.nodes.map((n) => `${n.target.join(" ")}: ${n.failureSummary ?? ""}`),
-    );
-    expect(violations).toEqual([]);
-
-    const tooSmall = await page.evaluate(() => {
-      const found: string[] = [];
-      for (const element of Array.from(document.body.querySelectorAll<HTMLElement>("*"))) {
-        const ownText = Array.from(element.childNodes).some(
-          (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "",
-        );
-        if (!ownText) continue;
-        const box = element.getBoundingClientRect();
-        const style = getComputedStyle(element);
-        if (box.width === 0 || box.height === 0 || style.visibility === "hidden") continue;
-        if (parseFloat(style.fontSize) < 12) {
-          found.push(`${element.tagName.toLowerCase()}.${element.className}: ${style.fontSize} "${(element.textContent ?? "").trim().slice(0, 40)}"`);
-        }
-      }
-      return found;
-    });
-    expect(tooSmall).toEqual([]);
+    await checkContrastAndTextSize(page);
   });
 
   test("design: no request leaves the origin", async ({ page, baseURL }) => {
     const origin = new URL(baseURL!).origin;
     const requests: string[] = [];
     page.on("request", (request) => requests.push(request.url()));
+    await page.goto("/");
+    await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
     await openReview(page, "?scenario=design_states", "pkg-design-states", "design-origin");
     await page.evaluate(() => document.fonts.ready);
     expect(requests.length).toBeGreaterThan(0);
