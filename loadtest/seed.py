@@ -342,7 +342,9 @@ def main() -> None:
             ).raise_for_status()
         admin("projects", "add-member", "load", username, "--role", "annotator")
         selected = assigned_documents(username, manifest["documents"])
-        document_args = [value for document in selected for value in ("--document", document)]
+        document_args = [
+            value for document in selected for value in ("--document", document)
+        ]
         admin("assign", "load", username, "--confirm-language", *document_args)
     print(
         f"Seeded {args.compose_project}: 30 users, 1000 documents, 3000 proposals; HPO {release}. Workers load uploaded ontologies automatically on first use; warm up before measurement."

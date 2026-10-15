@@ -181,3 +181,19 @@ def test_container_transfer_preserves_binary_stdin(tmp_path):
     source.write_bytes(original)
     seed_module().stream_to_container([sys.executable, str(shim)], source, str(target))
     assert target.read_bytes() == original
+
+
+def test_selected_assignment_documents_match_workload_and_cover_unchanged_corpus():
+    seed = seed_module()
+    documents = [f"load-{index:04d}" for index in range(1, 1001)]
+    selections = [
+        seed.assigned_documents(f"load-{index:02d}", documents)
+        for index in range(1, 31)
+    ]
+    assert set().union(*map(set, selections)) == set(documents)
+    assert sum(map(len, selections)) == 1000
+    assert all(33 <= len(selection) <= 34 for selection in selections)
+    assert selections == [
+        seed.assigned_documents(f"load-{index:02d}", documents)
+        for index in range(1, 31)
+    ]

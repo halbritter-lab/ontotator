@@ -25,6 +25,7 @@ from ontocurator.authz.policy import ROLES, Access, Action, can, may_take
 from ontocurator.authz.visibility import (
     DocumentFilter,
     current_access,
+    project_document_filters,
     require_document,
     visible_documents,
 )
@@ -62,6 +63,8 @@ from ontocurator.storage.tables import (
     AssignmentRow,
     EvidenceSnapshotRow,
     ProposalSetRow,
+    SearchEventRow,
+    SubmissionRow,
     UserRow,
 )
 
@@ -151,6 +154,9 @@ class ScopedRepository(Repository):
             .where(AssignmentRow.id == assignment.id)
             .with_for_update(key_share=True)
         ).one()
+        # Another compatible draft can submit the same task while this row
+        # lock waits (for example legacy assisted versus independent).
+        self.require_workable(conn, key, mutation=True)
 
     def _after_new_mutation(
         self,
@@ -323,31 +329,57 @@ class ScopedRepository(Repository):
 
     def get_manifest(self, project_key: str) -> PackageManifest:
         self._visible(project_key)
-        return super().get_manifest(project_key)
+        manifest = super().get_manifest(project_key)
+        visibility = self._documents(project_key)
+        if visibility.all:
+            return manifest
+        return manifest.model_copy(
+            update={
+                "document_order": [
+                    doc
+                    for doc in manifest.document_order
+                    if doc in visibility.document_ids
+                ],
+                "file_hashes": {},
+            }
+        )
 
     def manifest_hash(self, project_key: str) -> str | None:
         self._visible(project_key)
         return super().manifest_hash(project_key)
 
     def list_manifests(self) -> list[PackageManifest]:
+        with self.db.transaction() as conn:
+            filters = project_document_filters(conn, self.access)
         return [
             manifest
+            if filters[manifest.package_id].all
+            else manifest.model_copy(
+                update={
+                    "document_order": [
+                        doc
+                        for doc in manifest.document_order
+                        if doc in filters[manifest.package_id].document_ids
+                    ],
+                    "file_hashes": {},
+                }
+            )
             for manifest in super().list_manifests()
-            if can(self.access, Action.VIEW_PROJECT, manifest.package_id)
+            if manifest.package_id in filters
         ]
 
     def list_projects(self) -> list[ProjectInfo]:
-        projects = []
-        for project in super().list_projects():
-            if not can(self.access, Action.VIEW_PROJECT, project.project_key):
-                continue
-            visibility = self._documents(project.project_key)
-            projects.append(
-                project
-                if visibility.all
-                else replace(project, document_count=len(visibility.document_ids))
+        with self.db.transaction() as conn:
+            filters = project_document_filters(conn, self.access)
+        return [
+            project
+            if filters[project.project_key].all
+            else replace(
+                project, document_count=len(filters[project.project_key].document_ids)
             )
-        return projects
+            for project in super().list_projects()
+            if project.project_key in filters
+        ]
 
     def get_task_profile(self, project_key: str) -> TaskProfile:
         self._visible(project_key)
@@ -534,10 +566,17 @@ class ScopedRepository(Repository):
         if project_key is None:
             raise _project_required()
         self._visible(project_key)
-        result = super().get_submission(submission_id, project_key)
-        if result is not None:
-            self._document(project_key, result.origin_key.document_id)
-        return result
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            owner = conn.execute(
+                select(SubmissionRow.document_id).where(
+                    SubmissionRow.project_id == project_id,
+                    SubmissionRow.submission_id == submission_id,
+                )
+            ).scalar_one_or_none()
+            if owner is not None:
+                require_document(conn, self.access, project_id, project_key, owner)
+        return super().get_submission(submission_id, project_key)
 
     # --- search events ------------------------------------------------------ #
 
@@ -552,10 +591,19 @@ class ScopedRepository(Repository):
         if project_key is None:
             raise _project_required()
         self._visible(project_key)
-        result = super().get_search_event(event_id, project_key)
-        if result is not None:
-            self._document(project_key, result.workspace_key.document_id)
-        return result
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            owner = conn.execute(
+                select(
+                    SearchEventRow.payload["workspace_key"]["document_id"].astext
+                ).where(
+                    SearchEventRow.project_id == project_id,
+                    SearchEventRow.event_id == event_id,
+                )
+            ).scalar_one_or_none()
+            if owner is not None:
+                require_document(conn, self.access, project_id, project_key, owner)
+        return super().get_search_event(event_id, project_key)
 
     def append_search_event_candidates(
         self,
@@ -590,6 +638,8 @@ class ScopedRepository(Repository):
         self, project_key: str, *, include_captured_conditions: bool = True
     ) -> ValidatedPackage:
         self._visible(project_key)
+        if not self._documents(project_key).all:
+            raise AccessDenied("NOT_ALLOWED", "You may not export all project data.")
         return super().export_package(
             project_key, include_captured_conditions=include_captured_conditions
         )

@@ -97,9 +97,24 @@ def provision_assignments(
         tasks.append("annotate")
     if "adjudicator" in roles:
         tasks.append("review")
+    from ontocurator.assignments.service import AssignmentService
+
+    service = AssignmentService(app.state.repo.db)
+    known = {
+        (row.document_id, row.task)
+        for row in service.list(project, user=username, include_revoked=True)
+    }
     for document in app.state.repo.list_documents(project):
         for task in tasks:
-            ensure_assignment(app, username, project, document.document_id, task)
+            if (document.document_id, task) not in known:
+                service.assign(
+                    HARNESS,
+                    project,
+                    document.document_id,
+                    username,
+                    task,
+                    confirm_language=True,
+                )
 
 
 def log_in(client: TestClient, username: str) -> dict[str, Any]:
@@ -209,8 +224,7 @@ class AutoLoginClient(TestClient):
         self.memberships.add((annotator, project))
         return True
 
-    @staticmethod
-    def _project_of(target: httpx.URL, kwargs: dict[str, Any]) -> str | None:
+    def _project_of(self, target: httpx.URL, kwargs: dict[str, Any]) -> str | None:
         """The project key a request names, if any."""
         body = kwargs.get("json")
         if isinstance(body, dict):
@@ -227,6 +241,18 @@ class AutoLoginClient(TestClient):
                 return decode_workspace_id(parts[4]).project_key
             except Exception:  # not a workspace ID (open, review-inputs, ...)
                 return None
+        if (
+            len(parts) > 5
+            and parts[1:4] == ["api", "v1", "assignments"]
+            and parts[4].isdigit()
+        ):
+            from ontocurator.assignments.service import AssignmentService
+
+            with self.app.state.repo.db.transaction() as conn:
+                try:
+                    return AssignmentService._locate(conn, int(parts[4]))
+                except DomainError:
+                    return None
         return None
 
     def _annotator_of(self, target: httpx.URL, kwargs: dict[str, Any]) -> str:
@@ -256,6 +282,19 @@ class AutoLoginClient(TestClient):
                 return decode_workspace_id(parts[4]).annotator_id
             except Exception:  # not a workspace ID (open, review-inputs, ...)
                 pass
+        if (
+            len(parts) > 5
+            and parts[1:4] == ["api", "v1", "assignments"]
+            and parts[4].isdigit()
+            and parts[5] == "open"
+        ):
+            from ontocurator.assignments.service import AssignmentService
+
+            with self.app.state.repo.db.transaction() as conn:
+                try:
+                    return AssignmentService._get(conn, int(parts[4])).pseudonym
+                except Exception:
+                    pass
         return self.annotator or DEFAULT_ANNOTATOR
 
 

@@ -1620,7 +1620,26 @@ class Repository:
             return self._open_draft(conn, key, targets)
 
     def _before_workspace_locks(self, conn: Connection, key: WorkspaceKey) -> None:
-        """Request-specific authority locks, before any draft lock."""
+        """Keep a contextual principal stable before any draft/assignment lock."""
+        principal = current_principal.get()
+        if principal is not None:
+            from ontocurator.auth.authority import lock_user_authority
+
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock_shared(
+                        _lock_id("members", key.project_key)
+                    )
+                )
+            )
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock_shared(
+                        _lock_id("project", key.project_key)
+                    )
+                )
+            )
+            lock_user_authority(conn, principal.user_id)
 
     def _before_new_mutation(self, conn: Connection, key: WorkspaceKey) -> None:
         """Request-specific gate, after successful replay/revision checks."""
@@ -1633,6 +1652,33 @@ class Repository:
         at: datetime,
     ) -> None:
         """Status changes after storage, before receipt, in the same transaction."""
+        principal = current_principal.get()
+        if principal is None:
+            return
+        from ontocurator.assignments.service import TASK_FOR_MODE
+        from ontocurator.storage.tables import AssignmentRow
+
+        project_id = self._require_project(conn, key.project_key)
+        statement = update(AssignmentRow).where(
+            AssignmentRow.project_id == project_id,
+            AssignmentRow.document_id == key.document_id,
+            AssignmentRow.user_id == principal.user_id,
+            AssignmentRow.task == TASK_FOR_MODE[key.mode],
+            AssignmentRow.revoked_at.is_(None),
+        )
+        if isinstance(result, Submission):
+            statement = statement.where(
+                AssignmentRow.status.in_(["open", "in_progress", "reopened"])
+            ).values(
+                status="submitted",
+                last_submission_id=result.submission_id,
+                updated_at=at,
+            )
+        else:
+            statement = statement.where(AssignmentRow.status == "open").values(
+                status="in_progress", updated_at=at
+            )
+        conn.execute(statement)
 
     @staticmethod
     def _lock_draft(conn: Connection, key: WorkspaceKey) -> None:

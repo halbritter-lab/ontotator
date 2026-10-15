@@ -11,7 +11,6 @@ from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
 from ontocurator.application.workspaces import WorkspaceService
-from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.config import AppConfig
 
@@ -142,7 +141,9 @@ def test_mode_commands_are_refused_without_the_role(app: Any) -> None:
     opened = _open(bob, "independent")
     assert opened.status_code == 200, opened.text
     ws_id = opened.json()["workspace_id"]
-    app.state.memberships.remove(HARNESS, DEMO_ID, "bob", ["annotator"])
+    app.state.memberships.remove(
+        HARNESS, DEMO_ID, "bob", ["annotator"], revoke_assignments=True
+    )
     bob = logged_in(app, "bob")
     envelope = {
         "mutation_id": "m1",
@@ -219,7 +220,16 @@ def test_review_never_shows_other_members_work(app: Any) -> None:
     assert view["submissions"] == []
 
     # The service gives the same answer as the route.
-    access = Access(user_id=0, pseudonym="x", is_system_admin=True)
+    from types import SimpleNamespace
+
+    user = app.state.accounts.get_by_username("bob")
+    access = app.state.memberships.access_for(
+        SimpleNamespace(
+            user_id=user.id,
+            pseudonym=user.pseudonym,
+            is_system_admin=user.is_system_admin,
+        )
+    )
     service = WorkspaceService(
         ScopedRepository(app.state.repo.db, access), app.state.ontology_registry
     )

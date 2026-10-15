@@ -98,6 +98,18 @@ def test_batches_are_project_scoped(tmp_path: Path) -> None:
     repo = Repository(database_for(tmp_path / "db"))
     repo.import_package(_sample_package("pkg-a"))
     repo.import_package(_sample_package("pkg-b"))
+    from ontocurator.assignments.service import AssignmentService
+    from ontocurator.auth.accounts import AccountService
+    from ontocurator.auth.audit import Actor
+    from ontocurator.authz.memberships import MembershipService
+
+    user = (
+        AccountService(repo.db).create_user(Actor.cli(), "batch-reader", "Reader").user
+    )
+    MembershipService(repo.db).add(Actor.cli(), "pkg-a", user.username, ["annotator"])
+    AssignmentService(repo.db).assign(
+        Actor.cli(), "pkg-a", "doc-1", user.username, "annotate", confirm_language=True
+    )
     scoped = ScopedRepository(repo.db, _access({"pkg-a": {"annotator"}}))
     assert scoped.get_document_statuses("pkg-a", "ann-1", "independent") == {}
     assert scoped.review_input_document_ids("pkg-a") == {"doc-1"}

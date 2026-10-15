@@ -92,7 +92,7 @@ describe("editor and page polish", () => {
     vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     vi.spyOn(api, "listOntologies").mockResolvedValue([]);
-    vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: view() } as any);
+    vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view: view() } as any);
     const onLogout = vi.fn();
     render(<App onLogout={onLogout} />);
     fireEvent.click(await screen.findByRole("button", { name: /^Open case$/i }));
