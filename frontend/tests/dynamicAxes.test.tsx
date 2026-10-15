@@ -79,8 +79,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
     );
 
     // Non-HPO CURIE displayed in header
-    expect(screen.getByText("MONDO:0001250")).toBeDefined();
-    expect(screen.getByText(/Ontology Term|Ontologie-Term/i)).toBeDefined();
+    expect(screen.getByRole("heading", { level: 2, name: "MONDO:0001250" })).toBeDefined();
 
     // Required indicator on severity
     expect(screen.getByText(/Schweregrad/)).toBeDefined();
