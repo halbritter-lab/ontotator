@@ -199,3 +199,47 @@ that ratio is not a controlled speedup measurement. Artifacts are under
 `build/p9-lexical-serial/`. A narrow source fix, regression tests, review and a
 fresh unchanged-workload P9 run are required before acceptance. No production
 latency or memory improvement is claimed from this experiment.
+
+## Combined reviewed-image rerun
+
+The sparse-layout fix `9b98404` was independently reviewed and integrated with
+the pinned-data isolation correction. Complete/subset corpora, raw scores,
+ranking/ties and pinned views passed regression coverage; the final functional
+gate passed all 1,050 backend, 436 frontend and 39 browser tests, plus real-stack
+smoke/container checks.
+
+This P9 run used source `a17fb6a4bad16af6656916091fff51fddb0ecc59` and image
+`sha256:eb0dcc146d5952026ae9ce64b5b46a95bab4eccf096879d0d3abc177cf7483ed`.
+Post-run verification matched all 79 installed application Python files against
+the checkout byte for byte, including the CSC and pinned-view changes. The
+instrument-free app retained the same two workers, 2 CPU/2 GiB app limit,
+1 CPU/1 GiB PostgreSQL limit, HPO, accounts, documents, weights and think times.
+Seeding passed in 176.45 seconds; warmup exited 1 in 61.58 seconds; measurement
+exited 1 in 302.14 seconds. Owned containers/volumes were removed.
+
+| Operation | Requests | Failures | p50 ms | p95 ms | p99 ms | Result |
+|---|---:|---:|---:|---:|---:|---|
+| Search | 1,931 | 0 | 610 | 1,700 | 3,000 | FAIL (<150 ms required) |
+| Open | 731 | 0 | 540 | 1,600 | 2,500 | FAIL (<300 ms required) |
+| Write | 3,082 | 0 | 650 | 1,800 | 3,100 | FAIL (<150 ms required) |
+| Dashboard | 376 | 0 | 910 | 1,900 | 2,400 | FAIL (<500 ms required) |
+| Setup/login | 30 | 0 | 260 | 640 | 770 | — |
+
+The final console records 6,150 requests and no failures. The last periodic CSV
+records 6,144 at 20.53 requests/second (one fewer search/open and four fewer write
+completions), with the same p95 values. Both are retained unchanged under
+`build/p9-final/`, with execution identity, HTML, logs, 17 runtime samples, an
+additional PostgreSQL observation and the installed-source hash proof.
+
+Sampled peak memory was 1,206,853,632 bytes, with zero swap and max/OOM events.
+The app still reached roughly two CPUs. One PostgreSQL observation was 47% CPU
+and 132.3 MiB. The lower memory peak does not establish a latency improvement:
+this run fails every p95 target, and three p95 values are worse than the previous
+run. The current evidence does not attribute that end-to-end behavior to one
+function or justify another speculative change.
+
+P9 remains an explicit open performance task. The reviewed functional foundation
+and complete local gate permit the next independent administration plan to
+proceed, without treating this failed acceptance as green. Existing diagnostics
+and a read-only request-read preflight remain available for further investigation.
+No resources, workload or thresholds were relaxed.

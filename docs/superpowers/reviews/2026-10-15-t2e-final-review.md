@@ -111,3 +111,27 @@ The review explicitly leaves these bounds visible:
   gate responsibilities, rather than claims from source inspection.
 - Parallel UI redesign and later administration/workflow/variant plans are
   separate deliverables. This review does not establish their completion.
+
+## Final integrated functional gate and P9 disposition
+
+The complete container-enabled gate passed at `a17fb6a` on the reviewed combined
+T2e/T6a descendant: 1,050 backend tests plus one POSIX skip, 436 frontend tests,
+39 browser scenarios, one real-stack browser smoke and all nine container checks.
+Ruff, formatting, mypy, schema/type drift and wheel checks passed; total 787 seconds.
+The image built from that exact source is
+`sha256:eb0dcc146d5952026ae9ce64b5b46a95bab4eccf096879d0d3abc177cf7483ed`.
+Independent post-run hashing matched all 79 installed application Python files
+to the reviewed checkout, byte for byte.
+
+The subsequent unchanged-workload P9 run completed 6,150 client requests with no
+failures, but p95 search/open/write/dashboard remained 1,700/1,600/1,800/1,900 ms.
+All four targets fail. The isolated sparse-layout improvement is not an
+end-to-end latency success; the full measurement report retains the negative
+result, identities, original CSV difference and resource observations.
+
+**Functional/container acceptance is green; P9 acceptance remains open.**
+Administration work may proceed from this reviewed, functionally green source:
+the shared plan index requires a passing complete local gate for the next plan.
+This sequencing decision does not waive P9, change its targets or mark the full
+T2e performance goal achieved. Production deployment/recovery drills remain
+outside the executed local checks.

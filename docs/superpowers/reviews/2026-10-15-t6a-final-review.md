@@ -82,3 +82,23 @@ independently reviewed correction is recorded in the
 [T2e follow-up](2026-10-15-t2e-final-review.md#integrated-cache-isolation-follow-up).
 The complete combined gate will be rerun on the corrected descendant; these
 partial runs do not establish final browser/container success.
+
+## Final integrated gate
+
+At `a17fb6a4bad16af6656916091fff51fddb0ecc59`, the complete command
+`CHECK_CONTAINERS=1 CHECK_IMAGE=ontocurator:t6a-final scripts/check.sh` passed
+with exit 0 in 787 seconds. The tested image, built from that same source, is
+`sha256:eb0dcc146d5952026ae9ce64b5b46a95bab4eccf096879d0d3abc177cf7483ed`.
+
+- Ruff, formatting, mypy, OpenAPI drift, TypeScript/API drift and wheel checks passed.
+- Frontend: 436 tests in 53 files passed.
+- PostgreSQL backend: 1,050 passed, one POSIX-only test skipped; 496.45 seconds.
+- Playwright: all 39 scenarios passed in 2.4 minutes.
+- Real stack browser smoke: one passed; all nine container checks passed.
+- Wheel SHA256: `1207e1c4495ec11ac07e3e6598224add28b939a496f8137f5992a89ede508533`.
+
+All ten T6a tasks and the integrated functional gate are complete. The source
+and follow-up reviews are approved. Existing React/Starlette warnings remain.
+This tested descendant covers both T2e and T6a source; it does not claim fresh
+gates at the separate parent commits. P9 latency is independently still open,
+as recorded in the load-test report. No main merge, push or deployment occurred.
