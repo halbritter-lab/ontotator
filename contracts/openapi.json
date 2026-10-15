@@ -163,6 +163,447 @@
         }
       }
     },
+    "/api/v1/admin/ontologies/": {
+      "get": {
+        "tags": [
+          "admin-ontologies"
+        ],
+        "summary": "List Ontologies",
+        "operationId": "list_ontologies_api_v1_admin_ontologies__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminOntology"
+                  },
+                  "type": "array",
+                  "title": "Response List Ontologies Api V1 Admin Ontologies  Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin-ontologies"
+        ],
+        "summary": "Upload Ontologies",
+        "operationId": "upload_ontologies_api_v1_admin_ontologies__post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_ontologies_api_v1_admin_ontologies__post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminOntology"
+                  },
+                  "type": "array",
+                  "title": "Response Upload Ontologies Api V1 Admin Ontologies  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/templates": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Templates",
+        "operationId": "templates_api_v1_projects_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateInfo"
+                  },
+                  "type": "array",
+                  "title": "Response Templates Api V1 Projects Templates Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Create Project",
+        "operationId": "create_project_api_v1_projects__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/settings": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Settings",
+        "operationId": "settings_api_v1_projects__key__settings_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Update Settings",
+        "operationId": "update_settings_api_v1_projects__key__settings_patch",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectSettingsChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/pins": {
+      "put": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Update Pins",
+        "operationId": "update_pins_api_v1_projects__key__pins_put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ProjectPin"
+                },
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/profile": {
+      "put": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Update Profile",
+        "operationId": "update_profile_api_v1_projects__key__profile_put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskProfile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/members": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Members",
+        "operationId": "members_api_v1_projects__key__members_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Member"
+                  },
+                  "title": "Response Members Api V1 Projects  Key  Members Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/members/{username}": {
+      "put": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Set Member",
+        "operationId": "set_member_api_v1_projects__key__members__username__put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "username",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Username"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me/profile": {
       "get": {
         "tags": [
@@ -1073,6 +1514,72 @@
         "title": "ActorRef",
         "description": "Reference to human or tool actor."
       },
+      "AdminOntology": {
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "prefix": {
+            "type": "string",
+            "title": "Prefix"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "uploaded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Uploaded At"
+          },
+          "projects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Projects"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sha256",
+          "kind",
+          "prefix",
+          "release",
+          "filename",
+          "language",
+          "uploaded_at",
+          "projects"
+        ],
+        "title": "AdminOntology"
+      },
       "AdminUser": {
         "properties": {
           "username": {
@@ -1343,6 +1850,23 @@
         "title": "AxisDefinition",
         "description": "Definition of an individual annotation contextual axis."
       },
+      "Body_upload_ontologies_api_v1_admin_ontologies__post": {
+        "properties": {
+          "files[]": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files[]"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files[]"
+        ],
+        "title": "Body_upload_ontologies_api_v1_admin_ontologies__post"
+      },
       "CodeResponse": {
         "properties": {
           "code": {
@@ -1361,6 +1885,72 @@
           "expires_at"
         ],
         "title": "CodeResponse"
+      },
+      "CreateProjectRequest": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pins": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectPin"
+            },
+            "type": "array",
+            "title": "Pins"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "pins"
+        ],
+        "title": "CreateProjectRequest"
       },
       "CreateUserRequest": {
         "properties": {
@@ -1851,6 +2441,67 @@
         ],
         "title": "LoginRequest"
       },
+      "Member": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "pseudonym": {
+            "type": "string",
+            "title": "Pseudonym"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "display_name",
+          "pseudonym",
+          "roles",
+          "languages"
+        ],
+        "title": "Member"
+      },
+      "MemberChange": {
+        "properties": {
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "revoke_assignments": {
+            "type": "boolean",
+            "title": "Revoke Assignments",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "roles"
+        ],
+        "title": "MemberChange"
+      },
       "MutationEnvelope": {
         "properties": {
           "mutation_id": {
@@ -2159,6 +2810,46 @@
         "type": "object",
         "title": "PatchUserRequest"
       },
+      "PinnedOntology": {
+        "properties": {
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "allowed_roots": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Roots"
+          },
+          "t1_profile": {
+            "type": "string",
+            "enum": [
+              "generic",
+              "hpo-phenotype"
+            ],
+            "title": "T1 Profile",
+            "default": "generic"
+          },
+          "release": {
+            "type": "string",
+            "title": "Release"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ontology_id",
+          "sha256",
+          "release"
+        ],
+        "title": "PinnedOntology"
+      },
       "Preferences": {
         "properties": {
           "last_annotator_id": {
@@ -2360,6 +3051,236 @@
         "type": "object",
         "title": "ProfilePatch"
       },
+      "ProjectPin": {
+        "properties": {
+          "ontology_id": {
+            "type": "string",
+            "title": "Ontology Id"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "allowed_roots": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Roots"
+          },
+          "t1_profile": {
+            "type": "string",
+            "enum": [
+              "generic",
+              "hpo-phenotype"
+            ],
+            "title": "T1 Profile",
+            "default": "generic"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ontology_id",
+          "sha256"
+        ],
+        "title": "ProjectPin"
+      },
+      "ProjectSettings": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "guideline_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guideline Url"
+          },
+          "guideline_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guideline Version"
+          },
+          "require_chosen_axes": {
+            "type": "boolean",
+            "title": "Require Chosen Axes",
+            "default": false
+          },
+          "adjudicator_not_annotator": {
+            "type": "boolean",
+            "title": "Adjudicator Not Annotator",
+            "default": false
+          },
+          "contiguous_mentions_only": {
+            "type": "boolean",
+            "title": "Contiguous Mentions Only",
+            "default": false
+          },
+          "hidden_axis_values": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Hidden Axis Values"
+          },
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/TaskProfile"
+          },
+          "pins": {
+            "items": {
+              "$ref": "#/components/schemas/PinnedOntology"
+            },
+            "type": "array",
+            "title": "Pins"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          },
+          "axis_defaults": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Axis Defaults"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "project_key",
+          "profile",
+          "pins",
+          "locked",
+          "axis_defaults"
+        ],
+        "title": "ProjectSettings"
+      },
+      "ProjectSettingsChange": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "guideline_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guideline Url"
+          },
+          "guideline_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guideline Version"
+          },
+          "require_chosen_axes": {
+            "type": "boolean",
+            "title": "Require Chosen Axes",
+            "default": false
+          },
+          "adjudicator_not_annotator": {
+            "type": "boolean",
+            "title": "Adjudicator Not Annotator",
+            "default": false
+          },
+          "contiguous_mentions_only": {
+            "type": "boolean",
+            "title": "Contiguous Mentions Only",
+            "default": false
+          },
+          "hidden_axis_values": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Hidden Axis Values"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProjectSettingsChange"
+      },
       "ProjectSummary": {
         "properties": {
           "project_key": {
@@ -2408,6 +3329,10 @@
           "document_count": {
             "type": "integer",
             "title": "Document Count"
+          },
+          "can_manage": {
+            "type": "boolean",
+            "title": "Can Manage"
           }
         },
         "additionalProperties": false,
@@ -2418,7 +3343,8 @@
           "description",
           "roles",
           "allowed_modes",
-          "document_count"
+          "document_count",
+          "can_manage"
         ],
         "title": "ProjectSummary",
         "description": "A project on the dashboard, with what the user may do in it."
@@ -3078,6 +4004,64 @@
         "title": "Submission",
         "description": "Immutable local submission record."
       },
+      "TaskProfile": {
+        "properties": {
+          "schema": {
+            "type": "string",
+            "const": "ontocurator-task-profile/v1",
+            "title": "Schema",
+            "default": "ontocurator-task-profile/v1"
+          },
+          "profile_id": {
+            "type": "string",
+            "title": "Profile Id"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "ontologies": {
+            "items": {
+              "$ref": "#/components/schemas/OntologyDefinition"
+            },
+            "type": "array",
+            "title": "Ontologies"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerDefinition"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "default_layer_id": {
+            "type": "string",
+            "title": "Default Layer Id"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile_id",
+          "version",
+          "ontologies",
+          "layers",
+          "default_layer_id"
+        ],
+        "title": "TaskProfile",
+        "description": "Complete specification of task profile, ontologies, layers, and types."
+      },
       "TaskScope": {
         "properties": {
           "scope_id": {
@@ -3118,6 +4102,32 @@
         ],
         "title": "TaskScope",
         "description": "Execution scope defining active editable and reference layers for a workspace."
+      },
+      "TemplateInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "required_ontology_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Ontology Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "required_ontology_ids"
+        ],
+        "title": "TemplateInfo"
       },
       "TermLabel": {
         "properties": {

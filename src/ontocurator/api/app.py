@@ -26,6 +26,8 @@ from ontocurator.api.auth_routes import router as auth_router
 from ontocurator.api.health import ReadinessProbe
 from ontocurator.api.health import router as health_router
 from ontocurator.api.me_routes import router as me_router
+from ontocurator.api.ontology_routes import router as ontology_router
+from ontocurator.api.project_routes import router as project_router
 from ontocurator.api.routes import router
 from ontocurator.api.security import install_security
 from ontocurator.api.tree_routes import router as tree_router
@@ -366,12 +368,21 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
             status_code=(
                 404
                 if exc.code in NOT_FOUND_CODES
-                else {"SELF_LOCKOUT": 409, "PASSWORD_WRONG": 403}.get(exc.code, 422)
+                else {
+                    "SELF_LOCKOUT": 409,
+                    "PASSWORD_WRONG": 403,
+                    "PROJECT_EXISTS": 409,
+                    "PROJECT_IN_USE": 409,
+                    "LAST_LEAD": 409,
+                    "MEMBER_HAS_ASSIGNMENTS": 409,
+                }.get(exc.code, 422)
             ),
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 
     app.include_router(admin_router)
+    app.include_router(ontology_router)
+    app.include_router(project_router)
     app.include_router(me_router)
     app.include_router(auth_router)
     app.include_router(router)

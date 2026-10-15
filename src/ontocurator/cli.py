@@ -646,11 +646,20 @@ def projects_remove_member(
     project: ProjectArgument,
     username: UsernameArgument,
     role: RoleOption = None,
+    revoke_assignments: bool = typer.Option(
+        False,
+        "--revoke-assignments",
+        help="Confirm revocation of active unsubmitted assignments.",
+    ),
 ) -> None:
     """Take roles (all without --role) from a user; a change ends their sessions."""
     with _open_database(ctx) as db:
         roles = MembershipService(db).remove(
-            Actor.cli(), project, username, role or None
+            Actor.cli(),
+            project,
+            username,
+            role or None,
+            revoke_assignments=revoke_assignments,
         )
     _print_roles(username.strip().lower(), project, roles)
 

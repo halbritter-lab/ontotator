@@ -192,6 +192,10 @@ def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     filename = job.payload.get("filename") or ""
     actor, access = requester(db, job)
     repo = ScopedRepository(db, access, actor)
+    from ontocurator.projects.runtime import project_state
+
+    with db.transaction() as conn:
+        prepared_structure = project_state(conn, project)[0]
     profile = repo.get_task_profile(project)
     pins = repo.project_pins(project)
 
@@ -235,6 +239,12 @@ def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     summary: dict[str, Any] = {}
 
     def audit(conn: Any, project_id: int, counts: ImportCounts) -> None:
+        if project_state(conn, project)[0] != prepared_structure:
+            from ontocurator.domain.errors import RevisionConflict
+
+            raise RevisionConflict(
+                "Project structure changed while preparing the import; retry."
+            )
         summary.update(
             {
                 "bundle_id": delivery.bundle_id,
@@ -323,6 +333,7 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             content.proposals,
             set_id=f"{project}:{key.annotator_id}:{key.mode}:{submission.submission_id}",
             source_text_sha256=stored.source_text_sha256,
+            guideline_ref=content.guideline_ref,
         )
         units.append(unit)
         for name in counts:
