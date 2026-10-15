@@ -132,6 +132,25 @@ describe("ProfilePage component", () => {
     expect((screen.getByLabelText("New password (required)") as HTMLInputElement).value).toBe("new-password-123");
   });
 
+  it("accepts FEFF-wrapped username text because Python strip retains FEFF", async () => {
+    const change = vi.spyOn(api, "changePassword").mockResolvedValue();
+    render(<ProfilePage />); await loaded();
+    const next = `\uFEFF${profile.username}\uFEFF`;
+    passwordValues(next);
+    await userEvent.setup().click(within(passwordForm()).getByRole("button", { name: "Change password" }));
+    expect(change).toHaveBeenCalledWith("current-password", next);
+    expect(screen.getByText("Password changed. Other sessions were logged out.")).toBeDefined();
+  });
+
+  it.each(["\u0085", "\u001C", "\u001D", "\u001E", "\u001F"])("rejects Python-strip whitespace %j around the username before sending", async (space) => {
+    const change = vi.spyOn(api, "changePassword").mockResolvedValue();
+    render(<ProfilePage />); await loaded();
+    passwordValues(`${space}${profile.username}${space}`);
+    await userEvent.setup().click(within(passwordForm()).getByRole("button", { name: "Change password" }));
+    expect(change).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toBe("The password must differ from the username.");
+  });
+
   it("counts NFC Unicode codepoints and clears password fields after success", async () => {
     const change = vi.spyOn(api, "changePassword").mockResolvedValue();
     render(<ProfilePage />); await loaded();

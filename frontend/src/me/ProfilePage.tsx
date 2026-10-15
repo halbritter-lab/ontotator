@@ -17,8 +17,10 @@ function passwordProblem(username: string, next: string, repeat: string): string
   // Usernames are restricted to ASCII. Include the non-ASCII full casefolds
   // that can reduce to ASCII, without treating dotless i as an ASCII i.
   const folds: Record<string, string> = { "ß": "ss", "ſ": "s", "ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl", "ﬅ": "st", "ﬆ": "st" };
-  const folded = normalized.trim().toLowerCase().replace(/[ßſﬀﬁﬂﬃﬄﬅﬆ]/g, (letter) => folds[letter]);
-  if (folded === username.normalize("NFC").trim().toLowerCase()) return "The password must differ from the username.";
+  // Python str.strip includes NEL/C0 separators and retains FEFF, unlike JS trim.
+  const stripForComparison = (text: string) => text.replace(/^[\u0009-\u000D\u001C-\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+|[\u0009-\u000D\u001C-\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+$/g, "");
+  const folded = stripForComparison(normalized).toLowerCase().replace(/[ßſﬀﬁﬂﬃﬄﬅﬆ]/g, (letter) => folds[letter]);
+  if (folded === stripForComparison(username.normalize("NFC")).toLowerCase()) return "The password must differ from the username.";
 }
 
 export function ProfilePage({ onSaved }: ProfilePageProps): JSX.Element {
