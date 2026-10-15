@@ -133,3 +133,24 @@ One actionable P2 export-validation finding. The full gate is not green at the
 reviewed head: its frontend focus assertion failed intermittently and prevented
 backend/browser execution. Fix the validation gap, stabilize the effect-dependent
 assertion if confirmed, then run the complete gate once before integration.
+
+## Scoped fix review: `25e1d31..7dda5bf`
+
+Reviewed the two-file fix package and the existing `_validate` helper. **The original
+P2 is addressed; no new findings in this scoped diff.** `t1_export` loads views from
+each project's pinned blob and validates every assembled unit before creating the
+temporary output, storing the artifact, or recording a success audit. The shared
+helper raises `T1_INVALID` with ontology validation codes, covering the originally
+demonstrated `outside_allowed_roots` case.
+
+The new `test_an_export_outside_the_pinned_roots_fails_without_an_artifact` creates
+a fresh, correctly versioned snapshot for the outside-root term, then asserts a
+failed job, `T1_INVALID` and `outside_allowed_roots`, no result, and no success audit.
+Code ordering establishes that artifact storage is not reached on that failure.
+
+Implementer-provided verification: the regression failed before the fix
+(`succeeded != failed`, 17.30 s); all 10 export tests passed after it (16.90 s);
+Ruff check and jobs-module mypy passed; the test wrapping was subsequently formatted.
+The scoped reviewer ran `git diff 25e1d31..7dda5bf --check` successfully and did not
+rerun tests, as requested. This review closes the code finding, but does not replace
+the separately required complete gate or change the earlier failed gate evidence.
