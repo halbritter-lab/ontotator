@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import contextlib
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
+import argon2._password_hasher
 import pytest
-from argon2 import PasswordHasher
+from argon2 import Parameters, PasswordHasher, extract_parameters
 from pg_harness import column_values, count_rows, database_for
-from sqlalchemy import insert, update
+from sqlalchemy import insert, text, update
 
 import ontocurator.auth.sessions as sessions_module
 from ontocurator.auth.accounts import AccountService
@@ -212,13 +215,15 @@ def test_a_weaker_stored_hash_is_rehashed_at_login(services: Services) -> None:
     services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
 
 
-def test_a_stronger_stored_hash_is_kept_at_login(services: Services) -> None:
-    stronger = PasswordHasher(time_cost=3).hash(PASSWORD)
-    _store_hash(services, stronger)
+def test_a_stronger_stored_hash_is_replaced_with_ours_at_login(
+    services: Services,
+) -> None:
+    _store_hash(services, PasswordHasher(time_cost=3).hash(PASSWORD))
 
     services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
 
-    assert _stored_hash(services) == stronger
+    assert _stored_hash(services).startswith("$argon2id$v=19$m=19456,t=2,p=1$")
+    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
 
 
 def test_concurrent_failures_from_one_address_stop_at_the_threshold(
@@ -264,6 +269,51 @@ def test_concurrent_failures_from_one_address_stop_at_the_threshold(
     throttled = column_values(services.sessions, "login_attempts", "throttled")
     assert throttled.count(False) == 30
     assert throttled.count(True) == 3
+
+
+def test_a_failed_login_locks_and_verifies_alike_for_any_username(
+    services: Services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A stronger hash (bootstrap, recovery) costs more to verify than ours.
+    _store_hash(services, PasswordHasher(time_cost=3).hash(PASSWORD))
+    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+    engine = services.sessions.db.engine
+    real_verify = sessions_module.verify_password
+    real_argon2: Callable[..., Any] = argon2._password_hasher.verify_secret
+    locks: list[tuple[bool, bool]] = []
+    costs: list[Parameters] = []
+
+    def held(key: int) -> bool:
+        with engine.connect() as other:
+            free = other.execute(
+                text("SELECT pg_try_advisory_lock(:k)"), {"k": key}
+            ).scalar()
+            if free:
+                other.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": key})
+        return not free
+
+    def observing_verify(stored_hash: str | None, password: str) -> bool:
+        locks.append(
+            (
+                held(sessions_module._address_lock("10.0.0.2")),
+                held(sessions_module._username_lock(current)),
+            )
+        )
+        return real_verify(stored_hash, password)
+
+    def observing_argon2(hash_: bytes, *args: Any) -> Any:
+        costs.append(extract_parameters(hash_.decode("ascii")))
+        return real_argon2(hash_, *args)
+
+    monkeypatch.setattr(sessions_module, "verify_password", observing_verify)
+    monkeypatch.setattr(argon2._password_hasher, "verify_secret", observing_argon2)
+    for current in ("alice", "nobody"):
+        with pytest.raises(LoginFailed):
+            services.sessions.login(current, "wrong password!", client_ip="10.0.0.2")
+
+    assert locks == [(True, True), (True, True)]
+    assert len(costs) == 2
+    assert costs[0] == costs[1]
 
 
 def test_a_login_during_a_password_change_leaves_no_old_session(

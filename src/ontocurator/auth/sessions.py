@@ -91,6 +91,11 @@ def _address_lock(client_ip: str) -> int:
     return advisory_lock_id("login-address", client_ip)
 
 
+def _username_lock(name: str) -> int:
+    """The advisory lock that serialises the logins of one name, known or not."""
+    return advisory_lock_id("login-username", name)
+
+
 class SessionService:
     """Login, session lookup and logout."""
 
@@ -120,11 +125,12 @@ class SessionService:
         recorded attempt and with it the lockout.
 
         Before anything is read, the login takes an advisory lock on the
-        client address, then the user row (``FOR NO KEY UPDATE``), always in
-        this order. The logins from one address and those of one account run
-        one after another, so neither limit can be passed by concurrent
-        attempts. A password change waits for a login that read the old
-        hash; the session it created is then revoked with the others.
+        client address, then one on the name, then the user row (``FOR NO
+        KEY UPDATE``), always in this order. The logins from one address and
+        those of one name, known or not, run one after another, so neither
+        limit can be passed by concurrent attempts and an unknown name queues
+        like a real one. A password change waits for a login that read the
+        old hash; the session it created is then revoked with the others.
 
         Raises:
             LoginFailed: for a wrong password, an unknown or inactive user, or
@@ -144,6 +150,7 @@ class SessionService:
         started: tuple[str, Principal] | None = None
         with self.db.transaction() as conn:
             conn.execute(select(func.pg_advisory_xact_lock(_address_lock(client_ip))))
+            conn.execute(select(func.pg_advisory_xact_lock(_username_lock(name))))
             # Read after waiting for the locks, so the attempts that committed
             # meanwhile are inside the window this one is checked against.
             now = self._now()

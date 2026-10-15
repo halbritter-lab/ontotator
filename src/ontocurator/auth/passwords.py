@@ -2,7 +2,8 @@
 
 The parameters are the OWASP minimum for Argon2id (T2 index D-i). A hash
 supplied from outside (the bootstrap admin) must be at least as strong, and at
-most as costly as the caps below, so one login cannot exhaust the server.
+most as costly as the caps below, so one login cannot exhaust the server. The
+first login replaces it with a hash of ours (``needs_rehash``).
 
 Passwords are compared in Unicode NFC, so a composed and a decomposed spelling
 of the same text are the same password.
@@ -58,6 +59,7 @@ def _secret(password: str) -> bytes:
 
 # Computed at import, so even the first unknown-user login costs one run only.
 _DUMMY_HASH = _HASHER.hash(b"ontocurator timing equaliser")
+_OUR_PARAMETERS = extract_parameters(_DUMMY_HASH)
 
 
 def check_password_rules(username: str | None, password: str) -> None:
@@ -115,16 +117,18 @@ def verify_password(stored_hash: str | None, password: str) -> bool:
 
 
 def needs_rehash(stored_hash: str) -> bool:
-    """Whether ``stored_hash`` is weaker than ours, or not Argon2id v=19 at all.
+    """Whether ``stored_hash`` differs from ours in any parameter, or is no hash.
 
-    A stronger hash is kept: the first login of a bootstrapped or recovered
-    admin must not replace a supplied hash with a cheaper one.
+    A stronger supplied hash (bootstrap, recovery) is replaced too. Then every
+    account costs one Argon2 run with our parameters, as the dummy hash of an
+    unknown name does, and the time of a failed login cannot tell them apart
+    (T2 index D-j).
     """
     try:
         params = extract_parameters(stored_hash)
     except Exception:
         return True
-    return _weaker_than_ours(params)
+    return params != _OUR_PARAMETERS
 
 
 def _weaker_than_ours(params: Parameters) -> bool:

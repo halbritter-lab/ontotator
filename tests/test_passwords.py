@@ -170,10 +170,12 @@ def test_a_supplied_hash_outside_the_policy_is_refused(
         assert_policy(supplied)
 
 
-def test_only_weaker_or_unusable_hashes_need_a_rehash() -> None:
+def test_every_hash_but_ours_needs_a_rehash() -> None:
     assert needs_rehash(OURS) is False
-    # A stronger supplied hash (bootstrap, recovery) is kept, not downgraded.
-    assert needs_rehash(PasswordHasher(time_cost=3).hash(PASSWORD)) is False
+    # A stronger supplied hash (bootstrap, recovery) is replaced as well, so a
+    # failed login costs the same for every account and for an unknown name.
+    assert needs_rehash(PasswordHasher(time_cost=3).hash(PASSWORD)) is True
+    assert needs_rehash(PasswordHasher(salt_len=32).hash(PASSWORD)) is True
     assert needs_rehash(PasswordHasher(time_cost=1).hash(PASSWORD)) is True
     assert needs_rehash(PasswordHasher(memory_cost=8192).hash(PASSWORD)) is True
     assert needs_rehash(PasswordHasher(type=Type.I).hash(PASSWORD)) is True
