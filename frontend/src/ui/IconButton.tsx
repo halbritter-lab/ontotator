@@ -9,5 +9,5 @@ export interface IconButtonProps extends Omit<ButtonProps, "children" | "icon"> 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   { label, icon, className, ...props }, ref,
 ) {
-  return <Button {...props} ref={ref} className={["btn-icon", className].filter(Boolean).join(" ")} aria-label={label} title={label} icon={icon} />;
+  return <Button {...props} ref={ref} className={["btn-icon", className].filter(Boolean).join(" ")} aria-label={label} title={props.title ?? label} icon={icon} />;
 });

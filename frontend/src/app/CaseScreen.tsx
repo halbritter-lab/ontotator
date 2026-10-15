@@ -49,6 +49,11 @@ import { type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { markColourSlot } from "../editor/markColours";
 import { IconCheck, IconClose, IconDownload, IconKeyboard, IconPencil, IconQuestion, IconRetry } from "../ui/icons";
 import { isNegated } from "../editor/negation";
+import { Dialog } from "../ui/Dialog";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { IconButton } from "../ui/IconButton";
+import { openShortcutHelp, ShortcutHelpHost } from "../ui/ShortcutHelp";
+import { useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { CaseNavigation } from "./CaseNavigation";
 import { adjacentCase } from "./caseOrder";
 
@@ -77,40 +82,6 @@ const segmentsKey = (evidence: { mention: { segments: { start: number; end: numb
       .map((segs) => JSON.stringify(segs))
       .sort(),
   );
-
-/**
- * True while the editor is behind the login dialog (an `inert` ancestor) or the key
- * comes from a modal dialog outside it: window shortcuts must not act then.
- */
-const isEditorBlocked = (root: HTMLElement | null, target: EventTarget | null): boolean => {
-  if (root?.closest("[inert]")) return true;
-  const el = target as Element | null;
-  const dialog = typeof el?.closest === "function" ? el.closest('[aria-modal="true"]') : null;
-  return !!dialog && !root?.contains(dialog);
-};
-
-const isTypingTarget = (target: EventTarget | null): boolean => {
-  const el = target as HTMLElement | null;
-  if (!el || typeof el !== "object") return false;
-  const tag = el.tagName?.toLowerCase();
-  if (tag === "input" || tag === "textarea" || tag === "select") return true;
-  if (el.isContentEditable) return true;
-  const editable = el.getAttribute?.("contenteditable");
-  return editable !== null && editable !== undefined && editable !== "false";
-};
-
-export const SHORTCUTS: { keys: string; description: string; reviewOnly?: boolean }[] = [
-  { keys: "j / k", description: "Next / previous review proposal", reviewOnly: true },
-  { keys: "1", description: "Confirm selected proposal", reviewOnly: true },
-  { keys: "2", description: "Reject selected proposal", reviewOnly: true },
-  { keys: "3", description: "Adopt proposal as editable copy", reviewOnly: true },
-  { keys: "4", description: "Mark selected proposal as uncertain", reviewOnly: true },
-  { keys: "Esc", description: "Clear selection / cancel adding a mention" },
-  { keys: "Alt + ← / →", description: "Previous / next case" },
-  { keys: "Shift + arrows, then release Shift", description: "Select text with the keyboard to create a mention" },
-  { keys: "← / →  (Ctrl: by word)", description: "Move the focused mention edge (Tab to an edge handle of the selected annotation)" },
-  { keys: "?", description: "Show / hide this help" },
-];
 
 interface ConfirmRequest {
   title: string;
@@ -176,7 +147,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     typeof navigator !== "undefined" && navigator.onLine === false,
   );
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
-  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   // "Finish & Submit" was clicked and waits for pending saves before it validates.
   const [submitPending, setSubmitPending] = useState(false);
@@ -1281,100 +1251,54 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const prevDoc = documentList ? adjacentCase(documentList, view.document.document_id, -1) : null;
   const nextDoc = documentList ? adjacentCase(documentList, view.document.document_id, 1) : null;
 
-  const modalOpen = !!(confirmRequest || completedSubmission || historySubmission || submitDialogOpen || showShortcutHelp);
   const navigateTo = (docId: string) => {
     if (!onNavigateCase) return;
     void leaveCase(() => onNavigateCase(docId));
   };
 
-  useEffect(() => {
-    const handleCaseNavShortcuts = (e: KeyboardEvent) => {
-      if (e.repeat || isTypingTarget(e.target) || modalOpen || isEditorBlocked(rootRef.current, e.target)) return;
-      if (e.altKey && e.key === "ArrowRight") {
-        if (nextDoc && onNavigateCase && queueState !== "saving") {
-          e.preventDefault();
-          navigateTo(nextDoc.document_id);
-        }
-      } else if (e.altKey && e.key === "ArrowLeft") {
-        if (prevDoc && onNavigateCase && queueState !== "saving") {
-          e.preventDefault();
-          navigateTo(prevDoc.document_id);
-        }
-      }
-    };
-    window.addEventListener("keydown", handleCaseNavShortcuts);
-    return () => window.removeEventListener("keydown", handleCaseNavShortcuts);
-  });
-
-  useEffect(() => {
-    const handleReviewShortcuts = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target) || isEditorBlocked(rootRef.current, e.target)) return;
-      if (e.altKey || e.ctrlKey || e.metaKey) return;
-
-      if (e.key === "Escape") {
-        if (showShortcutHelp) { e.preventDefault(); setShowShortcutHelp(false); return; }
-        if (modalOpen) return;
-        if (isAttachingMention) { e.preventDefault(); setIsAttachingMention(false); return; }
-        if (selectedAnnotationId || selectedTargetId || selectedSourceId) {
-          e.preventDefault();
-          handleDeselectAll();
-        }
-        return;
-      }
-      if (e.key === "?") {
-        if (confirmRequest || completedSubmission || historySubmission || submitDialogOpen) return;
-        e.preventDefault();
-        setShowShortcutHelp((v) => !v);
-        return;
-      }
-      if (e.repeat || modalOpen) return;
-
-      if (view.key.mode === "review" && reviewTargets.length > 0) {
-        if (e.key === "j" || e.key === "J") {
-          e.preventDefault();
-          const currIdx = reviewTargets.findIndex((t) => refKey(t) === selectedTargetId);
-          const nextIdx = currIdx < reviewTargets.length - 1 ? currIdx + 1 : 0;
-          const nextT = reviewTargets[nextIdx];
-          setSelectedTargetId(refKey(nextT));
-          setSelectedAnnotationId(null);
-          setSelectedSourceId(null);
-          return;
-        } else if (e.key === "k" || e.key === "K") {
-          e.preventDefault();
-          const currIdx = reviewTargets.findIndex((t) => refKey(t) === selectedTargetId);
-          const prevIdx = currIdx > 0 ? currIdx - 1 : reviewTargets.length - 1;
-          const prevT = reviewTargets[prevIdx];
-          setSelectedTargetId(refKey(prevT));
-          setSelectedAnnotationId(null);
-          setSelectedSourceId(null);
-          return;
-        }
-      }
-
-      if (view.key.mode !== "review" || !selectedTarget) return;
-
-      const currDec = decisionsMap[refKey(selectedTarget)];
-      if (e.key === "1") {
-        if (selectedTarget.is_obsolete || selectedTarget.is_unknown) return;
-        e.preventDefault();
-        const nextOutcome = currDec?.outcome === "confirmed" ? null : "confirmed";
-        void handleReviewDecision({ outcome: nextOutcome });
-      } else if (e.key === "2") {
-        e.preventDefault();
-        const nextOutcome = currDec?.outcome === "rejected" ? null : "rejected";
-        void handleReviewDecision({ outcome: nextOutcome });
-      } else if (e.key === "3") {
-        e.preventDefault();
-        void handleAdoptAndEditTarget(selectedTarget);
-      } else if (e.key === "4") {
-        e.preventDefault();
-        const nextOutcome = currDec?.outcome === "uncertain" ? null : "uncertain";
-        void handleReviewDecision({ outcome: nextOutcome });
-      }
-    };
-    window.addEventListener("keydown", handleReviewShortcuts);
-    return () => window.removeEventListener("keydown", handleReviewShortcuts);
-  });
+  const shortcutOptions = { scope: "screen" as const, root: rootRef };
+  useShortcut(["Alt+ArrowLeft", "Alt+ArrowRight"], (event) => {
+    const document = event.key === "ArrowLeft" ? prevDoc : nextDoc;
+    if (!document || !onNavigateCase || queueState === "saving") return false;
+    navigateTo(document.document_id);
+  }, { ...shortcutOptions, group: "Navigation", description: "Previous / next case" });
+  useShortcut("Escape", () => {
+    if (isAttachingMention) { setIsAttachingMention(false); return; }
+    if (!selectedAnnotationId && !selectedTargetId && !selectedSourceId) return false;
+    handleDeselectAll();
+  }, { ...shortcutOptions, allowRepeat: true, group: "General", description: "Clear selection / cancel adding a mention" });
+  useShortcut(["j", "k"], (event) => {
+    const current = reviewTargets.findIndex((target) => refKey(target) === selectedTargetId);
+    const index = event.key.toLowerCase() === "j"
+      ? (current < reviewTargets.length - 1 ? current + 1 : 0)
+      : (current > 0 ? current - 1 : reviewTargets.length - 1);
+    setSelectedTargetId(refKey(reviewTargets[index]));
+    setSelectedAnnotationId(null);
+    setSelectedSourceId(null);
+  }, { ...shortcutOptions, enabled: view.key.mode === "review" && reviewTargets.length > 0,
+    group: "Review", description: "Next / previous review proposal" });
+  const reviewShortcutOptions = { ...shortcutOptions, enabled: view.key.mode === "review" && !!selectedTarget, group: "Review" };
+  useShortcut("1", () => {
+    if (!selectedTarget || selectedTarget.is_obsolete || selectedTarget.is_unknown) return false;
+    const current = decisionsMap[refKey(selectedTarget)];
+    void handleReviewDecision({ outcome: current?.outcome === "confirmed" ? null : "confirmed" });
+  }, { ...reviewShortcutOptions, description: "Confirm selected proposal" });
+  useShortcut("2", () => {
+    if (!selectedTarget) return false;
+    const current = decisionsMap[refKey(selectedTarget)];
+    void handleReviewDecision({ outcome: current?.outcome === "rejected" ? null : "rejected" });
+  }, { ...reviewShortcutOptions, description: "Reject selected proposal" });
+  useShortcut("3", () => {
+    if (!selectedTarget) return false;
+    void handleAdoptAndEditTarget(selectedTarget);
+  }, { ...reviewShortcutOptions, description: "Adopt proposal as editable copy" });
+  useShortcut("4", () => {
+    if (!selectedTarget) return false;
+    const current = decisionsMap[refKey(selectedTarget)];
+    void handleReviewDecision({ outcome: current?.outcome === "uncertain" ? null : "uncertain" });
+  }, { ...reviewShortcutOptions, description: "Mark selected proposal as uncertain" });
+  useShortcutHint(["Shift + arrows, then release Shift"], "Select text with the keyboard to create a mention");
+  useShortcutHint(["←", "→", "Ctrl + ← / →"], "Move the focused mention edge (Tab to an edge handle of the selected annotation)");
 
   const textMentions: MentionDisplay[] = useMemo(() => [
     ...mentionsDisplay,
@@ -1459,16 +1383,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             {statusText}
           </span>
 
-          <button
-            type="button"
-            className="btn btn-quiet btn-sm btn-icon"
-            onClick={() => setShowShortcutHelp(true)}
-            title="Keyboard shortcuts (?)"
-            aria-label="Keyboard shortcuts"
-          >
-            <IconKeyboard />
-            <span aria-hidden="true">?</span>
-          </button>
+          <IconButton label="Keyboard shortcuts" icon={<IconKeyboard />} onClick={openShortcutHelp}
+            variant="quiet" size="sm" title="Keyboard shortcuts (?)" />
 
           {queueState === "error" && (
             <button
@@ -1907,171 +1823,133 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         )}
       </div>
 
-      {historySubmission && <div className="modal-overlay">
-        <div className="modal-content" role="dialog" aria-label="Historical submission">
-          <h2>Submission {historySubmission.submission_id}</h2>
-          <p>{historySubmission.created_at}</p>
-          <p>
-            Verified layers:{" "}
-            {historySubmission.checked_layer_ids && historySubmission.checked_layer_ids.length > 0
-              ? historySubmission.checked_layer_ids.join(", ")
-              : (historySubmission.document_checked ? "Document verified" : "None")}
-          </p>
-          {historySubmission.snapshots.map(snap => {
-            const axesVal = snap.annotation.axes_values ?? (snap.annotation as any).axes?.values;
-            return (
-              <div key={refKey({annotation_id:snap.annotation.annotation_id,version:snap.version})}>
-                <strong><TermName termId={snap.annotation.term_id} label={termLabel(snap.annotation.layer_id, snap.annotation.term_id)} /></strong>
-                <p>
-                  {axesVal && Object.keys(axesVal).length > 0
-                    ? Object.entries(axesVal)
-                        .map(([k, v]) => `${k}: ${v ?? "Not specified"}`)
-                        .join(" · ")
-                    : "No axes"}
-                </p>
-                {snap.evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
-                  {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
-                </p>)}
-              </div>
-            );
-          })}
-          {historySubmission.decisions.map(decision => <p key={refKey(decision.target)}>
-            {decision.target.annotation_id} ({decision.target.version}): {decision.outcome} {decision.note}
-          </p>)}
-          <button type="button" className="btn btn-secondary" onClick={() => setHistorySubmission(null)}>
-            Close
-          </button>
-        </div>
-      </div>}
+      {historySubmission && <Dialog open title="Historical submission" heading={<>Submission {historySubmission.submission_id}</>} onClose={() => setHistorySubmission(null)}>
+        <p>{historySubmission.created_at}</p>
+        <p>
+          Verified layers:{" "}
+          {historySubmission.checked_layer_ids && historySubmission.checked_layer_ids.length > 0
+            ? historySubmission.checked_layer_ids.join(", ")
+            : (historySubmission.document_checked ? "Document verified" : "None")}
+        </p>
+        {historySubmission.snapshots.map(snap => {
+          const axesVal = snap.annotation.axes_values ?? (snap.annotation as any).axes?.values;
+          return (
+            <div key={refKey({annotation_id:snap.annotation.annotation_id,version:snap.version})}>
+              <strong><TermName termId={snap.annotation.term_id} label={termLabel(snap.annotation.layer_id, snap.annotation.term_id)} /></strong>
+              <p>
+                {axesVal && Object.keys(axesVal).length > 0
+                  ? Object.entries(axesVal)
+                      .map(([k, v]) => `${k}: ${v ?? "Not specified"}`)
+                      .join(" · ")
+                  : "No axes"}
+              </p>
+              {snap.evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
+                {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
+              </p>)}
+            </div>
+          );
+        })}
+        {historySubmission.decisions.map(decision => <p key={refKey(decision.target)}>
+          {decision.target.annotation_id} ({decision.target.version}): {decision.outcome} {decision.note}
+        </p>)}
+        <button type="button" className="btn btn-secondary" onClick={() => setHistorySubmission(null)}>
+          Close
+        </button>
+      </Dialog>}
 
-      {completedSubmission && <div className="modal-overlay">
-        <div className="modal-content" role="dialog" aria-label="Case submitted">
-          <h2>✓ Case successfully submitted!</h2>
-          <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>
-          <p>Timestamp: {completedSubmission.created_at}</p>
-          <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-            {nextDoc && onNavigateCase && (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  setCompletedSubmission(null);
-                  void leaveCase(() => onNavigateCase(nextDoc.document_id));
-                }}
-              >
-                Review next case (Case {nextDoc.position}) →
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={downloadExport}
-            >
-              📥 Download export
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setCompletedSubmission(null)}
-            >
-              Stay in case
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => { setCompletedSubmission(null); void leaveCase(onClose); }}
-            >
-              Back to dashboard
-            </button>
-          </div>
-        </div>
-      </div>}
-
-      {submitDialogOpen && <div className="modal-overlay">
-        <div className="modal-content" role="dialog" aria-modal="true" aria-label="Submit case">
-          <h2>Submit case {view.document.document_id}?</h2>
-          <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
-            {view.key.mode === "review" ? (
-              <li>
-                {confirmedCount + (draft.annotations ?? []).length} annotation(s) will be submitted
-                ({confirmedCount} confirmed proposal(s), {(draft.annotations ?? []).length} curated)
-              </li>
-            ) : (
-              <li>{(draft.annotations ?? []).length} annotation(s) in this case</li>
-            )}
-            {view.key.mode === "review" && (
-              <li>
-                {reviewTargets.length - openReviewTargets.length} of {reviewTargets.length} review proposal(s) decided
-                {openReviewTargets.length > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargets.length} still open</strong>}
-              </li>
-            )}
-            {!isSingleLayer && (
-              <li>
-                Verified layers: {(draft.checked_layer_ids ?? []).filter((id) => editableLayerIds.includes(id)).length} of {editableLayerIds.length}
-              </li>
-            )}
-          </ul>
-          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
-            <input
-              type="checkbox"
-              checked={textCheckedConfirmed}
-              onChange={(e) => setTextCheckedConfirmed(e.target.checked)}
-            />
-            <span>Entire text checked for further findings</span>
-          </label>
-          {view.key.mode === "review" && openReviewTargets.length > 0 && (
-            <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
-              Decide every review proposal before submitting.
-            </p>
-          )}
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+      {completedSubmission && <Dialog open title="Case submitted" heading="✓ Case successfully submitted!">
+        <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>
+        <p>Timestamp: {completedSubmission.created_at}</p>
+        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+          {nextDoc && onNavigateCase && (
             <button
               type="button"
               className="btn btn-primary"
-              disabled={!textCheckedConfirmed || (view.key.mode === "review" && openReviewTargets.length > 0)}
-              onClick={() => { void confirmSubmit(); }}
+              onClick={() => {
+                setCompletedSubmission(null);
+                void leaveCase(() => onNavigateCase(nextDoc.document_id));
+              }}
             >
-              Submit case
+              Review next case (Case {nextDoc.position}) →
             </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setSubmitDialogOpen(false)}>
-              Cancel
-            </button>
-          </div>
+          )}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={downloadExport}
+          >
+            📥 Download export
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setCompletedSubmission(null)}
+          >
+            Stay in case
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => { setCompletedSubmission(null); void leaveCase(onClose); }}
+          >
+            Back to dashboard
+          </button>
         </div>
-      </div>}
+      </Dialog>}
 
-      {confirmRequest && <div className="modal-overlay">
-        <div className="modal-content" role="dialog" aria-modal="true" aria-label={confirmRequest.title}>
-          <h2>{confirmRequest.title}</h2>
-          <p>{confirmRequest.message}</p>
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-            <button type="button" className="btn btn-primary" onClick={() => closeConfirm(true)}>
-              {confirmRequest.confirmLabel}
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={() => closeConfirm(false)}>
-              Cancel
-            </button>
-          </div>
+      <Dialog open={submitDialogOpen} title="Submit case" heading={<>Submit case {view.document.document_id}?</>} onClose={() => setSubmitDialogOpen(false)}>
+        <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
+          {view.key.mode === "review" ? (
+            <li>
+              {confirmedCount + (draft.annotations ?? []).length} annotation(s) will be submitted
+              ({confirmedCount} confirmed proposal(s), {(draft.annotations ?? []).length} curated)
+            </li>
+          ) : (
+            <li>{(draft.annotations ?? []).length} annotation(s) in this case</li>
+          )}
+          {view.key.mode === "review" && (
+            <li>
+              {reviewTargets.length - openReviewTargets.length} of {reviewTargets.length} review proposal(s) decided
+              {openReviewTargets.length > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargets.length} still open</strong>}
+            </li>
+          )}
+          {!isSingleLayer && (
+            <li>
+              Verified layers: {(draft.checked_layer_ids ?? []).filter((id) => editableLayerIds.includes(id)).length} of {editableLayerIds.length}
+            </li>
+          )}
+        </ul>
+        <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
+          <input
+            type="checkbox"
+            checked={textCheckedConfirmed}
+            onChange={(e) => setTextCheckedConfirmed(e.target.checked)}
+          />
+          <span>Entire text checked for further findings</span>
+        </label>
+        {view.key.mode === "review" && openReviewTargets.length > 0 && (
+          <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
+            Decide every review proposal before submitting.
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!textCheckedConfirmed || (view.key.mode === "review" && openReviewTargets.length > 0)}
+            onClick={() => { void confirmSubmit(); }}
+          >
+            Submit case
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => setSubmitDialogOpen(false)}>
+            Cancel
+          </button>
         </div>
-      </div>}
+      </Dialog>
 
-      {showShortcutHelp && <div className="modal-overlay" onClick={() => setShowShortcutHelp(false)}>
-        <div className="modal-content" role="dialog" aria-label="Keyboard shortcuts" onClick={(e) => e.stopPropagation()}>
-          <h2>Keyboard shortcuts</h2>
-          <table style={{ fontSize: "0.9rem", borderCollapse: "collapse" }}>
-            <tbody>
-              {SHORTCUTS.filter((sc) => !sc.reviewOnly || view.key.mode === "review").map((sc) => (
-                <tr key={sc.keys}>
-                  <td style={{ padding: "3px 12px 3px 0" }}><kbd>{sc.keys}</kbd></td>
-                  <td>{sc.description}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Shortcuts are disabled while typing in a field or when a dialog is open.</p>
-          <button type="button" className="btn btn-secondary" onClick={() => setShowShortcutHelp(false)}>Close</button>
-        </div>
-      </div>}
+      {confirmRequest && <ConfirmDialog open title={confirmRequest.title} message={<p>{confirmRequest.message}</p>}
+        confirmLabel={confirmRequest.confirmLabel} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}
+      <ShortcutHelpHost />
     </div>
   );
 };

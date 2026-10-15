@@ -500,6 +500,51 @@ describe("CaseScreen integration", () => {
     });
   });
 
+  it("escape_cancels_the_submit_dialog", async () => {
+    render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Finish & Submit Case/i })).toBeDefined();
+  });
+
+  it("the_case_submitted_dialog_ignores_escape", async () => {
+    vi.spyOn(api, "submitWorkspace").mockResolvedValue({
+      submission_id: "submission-1", created_at: "2026-10-15T10:00:00Z",
+      snapshots: [], decisions: [], checked_layer_ids: [], document_checked: true,
+    } as any);
+    render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Entire text checked for further findings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit case" }));
+    const dialog = await screen.findByRole("dialog", { name: "Case submitted" });
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "Case submitted" })).toBe(dialog);
+    fireEvent.click(screen.getByRole("button", { name: "Stay in case" }));
+    expect(screen.queryByRole("dialog", { name: "Case submitted" })).toBeNull();
+  });
+
+  it("the_help_lists_review_keys_only_in_review_mode", () => {
+    const rendered = render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.keyDown(window, { key: "?" });
+    expect(screen.queryByText("Next / previous review proposal")).toBeNull();
+    expect(screen.queryByText("Confirm selected proposal")).toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    const view = structuredClone(sampleView);
+    view.key.mode = "review";
+    view.targets!.targets = [{ annotation_id: "proposal-1", version: "v1" }];
+    rendered.rerender(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.keyDown(window, { key: "j" });
+    fireEvent.keyDown(window, { key: "?" });
+    expect(screen.getByText("Next / previous review proposal")).toBeDefined();
+    expect(screen.getByText("Confirm selected proposal")).toBeDefined();
+    expect(screen.getByText("Reject selected proposal")).toBeDefined();
+    expect(screen.getByText("Adopt proposal as editable copy")).toBeDefined();
+    expect(screen.getByText("Mark selected proposal as uncertain")).toBeDefined();
+  });
+
   describe("Finish & Submit while a save is pending", () => {
     // Two layers, one editable: submitting requires the editable layer to be verified.
     const twoLayerView = (): WorkspaceView => ({

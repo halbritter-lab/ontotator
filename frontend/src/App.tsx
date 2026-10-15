@@ -10,6 +10,7 @@ import {
   type OntologyInfo,
 } from "./api/client";
 import type { components } from "./api/generated";
+import { Dialog } from "./ui/Dialog";
 import { CaseScreen } from "./app/CaseScreen";
 import { CaseErrorBoundary } from "./app/ErrorBoundary";
 
@@ -426,26 +427,23 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const showGuide = packagesLoaded && !hasPackages;
 
   const roundSelectionDialog = (
-    roundSelection && <div className="modal-overlay">
-        <div className="modal-content" role="dialog" aria-label="Select review round" aria-modal="true">
-          <h2>Select review round</h2>
-          <p>This annotator has several review rounds for this case. Choose the round to continue.</p>
-          <label htmlFor="review-round-select">Review round</label>
-          <select id="review-round-select" className="form-select" value={selectedRound} onChange={(e) => setSelectedRound(e.target.value)}>
-            <option value="">Choose a round</option>
-            {roundSelection.rounds.map((id) => <option key={id} value={id}>{id}</option>)}
-          </select>
-          <div className="modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setRoundSelection(null)}>Cancel</button>
-            <button type="button" className="btn btn-primary" disabled={!selectedRound || isOpening} onClick={async () => {
-              setIsOpening(true);
-              try { await openCase(roundSelection.docId, { roundId: selectedRound }); }
-              catch (err) { reportError("Error opening review round", err); }
-              finally { setIsOpening(false); }
-            }}>Resume round</button>
-          </div>
-        </div>
+    roundSelection && <Dialog open title="Select review round" onClose={() => setRoundSelection(null)}>
+      <p>This annotator has several review rounds for this case. Choose the round to continue.</p>
+      <label htmlFor="review-round-select">Review round</label>
+      <select id="review-round-select" className="form-select" value={selectedRound} onChange={(e) => setSelectedRound(e.target.value)}>
+        <option value="">Choose a round</option>
+        {roundSelection.rounds.map((id) => <option key={id} value={id}>{id}</option>)}
+      </select>
+      <div className="modal-actions">
+        <button type="button" className="btn btn-secondary" onClick={() => setRoundSelection(null)}>Cancel</button>
+        <button type="button" className="btn btn-primary" disabled={!selectedRound || isOpening} onClick={async () => {
+          setIsOpening(true);
+          try { await openCase(roundSelection.docId, { roundId: selectedRound }); }
+          catch (err) { reportError("Error opening review round", err); }
+          finally { setIsOpening(false); }
+        }}>Resume round</button>
       </div>
+    </Dialog>
   );
 
   if (activeWorkspace) {
