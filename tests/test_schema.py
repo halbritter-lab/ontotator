@@ -7,7 +7,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
 from pg_harness import database_for, owner_engine, unmigrated_database_url
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from ontocurator.storage.schema import current_revision, head_revision, upgrade
 from ontocurator.storage.tables import APPEND_ONLY_TABLES, SCHEMA, Base
@@ -35,6 +35,7 @@ def test_the_migration_creates_exactly_the_mapped_tables(tmp_path: Path) -> None
                 "include_name": _only_our_schema,
                 "version_table_schema": SCHEMA,
                 "compare_type": True,
+                "compare_server_default": True,
             },
         )
         assert compare_metadata(context, Base.metadata) == []
@@ -85,6 +86,44 @@ def test_even_the_schema_owner_cannot_change_history(tmp_path: Path) -> None:
     ):
         with pytest.raises(DBAPIError, match="append-only"), owner.begin() as conn:
             conn.execute(text(statement))
+
+
+def test_the_application_role_draws_pseudonym_numbers(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "a.db")
+
+    with db.engine.begin() as conn:
+        drawn = [
+            conn.execute(text(f"SELECT nextval('{SCHEMA}.pseudonym_seq')")).scalar_one()
+            for _ in range(2)
+        ]
+    assert drawn == [1, 2]
+
+
+def test_a_one_time_code_is_for_setup_or_reset_only(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "a.db")
+    with db.engine.begin() as conn:
+        conn.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.users (username, display_name, pseudonym)"
+                " VALUES ('alice', 'Alice', 'ann-0001')"
+            )
+        )
+
+    def insert_code(purpose: str, code: str) -> None:
+        with db.engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"INSERT INTO {SCHEMA}.one_time_codes (user_id, purpose,"
+                    " code_sha256, credential_generation, expires_at)"
+                    f" SELECT id, :purpose, :code, 1, now() FROM {SCHEMA}.users"
+                ),
+                {"purpose": purpose, "code": code},
+            )
+
+    insert_code("setup", "a")
+    insert_code("reset", "b")
+    with pytest.raises(IntegrityError, match="ck_one_time_codes_purpose"):
+        insert_code("login", "c")
 
 
 def test_the_application_role_cannot_create_tables(tmp_path: Path) -> None:

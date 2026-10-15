@@ -84,3 +84,32 @@ answer; the least surprising option was taken and should be confirmed.
   `argon2-cffi-bindings`, `cffi`, `pycparser`, all MIT/BSD); `scripts/license_notices.py` derives the
   runtime closure from installed metadata, so neither it, `THIRD_PARTY_NOTICES.md` nor
   `tests/test_license_notices.py` needed a change.
+- Task 2 (review fix): the earlier entry left `one_time_codes.purpose` without a constraint -> 0002 and
+  `tables.py` now have `CHECK (purpose IN ('setup', 'reset'))` named `ck_one_time_codes_purpose`
+  (`tables.py` gained the `ck_%(table_name)s_%(constraint_name)s` convention), because 0002 is not
+  released yet. The mapping/migration comparison now also sets `compare_server_default=True`; it passed
+  without changes. New tests: `test_the_application_role_draws_pseudonym_numbers` (the app role can
+  `nextval('ontocurator.pseudonym_seq')`) and `test_a_one_time_code_is_for_setup_or_reset_only`.
+  `tests/test_schema.py` now reports `19 passed`.
+- Task 3 (review fix): `assert_policy` matched with `^…$`, so a hash with a trailing newline (as read
+  from a secret file) or `m=019456` passed and then never verified -> it uses `fullmatch` and
+  `[1-9]\d*` parameters, so both are refused as "not an Argon2id (v=19) PHC string".
+- Task 3 (review fix): the plan set only lower bounds for a supplied hash -> it also has caps
+  (`MAX_MEMORY_COST = 262_144` KiB, `MAX_TIME_COST = 10`, `MAX_PARALLELISM = 8`, refused with "at
+  most"), because a supplied `m=4194304` would allocate 4 GiB per login. After the bounds,
+  `assert_policy` verifies the empty password against the hash: a mismatch proves Argon2 decodes it;
+  any other error becomes `PasswordRuleError("… cannot be decoded …")`.
+- Task 3 (review fix): passwords UTF-8 cannot encode (a lone surrogate) -> `check_password_rules`
+  refuses them ("not valid Unicode text"), and hashing and verification encode with `surrogatepass`,
+  so `hash_password` never raises `UnicodeEncodeError` and a login with such a password still runs
+  Argon2 exactly once. This replaces the earlier concern that such a password returned before Argon2 ran.
+- Task 3 (review fix, technical decision): passwords are compared in Unicode NFC -> `hash_password`,
+  `verify_password` and `check_password_rules` normalise to NFC first; lengths count characters after
+  NFC, and the username comparison normalises the username as well. A composed and a decomposed
+  spelling (for example of `é`) are the same password, because keyboards and operating systems differ in
+  which they produce.
+- Task 3 (review fix): the earlier entry computed the dummy hash lazily -> it is computed at import
+  (`_DUMMY_HASH`), so the first unknown-user login costs one Argon2 run like the others. A test counts
+  completed Argon2 runs (patched `verify_secret`) for a wrong password, `None`, broken, non-ASCII and
+  undecodable hashes and surrogate passwords: always exactly one. `tests/test_passwords.py` now reports
+  `26 passed` (adds `needs_rehash` and eight supplied-hash policy cases).

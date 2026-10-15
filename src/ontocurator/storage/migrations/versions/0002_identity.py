@@ -135,6 +135,9 @@ def upgrade() -> None:
         _user_fk("one_time_codes", "issued_by"),
         sa.PrimaryKeyConstraint("id", name="pk_one_time_codes"),
         sa.UniqueConstraint("code_sha256", name="uq_one_time_codes_code_sha256"),
+        sa.CheckConstraint(
+            "purpose IN ('setup', 'reset')", name="ck_one_time_codes_purpose"
+        ),
         schema=SCHEMA,
     )
     op.create_table(

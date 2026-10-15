@@ -13,6 +13,7 @@ from typing import Any, ClassVar
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -44,6 +45,7 @@ NAMING_CONVENTION = {
     "uq": "uq_%(table_name)s_%(column_0_N_name)s",
     "fk": "fk_%(table_name)s_%(column_0_N_name)s",
     "pk": "pk_%(table_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
 }
 
 
@@ -389,10 +391,11 @@ class OneTimeCodeRow(Base):
     """A single-use setup or reset code; only its SHA-256 is stored."""
 
     __tablename__ = "one_time_codes"
+    __table_args__ = (CheckConstraint("purpose IN ('setup', 'reset')", name="purpose"),)
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(UserRow.id))
-    purpose: Mapped[str]  # 'setup' or 'reset'
+    purpose: Mapped[str]
     code_sha256: Mapped[str] = mapped_column(unique=True)
     issued_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
     credential_generation: Mapped[int]
