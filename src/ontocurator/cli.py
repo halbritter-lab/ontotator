@@ -691,6 +691,238 @@ def projects_remove_member(
     _print_roles(username.strip().lower(), project, roles)
 
 
+def _pairs(values: list[str] | None, option: str) -> dict[str, str]:
+    """``id=value`` options by ontology id."""
+    pairs: dict[str, str] = {}
+    for item in values or []:
+        ontology_id, sep, value = item.partition("=")
+        if not sep or not ontology_id.strip() or not value.strip():
+            raise typer.BadParameter(
+                f"expected <ontology id>=<value>, got {item!r}", param_hint=option
+            )
+        pairs[ontology_id.strip()] = value.strip()
+    return pairs
+
+
+@projects_app.command("create")
+def projects_create(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    name: Annotated[str, typer.Option("--name", help="The project's name.")],
+    profile: Annotated[
+        Path,
+        typer.Option(
+            "--profile",
+            help="The task profile (JSON) with its layers and ontologies.",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    description: Annotated[
+        str | None, typer.Option("--description", help="Optional description.")
+    ] = None,
+    pin: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--pin",
+            help=(
+                "<ontology id>=<sha256> of a stored ontology file; overrides the "
+                "profile's sha256 (repeatable)."
+            ),
+            show_default=False,
+        ),
+    ] = None,
+    allowed_roots: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--allowed-roots",
+            help="<ontology id>=<term>,<term>,... the allowed roots (repeatable).",
+            show_default=False,
+        ),
+    ] = None,
+    t1_profile: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--t1-profile",
+            help="<ontology id>=generic|hpo-phenotype (repeatable; default generic).",
+            show_default=False,
+        ),
+    ] = None,
+) -> None:
+    """Create a project whose profile ontologies are pinned to stored files."""
+    from typing import cast
+
+    from pydantic import ValidationError
+
+    from ontocurator.authz.scoped import ScopedRepository
+    from ontocurator.domain.profiles import TaskProfile
+    from ontocurator.exchange.jobs import operator_access
+    from ontocurator.exchange.t1 import Pin, T1Profile
+
+    try:
+        task_profile = TaskProfile.model_validate_json(
+            profile.read_text(encoding="utf-8")
+        )
+    except (ValidationError, ValueError) as exc:
+        raise typer.BadParameter(
+            f"not a task profile: {exc}", param_hint="--profile"
+        ) from exc
+    shas = _pairs(pin, "--pin")
+    roots = _pairs(allowed_roots, "--allowed-roots")
+    profiles = _pairs(t1_profile, "--t1-profile")
+    defined = {o.ontology_id for o in task_profile.ontologies}
+    for option, given in (("--allowed-roots", roots), ("--t1-profile", profiles)):
+        unknown = sorted(set(given) - defined - set(shas))
+        if unknown:
+            raise typer.BadParameter(
+                f"no ontology {', '.join(unknown)} in the profile", param_hint=option
+            )
+    for value in profiles.values():
+        if value not in ("generic", "hpo-phenotype"):
+            raise typer.BadParameter(
+                f"must be generic or hpo-phenotype, got {value!r}",
+                param_hint="--t1-profile",
+            )
+    task_profile = task_profile.model_copy(
+        update={
+            "ontologies": [
+                o.model_copy(update={"sha256": shas.get(o.ontology_id, o.sha256)})
+                for o in task_profile.ontologies
+            ]
+        }
+    )
+    shas = {**{o.ontology_id: o.sha256 for o in task_profile.ontologies}, **shas}
+    pins = {
+        ontology_id: Pin(
+            sha256=sha,
+            allowed_roots=tuple(
+                root.strip()
+                for root in roots.get(ontology_id, "").split(",")
+                if root.strip()
+            ),
+            t1_profile=cast(T1Profile, profiles.get(ontology_id, "generic")),
+        )
+        for ontology_id, sha in shas.items()
+    }
+    actor = Actor.cli()
+    with _open_database(ctx) as db:
+        ScopedRepository(db, operator_access(actor), actor).create_project(
+            project, name, description, task_profile, pins
+        )
+    shown = ", ".join(f"{key}={item.sha256[:12]}" for key, item in sorted(pins.items()))
+    typer.echo(f"Created project '{project}' ({shown or 'no ontologies'}).")
+
+
+def _zip_directory(folder: Path) -> bytes:
+    """A directory bundle as ZIP bytes, entries sorted by path."""
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(folder.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(folder).as_posix())
+    return buffer.getvalue()
+
+
+def _run_job(db: Database, kind: str, payload: dict[str, Any], *, wait: bool) -> Any:
+    """Enqueue a job for the project in ``payload`` and run it inline.
+
+    Without ``wait`` it only queues the job and returns None. A server's worker
+    may take the job first; then its outcome is awaited. A failed job is
+    ``Error: JOB_FAILED: ...`` and exit 1.
+    """
+    import socket
+    import time
+
+    from sqlalchemy import select
+
+    from ontocurator.exchange.jobs import HANDLERS
+    from ontocurator.jobs.queue import Job, JobContext, JobQueue
+    from ontocurator.storage.tables import ProjectRow
+
+    with db.transaction() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == payload["project"])
+        ).scalar_one_or_none()
+    if project_id is None:
+        _fail("PROJECT_NOT_FOUND", f"There is no project '{payload['project']}'.")
+    queue = JobQueue(db, HANDLERS, context=JobContext(db=db, data_dir=db.data_dir))
+    job_id = queue.enqueue(kind, payload, project_id=project_id, actor=Actor.cli())
+    if not wait:
+        typer.echo(f"Queued job {job_id}; the server's worker runs it.")
+        return None
+    worker = f"cli:{socket.gethostname()}:{os.getpid()}"
+    claimed = queue.claim(job_id, worker)
+    job: Job | None
+    if claimed is not None:
+        job = queue.run(claimed, worker)
+    else:
+        job = queue.get(job_id)
+        while job is not None and job.status in ("queued", "running"):
+            time.sleep(0.5)
+            job = queue.get(job_id)
+    assert job is not None
+    if job.status != "succeeded":
+        _fail("JOB_FAILED", f"job {job.id}: {job.error}")
+    return job
+
+
+IMPORT_COUNTS = (
+    "units",
+    "documents_added",
+    "documents_skipped",
+    "documents_only",
+    "sets_added",
+    "sets_skipped",
+    "proposals",
+    "dropped_basis",
+)
+
+
+@admin_app.command("import")
+def import_command(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help="A T1 bundle (.zip or directory) or a single T1 unit (.json).",
+            exists=True,
+            readable=True,
+        ),
+    ],
+    no_wait: Annotated[
+        bool,
+        typer.Option("--no-wait", help="Only queue the job for the server's worker."),
+    ] = False,
+) -> None:
+    """Import documents and proposals in the T1 format into a project."""
+    from ontocurator.exchange.jobs import store_file
+
+    if path.is_dir():
+        data, filename = _zip_directory(path), f"{path.name}.zip"
+    else:
+        data, filename = path.read_bytes(), path.name
+    with _open_database(ctx) as db:
+        sha = store_file(db, data)
+        job = _run_job(
+            db,
+            "t1_import",
+            {"project": project, "blob_sha256": sha, "filename": filename},
+            wait=not no_wait,
+        )
+    if job is None:
+        return
+    result = job.result or {}
+    for key in IMPORT_COUNTS:
+        typer.echo(f"{key}: {result.get(key, 0)}")
+    if result.get("warnings"):
+        typer.echo(f"warnings: {', '.join(result['warnings'])}")
+
+
 def _ontology_store(db: Database) -> OntologyStore:
     return OntologyStore(db, OntologyRegistry(), db.data_dir)
 

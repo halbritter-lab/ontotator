@@ -98,6 +98,13 @@ def test_a_member_sees_only_their_projects(db: Database) -> None:
 # One call per overridden method, each naming project B.
 CALLS: dict[str, Callable[[Repository], object]] = {
     "import_package": lambda r: r.import_package(_package("B")),
+    "create_project": lambda r: r.create_project(
+        "B", "B", None, _package("B").manifest.task_profile, {}
+    ),
+    "project_pins": lambda r: r.project_pins("B"),
+    "add_documents_and_proposals": lambda r: r.add_documents_and_proposals(
+        "B", [], [], source_sha256="0" * 64
+    ),
     "get_search_conditions": lambda r: r.get_search_conditions("B"),
     "capture_search_conditions": lambda r: r.capture_search_conditions("B", [], {}),
     "get_embedded_files": lambda r: r.get_embedded_files("B"),
@@ -166,7 +173,7 @@ def test_every_project_method_checks_the_scope(db: Database, method: str) -> Non
     with pytest.raises(DomainError) as error:
         CALLS[method](alice)
 
-    if method == "import_package":
+    if method in ("import_package", "create_project"):
         # Creating or importing is refused alike for missing and foreign keys.
         assert isinstance(error.value, AccessDenied)
         assert error.value.code == "NOT_ALLOWED"

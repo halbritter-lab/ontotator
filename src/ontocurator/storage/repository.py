@@ -8,10 +8,10 @@ are append-only (T2 D6): the application role can only insert and read them.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from urllib.parse import quote
 
 from sqlalchemy import (
@@ -45,6 +45,13 @@ from ontocurator.domain.workspace import (
     Submission,
     WorkspaceKey,
 )
+from ontocurator.exchange.t1 import (
+    ImportCounts,
+    ImportedDocument,
+    ImportedSet,
+    Pin,
+    T1Profile,
+)
 from ontocurator.ontology.conditions import SearchCondition, validate_resources
 from ontocurator.packages.models import (
     PackageManifest,
@@ -62,11 +69,14 @@ from ontocurator.storage.tables import (
     EditEventRow,
     EvidenceSnapshotRow,
     MutationReceiptRow,
+    OntologyFileRow,
+    ProjectOntologyRow,
     ProjectResourceRow,
     ProjectRow,
     ProjectSearchConditionsRow,
     ProposalAnnotationRow,
     ProposalEvidenceRow,
+    ProposalSetRow,
     ReviewDecisionRow,
     SearchEventRow,
     StoredFileRow,
@@ -426,26 +436,9 @@ class Repository:
         state of its own copy, and no other project's copy is changed or handed
         to the importing project.
         """
-        for (annotation_id, version), snap in package.annotations.items():
-            expected = canonical_hash(encode_snapshot(snap))
-            for stored in conn.execute(
-                select(AnnotationSnapshotRow.payload).where(
-                    AnnotationSnapshotRow.annotation_id == annotation_id,
-                    AnnotationSnapshotRow.version == version,
-                )
-            ).scalars():
-                if canonical_hash(stored) != expected:
-                    raise InvalidPackage("Conflicting immutable snapshot content")
-        for (evidence_id, version), ev in package.evidence.items():
-            expected = canonical_hash(ev.model_dump())
-            for stored in conn.execute(
-                select(EvidenceSnapshotRow.payload).where(
-                    EvidenceSnapshotRow.evidence_id == evidence_id,
-                    EvidenceSnapshotRow.version == version,
-                )
-            ).scalars():
-                if canonical_hash(stored) != expected:
-                    raise InvalidPackage("Conflicting immutable snapshot content")
+        self._verify_snapshot_contents(
+            conn, package.annotations.values(), package.evidence.values()
+        )
         for submission in package.submissions.values():
             for stored in conn.execute(
                 select(SubmissionRow.payload).where(
@@ -483,6 +476,35 @@ class Repository:
                         )
                         .values(payload=event.model_dump(mode="json"))
                     )
+
+    @staticmethod
+    def _verify_snapshot_contents(
+        conn: Connection,
+        annotations: Iterable[AnnotationSnapshot],
+        evidence: Iterable[EvidenceSnapshot],
+    ) -> None:
+        """A known snapshot identity of any project must have the same content."""
+        for snap in annotations:
+            expected = canonical_hash(encode_snapshot(snap))
+            for stored in conn.execute(
+                select(AnnotationSnapshotRow.payload).where(
+                    AnnotationSnapshotRow.annotation_id
+                    == snap.annotation.annotation_id,
+                    AnnotationSnapshotRow.version == snap.version,
+                )
+            ).scalars():
+                if canonical_hash(stored) != expected:
+                    raise InvalidPackage("Conflicting immutable snapshot content")
+        for ev in evidence:
+            expected = canonical_hash(ev.model_dump())
+            for stored in conn.execute(
+                select(EvidenceSnapshotRow.payload).where(
+                    EvidenceSnapshotRow.evidence_id == ev.mention.evidence_id,
+                    EvidenceSnapshotRow.version == ev.version,
+                )
+            ).scalars():
+                if canonical_hash(stored) != expected:
+                    raise InvalidPackage("Conflicting immutable snapshot content")
 
     @staticmethod
     def _verify_existing_package_content(
@@ -673,6 +695,280 @@ class Repository:
                 if ont.resource_path == path:
                     result.append((ont, self.db.blobs.get(sha)))
         return result
+
+    # --- projects from the CLI and T1 imports (T2d) ------------------------ #
+
+    def create_project(
+        self,
+        key: str,
+        name: str,
+        description: str | None,
+        profile: TaskProfile,
+        pins: Mapping[str, Pin],
+        *,
+        on_create: Callable[[Connection, int], None] | None = None,
+    ) -> None:
+        """Create an empty project whose profile ontologies are pinned (P7).
+
+        Every profile ontology must be pinned to a stored ontology file with
+        the profile's sha256 and release, and no other ontology may be pinned;
+        otherwise ``PIN_MISMATCH`` lists the differences. A synthesised
+        manifest keeps the readers of seed projects working.
+        """
+        differences: list[dict[str, Any]] = []
+        defined = {o.ontology_id: o for o in profile.ontologies}
+        for ontology_id in sorted(set(pins) - set(defined)):
+            differences.append(
+                {"ontology_id": ontology_id, "field": "profile", "found": None}
+            )
+        for ontology_id, definition in defined.items():
+            pin = pins.get(ontology_id)
+            if pin is None:
+                differences.append(
+                    {"ontology_id": ontology_id, "field": "pin", "found": None}
+                )
+            elif pin.sha256 != definition.sha256:
+                differences.append(
+                    {
+                        "ontology_id": ontology_id,
+                        "field": "sha256",
+                        "expected": definition.sha256,
+                        "found": pin.sha256,
+                    }
+                )
+        manifest = PackageManifest(
+            package_id=key,
+            task_profile=profile,
+            task_profile_sha256=profile_hash(profile),
+            created_at=datetime.now(UTC).isoformat(),
+        )
+        with self.db.transaction() as conn:
+            conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", key))))
+            for ontology_id, pin in pins.items():
+                pinned = defined.get(ontology_id)
+                if pinned is None or pin.sha256 != pinned.sha256:
+                    continue
+                stored = conn.execute(
+                    select(OntologyFileRow.kind, OntologyFileRow.release).where(
+                        OntologyFileRow.sha256 == pin.sha256
+                    )
+                ).one_or_none()
+                if stored is None or stored.kind != "ontology":
+                    differences.append(
+                        {"ontology_id": ontology_id, "field": "file", "found": None}
+                    )
+                elif stored.release != pinned.release:
+                    differences.append(
+                        {
+                            "ontology_id": ontology_id,
+                            "field": "release",
+                            "expected": pinned.release,
+                            "found": stored.release,
+                        }
+                    )
+            if differences:
+                raise DomainError("PIN_MISMATCH", {"differences": differences})
+            if self._project_id(conn, key) is not None:
+                raise DomainError("PROJECT_EXISTS", f"Project '{key}' exists.")
+            project_id = conn.execute(
+                insert(ProjectRow)
+                .values(
+                    project_key=key,
+                    name=name,
+                    description=description,
+                    manifest=manifest.model_dump(mode="json"),
+                    manifest_sha256=canonical_hash(manifest.model_dump()),
+                    task_profile=profile.model_dump(mode="json"),
+                    task_profile_sha256=profile_hash(profile),
+                )
+                .returning(ProjectRow.id)
+            ).scalar_one()
+            if pins:
+                conn.execute(
+                    insert(ProjectOntologyRow),
+                    [
+                        {
+                            "project_id": project_id,
+                            "ontology_id": ontology_id,
+                            "sha256": pin.sha256,
+                            "allowed_roots": list(pin.allowed_roots),
+                            "t1_profile": pin.t1_profile,
+                        }
+                        for ontology_id, pin in sorted(pins.items())
+                    ],
+                )
+            if on_create is not None:
+                on_create(conn, project_id)
+
+    def project_pins(self, package_id: str) -> dict[str, Pin]:
+        """The project's pinned ontologies by ontology id."""
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, package_id)
+            rows = conn.execute(
+                select(
+                    ProjectOntologyRow.ontology_id,
+                    ProjectOntologyRow.sha256,
+                    ProjectOntologyRow.allowed_roots,
+                    ProjectOntologyRow.t1_profile,
+                ).where(ProjectOntologyRow.project_id == project_id)
+            ).all()
+        return {
+            row.ontology_id: Pin(
+                sha256=row.sha256,
+                allowed_roots=tuple(row.allowed_roots),
+                t1_profile=cast(T1Profile, row.t1_profile),
+            )
+            for row in rows
+        }
+
+    def add_documents_and_proposals(
+        self,
+        package_id: str,
+        documents: Sequence[ImportedDocument],
+        proposal_sets: Sequence[ImportedSet],
+        *,
+        source_sha256: str,
+        imported_by: int | None = None,
+        job_id: int | None = None,
+        on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
+    ) -> ImportCounts:
+        """Add imported documents and sets in one transaction (T3 A1, T7 O1, O2).
+
+        A known document with another text is ``DOCUMENT_CONFLICT`` and nothing
+        is written; an identical one is skipped. A set already imported under
+        the same (bundle, set, document) is skipped, so a re-import adds
+        nothing. ``on_done`` runs with the counts in the same transaction.
+        """
+        texts: dict[str, ImportedDocument] = {}
+        conflicts: set[str] = set()
+        for entry in documents:
+            doc = entry.document
+            known = texts.setdefault(doc.document_id, entry)
+            if known.document.text_sha256 != doc.text_sha256:
+                conflicts.add(doc.document_id)
+        with self.db.transaction() as conn:
+            conn.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
+            conn.execute(
+                select(func.pg_advisory_xact_lock(_lock_id("project", package_id)))
+            )
+            project_id = self._require_project(conn, package_id)
+            stored = dict(
+                conn.execute(
+                    select(DocumentRow.document_id, DocumentRow.text_sha256).where(
+                        DocumentRow.project_id == project_id,
+                        DocumentRow.document_id.in_(list(texts)),
+                    )
+                )
+                .tuples()
+                .all()
+            )
+            conflicts.update(
+                doc_id
+                for doc_id, sha in stored.items()
+                if texts[doc_id].document.text_sha256 != sha
+            )
+            if conflicts:
+                raise DomainError("DOCUMENT_CONFLICT", {"documents": sorted(conflicts)})
+            self._verify_snapshot_contents(
+                conn,
+                [s for item in proposal_sets for s in item.proposals.annotations],
+                [e for item in proposal_sets for e in item.proposals.evidence],
+            )
+            position = conn.execute(
+                select(func.coalesce(func.max(DocumentRow.position), -1)).where(
+                    DocumentRow.project_id == project_id
+                )
+            ).scalar_one()
+            assert position is not None
+            new_documents = []
+            for doc_id, entry in texts.items():
+                if doc_id in stored:
+                    continue
+                position += 1
+                new_documents.append(
+                    {
+                        "project_id": project_id,
+                        "document_id": doc_id,
+                        "position": position,
+                        "language": entry.document.language,
+                        "text": entry.document.text,
+                        "text_sha256": entry.document.text_sha256,
+                        "source_text_sha256": entry.source_text_sha256,
+                    }
+                )
+            if new_documents:
+                conn.execute(insert(DocumentRow), new_documents)
+            counts: ImportCounts = {
+                "documents_added": len(new_documents),
+                "documents_skipped": len(texts) - len(new_documents),
+                "documents_only": len(
+                    set(texts) - {item.document_id for item in proposal_sets}
+                ),
+                "sets_added": 0,
+                "sets_skipped": 0,
+                "proposals": 0,
+            }
+            for item in proposal_sets:
+                set_id = conn.execute(
+                    pg_insert(ProposalSetRow)
+                    .values(
+                        project_id=project_id,
+                        document_id=item.document_id,
+                        bundle_id=item.bundle_id,
+                        manifest_sha256=item.manifest_sha256,
+                        annotation_set_id=item.annotation_set_id,
+                        set_kind=item.set_kind,
+                        actors=item.actors,
+                        payload=item.payload,
+                        source_sha256=source_sha256,
+                        imported_by=imported_by,
+                        job_id=job_id,
+                    )
+                    .on_conflict_do_nothing()
+                    .returning(ProposalSetRow.id)
+                ).scalar_one_or_none()
+                if set_id is None:
+                    counts["sets_skipped"] += 1
+                    continue
+                counts["sets_added"] += 1
+                proposals = item.proposals
+                self._insert_snapshots(
+                    conn, project_id, proposals.annotations, proposals.evidence
+                )
+                if proposals.annotations:
+                    inserted = conn.execute(
+                        pg_insert(ProposalAnnotationRow)
+                        .on_conflict_do_nothing()
+                        .returning(ProposalAnnotationRow.annotation_id),
+                        [
+                            {
+                                "project_id": project_id,
+                                "annotation_id": snap.annotation.annotation_id,
+                                "version": snap.version,
+                                "proposal_set_id": set_id,
+                                "notes": proposals.notes.get(
+                                    snap.annotation.annotation_id, []
+                                ),
+                            }
+                            for snap in proposals.annotations
+                        ],
+                    ).all()
+                    counts["proposals"] += len(inserted)
+                if proposals.evidence:
+                    conn.execute(
+                        pg_insert(ProposalEvidenceRow).on_conflict_do_nothing(),
+                        [
+                            {
+                                "project_id": project_id,
+                                "evidence_id": ev.mention.evidence_id,
+                                "version": ev.version,
+                            }
+                            for ev in proposals.evidence
+                        ],
+                    )
+            if on_done is not None:
+                on_done(conn, project_id, counts)
+        return counts
 
     def get_manifest(self, package_id: str) -> PackageManifest:
         """The stored manifest of a project."""

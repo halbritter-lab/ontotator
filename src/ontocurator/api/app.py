@@ -213,8 +213,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
             app.state.ontologies_ready = ready
             app.state.ontology_store = store
-            # Handlers are added by the import and export tasks (T2d Tasks 4, 5).
-            handlers: dict[str, Handler] = {}
+            from ontocurator.exchange.jobs import HANDLERS
+
+            handlers: dict[str, Handler] = dict(HANDLERS)
             app.state.jobs = JobQueue(
                 db,
                 handlers,
