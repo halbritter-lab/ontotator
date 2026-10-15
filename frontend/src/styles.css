@@ -1182,6 +1182,21 @@ body {
   text-decoration: underline;
 }
 
+/* The editor inside the login gate (made inert while the login dialog is open) */
+.app-shell {
+  height: 100%;
+}
+
+/* Session notices of the login gate, over the editor */
+.session-notice {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  max-width: min(640px, calc(100vw - 32px));
+}
+
 /* The logged-in user in the dashboard header: display name · pseudonym */
 .current-user {
   font-size: 0.82rem;

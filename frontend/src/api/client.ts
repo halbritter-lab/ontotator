@@ -181,6 +181,10 @@ export class ApiClient {
     this.csrfToken = token;
   }
 
+  getCsrfToken(): string | null {
+    return this.csrfToken;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}

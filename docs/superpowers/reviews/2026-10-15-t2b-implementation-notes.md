@@ -423,6 +423,26 @@ answer; the least surprising option was taken and should be confirmed.
   `.login-link` and `.current-user`. The Playwright specs in `frontend/browser` still use the launch
   token and the initials, and the embedded web assets were not rebuilt; both are Task 9. Counts:
   `tests/session.test.tsx` 4, full vitest 306 in 33 files (17 tests deleted per the table, 4 added).
+- Task 8 (re-review fix): the login dialog over the editor did not block it, so the case's window
+  shortcuts ("1"-"4" decisions, Alt+Arrow leaving the case) still ran from the dialog's buttons ->
+  the gate wraps `<App>` in a `div.app-shell` that is always in the tree (so the editor is never
+  remounted by it) and sets `inert` on it while the dialog is open, through the DOM in a layout
+  effect, because React 18's types have no `inert` prop. The dialog root stops key events from
+  propagating (React's `stopPropagation` also stops the native bubble before `window`), and both
+  CaseScreen window shortcut handlers ignore keys while the case's root has an `[inert]` ancestor or
+  the key comes from an `aria-modal` dialog outside the case. TextPane's capture-phase Escape
+  listener (cancel attaching a mention) is left alone; it only changes local selection state.
+  Test: `keeps the case out of reach of keys pressed in the login dialog`.
+- Task 8 (re-review fix): a `CSRF_FAILED` that does not come from a stale token (e.g. a proxy drops
+  the header) looped: `me()`, same user, restore, retry, `CSRF_FAILED` -> the gate notes the refused
+  token (`api.getCsrfToken()`, new) before `me()` and restores only if the new token differs;
+  otherwise it shows "The page is out of date; reload it." and the queue stays in its error state
+  (Retry button; each manual retry costs one `me()`). Test: `does not retry for ever when a CSRF
+  failure persists with the same token`.
+- Task 8 (re-review fix): the gate's notices ("... (from another tab).", "The page is out of date;
+  reload it.") moved from an `App` prop to a fixed, dismissable `role="status"` banner rendered by
+  the gate (`.session-notice`), so they show over the case view as well; `App` has no
+  `sessionNotice` prop any more. Counts: `tests/session.test.tsx` 14, full vitest 318 in 33 files.
 
 ## Open risks
 

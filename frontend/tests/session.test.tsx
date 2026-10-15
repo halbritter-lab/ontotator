@@ -76,15 +76,15 @@ const caseView = (): any => ({
 });
 
 /** Alice opens a case; her session has ended on the server, so the first save gets a 401. */
-const caseWithEndedSession = (relogin: CurrentUser) => {
+const caseWithEndedSession = (relogin: CurrentUser, view = caseView()) => {
   const alice = testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" });
   sessionsOf(alice);
   oneCaseServer();
-  vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: caseView() });
+  vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view });
   let sessionOpen = false;
   const fetchMock = fakeServer({
     "POST /api/v1/workspaces/ws/commands": () => sessionOpen
-      ? jsonResponse(200, { ...caseView().draft, revision: 1, checked_layer_ids: ["phenotype"] })
+      ? jsonResponse(200, { ...view.draft, revision: 1, checked_layer_ids: ["phenotype"] })
       : jsonResponse(401, { code: "NOT_AUTHENTICATED", details: "Log in to continue." }),
     "POST /api/v1/auth/login": () => {
       sessionOpen = true;
@@ -93,6 +93,29 @@ const caseWithEndedSession = (relogin: CurrentUser) => {
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+};
+
+/** The second of two cases, in review mode with one proposal to decide on. */
+const reviewCaseView = (): any => {
+  const view = caseView();
+  const reviewKey = { ...key, document_id: "doc-2", mode: "review" as const };
+  const targets = { target_set_id: "targets", targets: [{ annotation_id: "prop", version: "p-v1" }] };
+  view.key = reviewKey;
+  view.scope = { ...view.scope, mode: "review" };
+  view.document = { ...view.document, document_id: "doc-2" };
+  view.targets = targets;
+  view.available_inputs = [{
+    schema_version: "ontocurator-annotation/v3",
+    annotation: {
+      annotation_id: "prop", document_id: "doc-2", layer_id: "phenotype", type_id: "default", term_id: "HP:0001", axes_values: {},
+      evidence_refs: [{ evidence_id: "ev-prop", version: "ev-v" }],
+      provenance: { actor: { actor_id: "source", kind: "tool" }, method: "automated" },
+    },
+    evidence: [{ mention: { evidence_id: "ev-prop", segments: [{ start: 0, end: 5 }], cue_segments: [] }, version: "ev-v", document_id: "doc-2", text_sha256: "text" }],
+    version: "p-v1", document_id: "doc-2", text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer-sha",
+  }];
+  view.draft = { ...view.draft, key: reviewKey, targets };
+  return view;
 };
 
 const logInThrough = (dialog: HTMLElement, username: string) => {
@@ -356,5 +379,56 @@ describe("the login gate", () => {
     expect(await screen.findByText("You are now logged in as Bob (from another tab).")).toBeDefined();
     expect(screen.getByTestId("current-user").textContent).toBe("Bob · ann-0009");
     await waitFor(() => expect((screen.getByLabelText(/Working mode/i) as HTMLSelectElement).value).toBe("independent"));
+  });
+
+  it("keeps the case out of reach of keys pressed in the login dialog", async () => {
+    const fetchMock = caseWithEndedSession(testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-2" }), reviewCaseView());
+    vi.spyOn(api, "listDocuments").mockResolvedValue([
+      { document_id: "doc-1", text_length: 10, language: "en", position: 1, status: "completed" as const },
+      { document_id: "doc-2", text_length: 10, language: "en", position: 2, status: "in_progress" as const },
+    ]);
+    const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...reviewCaseView().draft, revision: 2 });
+    render(<AuthGate />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
+    const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
+
+    // The editor behind the dialog is inert, and its window shortcuts do not see these keys.
+    expect(screen.getByTestId("annotator-identity").closest("[inert]")).not.toBeNull();
+    expect(dialog.closest("[inert]")).toBeNull();
+    const button = within(dialog).getByRole("button", { name: "I have a setup or reset code" });
+    fireEvent.keyDown(button, { key: "j" });
+    fireEvent.keyDown(button, { key: "1" });
+    fireEvent.keyDown(button, { key: "ArrowLeft", altKey: true });
+    expect(screen.queryByText(/Changes not saved/)).toBeNull();
+    expect(api.openWorkspace).toHaveBeenCalledTimes(1);
+
+    logInThrough(dialog, "alice");
+    await waitFor(() => expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(2));
+    await screen.findByText(/● Saved/);
+    expect(screen.getByTestId("annotator-identity").closest("[inert]")).toBeNull();
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("does not retry for ever when a CSRF failure persists with the same token", async () => {
+    const alice = testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" });
+    const me = sessionsOf(alice, alice, alice);
+    oneCaseServer();
+    vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: caseView() });
+    const fetchMock = fakeServer({
+      "POST /api/v1/workspaces/ws/commands": () =>
+        jsonResponse(403, { code: "CSRF_FAILED", details: "The page is out of date; reload it." }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AuthGate />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
+
+    expect(await screen.findByText("The page is out of date; reload it.")).toBeDefined();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(me).toHaveBeenCalledTimes(2);
+    expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(1);
+    expect(screen.queryByRole("dialog", { name: "Log in to Ontocurator" })).toBeNull();
+    expect(screen.getByTestId("annotator-identity")).toBeDefined();
   });
 });

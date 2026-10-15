@@ -203,6 +203,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
         role="dialog"
         aria-modal="true"
         aria-labelledby={view === "login" ? "login-title" : "code-title"}
+        // Keys typed here must not reach the editor's window shortcuts behind the dialog.
+        onKeyDown={(e) => e.stopPropagation()}
       >
         {card}
       </div>

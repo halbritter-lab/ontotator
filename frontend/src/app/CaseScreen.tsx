@@ -75,6 +75,17 @@ const segmentsKey = (evidence: { mention: { segments: { start: number; end: numb
       .sort(),
   );
 
+/**
+ * True while the editor is behind the login dialog (an `inert` ancestor) or the key
+ * comes from a modal dialog outside it: window shortcuts must not act then.
+ */
+const isEditorBlocked = (root: HTMLElement | null, target: EventTarget | null): boolean => {
+  if (root?.closest("[inert]")) return true;
+  const el = target as Element | null;
+  const dialog = typeof el?.closest === "function" ? el.closest('[aria-modal="true"]') : null;
+  return !!dialog && !root?.contains(dialog);
+};
+
 const isTypingTarget = (target: EventTarget | null): boolean => {
   const el = target as HTMLElement | null;
   if (!el || typeof el !== "object") return false;
@@ -213,6 +224,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const definition = (view.ontologies ?? []).find((item) => item.ontology_id === ontologyId);
     return languagesForOntology(definition?.sha256);
   };
+
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // Dedicated mutation queue for this workspace
   const queueRef = useRef<MutationQueue>(null as unknown as MutationQueue);
@@ -1266,7 +1279,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   useEffect(() => {
     const handleCaseNavShortcuts = (e: KeyboardEvent) => {
-      if (e.repeat || isTypingTarget(e.target) || modalOpen) return;
+      if (e.repeat || isTypingTarget(e.target) || modalOpen || isEditorBlocked(rootRef.current, e.target)) return;
       if (e.altKey && e.key === "ArrowRight") {
         if (nextDoc && onNavigateCase && queueState !== "saving") {
           e.preventDefault();
@@ -1285,7 +1298,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   useEffect(() => {
     const handleReviewShortcuts = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target)) return;
+      if (isTypingTarget(e.target) || isEditorBlocked(rootRef.current, e.target)) return;
       if (e.altKey || e.ctrlKey || e.metaKey) return;
 
       if (e.key === "Escape") {
@@ -1365,7 +1378,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const cancelAttach = useMemo(() => () => setIsAttachingMention(false), []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
       <header className="app-header">
         <div className="app-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>

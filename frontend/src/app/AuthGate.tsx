@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { App } from "../App";
 import {
   api,
@@ -18,6 +18,7 @@ type GateState =
   | { kind: "expired"; user: CurrentUser };
 
 const SESSION_ENDED = "Your session has ended. Please log in again.";
+const PAGE_OUT_OF_DATE = "The page is out of date; reload it.";
 
 /**
  * The login gate: the editor is shown only with a session. `api.me()` decides at
@@ -33,8 +34,11 @@ export const AuthGate: React.FC = () => {
   const setState = (next: GateState) => {
     stateRef.current = next;
     setStateValue(next);
+    setNoticeDismissed(false);
   };
   const recheckingRef = useRef(false);
+  const appShellRef = useRef<HTMLDivElement>(null);
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
 
   /** Take over a user with a valid session; the same user keeps the editor and retries its saves. */
   const adopt = (user: CurrentUser, previous: CurrentUser | null, noticeForAnother?: string) => {
@@ -51,9 +55,16 @@ export const AuthGate: React.FC = () => {
     const before = stateRef.current;
     if (before.kind !== "ready" || recheckingRef.current) return;
     recheckingRef.current = true;
+    const refusedToken = api.getCsrfToken();
     try {
       const user = await api.me();
       if (stateRef.current !== before) return;
+      if (user.username === before.user.username && user.csrf_token === refusedToken) {
+        // The token was not stale, yet it was refused (e.g. a proxy drops the header):
+        // retrying would only fail again, so ask for a reload instead.
+        setState({ kind: "ready", user, notice: PAGE_OUT_OF_DATE });
+        return;
+      }
       adopt(user, before.user, `You are now logged in as ${user.display_name} (from another tab).`);
     } catch (err: unknown) {
       if (stateRef.current === before && err instanceof AuthError && err.status === 401) {
@@ -64,6 +75,13 @@ export const AuthGate: React.FC = () => {
       recheckingRef.current = false;
     }
   };
+  // Behind the login dialog the editor is inert: no focus, clicks or keys reach it.
+  // (Set through the DOM: React 18 has no typed `inert` prop.) The shell stays in the
+  // tree in both states, so the editor is never remounted by this.
+  useLayoutEffect(() => {
+    appShellRef.current?.toggleAttribute("inert", state.kind === "expired");
+  }, [state]);
+
   const recheckRef = useRef(recheck);
   recheckRef.current = recheck;
 
@@ -126,14 +144,20 @@ export const AuthGate: React.FC = () => {
     return <LoginScreen notice={state.notice} onLoggedIn={(user) => adopt(user, null)} />;
   }
   const { user } = state;
+  const notice = state.kind === "ready" && !noticeDismissed ? state.notice : undefined;
   return (
     <>
-      <App
-        key={user.username}
-        user={user}
-        onLogout={() => { void logout(); }}
-        sessionNotice={state.kind === "ready" ? state.notice : undefined}
-      />
+      <div ref={appShellRef} className="app-shell">
+        <App key={user.username} user={user} onLogout={() => { void logout(); }} />
+      </div>
+      {notice && (
+        <div role="status" className="notice notice-info session-notice">
+          <span>{notice}</span>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setNoticeDismissed(true)} aria-label="Dismiss message">
+            ✕
+          </button>
+        </div>
+      )}
       {state.kind === "expired" && (
         <LoginScreen overlay notice={SESSION_ENDED} onLoggedIn={(next) => adopt(next, user)} />
       )}
