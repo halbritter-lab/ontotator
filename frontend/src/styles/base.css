@@ -1,0 +1,95 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--surface);
+  color: var(--text);
+  line-height: 1.5;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.axis-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:focus-visible,
+.dashboard-table tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--size-base);
+  line-height: var(--leading-base);
+  color: var(--text);
+  background-color: var(--surface);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-light);
+  color: var(--text);
+}
+
+.btn:focus-visible,
+.dashboard-table tr:focus-visible,
+.axis-option:has(input:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+kbd.kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  text-align: center;
+}
+
+/* Density classes only set tokens; surfaces and components consume them. */
+
+.density-reading {
+  --body-font: var(--font-serif);
+  --body-size: var(--size-reading);
+  --body-leading: var(--leading-reading);
+  --row-height: 44px;
+  --cell-pad-y: 10px;
+  --cell-pad-x: 16px;
+  --control-height: 36px;
+}
+
+.density-compact {
+  --body-font: var(--font-sans);
+  --body-size: var(--size-md);
+  --body-leading: var(--leading-md);
+  --row-height: 34px;
+  --cell-pad-y: 6px;
+  --cell-pad-x: 12px;
+  --control-height: 30px;
+}
+
+:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}

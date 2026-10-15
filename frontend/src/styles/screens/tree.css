@@ -1,0 +1,338 @@
+/* Ontology tree: the tree itself */
+
+.term-tree {
+  list-style: none;
+  padding: 4px 0;
+}
+
+.tree-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  padding-right: 8px;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.tree-item:hover {
+  background: var(--surface);
+}
+
+.tree-item[aria-selected="true"] {
+  background: var(--accent-light);
+}
+
+.tree-item:focus {
+  outline: none;
+}
+
+.tree-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.tree-item[aria-busy="true"] {
+  cursor: progress;
+}
+
+.tree-toggle {
+  flex: 0 0 14px;
+  text-align: center;
+  /* The small triangles are hard to see and to hit at the row's font size. */
+  font-size: 1.25em;
+  line-height: 1;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.tree-label {
+  flex: 1 1 10ch;
+  min-width: 10ch;
+}
+
+.tree-item--current .tree-label {
+  font-weight: 600;
+}
+
+.tree-count {
+  flex-shrink: 0;
+  font-size: var(--size-xs);
+  color: var(--text-muted);
+}
+
+.tree-current {
+  flex-shrink: 0;
+  font-size: var(--size-xs);
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+
+/* Ontology tree: the browser, a panel docked into the case layout (its place there
+   follows further down) */
+
+.tree-host {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface-raised);
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.tree-host[hidden] {
+  display: none;
+}
+
+.tree-browser {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface-raised);
+}
+
+.tree-browser__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.tree-browser__header h2 {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.tree-notice,
+.tree-error {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.tree-notice {
+  background: var(--warning-light);
+}
+
+.tree-error {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.tree-loading {
+  padding: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* The rows above the details of the selected term. */
+
+.tree-browser__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-browser__tree {
+  flex: 1 1 55%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  /* A row brought into view is whole, also where the box ends on a fraction of a pixel. */
+  scroll-padding-block: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tree-detail {
+  flex: 1 1 45%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-detail__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.tree-detail__name {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.tree-detail__id {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.tree-detail__definition,
+.tree-detail__group {
+  margin-bottom: 8px;
+}
+
+.tree-detail__group h4 {
+  font-size: var(--size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.tree-detail__group ul {
+  list-style: none;
+}
+
+.tree-detail__group dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+}
+
+.tree-detail__group dt {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.tree-detail__empty {
+  color: var(--text-muted);
+}
+
+.tree-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tree-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The button stays visible while the details above it scroll. */
+
+.tree-detail__actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Next to a long hint in the narrow panel the button keeps its one line. */
+
+.tree-detail__actions .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.tree-detail__hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* "Show in tree", under the term name of an annotation */
+
+.annotation-tree-button {
+  margin-top: 2px;
+}
+
+.tree-id {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  color: var(--text-muted);
+}
+
+.tree-external {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 0 2px;
+}
+
+.tree-external:hover,
+.tree-external:focus-visible {
+  color: var(--accent);
+}
+
+.tree-detail__ids {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tree-detail__ids .tree-detail__id {
+  margin-bottom: 0;
+}
+
+/* ==========================================================================
+   Direction C, "reading document": editor prototype (T6a Task 1).
+   Paper-like surfaces; the clinical text is set in a serif on a raised sheet
+   with room to read; controls recede into sans, hairlines and muted labels.
+   The preserved prototype rules are grouped by surface.
+   ========================================================================== */
+
+/* The ontology tree host keeps its exact class name (tests pin it), so it
+   takes compact density here instead of through a class. */
+
+.tree-host {
+  --body-size: var(--size-md);
+  --body-leading: var(--leading-md);
+  --row-height: 34px;
+  --cell-pad-y: 6px;
+  --cell-pad-x: 12px;
+  --control-height: 30px;
+}
+
+.tree-host,
+.tree-browser {
+  background: var(--surface);
+  font-size: var(--body-size);
+  line-height: var(--body-leading);
+}
+
+.tree-host {
+  border-left: 1px solid var(--border);
+}
+
+.tree-browser__header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.tree-browser__header h2 {
+  font-size: var(--size-sm);
+  color: var(--text-muted);
+}

@@ -58,9 +58,9 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        border: "1px solid var(--border-color)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius)",
-        background: "var(--bg-surface)",
+        background: "var(--surface-raised)",
         overflow: "hidden",
       }}
     >
@@ -87,8 +87,8 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
           style={{
             borderTop: "none",
             borderBottom: "none",
-            borderLeft: "1px solid var(--border-color)",
-            borderRight: "1px solid var(--border-color)",
+            borderLeft: "1px solid var(--border)",
+            borderRight: "1px solid var(--border)",
             borderRadius: 0,
             background: "transparent",
             fontWeight: 600,
@@ -114,11 +114,11 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
           style={{
             fontSize: "0.82rem",
             fontWeight: 600,
-            color: "var(--text-main)",
+            color: "var(--text)",
             padding: "0 10px",
             whiteSpace: "nowrap",
-            borderLeft: "1px solid var(--border-color)",
-            borderRight: "1px solid var(--border-color)",
+            borderLeft: "1px solid var(--border)",
+            borderRight: "1px solid var(--border)",
             lineHeight: "26px",
           }}
         >

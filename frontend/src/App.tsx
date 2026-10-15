@@ -512,7 +512,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-primary)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
       {isAdmin && fileInputs}
       {roundSelectionDialog}
       {/* App Header */}
@@ -529,7 +529,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
               style={{
                 fontSize: "0.78rem",
                 color: "var(--text-muted)",
-                background: "var(--bg-secondary)",
+                background: "var(--surface-sunken)",
                 padding: "3px 8px",
                 borderRadius: 4,
                 whiteSpace: "nowrap",
@@ -669,10 +669,10 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
             {/* Package and mode */}
             <div
               style={{
-                background: "var(--bg-surface)",
+                background: "var(--surface-raised)",
                 padding: "16px 20px",
                 borderRadius: "var(--radius)",
-                border: "1px solid var(--border-color)",
+                border: "1px solid var(--border)",
                 marginBottom: 20,
                 display: "grid",
                 gridTemplateColumns: "1.2fr 1fr",
@@ -756,10 +756,10 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
             ) : heroDoc && (
               <div className="dashboard-hero">
                 <div>
-                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--primary)", fontWeight: 700 }}>
+                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--accent)", fontWeight: 700 }}>
                     {heroDoc.status === "in_progress" ? "Continue where you left off" : "Selected case"}
                   </div>
-                  <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text-main)", marginTop: 2 }}>
+                  <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text)", marginTop: 2 }}>
                     Case {heroDoc.position}: <span style={{ fontFamily: "var(--font-mono)" }}>{heroDoc.document_id}</span>
                   </div>
                   <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: 3 }}>
@@ -896,13 +896,13 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
                                 doc.status === "completed"
                                   ? "var(--success-light)"
                                   : doc.status === "in_progress"
-                                  ? "var(--primary-light)"
+                                  ? "var(--accent-light)"
                                   : "#f1f5f9",
                               color:
                                 doc.status === "completed"
                                   ? "var(--success)"
                                   : doc.status === "in_progress"
-                                  ? "var(--primary)"
+                                  ? "var(--accent)"
                                   : "#64748b",
                             }}
                           >

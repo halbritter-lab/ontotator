@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -13,6 +13,34 @@ import {
 } from "./support/colour";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const src = resolve(here, "../src");
+const filesUnder = (directory: string): string[] =>
+  readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name === "vendor") return [];
+    const path = resolve(directory, entry.name);
+    return entry.isDirectory() ? filesUnder(path) : [path];
+  });
+
+// CSS named colours, excluding the permitted transparent/currentColor/inherit.
+const namedColours = new Set(`aliceblue antiquewhite aqua aquamarine azure beige bisque black
+blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral
+cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen
+darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon
+darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink
+deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro
+ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo
+ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan
+lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen
+lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen
+magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen
+mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream
+mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid
+palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum
+powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown
+seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen
+steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow
+yellowgreen`.split(/\s+/));
+
 const tokens = parseColourTokens(readFileSync(resolve(here, "../src/styles/tokens.css"), "utf8"));
 
 const token = (name: string): string => {
@@ -45,6 +73,33 @@ const cross = (as: string[], bs: string[]): Array<[string, string]> =>
   as.flatMap((a) => bs.map((b) => [a, b] as [string, string]));
 
 describe("design tokens", () => {
+  it("no_legacy_token_names_remain", () => {
+    const legacy = /--(?:bg-primary|bg-surface|bg-secondary|border-color|text-main|primary[\w-]*|span-[\w-]*)\b/g;
+    const offenders = filesUnder(src).flatMap((path) => {
+      const matches = readFileSync(path, "utf8").match(legacy);
+      return matches ? [`${relative(src, path)}: ${[...new Set(matches)].join(", ")}`] : [];
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("only_tokens_css_declares_colours", () => {
+    const offenders = filesUnder(resolve(src, "styles"))
+      .filter((path) => path.endsWith(".css") && path !== resolve(src, "styles/tokens.css"))
+      .flatMap((path) => {
+        const css = readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+        const literals = css.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/g) ?? [];
+        const named: string[] = [];
+        for (const declaration of css.matchAll(/(?:^|[;{])\s*([\w-]+)\s*:\s*([^;{}]+)/g)) {
+          if (!/^(?:color|background(?:-color|-image)?|border(?:-[\w-]+)?|outline(?:-color)?|(?:box|text)-shadow|fill|stroke|caret-color|accent-color|text-decoration(?:-color)?|column-rule(?:-color)?|scrollbar-color)$/i.test(declaration[1])) continue;
+          const value = declaration[2].replace(/--[\w-]+/g, "").replace(/["'][^"']*["']/g, "");
+          named.push(...(value.match(/\b[a-z]+\b/gi) ?? []).filter((word) => namedColours.has(word.toLowerCase())));
+        }
+        const matches = [...literals, ...named];
+        return matches.length ? [`${relative(src, path)}: ${[...new Set(matches)].join(", ")}`] : [];
+      });
+    expect(offenders).toEqual([]);
+  });
+
   it("colour_helpers_match_reference_values", () => {
     expect(contrast("#000000", "#ffffff")).toBeCloseTo(21, 6);
     expect(Math.round(contrast("#777777", "#ffffff") * 100) / 100).toBe(4.48);

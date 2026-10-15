@@ -1,0 +1,165 @@
+/* Curation Dashboard */
+
+.dashboard-container {
+  flex: 1;
+  padding: 24px 32px;
+  overflow-y: auto;
+  max-width: 1050px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.dashboard-hero {
+  background: linear-gradient(135deg, var(--dashboard-hero-start) 0%, var(--dashboard-hero-end) 100%);
+  border: 1px solid var(--dashboard-hero-border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px var(--dashboard-hero-shadow-colour);
+}
+
+.dashboard-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+
+.dashboard-tab {
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.dashboard-tab:hover {
+  color: var(--text);
+}
+
+.dashboard-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 1px 3px var(--dashboard-table-shadow-colour);
+}
+
+.dashboard-table th {
+  background: var(--dashboard-row-fill);
+  padding: 10px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-table td {
+  padding: 10px 14px;
+  font-size: 0.86rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.dashboard-table tr:last-child td {
+  border-bottom: none;
+}
+
+.dashboard-table tr:hover td {
+  background: var(--dashboard-row-fill);
+}
+
+.dashboard-table tr.is-selected td {
+  background: var(--accent-light);
+}
+
+/* Working mode fixed by the installation (only one mode allowed) */
+
+.fixed-mode {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  font-weight: 600;
+}
+
+/* First-run guide shown while no work package is imported */
+
+.getting-started {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  max-width: 720px;
+  margin: 24px auto;
+  box-shadow: 0 1px 3px var(--getting-started-shadow-colour);
+}
+
+.getting-started h2 {
+  font-size: 1.25rem;
+  margin-bottom: 16px;
+}
+
+.getting-started-steps {
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.getting-started-steps li {
+  counter-increment: step;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-left: 44px;
+  position: relative;
+  min-height: 32px;
+}
+
+.getting-started-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.getting-started-steps strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.getting-started-steps span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}

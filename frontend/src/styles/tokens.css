@@ -1,8 +1,8 @@
 /*
  * Design tokens: direction C, "reading document". Light theme only.
- * Every colour of the interface is declared here as a #rrggbb literal (the token
- * tests parse them); every other stylesheet refers to these custom properties.
- * Draft values (T6a Task 1); frozen after the prototype is approved (Task 2).
+ * Every interface colour is declared here; every other stylesheet refers to
+ * these custom properties. Palette regression tests parse the hex tokens.
+ * Frozen for the continued direction C implementation (T6a Task 2, 2026-10-15).
  */
 :root {
   /* Surfaces: warm paper, a brighter sheet for the document, a sunken band for bars. */
@@ -38,7 +38,7 @@
   /* Mark palette: six soft highlighter fills, painted over the lower half of the
      line. These are palette slots, not meanings: which slot a mark takes (by term,
      layer, kind, ...) is decided in one place, src/editor/markColours.ts, and the
-     `.run--color-N` block in styles.css binds slot N to these tokens. The state of a
+     `.run--color-N` block in screens/editor.css binds slot N to these tokens. The state of a
      mark (own, proposal, reference, negated, selected) is carried by its line style
      or pattern, never by the fill. */
   --mark-0-fill: #f8f1a6;
@@ -91,7 +91,7 @@
   --shadow-1: 0 1px 2px rgb(31 26 20 / 0.06), 0 0 0 1px rgb(31 26 20 / 0.05);
   --shadow-2: 0 12px 32px -8px rgb(31 26 20 / 0.22), 0 2px 6px rgb(31 26 20 / 0.08);
 
-  /* Density defaults (reading); `.density-compact` tightens them. */
+  /* Density defaults; explicit surface classes choose reading or compact. */
   --body-font: var(--font-sans);
   --body-size: var(--size-base);
   --body-leading: var(--leading-base);
@@ -99,24 +99,34 @@
   --cell-pad-y: 10px;
   --cell-pad-x: 16px;
   --control-height: 36px;
-}
-
-.density-reading {
-  --body-font: var(--font-sans);
-  --body-size: var(--size-base);
-  --body-leading: var(--leading-base);
-  --row-height: 44px;
-  --cell-pad-y: 10px;
-  --cell-pad-x: 16px;
-  --control-height: 36px;
-}
-
-.density-compact {
-  --body-font: var(--font-sans);
-  --body-size: var(--size-md);
-  --body-leading: var(--leading-md);
-  --row-height: 34px;
-  --cell-pad-y: 6px;
-  --cell-pad-x: 12px;
-  --control-height: 30px;
+  /* Existing component colours, centralised without changing their values. */
+  --review-badge-fill: #f3e8ff;
+  --review-badge-text: #7e22ce;
+  --assistant-gradient-start: #7c3aed;
+  --assistant-gradient-end: #db2777;
+  --danger-border: #fca5a5;
+  --danger-hover-fill: #fecaca;
+  --disabled-fill: #94a3b8;
+  --obsolete-fill: #f1f5f9;
+  --obsolete-border: #cbd5e1;
+  --overlay-scrim: rgba(15, 23, 42, 0.45);
+  --dialog-shadow-colour: rgba(0, 0, 0, 0.1);
+  --dashboard-hero-start: #eff6ff;
+  --dashboard-hero-end: #e0e7ff;
+  --dashboard-hero-border: #bfdbfe;
+  --dashboard-hero-shadow-colour: rgba(0,0,0,0.05);
+  --dashboard-table-shadow-colour: rgba(0,0,0,0.04);
+  --dashboard-row-fill: #f8fafc;
+  --notice-success-text: #166534;
+  --notice-success-border: #86efac;
+  --notice-warning-fill: #fef9c3;
+  --notice-warning-text: #854d0e;
+  --notice-warning-border: #facc15;
+  --notice-info-fill: #e0f2fe;
+  --notice-info-text: #075985;
+  --notice-info-border: #7dd3fc;
+  --getting-started-shadow-colour: rgba(0, 0, 0, 0.05);
+  --session-card-shadow-colour: rgba(0, 0, 0, 0.08);
+  --flag-shadow-colour: rgba(15, 23, 42, 0.18);
+  --language-menu-shadow-colour: rgba(15, 23, 42, 0.14);
 }

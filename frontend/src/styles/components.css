@@ -1,0 +1,476 @@
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.badge-independent {
+  background-color: var(--accent-light);
+  color: var(--accent);
+}
+
+.badge-review {
+  background-color: var(--review-badge-fill);
+  color: var(--review-badge-text);
+}
+
+.badge-ai {
+  background: linear-gradient(135deg, var(--assistant-gradient-start), var(--assistant-gradient-end));
+  color: var(--on-accent);
+  font-size: var(--size-xs);
+  font-weight: 600;
+  padding: 2px 6px;
+}
+
+.status-badge {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-saved {
+  background-color: var(--success-light);
+  color: var(--success);
+}
+
+.status-saving {
+  background-color: var(--warning-light);
+  color: var(--warning);
+}
+
+.status-conflict,
+.status-error {
+  background-color: var(--danger-light);
+  color: var(--danger);
+}
+
+/* Forms & Inputs */
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.axis-field {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.axis-options {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.axis-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface-raised);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.axis-option input[type="radio"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.axis-option:hover {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.axis-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.form-control,
+.form-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+/* Buttons */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--surface-raised);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: var(--surface);
+}
+
+.btn-danger {
+  background: var(--danger-light);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.btn-danger:hover {
+  background: var(--danger-hover-fill);
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+/* Disabled buttons must look disabled (and not react to hover). */
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-primary:disabled,
+.btn-primary:disabled:hover {
+  background: var(--disabled-fill);
+}
+
+.btn-secondary:disabled:hover {
+  background: var(--surface-raised);
+}
+
+.btn-danger:disabled:hover {
+  background: var(--danger-light);
+}
+
+/* Modal / Setup dialog */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-content {
+  background: var(--surface-raised);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: 90%;
+  max-width: 540px;
+  box-shadow: 0 10px 25px -5px var(--dialog-shadow-colour);
+}
+
+/* Small helper text under form fields */
+
+.field-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.field-hint-error {
+  color: var(--danger);
+}
+
+.form-control.is-invalid {
+  border-color: var(--danger);
+}
+
+/* Success messages (e.g. after importing a package) */
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.notice-success {
+  background: var(--success-light);
+  color: var(--notice-success-text);
+  border: 1px solid var(--notice-success-border);
+}
+
+/* Notices about the preloaded ontologies/ and packages/ folders */
+
+.notice-warning {
+  background: var(--notice-warning-fill);
+  color: var(--notice-warning-text);
+  border: 1px solid var(--notice-warning-border);
+}
+
+.notice-info {
+  background: var(--notice-info-fill);
+  color: var(--notice-info-text);
+  border: 1px solid var(--notice-info-border);
+}
+
+.badge {
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-strong);
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.badge-independent,
+.badge-review,
+.badge-assisted {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.badge-ai {
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: var(--size-xs);
+}
+
+.status-badge {
+  font-size: var(--size-sm);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.status-saved,
+.status-saving {
+  background: transparent;
+}
+
+/* Buttons recede: hairline secondaries, one filled primary. */
+
+.btn {
+  font-family: var(--font-sans);
+  font-size: var(--size-md);
+  line-height: var(--leading-md);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out, color 0.15s ease-out;
+}
+
+.btn-sm {
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  padding: 5px 10px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-sunken);
+  border-color: var(--border-strong);
+}
+
+.btn-secondary:disabled:hover {
+  background: transparent;
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--border);
+}
+
+.btn-danger:hover {
+  background: var(--danger-light);
+  border-color: var(--danger);
+}
+
+.btn-danger:disabled:hover {
+  background: transparent;
+}
+
+.btn-primary:disabled,
+.btn-primary:disabled:hover {
+  background: var(--border-strong);
+}
+
+.form-label {
+  font-size: var(--size-sm);
+  font-weight: var(--weight-strong);
+  color: var(--text);
+}
+
+.form-control,
+.form-select {
+  font-family: var(--font-sans);
+  font-size: var(--size-md);
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-sm);
+  min-height: var(--control-height);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
+}
+
+.axis-option {
+  font-size: var(--size-sm);
+  border-color: var(--border);
+  background: transparent;
+  border-radius: var(--radius-sm);
+}
+
+.axis-option:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-sunken);
+}
+
+.axis-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.modal-overlay {
+  background: color-mix(in srgb, var(--text) 40%, transparent);
+}
+
+.modal-content {
+  background: var(--surface-raised);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+}
+
+/* ==========================================================================
+   Direction C, second iteration (T6a Task 1): the case header and both side
+   panes. Emoji give way to inline SVG icons (ui/icons.tsx); boxed cards give
+   way to hairline rules and spacing; the side panes are compact, the text
+   keeps reading density. Behaviour and class names unchanged.
+   ========================================================================== */
+
+.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.btn-sm .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* A control that recedes: no box until hovered. */
+
+.btn-quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
+.btn-quiet:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+.btn-quiet:disabled:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.btn-icon {
+  gap: 4px;
+  padding-inline: 6px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-saving .status-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+/* Shared primitives, Tasks 3–8: Button, Badge, Notice; FormField; Dialog,
+   HelpDrawer, DataTable; AppShell. Existing rules above remain their foundation. */

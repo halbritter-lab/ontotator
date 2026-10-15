@@ -176,7 +176,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 className={`candidate-card ${obsolete ? "candidate-obsolete" : ""}`}
                 style={
                   isSelected
-                    ? { outline: "2px solid var(--primary)", background: "var(--primary-light)" }
+                    ? { outline: "2px solid var(--accent)", background: "var(--accent-light)" }
                     : undefined
                 }
                 onClick={() => {
@@ -190,7 +190,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   <span className="candidate-id">{candidateTermId}</span>
                 </div>
                 {cand.matched_term && cand.matched_term !== cand.label && (
-                  <div style={{ fontSize: "0.8rem", color: "var(--primary)", marginBottom: 2 }}>
+                  <div style={{ fontSize: "0.8rem", color: "var(--accent)", marginBottom: 2 }}>
                     {`Match: »${cand.matched_term}« (${matchDetail(cand)})`}
                   </div>
                 )}
@@ -207,7 +207,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                       marginTop: 4,
                       fontSize: "0.75rem",
                       fontWeight: 600,
-                      color: "var(--primary)",
+                      color: "var(--accent)",
                     }}
                   >
                     ✓ Currently selected

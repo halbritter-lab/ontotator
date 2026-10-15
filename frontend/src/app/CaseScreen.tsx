@@ -1508,7 +1508,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <div
           role="alert"
           aria-label="Revision conflict"
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", background: "var(--warning-light)", borderBottom: "1px solid var(--border-color)" }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", background: "var(--warning-light)", borderBottom: "1px solid var(--border)" }}
         >
           <span>
             <strong>Case was changed elsewhere.</strong> Your latest edit was not saved. Reload the case to continue;
@@ -1527,7 +1527,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       )}
 
       {(actionError || submitError) && (
-        <div role="alert" style={{ color: "var(--danger)", padding: 12, background: "var(--danger-light)", borderBottom: "1px solid var(--border-color)" }}>
+        <div role="alert" style={{ color: "var(--danger)", padding: 12, background: "var(--danger-light)", borderBottom: "1px solid var(--border)" }}>
           {actionError ?? submitError}
         </div>
       )}

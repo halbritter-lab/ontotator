@@ -119,7 +119,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         <div
           style={{
             padding: "8px 12px",
-            background: "var(--primary-light)",
+            background: "var(--accent-light)",
             borderBottom: "1px solid var(--border)",
             display: "flex",
             justifyContent: "space-between",
@@ -128,8 +128,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           }}
         >
           <div>
-            <span style={{ fontWeight: 600, color: "var(--primary)" }}>↳ Replacement for proposal: </span>
-            <span style={{ color: "var(--text-main)", fontWeight: 500 }}>
+            <span style={{ fontWeight: 600, color: "var(--accent)" }}>↳ Replacement for proposal: </span>
+            <span style={{ color: "var(--text)", fontWeight: 500 }}>
               {linkedTarget.termLabel ? `${linkedTarget.termLabel} (${linkedTarget.termId})` : linkedTarget.termId}
             </span>
           </div>
@@ -137,7 +137,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              style={{ padding: "2px 8px", fontSize: "0.75rem", background: "var(--bg-primary)" }}
+              style={{ padding: "2px 8px", fontSize: "0.75rem", background: "var(--surface)" }}
               onClick={onNavigateTarget}
             >
               View review target
@@ -274,7 +274,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             style={{
               padding: "10px 12px",
               background: "var(--surface)",
-              border: "1px dashed var(--border-color)",
+              border: "1px dashed var(--border)",
               borderRadius: "var(--radius)",
               fontSize: "0.85rem",
               color: "var(--text-muted)",
@@ -295,9 +295,9 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                   key={ev.mention.evidence_id}
                   style={{
                     padding: "8px 10px",
-                    border: "1px solid var(--border-color)",
+                    border: "1px solid var(--border)",
                     borderRadius: "var(--radius)",
-                    background: isSelected ? "var(--primary-light)" : "var(--bg-surface)",
+                    background: isSelected ? "var(--accent-light)" : "var(--surface-raised)",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",

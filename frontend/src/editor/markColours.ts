@@ -2,7 +2,7 @@
  * What the colour of a mark means: the one place that maps a meaning to a palette slot.
  *
  * The palette is `--mark-0-fill` … `--mark-5-fill` in `styles/tokens.css`; the
- * `.run--color-N` block in `styles.css` binds slot N to `--mark-N-fill`. Neither knows
+ * `.run--color-N` block in `styles/screens/editor.css` binds slot N to `--mark-N-fill`. Neither knows
  * what a colour stands for. This module does: today a mark is coloured by its term, so
  * the same term looks the same wherever it appears. To give colours another meaning
  * (by layer, by kind, …) change `MARK_COLOUR_MEANING`, or add a meaning here; the

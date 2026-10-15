@@ -1,55 +1,8 @@
-:root {
-  /* Aliases of the old names onto the design tokens (styles/tokens.css), so the whole
-     app takes the new colours at once. Removed when the styles are split (T6a Task 2). */
-  --bg-primary: var(--surface);
-  --bg-surface: var(--surface-raised);
-  --bg-secondary: var(--surface-sunken);
-  --border-color: var(--border);
-  --text-main: var(--text);
-  --primary: var(--accent);
-  --primary-hover: var(--accent-hover);
-  --primary-light: var(--accent-light);
-  --span-highlight: var(--mark-2-fill);
-  --span-selected: var(--accent-light);
-  --span-color-0: var(--mark-0-fill);
-  --span-color-0-border: var(--mark-line);
-  --span-color-1: var(--mark-1-fill);
-  --span-color-1-border: var(--mark-line);
-  --span-color-2: var(--mark-2-fill);
-  --span-color-2-border: var(--mark-line);
-  --span-color-3: var(--mark-3-fill);
-  --span-color-3-border: var(--mark-line);
-  --span-color-4: var(--mark-4-fill);
-  --span-color-4-border: var(--mark-line);
-  --span-color-5: var(--mark-5-fill);
-  --span-color-5-border: var(--mark-line);
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: var(--font-sans);
-  background-color: var(--bg-primary);
-  color: var(--text-main);
-  line-height: 1.5;
-  height: 100vh;
-  overflow: hidden;
-}
-
-#root {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
 /* Header */
+
 .app-header {
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
   padding: 12px 20px;
   display: flex;
   align-items: center;
@@ -65,22 +18,13 @@ body {
   gap: 12px;
 }
 
-.badge {
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
 /* The case header's "Annotating as Name (pseudonym)": the name is cut to a
    bounded width (the title has it in full) so that the header keeps two lines
    in the narrowest three-column window; the pseudonym is never cut. */
+
 .identity-badge {
-  background: var(--bg-secondary);
-  color: var(--text-main);
+  background: var(--surface-sunken);
+  color: var(--text);
   font-size: 0.78rem;
   text-transform: none;
   letter-spacing: normal;
@@ -101,50 +45,8 @@ body {
   }
 }
 
-.badge-independent {
-  background-color: var(--primary-light);
-  color: var(--primary);
-}
-
-.badge-review {
-  background-color: #f3e8ff;
-  color: #7e22ce;
-}
-
-.badge-ai {
-  background: linear-gradient(135deg, #7c3aed, #db2777);
-  color: #fff;
-  font-size: var(--size-xs);
-  font-weight: 600;
-  padding: 2px 6px;
-}
-
-.status-badge {
-  font-size: 0.8rem;
-  padding: 4px 10px;
-  border-radius: var(--radius);
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.status-saved {
-  background-color: var(--success-light);
-  color: var(--success);
-}
-
-.status-saving {
-  background-color: var(--warning-light);
-  color: var(--warning);
-}
-
-.status-conflict, .status-error {
-  background-color: var(--danger-light);
-  color: var(--danger);
-}
-
 /* App Main Layout */
+
 .app-layout {
   display: flex;
   flex: 1;
@@ -156,10 +58,11 @@ body {
 }
 
 /* Left Sidebar: Document / Package List */
+
 .sidebar {
   width: 320px;
-  border-right: 1px solid var(--border-color);
-  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  background: var(--surface-raised);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -167,7 +70,7 @@ body {
 
 .sidebar-header {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--text-muted);
@@ -180,6 +83,7 @@ body {
 }
 
 /* Case sidebar: proposals, references and curated annotations scroll together. */
+
 .sidebar-scroll {
   flex: 1;
   min-height: 0;
@@ -195,10 +99,11 @@ body {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--bg-surface);
+  background: var(--surface-raised);
 }
 
 /* Section header with an action: the title gives way, the button stays whole. */
+
 .sidebar-header--actions {
   display: flex;
   justify-content: space-between;
@@ -219,6 +124,7 @@ body {
 }
 
 /* Read-only reference annotation: laid out like a list entry. */
+
 .reference-item {
   display: flex;
   flex-direction: column;
@@ -226,7 +132,7 @@ body {
   width: 100%;
   padding: 12px 16px;
   border: 0;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   border-left: 1px solid transparent;
   background: transparent;
   color: inherit;
@@ -237,12 +143,12 @@ body {
 }
 
 .reference-item:hover {
-  background: var(--bg-primary);
+  background: var(--surface);
 }
 
 .reference-item[aria-pressed="true"] {
-  background: var(--primary-light);
-  border-left-color: var(--primary);
+  background: var(--accent-light);
+  border-left-color: var(--accent);
 }
 
 .reference-item .term-name {
@@ -251,24 +157,25 @@ body {
 }
 
 /* Keep an entry scrolled into view clear of the sticky section header. */
+
 .sidebar-scroll [data-list-key] {
   scroll-margin-top: 48px;
 }
 
 .doc-item {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.15s ease;
 }
 
 .doc-item:hover {
-  background: var(--bg-primary);
+  background: var(--surface);
 }
 
 .doc-item.selected {
-  background: var(--primary-light);
-  border-left: 1px solid var(--primary);
+  background: var(--accent-light);
+  border-left: 1px solid var(--accent);
 }
 
 .doc-id {
@@ -298,18 +205,19 @@ body {
 }
 
 /* Center Content: Text Pane */
+
 .center-pane {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--bg-surface);
+  background: var(--surface-raised);
   overflow: hidden;
 }
 
 .pane-toolbar {
   padding: 10px 16px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -319,6 +227,7 @@ body {
 }
 
 /* One line always: a long intent label is cut off rather than wrapping the bar. */
+
 .pane-toolbar > div:first-child {
   flex: 1 1 auto;
   min-width: 0;
@@ -337,6 +246,7 @@ body {
 }
 
 /* The "adding a mention" notice takes the toolbar's place instead of pushing the text down. */
+
 .center-pane {
   position: relative;
 }
@@ -362,10 +272,11 @@ body {
 }
 
 /* Right Sidebar: Annotation & Search Panel */
+
 .detail-pane {
   width: 380px;
-  border-left: 1px solid var(--border-color);
-  background: var(--bg-surface);
+  border-left: 1px solid var(--border);
+  background: var(--surface-raised);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -378,8 +289,8 @@ body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  border-left: 1px solid var(--border-color);
-  background: var(--bg-surface);
+  border-left: 1px solid var(--border);
+  background: var(--surface-raised);
   overflow-wrap: anywhere;
 }
 
@@ -402,7 +313,7 @@ body {
 
 .detail-section {
   padding: 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .detail-section h3 {
@@ -412,165 +323,8 @@ body {
   color: var(--text-muted);
 }
 
-/* Forms & Inputs */
-.form-group {
-  margin-bottom: 14px;
-}
-
-.form-label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 500;
-  margin-bottom: 4px;
-  color: var(--text-main);
-}
-
-.axis-field {
-  border: 0;
-  padding: 0;
-  min-width: 0;
-}
-
-.axis-options {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.axis-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 9999px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-main);
-  background: var(--bg-surface);
-  transition: all 0.15s ease;
-  user-select: none;
-}
-
-.axis-option input[type="radio"] {
-  width: 13px;
-  height: 13px;
-  margin: 0;
-  accent-color: var(--primary);
-  cursor: pointer;
-}
-
-.axis-option:hover {
-  border-color: var(--primary);
-  background: var(--bg-primary);
-}
-
-.axis-option:has(input:checked) {
-  border-color: var(--primary);
-  background: var(--primary-light);
-  color: var(--primary);
-  font-weight: 600;
-}
-
-.axis-option:has(input:focus-visible) {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.form-control, .form-select {
-  width: 100%;
-  padding: 8px 12px;
-  font-size: 0.9rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  background: var(--bg-surface);
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.form-control:focus, .form-select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-light);
-}
-
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: var(--radius);
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: #ffffff;
-}
-
-.btn-primary:hover {
-  background: var(--primary-hover);
-}
-
-.btn-secondary {
-  background: var(--bg-surface);
-  border-color: var(--border-color);
-  color: var(--text-main);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-primary);
-}
-
-.btn-danger {
-  background: var(--danger-light);
-  color: var(--danger);
-  border-color: #fca5a5;
-}
-
-.btn-danger:hover {
-  background: #fecaca;
-}
-
-.btn-sm {
-  padding: 4px 8px;
-  font-size: 0.8rem;
-}
-
-/* Disabled buttons must look disabled (and not react to hover). */
-.btn:disabled,
-.btn[aria-disabled="true"] {
-  opacity: 0.5;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.btn-primary:disabled,
-.btn-primary:disabled:hover {
-  background: #94a3b8;
-}
-
-.btn-secondary:disabled:hover {
-  background: var(--bg-surface);
-}
-
-.btn-danger:disabled:hover {
-  background: var(--danger-light);
-}
-
-.btn:focus-visible,
-.dashboard-table tr:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 /* Search Candidates */
+
 .candidate-list {
   list-style: none;
   margin-top: 10px;
@@ -581,20 +335,20 @@ body {
 
 .candidate-card {
   padding: 10px 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .candidate-card:hover:not(.candidate-obsolete) {
-  background: var(--bg-primary);
-  border-color: var(--primary);
+  background: var(--surface);
+  border-color: var(--accent);
 }
 
 .candidate-card.candidate-obsolete {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--obsolete-fill);
+  border-color: var(--obsolete-border);
   cursor: not-allowed;
   opacity: 0.75;
 }
@@ -632,6 +386,7 @@ body {
 }
 
 /* Spans in text */
+
 .run {
   display: inline;
   padding: 0;
@@ -645,7 +400,7 @@ body {
   /* A soft highlighter over the lower half of the line, feathered at its top edge.
      The fill is a palette slot (`--run-fill`, set below); what it means is decided
      in editor/markColours.ts. */
-  --run-fill: var(--span-highlight);
+  --run-fill: var(--mark-2-fill);
   --run-highlight: linear-gradient(to bottom, transparent 0 40%, var(--run-fill) 54% 100%);
   background-color: transparent;
   background-image: var(--run-highlight);
@@ -660,15 +415,22 @@ body {
 
 /* Palette slots: slot N paints with --mark-N-fill (styles/tokens.css). The only
    binding of slot to colour; the meaning of a slot lives in editor/markColours.ts. */
+
 .run--color-0 { --run-fill: var(--mark-0-fill); }
+
 .run--color-1 { --run-fill: var(--mark-1-fill); }
+
 .run--color-2 { --run-fill: var(--mark-2-fill); }
+
 .run--color-3 { --run-fill: var(--mark-3-fill); }
+
 .run--color-4 { --run-fill: var(--mark-4-fill); }
+
 .run--color-5 { --run-fill: var(--mark-5-fill); }
 
 /* The state of a mark is carried by its line, not by its hue: own annotations are
    underlined solid, proposals under review dashed, read-only references dotted. */
+
 .run--source {
   border-bottom: 2px dotted var(--mark-line);
 }
@@ -678,6 +440,7 @@ body {
 }
 
 /* Last, so an own annotation wins where it overlaps a proposal or a reference. */
+
 .run--own {
   border-bottom: 2px solid var(--mark-line);
 }
@@ -688,6 +451,7 @@ body {
 
 /* A negated finding (assertion "absent"): a fine diagonal hatch over the whole run,
    on top of the highlighter. */
+
 .run--negated {
   background-image:
     repeating-linear-gradient(135deg, transparent 0 5px, var(--mark-negated-hatch) 5px 6px),
@@ -695,6 +459,7 @@ body {
 }
 
 /* Active / Selected mention */
+
 .mention-span.selected {
   outline: 2px solid var(--mark-selected);
   outline-offset: 1px;
@@ -706,6 +471,7 @@ body {
 /* The frame is drawn per segment, not per run: lines above and below every run,
    side lines only where a segment really starts or ends. Pieces split by an
    overlapping annotation or a line break therefore show no false edges. */
+
 .run--hot {
   --hot: var(--mark-selected);
   --hot-rows: 0 -2px 0 var(--hot), 0 2px 0 var(--hot);
@@ -735,6 +501,7 @@ body {
    An empty inline box: it takes no room and, unlike an inline-block, adds no line-break
    opportunity, so the start handle of a segment at the beginning of a wrapped line stays
    with its segment instead of hanging at the end of the previous line. */
+
 .resize-handle {
   position: relative;
   display: inline;
@@ -745,6 +512,7 @@ body {
 }
 
 /* Visible bar. */
+
 .resize-handle::before {
   content: "";
   position: absolute;
@@ -757,6 +525,7 @@ body {
 }
 
 /* Wider grab area; its knob tells a handle apart from the selection outline. */
+
 .resize-handle::after {
   content: "";
   position: absolute;
@@ -777,6 +546,7 @@ body {
 
 /* Two handles on (almost) the same spot: upper half grabs the start handle,
    lower half the end handle, matching where their knobs are. */
+
 .resize-handle--crowded.resize-handle--start::after {
   height: 0.8em;
   padding-bottom: 0;
@@ -802,31 +572,13 @@ body {
 
 /* While dragging, the pointer must hit the text and not the grab area of the moving handle,
    otherwise the edge sticks to its current position within that area. */
+
 .text-container.resizing .resize-handle {
   pointer-events: none;
 }
 
-/* Modal / Setup dialog */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal-content {
-  background: var(--bg-surface);
-  border-radius: var(--radius);
-  padding: 24px;
-  width: 90%;
-  max-width: 540px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-}
-
 /* Responsive behavior */
+
 @media (max-width: 1024px) {
   .app-header {
     flex-wrap: wrap;
@@ -856,7 +608,7 @@ body {
     grid-column: 2;
     width: 100%;
     border-left: 0;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--border);
   }
   .inspector-pane .detail-pane {
     max-height: none;
@@ -870,7 +622,7 @@ body {
     max-width: 100%;
   }
   .app-header .btn,
-  .case-navigation .btn {
+.case-navigation .btn {
     white-space: nowrap;
   }
   .case-navigation {
@@ -879,21 +631,21 @@ body {
   .mobile-pane-tabs {
     display: flex;
     flex-shrink: 0;
-    background: var(--bg-surface);
-    border-bottom: 1px solid var(--border-color);
+    background: var(--surface-raised);
+    border-bottom: 1px solid var(--border);
   }
   .mobile-pane-tabs button {
     flex: 1;
     padding: 9px;
     border: 0;
     background: transparent;
-    color: var(--text-main);
+    color: var(--text);
     font: inherit;
     cursor: pointer;
   }
   .mobile-pane-tabs button[aria-pressed="true"] {
-    color: var(--primary-hover);
-    border-bottom: 2px solid var(--primary);
+    color: var(--accent-hover);
+    border-bottom: 2px solid var(--accent);
     font-weight: 600;
   }
   .app-layout {
@@ -901,16 +653,16 @@ body {
     flex-direction: column;
   }
   .app-layout.mobile-pane-list .center-pane,
-  .app-layout.mobile-pane-list .inspector-pane,
-  .app-layout.mobile-pane-text .sidebar,
-  .app-layout.mobile-pane-text .inspector-pane,
-  .app-layout.mobile-pane-details .sidebar,
-  .app-layout.mobile-pane-details .center-pane {
+.app-layout.mobile-pane-list .inspector-pane,
+.app-layout.mobile-pane-text .sidebar,
+.app-layout.mobile-pane-text .inspector-pane,
+.app-layout.mobile-pane-details .sidebar,
+.app-layout.mobile-pane-details .center-pane {
     display: none;
   }
   .sidebar,
-  .center-pane,
-  .inspector-pane {
+.center-pane,
+.inspector-pane {
     width: 100%;
     min-height: 0;
     max-height: none;
@@ -918,316 +670,8 @@ body {
   }
 }
 
-/* Curation Dashboard */
-.dashboard-container {
-  flex: 1;
-  padding: 24px 32px;
-  overflow-y: auto;
-  max-width: 1050px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.dashboard-hero {
-  background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
-  border: 1px solid #bfdbfe;
-  border-radius: var(--radius);
-  padding: 16px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.dashboard-tabs {
-  display: flex;
-  gap: 6px;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 14px;
-}
-
-.dashboard-tab {
-  padding: 8px 14px;
-  border: none;
-  background: transparent;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.15s ease;
-}
-
-.dashboard-tab:hover {
-  color: var(--text-main);
-}
-
-.dashboard-tab.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
-  font-weight: 600;
-}
-
-.dashboard-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-
-.dashboard-table th {
-  background: #f8fafc;
-  padding: 10px 14px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  text-align: left;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.dashboard-table td {
-  padding: 10px 14px;
-  font-size: 0.86rem;
-  border-bottom: 1px solid var(--border-color);
-  vertical-align: middle;
-}
-
-.dashboard-table tr:last-child td {
-  border-bottom: none;
-}
-
-.dashboard-table tr:hover td {
-  background: #f8fafc;
-}
-
-
-.dashboard-table tr.is-selected td {
-  background: var(--primary-light);
-}
-
-/* Small helper text under form fields */
-.field-hint {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 4px;
-}
-
-.field-hint-error {
-  color: var(--danger);
-}
-
-.form-control.is-invalid {
-  border-color: var(--danger);
-}
-
-/* Success messages (e.g. after importing a package) */
-.notice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-  border-radius: var(--radius);
-  margin-bottom: 20px;
-  font-size: 0.9rem;
-}
-
-.notice-success {
-  background: var(--success-light);
-  color: #166534;
-  border: 1px solid #86efac;
-}
-
-/* Notices about the preloaded ontologies/ and packages/ folders */
-.notice-warning {
-  background: #fef9c3;
-  color: #854d0e;
-  border: 1px solid #facc15;
-}
-
-.notice-info {
-  background: #e0f2fe;
-  color: #075985;
-  border: 1px solid #7dd3fc;
-}
-
-/* Working mode fixed by the installation (only one mode allowed) */
-.fixed-mode {
-  padding: 6px 10px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  background: var(--bg-secondary);
-  font-weight: 600;
-}
-
-/* First-run guide shown while no work package is imported */
-.getting-started {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  padding: 24px 28px;
-  max-width: 720px;
-  margin: 24px auto;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.getting-started h2 {
-  font-size: 1.25rem;
-  margin-bottom: 16px;
-}
-
-.getting-started-steps {
-  list-style: none;
-  counter-reset: step;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.getting-started-steps li {
-  counter-increment: step;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-left: 44px;
-  position: relative;
-  min-height: 32px;
-}
-
-.getting-started-steps li::before {
-  content: counter(step);
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--primary-light);
-  color: var(--primary);
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.getting-started-steps strong {
-  display: block;
-  font-size: 0.95rem;
-}
-
-.getting-started-steps span {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-/* Full-page login and session notices */
-.session-lost {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: var(--bg-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  overflow: auto;
-}
-
-.session-lost-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  padding: 32px 36px;
-  max-width: 600px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
-}
-
-.session-lost-card h1 {
-  font-size: 1.4rem;
-  margin-bottom: 12px;
-}
-
-.session-lost-card p {
-  font-size: 0.98rem;
-  line-height: 1.5;
-  margin-bottom: 12px;
-}
-
-.session-lost-muted {
-  color: var(--text-muted);
-  font-size: 0.9rem !important;
-}
-
-/* Login and code forms (LoginScreen), on the full-page card above */
-.login-overlay {
-  /* After the session ended: the editor stays visible underneath. */
-  background: rgba(15, 23, 42, 0.45);
-}
-
-.login-card {
-  width: 100%;
-  max-width: 420px;
-}
-
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.login-form .form-label {
-  margin: 8px 0 0;
-}
-
-.login-form .btn-primary {
-  margin-top: 14px;
-}
-
-.login-link {
-  background: none;
-  border: none;
-  padding: 6px 0;
-  color: var(--primary);
-  font-size: 0.88rem;
-  cursor: pointer;
-  align-self: flex-start;
-}
-
-.login-link:hover {
-  text-decoration: underline;
-}
-
-/* The editor inside the login gate (made inert while the login dialog is open) */
-.app-shell {
-  height: 100%;
-}
-
-/* Session notices of the login gate, over the editor */
-.session-notice {
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 900;
-  max-width: min(640px, calc(100vw - 32px));
-}
-
-/* The logged-in user in the dashboard header: display name · pseudonym */
-.current-user {
-  font-size: 0.82rem;
-  color: var(--text-main);
-  white-space: nowrap;
-}
-
 /* Search languages: flag button at the right edge of the search box */
+
 .search-language {
   position: relative;
   flex: none;
@@ -1239,15 +683,15 @@ body {
   align-items: center;
   gap: 3px;
   padding: 0 8px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--bg-surface);
+  background: var(--surface-raised);
   cursor: pointer;
 }
 
 .search-language-button:hover,
 .search-language-button[aria-expanded="true"] {
-  border-color: var(--primary);
+  border-color: var(--accent);
 }
 
 .lang-flag {
@@ -1255,7 +699,7 @@ body {
   width: 16px;
   height: 12px;
   border-radius: 1px;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 0 0 1px var(--flag-shadow-colour);
 }
 
 .lang-code {
@@ -1275,10 +719,10 @@ body {
   gap: 2px;
   min-width: 96px;
   padding: 6px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 6px 16px var(--language-menu-shadow-colour);
 }
 
 .search-language-option {
@@ -1292,268 +736,7 @@ body {
 }
 
 .search-language-option:hover {
-  background: var(--primary-light);
-}
-
-/* Ontology tree: the tree itself */
-.term-tree {
-  list-style: none;
-  padding: 4px 0;
-}
-
-.tree-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
-  padding-top: 3px;
-  padding-bottom: 3px;
-  padding-right: 8px;
-  font-size: 0.88rem;
-  line-height: 1.35;
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-
-.tree-item:hover {
-  background: var(--bg-primary);
-}
-
-.tree-item[aria-selected="true"] {
-  background: var(--primary-light);
-}
-
-.tree-item:focus {
-  outline: none;
-}
-
-.tree-item:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: -2px;
-}
-
-.tree-item[aria-busy="true"] {
-  cursor: progress;
-}
-
-.tree-toggle {
-  flex: 0 0 14px;
-  text-align: center;
-  /* The small triangles are hard to see and to hit at the row's font size. */
-  font-size: 1.25em;
-  line-height: 1;
-  color: var(--text-muted);
-  user-select: none;
-}
-
-.tree-label {
-  flex: 1 1 10ch;
-  min-width: 10ch;
-}
-
-.tree-item--current .tree-label {
-  font-weight: 600;
-}
-
-.tree-count {
-  flex-shrink: 0;
-  font-size: var(--size-xs);
-  color: var(--text-muted);
-}
-
-.tree-current {
-  flex-shrink: 0;
-  font-size: var(--size-xs);
-  font-weight: 600;
-  color: var(--primary);
-  border: 1px solid var(--primary);
-  border-radius: 999px;
-  padding: 0 6px;
-}
-
-/* Ontology tree: the browser, a panel docked into the case layout (its place there
-   follows further down) */
-.tree-host {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  background: var(--bg-surface);
-  border-left: 1px solid var(--border-color);
-  border-top: 1px solid var(--border-color);
-}
-
-.tree-host[hidden] {
-  display: none;
-}
-
-.tree-browser {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  background: var(--bg-surface);
-}
-
-.tree-browser__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-
-.tree-browser__header h2 {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.tree-notice,
-.tree-error {
-  flex-shrink: 0;
-  padding: 6px 12px;
-  font-size: 0.82rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.tree-notice {
-  background: var(--warning-light);
-}
-
-.tree-error {
-  background: var(--danger-light);
-  color: var(--danger);
-}
-
-.tree-loading {
-  padding: 12px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-/* The rows above the details of the selected term. */
-.tree-browser__body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.tree-browser__tree {
-  flex: 1 1 55%;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  /* A row brought into view is whole, also where the box ends on a fraction of a pixel. */
-  scroll-padding-block: 2px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.tree-detail {
-  flex: 1 1 45%;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.tree-detail__body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 12px;
-  font-size: 0.85rem;
-  overflow-wrap: anywhere;
-}
-
-.tree-detail__name {
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.tree-detail__id {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-
-.tree-detail__definition,
-.tree-detail__group {
-  margin-bottom: 8px;
-}
-
-.tree-detail__group h4 {
-  font-size: var(--size-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 2px;
-}
-
-.tree-detail__group ul {
-  list-style: none;
-}
-
-.tree-detail__group dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 8px;
-}
-
-.tree-detail__group dt {
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-}
-
-.tree-detail__empty {
-  color: var(--text-muted);
-}
-
-.tree-link {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: var(--primary);
-  text-decoration: underline;
-  cursor: pointer;
-  text-align: left;
-}
-
-.tree-link:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-/* The button stays visible while the details above it scroll. */
-.tree-detail__actions {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--border-color);
-}
-
-/* Next to a long hint in the narrow panel the button keeps its one line. */
-.tree-detail__actions .btn {
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.tree-detail__hint {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-/* "Show in tree", under the term name of an annotation */
-.annotation-tree-button {
-  margin-top: 2px;
+  background: var(--accent-light);
 }
 
 /* Ontology tree in the case layout: under the annotation panel, wherever that is.
@@ -1563,6 +746,7 @@ body {
    (so that it does not jump about while little is shown) and never more than the tree
    leaves: the tree keeps at least half of the column, and on a low screen 400 px (or
    60 %, whichever is less). So neither part is short while the other has room to spare. */
+
 @media (min-width: 1025px) {
   .app-layout.tree-open {
     display: grid;
@@ -1594,6 +778,7 @@ body {
 /* Two columns (up to 1024 px): the annotation panel is a strip under the text there.
    The tree is docked in that strip, next to the panel, and the strip gets more of
    the height while the tree is open. */
+
 @media (min-width: 701px) and (max-width: 1024px) {
   .app-layout.tree-open {
     grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);
@@ -1614,9 +799,10 @@ body {
 
 /* One pane at a time (up to 700 px): the tree is part of "Details", under the
    annotation panel, and has the larger share of the height. */
+
 @media (max-width: 700px) {
   .app-layout.mobile-pane-list > .tree-host,
-  .app-layout.mobile-pane-text > .tree-host {
+.app-layout.mobile-pane-text > .tree-host {
     display: none;
   }
   .app-layout > .tree-host {
@@ -1626,72 +812,8 @@ body {
   }
 }
 
-.tree-id {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: var(--size-xs);
-  color: var(--text-muted);
-}
-
-.tree-external {
-  flex-shrink: 0;
-  font-size: 0.8rem;
-  line-height: 1;
-  color: var(--text-muted);
-  text-decoration: none;
-  padding: 0 2px;
-}
-
-.tree-external:hover,
-.tree-external:focus-visible {
-  color: var(--primary);
-}
-
-.tree-detail__ids {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.tree-detail__ids .tree-detail__id {
-  margin-bottom: 0;
-}
-
-/* ==========================================================================
-   Direction C, "reading document": editor prototype (T6a Task 1).
-   Paper-like surfaces; the clinical text is set in a serif on a raised sheet
-   with room to read; controls recede into sans, hairlines and muted labels.
-   Overrides the rules above; Task 2 folds them into base, components and
-   screen files.
-   ========================================================================== */
-
-/* The ontology tree host keeps its exact class name (tests pin it), so it
-   takes compact density here instead of through a class. */
-.tree-host {
-  --body-size: var(--size-md);
-  --body-leading: var(--leading-md);
-  --row-height: 34px;
-  --cell-pad-y: 6px;
-  --cell-pad-x: 12px;
-  --control-height: 30px;
-}
-
-body {
-  font-family: var(--font-sans);
-  font-size: var(--size-base);
-  line-height: var(--leading-base);
-  color: var(--text);
-  background-color: var(--surface);
-  text-rendering: optimizeLegibility;
-}
-
-::selection {
-  background: var(--accent-light);
-  color: var(--text);
-}
-
 /* Case header: flat, on the paper, one filled action. */
+
 .app-header {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -1703,30 +825,6 @@ body {
   font-size: var(--size-base);
   font-weight: var(--weight-strong);
   gap: var(--space-3);
-}
-
-.badge {
-  font-size: var(--size-xs);
-  line-height: var(--leading-xs);
-  font-weight: var(--weight-strong);
-  text-transform: none;
-  letter-spacing: 0;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
-}
-
-.badge-independent,
-.badge-review,
-.badge-assisted {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.badge-ai {
-  background: var(--accent-light);
-  color: var(--accent);
-  font-size: var(--size-xs);
 }
 
 .identity-badge {
@@ -1742,87 +840,11 @@ body {
   font-weight: var(--weight-strong);
 }
 
-.status-badge {
-  font-size: var(--size-sm);
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
-}
-
-.status-saved,
-.status-saving {
-  background: transparent;
-}
-
-/* Buttons recede: hairline secondaries, one filled primary. */
-.btn {
-  font-family: var(--font-sans);
-  font-size: var(--size-md);
-  line-height: var(--leading-md);
-  border-radius: var(--radius-sm);
-  transition: background-color 0.15s ease-out, border-color 0.15s ease-out, color 0.15s ease-out;
-}
-
-.btn-sm {
-  font-size: var(--size-sm);
-  line-height: var(--leading-sm);
-  padding: 5px 10px;
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.btn-primary:hover {
-  background: var(--accent-hover);
-}
-
-.btn-secondary {
-  background: transparent;
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.btn-secondary:hover {
-  background: var(--surface-sunken);
-  border-color: var(--border-strong);
-}
-
-.btn-secondary:disabled:hover {
-  background: transparent;
-}
-
-.btn-danger {
-  background: transparent;
-  color: var(--danger);
-  border-color: var(--border);
-}
-
-.btn-danger:hover {
-  background: var(--danger-light);
-  border-color: var(--danger);
-}
-
-.btn-danger:disabled:hover {
-  background: transparent;
-}
-
-.btn-primary:disabled,
-.btn-primary:disabled:hover {
-  background: var(--border-strong);
-}
-
-.btn:focus-visible,
-.dashboard-table tr:focus-visible,
-.axis-option:has(input:focus-visible) {
-  outline: var(--focus-width) solid var(--focus-ring);
-  outline-offset: var(--focus-offset);
-}
-
 /* Side panes: compact sans on the paper, hairlines instead of boxes. */
 
 /* A decided proposal (changed or rejected) steps back: muted text on the sunken
    band instead of transparency, so its text keeps AA contrast. */
+
 .doc-item--resolved:not(.selected) {
   background: var(--surface-sunken);
   color: var(--text-muted);
@@ -1833,15 +855,14 @@ body {
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
+
 .app-layout {
   background: var(--surface);
 }
 
 .sidebar,
 .inspector-pane,
-.detail-pane,
-.tree-host,
-.tree-browser {
+.detail-pane {
   background: var(--surface);
   font-size: var(--body-size);
   line-height: var(--body-leading);
@@ -1851,8 +872,7 @@ body {
   border-right: 1px solid var(--border);
 }
 
-.inspector-pane,
-.tree-host {
+.inspector-pane {
   border-left: 1px solid var(--border);
 }
 
@@ -1910,47 +930,8 @@ body {
   margin-bottom: var(--space-3);
 }
 
-.form-label {
-  font-size: var(--size-sm);
-  font-weight: var(--weight-strong);
-  color: var(--text);
-}
-
-.form-control,
-.form-select {
-  font-family: var(--font-sans);
-  font-size: var(--size-md);
-  background: var(--surface-raised);
-  border-color: var(--border-strong);
-  border-radius: var(--radius-sm);
-  min-height: var(--control-height);
-}
-
-.form-control:focus,
-.form-select:focus {
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 1px var(--focus-ring);
-}
-
-.axis-option {
-  font-size: var(--size-sm);
-  border-color: var(--border);
-  background: transparent;
-  border-radius: var(--radius-sm);
-}
-
-.axis-option:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-sunken);
-}
-
-.axis-option:has(input:checked) {
-  border-color: var(--accent);
-  background: var(--accent-light);
-  color: var(--accent);
-}
-
 /* Search results: a ruled list, not a stack of cards. */
+
 .candidate-list {
   gap: 0;
   border-top: 1px solid var(--border);
@@ -1982,17 +963,8 @@ body {
   line-height: var(--leading-sm);
 }
 
-.tree-browser__header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-
-.tree-browser__header h2 {
-  font-size: var(--size-sm);
-  color: var(--text-muted);
-}
-
 /* The document: a raised sheet on the paper, set in the serif at reading size. */
+
 .center-pane {
   background: var(--surface);
 }
@@ -2042,10 +1014,10 @@ body {
   border-bottom: 0;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   box-shadow: var(--shadow-1);
-  font-family: var(--font-serif);
+  font-family: var(--body-font);
   font-optical-sizing: auto;
-  font-size: var(--size-reading);
-  line-height: var(--leading-reading);
+  font-size: var(--body-size);
+  line-height: var(--body-leading);
   color: var(--text);
   scrollbar-color: var(--border-strong) transparent;
   scrollbar-width: thin;
@@ -2054,16 +1026,6 @@ body {
 .text-container.density-reading:focus-visible {
   outline: var(--focus-width) solid var(--focus-ring);
   outline-offset: -3px;
-}
-
-.modal-overlay {
-  background: color-mix(in srgb, var(--text) 40%, transparent);
-}
-
-.modal-content {
-  background: var(--surface-raised);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-2);
 }
 
 @media (max-width: 1024px) {
@@ -2103,63 +1065,14 @@ body {
   }
 }
 
-/* ==========================================================================
-   Direction C, second iteration (T6a Task 1): the case header and both side
-   panes. Emoji give way to inline SVG icons (ui/icons.tsx); boxed cards give
-   way to hairline rules and spacing; the side panes are compact, the text
-   keeps reading density. Behaviour and class names unchanged.
-   ========================================================================== */
-
-.icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
-}
-
-.btn-sm .icon,
 .decision-tag .icon,
 .layer-tag .icon {
   width: 14px;
   height: 14px;
 }
 
-/* A control that recedes: no box until hovered. */
-.btn-quiet {
-  background: transparent;
-  border-color: transparent;
-  color: var(--text-muted);
-}
-
-.btn-quiet:hover {
-  background: var(--surface-sunken);
-  color: var(--text);
-}
-
-.btn-quiet:disabled:hover {
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.btn-icon {
-  gap: 4px;
-  padding-inline: 6px;
-}
-
-kbd.kbd {
-  display: inline-block;
-  min-width: 1.5em;
-  padding: 0 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--size-xs);
-  line-height: var(--leading-xs);
-  text-align: center;
-}
-
 /* Case header: groups separated by space and one hairline, not by boxes. */
+
 .app-header {
   gap: var(--space-4);
   min-height: 52px;
@@ -2205,18 +1118,6 @@ kbd.kbd {
   font-weight: var(--weight-regular);
 }
 
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.status-saving .status-dot {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px currentColor;
-}
-
 .app-actions .btn-primary {
   margin-left: var(--space-2);
   font-weight: var(--weight-strong);
@@ -2224,6 +1125,7 @@ kbd.kbd {
 }
 
 /* Left pane: layers. */
+
 .layer-controls {
   padding: var(--space-3) var(--cell-pad-x) var(--space-3);
   border-bottom: 1px solid var(--border);
@@ -2346,6 +1248,7 @@ kbd.kbd {
 }
 
 /* Left pane: lists of proposals, references and annotations. */
+
 .sidebar-header--actions .btn {
   padding: 2px var(--space-2);
   font-size: var(--size-xs);
@@ -2461,6 +1364,7 @@ kbd.kbd {
 }
 
 /* Right pane: the review decision. */
+
 .review-actions {
   padding: var(--space-4) var(--cell-pad-x);
 }
@@ -2523,6 +1427,7 @@ kbd.kbd {
 }
 
 /* The quoted evidence is clinical text: it keeps the reading serif. */
+
 .review-actions__quote {
   margin: 0 0 var(--space-2);
   padding-left: var(--space-3);
@@ -2573,8 +1478,11 @@ kbd.kbd {
 }
 
 .decision-btn--confirmed { --decision-colour: var(--success); }
+
 .decision-btn--rejected { --decision-colour: var(--danger); }
+
 .decision-btn--changed { --decision-colour: var(--accent); }
+
 .decision-btn--uncertain { --decision-colour: var(--warning); }
 
 .btn.decision-btn:hover:not(:disabled) {
@@ -2667,6 +1575,7 @@ kbd.kbd {
 }
 
 /* Nothing selected: a quiet note, not a card. */
+
 .detail-section.detail-empty {
   padding: var(--space-5) var(--cell-pad-x);
 }
