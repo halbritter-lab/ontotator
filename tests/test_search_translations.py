@@ -23,7 +23,7 @@ ES = FIXTURES / "hp-es.babelon.tsv"
 
 def _key(annotator_id: str = "dr-meier") -> WorkspaceKey:
     return WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id=annotator_id,
         mode="independent",

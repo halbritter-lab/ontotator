@@ -543,7 +543,7 @@ def submission_to_unit(
     decision: ReviewDecision
     for decision in submission.decisions if key.mode == "review" else []:
         target = (decision.target.annotation_id, decision.target.version)
-        source = _proposal_ref(decision.target.annotation_id, key.package_id)
+        source = _proposal_ref(decision.target.annotation_id, key.project_key)
         if decision.outcome == "confirmed":
             reviewed[target] = ("adopted", source)
             if target not in present:

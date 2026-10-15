@@ -123,7 +123,7 @@ def _submit(
     repo = Repository(db)
     target_set = ReviewTargetSet.create(targets or [])
     key = WorkspaceKey(
-        package_id="proj",
+        project_key="proj",
         document_id=DOC,
         annotator_id=annotator,
         mode=mode,  # type: ignore[arg-type]

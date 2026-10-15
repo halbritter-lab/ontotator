@@ -34,9 +34,9 @@ def _from_stored(data: object) -> Preferences:
         ).last_annotator_id
     modes = data.get("mode_by_package")
     if isinstance(modes, dict):
-        for package_id, mode in modes.items():
-            if isinstance(package_id, str) and mode in _MODES:
-                prefs.mode_by_package[package_id] = mode
+        for project_key, mode in modes.items():
+            if isinstance(project_key, str) and mode in _MODES:
+                prefs.mode_by_package[project_key] = mode
     selections = data.get("search_languages_by_annotator")
     if isinstance(selections, dict):
         for annotator_id, languages in selections.items():

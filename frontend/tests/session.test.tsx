@@ -15,7 +15,7 @@ const notLoggedIn = () => new AuthError("Log in to continue.", undefined, "NOT_A
 const oneCaseServer = () => {
   vi.spyOn(api, "getPreferences").mockResolvedValue({ mode_by_package: {} } as any);
   vi.spyOn(api, "listOntologies").mockResolvedValue([]);
-  vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+  vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
   vi.spyOn(api, "listDocuments").mockResolvedValue([
     { document_id: "doc-1", text_length: 10, language: "en", position: 1, status: "not_started" as const },
   ]);
@@ -52,7 +52,7 @@ const callsTo = (fetchMock: ReturnType<typeof fakeServer>, path: string) =>
   fetchMock.mock.calls.filter(([url]) => url.split("?")[0] === path);
 const csrfOf = (init?: RequestInit) => (init?.headers as Headers).get("X-CSRF-Token");
 
-const key = { package_id: "pkg", document_id: "doc-1", annotator_id: "ann-0007", mode: "independent" as const, scope_id: "scope-default", target_set_id: "empty" };
+const key = { project_key: "pkg", document_id: "doc-1", annotator_id: "ann-0007", mode: "independent" as const, scope_id: "scope-default", target_set_id: "empty" };
 const caseView = (): any => ({
   key,
   // Two layers, so the layer controls (with "Mark ... as verified") are shown.
@@ -134,7 +134,7 @@ describe("sessions in the API client", () => {
     const client = new ApiClient();
 
     await client.me();
-    await client.listPackages();
+    await client.listProjects();
     await client.updatePreferences({ mode_by_package: { pkg: "review" } });
     await expect(client.logout()).resolves.toBeUndefined();
 
@@ -172,12 +172,12 @@ describe("sessions in the API client", () => {
     expect(isSessionExpired(failedLogin)).toBe(false);
     expect(seen).toHaveLength(0);
 
-    const ended = await client.listPackages().catch((e) => e);
+    const ended = await client.listProjects().catch((e) => e);
     expect(ended).toBeInstanceOf(AuthError);
     expect(ended.status).toBe(401);
     expect(isSessionExpired(ended)).toBe(true);
 
-    const forbidden = await client.listPackages().catch((e) => e);
+    const forbidden = await client.listProjects().catch((e) => e);
     expect(forbidden).toBeInstanceOf(AuthError);
     expect(forbidden.status).toBe(403);
     expect(forbidden.code).toBe("CSRF_FAILED");

@@ -67,10 +67,10 @@ def test_batch_status_keeps_origins_rounds_and_newer_drafts(
     key = key.model_copy(update={"target_set_id": targets.target_set_id})
     package.submissions = {
         "old": _submission(
-            key.model_copy(update={"package_id": "origin"}), 2
+            key.model_copy(update={"project_key": "origin"}), 2
         ).model_copy(update={"submission_id": "old"}),
         "latest": _submission(
-            key.model_copy(update={"package_id": "origin"}), 7
+            key.model_copy(update={"project_key": "origin"}), 7
         ).model_copy(update={"submission_id": "latest"}),
     }
     repo.import_package(package)

@@ -6,7 +6,7 @@ import { toggledSelection, type SearchLanguageControl } from "../src/editor/sear
 import { SearchManager } from "../src/editor/searchState";
 
 const key = {
-  package_id: "pkg",
+  project_key: "pkg",
   document_id: "doc",
   annotator_id: "dr-a",
   mode: "independent" as const,

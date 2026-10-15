@@ -49,7 +49,7 @@ def alice(app: Any) -> Any:
 def _open(client: Any) -> str:
     response = client.post(
         "/api/v1/workspaces/open",
-        json={"package_id": PROJECT, "document_id": "doc-beta"},
+        json={"project_key": PROJECT, "document_id": "doc-beta"},
     )
     assert response.status_code == 200, response.text
     return str(response.json()["workspace_id"])

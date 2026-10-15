@@ -49,7 +49,7 @@ def test_null_finding_can_be_submitted_per_layer(
     sub_svc = SubmissionService(repo)
 
     key = WorkspaceKey(
-        package_id="pkg-scenario-a",
+        project_key="pkg-scenario-a",
         document_id="doc-alpha",
         annotator_id="dr-meier",
         mode="independent",
@@ -94,7 +94,7 @@ def test_two_editable_layers_require_both_checked_to_submit(
     sub_svc = SubmissionService(repo)
 
     key = WorkspaceKey(
-        package_id="pkg-scenario-c",
+        project_key="pkg-scenario-c",
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="independent",
@@ -156,7 +156,7 @@ def test_reference_layer_generates_no_checking_obligation(
     sub_svc = SubmissionService(repo)
 
     key = WorkspaceKey(
-        package_id="pkg-scenario-b",
+        project_key="pkg-scenario-b",
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="assisted",
@@ -197,7 +197,7 @@ def test_assisted_mode_allows_any_number_of_source_and_target_annotations(
     sub_svc = SubmissionService(repo)
 
     key = WorkspaceKey(
-        package_id="pkg-scenario-b",
+        project_key="pkg-scenario-b",
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="assisted",
@@ -259,7 +259,7 @@ def test_required_axes_and_evidence_on_complete_enforced(
     sub_svc = SubmissionService(repo)
 
     key = WorkspaceKey(
-        package_id="pkg-scenario-c",
+        project_key="pkg-scenario-c",
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="independent",
@@ -357,7 +357,7 @@ def test_review_replacement_must_match_target_layer_and_type(
     target_set = ReviewTargetSet.create([target])
 
     key = WorkspaceKey(
-        package_id="pkg-scenario-c",
+        project_key="pkg-scenario-c",
         document_id="doc-beta",
         annotator_id="reviewer",
         mode="review",
@@ -440,7 +440,7 @@ def test_review_decision_invalidates_only_target_layer_check(
     target_set = ReviewTargetSet.create([target])
 
     key = WorkspaceKey(
-        package_id="pkg-scenario-c",
+        project_key="pkg-scenario-c",
         document_id="doc-beta",
         annotator_id="reviewer",
         mode="review",
@@ -505,7 +505,7 @@ def test_reopen_workspace_after_submission_creates_new_draft_preserving_submissi
     sub_svc = SubmissionService(repo)
 
     key = WorkspaceKey(
-        package_id="pkg-scenario-a",
+        project_key="pkg-scenario-a",
         document_id="doc-alpha",
         annotator_id="dr-meier",
         mode="independent",
@@ -577,7 +577,7 @@ def test_independent_export_isolation_and_hash_stability(
     exp_svc = ExportService(repo)
 
     key = WorkspaceKey(
-        package_id="pkg-scenario-b",
+        project_key="pkg-scenario-b",
         document_id="doc-beta",
         annotator_id="independent-user",
         mode="independent",

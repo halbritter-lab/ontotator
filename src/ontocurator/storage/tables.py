@@ -3,7 +3,7 @@
 The repository runs Core statements against these mapped classes on a
 ``Connection``. It never loads ORM objects, so snapshot and submission
 payloads stay plain JSON (JSONB). A project replaces the work package of the
-desktop editor; ``WorkspaceKey.package_id`` carries ``projects.project_key``.
+desktop editor; ``WorkspaceKey.project_key`` carries ``projects.project_key``.
 """
 
 from __future__ import annotations

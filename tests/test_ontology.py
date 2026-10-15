@@ -51,7 +51,7 @@ def test_search_exact_id_and_lexical_shuffling() -> None:
     service = OntologyService.load(FIXTURE_PATH, _fixture_ref())
 
     ws_key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="dr-meier",
         mode="independent",
@@ -167,7 +167,7 @@ def test_mondo_ontology_load_validation_and_search() -> None:
     assert service.validate_term("unsupported:non_obo_identifier").status == "unknown"
 
     ws_key = WorkspaceKey(
-        package_id="pkg-mondo",
+        project_key="pkg-mondo",
         document_id="doc-1",
         annotator_id="dr-meier",
         mode="independent",

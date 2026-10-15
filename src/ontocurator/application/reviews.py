@@ -53,7 +53,7 @@ class ReviewService:
             )
         cmd = self.parse_command(envelope.payload)
         if self.registry is not None and cmd.outcome == "confirmed":
-            self.registry.ensure_package_conditions(self.repo, key.package_id)
+            self.registry.ensure_package_conditions(self.repo, key.project_key)
 
         def operation(draft: Draft) -> Draft:
             return self._execute_decision(draft, cmd, key)
@@ -82,11 +82,11 @@ class ReviewService:
         available = {
             (a.annotation.annotation_id, a.version): a
             for a in self.repo.list_annotations_for_document(
-                key.package_id, key.document_id
+                key.project_key, key.document_id
             )
         }
         target_snap = available.get((cmd.target.annotation_id, cmd.target.version))
-        task_profile = self.repo.get_task_profile(key.package_id)
+        task_profile = self.repo.get_task_profile(key.project_key)
 
         if target_snap is None:
             raise DomainError(
@@ -111,7 +111,7 @@ class ReviewService:
             ont_svc = None
             if self.registry is not None:
                 ont_svc = self.registry.for_package_layer(
-                    self.repo, key.package_id, target_snap.annotation.layer_id
+                    self.repo, key.project_key, target_snap.annotation.layer_id
                 )
             elif self.ontology is not None:
                 ont_svc = self.ontology

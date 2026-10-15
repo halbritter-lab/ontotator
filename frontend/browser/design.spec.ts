@@ -62,8 +62,8 @@ async function checkContrastAndTextSize(page: Page) {
   expect(tooSmall).toEqual([]);
 }
 
-async function openReview(page: Page, query: string, packageId: string, annotator: string) {
-  await importPackage(page, query, packageId, annotator);
+async function openReview(page: Page, query: string, projectKey: string, annotator: string) {
+  await importPackage(page, query, projectKey, annotator);
   await page.locator("#mode-select").selectOption("review");
   await openCase(page);
 }

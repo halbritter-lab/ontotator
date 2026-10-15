@@ -17,7 +17,7 @@ import { getOffsetMapBuildCount, toCodepoint, toUtf16 } from "../src/spans/offse
 import { loggedInAs } from "./session";
 
 const key = {
-  package_id: "pkg",
+  project_key: "pkg",
   document_id: "doc",
   annotator_id: "dr-a",
   mode: "independent" as const,
@@ -115,7 +115,7 @@ afterEach(() => {
 describe("A1/A7: dashboard blinding, identity and persistence", () => {
   it("opens a zero-proposal case for a review-only role without constructing fresh targets", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", allowed_modes: ["review"] }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", allowed_modes: ["review"] }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue([{ ...docs[0], has_review_inputs: false }]);
     const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
     const view = reviewView();
@@ -132,7 +132,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
 
   it("requires and sends explicit round selection when resuming is ambiguous", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", allowed_modes: ["review"] }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", allowed_modes: ["review"] }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     const open = vi.spyOn(api, "openWorkspace")
       .mockRejectedValueOnce(new ApiError(422, "Select the review round to resume", "AMBIGUOUS_REVIEW_ROUND", { rounds: ["round-a", "round-b"] } as any))
@@ -148,7 +148,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
 
   it("dedupes ontology badges, keeps hero and selection consistent and disables open while loading", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
     vi.spyOn(api, "listOntologies").mockResolvedValue([
       { ontology_id: "hp", release: "a", sha256: "1", term_count: 1 },
       { ontology_id: "hp", release: "b", sha256: "2", term_count: 1 },
@@ -618,7 +618,7 @@ describe("Shortcuts and error handling", () => {
 
   it("shows navigation errors from the dashboard open flow", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     vi.spyOn(api, "openWorkspace").mockRejectedValue(new Error("boom"));
     render(<App />);

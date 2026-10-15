@@ -29,7 +29,7 @@ def ranked(
     result = svc.search(
         SearchRequest(
             workspace_key=WorkspaceKey(
-                package_id="study",
+                project_key="study",
                 document_id="case",
                 annotator_id="rater",
                 mode="independent",

@@ -79,7 +79,7 @@ def validate_draft_terms(
     for snap in draft.annotations:
         layer_id = snap.annotation.layer_id
         service = (
-            ontology.for_package_layer(repo, draft.key.package_id, layer_id)
+            ontology.for_package_layer(repo, draft.key.project_key, layer_id)
             if isinstance(ontology, OntologyRegistry) and repo is not None
             else ontology.for_layer(profile, layer_id)
             if isinstance(ontology, OntologyRegistry)
@@ -191,7 +191,7 @@ class SubmissionService:
             )
 
         if isinstance(self.ontology, OntologyRegistry):
-            self.ontology.ensure_package_conditions(self.repo, key.package_id)
+            self.ontology.ensure_package_conditions(self.repo, key.project_key)
 
         def operation(draft: Draft) -> Submission:
             return self._create_submission(draft, cmd, key)
@@ -225,7 +225,7 @@ class SubmissionService:
         if cmd.checked_layer_ids is not None:
             draft.checked_layer_ids = list(cmd.checked_layer_ids)
 
-        task_profile = self.repo.get_task_profile(key.package_id)
+        task_profile = self.repo.get_task_profile(key.project_key)
         scope = build_scope(task_profile, key.mode)
         previous = latest_submissions(self.repo.get_submissions_for_workspace(key))
         if len(previous) > 1:
@@ -251,7 +251,7 @@ class SubmissionService:
             members = {
                 (a.annotation.annotation_id, a.version): a
                 for a in self.repo.list_annotations_for_document(
-                    key.package_id, key.document_id
+                    key.project_key, key.document_id
                 )
             }
             current = {

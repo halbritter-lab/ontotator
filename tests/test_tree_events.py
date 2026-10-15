@@ -39,8 +39,8 @@ def _repo(tmp_path) -> Repository:
     return repo
 
 
-def _export_with(event: SearchEventRecord, package_id: str):
-    package = _sample_package(package_id)
+def _export_with(event: SearchEventRecord, project_key: str):
+    package = _sample_package(project_key)
     package.search_events = [event]
     return package
 
@@ -127,11 +127,11 @@ def test_a_later_export_of_the_same_walk_leaves_the_other_project(tmp_path):
     repo.import_package(_export_with(_walk(["HP:1", "HP:2", "HP:3"]), "export-late"))
 
     # Each imported package hands out the state it brought.
-    for package_id, candidates in (
+    for project_key, candidates in (
         ("export-early", ["HP:1", "HP:2"]),
         ("export-late", ["HP:1", "HP:2", "HP:3"]),
     ):
-        events = repo.export_package(package_id).search_events
+        events = repo.export_package(project_key).search_events
         assert [e.candidates for e in events] == [candidates]
         assert [e.ranked_ids for e in events] == [candidates]
 

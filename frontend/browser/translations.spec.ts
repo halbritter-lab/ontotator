@@ -42,7 +42,7 @@ test("translations: add a file, search in German, switch the language off, selec
   // A fresh page: the selection comes back from the workspace preferences.
   await page.goto("about:blank");
   await page.goto(LAUNCH_URL);
-  await expect(page.locator("#package-select")).toHaveValue("translation-fixture");
+  await expect(page.locator("#project-select")).toHaveValue("translation-fixture");
   await openCase(page);
   await startSearch(page, "Krampfanfall");
   await expect(page.getByRole("button", { name: "Search languages: EN", exact: true })).toBeVisible();

@@ -52,7 +52,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
       text_sha256: "sha-doc-rich-text",
     },
     key: {
-      package_id: "pkg-release-e2e",
+      project_key: "pkg-release-e2e",
       document_id: "doc-e2e-1",
       annotator_id: "clinician-reviewer",
       mode: "review",
@@ -65,7 +65,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     checked_layer_ids: [],
     draft: {
       key: {
-        package_id: "pkg-release-e2e",
+        project_key: "pkg-release-e2e",
         document_id: "doc-e2e-1",
         annotator_id: "clinician-reviewer",
         mode: "review",

@@ -1,6 +1,6 @@
 """PostgreSQL repository for projects, revisioned drafts and immutable submissions.
 
-A project replaces the desktop editor's work package: ``package_id`` in
+A project replaces the desktop editor's work package: ``project_key`` in
 ``WorkspaceKey`` and in the method names below is the project key (T2 index
 decision D-e). Every query is filtered by project. Snapshots and submissions
 are append-only (T2 D6): the application role can only insert and read them.
@@ -96,7 +96,7 @@ def _key_str(key: WorkspaceKey) -> str:
     which keeps the encoding injective.
     """
     parts = [
-        key.package_id,
+        key.project_key,
         key.document_id,
         key.annotator_id,
         key.mode,
@@ -130,12 +130,12 @@ def _same_tree_walk(stored: SearchEventRecord, incoming: SearchEventRecord) -> b
 
 
 def _local_import_key(
-    origin: WorkspaceKey, package_id: str, profile: TaskProfile
+    origin: WorkspaceKey, project_key: str, profile: TaskProfile
 ) -> WorkspaceKey:
     """Bind imported history to the importing project's workspace identity."""
     return origin.model_copy(
         update={
-            "package_id": package_id,
+            "project_key": project_key,
             "scope_id": build_scope(profile, origin.mode).scope_id,
             "target_set_id": "targets-0"
             if origin.mode == "independent"
@@ -279,16 +279,16 @@ class Repository:
     # --- projects ---------------------------------------------------------- #
 
     @staticmethod
-    def _project_id(conn: Connection, package_id: str) -> int | None:
+    def _project_id(conn: Connection, project_key: str) -> int | None:
         return conn.execute(
-            select(ProjectRow.id).where(ProjectRow.project_key == package_id)
+            select(ProjectRow.id).where(ProjectRow.project_key == project_key)
         ).scalar_one_or_none()
 
-    def _require_project(self, conn: Connection, package_id: str) -> int:
-        project_id = self._project_id(conn, package_id)
+    def _require_project(self, conn: Connection, project_key: str) -> int:
+        project_id = self._project_id(conn, project_key)
         if project_id is None:
             raise DomainError(
-                "PACKAGE_NOT_FOUND", f"No package found for package '{package_id}'"
+                "PACKAGE_NOT_FOUND", f"No package found for package '{project_key}'"
             )
         return project_id
 
@@ -390,7 +390,7 @@ class Repository:
         package: ValidatedPackage,
         profile: TaskProfile,
     ) -> None:
-        package_id = package.manifest.package_id
+        project_key = package.manifest.package_id
         order = {
             doc_id: index
             for index, doc_id in enumerate(package.manifest.document_order)
@@ -428,12 +428,12 @@ class Repository:
                 ],
             )
         for submission in package.submissions.values():
-            local = _local_import_key(submission.origin_key, package_id, profile)
+            local = _local_import_key(submission.origin_key, project_key, profile)
             self._insert_submission(
                 conn, project_id, submission, local_key=_key_str(local), imported=True
             )
         for event in package.search_events:
-            local = _local_import_key(event.workspace_key, package_id, profile)
+            local = _local_import_key(event.workspace_key, project_key, profile)
             self._insert_search_event(
                 conn,
                 project_id,
@@ -637,27 +637,27 @@ class Repository:
             return None
         return [SearchCondition.model_validate(c) for c in stored]
 
-    def get_search_conditions(self, package_id: str) -> list[SearchCondition] | None:
+    def get_search_conditions(self, project_key: str) -> list[SearchCondition] | None:
         with self.db.transaction() as conn:
-            project_id = self._project_id(conn, package_id)
+            project_id = self._project_id(conn, project_key)
             if project_id is None:
                 return None
             return self._search_conditions(conn, project_id)
 
     def capture_search_conditions(
         self,
-        package_id: str,
+        project_key: str,
         conditions: list[SearchCondition],
         resources: dict[str, bytes],
     ) -> list[SearchCondition]:
         """Store first-use conditions once; concurrent captures get the first ones."""
-        validate_resources(conditions, self.get_task_profile(package_id), resources)
+        validate_resources(conditions, self.get_task_profile(project_key), resources)
         files = {
             path: (self.db.blobs.put(data), len(data))
             for path, data in resources.items()
         }
         with self.db.transaction() as conn:
-            project_id = self._require_project(conn, package_id)
+            project_id = self._require_project(conn, project_key)
             inserted = conn.execute(
                 pg_insert(ProjectSearchConditionsRow)
                 .values(
@@ -670,14 +670,14 @@ class Repository:
             if inserted is None:
                 existing = self._search_conditions(conn, project_id)
                 if existing is None:
-                    raise DomainError("SEARCH_CONDITIONS_MISSING", package_id)
+                    raise DomainError("SEARCH_CONDITIONS_MISSING", project_key)
                 return existing
             self._store_files(conn, project_id, files)
             return conditions
 
-    def get_embedded_files(self, package_id: str) -> dict[str, bytes]:
+    def get_embedded_files(self, project_key: str) -> dict[str, bytes]:
         with self.db.transaction() as conn:
-            project_id = self._project_id(conn, package_id)
+            project_id = self._project_id(conn, project_key)
             if project_id is None:
                 return {}
             rows = (
@@ -820,10 +820,10 @@ class Repository:
             if on_create is not None:
                 on_create(conn, project_id)
 
-    def project_pins(self, package_id: str) -> dict[str, Pin]:
+    def project_pins(self, project_key: str) -> dict[str, Pin]:
         """The project's pinned ontologies by ontology id."""
         with self.db.transaction() as conn:
-            return self._pins(conn, self._require_project(conn, package_id))
+            return self._pins(conn, self._require_project(conn, project_key))
 
     @staticmethod
     def _pins(conn: Connection, project_id: int) -> dict[str, Pin]:
@@ -846,7 +846,7 @@ class Repository:
 
     def add_documents_and_proposals(
         self,
-        package_id: str,
+        project_key: str,
         documents: Sequence[ImportedDocument],
         proposal_sets: Sequence[ImportedSet],
         *,
@@ -872,9 +872,9 @@ class Repository:
         with self.db.transaction() as conn:
             conn.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
             conn.execute(
-                select(func.pg_advisory_xact_lock(_lock_id("project", package_id)))
+                select(func.pg_advisory_xact_lock(_lock_id("project", project_key)))
             )
-            project_id = self._require_project(conn, package_id)
+            project_id = self._require_project(conn, project_key)
             stored = dict(
                 conn.execute(
                     select(DocumentRow.document_id, DocumentRow.text_sha256).where(
@@ -995,7 +995,7 @@ class Repository:
 
     # --- exports (T2d) ------------------------------------------------------ #
 
-    def t1_export_content(self, package_id: str) -> ProjectExport:
+    def t1_export_content(self, project_key: str) -> ProjectExport:
         """What a T1 export of the project needs, read in one snapshot.
 
         Per document, annotator and mode only the latest submission is kept:
@@ -1004,12 +1004,12 @@ class Repository:
         with self.db.snapshot() as conn:
             project = conn.execute(
                 select(ProjectRow.id, ProjectRow.task_profile).where(
-                    ProjectRow.project_key == package_id
+                    ProjectRow.project_key == project_key
                 )
             ).one_or_none()
             if project is None:
                 raise DomainError(
-                    "PACKAGE_NOT_FOUND", f"No package found for package '{package_id}'"
+                    "PACKAGE_NOT_FOUND", f"No package found for package '{project_key}'"
                 )
             documents = {
                 row.document_id: ImportedDocument(
@@ -1102,14 +1102,14 @@ class Repository:
             contributors=contributors,
         )
 
-    def edit_log(self, package_id: str) -> list[dict[str, Any]]:
+    def edit_log(self, project_key: str) -> list[dict[str, Any]]:
         """Every edit event of the project in id order, pseudonymised (D6).
 
         No user id and no session id: the annotator is the draft's pseudonym;
         ``at`` is UTC to the second.
         """
         with self.db.transaction() as conn:
-            project_id = self._require_project(conn, package_id)
+            project_id = self._require_project(conn, project_key)
             rows = conn.execute(
                 select(
                     EditEventRow.id,
@@ -1145,24 +1145,24 @@ class Repository:
             for row in rows
         ]
 
-    def get_manifest(self, package_id: str) -> PackageManifest:
+    def get_manifest(self, project_key: str) -> PackageManifest:
         """The stored manifest of a project."""
         with self.db.transaction() as conn:
             stored = conn.execute(
-                select(ProjectRow.manifest).where(ProjectRow.project_key == package_id)
+                select(ProjectRow.manifest).where(ProjectRow.project_key == project_key)
             ).scalar_one_or_none()
         if stored is None:
             raise DomainError(
-                "PACKAGE_NOT_FOUND", f"No package found for package '{package_id}'"
+                "PACKAGE_NOT_FOUND", f"No package found for package '{project_key}'"
             )
         return PackageManifest.model_validate(stored)
 
-    def manifest_hash(self, package_id: str) -> str | None:
+    def manifest_hash(self, project_key: str) -> str | None:
         """Canonical manifest hash of a project, or None if absent."""
         with self.db.transaction() as conn:
             return conn.execute(
                 select(ProjectRow.manifest_sha256).where(
-                    ProjectRow.project_key == package_id
+                    ProjectRow.project_key == project_key
                 )
             ).scalar_one_or_none()
 
@@ -1198,24 +1198,24 @@ class Repository:
             ).all()
         return [ProjectInfo(**row._asdict()) for row in rows]
 
-    def get_task_profile(self, package_id: str) -> TaskProfile:
+    def get_task_profile(self, project_key: str) -> TaskProfile:
         """The resolved task profile of a project."""
         with self.db.transaction() as conn:
             stored = conn.execute(
                 select(ProjectRow.task_profile).where(
-                    ProjectRow.project_key == package_id
+                    ProjectRow.project_key == project_key
                 )
             ).scalar_one_or_none()
         if stored is None:
             raise DomainError(
                 "PACKAGE_NOT_FOUND",
-                f"No package or task profile found for package '{package_id}'",
+                f"No package or task profile found for package '{project_key}'",
             )
         return TaskProfile.model_validate(stored)
 
-    def get_axes_config(self, package_id: str) -> AxesConfig:
+    def get_axes_config(self, project_key: str) -> AxesConfig:
         """AxesConfig synthesized from the task profile, for older callers."""
-        profile = self.get_task_profile(package_id)
+        profile = self.get_task_profile(project_key)
         name = profile.preset or "custom"
         for layer in profile.layers:
             for annotation_type in layer.annotation_types:
@@ -1225,7 +1225,7 @@ class Repository:
 
     # --- documents and proposals ------------------------------------------- #
 
-    def get_document(self, package_id: str, document_id: str) -> Document | None:
+    def get_document(self, project_key: str, document_id: str) -> Document | None:
         with self.db.transaction() as conn:
             row = conn.execute(
                 select(
@@ -1236,7 +1236,7 @@ class Repository:
                 )
                 .join(ProjectRow, ProjectRow.id == DocumentRow.project_id)
                 .where(
-                    ProjectRow.project_key == package_id,
+                    ProjectRow.project_key == project_key,
                     DocumentRow.document_id == document_id,
                 )
             ).one_or_none()
@@ -1249,7 +1249,7 @@ class Repository:
             text_sha256=row.text_sha256,
         )
 
-    def list_documents(self, package_id: str) -> list[Document]:
+    def list_documents(self, project_key: str) -> list[Document]:
         """Documents in the declared order, the rest by ID."""
         with self.db.transaction() as conn:
             rows = conn.execute(
@@ -1260,7 +1260,7 @@ class Repository:
                     DocumentRow.text_sha256,
                 )
                 .join(ProjectRow, ProjectRow.id == DocumentRow.project_id)
-                .where(ProjectRow.project_key == package_id)
+                .where(ProjectRow.project_key == project_key)
                 .order_by(
                     DocumentRow.position.asc().nulls_last(), DocumentRow.document_id
                 )
@@ -1314,37 +1314,37 @@ class Repository:
             )
 
     def get_annotation_snapshot(
-        self, annotation_id: str, version: str, package_id: str | None = None
+        self, annotation_id: str, version: str, project_key: str | None = None
     ) -> AnnotationSnapshot | None:
         statement = select(AnnotationSnapshotRow.payload).where(
             AnnotationSnapshotRow.annotation_id == annotation_id,
             AnnotationSnapshotRow.version == version,
         )
-        if package_id is not None:
+        if project_key is not None:
             statement = statement.join(
                 ProjectRow, ProjectRow.id == AnnotationSnapshotRow.project_id
-            ).where(ProjectRow.project_key == package_id)
+            ).where(ProjectRow.project_key == project_key)
         with self.db.transaction() as conn:
             stored = conn.execute(statement.limit(1)).scalar_one_or_none()
         return None if stored is None else decode_snapshot(stored)
 
     def get_evidence_snapshot(
-        self, evidence_id: str, version: str, package_id: str | None = None
+        self, evidence_id: str, version: str, project_key: str | None = None
     ) -> EvidenceSnapshot | None:
         statement = select(EvidenceSnapshotRow.payload).where(
             EvidenceSnapshotRow.evidence_id == evidence_id,
             EvidenceSnapshotRow.version == version,
         )
-        if package_id is not None:
+        if project_key is not None:
             statement = statement.join(
                 ProjectRow, ProjectRow.id == EvidenceSnapshotRow.project_id
-            ).where(ProjectRow.project_key == package_id)
+            ).where(ProjectRow.project_key == project_key)
         with self.db.transaction() as conn:
             stored = conn.execute(statement.limit(1)).scalar_one_or_none()
         return None if stored is None else EvidenceSnapshot.model_validate(stored)
 
     def list_annotations_for_document(
-        self, package_id: str, document_id: str
+        self, project_key: str, document_id: str
     ) -> list[AnnotationSnapshot]:
         """The project's proposals for one document, ordered by identity."""
         with self.db.transaction() as conn:
@@ -1364,7 +1364,7 @@ class Repository:
                     )
                     .join(ProjectRow, ProjectRow.id == AnnotationSnapshotRow.project_id)
                     .where(
-                        ProjectRow.project_key == package_id,
+                        ProjectRow.project_key == project_key,
                         AnnotationSnapshotRow.document_id == document_id,
                     )
                     .order_by(
@@ -1434,15 +1434,15 @@ class Repository:
 
     def list_workspace_keys(
         self,
-        package_id: str,
+        project_key: str,
         annotator_id: str,
         mode: str | None = None,
         document_id: str | None = None,
     ) -> list[WorkspaceKey]:
         """Workspace identities of one annotator: opened drafts and submissions."""
-        profile = self.get_task_profile(package_id)
+        profile = self.get_task_profile(project_key)
         with self.db.transaction() as conn:
-            project_id = self._require_project(conn, package_id)
+            project_id = self._require_project(conn, project_key)
             drafts = select(
                 DraftRow.document_id,
                 DraftRow.mode,
@@ -1468,7 +1468,7 @@ class Repository:
         keys: dict[str, WorkspaceKey] = {}
         for row in draft_rows:
             key = WorkspaceKey(
-                package_id=package_id,
+                project_key=project_key,
                 document_id=row.document_id,
                 annotator_id=annotator_id,
                 mode=row.mode,
@@ -1480,8 +1480,8 @@ class Repository:
             origin = WorkspaceKey.model_validate(payload["origin_key"])
             key = (
                 origin
-                if origin.package_id == package_id
-                else _local_import_key(origin, package_id, profile)
+                if origin.project_key == project_key
+                else _local_import_key(origin, project_key, profile)
             )
             keys.setdefault(_key_str(key), key)
         return sorted(
@@ -1523,7 +1523,7 @@ class Repository:
         conn.execute(
             select(
                 func.pg_advisory_xact_lock(
-                    _lock_id("draft", key.package_id, _key_str(key))
+                    _lock_id("draft", key.project_key, _key_str(key))
                 )
             )
         )
@@ -1531,7 +1531,7 @@ class Repository:
     def _open_draft(
         self, conn: Connection, key: WorkspaceKey, targets: ReviewTargetSet | None
     ) -> Draft:
-        project_id = self._require_project(conn, key.package_id)
+        project_id = self._require_project(conn, key.project_key)
         key_string = _key_str(key)
         row = self._draft_row(conn, project_id, key_string)
         if row is None:
@@ -1750,7 +1750,7 @@ class Repository:
         key_string = _key_str(key)
         request_hash = canonical_hash(envelope.model_dump())
         with self.db.transaction() as conn:
-            project_id = self._require_project(conn, key.package_id)
+            project_id = self._require_project(conn, key.project_key)
             self._lock_draft(conn, key)
             receipt = conn.execute(
                 select(
@@ -1916,7 +1916,7 @@ class Repository:
             .join(DraftRow, DraftRow.id == EditEventRow.draft_id)
             .join(ProjectRow, ProjectRow.id == DraftRow.project_id)
             .where(
-                ProjectRow.project_key == key.package_id,
+                ProjectRow.project_key == key.project_key,
                 EditEventRow.project_id == ProjectRow.id,
                 DraftRow.draft_key == _key_str(key),
             )
@@ -1929,7 +1929,7 @@ class Repository:
             DomainError: ``PACKAGE_NOT_FOUND``.
         """
         with self.db.transaction() as conn:
-            self._require_project(conn, key.package_id)
+            self._require_project(conn, key.project_key)
             rows = conn.execute(self._draft_events(key).order_by(EditEventRow.id)).all()
         return [EditEvent(**row._asdict()) for row in rows]
 
@@ -1944,7 +1944,7 @@ class Repository:
         if revision == 0:
             return DraftState()
         with self.db.transaction() as conn:
-            self._require_project(conn, key.package_id)
+            self._require_project(conn, key.project_key)
             row = conn.execute(
                 self._draft_events(key)
                 .where(EditEventRow.revision_after == revision)
@@ -1960,36 +1960,36 @@ class Repository:
 
     def get_document_status(
         self,
-        package_id: str,
+        project_key: str,
         document_id: str,
         annotator_id: str,
         mode: str,
     ) -> Literal["not_started", "in_progress", "completed"]:
         """Progress of one annotator in one mode on one document."""
-        return self._document_statuses(package_id, annotator_id, mode, document_id).get(
-            document_id, "not_started"
-        )
+        return self._document_statuses(
+            project_key, annotator_id, mode, document_id
+        ).get(document_id, "not_started")
 
     def get_document_statuses(
-        self, package_id: str, annotator_id: str, mode: str
+        self, project_key: str, annotator_id: str, mode: str
     ) -> dict[str, Literal["not_started", "in_progress", "completed"]]:
         """Progress facts for one project's annotator/mode; absent means not started.
 
         Read all workspace facts in a bounded number of statements. Immutable
         submissions still resolve by complete origin and revision, never clocks.
         """
-        return self._document_statuses(package_id, annotator_id, mode)
+        return self._document_statuses(project_key, annotator_id, mode)
 
     def _document_statuses(
         self,
-        package_id: str,
+        project_key: str,
         annotator_id: str,
         mode: str,
         document_id: str | None = None,
     ) -> dict[str, Literal["not_started", "in_progress", "completed"]]:
-        profile = self.get_task_profile(package_id)
+        profile = self.get_task_profile(project_key)
         with self.db.transaction() as conn:
-            project_id = self._require_project(conn, package_id)
+            project_id = self._require_project(conn, project_key)
             drafts = select(
                 DraftRow.id,
                 DraftRow.draft_key,
@@ -2029,7 +2029,7 @@ class Repository:
         keys: dict[str, WorkspaceKey] = {}
         for row in draft_rows:
             key = WorkspaceKey(
-                package_id=package_id,
+                project_key=project_key,
                 document_id=row.document_id,
                 annotator_id=annotator_id,
                 mode=row.mode,
@@ -2044,8 +2044,8 @@ class Repository:
             origin = submission.origin_key
             key = (
                 origin
-                if origin.package_id == package_id
-                else _local_import_key(origin, package_id, profile)
+                if origin.project_key == project_key
+                else _local_import_key(origin, project_key, profile)
             )
             keys.setdefault(_key_str(key), key)
 
@@ -2086,7 +2086,7 @@ class Repository:
             statuses[doc_id] = status
         return statuses
 
-    def review_input_document_ids(self, package_id: str) -> set[str]:
+    def review_input_document_ids(self, project_key: str) -> set[str]:
         """Documents with proposals, exposing presence only (never others' work)."""
         with self.db.transaction() as conn:
             return set(
@@ -2104,7 +2104,7 @@ class Repository:
                         ),
                     )
                     .join(ProjectRow, ProjectRow.id == AnnotationSnapshotRow.project_id)
-                    .where(ProjectRow.project_key == package_id)
+                    .where(ProjectRow.project_key == project_key)
                     .distinct()
                 ).scalars()
             )
@@ -2132,13 +2132,13 @@ class Repository:
     def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
         """Submissions bound to this workspace key, oldest first."""
         with self.db.transaction() as conn:
-            project_id = self._project_id(conn, key.package_id)
+            project_id = self._project_id(conn, key.project_key)
             if project_id is None:
                 return []
             return self._submissions_for_workspace(conn, project_id, key)
 
     def get_submissions_for_document(
-        self, package_id: str, document_id: str
+        self, project_key: str, document_id: str
     ) -> list[Submission]:
         """Every submission of the project for one document.
 
@@ -2151,7 +2151,7 @@ class Repository:
                     select(SubmissionRow.payload)
                     .join(ProjectRow, ProjectRow.id == SubmissionRow.project_id)
                     .where(
-                        ProjectRow.project_key == package_id,
+                        ProjectRow.project_key == project_key,
                         SubmissionRow.document_id == document_id,
                     )
                     .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
@@ -2162,16 +2162,16 @@ class Repository:
         return [Submission.model_validate(p) for p in stored]
 
     def get_submission(
-        self, submission_id: str, package_id: str | None = None
+        self, submission_id: str, project_key: str | None = None
     ) -> Submission | None:
-        """A submission by ID, within a project when ``package_id`` is given."""
+        """A submission by ID, within a project when ``project_key`` is given."""
         statement = select(SubmissionRow.payload).where(
             SubmissionRow.submission_id == submission_id
         )
-        if package_id is not None:
+        if project_key is not None:
             statement = statement.join(
                 ProjectRow, ProjectRow.id == SubmissionRow.project_id
-            ).where(ProjectRow.project_key == package_id)
+            ).where(ProjectRow.project_key == project_key)
         with self.db.transaction() as conn:
             stored = conn.execute(statement.limit(1)).scalar_one_or_none()
         return None if stored is None else Submission.model_validate(stored)
@@ -2186,7 +2186,7 @@ class Repository:
         a lookup without a project expects one content per ID.
         """
         with self.db.transaction() as conn:
-            project_id = self._require_project(conn, event.workspace_key.package_id)
+            project_id = self._require_project(conn, event.workspace_key.project_key)
             # Shared: local IDs are a fresh uuid4 or a hash over the workspace
             # and the mutation, so two concurrent local saves never bring the
             # same new ID. An import may repeat any ID, so it takes the lock
@@ -2208,9 +2208,9 @@ class Repository:
             )
 
     def get_search_event(
-        self, event_id: str, package_id: str | None = None
+        self, event_id: str, project_key: str | None = None
     ) -> SearchEventRecord | None:
-        """The event with this ID; within a project when ``package_id`` is given.
+        """The event with this ID; within a project when ``project_key`` is given.
 
         Without a project, an ID stored in several projects must have the same
         content everywhere; otherwise the lookup is ambiguous.
@@ -2219,8 +2219,8 @@ class Repository:
             SearchEventRow.event_id == event_id
         )
         with self.db.transaction() as conn:
-            if package_id is not None:
-                project_id = self._project_id(conn, package_id)
+            if project_key is not None:
+                project_id = self._project_id(conn, project_key)
                 if project_id is None:
                     return None
                 statement = statement.where(SearchEventRow.project_id == project_id)
@@ -2258,7 +2258,7 @@ class Repository:
         with self.db.transaction() as conn:
             project_id: int | None = None
             if workspace_key is not None:
-                project_id = self._project_id(conn, workspace_key.package_id)
+                project_id = self._project_id(conn, workspace_key.project_key)
                 if project_id is None:
                     return None
             statement = select(SearchEventRow.project_id, SearchEventRow.payload).where(
@@ -2300,7 +2300,7 @@ class Repository:
         """Events written in, or imported into, this workspace, in written order."""
         aliases = _workspace_aliases(key)
         with self.db.transaction() as conn:
-            project_id = self._project_id(conn, key.package_id)
+            project_id = self._project_id(conn, key.project_key)
             if project_id is None:
                 return []
             stored = (
@@ -2323,7 +2323,7 @@ class Repository:
     # --- export ------------------------------------------------------------- #
 
     def export_package(
-        self, package_id: str, *, include_captured_conditions: bool = True
+        self, project_key: str, *, include_captured_conditions: bool = True
     ) -> ValidatedPackage:
         """Everything of a project as an in-memory package.
 
@@ -2333,11 +2333,11 @@ class Repository:
         with self.db.snapshot() as conn:
             project = conn.execute(
                 select(ProjectRow.id, ProjectRow.manifest).where(
-                    ProjectRow.project_key == package_id
+                    ProjectRow.project_key == project_key
                 )
             ).one_or_none()
             if project is None:
-                raise InvalidPackage(f"Package '{package_id}' not found")
+                raise InvalidPackage(f"Package '{project_key}' not found")
             project_id = project.id
             manifest = PackageManifest.model_validate(project.manifest)
             documents = {
@@ -2437,7 +2437,7 @@ class Repository:
                 if include_captured_conditions
                 else None
             )
-            stored_files = self.get_embedded_files(package_id)
+            stored_files = self.get_embedded_files(project_key)
         if conditions is not None:
             manifest = manifest.model_copy(update={"search_conditions": conditions})
         annotations: dict[tuple[str, str], AnnotationSnapshot] = {}

@@ -7,7 +7,7 @@ test("stack smoke: log in, open the project, annotate, submit", async ({ page })
   // Synthetic DEVELOPMENT ONLY account, created by scripts/seed_stack.py.
   await login.getByLabel("Password").fill(process.env.STACK_SMOKE_PASSWORD ?? "development-only-smoke-password");
   await login.getByRole("button", { name: "Log in", exact: true }).click();
-  const projects = page.locator("#package-select");
+  const projects = page.locator("#project-select");
   await expect(projects.locator("option[value='smoke']")).toHaveText(/smoke/i);
   await projects.selectOption("smoke");
   await page.locator("#mode-select").selectOption("independent");

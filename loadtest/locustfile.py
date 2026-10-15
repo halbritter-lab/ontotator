@@ -122,7 +122,11 @@ class Annotator(HttpUser):
         document = self.rng.choice(self.environment.load_manifest["documents"])
         with self.client.post(
             "/api/v1/workspaces/open",
-            json={"package_id": "load", "document_id": document, "mode": "independent"},
+            json={
+                "project_key": "load",
+                "document_id": document,
+                "mode": "independent",
+            },
             name="open",
             catch_response=True,
         ) as response:
@@ -203,7 +207,7 @@ class Annotator(HttpUser):
     @task(1)
     def dashboard(self):
         with self.client.get(
-            "/api/v1/packages/load/documents?mode=independent",
+            "/api/v1/projects/load/documents?mode=independent",
             name="dashboard",
             catch_response=True,
         ) as response:

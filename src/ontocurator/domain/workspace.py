@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.documents import EvidenceSnapshot
@@ -13,9 +13,9 @@ WorkspaceMode = Literal["independent", "review", "assisted"]
 class WorkspaceKey(BaseModel):
     """Identifier for an isolated local workspace."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    package_id: str
+    project_key: str = Field(validation_alias=AliasChoices("project_key", "package_id"))
     document_id: str
     annotator_id: str
     mode: WorkspaceMode

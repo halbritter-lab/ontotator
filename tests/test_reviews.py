@@ -230,7 +230,7 @@ def test_review_decisions_for_human_and_tool_proposals(
     target_set = ReviewTargetSet.create([target_ref])
 
     ws_key = WorkspaceKey(
-        package_id="pkg-rev-1",
+        project_key="pkg-rev-1",
         document_id="doc-1",
         annotator_id="reviewer-1",
         mode="review",
@@ -269,7 +269,7 @@ def test_review_decision_can_be_cleared_to_offen(tmp_path: Path):
     target_set = ReviewTargetSet.create([target_ref])
 
     ws_key = WorkspaceKey(
-        package_id="pkg-rev-1",
+        project_key="pkg-rev-1",
         document_id="doc-1",
         annotator_id="reviewer-1",
         mode="review",
@@ -353,7 +353,7 @@ def test_review_decision_changed_requires_and_binds_replacement(tmp_path: Path):
     target_set = ReviewTargetSet.create([target_ref])
 
     ws_key = WorkspaceKey(
-        package_id="pkg-rev-1",
+        project_key="pkg-rev-1",
         document_id="doc-1",
         annotator_id="reviewer-1",
         mode="review",
@@ -416,7 +416,7 @@ def test_obsolete_term_cannot_be_confirmed(tmp_path: Path):
     target_set = ReviewTargetSet.create([target_ref])
 
     ws_key = WorkspaceKey(
-        package_id="pkg-rev-1",
+        project_key="pkg-rev-1",
         document_id="doc-1",
         annotator_id="reviewer-1",
         mode="review",
@@ -450,7 +450,7 @@ def test_review_submission_completeness_and_export_scoping(tmp_path: Path):
     target_set = ReviewTargetSet.create([target_ref])
 
     ws_key = WorkspaceKey(
-        package_id="pkg-rev-1",
+        project_key="pkg-rev-1",
         document_id="doc-1",
         annotator_id="reviewer-1",
         mode="review",
@@ -534,7 +534,7 @@ def test_review_submission_completeness_and_export_scoping(tmp_path: Path):
 def test_independent_mode_null_finding_and_hidden_proposals(tmp_path: Path):
     ctx = _setup_review_test_env(tmp_path)
     ws_key = WorkspaceKey(
-        package_id="pkg-rev-1",
+        project_key="pkg-rev-1",
         document_id="doc-1",
         annotator_id="indep-annotator",
         mode="independent",
@@ -680,7 +680,7 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
         [AnnotationRef(annotation_id="prop-inc", version=snap_inc.version)]
     )
     ws_key = WorkspaceKey(
-        package_id="pkg-strict-1",
+        project_key="pkg-strict-1",
         document_id="doc-1",
         annotator_id="rev-1",
         mode="review",

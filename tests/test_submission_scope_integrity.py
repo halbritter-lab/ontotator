@@ -40,7 +40,7 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
     original.import_package(package)
     opened = WorkspaceService(original, ontologies).open(
         WorkspaceKey(
-            package_id=package.manifest.package_id,
+            project_key=package.manifest.package_id,
             document_id="doc-beta",
             annotator_id="same-reviewer",
             mode="independent",
@@ -79,7 +79,7 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
     imported = Repository(database_for(tmp_path / "first-import.db"))
     imported_id = imported.import_package(projected)
     resumed = WorkspaceService(imported, ontologies).open(
-        opened.key.model_copy(update={"package_id": imported_id, "scope_id": ""})
+        opened.key.model_copy(update={"project_key": imported_id, "scope_id": ""})
     )
     assert resumed.key.scope_id != first.origin_key.scope_id
     continued = SubmissionService(imported).submit(
@@ -102,7 +102,7 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
     second_import = Repository(database_for(tmp_path / "second-import.db"))
     second_id = second_import.import_package(second_export)
     restored = WorkspaceService(second_import, ontologies).open(
-        opened.key.model_copy(update={"package_id": second_id, "scope_id": ""})
+        opened.key.model_copy(update={"project_key": second_id, "scope_id": ""})
     )
     assert restored.draft.revision == continued.draft_revision
     exported = second_import.export_package(second_id)
@@ -151,7 +151,7 @@ def test_reference_layer_review_targets_are_rejected_before_import(
     forged = Submission(
         submission_id="forged",
         origin_key=WorkspaceKey(
-            package_id=package.manifest.package_id,
+            project_key=package.manifest.package_id,
             document_id=target.document_id,
             annotator_id="reviewer",
             mode="review",
@@ -191,7 +191,7 @@ def test_reference_layer_approved_snapshots_are_rejected_before_import(
     forged = Submission(
         submission_id="forged",
         origin_key=WorkspaceKey(
-            package_id=package.manifest.package_id,
+            project_key=package.manifest.package_id,
             document_id=reference.document_id,
             annotator_id="annotator",
             mode=mode,

@@ -160,7 +160,7 @@ def test_cold_edit_service_build_runs_before_mutation_transaction(
     repo, base, workspaces, initial_editor, _ = _setup_test_env(tmp_path)
     key = workspaces.open(
         WorkspaceKey(
-            package_id="pkg-1",
+            project_key="pkg-1",
             document_id="doc-1",
             annotator_id="annotator-1",
             mode="independent",
@@ -326,7 +326,7 @@ def test_blocked_cold_edit_releases_connection_for_unrelated_draft(
     repo, base, workspaces, initial_editor, _ = _setup_test_env(tmp_path)
     key = workspaces.open(
         WorkspaceKey(
-            package_id="pkg-1",
+            project_key="pkg-1",
             document_id="doc-1",
             annotator_id="annotator-1",
             mode="independent",

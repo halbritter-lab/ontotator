@@ -37,7 +37,7 @@ const snapshot = (annotationId: string, termId: string, segments: Array<{ start:
 });
 
 const makeView = (mode: "independent" | "review", annotations: any[], inputs: any[] = []): WorkspaceView => {
-  const key = { package_id: "pkg", document_id: "doc", annotator_id: "dr-a", mode, scope_id: "scope-default", target_set_id: "t" };
+  const key = { project_key: "pkg", document_id: "doc", annotator_id: "dr-a", mode, scope_id: "scope-default", target_set_id: "t" };
   const targets = { target_set_id: "t", targets: inputs.map((s) => ({ annotation_id: s.annotation.annotation_id, version: s.version })) };
   return {
     key,

@@ -31,7 +31,7 @@ from ontocurator.domain.workspace import WorkspaceKey
 
 def _export(client: Any, key: Any) -> bytes:
     return package_export_zip(
-        client.app, key["package_id"], key["annotator_id"], key["mode"]
+        client.app, key["project_key"], key["annotator_id"], key["mode"]
     )
 
 
@@ -71,7 +71,7 @@ def test_global_upload_keeps_captured_package_english_only(tmp_path: Path) -> No
     PackageWriter.write_to_stream(package, stream)
     response = upload_package(client, files={"file": ("new.zip", stream.getvalue())})
     assert response.status_code == 200, response.text
-    new_key = dict(key, package_id="new-after-upload")
+    new_key = dict(key, project_key="new-after-upload")
     assert _search(client, new_key, "Muskelhypotonie")["languages"] == ["en", "de"]
 
 
@@ -82,7 +82,7 @@ def test_roundtrip_uses_captured_bytes_without_ambient_translations(
     client = _client(tmp_path, ontology_paths=[HP])
     key = _open_single(client, embedded=True)
     before = _search(client, key, "Muskelhypotonie")
-    original = client.app.state.repo.get_manifest(key["package_id"]).model_dump()
+    original = client.app.state.repo.get_manifest(key["project_key"]).model_dump()
     data = _export(client, key)
     manifest = _manifest(data)
     assert manifest["search_conditions"]
@@ -96,7 +96,7 @@ def test_roundtrip_uses_captured_bytes_without_ambient_translations(
     fresh = _client(tmp_path / "fresh")
     imported = upload_package(fresh, files={"file": ("study.zip", data)})
     assert imported.status_code == 200, imported.text
-    new_key = dict(key, package_id=imported.json()["package_id"])
+    new_key = dict(key, project_key=imported.json()["project_key"])
     after = _search(fresh, new_key, "Muskelhypotonie")
     assert after["ranked_ids"] == before["ranked_ids"]
     assert after["languages"] == ["en", "de"]
@@ -150,18 +150,18 @@ def test_repository_export_includes_capture_without_changing_stored_manifest(
     client = _client(tmp_path, ontology_paths=[HP])
     key = _open_single(client, embedded=True)
     repo = client.app.state.repo
-    original = repo.get_manifest(key["package_id"]).model_dump()
+    original = repo.get_manifest(key["project_key"]).model_dump()
     _search(client, key, "Muskelhypotonie")
     stream = io.BytesIO()
-    PackageWriter.write_to_stream(repo.export_package(key["package_id"]), stream)
+    PackageWriter.write_to_stream(repo.export_package(key["project_key"]), stream)
     assert _manifest(stream.getvalue())["search_conditions"]
-    assert repo.get_manifest(key["package_id"]).model_dump() == original
+    assert repo.get_manifest(key["project_key"]).model_dump() == original
 
 
 def test_package_language_listing_uses_pins_after_global_upload(tmp_path: Path) -> None:
     client = _client(tmp_path, ontology_paths=[HP])
     key = _open_single(client)
-    endpoint = f"/api/v1/packages/{key['package_id']}/ontologies"
+    endpoint = f"/api/v1/projects/{key['project_key']}/ontologies"
     before = client.get(endpoint)
     assert before.status_code == 200, before.text
     assert before.json()[0]["translations"] == []
@@ -203,7 +203,7 @@ def test_import_preserves_historical_runtime_and_records_current_execution(
     fresh = _client(tmp_path / "fresh")
     imported = upload_package(fresh, files={"file": ("historical.zip", altered)})
     assert imported.status_code == 200, imported.text
-    new_key = dict(key, package_id=imported.json()["package_id"])
+    new_key = dict(key, project_key=imported.json()["project_key"])
     after = _search(fresh, new_key, "Muskelhypotonie")
     assert after["runtime_drift"] is True
     assert after["execution"]["runtime"]["python"] != "historical-runtime"
@@ -257,14 +257,14 @@ def test_capture_supports_unused_ontology_declarations_and_digest_aliases(
     imported = upload_package(client, files={"file": ("extra.zip", stream.getvalue())})
     assert imported.status_code == 200, imported.text
     key = {
-        "package_id": imported.json()["package_id"],
+        "project_key": imported.json()["project_key"],
         "document_id": "doc-beta",
         "annotator_id": "rater",
         "mode": "independent",
         "target_set_id": "targets-0",
     }
     assert _search(client, key, "hypotonia")["search_condition_id"]
-    conditions = client.app.state.repo.get_search_conditions(key["package_id"])
+    conditions = client.app.state.repo.get_search_conditions(key["project_key"])
     assert len(conditions) == (1 if alias else 2)
 
 
@@ -289,18 +289,18 @@ def test_concurrent_first_use_commits_one_immutable_capture(tmp_path: Path) -> N
     key = _open_single(client, embedded=True)
     repo = client.app.state.repo
     registry = client.app.state.ontology_registry
-    assert repo.get_search_conditions(key["package_id"]) is None
+    assert repo.get_search_conditions(key["project_key"]) is None
     with ThreadPoolExecutor(max_workers=4) as pool:
         services = list(
             pool.map(
                 lambda _: registry.for_package_layer(
-                    repo, key["package_id"], "hpo-layer"
+                    repo, key["project_key"], "hpo-layer"
                 ),
                 range(8),
             )
         )
     assert len({svc.search_condition.condition_id for svc in services}) == 1
-    assert len(repo.get_search_conditions(key["package_id"])) == 1
+    assert len(repo.get_search_conditions(key["project_key"])) == 1
     assert all(svc.languages == ["de"] for svc in services)
 
 
@@ -326,14 +326,14 @@ def test_independent_exports_project_captured_resources_with_profile(
     )
     assert imported.status_code == 200, imported.text
     key = {
-        "package_id": imported.json()["package_id"],
+        "project_key": imported.json()["project_key"],
         "document_id": "doc-beta",
         "annotator_id": "rater",
         "mode": "independent",
         "target_set_id": "targets-0",
     }
     _search(client, key, "Muskelhypotonie", layer_id="target-layer")
-    assert len(client.app.state.repo.get_search_conditions(key["package_id"])) == 2
+    assert len(client.app.state.repo.get_search_conditions(key["project_key"])) == 2
     data = _export(client, key)
     projected = PackageReader.read_from_stream(io.BytesIO(data))
     assert len(projected.manifest.search_conditions) == 1
@@ -380,15 +380,15 @@ def test_first_use_capture_during_export_includes_matching_resources(
     key = _open_single(client, embedded=True)
     repo = client.app.state.repo
     registry = client.app.state.ontology_registry
-    original_manifest = repo.get_manifest(key["package_id"]).model_dump()
-    assert repo.get_search_conditions(key["package_id"]) is None
+    original_manifest = repo.get_manifest(key["project_key"]).model_dump()
+    assert repo.get_search_conditions(key["project_key"]) is None
     service = ExportService(repo)
     if boundary == "package-aggregate":
         original_workspace_export = service._export_workspace
 
         def capture_after_workspace(*args: Any, **kwargs: Any) -> Any:
             package = original_workspace_export(*args, **kwargs)
-            registry.ensure_package_conditions(repo, key["package_id"])
+            registry.ensure_package_conditions(repo, key["project_key"])
             return package
 
         monkeypatch.setattr(service, "_export_workspace", capture_after_workspace)
@@ -397,14 +397,14 @@ def test_first_use_capture_during_export_includes_matching_resources(
 
         def capture_after_resource_read(*args: Any, **kwargs: Any) -> Any:
             package = original_export(*args, **kwargs)
-            registry.ensure_package_conditions(repo, key["package_id"])
+            registry.ensure_package_conditions(repo, key["project_key"])
             return package
 
         monkeypatch.setattr(repo, "export_package", capture_after_resource_read)
     exported = (
         service.for_workspace(WorkspaceKey.model_validate(key))
         if boundary == "workspace"
-        else service.for_package(key["package_id"], key["annotator_id"], "independent")
+        else service.for_package(key["project_key"], key["annotator_id"], "independent")
     )
     assert exported.manifest.origin_manifest_hash == canonical_hash(original_manifest)
     assert exported.manifest.search_conditions is not None
@@ -430,16 +430,16 @@ def test_raw_export_ignores_capture_committed_after_condition_read(
     original_conditions = repo.get_search_conditions
     did_capture = False
 
-    def capture_after_condition_read(package_id: str) -> Any:
+    def capture_after_condition_read(project_key: str) -> Any:
         nonlocal did_capture
-        conditions = original_conditions(package_id)
+        conditions = original_conditions(project_key)
         if not did_capture:
             did_capture = True
-            registry.ensure_package_conditions(repo, package_id)
+            registry.ensure_package_conditions(repo, project_key)
         return conditions
 
     monkeypatch.setattr(repo, "get_search_conditions", capture_after_condition_read)
-    exported = repo.export_package(key["package_id"])
+    exported = repo.export_package(key["project_key"])
     assert exported.manifest.search_conditions is None
     assert not any(
         path.startswith("search-resources/") for path in exported.embedded_files

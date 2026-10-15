@@ -127,9 +127,11 @@ class ExportService:
         """Produce a scoped ValidatedPackage containing only workspace data."""
         return self._export_workspace(
             key,
-            self.repo.export_package(key.package_id, include_captured_conditions=False),
-            self.repo.get_task_profile(key.package_id),
-            self.repo.get_document(key.package_id, key.document_id),
+            self.repo.export_package(
+                key.project_key, include_captured_conditions=False
+            ),
+            self.repo.get_task_profile(key.project_key),
+            self.repo.get_document(key.project_key, key.document_id),
         )
 
     def _export_workspace(
@@ -241,9 +243,9 @@ class ExportService:
         now = datetime.now(UTC).isoformat()
         export_pkg_id = f"export-{uuid4()}"
         conditions = projected_conditions(
-            self.repo.get_search_conditions(key.package_id), task_profile
+            self.repo.get_search_conditions(key.project_key), task_profile
         )
-        stored_resources = self.repo.get_embedded_files(key.package_id)
+        stored_resources = self.repo.get_embedded_files(key.project_key)
         captured_paths = {
             item.resource_path
             for condition in conditions or []
@@ -257,7 +259,7 @@ class ExportService:
             task_profile=task_profile,
             task_profile_sha256=profile_hash(task_profile),
             search_conditions=conditions,
-            origin_package_id=key.package_id,
+            origin_package_id=key.project_key,
             origin_manifest_hash=canonical_hash(orig_pkg.manifest.model_dump()),
         )
 

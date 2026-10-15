@@ -43,14 +43,14 @@ def _member(app: Any, name: str, *roles: str) -> Any:
 def _open(client: Any, mode: str) -> Any:
     return client.post(
         "/api/v1/workspaces/open",
-        json={"package_id": DEMO_ID, "document_id": DOCUMENT, "mode": mode},
+        json={"project_key": DEMO_ID, "document_id": DOCUMENT, "mode": mode},
     )
 
 
 def _review_inputs(client: Any) -> Any:
     return client.post(
         "/api/v1/workspaces/review-inputs",
-        json={"package_id": DEMO_ID, "document_id": DOCUMENT, "mode": "review"},
+        json={"project_key": DEMO_ID, "document_id": DOCUMENT, "mode": "review"},
     )
 
 
@@ -68,7 +68,7 @@ def test_project_list_shows_roles_and_modes(app: Any) -> None:
 
     assert projects.status_code == 200, projects.text
     [project] = projects.json()
-    assert project["package_id"] == DEMO_ID
+    assert project["project_key"] == DEMO_ID
     assert project["name"] == DEMO_ID
     assert project["description"] is None
     assert project["roles"] == ["annotator"]
@@ -115,13 +115,13 @@ def test_a_lead_without_annotator_role_cannot_annotate(app: Any) -> None:
         assert response.status_code == 403, (mode, response.text)
         assert response.json()["code"] == "MODE_NOT_ALLOWED"
     # A lead still sees the project.
-    assert lead.get(f"/api/v1/packages/{DEMO_ID}/documents").status_code == 200
+    assert lead.get(f"/api/v1/projects/{DEMO_ID}/documents").status_code == 200
 
 
 def test_the_review_document_list_is_refused_to_annotators(app: Any) -> None:
     alice = _member(app, "alice", "annotator")
     bob = _member(app, "bob", "adjudicator")
-    path = f"/api/v1/packages/{DEMO_ID}/documents"
+    path = f"/api/v1/projects/{DEMO_ID}/documents"
 
     refused = alice.get(path, params={"mode": "review"})
     shown = bob.get(path, params={"mode": "review"})
@@ -234,7 +234,7 @@ def test_a_lead_reads_other_members_work_and_an_annotator_does_not(app: Any) -> 
     assert _open(alice, "independent").status_code == 200
     lead = _member(app, "lead", "lead")
     bob = _member(app, "bob", "annotator")
-    path = f"/api/v1/packages/{DEMO_ID}/documents"
+    path = f"/api/v1/projects/{DEMO_ID}/documents"
     params = {"annotator_id": "alice", "mode": "independent"}
 
     by_lead = lead.get(path, params=params)

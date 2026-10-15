@@ -14,7 +14,7 @@ const docs = [
 
 const view = () => ({
   document: { document_id: "doc-2", text: "Patient has seizures.", language: "en", text_sha256: "x" },
-  key: { package_id: "pkg", document_id: "doc-2", annotator_id: "JPL", mode: "independent" as const, scope_id: "s", target_set_id: "t" },
+  key: { project_key: "pkg", document_id: "doc-2", annotator_id: "JPL", mode: "independent" as const, scope_id: "s", target_set_id: "t" },
   scope: { scope_id: "s", mode: "independent" as const, editable_layer_ids: ["phenotype"], reference_layer_ids: [] },
   draft: { schema_version: "ontocurator-draft/v3" as const, revision: 7, annotations: [], decisions: [] },
   layers: [{ layer_id: "phenotype", label: "Phenotype", access: "editable" as const, default_visible: true, default_type_id: "default", annotation_types: [] }],
@@ -30,7 +30,7 @@ describe("dashboard: guided first run", () => {
   it("tells a user without projects to ask an administrator", async () => {
     loggedInAs("annotator-1");
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    vi.spyOn(api, "listPackages").mockResolvedValue([]);
+    vi.spyOn(api, "listProjects").mockResolvedValue([]);
     render(<App />);
     const guide = await screen.findByRole("region", { name: /Get started/i });
     expect(guide.textContent).toContain(
@@ -44,7 +44,7 @@ describe("dashboard: guided first run", () => {
   it("uses plain mode labels with one-sentence explanations", async () => {
     loggedInAs("annotator-1");
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     render(<App />);
     await screen.findByRole("table");
@@ -60,7 +60,7 @@ describe("dashboard: guided first run", () => {
   it("offers a single primary 'Open case' action", async () => {
     loggedInAs("JPL");
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: "JPL", mode_by_package: {} });
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     render(<App />);
     await screen.findByRole("table");
@@ -74,7 +74,7 @@ describe("annotator identity", () => {
     loggedInAs("annotator-1");
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
     const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: { pkg: "review" } });
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     render(<App />);
     await screen.findByRole("table");
@@ -89,7 +89,7 @@ describe("editor and page polish", () => {
   it("editor_shell_routes_logout_through_the_leave_guard", async () => {
     loggedInAs("JPL");
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     vi.spyOn(api, "listOntologies").mockResolvedValue([]);
     vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: view() } as any);

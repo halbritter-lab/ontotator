@@ -261,9 +261,11 @@ class EditingService:
             self.registry = None
             self.ontology = ontology
 
-    def _get_service_for_layer(self, package_id: str, layer_id: str) -> OntologyService:
+    def _get_service_for_layer(
+        self, project_key: str, layer_id: str
+    ) -> OntologyService:
         if self.registry is not None:
-            return self.registry.for_package_layer(self.repo, package_id, layer_id)
+            return self.registry.for_package_layer(self.repo, project_key, layer_id)
         if self.ontology is not None:
             return self.ontology
         raise DomainError(
@@ -288,13 +290,13 @@ class EditingService:
                     "IDENTITY_MISMATCH",
                     "A human annotation is attributed to the workspace's annotator.",
                 )
-        doc = self.repo.get_document(key.package_id, key.document_id)
+        doc = self.repo.get_document(key.project_key, key.document_id)
         if doc is None:
             raise DomainError(
                 "DOCUMENT_NOT_FOUND",
-                f"Document '{key.document_id}' not found in package '{key.package_id}'",
+                f"Document '{key.document_id}' not found in package '{key.project_key}'",
             )
-        profile = self.repo.get_task_profile(key.package_id)
+        profile = self.repo.get_task_profile(key.project_key)
         scope = build_scope(profile, key.mode)
 
         if key.scope_id and key.scope_id != scope.scope_id:
@@ -306,7 +308,7 @@ class EditingService:
         services: dict[str, OntologyService | Exception] = {}
         if isinstance(cmd, (CreateAnnotationCommand, SetTermCommand)):
             if self.registry is not None:
-                self.registry.ensure_package_conditions(self.repo, key.package_id)
+                self.registry.ensure_package_conditions(self.repo, key.project_key)
             # Set-term's layer comes from the locked draft. Resolve all editable
             # layers first rather than trusting an unlocked draft read. Keep
             # strong references so LRU eviction cannot cause a build in operation.
@@ -321,7 +323,7 @@ class EditingService:
             for layer_id in layers:
                 try:
                     services[layer_id] = self._get_service_for_layer(
-                        key.package_id, layer_id
+                        key.project_key, layer_id
                     )
                 except Exception as exc:
                     # Defer a resolution failure to the original validation
@@ -335,7 +337,7 @@ class EditingService:
                 isinstance(cmd, (CreateAnnotationCommand, SetTermCommand))
                 and cmd.search_event_id
             ):
-                event = self.repo.get_search_event(cmd.search_event_id, key.package_id)
+                event = self.repo.get_search_event(cmd.search_event_id, key.project_key)
                 # The layer the annotation has after this edit. Two layers can
                 # share an ontology, so the candidates alone do not tell
                 # whether the event was a search or a walk for this layer.
@@ -486,7 +488,7 @@ class EditingService:
         if not cmd.source_annotation_id:
             return False
         for source in self.repo.list_annotations_for_document(
-            draft.key.package_id, doc.document_id
+            draft.key.project_key, doc.document_id
         ):
             if (
                 source.annotation.annotation_id == cmd.source_annotation_id

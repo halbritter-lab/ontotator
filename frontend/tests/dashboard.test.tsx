@@ -15,7 +15,7 @@ const confirmIdentity = async () => {};
 describe("Curation Dashboard Start Screen", () => {
   const samplePackages = [
     {
-      package_id: "pediatric-hpo-pkg",
+      project_key: "pediatric-hpo-pkg",
       ontology: { ontology_id: "hp", release: "2026-09" },
     },
   ];
@@ -45,7 +45,7 @@ describe("Curation Dashboard Start Screen", () => {
   ];
 
   it("renders the dashboard table with documents and status badges", async () => {
-    vi.spyOn(api, "listPackages").mockResolvedValue(samplePackages as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue(samplePackages as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(sampleDocuments as any);
 
     render(<App />);
@@ -65,7 +65,7 @@ describe("Curation Dashboard Start Screen", () => {
   });
 
   it("shows the languages and term counts of each ontology", async () => {
-    vi.spyOn(api, "listPackages").mockResolvedValue(samplePackages as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue(samplePackages as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(sampleDocuments as any);
     vi.spyOn(api, "listOntologies").mockResolvedValue([
       {
@@ -90,7 +90,7 @@ describe("Curation Dashboard Start Screen", () => {
   });
 
   it("filters documents by status tabs", async () => {
-    vi.spyOn(api, "listPackages").mockResolvedValue(samplePackages as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue(samplePackages as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(sampleDocuments as any);
 
     render(<App />);
@@ -121,7 +121,7 @@ describe("Curation Dashboard Start Screen", () => {
   });
 
   it("filters documents by search query", async () => {
-    vi.spyOn(api, "listPackages").mockResolvedValue(samplePackages as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue(samplePackages as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(sampleDocuments as any);
 
     render(<App />);
@@ -142,13 +142,13 @@ describe("Curation Dashboard Start Screen", () => {
 
   it("renders the continue hero card for the in-progress case and opens it", async () => {
     asAnnotator("annotator-1");
-    vi.spyOn(api, "listPackages").mockResolvedValue(samplePackages as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue(samplePackages as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(sampleDocuments as any);
     const openSpy = vi.spyOn(api, "openWorkspace").mockResolvedValue({
       workspace_id: "ws-hero",
       view: {
         document: { document_id: "doc-002", text: "Text", language: "de", text_sha256: "sha" },
-        key: { package_id: "pediatric-hpo-pkg", document_id: "doc-002", annotator_id: "annotator-1", mode: "independent", scope_id: "s", target_set_id: "t" },
+        key: { project_key: "pediatric-hpo-pkg", document_id: "doc-002", annotator_id: "annotator-1", mode: "independent", scope_id: "s", target_set_id: "t" },
         scope: { scope_id: "s", mode: "independent", editable_layer_ids: ["phenotype"], reference_layer_ids: [] },
         draft: { schema_version: "ontocurator-draft/v3", revision: 1, annotations: [], decisions: [] },
         layers: [{ layer_id: "phenotype", label: "Phänotyp", access: "editable", default_visible: true, default_type_id: "default", annotation_types: [] }],

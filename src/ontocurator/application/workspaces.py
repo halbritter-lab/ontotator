@@ -78,9 +78,11 @@ class WorkspaceService:
             self.registry = None
             self.ontology = ontology
 
-    def _get_service_for_layer(self, package_id: str, layer_id: str) -> OntologyService:
+    def _get_service_for_layer(
+        self, project_key: str, layer_id: str
+    ) -> OntologyService:
         if self.registry is not None:
-            return self.registry.for_package_layer(self.repo, package_id, layer_id)
+            return self.registry.for_package_layer(self.repo, project_key, layer_id)
         if self.ontology is not None:
             return self.ontology
         raise DomainError(
@@ -90,7 +92,7 @@ class WorkspaceService:
 
     def list_documents(
         self,
-        package_id: str,
+        project_key: str,
         annotator_id: str | None = None,
         mode: str | None = None,
         reveal_review_inputs: bool = False,
@@ -100,16 +102,16 @@ class WorkspaceService:
         With ``reveal_review_inputs`` each summary tells whether the document has
         review proposals; callers must only request this for review mode.
         """
-        docs = self.repo.list_documents(package_id)
+        docs = self.repo.list_documents(project_key)
         if not docs:
             return []
         statuses = (
-            self.repo.get_document_statuses(package_id, annotator_id, mode)
+            self.repo.get_document_statuses(project_key, annotator_id, mode)
             if annotator_id and mode
             else {}
         )
         review_documents = (
-            self.repo.review_input_document_ids(package_id)
+            self.repo.review_input_document_ids(project_key)
             if reveal_review_inputs
             else set()
         )
@@ -131,18 +133,18 @@ class WorkspaceService:
             )
         return summaries
 
-    def get_document(self, package_id: str, document_id: str) -> Document:
+    def get_document(self, project_key: str, document_id: str) -> Document:
         """Fetch a document or raise DomainError."""
-        doc = self.repo.get_document(package_id, document_id)
+        doc = self.repo.get_document(project_key, document_id)
         if doc is None:
             raise DomainError(
                 "DOCUMENT_NOT_FOUND",
-                f"Document '{document_id}' not found in package '{package_id}'",
+                f"Document '{document_id}' not found in package '{project_key}'",
             )
         return doc
 
     def get_review_inputs(
-        self, package_id: str, document_id: str
+        self, project_key: str, document_id: str
     ) -> list[AnnotationSnapshot]:
         """The document's proposals on the layers a review may edit.
 
@@ -150,11 +152,13 @@ class WorkspaceService:
         a reviewer could bias them (index Q3). Their work reaches review only
         through workflow assignments (T4).
         """
-        profile = self.repo.get_task_profile(package_id)
+        profile = self.repo.get_task_profile(project_key)
         scope = build_scope(profile, "review")
         return [
             snap
-            for snap in self.repo.list_annotations_for_document(package_id, document_id)
+            for snap in self.repo.list_annotations_for_document(
+                project_key, document_id
+            )
             if snap.annotation.layer_id in scope.editable_layer_ids
         ]
 
@@ -162,8 +166,8 @@ class WorkspaceService:
         self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
     ) -> WorkspaceView:
         """Open or initialize a workspace view."""
-        doc = self.get_document(key.package_id, key.document_id)
-        profile = self.repo.get_task_profile(key.package_id)
+        doc = self.get_document(key.project_key, key.document_id)
+        profile = self.repo.get_task_profile(key.project_key)
         scope = build_scope(profile, key.mode)
 
         if key.scope_id and key.scope_id != scope.scope_id:
@@ -187,7 +191,7 @@ class WorkspaceService:
         elif key.mode == "assisted":
             effective_targets = ReviewTargetSet.create([])
             all_inputs = self.repo.list_annotations_for_document(
-                key.package_id, key.document_id
+                key.project_key, key.document_id
             )
             available_inputs = [
                 s
@@ -202,7 +206,7 @@ class WorkspaceService:
                 rounds = [
                     k
                     for k in self.repo.list_workspace_keys(
-                        key.package_id, key.annotator_id, "review", key.document_id
+                        key.project_key, key.annotator_id, "review", key.document_id
                     )
                     if k.document_id == key.document_id and k.scope_id == key.scope_id
                 ]
@@ -232,7 +236,7 @@ class WorkspaceService:
                                 version=s.version,
                             )
                             for s in self.get_review_inputs(
-                                key.package_id, key.document_id
+                                key.project_key, key.document_id
                             )
                         ]
                     )
@@ -240,7 +244,7 @@ class WorkspaceService:
                         update={"target_set_id": effective_targets.target_set_id}
                     )
             all_inputs = self.repo.list_annotations_for_document(
-                key.package_id, key.document_id
+                key.project_key, key.document_id
             )
             available_inputs = [
                 s
@@ -295,21 +299,21 @@ class WorkspaceService:
             lid = a.annotation.layer_id
             st_key = f"{lid}:{tid}"
             if st_key not in term_statuses:
-                service = self._get_service_for_layer(key.package_id, lid)
+                service = self._get_service_for_layer(key.project_key, lid)
                 term_statuses[st_key] = service.validate_term(tid).status
 
         for snap in draft.annotations:
             st_key = f"{snap.annotation.layer_id}:{snap.annotation.term_id}"
             if st_key not in term_statuses:
                 service = self._get_service_for_layer(
-                    key.package_id, snap.annotation.layer_id
+                    key.project_key, snap.annotation.layer_id
                 )
                 term_statuses[st_key] = service.validate_term(
                     snap.annotation.term_id
                 ).status
 
         submissions = self.repo.get_submissions_for_workspace(key)
-        axes_profile = self.repo.get_axes_config(key.package_id)
+        axes_profile = self.repo.get_axes_config(key.project_key)
 
         return WorkspaceView(
             key=key,

@@ -52,7 +52,7 @@ it("retains the caller continuation through a transient retry", async () => {
 });
 
 const key = {
-  package_id: "pkg",
+  project_key: "pkg",
   document_id: "doc",
   annotator_id: "doctor",
   mode: "independent" as const,
@@ -308,7 +308,7 @@ it("strictly separates selection between review targets and own annotations in s
 it("lets the server resolve review targets only after opening explicitly chosen review mode (blinding)", async () => {
  window.localStorage.clear();
  asAnnotator("dr-a");
- vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", ontology: { release: "test" } }] as any);
+ vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", ontology: { release: "test" } }] as any);
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([proposal("v1", "HP:1"), proposal("v2", "HP:2")]);
  const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: baseView() });
@@ -333,7 +333,7 @@ it("lets the server resolve review targets only after opening explicitly chosen 
 
 it("opens a review workspace without any review targets", async () => {
  window.localStorage.clear();
- vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", ontology: { release: "test" } }] as any);
+ vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", ontology: { release: "test" } }] as any);
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
  asAnnotator("dr-a");

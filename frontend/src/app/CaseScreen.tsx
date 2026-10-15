@@ -190,7 +190,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     layer_id: snapshot.annotation.layer_id,
     term_id: snapshot.annotation.term_id,
   })), [draft.annotations, view.available_inputs, view.submissions]);
-  const termLabel = useTermLabels(view.key.package_id, displayedTerms);
+  const termLabel = useTermLabels(view.key.project_key, displayedTerms);
 
   const searchManager = useMemo(() => new SearchManager(api), []);
 
@@ -199,7 +199,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, [layerSelection.activeLayerId, searchManager]);
 
   // Search languages: stored per annotator, offered per ontology of the layer.
-  const languagesForOntology = useSearchLanguages(api, view.key.annotator_id, view.key.package_id);
+  const languagesForOntology = useSearchLanguages(api, view.key.annotator_id, view.key.project_key);
   const searchLanguagesFor = (layerId: string | null | undefined) => {
     const ontologyId = (view.layers ?? []).find((layer) => layer.layer_id === layerId)?.ontology_id;
     const definition = (view.ontologies ?? []).find((item) => item.ontology_id === ontologyId);

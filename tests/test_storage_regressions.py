@@ -11,9 +11,9 @@ from ontocurator.domain.workspace import MutationEnvelope, Submission, Workspace
 from ontocurator.storage.repository import Repository
 
 
-def key_for(package_id="pkg-1"):
+def key_for(project_key="pkg-1"):
     return WorkspaceKey(
-        package_id=package_id,
+        project_key=project_key,
         document_id="doc-1",
         annotator_id="a",
         mode="independent",

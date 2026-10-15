@@ -186,7 +186,7 @@ def unmigrated_database_url(path: Path | str) -> str:
     ).render_as_string(hide_password=False)
 
 
-def insert_proposal(repo: Any, package_id: str, snapshot: Any) -> None:
+def insert_proposal(repo: Any, project_key: str, snapshot: Any) -> None:
     """Add an annotation proposal (and its evidence) to a project, as an import does."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -195,7 +195,7 @@ def insert_proposal(repo: Any, package_id: str, snapshot: Any) -> None:
     with repo.db.transaction() as conn:
         project_id = conn.execute(
             text(f"SELECT id FROM {SCHEMA}.projects WHERE project_key = :k"),
-            {"k": package_id},
+            {"k": project_key},
         ).scalar_one()
         repo._insert_snapshots(conn, project_id, [snapshot], snapshot.evidence)
         conn.execute(

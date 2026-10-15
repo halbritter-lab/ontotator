@@ -57,7 +57,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
         annotation={sampleAnnotation}
         allEvidence={{}}
         workspaceKey={{
-          package_id: "pkg-1",
+          project_key: "pkg-1",
           document_id: "doc-1",
           annotator_id: "user",
           mode: "independent",
@@ -112,7 +112,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
         annotation={annotated}
         allEvidence={{}}
         workspaceKey={{
-          package_id: "pkg-1",
+          project_key: "pkg-1",
           document_id: "doc-1",
           annotator_id: "user",
           mode: "independent",
@@ -147,7 +147,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
         annotation={sampleAnnotation}
         allEvidence={{}}
         workspaceKey={{
-          package_id: "pkg-1",
+          project_key: "pkg-1",
           document_id: "doc-1",
           annotator_id: "user",
           mode: "independent",

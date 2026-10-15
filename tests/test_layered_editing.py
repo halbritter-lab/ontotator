@@ -68,7 +68,7 @@ def test_independent_view_contains_no_imported_annotations_or_term_statuses(
 
     scope = build_scope(pkg_b.manifest.task_profile, "independent")
     key = WorkspaceKey(
-        package_id=pkg_b.manifest.package_id,
+        project_key=pkg_b.manifest.package_id,
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="independent",
@@ -90,7 +90,7 @@ def test_editing_rejects_foreign_scope(tmp_path: Path) -> None:
     ws_service = WorkspaceService(repo, registry)
 
     key = WorkspaceKey(
-        package_id=pkg.manifest.package_id,
+        project_key=pkg.manifest.package_id,
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="independent",
@@ -113,7 +113,7 @@ def test_editing_rejects_mutation_on_reference_layer(tmp_path: Path) -> None:
 
     scope = build_scope(pkg.manifest.task_profile, "assisted")
     key = WorkspaceKey(
-        package_id=pkg.manifest.package_id,
+        project_key=pkg.manifest.package_id,
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="assisted",
@@ -151,7 +151,7 @@ def test_editing_rejects_invalid_layer_or_type(tmp_path: Path) -> None:
 
     scope = build_scope(pkg.manifest.task_profile, "independent")
     key = WorkspaceKey(
-        package_id=pkg.manifest.package_id,
+        project_key=pkg.manifest.package_id,
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="independent",
@@ -206,7 +206,7 @@ def test_copy_on_write_evidence_leaves_source_intact(tmp_path: Path) -> None:
 
     scope = build_scope(pkg.manifest.task_profile, "independent")
     key = WorkspaceKey(
-        package_id=pkg.manifest.package_id,
+        project_key=pkg.manifest.package_id,
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="independent",
@@ -284,7 +284,7 @@ def test_check_layer_command_and_invalidation(tmp_path: Path) -> None:
 
     scope = build_scope(pkg.manifest.task_profile, "independent")
     key = WorkspaceKey(
-        package_id=pkg.manifest.package_id,
+        project_key=pkg.manifest.package_id,
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="independent",
@@ -357,7 +357,7 @@ def test_retry_with_lost_response_and_competing_browser_revisions(
 
     scope = build_scope(pkg.manifest.task_profile, "independent")
     key = WorkspaceKey(
-        package_id=pkg.manifest.package_id,
+        project_key=pkg.manifest.package_id,
         document_id="doc-beta",
         annotator_id="dr-meier",
         mode="independent",

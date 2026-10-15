@@ -7,7 +7,7 @@ describe("SearchManager", () => {
   let searchOntologySpy: any;
 
   const sampleKey = {
-    package_id: "pkg-1",
+    project_key: "pkg-1",
     document_id: "doc-1",
     annotator_id: "user-1",
     mode: "independent" as const,

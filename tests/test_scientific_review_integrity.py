@@ -26,7 +26,7 @@ def mutation(revision, payload):
 
 def key(ctx, annotator="reviewer", target_set_id="targets-0"):
     return WorkspaceKey(
-        package_id="pkg-rev-1",
+        project_key="pkg-rev-1",
         document_id="doc-1",
         annotator_id=annotator,
         mode="review",
@@ -101,10 +101,10 @@ def test_selecting_review_inputs_does_not_export_entire_package(tmp_path, monkey
         pytest.fail("Review input selection must query only this document")
 
     monkeypatch.setattr(ctx["repo"], "export_package", prohibit_export)
-    inputs = ctx["ws_svc"].get_review_inputs(ws_key.package_id, ws_key.document_id)
+    inputs = ctx["ws_svc"].get_review_inputs(ws_key.project_key, ws_key.document_id)
     # The document's proposals only, never a submitted result (index Q3).
     proposals = ctx["repo"].list_annotations_for_document(
-        ws_key.package_id, ws_key.document_id
+        ws_key.project_key, ws_key.document_id
     )
     assert inputs == proposals
     assert replacement not in [
@@ -119,21 +119,21 @@ def test_review_round_continues_after_export_reimport(tmp_path):
     submitted = submit(ctx, ws_key, 2)
     exported = roundtrip(ctx["exp_svc"].for_workspace(ws_key))
     clean = Repository(database_for(tmp_path / "import.db"))
-    package_id = clean.import_package(exported)
+    project_key = clean.import_package(exported)
     svc = WorkspaceService(clean, ctx["ontology"])
-    resumed = svc.open(key(ctx).model_copy(update={"package_id": package_id}))
+    resumed = svc.open(key(ctx).model_copy(update={"project_key": project_key}))
     assert resumed.targets == submitted.targets
     assert resumed.draft.decisions[0].replacement == replacement
     assert resumed.draft.annotations == submitted.snapshots
     assert resumed.draft.revision == submitted.draft_revision
     fresh = svc.open(
-        key(ctx, "new-reviewer").model_copy(update={"package_id": package_id})
+        key(ctx, "new-reviewer").model_copy(update={"project_key": project_key})
     )
     # Another reviewer starts from the proposals of the importing project (an
     # export carries its annotations as proposals), never from submissions.
     assert fresh.targets.targets == [
         AnnotationRef(annotation_id=a.annotation.annotation_id, version=a.version)
-        for a in clean.list_annotations_for_document(package_id, ws_key.document_id)
+        for a in clean.list_annotations_for_document(project_key, ws_key.document_id)
     ]
     from ontocurator.application.submissions import SubmissionService
 
@@ -244,7 +244,7 @@ def test_round_selection_api_resumes_selected_round_and_rejects_incompatible_req
     )
     assert imported.status_code == 200, imported.text
     request = {
-        "package_id": "pkg-rev-1",
+        "project_key": "pkg-rev-1",
         "document_id": "doc-1",
         "annotator_id": "reviewer",
         "mode": "review",
@@ -306,9 +306,9 @@ def test_restoration_chooses_revision_under_clock_skew(tmp_path):
         update={"created_at": "2099-01-01T00:00:00Z"}
     )
     clean = Repository(database_for(tmp_path / "skew.db"))
-    package_id = clean.import_package(roundtrip(package))
+    project_key = clean.import_package(roundtrip(package))
     restored = WorkspaceService(clean, ctx["ontology"]).open(
-        ws_key.model_copy(update={"package_id": package_id, "scope_id": ""})
+        ws_key.model_copy(update={"project_key": project_key, "scope_id": ""})
     )
     assert restored.draft.revision == second.draft_revision
 
@@ -328,7 +328,7 @@ def test_status_uses_revision_even_when_last_clock_is_older(tmp_path):
     )
     assert (
         ctx["repo"].get_document_status(
-            ws_key.package_id, ws_key.document_id, ws_key.annotator_id, ws_key.mode
+            ws_key.project_key, ws_key.document_id, ws_key.annotator_id, ws_key.mode
         )
         == "completed"
     )
@@ -342,7 +342,7 @@ def test_review_with_no_proposals_can_submit_checked_negative(tmp_path):
     package.evidence = {}
     ctx["repo"].import_package(package)
     view = ctx["ws_svc"].open(
-        key(ctx).model_copy(update={"package_id": "empty-proposals"})
+        key(ctx).model_copy(update={"project_key": "empty-proposals"})
     )
     assert view.targets.targets == []
     result = submit(ctx, view.key, 0)
@@ -389,7 +389,7 @@ def test_latest_selection_preserves_full_origins_and_rejects_equal_revision_conf
         update={
             "submission_id": "other-branch",
             "origin_key": high.origin_key.model_copy(
-                update={"package_id": "other-origin"}
+                update={"project_key": "other-origin"}
             ),
         }
     )
@@ -423,14 +423,14 @@ def test_a_reviewer_does_not_guess_between_origin_branches(tmp_path):
         update={
             "submission_id": "branch",
             "origin_key": result.origin_key.model_copy(
-                update={"package_id": "other-origin"}
+                update={"project_key": "other-origin"}
             ),
         }
     )
     package.submissions[branch.submission_id] = branch
     clean = Repository(database_for(tmp_path / "branch.db"))
-    package_id = clean.import_package(roundtrip(package))
+    project_key = clean.import_package(roundtrip(package))
     service = WorkspaceService(clean, ctx["ontology"])
     with pytest.raises(DomainError, match="AMBIGUOUS_SUBMISSION_ORIGIN"):
-        service.open(key(ctx).model_copy(update={"package_id": package_id}))
+        service.open(key(ctx).model_copy(update={"project_key": project_key}))
     assert count_rows(clean, "drafts") == 0

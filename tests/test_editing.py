@@ -108,7 +108,7 @@ def _setup_test_env(tmp_path: Path):
 def test_create_annotation_and_provenance_equivalence(tmp_path: Path, actor_kind: str):
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="annotator-1",
         mode="independent",
@@ -151,7 +151,7 @@ def test_a_human_annotation_cannot_name_another_annotator(tmp_path: Path) -> Non
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = ws_svc.open(
         WorkspaceKey(
-            package_id="pkg-1",
+            project_key="pkg-1",
             document_id="doc-1",
             annotator_id="annotator-1",
             mode="independent",
@@ -184,7 +184,7 @@ def test_create_annotation_attributes_workspace_annotator_by_default(tmp_path: P
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = ws_svc.open(
         WorkspaceKey(
-            package_id="pkg-1",
+            project_key="pkg-1",
             document_id="doc-1",
             annotator_id="annotator-1",
             mode="independent",
@@ -214,7 +214,7 @@ def test_create_annotation_attributes_workspace_annotator_by_default(tmp_path: P
 def test_spanless_annotation_and_subsequent_evidence_addition(tmp_path: Path):
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="annotator-1",
         mode="independent",
@@ -270,7 +270,7 @@ def test_spanless_annotation_and_subsequent_evidence_addition(tmp_path: Path):
 def test_shared_evidence_copy_on_write(tmp_path: Path):
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="annotator-1",
         mode="independent",
@@ -354,7 +354,7 @@ def test_shared_evidence_copy_on_write(tmp_path: Path):
 def test_reject_obsolete_or_unknown_term_creation(tmp_path: Path):
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="annotator-1",
         mode="independent",
@@ -403,7 +403,7 @@ def test_create_and_set_term_with_term_id(tmp_path: Path):
 
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="annotator-1",
         mode="independent",
@@ -477,7 +477,7 @@ def test_command_conflicting_term_id_and_hpo_id_rejected():
 def test_discontinuous_segments_and_repeated_evidence_mentions(tmp_path: Path):
     _, _, ws_svc, edit_svc, _ = _setup_test_env(tmp_path)
     ws_key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="annotator-1",
         mode="independent",

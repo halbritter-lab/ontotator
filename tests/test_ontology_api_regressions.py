@@ -52,14 +52,14 @@ def upload(client, data):
         client, files={"file": ("cases.zip", data, "application/zip")}
     )
     assert response.status_code == 200, response.text
-    return response.json()["package_id"]
+    return response.json()["project_key"]
 
 
-def open_case(client, package_id):
+def open_case(client, project_key):
     response = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": package_id,
+            "project_key": project_key,
             "document_id": "doc-alpha",
             "annotator_id": "reviewer",
             "mode": "independent",
@@ -87,8 +87,8 @@ def search(client, workspace, layer_id, query):
 
 def test_second_ontology_is_used_for_editing_and_workspace_status(tmp_path):
     with client_at(tmp_path, [FIXTURES / "hp.json", FIXTURES / "mondo.json"]) as client:
-        package_id = upload(client, archive("multi_editable"))
-        workspace = open_case(client, package_id)
+        project_key = upload(client, archive("multi_editable"))
+        workspace = open_case(client, project_key)
         response = client.post(
             f"/api/v1/workspaces/{workspace['workspace_id']}/commands",
             json={
@@ -105,14 +105,14 @@ def test_second_ontology_is_used_for_editing_and_workspace_status(tmp_path):
             },
         )
         assert response.status_code == 200, response.text
-        reopened = open_case(client, package_id)
+        reopened = open_case(client, project_key)
         assert reopened["view"]["term_statuses"]["layer-2:MONDO:0000001"] == "valid"
 
 
 def test_embedded_ontology_survives_restart_and_export_without_cli_files(tmp_path):
     with client_at(tmp_path) as client:
-        package_id = upload(client, archive("single", embedded=True))
-        workspace = open_case(client, package_id)
+        project_key = upload(client, archive("single", embedded=True))
+        workspace = open_case(client, project_key)
         assert (
             search(client, workspace, "hpo-layer", "HP:0001250")["candidates"][0][
                 "term_id"
@@ -121,7 +121,7 @@ def test_embedded_ontology_survives_restart_and_export_without_cli_files(tmp_pat
         )
 
     with client_at(tmp_path) as client:
-        workspace = open_case(client, package_id)
+        workspace = open_case(client, project_key)
         assert (
             search(client, workspace, "hpo-layer", "HP:0001250")["candidates"][0][
                 "term_id"
@@ -135,8 +135,8 @@ def test_embedded_ontology_survives_restart_and_export_without_cli_files(tmp_pat
             )
 
     with client_at(tmp_path / "fresh") as client:
-        package_id = upload(client, exported)
-        workspace = open_case(client, package_id)
+        project_key = upload(client, exported)
+        workspace = open_case(client, project_key)
         assert (
             search(client, workspace, "hpo-layer", "HP:0001250")["candidates"][0][
                 "term_id"
@@ -183,8 +183,8 @@ def test_invalid_embedded_ontology_does_not_publish_package_or_partial_registry(
 
 def test_independent_export_does_not_embed_reference_ontology(tmp_path):
     with client_at(tmp_path) as client:
-        package_id = upload(client, archive("assisted", embedded=True))
-        workspace = open_case(client, package_id)
+        project_key = upload(client, archive("assisted", embedded=True))
+        workspace = open_case(client, project_key)
         exported = workspace_export_zip(client.app, workspace["workspace_id"])
         with zipfile.ZipFile(io.BytesIO(exported)) as zipped:
             assert "ontologies/hp.json" in zipped.namelist()

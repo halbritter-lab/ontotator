@@ -656,8 +656,8 @@ test.describe("ontology tree", () => {
     // A reload ends the page session. Choose this test's package explicitly:
     // other specs import newer packages into the shared synthetic server.
     await page.reload();
-    await page.locator("#package-select").selectOption("browser-fixture");
-    await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
+    await page.locator("#project-select").selectOption("browser-fixture");
+    await expect(page.locator("#project-select")).toHaveValue("browser-fixture");
     // The session cookie survives the reload: still logged in, no login form.
     await expect(page.getByTestId("current-user")).toBeVisible();
     await page.locator("#mode-select").selectOption("independent");

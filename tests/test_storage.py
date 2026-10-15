@@ -155,7 +155,7 @@ def test_storage_concurrency_and_revision_protection(tmp_path: Path) -> None:
 
     target_set = ReviewTargetSet.create([])
     key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="user-a",
         mode="independent",
@@ -210,7 +210,7 @@ def test_committed_write_with_lost_response_replays_once(tmp_path: Path) -> None
 
     target_set = ReviewTargetSet.create([])
     key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="user-b",
         mode="independent",
@@ -285,7 +285,7 @@ def test_package_idempotent_import_and_hash_collision_rejection(tmp_path: Path) 
     id2 = repo.import_package(pkg)
     assert id2 == "pkg-idem"
 
-    # Same package_id with different manifest hash -> rejection
+    # Same project_key with different manifest hash -> rejection
     pkg_colliding = _sample_package("pkg-idem")
     pkg_colliding.manifest.created_at = "2026-10-02T12:00:00Z"
     with pytest.raises(InvalidPackage, match="exists with different manifest hash"):
@@ -302,7 +302,7 @@ def test_persistence_across_process_restart(tmp_path: Path) -> None:
 
     target_set = ReviewTargetSet.create([])
     key = WorkspaceKey(
-        package_id="pkg-restart",
+        project_key="pkg-restart",
         document_id="doc-1",
         annotator_id="dr-frank",
         mode="independent",
@@ -367,7 +367,7 @@ def test_export_p_import_q_preserves_historical_submission(tmp_path: Path) -> No
 
     target_set = ReviewTargetSet.create([])
     key_p = WorkspaceKey(
-        package_id="pkg-P",
+        project_key="pkg-P",
         document_id="doc-1",
         annotator_id="reviewer-1",
         mode="independent",
@@ -424,12 +424,12 @@ def test_export_p_import_q_preserves_historical_submission(tmp_path: Path) -> No
     loaded_q = repo2.export_package("pkg-Q")
     assert "sub-hist-1" in loaded_q.submissions
     sub_loaded = loaded_q.submissions["sub-hist-1"]
-    assert sub_loaded.origin_key.package_id == "pkg-P"  # Historical origin preserved!
+    assert sub_loaded.origin_key.project_key == "pkg-P"  # Historical origin preserved!
     assert sub_loaded.submission_id == "sub-hist-1"
 
     # Fortsetzen under local Q workspace
     key_q = WorkspaceKey(
-        package_id="pkg-Q",
+        project_key="pkg-Q",
         document_id="doc-1",
         annotator_id="reviewer-2",
         mode="independent",
@@ -437,4 +437,4 @@ def test_export_p_import_q_preserves_historical_submission(tmp_path: Path) -> No
     )
     draft_q = repo2.open_draft(key_q, target_set)
     assert draft_q.revision == 0
-    assert draft_q.key.package_id == "pkg-Q"
+    assert draft_q.key.project_key == "pkg-Q"

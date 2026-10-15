@@ -81,9 +81,9 @@ const modesOf = (project: ProjectSummary | undefined): WorkspaceMode[] => {
 
 /** "Name (key)", or the key alone when the project has no name of its own. */
 const projectLabel = (project: ProjectSummary) =>
-  project.name && project.name !== project.package_id
-    ? `${project.name} (${project.package_id})`
-    : project.package_id;
+  project.name && project.name !== project.project_key
+    ? `${project.name} (${project.project_key})`
+    : project.project_key;
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -137,7 +137,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
     setSelectedPackageIdState(id);
   };
   const modesOfPackage = (pkgId: string | null) =>
-    modesOf(packagesRef.current.find((p) => p.package_id === pkgId));
+    modesOf(packagesRef.current.find((p) => p.project_key === pkgId));
 
   // Dashboard filter & search
   const [statusFilter, setStatusFilter] = useState<"all" | "not_started" | "in_progress" | "completed">("all");
@@ -215,15 +215,15 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const loadPackages = async (preferredPackageId?: string | null): Promise<DocumentSummary[] | null> => {
     try {
       setError(null);
-      const list = await api.listPackages();
+      const list = await api.listProjects();
       setPackages(list);
       setPackagesLoaded(true);
-      const preferred = preferredPackageId && list.some((p) => p.package_id === preferredPackageId) ? preferredPackageId : null;
+      const preferred = preferredPackageId && list.some((p) => p.project_key === preferredPackageId) ? preferredPackageId : null;
       // The project selected last, otherwise the first (newest).
       const current = selectedPackageRef.current;
       const next = preferred
-        ?? (current && list.some((p) => p.package_id === current) ? current : null)
-        ?? list[0]?.package_id
+        ?? (current && list.some((p) => p.project_key === current) ? current : null)
+        ?? list[0]?.project_key
         ?? null;
       return next ? await handleSelectPackage(next) : null;
     } catch (err: unknown) {
@@ -271,7 +271,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
     let res: OpenWorkspaceResponse;
     try {
       res = await api.openWorkspace({
-      package_id: selectedPackageId,
+      project_key: selectedPackageId,
       document_id: docId,
       annotator_id: identity,
       mode,
@@ -348,7 +348,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const completedCount = documents.filter((d) => d.status === "completed").length;
 
   const hasPackages = packages.length > 0;
-  const allowedModes = modesOf(packages.find((p) => p.package_id === selectedPackageId));
+  const allowedModes = modesOf(packages.find((p) => p.project_key === selectedPackageId));
   const noWorkingRole = selectedPackageId !== null && allowedModes.length === 0;
   const showGuide = packagesLoaded && !hasPackages;
 
@@ -376,7 +376,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
     const currentDocId = activeWorkspace.view.document.document_id;
     const reload = () => openCase(currentDocId, { forceRemount: true, roundId: mode === "review" ? activeWorkspace.view.key.target_set_id : undefined });
     return (
-      <AppShell user={user ?? null} onLogout={onLogout ? () => leaveGuardRef.current ? leaveGuardRef.current(onLogout) : onLogout() : undefined} density="reading" breadcrumb={[{ label: packages.find((p) => p.package_id === selectedPackageId)?.name || selectedPackageId || "Project" }, { label: `Case ${currentDocId}` }]}>
+      <AppShell user={user ?? null} onLogout={onLogout ? () => leaveGuardRef.current ? leaveGuardRef.current(onLogout) : onLogout() : undefined} density="reading" breadcrumb={[{ label: packages.find((p) => p.project_key === selectedPackageId)?.name || selectedPackageId || "Project" }, { label: `Case ${currentDocId}` }]}>
         <CaseErrorBoundary
           key={`${activeWorkspace.workspace_id}:${workspaceNonce}`}
           onBackToDashboard={() => { void closeWorkspace(); }}
@@ -404,7 +404,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
 
   return (
     <AppShell user={user ?? null} onLogout={onLogout}
-      breadcrumb={selectedPackageId ? [{ label: packages.find((p) => p.package_id === selectedPackageId)?.name || selectedPackageId }] : undefined}
+      breadcrumb={selectedPackageId ? [{ label: packages.find((p) => p.project_key === selectedPackageId)?.name || selectedPackageId }] : undefined}
       actions={ontologyLabels.length > 0 && <span className="ontology-summary">Ontologies: {ontologyLabels.join(", ")}</span>}
     >
       {roundSelectionDialog}
@@ -415,8 +415,8 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
         </section>}
         {hasPackages && <>
           <div className="dashboard-settings">
-            <Select id="package-select" label="Project" value={selectedPackageId ?? ""} onChange={(e) => { void handleSelectPackage(e.target.value); }}>
-              {packages.map((pkg) => <option key={pkg.package_id} value={pkg.package_id}>{projectLabel(pkg)}</option>)}
+            <Select id="project-select" label="Project" value={selectedPackageId ?? ""} onChange={(e) => { void handleSelectPackage(e.target.value); }}>
+              {packages.map((pkg) => <option key={pkg.project_key} value={pkg.project_key}>{projectLabel(pkg)}</option>)}
             </Select>
             {noWorkingRole ? null : allowedModes.length === 1 ? <div className="form-group">
               <div className="form-label">Working mode</div>

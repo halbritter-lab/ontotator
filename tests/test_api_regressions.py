@@ -41,7 +41,7 @@ def _open(client, config, mode="independent", targets=None, scenario=None):
     archive = _create_sample_package_bytes(pkg_scenario)
     with zipfile.ZipFile(io.BytesIO(archive)) as z:
         pkg_id = json.loads(z.read("manifest.json"))["package_id"]
-    installed = {p["package_id"] for p in client.get("/api/v1/projects").json()}
+    installed = {p["project_key"] for p in client.get("/api/v1/projects").json()}
     if pkg_id not in installed:
         # Re-importing is only idempotent for identical content; some tests
         # extend the installed package directly in the database.
@@ -50,12 +50,12 @@ def _open(client, config, mode="independent", targets=None, scenario=None):
             files={"file": ("fixture.zip", archive, "application/zip")},
         )
         assert response.status_code == 200
-        assert response.json()["package_id"] == pkg_id
+        assert response.json()["project_key"] == pkg_id
     doc_id = "doc-beta"
     response = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": pkg_id,
+            "project_key": pkg_id,
             "document_id": doc_id,
             "annotator_id": "reviewer",
             "mode": mode,
@@ -87,7 +87,7 @@ def test_invalid_command_body_returns_validation_error_not_server_error(app_clie
 def test_review_open_computes_stable_target_identity(app_client):
     client, config = app_client
     opened = _open(client, config, mode="independent", scenario="single")
-    pkg_id = opened["view"]["key"]["package_id"]
+    pkg_id = opened["view"]["key"]["project_key"]
     doc_id = opened["view"]["key"]["document_id"]
 
     from ontocurator.domain.annotations import (
@@ -116,7 +116,7 @@ def test_review_open_computes_stable_target_identity(app_client):
     inputs = client.post(
         "/api/v1/workspaces/review-inputs",
         json={
-            "package_id": pkg_id,
+            "project_key": pkg_id,
             "document_id": doc_id,
             "annotator_id": "reviewer",
             "mode": "review",

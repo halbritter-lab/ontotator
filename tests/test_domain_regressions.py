@@ -18,7 +18,7 @@ def review(ctx, reviewer="one"):
     )
     targets = ReviewTargetSet.create([ref])
     key = WorkspaceKey(
-        package_id="pkg-rev-1",
+        project_key="pkg-rev-1",
         document_id="doc-1",
         annotator_id=reviewer,
         mode="review",
@@ -262,7 +262,7 @@ def test_review_versions_have_separate_decisions(tmp_path):
 
     scope = build_scope(ctx["profile"], "review")
     key = WorkspaceKey(
-        package_id="pkg-rev-1",
+        project_key="pkg-rev-1",
         document_id="doc-1",
         annotator_id="one",
         mode="review",
@@ -326,7 +326,7 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
     pkg = ctx["exp_svc"].for_workspace(key)
     pkg.manifest.package_id = "imported"
     ctx["repo"].import_package(pkg)
-    local_key = key.model_copy(update={"package_id": "imported"})
+    local_key = key.model_copy(update={"project_key": "imported"})
     assert ctx["sub_svc"].read(local_key, submission.submission_id) == submission
     with pytest.raises(DomainError):
         ctx["sub_svc"].read(

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
 
 const key = {
-  package_id: "pkg",
+  project_key: "pkg",
   document_id: "doc",
   annotator_id: "dr-a",
   mode: "review" as const,

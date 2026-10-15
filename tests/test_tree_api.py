@@ -50,11 +50,11 @@ def _import(client, package) -> None:
     assert resp.status_code == 200, resp.text
 
 
-def _open(client, package_id, annotator="annotator-1", mode="independent"):
+def _open(client, project_key, annotator="annotator-1", mode="independent"):
     resp = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": package_id,
+            "project_key": project_key,
             "document_id": "doc-beta",
             "annotator_id": annotator,
             "mode": mode,

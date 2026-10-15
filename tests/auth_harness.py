@@ -176,17 +176,17 @@ class AutoLoginClient(TestClient):
         """The project key a request names, if any."""
         body = kwargs.get("json")
         if isinstance(body, dict):
-            if isinstance(body.get("package_id"), str):
-                return str(body["package_id"])
+            if isinstance(body.get("project_key"), str):
+                return str(body["project_key"])
             key = body.get("workspace_key")
-            if isinstance(key, dict) and isinstance(key.get("package_id"), str):
-                return str(key["package_id"])
+            if isinstance(key, dict) and isinstance(key.get("project_key"), str):
+                return str(key["project_key"])
         parts = target.path.split("/")
-        if len(parts) > 4 and parts[1:4] == ["api", "v1", "packages"]:
+        if len(parts) > 4 and parts[1:4] == ["api", "v1", "projects"]:
             return unquote(parts[4])
         if len(parts) > 4 and parts[1:4] == ["api", "v1", "workspaces"]:
             try:
-                return decode_workspace_id(parts[4]).package_id
+                return decode_workspace_id(parts[4]).project_key
             except Exception:  # not a workspace ID (open, review-inputs, ...)
                 return None
         return None
@@ -300,7 +300,7 @@ def upload_package(client: TestClient, *, files: Mapping[str, Any]) -> UploadRes
     except ValidationError as exc:
         return UploadResult(422, {"code": "VALIDATION_ERROR", "details": str(exc)})
     return UploadResult(
-        200, {"package_id": manifest.package_id, "manifest": manifest.model_dump()}
+        200, {"project_key": manifest.package_id, "manifest": manifest.model_dump()}
     )
 
 

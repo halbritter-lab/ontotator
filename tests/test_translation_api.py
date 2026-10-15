@@ -73,7 +73,7 @@ def _open_single(client: TestClient, embedded: bool = False) -> Any:
     opened = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": imported.json()["package_id"],
+            "project_key": imported.json()["project_key"],
             "document_id": "doc-beta",
             "annotator_id": "annotator-1",
             "mode": "independent",
@@ -450,7 +450,7 @@ def test_uploading_a_file_with_a_byte_order_mark_works(tmp_path: Path) -> None:
     marked_identity = _search(client, key, "Krampfanfall")["index_identity"]
     assert _upload(client, "hp-de.babelon.tsv", DE.read_bytes()).status_code == 200
     assert _search(client, key, "Krampfanfall")["index_identity"] == marked_identity
-    captured = client.app.state.repo.get_search_conditions(key["package_id"])[0]
+    captured = client.app.state.repo.get_search_conditions(key["project_key"])[0]
     assert captured.translations[0].sha256 == hashlib.sha256(marked).hexdigest()
 
 

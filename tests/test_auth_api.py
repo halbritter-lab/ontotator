@@ -213,7 +213,7 @@ def test_nobody_works_under_another_identity(app: FastAPI) -> None:
     assert uploaded.status_code == 200, uploaded.text
     alice = logged_in(app, "alice", pseudonym="alice", projects=MEMBER)
     bob = logged_in(app, "bob", pseudonym="bob", projects=MEMBER)
-    request = {"package_id": PACKAGE, "document_id": DOCUMENT, "mode": "independent"}
+    request = {"project_key": PACKAGE, "document_id": DOCUMENT, "mode": "independent"}
 
     opened = alice.post("/api/v1/workspaces/open", json=request)
     assert opened.status_code == 200, opened.text
@@ -364,7 +364,7 @@ def alices_workspace(app: FastAPI) -> dict[str, Any]:
     alice = logged_in(app, "alice", pseudonym="alice", projects=MEMBER)
     opened = alice.post(
         "/api/v1/workspaces/open",
-        json={"package_id": PACKAGE, "document_id": DOCUMENT, "mode": "independent"},
+        json={"project_key": PACKAGE, "document_id": DOCUMENT, "mode": "independent"},
     )
     assert opened.status_code == 200, opened.text
     return {
@@ -379,7 +379,7 @@ def alices_workspace(app: FastAPI) -> dict[str, Any]:
 def test_only_a_system_admin_reads_another_annotators_work(
     alices_workspace: dict[str, Any],
 ) -> None:
-    path = f"/api/v1/packages/{PACKAGE}/documents"
+    path = f"/api/v1/projects/{PACKAGE}/documents"
     params = {"annotator_id": "alice"}
 
     by_bob = alices_workspace["bob"].get(path, params=params)

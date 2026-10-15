@@ -65,7 +65,7 @@ TEST_PASSWORD = "browser test passphrase"
 
 
 def fixture_package(
-    package_id: str = "browser-fixture",
+    project_key: str = "browser-fixture",
     created_at: str = "2026-10-01T00:00:00Z",
     proposals: list[tuple[str, str, int, int]] | None = None,
 ) -> ValidatedPackage:
@@ -148,7 +148,7 @@ def fixture_package(
 
     pkg = ValidatedPackage(
         manifest=PackageManifest(
-            package_id=package_id,
+            package_id=project_key,
             format_version="ontocurator-work-package/v2",
             document_order=["browser-doc"],
             task_profile=profile,
@@ -283,8 +283,8 @@ def seed_packages() -> list[ValidatedPackage]:
     """Every project the specs use, oldest first."""
     return [
         fixture_package(),
-        fixture_package(package_id="pkg-many-proposals", proposals=MANY_PROPOSALS),
-        fixture_package(package_id="translation-fixture"),
+        fixture_package(project_key="pkg-many-proposals", proposals=MANY_PROPOSALS),
+        fixture_package(project_key="translation-fixture"),
         design_package(),
         *(
             scenario_package(scenario)

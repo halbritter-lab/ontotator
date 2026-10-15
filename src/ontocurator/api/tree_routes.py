@@ -159,7 +159,7 @@ def tree_node(
         "INVALID_TREE_WALK",
         "This tree walk does not belong to this workspace, annotation and layer",
     )
-    event = repo.get_search_event(req.browse_id, req.workspace_key.package_id)
+    event = repo.get_search_event(req.browse_id, req.workspace_key.project_key)
     if (
         event is None
         # A search with the old "browse" route and the copy written for a

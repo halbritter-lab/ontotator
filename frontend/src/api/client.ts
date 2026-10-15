@@ -276,16 +276,16 @@ export class ApiClient {
 
   /**
    * The projects the logged-in user can see, with their roles and working
-   * modes. Keeps its name until the T3 rename (index D-e).
+   * modes.
    */
-  async listPackages(): Promise<ProjectSummary[]> {
+  async listProjects(): Promise<ProjectSummary[]> {
     return this.request<ProjectSummary[]>("/api/v1/projects", {
       method: "GET",
     });
   }
 
   async listDocuments(
-    packageId: string,
+    projectKey: string,
     params?: { annotator_id?: string; mode?: string }
   ): Promise<DocumentSummary[]> {
     const searchParams = new URLSearchParams();
@@ -297,7 +297,7 @@ export class ApiClient {
     }
     const qs = searchParams.toString();
     return this.request<DocumentSummary[]>(
-      `/api/v1/packages/${encodeURIComponent(packageId)}/documents${
+      `/api/v1/projects/${encodeURIComponent(projectKey)}/documents${
         qs ? `?${qs}` : ""
       }`,
       {
@@ -402,10 +402,10 @@ export class ApiClient {
     });
   }
 
-  async resolveTermLabels(packageId: string, terms: TermLookup[]): Promise<TermLabel[]> {
+  async resolveTermLabels(projectKey: string, terms: TermLookup[]): Promise<TermLabel[]> {
     return this.request<TermLabel[]>("/api/v1/terms/labels", {
       method: "POST",
-      body: JSON.stringify({ package_id: packageId, terms }),
+      body: JSON.stringify({ project_key: projectKey, terms }),
     });
   }
 
@@ -415,8 +415,8 @@ export class ApiClient {
     });
   }
 
-  async listPackageOntologies(packageId: string): Promise<OntologyInfo[]> {
-    return this.request<OntologyInfo[]>(`/api/v1/packages/${encodeURIComponent(packageId)}/ontologies`, {
+  async listPackageOntologies(projectKey: string): Promise<OntologyInfo[]> {
+    return this.request<OntologyInfo[]>(`/api/v1/projects/${encodeURIComponent(projectKey)}/ontologies`, {
       method: "GET",
     });
   }

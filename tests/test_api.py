@@ -64,7 +64,7 @@ def test_term_labels_resolve_from_package_layer_without_search_event(app_client)
     response = client.post(
         "/api/v1/terms/labels",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "terms": [
                 {"layer_id": "hpo-layer", "term_id": "HP:0001250"},
                 {"layer_id": "hpo-layer", "term_id": "HP:9999999"},
@@ -105,10 +105,10 @@ def test_full_package_review_and_export_lifecycle(app_client):
     resp = upload_package(client, files=files)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["package_id"] == "pkg-scenario-a"
+    assert data["project_key"] == "pkg-scenario-a"
 
     # 2. List documents (metadata only, no proposal counts, 1-indexed position)
-    resp = client.get("/api/v1/packages/pkg-scenario-a/documents")
+    resp = client.get("/api/v1/projects/pkg-scenario-a/documents")
     assert resp.status_code == 200
     docs = resp.json()
     assert len(docs) == 2
@@ -125,7 +125,7 @@ def test_full_package_review_and_export_lifecycle(app_client):
     resp = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "document_id": "doc-beta",
             "annotator_id": "annotator-1",
             "mode": "independent",
@@ -227,7 +227,7 @@ def test_document_list_with_position_and_status(app_client):
 
     # Initially both not_started
     res = client.get(
-        "/api/v1/packages/pkg-scenario-a/documents?annotator_id=alice&mode=independent"
+        "/api/v1/projects/pkg-scenario-a/documents?annotator_id=alice&mode=independent"
     )
     assert res.status_code == 200
     docs = res.json()
@@ -243,7 +243,7 @@ def test_document_list_with_position_and_status(app_client):
     open_res = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "document_id": "doc-beta",
             "annotator_id": "alice",
             "mode": "independent",
@@ -267,7 +267,7 @@ def test_document_list_with_position_and_status(app_client):
 
     # Now doc-beta is in_progress for Alice
     res = client.get(
-        "/api/v1/packages/pkg-scenario-a/documents?annotator_id=alice&mode=independent"
+        "/api/v1/projects/pkg-scenario-a/documents?annotator_id=alice&mode=independent"
     )
     docs = res.json()
     assert docs[0]["status"] == "in_progress"
@@ -275,7 +275,7 @@ def test_document_list_with_position_and_status(app_client):
 
     # But for Bob it is still not_started (isolation)
     res_bob = client.get(
-        "/api/v1/packages/pkg-scenario-a/documents?annotator_id=bob&mode=independent"
+        "/api/v1/projects/pkg-scenario-a/documents?annotator_id=bob&mode=independent"
     )
     assert res_bob.json()[0]["status"] == "not_started"
 
@@ -303,7 +303,7 @@ def test_document_list_with_position_and_status(app_client):
 
     # Now doc-beta is completed for Alice
     res = client.get(
-        "/api/v1/packages/pkg-scenario-a/documents?annotator_id=alice&mode=independent"
+        "/api/v1/projects/pkg-scenario-a/documents?annotator_id=alice&mode=independent"
     )
     assert res.json()[0]["status"] == "completed"
     assert res.json()[1]["status"] == "not_started"
@@ -320,7 +320,7 @@ def test_rejected_foreign_layer_commands_and_search(app_client):
     open_res = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "document_id": "doc-beta",
             "annotator_id": "alice",
             "mode": "independent",
@@ -372,7 +372,7 @@ def test_search_discards_mismatched_annotation_layer(app_client):
     open_res = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-c",
+            "project_key": "pkg-scenario-c",
             "document_id": "doc-beta",
             "annotator_id": "alice",
             "mode": "independent",
@@ -443,7 +443,7 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
     labels = client.post(
         "/api/v1/terms/labels",
         json={
-            "package_id": "pkg-scenario-c",
+            "project_key": "pkg-scenario-c",
             "terms": [
                 {"layer_id": "layer-1", "term_id": "HP:0001250"},
                 {"layer_id": "layer-2", "term_id": "HP:0001250"},
@@ -459,7 +459,7 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
     open_res = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-c",
+            "project_key": "pkg-scenario-c",
             "document_id": "doc-beta",
             "annotator_id": "alice",
             "mode": "independent",
@@ -508,7 +508,7 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
     reopen_res = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-c",
+            "project_key": "pkg-scenario-c",
             "document_id": "doc-beta",
             "annotator_id": "alice",
             "mode": "independent",
@@ -549,7 +549,7 @@ def test_revision_conflict_409_and_domain_error_422(app_client):
     resp = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "document_id": "doc-beta",
             "annotator_id": "indep-1",
             "mode": "independent",
@@ -602,7 +602,7 @@ def test_api_create_term_with_term_id_and_alias_conflict(app_client):
     resp = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "document_id": "doc-beta",
             "annotator_id": "indep-1",
             "mode": "independent",
@@ -671,7 +671,7 @@ def test_api_retry_lost_response_before_and_after_restart(tmp_path: Path):
     res = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "document_id": "doc-beta",
             "annotator_id": "user-restart",
             "mode": "independent",
@@ -738,9 +738,9 @@ def test_document_list_flags_review_inputs_only_in_review_mode(app_client):
         resp = upload_package(client, files={"file": (name, data, "application/zip")})
         assert resp.status_code == 200, resp.text
 
-    def flags(package_id: str, mode: str | None) -> list[bool | None]:
+    def flags(project_key: str, mode: str | None) -> list[bool | None]:
         params = {"annotator_id": "AB", "mode": mode} if mode else {}
-        resp = client.get(f"/api/v1/packages/{package_id}/documents", params=params)
+        resp = client.get(f"/api/v1/projects/{project_key}/documents", params=params)
         assert resp.status_code == 200, resp.text
         return [d["has_review_inputs"] for d in resp.json()]
 
@@ -766,7 +766,7 @@ def test_auto_search_records_the_route_of_each_candidate(app_client):
     opened = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "document_id": "doc-beta",
             "annotator_id": "annotator-1",
             "mode": "independent",
@@ -849,7 +849,7 @@ def test_selection_from_the_similar_block_records_its_positions(app_client):
     opened = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "document_id": "doc-beta",
             "annotator_id": "annotator-1",
             "mode": "independent",

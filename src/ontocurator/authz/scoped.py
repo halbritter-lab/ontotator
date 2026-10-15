@@ -52,8 +52,8 @@ from ontocurator.storage.tables import UserRow
 PROJECT_FREE = frozenset({"ontology_resources", "package_manifest_hash"})
 
 
-def project_not_found(package_id: str) -> DomainError:
-    return DomainError("PROJECT_NOT_FOUND", f"There is no project '{package_id}'.")
+def project_not_found(project_key: str) -> DomainError:
+    return DomainError("PROJECT_NOT_FOUND", f"There is no project '{project_key}'.")
 
 
 def _project_required() -> DomainError:
@@ -76,9 +76,9 @@ class ScopedRepository(Repository):
         self.access = access
         self.actor = actor
 
-    def _visible(self, package_id: str) -> None:
-        if not can(self.access, Action.VIEW_PROJECT, package_id):
-            raise project_not_found(package_id)
+    def _visible(self, project_key: str) -> None:
+        if not can(self.access, Action.VIEW_PROJECT, project_key):
+            raise project_not_found(project_key)
 
     # --- projects ---------------------------------------------------------- #
 
@@ -179,13 +179,13 @@ class ScopedRepository(Repository):
 
         super().create_project(key, name, description, profile, pins, on_create=created)
 
-    def project_pins(self, package_id: str) -> dict[str, Pin]:
-        self._visible(package_id)
-        return super().project_pins(package_id)
+    def project_pins(self, project_key: str) -> dict[str, Pin]:
+        self._visible(project_key)
+        return super().project_pins(project_key)
 
     def add_documents_and_proposals(
         self,
-        package_id: str,
+        project_key: str,
         documents: Sequence[ImportedDocument],
         proposal_sets: Sequence[ImportedSet],
         *,
@@ -194,11 +194,11 @@ class ScopedRepository(Repository):
         job_id: int | None = None,
         on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
     ) -> ImportCounts:
-        self._visible(package_id)
-        if not can(self.access, Action.IMPORT_DOCUMENTS, package_id):
+        self._visible(project_key)
+        if not can(self.access, Action.IMPORT_DOCUMENTS, project_key):
             raise AccessDenied("NOT_ALLOWED", "You may not import into this project.")
         return super().add_documents_and_proposals(
-            package_id,
+            project_key,
             documents,
             proposal_sets,
             source_sha256=source_sha256,
@@ -207,30 +207,30 @@ class ScopedRepository(Repository):
             on_done=on_done,
         )
 
-    def get_search_conditions(self, package_id: str) -> list[SearchCondition] | None:
-        self._visible(package_id)
-        return super().get_search_conditions(package_id)
+    def get_search_conditions(self, project_key: str) -> list[SearchCondition] | None:
+        self._visible(project_key)
+        return super().get_search_conditions(project_key)
 
     def capture_search_conditions(
         self,
-        package_id: str,
+        project_key: str,
         conditions: list[SearchCondition],
         resources: dict[str, bytes],
     ) -> list[SearchCondition]:
-        self._visible(package_id)
-        return super().capture_search_conditions(package_id, conditions, resources)
+        self._visible(project_key)
+        return super().capture_search_conditions(project_key, conditions, resources)
 
-    def get_embedded_files(self, package_id: str) -> dict[str, bytes]:
-        self._visible(package_id)
-        return super().get_embedded_files(package_id)
+    def get_embedded_files(self, project_key: str) -> dict[str, bytes]:
+        self._visible(project_key)
+        return super().get_embedded_files(project_key)
 
-    def get_manifest(self, package_id: str) -> PackageManifest:
-        self._visible(package_id)
-        return super().get_manifest(package_id)
+    def get_manifest(self, project_key: str) -> PackageManifest:
+        self._visible(project_key)
+        return super().get_manifest(project_key)
 
-    def manifest_hash(self, package_id: str) -> str | None:
-        self._visible(package_id)
-        return super().manifest_hash(package_id)
+    def manifest_hash(self, project_key: str) -> str | None:
+        self._visible(project_key)
+        return super().manifest_hash(project_key)
 
     def list_manifests(self) -> list[PackageManifest]:
         return [
@@ -246,62 +246,62 @@ class ScopedRepository(Repository):
             if can(self.access, Action.VIEW_PROJECT, project.project_key)
         ]
 
-    def get_task_profile(self, package_id: str) -> TaskProfile:
-        self._visible(package_id)
-        return super().get_task_profile(package_id)
+    def get_task_profile(self, project_key: str) -> TaskProfile:
+        self._visible(project_key)
+        return super().get_task_profile(project_key)
 
-    def get_axes_config(self, package_id: str) -> AxesConfig:
-        self._visible(package_id)
-        return super().get_axes_config(package_id)
+    def get_axes_config(self, project_key: str) -> AxesConfig:
+        self._visible(project_key)
+        return super().get_axes_config(project_key)
 
     # --- documents and proposals ------------------------------------------- #
 
-    def get_document(self, package_id: str, document_id: str) -> Document | None:
-        self._visible(package_id)
-        return super().get_document(package_id, document_id)
+    def get_document(self, project_key: str, document_id: str) -> Document | None:
+        self._visible(project_key)
+        return super().get_document(project_key, document_id)
 
-    def list_documents(self, package_id: str) -> list[Document]:
-        self._visible(package_id)
-        return super().list_documents(package_id)
+    def list_documents(self, project_key: str) -> list[Document]:
+        self._visible(project_key)
+        return super().list_documents(project_key)
 
     def get_annotation_snapshot(
-        self, annotation_id: str, version: str, package_id: str | None = None
+        self, annotation_id: str, version: str, project_key: str | None = None
     ) -> AnnotationSnapshot | None:
-        if package_id is None:
+        if project_key is None:
             raise _project_required()
-        self._visible(package_id)
-        return super().get_annotation_snapshot(annotation_id, version, package_id)
+        self._visible(project_key)
+        return super().get_annotation_snapshot(annotation_id, version, project_key)
 
     def get_evidence_snapshot(
-        self, evidence_id: str, version: str, package_id: str | None = None
+        self, evidence_id: str, version: str, project_key: str | None = None
     ) -> EvidenceSnapshot | None:
-        if package_id is None:
+        if project_key is None:
             raise _project_required()
-        self._visible(package_id)
-        return super().get_evidence_snapshot(evidence_id, version, package_id)
+        self._visible(project_key)
+        return super().get_evidence_snapshot(evidence_id, version, project_key)
 
     def list_annotations_for_document(
-        self, package_id: str, document_id: str
+        self, project_key: str, document_id: str
     ) -> list[AnnotationSnapshot]:
-        self._visible(package_id)
-        return super().list_annotations_for_document(package_id, document_id)
+        self._visible(project_key)
+        return super().list_annotations_for_document(project_key, document_id)
 
     # --- drafts and mutations ---------------------------------------------- #
 
     def list_workspace_keys(
         self,
-        package_id: str,
+        project_key: str,
         annotator_id: str,
         mode: str | None = None,
         document_id: str | None = None,
     ) -> list[WorkspaceKey]:
-        self._visible(package_id)
-        return super().list_workspace_keys(package_id, annotator_id, mode, document_id)
+        self._visible(project_key)
+        return super().list_workspace_keys(project_key, annotator_id, mode, document_id)
 
     def open_draft(
         self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
     ) -> Draft:
-        self._visible(key.package_id)
+        self._visible(key.project_key)
         return super().open_draft(key, targets)
 
     def run_mutation(
@@ -310,62 +310,62 @@ class ScopedRepository(Repository):
         envelope: MutationEnvelope,
         operation: Callable[[Draft], Draft | Submission],
     ) -> Draft | Submission:
-        self._visible(key.package_id)
+        self._visible(key.project_key)
         return super().run_mutation(key, envelope, operation)
 
     def get_document_status(
         self,
-        package_id: str,
+        project_key: str,
         document_id: str,
         annotator_id: str,
         mode: str,
     ) -> Literal["not_started", "in_progress", "completed"]:
-        self._visible(package_id)
-        return super().get_document_status(package_id, document_id, annotator_id, mode)
+        self._visible(project_key)
+        return super().get_document_status(project_key, document_id, annotator_id, mode)
 
     # --- submissions -------------------------------------------------------- #
 
     def get_document_statuses(
-        self, package_id: str, annotator_id: str, mode: str
+        self, project_key: str, annotator_id: str, mode: str
     ) -> dict[str, Literal["not_started", "in_progress", "completed"]]:
-        self._visible(package_id)
-        return super().get_document_statuses(package_id, annotator_id, mode)
+        self._visible(project_key)
+        return super().get_document_statuses(project_key, annotator_id, mode)
 
-    def review_input_document_ids(self, package_id: str) -> set[str]:
-        self._visible(package_id)
-        return super().review_input_document_ids(package_id)
+    def review_input_document_ids(self, project_key: str) -> set[str]:
+        self._visible(project_key)
+        return super().review_input_document_ids(project_key)
 
     def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
-        self._visible(key.package_id)
+        self._visible(key.project_key)
         return super().get_submissions_for_workspace(key)
 
     def get_submissions_for_document(
-        self, package_id: str, document_id: str
+        self, project_key: str, document_id: str
     ) -> list[Submission]:
-        self._visible(package_id)
-        return super().get_submissions_for_document(package_id, document_id)
+        self._visible(project_key)
+        return super().get_submissions_for_document(project_key, document_id)
 
     def get_submission(
-        self, submission_id: str, package_id: str | None = None
+        self, submission_id: str, project_key: str | None = None
     ) -> Submission | None:
-        if package_id is None:
+        if project_key is None:
             raise _project_required()
-        self._visible(package_id)
-        return super().get_submission(submission_id, package_id)
+        self._visible(project_key)
+        return super().get_submission(submission_id, project_key)
 
     # --- search events ------------------------------------------------------ #
 
     def save_search_event(self, event: SearchEventRecord) -> None:
-        self._visible(event.workspace_key.package_id)
+        self._visible(event.workspace_key.project_key)
         super().save_search_event(event)
 
     def get_search_event(
-        self, event_id: str, package_id: str | None = None
+        self, event_id: str, project_key: str | None = None
     ) -> SearchEventRecord | None:
-        if package_id is None:
+        if project_key is None:
             raise _project_required()
-        self._visible(package_id)
-        return super().get_search_event(event_id, package_id)
+        self._visible(project_key)
+        return super().get_search_event(event_id, project_key)
 
     def append_search_event_candidates(
         self,
@@ -378,7 +378,7 @@ class ScopedRepository(Repository):
     ) -> SearchEventRecord | None:
         if workspace_key is None:
             raise _project_required()
-        self._visible(workspace_key.package_id)
+        self._visible(workspace_key.project_key)
         return super().append_search_event_candidates(
             event_id,
             term_ids,
@@ -390,39 +390,39 @@ class ScopedRepository(Repository):
     def get_search_events_for_workspace(
         self, key: WorkspaceKey
     ) -> list[SearchEventRecord]:
-        self._visible(key.package_id)
+        self._visible(key.project_key)
         return super().get_search_events_for_workspace(key)
 
     # --- export ------------------------------------------------------------- #
 
     def export_package(
-        self, package_id: str, *, include_captured_conditions: bool = True
+        self, project_key: str, *, include_captured_conditions: bool = True
     ) -> ValidatedPackage:
-        self._visible(package_id)
+        self._visible(project_key)
         return super().export_package(
-            package_id, include_captured_conditions=include_captured_conditions
+            project_key, include_captured_conditions=include_captured_conditions
         )
 
-    def t1_export_content(self, package_id: str) -> ProjectExport:
-        self._visible(package_id)
-        if not can(self.access, Action.EXPORT_ALL_WORK, package_id):
+    def t1_export_content(self, project_key: str) -> ProjectExport:
+        self._visible(project_key)
+        if not can(self.access, Action.EXPORT_ALL_WORK, project_key):
             raise AccessDenied("NOT_ALLOWED", "You may not export this project.")
-        return super().t1_export_content(package_id)
+        return super().t1_export_content(project_key)
 
-    def edit_log(self, package_id: str) -> list[dict[str, Any]]:
-        self._visible(package_id)
-        if not can(self.access, Action.EXPORT_EDIT_LOG, package_id):
+    def edit_log(self, project_key: str) -> list[dict[str, Any]]:
+        self._visible(project_key)
+        if not can(self.access, Action.EXPORT_EDIT_LOG, project_key):
             raise AccessDenied(
                 "NOT_ALLOWED", "You may not export the edit log of this project."
             )
-        return super().edit_log(package_id)
+        return super().edit_log(project_key)
 
     # --- edit log ----------------------------------------------------------- #
 
     def edit_events(self, key: WorkspaceKey) -> list[EditEvent]:
-        self._visible(key.package_id)
+        self._visible(key.project_key)
         return super().edit_events(key)
 
     def draft_state_at(self, key: WorkspaceKey, revision: int) -> DraftState:
-        self._visible(key.package_id)
+        self._visible(key.project_key)
         return super().draft_state_at(key, revision)

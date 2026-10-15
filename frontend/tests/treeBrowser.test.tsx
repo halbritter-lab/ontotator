@@ -4,7 +4,7 @@ import { api, type TreeOpenResponse, type TreeTermDetail } from "../src/api/clie
 import { TreeBrowser, type TreeBrowserProps } from "../src/editor/TreeBrowser";
 
 const key = {
-  package_id: "pkg",
+  project_key: "pkg",
   document_id: "doc",
   annotator_id: "dr-a",
   mode: "independent" as const,

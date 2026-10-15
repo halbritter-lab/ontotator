@@ -30,7 +30,7 @@ test("first run: log in without projects, get a T1 import, open a case without t
   expect(((await imported.json()) as { proposals: number }).proposals).toBeGreaterThan(0);
   await page.reload();
   await expect(guide).toHaveCount(0);
-  await expect(page.locator("#package-select")).toHaveValue("t1-browser");
+  await expect(page.locator("#project-select")).toHaveValue("t1-browser");
 
   // The identity comes from the session: nothing asks for initials or a confirmation.
   await openCase(page);
@@ -91,8 +91,8 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
 
   await expect(page.getByRole("button", { name: /Download export/i })).toHaveCount(0);
   await page.reload();
-  await page.locator("#package-select").selectOption("browser-fixture");
-  await expect(page.locator("#package-select")).toHaveValue("browser-fixture");
+  await page.locator("#project-select").selectOption("browser-fixture");
+  await expect(page.locator("#project-select")).toHaveValue("browser-fixture");
   await expect(page.getByText(/Forbidden|Unauthorized|Error loading/)).toHaveCount(0);
 });
 

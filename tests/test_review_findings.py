@@ -146,7 +146,7 @@ def _submit_independent(repo, ontology, annotator_id: str) -> None:  # type: ign
     from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 
     key = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id=annotator_id,
         mode="independent",
@@ -192,7 +192,7 @@ def test_workspace_key_encoding_is_unambiguous_and_backward_compatible(
     from ontocurator.storage.repository import _key_str
 
     legacy = WorkspaceKey(
-        package_id="p",
+        project_key="p",
         document_id="d",
         annotator_id="a",
         mode="independent",
@@ -201,13 +201,13 @@ def test_workspace_key_encoding_is_unambiguous_and_backward_compatible(
     )
     assert _key_str(legacy) == "p:d:a:independent:s:targets-0"
 
-    first = legacy.model_copy(update={"package_id": "p:d", "document_id": "a"})
+    first = legacy.model_copy(update={"project_key": "p:d", "document_id": "a"})
     second = legacy.model_copy(update={"document_id": "d:a", "annotator_id": "a"})
-    second = second.model_copy(update={"package_id": "p"})
+    second = second.model_copy(update={"project_key": "p"})
     # Both join to the same legacy string, so the encoding must separate them.
     assert ":".join(
-        [first.package_id, first.document_id, first.annotator_id]
-    ) == ":".join([second.package_id, second.document_id, second.annotator_id])
+        [first.project_key, first.document_id, first.annotator_id]
+    ) == ":".join([second.project_key, second.document_id, second.annotator_id])
     assert _key_str(first) != _key_str(second)
     assert ":" not in _key_str(first)
 
@@ -215,8 +215,8 @@ def test_workspace_key_encoding_is_unambiguous_and_backward_compatible(
 
     repo = Repository(database_for(tmp_path / "db.sqlite"))
     # Drafts belong to a project (D-e); both keys' projects must exist.
-    repo.import_package(_project(first.package_id))
-    repo.import_package(_project(second.package_id))
+    repo.import_package(_project(first.project_key))
+    repo.import_package(_project(second.project_key))
     repo.open_draft(first)
 
     def bump(draft: Draft) -> Draft:
@@ -243,15 +243,15 @@ class _Session:
         from ontocurator.domain.workspace import WorkspaceKey
 
         repo, ontology, _ws, _edit, doc = _editing_env(tmp_path)
-        package_id = "pkg-1"
+        project_key = "pkg-1"
         if with_source_term is not None:
-            package_id = "pkg-src"
+            project_key = "pkg-src"
             self.source = self._import_source_package(repo, doc, with_source_term)
         self.repo = repo
         self.editor = EditorService(repo, ontology)
         self.submissions = SubmissionService(repo, ontology)
         key = WorkspaceKey(
-            package_id=package_id,
+            project_key=project_key,
             document_id="doc-1",
             annotator_id="annotator-1",
             mode="independent",
@@ -790,7 +790,7 @@ def test_review_confirms_proposal_recorded_with_alt_id(tmp_path: Path) -> None:
         [AnnotationRef(annotation_id="p-1", version=snap.version)]
     )
     key = WorkspaceKey(
-        package_id="pkg-alt",
+        project_key="pkg-alt",
         document_id="doc-1",
         annotator_id="rev",
         mode="review",
@@ -824,7 +824,7 @@ def test_term_labels_expose_status_and_replacement(tmp_path: Path) -> None:
     labels = client.post(
         "/api/v1/terms/labels",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "terms": [
                 {"layer_id": "hpo-layer", "term_id": "HP:0000123"},
                 {"layer_id": "hpo-layer", "term_id": "hp:0001252"},
@@ -864,7 +864,7 @@ def _annotate(client, annotator: str, document_id: str, term_id: str) -> str:  #
     opened = client.post(
         "/api/v1/workspaces/open",
         json={
-            "package_id": "pkg-scenario-a",
+            "project_key": "pkg-scenario-a",
             "document_id": document_id,
             "annotator_id": annotator,
             "mode": "independent",

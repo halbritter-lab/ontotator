@@ -84,7 +84,7 @@ class ReviewInputsRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    package_id: str
+    project_key: str
     document_id: str
     # Only the logged-in user's own pseudonym; omitted means the same.
     annotator_id: str | None = None
@@ -96,7 +96,7 @@ class OpenWorkspaceRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    package_id: str
+    project_key: str
     document_id: str
     # Only the logged-in user's own pseudonym; omitted means the same.
     annotator_id: str | None = None
@@ -120,7 +120,7 @@ class TermLookup(BaseModel):
 
 
 class TermLabelsRequest(BaseModel):
-    package_id: str
+    project_key: str
     terms: list[TermLookup] = Field(max_length=200)
 
 
@@ -220,7 +220,7 @@ def _preferences_store(request: Request) -> UserPreferencesStore:
     return cast(UserPreferencesStore, request.app.state.preferences)
 
 
-def require_mode(request: Request, package_id: str, mode: WorkspaceMode) -> None:
+def require_mode(request: Request, project_key: str, mode: WorkspaceMode) -> None:
     """Refuse a working mode the user's roles in the project do not give.
 
     A project the user cannot see is not found, as everywhere (E3).
@@ -229,29 +229,26 @@ def require_mode(request: Request, package_id: str, mode: WorkspaceMode) -> None
         AccessDenied: ``MODE_NOT_ALLOWED`` (403).
     """
     access = get_access(request)
-    if not can(access, Action.VIEW_PROJECT, package_id):
-        raise project_not_found(package_id)
-    if not can(access, MODE_ACTIONS[mode], package_id):
+    if not can(access, Action.VIEW_PROJECT, project_key):
+        raise project_not_found(project_key)
+    if not can(access, MODE_ACTIONS[mode], project_key):
         raise AccessDenied(
             "MODE_NOT_ALLOWED",
             f"Your roles in this project do not include the working mode '{mode}'.",
         )
 
 
-def may_read_others(request: Request, package_id: str) -> bool:
+def may_read_others(request: Request, project_key: str) -> bool:
     """Whether the user may read other annotators' work in the project (Q5)."""
-    return can(get_access(request), Action.EXPORT_ALL_WORK, package_id)
+    return can(get_access(request), Action.EXPORT_ALL_WORK, project_key)
 
 
 class ProjectSummary(BaseModel):
-    """A project on the dashboard, with what the user may do in it.
-
-    The project key keeps the name ``package_id`` until T3 (index D-e).
-    """
+    """A project on the dashboard, with what the user may do in it."""
 
     model_config = ConfigDict(extra="forbid")
 
-    package_id: str
+    project_key: str
     name: str
     description: str | None
     roles: list[Role]
@@ -265,7 +262,7 @@ def list_projects(request: Request, repo: RepoDep) -> list[ProjectSummary]:
     access = get_access(request)
     return [
         ProjectSummary(
-            package_id=project.project_key,
+            project_key=project.project_key,
             name=project.name,
             description=project.description,
             roles=sorted(access.roles_in(project.project_key)),
@@ -290,9 +287,9 @@ def update_preferences(
     return _preferences_store(request).update(principal.user_id, change)
 
 
-@router.get("/packages/{package_id}/documents")
+@router.get("/projects/{project_key}/documents")
 def list_package_documents(
-    package_id: str,
+    project_key: str,
     request: Request,
     ws_svc: WorkspaceSvcDep,
     principal: PrincipalDep,
@@ -311,12 +308,12 @@ def list_package_documents(
         AccessDenied: ``MODE_NOT_ALLOWED`` (403) for review mode without it.
     """
     if mode == "review":
-        require_mode(request, package_id, mode)
+        require_mode(request, project_key, mode)
     annotator_id = own_annotator(
-        principal, annotator_id, may_read_others=may_read_others(request, package_id)
+        principal, annotator_id, may_read_others=may_read_others(request, project_key)
     )
     return ws_svc.list_documents(
-        package_id, annotator_id, mode, reveal_review_inputs=mode == "review"
+        project_key, annotator_id, mode, reveal_review_inputs=mode == "review"
     )
 
 
@@ -330,7 +327,7 @@ def resolve_term_labels(
     labels: list[TermLabel] = []
     for term in payload.terms:
         status = ontology.for_package_layer(
-            repo, payload.package_id, term.layer_id
+            repo, payload.project_key, term.layer_id
         ).validate_term(term.term_id)
         labels.append(
             TermLabel(
@@ -356,13 +353,13 @@ def get_review_inputs(
 ) -> list[AnnotationSnapshot]:
     """Get selectable proposal versions for setting up a review round."""
     own_annotator(principal, req.annotator_id)
-    require_mode(request, req.package_id, req.mode)
+    require_mode(request, req.project_key, req.mode)
     if req.mode != "review":
         raise DomainError(
             "REVIEW_MODE_REQUIRED",
             "Review inputs can only be queried in review mode",
         )
-    return ws_svc.get_review_inputs(req.package_id, req.document_id)
+    return ws_svc.get_review_inputs(req.project_key, req.document_id)
 
 
 @router.post("/workspaces/open")
@@ -374,7 +371,7 @@ def open_workspace(
 ) -> OpenWorkspaceResponse:
     """Open or initialize a workspace view of the logged-in user."""
     annotator_id = own_annotator(principal, req.annotator_id)
-    require_mode(request, req.package_id, req.mode)
+    require_mode(request, req.project_key, req.mode)
     targets = req.targets
     if req.review_round_target_set_id is not None and (
         req.mode != "review" or targets is not None
@@ -391,7 +388,7 @@ def open_workspace(
         else (req.review_round_target_set_id or "targets-0")
     )
     key = WorkspaceKey(
-        package_id=req.package_id,
+        project_key=req.project_key,
         document_id=req.document_id,
         annotator_id=annotator_id,
         mode=req.mode,
@@ -414,7 +411,7 @@ def apply_command(
 ) -> Draft:
     """Execute an edit command against a workspace draft."""
     key = own_key(principal, decode_workspace_id(workspace_id))
-    require_mode(request, key.package_id, key.mode)
+    require_mode(request, key.project_key, key.mode)
     return edit_svc.apply(key, envelope)
 
 
@@ -428,7 +425,7 @@ def record_decision(
 ) -> Draft:
     """Record a reviewer decision against a targeted proposal."""
     key = own_key(principal, decode_workspace_id(workspace_id))
-    require_mode(request, key.package_id, key.mode)
+    require_mode(request, key.project_key, key.mode)
     return rev_svc.decide(key, envelope)
 
 
@@ -442,7 +439,7 @@ def submit_workspace(
 ) -> Submission:
     """Commit workspace submission upon verification."""
     key = own_key(principal, decode_workspace_id(workspace_id))
-    require_mode(request, key.package_id, key.mode)
+    require_mode(request, key.project_key, key.mode)
     return sub_svc.submit(key, envelope)
 
 
@@ -473,9 +470,9 @@ def layer_ontology(
     draft belongs to that layer. The workspace must be the logged-in user's.
     """
     own_key(principal_of(request), workspace_key)
-    require_mode(request, workspace_key.package_id, workspace_key.mode)
-    ws_svc.get_document(workspace_key.package_id, workspace_key.document_id)
-    profile = repo.get_task_profile(workspace_key.package_id)
+    require_mode(request, workspace_key.project_key, workspace_key.mode)
+    ws_svc.get_document(workspace_key.project_key, workspace_key.document_id)
+    profile = repo.get_task_profile(workspace_key.project_key)
     scope = build_scope(profile, workspace_key.mode)
     profile_layer_ids = [layer.layer_id for layer in profile.layers]
     if layer_id not in profile_layer_ids:
@@ -505,7 +502,7 @@ def layer_ontology(
             break
 
     return get_ontology(request).for_package_layer(
-        repo, workspace_key.package_id, layer_id
+        repo, workspace_key.project_key, layer_id
     )
 
 
@@ -601,16 +598,16 @@ def _ontology_info(sha: str, svc: OntologyService, path: Path | None) -> Ontolog
     )
 
 
-@router.get("/packages/{package_id}/ontologies")
+@router.get("/projects/{project_key}/ontologies")
 def package_ontologies(
-    package_id: str, repo: RepoDep, ontology: OntologyDep
+    project_key: str, repo: RepoDep, ontology: OntologyDep
 ) -> list[OntologyInfo]:
     """Search languages from the package's immutable first-use resource capture."""
-    profile = repo.get_task_profile(package_id)
+    profile = repo.get_task_profile(project_key)
     results = []
     for definition in profile.ontologies:
         service = ontology.for_package_ontology(
-            repo, package_id, definition.ontology_id
+            repo, project_key, definition.ontology_id
         )
         results.append(_ontology_info(definition.sha256, service, None))
     return results

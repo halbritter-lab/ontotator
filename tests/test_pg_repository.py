@@ -166,8 +166,8 @@ def _walk(candidates: list[str]) -> SearchEventRecord:
     )
 
 
-def _with_event(package_id: str, event: SearchEventRecord) -> ValidatedPackage:
-    package = _sample_package(package_id)
+def _with_event(project_key: str, event: SearchEventRecord) -> ValidatedPackage:
+    package = _sample_package(project_key)
     package.search_events = [event]
     return package
 
@@ -217,9 +217,9 @@ def test_imports_of_different_projects_wait_for_each_other(tmp_path: Path) -> No
         assert importing.result(timeout=10) == "pkg-a"
 
 
-def _key(package_id: str = "pkg-a", annotator_id: str = "ann-1") -> WorkspaceKey:
+def _key(project_key: str = "pkg-a", annotator_id: str = "ann-1") -> WorkspaceKey:
     return WorkspaceKey(
-        package_id=package_id,
+        project_key=project_key,
         document_id="doc-1",
         annotator_id=annotator_id,
         mode="independent",

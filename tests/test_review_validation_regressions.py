@@ -63,7 +63,7 @@ def test_review_targets_exclude_references_but_workspace_keeps_them(tmp_path):
         ]
     )
     key = WorkspaceKey(
-        package_id=package.manifest.package_id,
+        project_key=package.manifest.package_id,
         document_id="doc-beta",
         annotator_id="reviewer",
         mode="review",
@@ -130,7 +130,7 @@ def test_invalid_stored_axes_cannot_be_approved(tmp_path, axes_values, operation
     )
     targets = ReviewTargetSet.create([target])
     key = WorkspaceKey(
-        package_id=package.manifest.package_id,
+        project_key=package.manifest.package_id,
         document_id="doc-beta",
         annotator_id="reviewer",
         mode="review",

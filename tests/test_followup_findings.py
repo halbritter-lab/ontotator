@@ -22,7 +22,7 @@ from ontocurator.storage.repository import Repository
 
 def _colon_key() -> WorkspaceKey:
     return WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="orcid:0000-0001",
         mode="independent",
@@ -62,7 +62,7 @@ def test_package_export_loads_package_once_and_keeps_resubmissions(
     repo.import_package(_sample_package())
     independent = _colon_key().model_copy(update={"annotator_id": "a"})
     review = WorkspaceKey(
-        package_id="pkg-1",
+        project_key="pkg-1",
         document_id="doc-1",
         annotator_id="a",
         mode="review",
@@ -79,10 +79,10 @@ def test_package_export_loads_package_once_and_keeps_resubmissions(
     calls: list[str] = []
     original = repo.export_package
 
-    def counting(package_id: str, *, include_captured_conditions: bool = True):  # type: ignore[no-untyped-def]
-        calls.append(package_id)
+    def counting(project_key: str, *, include_captured_conditions: bool = True):  # type: ignore[no-untyped-def]
+        calls.append(project_key)
         return original(
-            package_id, include_captured_conditions=include_captured_conditions
+            project_key, include_captured_conditions=include_captured_conditions
         )
 
     monkeypatch.setattr(repo, "export_package", counting)

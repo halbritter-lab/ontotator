@@ -200,7 +200,7 @@ def submission(
     return Submission(
         submission_id="sub-1",
         origin_key=WorkspaceKey(
-            package_id="proj",
+            project_key="proj",
             document_id="EN100017",
             annotator_id="ann-0007",
             mode=mode,  # type: ignore[arg-type]

@@ -133,7 +133,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/packages/{package_id}/documents": {
+    "/api/v1/projects/{project_key}/documents": {
         parameters: {
             query?: never;
             header?: never;
@@ -153,7 +153,7 @@ export interface paths {
          *     Raises:
          *         AccessDenied: ``MODE_NOT_ALLOWED`` (403) for review mode without it.
          */
-        get: operations["list_package_documents_api_v1_packages__package_id__documents_get"];
+        get: operations["list_package_documents_api_v1_projects__project_key__documents_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -322,7 +322,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/packages/{package_id}/ontologies": {
+    "/api/v1/projects/{project_key}/ontologies": {
         parameters: {
             query?: never;
             header?: never;
@@ -333,7 +333,7 @@ export interface paths {
          * Package Ontologies
          * @description Search languages from the package's immutable first-use resource capture.
          */
-        get: operations["package_ontologies_api_v1_packages__package_id__ontologies_get"];
+        get: operations["package_ontologies_api_v1_projects__project_key__ontologies_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -823,8 +823,8 @@ export interface components {
          * @description Request payload for opening a workspace draft.
          */
         OpenWorkspaceRequest: {
-            /** Package Id */
-            package_id: string;
+            /** Project Key */
+            project_key: string;
             /** Document Id */
             document_id: string;
             /** Annotator Id */
@@ -883,12 +883,10 @@ export interface components {
         /**
          * ProjectSummary
          * @description A project on the dashboard, with what the user may do in it.
-         *
-         *     The project key keeps the name ``package_id`` until T3 (index D-e).
          */
         ProjectSummary: {
-            /** Package Id */
-            package_id: string;
+            /** Project Key */
+            project_key: string;
             /** Name */
             name: string;
             /** Description */
@@ -946,8 +944,8 @@ export interface components {
          * @description Request payload for fetching targeted review inputs.
          */
         ReviewInputsRequest: {
-            /** Package Id */
-            package_id: string;
+            /** Project Key */
+            project_key: string;
             /** Document Id */
             document_id: string;
             /** Annotator Id */
@@ -1204,8 +1202,8 @@ export interface components {
         };
         /** TermLabelsRequest */
         TermLabelsRequest: {
-            /** Package Id */
-            package_id: string;
+            /** Project Key */
+            project_key: string;
             /** Terms */
             terms: components["schemas"]["TermLookup"][];
         };
@@ -1345,8 +1343,8 @@ export interface components {
          * @description Identifier for an isolated local workspace.
          */
         WorkspaceKey: {
-            /** Package Id */
-            package_id: string;
+            /** Project Key */
+            project_key: string;
             /** Document Id */
             document_id: string;
             /** Annotator Id */
@@ -1587,7 +1585,7 @@ export interface operations {
             };
         };
     };
-    list_package_documents_api_v1_packages__package_id__documents_get: {
+    list_package_documents_api_v1_projects__project_key__documents_get: {
         parameters: {
             query?: {
                 annotator_id?: string | null;
@@ -1595,7 +1593,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                package_id: string;
+                project_key: string;
             };
             cookie?: never;
         };
@@ -1890,12 +1888,12 @@ export interface operations {
             };
         };
     };
-    package_ontologies_api_v1_packages__package_id__ontologies_get: {
+    package_ontologies_api_v1_projects__project_key__ontologies_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                package_id: string;
+                project_key: string;
             };
             cookie?: never;
         };

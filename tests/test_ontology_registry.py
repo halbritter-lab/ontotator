@@ -134,7 +134,7 @@ def test_same_term_id_in_two_ontologies_independent_indices_and_labels(tmp_path:
     from ontocurator.ontology.provenance import SearchRequest
 
     ws_key = WorkspaceKey(
-        package_id="p1",
+        project_key="p1",
         document_id="d1",
         annotator_id="u1",
         mode="independent",
@@ -243,7 +243,7 @@ def test_numeric_search_is_scoped_to_layer_ontology(tmp_path: Path):
     svc2 = registry.for_layer(profile, "l2")
 
     ws_key = WorkspaceKey(
-        package_id="p",
+        project_key="p",
         document_id="d",
         annotator_id="u",
         mode="independent",

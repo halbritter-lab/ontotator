@@ -42,9 +42,9 @@ def _package(key: str) -> ValidatedPackage:
     )
 
 
-def _key(package_id: str) -> WorkspaceKey:
+def _key(project_key: str) -> WorkspaceKey:
     return WorkspaceKey(
-        package_id=package_id,
+        project_key=project_key,
         document_id="doc-beta",
         annotator_id="ann-0001",
         mode="independent",
@@ -52,10 +52,10 @@ def _key(package_id: str) -> WorkspaceKey:
     )
 
 
-def _event(package_id: str) -> SearchEventRecord:
+def _event(project_key: str) -> SearchEventRecord:
     return SearchEventRecord(
         event_id="e-1",
-        workspace_key=_key(package_id),
+        workspace_key=_key(project_key),
         annotation_id="a-1",
         query="seizure",
         route="lexical",
@@ -315,15 +315,15 @@ def app(tmp_path: Path) -> Any:
 def test_the_api_hides_foreign_projects(app: Any) -> None:
     alice = logged_in(app, "alice", projects={"A": ["annotator"]})
 
-    assert alice.get("/api/v1/packages/A/documents").status_code == 200
-    foreign = alice.get("/api/v1/packages/B/documents")
-    missing = alice.get("/api/v1/packages/Z/documents")
+    assert alice.get("/api/v1/projects/A/documents").status_code == 200
+    foreign = alice.get("/api/v1/projects/B/documents")
+    missing = alice.get("/api/v1/projects/Z/documents")
 
     assert foreign.status_code == 404
     assert missing.status_code == 404
     assert foreign.json()["code"] == missing.json()["code"] == "PROJECT_NOT_FOUND"
     assert foreign.json()["details"].replace("B", "Z") == missing.json()["details"]
-    assert [p["package_id"] for p in alice.get("/api/v1/projects").json()] == ["A"]
+    assert [p["project_key"] for p in alice.get("/api/v1/projects").json()] == ["A"]
 
 
 def test_an_upload_makes_the_uploader_a_member_of_the_new_project(
@@ -348,7 +348,7 @@ def test_an_upload_makes_the_uploader_a_member_of_the_new_project(
         ("root", "ann-0001", frozenset({"lead", "annotator", "adjudicator"}))
     ]
     # The uploader's session goes on.
-    assert root.get("/api/v1/packages/C/documents").status_code == 200
+    assert root.get("/api/v1/projects/C/documents").status_code == 200
     with app.state.repo.db.transaction() as conn:
         actions = list(
             conn.execute(

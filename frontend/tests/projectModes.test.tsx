@@ -10,7 +10,7 @@ const docs = [
   { document_id: "doc-1", text_length: 10, language: "en", position: 1, status: "not_started" as const },
 ];
 
-type Project = { package_id: string; name?: string; allowed_modes?: Mode[] };
+type Project = { project_key: string; name?: string; allowed_modes?: Mode[] };
 
 const mockServer = (opts: {
   allowed?: Mode[];
@@ -23,9 +23,9 @@ const mockServer = (opts: {
   });
   vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
   vi.spyOn(api, "listOntologies").mockResolvedValue([]);
-  vi.spyOn(api, "listPackages").mockResolvedValue(
-    (opts.projects ?? [{ package_id: "pkg-a", allowed_modes: opts.allowed ?? [...ALL_MODES] }]).map((p) => ({
-      name: p.package_id,
+  vi.spyOn(api, "listProjects").mockResolvedValue(
+    (opts.projects ?? [{ project_key: "pkg-a", allowed_modes: opts.allowed ?? [...ALL_MODES] }]).map((p) => ({
+      name: p.project_key,
       description: null,
       roles: [],
       document_count: docs.length,
@@ -72,8 +72,8 @@ describe("working modes from the project roles", () => {
   it("never asks for the review list in a project whose roles do not give review", async () => {
     const list = mockServer({
       projects: [
-        { package_id: "pkg-a", allowed_modes: ["review"] },
-        { package_id: "pkg-b", allowed_modes: ["independent", "assisted"] },
+        { project_key: "pkg-a", allowed_modes: ["review"] },
+        { project_key: "pkg-b", allowed_modes: ["independent", "assisted"] },
       ],
       modeByPackage: { "pkg-a": "review", "pkg-b": "review" },
     });
@@ -103,8 +103,8 @@ describe("working modes from the project roles", () => {
   it("names the projects and selects the first", async () => {
     const list = mockServer({
       projects: [
-        { package_id: "study-xy", name: "Study XY", allowed_modes: ["independent"] },
-        { package_id: "pkg-a", allowed_modes: ["independent"] },
+        { project_key: "study-xy", name: "Study XY", allowed_modes: ["independent"] },
+        { project_key: "pkg-a", allowed_modes: ["independent"] },
       ],
     });
     render(<App />);

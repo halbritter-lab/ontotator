@@ -205,19 +205,19 @@
         }
       }
     },
-    "/api/v1/packages/{package_id}/documents": {
+    "/api/v1/projects/{project_key}/documents": {
       "get": {
         "summary": "List Package Documents",
         "description": "List documents showing metadata only, without proposal counts.\n\nThe status is the logged-in user's; a system admin or a lead of the\nproject may ask for another annotator's. Review mode is refused to a user\nwhose roles do not give it; in it each document says whether it has\nproposals, so review navigation can skip documents there is nothing to\nreview in.\n\nRaises:\n    AccessDenied: ``MODE_NOT_ALLOWED`` (403) for review mode without it.",
-        "operationId": "list_package_documents_api_v1_packages__package_id__documents_get",
+        "operationId": "list_package_documents_api_v1_projects__project_key__documents_get",
         "parameters": [
           {
-            "name": "package_id",
+            "name": "project_key",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Package Id"
+              "title": "Project Key"
             }
           },
           {
@@ -268,7 +268,7 @@
                   "items": {
                     "$ref": "#/components/schemas/DocumentSummary"
                   },
-                  "title": "Response List Package Documents Api V1 Packages  Package Id  Documents Get"
+                  "title": "Response List Package Documents Api V1 Projects  Project Key  Documents Get"
                 }
               }
             }
@@ -649,19 +649,19 @@
         }
       }
     },
-    "/api/v1/packages/{package_id}/ontologies": {
+    "/api/v1/projects/{project_key}/ontologies": {
       "get": {
         "summary": "Package Ontologies",
         "description": "Search languages from the package's immutable first-use resource capture.",
-        "operationId": "package_ontologies_api_v1_packages__package_id__ontologies_get",
+        "operationId": "package_ontologies_api_v1_projects__project_key__ontologies_get",
         "parameters": [
           {
-            "name": "package_id",
+            "name": "project_key",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Package Id"
+              "title": "Project Key"
             }
           }
         ],
@@ -675,7 +675,7 @@
                   "items": {
                     "$ref": "#/components/schemas/OntologyInfo"
                   },
-                  "title": "Response Package Ontologies Api V1 Packages  Package Id  Ontologies Get"
+                  "title": "Response Package Ontologies Api V1 Projects  Project Key  Ontologies Get"
                 }
               }
             }
@@ -1621,9 +1621,9 @@
       },
       "OpenWorkspaceRequest": {
         "properties": {
-          "package_id": {
+          "project_key": {
             "type": "string",
-            "title": "Package Id"
+            "title": "Project Key"
           },
           "document_id": {
             "type": "string",
@@ -1675,7 +1675,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "package_id",
+          "project_key",
           "document_id"
         ],
         "title": "OpenWorkspaceRequest",
@@ -1797,9 +1797,9 @@
       },
       "ProjectSummary": {
         "properties": {
-          "package_id": {
+          "project_key": {
             "type": "string",
-            "title": "Package Id"
+            "title": "Project Key"
           },
           "name": {
             "type": "string",
@@ -1848,7 +1848,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "package_id",
+          "project_key",
           "name",
           "description",
           "roles",
@@ -1856,7 +1856,7 @@
           "document_count"
         ],
         "title": "ProjectSummary",
-        "description": "A project on the dashboard, with what the user may do in it.\n\nThe project key keeps the name ``package_id`` until T3 (index D-e)."
+        "description": "A project on the dashboard, with what the user may do in it."
       },
       "Provenance": {
         "properties": {
@@ -1980,9 +1980,9 @@
       },
       "ReviewInputsRequest": {
         "properties": {
-          "package_id": {
+          "project_key": {
             "type": "string",
-            "title": "Package Id"
+            "title": "Project Key"
           },
           "document_id": {
             "type": "string",
@@ -2008,7 +2008,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "package_id",
+          "project_key",
           "document_id",
           "mode"
         ],
@@ -2633,9 +2633,9 @@
       },
       "TermLabelsRequest": {
         "properties": {
-          "package_id": {
+          "project_key": {
             "type": "string",
-            "title": "Package Id"
+            "title": "Project Key"
           },
           "terms": {
             "items": {
@@ -2648,7 +2648,7 @@
         },
         "type": "object",
         "required": [
-          "package_id",
+          "project_key",
           "terms"
         ],
         "title": "TermLabelsRequest"
@@ -3011,9 +3011,9 @@
       },
       "WorkspaceKey": {
         "properties": {
-          "package_id": {
+          "project_key": {
             "type": "string",
-            "title": "Package Id"
+            "title": "Project Key"
           },
           "document_id": {
             "type": "string",
@@ -3045,7 +3045,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "package_id",
+          "project_key",
           "document_id",
           "annotator_id",
           "mode",

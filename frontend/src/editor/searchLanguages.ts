@@ -44,7 +44,7 @@ export type LanguageClient = Pick<ApiClient, "listPackageOntologies" | "getPrefe
 export function useSearchLanguages(
   client: LanguageClient,
   annotatorId: string,
-  packageId: string,
+  projectKey: string,
 ): (ontologySha256: string | null | undefined) => SearchLanguageControl | undefined {
   const [ontologies, setOntologies] = useState<OntologyInfo[]>([]);
   const [stored, setStored] = useState<string[] | undefined>(undefined);
@@ -54,7 +54,7 @@ export function useSearchLanguages(
   useEffect(() => {
     let cancelled = false;
     setOntologies([]);
-    client.listPackageOntologies(packageId).then(
+    client.listPackageOntologies(projectKey).then(
       (list) => {
         if (!cancelled) setOntologies(list ?? []);
       },
@@ -71,7 +71,7 @@ export function useSearchLanguages(
     return () => {
       cancelled = true;
     };
-  }, [client, annotatorId, packageId]);
+  }, [client, annotatorId, projectKey]);
 
   return useCallback(
     (ontologySha256) => {

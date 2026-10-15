@@ -32,15 +32,15 @@ export async function openCase(page: Page) {
 }
 
 /**
- * Log in as ``annotator`` with every role in the seeded project ``packageId``
+ * Log in as ``annotator`` with every role in the seeded project ``projectKey``
  * and select it on the dashboard. The browser server seeds every scenario at
  * start-up (``_scenario`` names the one the spec relies on).
  */
-export async function importPackage(page: Page, _scenario: string, packageId: string, annotator: string) {
-  await loginAs(page, annotator, [packageId]);
-  await expect(page.locator("#package-select")).toBeVisible();
-  await page.locator("#package-select").selectOption(packageId);
-  await expect(page.locator("#package-select")).toHaveValue(packageId);
+export async function importPackage(page: Page, _scenario: string, projectKey: string, annotator: string) {
+  await loginAs(page, annotator, [projectKey]);
+  await expect(page.locator("#project-select")).toBeVisible();
+  await page.locator("#project-select").selectOption(projectKey);
+  await expect(page.locator("#project-select")).toHaveValue(projectKey);
 }
 
 /** "Finish & Submit Case", tick "Entire text checked" and confirm. */

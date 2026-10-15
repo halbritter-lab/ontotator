@@ -20,7 +20,7 @@ describe("ApiClient and session management", () => {
     globalThis.fetch = fetchSpy;
     const client = new ApiClient();
     const workspace_key = {
-      package_id: "pkg",
+      project_key: "pkg",
       document_id: "doc",
       annotator_id: "dr-a",
       mode: "independent" as const,
@@ -89,6 +89,6 @@ describe("ApiClient and session management", () => {
     });
 
     const client = new ApiClient();
-    await expect(client.listPackages()).rejects.toThrow(AuthError);
+    await expect(client.listProjects()).rejects.toThrow(AuthError);
   });
 });

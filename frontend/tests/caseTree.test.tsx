@@ -6,7 +6,7 @@ import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
 import { loggedInAs } from "./session";
 
 const key = {
-  package_id: "pkg",
+  project_key: "pkg",
   document_id: "doc",
   annotator_id: "dr-a",
   mode: "independent" as const,
@@ -626,7 +626,7 @@ describe("the tree in the App", () => {
     loggedInAs("dr-a");
     vi.spyOn(api, "getPreferences").mockResolvedValue(stored);
     const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: "dr-a", mode_by_package: {} });
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", ontology: { release: "test" } }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", ontology: { release: "test" } }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue([
       { document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" },
     ]);

@@ -26,7 +26,7 @@ describe("CaseScreen integration", () => {
       text_sha256: "sha-test-text",
     },
     key: {
-      package_id: "pkg-1",
+      project_key: "pkg-1",
       document_id: "doc-test-1",
       annotator_id: "user-test",
       mode: "independent",
@@ -73,7 +73,7 @@ describe("CaseScreen integration", () => {
     checked_layer_ids: [],
     draft: {
       key: {
-        package_id: "pkg-1",
+        project_key: "pkg-1",
         document_id: "doc-test-1",
         annotator_id: "user-test",
         mode: "independent",
@@ -342,7 +342,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={sampleView} workspaceId="ws-test-token" onClose={vi.fn()} />);
     fireEvent.click(screen.getByText(/\+ (New Annotation|Neue Annotation)/i));
 
-    await waitFor(() => expect(listed).toHaveBeenCalledWith(sampleView.key.package_id));
+    await waitFor(() => expect(listed).toHaveBeenCalledWith(sampleView.key.project_key));
     expect(screen.getByLabelText(/Search ontology term/i)).toBeDefined();
     expect(screen.queryByRole("button", { name: /Search languages/ })).toBeNull();
   });

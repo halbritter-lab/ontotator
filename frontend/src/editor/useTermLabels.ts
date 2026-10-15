@@ -3,7 +3,7 @@ import { api, type TermLookup } from "../api/client";
 
 const keyOf = ({ layer_id, term_id }: TermLookup) => JSON.stringify([layer_id, term_id]);
 
-export function useTermLabels(packageId: string, terms: TermLookup[]) {
+export function useTermLabels(projectKey: string, terms: TermLookup[]) {
   const [labels, setLabels] = useState<Record<string, string | null>>({});
   const [retryTick, setRetryTick] = useState(0);
   const requested = useRef(new Set<string>());
@@ -22,7 +22,7 @@ export function useTermLabels(packageId: string, terms: TermLookup[]) {
       if (retryTimer.current) clearTimeout(retryTimer.current);
       retryTimer.current = null;
     };
-  }, [packageId]);
+  }, [projectKey]);
   const termsKey = JSON.stringify(terms);
   const uniqueTerms = useMemo(() => {
     const unique = new Map<string, TermLookup>();
@@ -43,7 +43,7 @@ export function useTermLabels(packageId: string, terms: TermLookup[]) {
     }
     const requestGeneration = generation.current;
     const batches = Array.from({ length: Math.ceil(missing.length / 200) }, (_, index) => missing.slice(index * 200, (index + 1) * 200));
-    void Promise.all(batches.map((batch) => api.resolveTermLabels(packageId, batch))).then((responses) => {
+    void Promise.all(batches.map((batch) => api.resolveTermLabels(projectKey, batch))).then((responses) => {
       if (requestGeneration !== generation.current) return;
       setLabels((current) => {
         const next = { ...current };
@@ -60,7 +60,7 @@ export function useTermLabels(packageId: string, terms: TermLookup[]) {
         }, 1500);
       }
     });
-  }, [packageId, uniqueTerms, retryTick]);
+  }, [projectKey, uniqueTerms, retryTick]);
 
   return (layerId: string | undefined, termId: string) =>
     layerId ? labels[keyOf({ layer_id: layerId, term_id: termId })] ?? null : null;

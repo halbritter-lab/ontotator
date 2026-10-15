@@ -209,15 +209,19 @@ def test_running_worker_searches_ontology_added_by_another_worker(
     writer = OntologyStore(db, OntologyRegistry(base_dir=db.data_dir), db.data_dir)
     writer.add(Actor.cli(), "hp.json", HP.read_bytes())
     _pin_hp(db)
-    package_id = make_layered_package("single").manifest.package_id
+    project_key = make_layered_package("single").manifest.package_id
     if captured:
-        writer.registry.ensure_package_conditions(Repository(db), package_id)
+        writer.registry.ensure_package_conditions(Repository(db), project_key)
 
     outsider = logged_in(app, "outsider")
-    body = {"package_id": package_id, "document_id": "doc-alpha", "mode": "independent"}
+    body = {
+        "project_key": project_key,
+        "document_id": "doc-alpha",
+        "mode": "independent",
+    }
     assert outsider.post("/api/v1/workspaces/open", json=body).status_code == 404
     assert registry.services() == []
-    member = logged_in(app, "member", projects={package_id: ["annotator"]})
+    member = logged_in(app, "member", projects={project_key: ["annotator"]})
     opened = member.post("/api/v1/workspaces/open", json=body)
     assert opened.status_code == 200, opened.text
     searched = member.post(

@@ -302,12 +302,12 @@ class OntologyRegistry:
         return service
 
     def ensure_package_conditions(
-        self, repo: Repository, package_id: str
+        self, repo: Repository, project_key: str
     ) -> list[SearchCondition]:
-        conditions = repo.get_search_conditions(package_id)
+        conditions = repo.get_search_conditions(project_key)
         if conditions is not None:
             return conditions
-        profile = repo.get_task_profile(package_id)
+        profile = repo.get_task_profile(project_key)
         resources: dict[str, bytes] = {}
         # Capture immutable loaded content while an upload cannot swap services.
         # Release the change lock before acquiring a database write transaction.
@@ -327,27 +327,27 @@ class OntologyRegistry:
                         for item in service.translations
                     }
                 )
-        return repo.capture_search_conditions(package_id, conditions, resources)
+        return repo.capture_search_conditions(project_key, conditions, resources)
 
     def for_package_layer(
-        self, repo: Repository, package_id: str, layer_id: str
+        self, repo: Repository, project_key: str, layer_id: str
     ) -> OntologyService:
         """Resolve a package layer against its first-use/imported immutable pins."""
-        profile = repo.get_task_profile(package_id)
+        profile = repo.get_task_profile(project_key)
         layer = resolve_layer(profile, layer_id)
         definition = resolve_ontology(profile, layer.ontology_id)
-        return self._package_ontology(repo, package_id, definition)
+        return self._package_ontology(repo, project_key, definition)
 
     def for_package_ontology(
-        self, repo: Repository, package_id: str, ontology_id: str
+        self, repo: Repository, project_key: str, ontology_id: str
     ) -> OntologyService:
-        definition = resolve_ontology(repo.get_task_profile(package_id), ontology_id)
-        return self._package_ontology(repo, package_id, definition)
+        definition = resolve_ontology(repo.get_task_profile(project_key), ontology_id)
+        return self._package_ontology(repo, project_key, definition)
 
     def _package_ontology(
-        self, repo: Repository, package_id: str, definition: OntologyDefinition
+        self, repo: Repository, project_key: str, definition: OntologyDefinition
     ) -> OntologyService:
-        conditions = self.ensure_package_conditions(repo, package_id)
+        conditions = self.ensure_package_conditions(repo, project_key)
         condition = next(
             c for c in conditions if c.ontology_sha256 == definition.sha256.lower()
         )
@@ -376,7 +376,7 @@ class OntologyRegistry:
             # drafts must resolve these services before opening their transaction.
             base = self._for_definition(definition)
             service = self._pinned_service(
-                base, condition, repo.get_embedded_files(package_id)
+                base, condition, repo.get_embedded_files(project_key)
             )
             with self._lock:
                 self._package_services[condition.condition_id] = service

@@ -48,7 +48,7 @@ def test_independent_trimmed_profile_roundtrip_restores_own_submission(tmp_path)
         WorkspaceService(repo, ontologies)
         .open(
             WorkspaceKey(
-                package_id=package.manifest.package_id,
+                project_key=package.manifest.package_id,
                 document_id="doc-beta",
                 annotator_id="same-person",
                 mode="independent",
@@ -91,7 +91,7 @@ def test_independent_trimmed_profile_roundtrip_restores_own_submission(tmp_path)
     view = WorkspaceService(clean, ontologies).open(
         key.model_copy(
             update={
-                "package_id": local_id,
+                "project_key": local_id,
                 "scope_id": "",
             }
         )
@@ -132,7 +132,7 @@ def strict_review(tmp_path):
         WorkspaceService(repo, ontologies)
         .open(
             WorkspaceKey(
-                package_id=package.manifest.package_id,
+                project_key=package.manifest.package_id,
                 document_id="doc-beta",
                 annotator_id="reviewer",
                 mode="review",
