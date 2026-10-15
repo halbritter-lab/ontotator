@@ -90,6 +90,29 @@ On the first start the administrator `admin` is created from the Argon2id hash
 in `ONTOCURATOR_ADMIN_PASSWORD_HASH` (or the file named by
 `ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE`); later starts ignore it.
 
+### User administration
+
+`ontocurator admin` works on the database directly (same `--database-url` and
+environment as `serve`; actions are audited as `cli:<os user>`):
+
+```bash
+ontocurator admin hash-password              # prompts twice; prints the Argon2id hash
+ontocurator admin users create alice --display-name "Alice A." [--email …] [--system-admin] [--pseudonym …]
+ontocurator admin users reset-code alice     # single-use code, valid 15 minutes
+ontocurator admin users deactivate alice     # or: activate, set-admin alice --on/--off
+ontocurator admin users list
+```
+
+`users create` prints a single-use setup code (valid 24 hours); hand it to the
+person out of band, who sets a password with it on the login page.
+
+A lost admin password is recovered offline: stop the service, write a private
+file (`chmod 600`, at most 8 KiB) with the fields `username`, `password_hash`
+(from `hash-password`), `operator` and `reason`, then run
+`ontocurator admin recover-admin --input FILE`. It refuses while a server is
+still running and ends all sessions of that admin. No plaintext password is
+written to disk.
+
 ### CLI Options
 
 `ontocurator serve`:
@@ -107,7 +130,8 @@ in `ONTOCURATOR_ADMIN_PASSWORD_HASH` (or the file named by
 | `--verbose` | `-v` | `false` | Log every HTTP request |
 
 Other commands: `ontocurator db upgrade` (schema migrations, as the schema
-owner), `ontocurator analyze <package.zip>` (analysis JSON of an exported work
+owner), `ontocurator admin …` (users and recovery, see above),
+`ontocurator analyze <package.zip>` (analysis JSON of an exported work
 package) and `ontocurator version`.
 
 ---

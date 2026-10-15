@@ -60,10 +60,11 @@ def _secret(password: str) -> bytes:
 _DUMMY_HASH = _HASHER.hash(b"ontocurator timing equaliser")
 
 
-def check_password_rules(username: str, password: str) -> None:
+def check_password_rules(username: str | None, password: str) -> None:
     """Refuse a password that is too short, too long or equal to the username.
 
-    Lengths count characters after NFC normalisation.
+    Lengths count characters after NFC normalisation. Without a username
+    (``ontocurator admin hash-password``) there is nothing to compare with.
     """
     password = _normalised(password)
     try:
@@ -80,7 +81,10 @@ def check_password_rules(username: str, password: str) -> None:
         raise PasswordRuleError(
             f"The password must have at most {MAX_LENGTH} characters."
         )
-    if password.strip().casefold() == _normalised(username).strip().casefold():
+    if (
+        username is not None
+        and password.strip().casefold() == _normalised(username).strip().casefold()
+    ):
         raise PasswordRuleError("The password must differ from the username.")
 
 

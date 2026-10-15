@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -13,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from ontocurator import settings
 from ontocurator.api.auth_routes import router as auth_router
@@ -34,10 +36,33 @@ from ontocurator.domain.errors import (
     RevisionConflict,
 )
 from ontocurator.storage.database import Database
+from ontocurator.storage.lease import RuntimeLease
 from ontocurator.storage.repository import Repository
 from ontocurator.storage.schema import current_revision, head_revision
 
 logger = logging.getLogger(__name__)
+
+
+@contextlib.asynccontextmanager
+async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
+    """Hold the runtime lease while the server runs (recovery needs it alone).
+
+    The app is fully set up by ``create_app``; only the lease belongs to the
+    server's lifetime. Acquiring waits while an offline recovery runs.
+    """
+    lease: RuntimeLease | None = getattr(app.state, "runtime_lease", None)
+    if lease is None:
+        yield
+        return
+    await run_in_threadpool(lease.acquire)
+    try:
+        yield
+    finally:
+        try:
+            await run_in_threadpool(lease.release)
+        except Exception:
+            # Closing the engine ends the session, and with it the lease.
+            logger.warning("Could not release the runtime lease.", exc_info=True)
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -47,6 +72,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         version="0.1.0",
         docs_url="/docs",
         openapi_url="/openapi.json",
+        lifespan=_runtime_lease,
     )
 
     if config is not None:
@@ -146,6 +172,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             app.state.accounts = accounts
             app.state.sessions = sessions
             app.state.preferences = UserPreferencesStore(db)
+            app.state.runtime_lease = RuntimeLease(db.engine)
             app.state.secure_cookies = bool(
                 config.public_origin and config.public_origin.startswith("https://")
             )

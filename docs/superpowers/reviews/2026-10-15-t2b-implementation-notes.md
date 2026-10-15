@@ -296,6 +296,37 @@ answer; the least surprising option was taken and should be confirmed.
   a trusted host configured in Unicode).
 - Task 6 (re-review): README -> a reverse proxy must forward the original `Host` header
   (`proxy_set_header Host $host;`), or every request gets 400 `HOST_NOT_ALLOWED`.
+- Task 7: `hash-password` "checks the rules" without a username -> `check_password_rules` takes
+  `username: str | None` and skips the username comparison for `None`, because an empty username
+  would refuse a whitespace-only password as "must differ from the username" (the length rule
+  refuses it anyway). On a TTY it prompts twice with `getpass` and refuses a mismatch with
+  `PASSWORD_MISMATCH`; otherwise it reads one line and strips only a trailing `\n` or `\r\n`.
+- Task 7 **[user-flow choice]**: the plan wrote `'u': active=…, system admin=….` -> the values are
+  `yes`/`no`; `users list` writes `inactive` for a deactivated user (`inactive, admin` for an admin)
+  and prints nothing when there are no users. Usernames are shown normalised (`Alice` -> `alice`).
+- Task 7: unspecified error codes -> `SETTINGS_INVALID` (no or a bad database URL),
+  `DATABASE_UNAVAILABLE` (connection failed; psycopg's message, never the URL),
+  `DATABASE_NOT_MIGRATED` (with the `ontocurator db upgrade` hint, like `serve`), `SERVICE_RUNNING`
+  (the plan's lease message), `PASSWORD_MISMATCH`, `PASSWORD_RULES`, and for the recovery file
+  `RECOVERY_INPUT_UNREADABLE`, `RECOVERY_INPUT_NOT_PRIVATE`, `RECOVERY_INPUT_TOO_LARGE` and
+  `RECOVERY_INPUT_INVALID` (not a regular file, not UTF-8, not JSON, or not exactly the four string
+  fields). These errors name the file, never its content or the hash. The file may start with a
+  UTF-8 BOM (Windows editors write one). The private-file check applies on POSIX only; the input is
+  checked before the database is opened.
+- Task 7 (technical): every admin command opens its own `Database` (pool 2 + 2) and closes it on
+  every exit, including errors; it checks the schema revision first. The admin data folder is
+  `$ONTOCURATOR_DATA_DIR` or `data` and is not created (the CLI writes no files).
+- Task 7 (technical): `RuntimeLease.release()` is idempotent and safe before `acquire()`;
+  `acquire()` is a no-op while held. A lease connection whose unlock fails is invalidated instead
+  of returned to the pool, since a pooled session would keep the advisory lock. The FastAPI
+  lifespan only acquires and releases `app.state.runtime_lease` (set by `create_app`, which keeps
+  doing all set-up eagerly, so apps without `with TestClient(app)` behave as before); a failed
+  release is logged, and closing the engine ends the session anyway. A server that starts during a
+  recovery waits for it to finish. Extra tests (not in the plan's 6): `tests/test_lease.py` (shared
+  leases block the exclusive one, release is safe twice, the app holds the lease only inside
+  `with TestClient(app)`), and `admin` in the CLI help test.
+- Task 7: the plan did not mention the README -> a "User administration" section documents the
+  `admin` commands and the offline recovery, since the start-up warning (Task 6) points there.
 
 ## Open risks
 

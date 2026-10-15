@@ -6,18 +6,25 @@ import contextlib
 import ipaddress
 import json
 import os
+import stat
+import sys
 import tempfile
+from collections.abc import Iterator
+from datetime import UTC
 from importlib import metadata
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, NoReturn
 from urllib.parse import urlsplit
 
 import typer
 import uvicorn
 
 from ontocurator.api.app import create_app
+from ontocurator.auth.accounts import AccountService, IssuedCode, User
+from ontocurator.auth.audit import Actor
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import DomainError
+from ontocurator.storage.database import Database
 
 app = typer.Typer(
     name="ontocurator",
@@ -365,6 +372,312 @@ def db_upgrade() -> None:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"Database schema is at revision {head}.")
+
+
+admin_app = typer.Typer(
+    help="Users, password hashes and the offline admin recovery.",
+    no_args_is_help=True,
+)
+users_app = typer.Typer(help="Users and their single-use codes.", no_args_is_help=True)
+app.add_typer(admin_app, name="admin")
+admin_app.add_typer(users_app, name="users")
+
+RECOVERY_INPUT_MAX_BYTES = 8 * 1024
+RECOVERY_KEYS = ("username", "password_hash", "operator", "reason")
+
+
+def _fail(code: str, details: object) -> NoReturn:
+    typer.echo(f"Error: {code}: {details}", err=True)
+    raise typer.Exit(code=1)
+
+
+@admin_app.callback()
+def admin_callback(
+    ctx: typer.Context,
+    database_url: Annotated[
+        str | None,
+        typer.Option(
+            "--database-url",
+            help=(
+                "PostgreSQL URL of the application role. Default: "
+                "ONTOCURATOR_DATABASE_URL, with the password from "
+                "ONTOCURATOR_DATABASE_PASSWORD or ONTOCURATOR_DATABASE_PASSWORD_FILE."
+            ),
+            show_default=False,
+        ),
+    ] = None,
+) -> None:
+    """Manage users and recover a lost admin password, on the database directly."""
+    ctx.obj = {"database_url": database_url}
+
+
+@contextlib.contextmanager
+def _open_database(ctx: typer.Context) -> Iterator[Database]:
+    """The database of ``--database-url``, closed again on every exit.
+
+    A ``DomainError`` of the body becomes ``Error: <CODE>: <details>`` and
+    exit 1.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    from ontocurator import settings
+    from ontocurator.storage.schema import current_revision, head_revision
+
+    explicit = (ctx.obj or {}).get("database_url")
+    try:
+        url = settings.resolve_database_url(explicit, None)
+    except settings.SettingsError as exc:
+        _fail("SETTINGS_INVALID", exc)
+    data_dir = Path(os.environ.get("ONTOCURATOR_DATA_DIR") or "data")
+    db = Database(url, data_dir=data_dir, pool_size=2, max_overflow=2)
+    try:
+        try:
+            with db.transaction() as conn:
+                current = current_revision(conn)
+        except OperationalError as exc:
+            reason = " ".join(str(exc.orig).split())
+            _fail("DATABASE_UNAVAILABLE", f"Cannot use the database: {reason}")
+        head = head_revision()
+        if current != head:
+            _fail(
+                "DATABASE_NOT_MIGRATED",
+                f"The database schema is at revision {current or 'none'}, this "
+                f"version needs {head}. Run 'ontocurator db upgrade' with the "
+                "schema owner's credentials first.",
+            )
+        try:
+            yield db
+        except DomainError as exc:
+            _fail(exc.code, exc.details)
+    finally:
+        db.close()
+
+
+def _print_code(issued: IssuedCode) -> None:
+    until = issued.expires_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M")
+    typer.echo(
+        f"{issued.purpose.capitalize()} code for '{issued.user.username}' "
+        f"(single use, valid until {until} UTC):"
+    )
+    typer.echo(f"  {issued.code}")
+    typer.echo("Hand it to the user out of band. It is not shown again.")
+
+
+def _print_flags(user: User) -> None:
+    def yes_no(value: bool) -> str:
+        return "yes" if value else "no"
+
+    typer.echo(
+        f"'{user.username}': active={yes_no(user.active)}, "
+        f"system admin={yes_no(user.is_system_admin)}."
+    )
+
+
+UsernameArgument = Annotated[str, typer.Argument(help="The user's login name.")]
+
+
+@users_app.command("create")
+def users_create(
+    ctx: typer.Context,
+    username: Annotated[
+        str,
+        typer.Argument(
+            help="Login name: 3 to 64 of a-z 0-9 . _ - (stored in lower case)."
+        ),
+    ],
+    display_name: Annotated[
+        str, typer.Option("--display-name", help="The name other people see.")
+    ],
+    email: Annotated[
+        str | None, typer.Option("--email", help="Optional contact address.")
+    ] = None,
+    system_admin: Annotated[
+        bool,
+        typer.Option("--system-admin", help="Make the user a system administrator."),
+    ] = False,
+    pseudonym: Annotated[
+        str | None,
+        typer.Option(
+            "--pseudonym",
+            help="Annotator pseudonym. Default: the next free ann-NNNN.",
+            show_default=False,
+        ),
+    ] = None,
+) -> None:
+    """Create a user and print its single-use setup code (valid 24 hours)."""
+    with _open_database(ctx) as db:
+        issued = AccountService(db).create_user(
+            Actor.cli(),
+            username,
+            display_name,
+            email=email,
+            system_admin=system_admin,
+            pseudonym=pseudonym,
+        )
+    typer.echo(
+        f"Created user '{issued.user.username}' (pseudonym {issued.user.pseudonym})."
+    )
+    _print_code(issued)
+
+
+@users_app.command("reset-code")
+def users_reset_code(ctx: typer.Context, username: UsernameArgument) -> None:
+    """Print a single-use reset code (valid 15 minutes); older codes end."""
+    with _open_database(ctx) as db:
+        issued = AccountService(db).issue_reset_code(Actor.cli(), username)
+    _print_code(issued)
+
+
+@users_app.command("deactivate")
+def users_deactivate(ctx: typer.Context, username: UsernameArgument) -> None:
+    """Deactivate a user; their sessions end."""
+    with _open_database(ctx) as db:
+        user = AccountService(db).set_active(Actor.cli(), username, False)
+    _print_flags(user)
+
+
+@users_app.command("activate")
+def users_activate(ctx: typer.Context, username: UsernameArgument) -> None:
+    """Activate a deactivated user again."""
+    with _open_database(ctx) as db:
+        user = AccountService(db).set_active(Actor.cli(), username, True)
+    _print_flags(user)
+
+
+@users_app.command("set-admin")
+def users_set_admin(
+    ctx: typer.Context,
+    username: UsernameArgument,
+    on: Annotated[
+        bool,
+        typer.Option(
+            "--on/--off",
+            help="Grant or withdraw the system admin role.",
+            show_default=False,
+        ),
+    ],
+) -> None:
+    """Grant or withdraw the system admin role; a change ends the user's sessions."""
+    with _open_database(ctx) as db:
+        user = AccountService(db).set_system_admin(Actor.cli(), username, on)
+    _print_flags(user)
+
+
+@users_app.command("list")
+def users_list(ctx: typer.Context) -> None:
+    """One line per user: username, pseudonym, display name and state (tabs)."""
+    with _open_database(ctx) as db:
+        users = AccountService(db).list_users()
+    for user in users:
+        state = "active" if user.active else "inactive"
+        if user.is_system_admin:
+            state += ", admin"
+        typer.echo(f"{user.username}\t{user.pseudonym}\t{user.display_name}\t{state}")
+
+
+@admin_app.command("hash-password")
+def hash_password_command() -> None:
+    """Print the Argon2id hash of a password.
+
+    On a terminal it asks twice; otherwise it reads one line from standard
+    input. The hash is meant for ONTOCURATOR_ADMIN_PASSWORD_HASH and the
+    recovery file; the password itself is never stored.
+    """
+    import getpass
+
+    from ontocurator.auth.passwords import (
+        PasswordRuleError,
+        check_password_rules,
+        hash_password,
+    )
+
+    if sys.stdin.isatty():
+        password = getpass.getpass("Password: ")
+        if getpass.getpass("Repeat the password: ") != password:
+            _fail("PASSWORD_MISMATCH", "The two entries differ.")
+    else:
+        line = sys.stdin.readline()
+        password = line[:-2] if line.endswith("\r\n") else line.removesuffix("\n")
+    try:
+        check_password_rules(None, password)
+    except PasswordRuleError as exc:
+        _fail("PASSWORD_RULES", exc)
+    typer.echo(hash_password(password))
+
+
+def _read_recovery_input(path: Path) -> dict[str, str]:
+    """The four fields of a private recovery file; errors never show its content."""
+    try:
+        info = path.stat()
+        if not stat.S_ISREG(info.st_mode):
+            _fail("RECOVERY_INPUT_INVALID", f"{path} is not a regular file.")
+        if os.name == "posix" and info.st_mode & 0o077:
+            _fail(
+                "RECOVERY_INPUT_NOT_PRIVATE",
+                f"{path} is accessible to other users; make it private first "
+                "(chmod 600).",
+            )
+        if info.st_size > RECOVERY_INPUT_MAX_BYTES:
+            _fail("RECOVERY_INPUT_TOO_LARGE", f"{path} is larger than 8 KiB.")
+        with path.open("rb") as handle:
+            raw = handle.read(RECOVERY_INPUT_MAX_BYTES + 1)
+    except OSError as exc:
+        _fail("RECOVERY_INPUT_UNREADABLE", f"Cannot read {path}: {exc.strerror}.")
+    if len(raw) > RECOVERY_INPUT_MAX_BYTES:
+        _fail("RECOVERY_INPUT_TOO_LARGE", f"{path} is larger than 8 KiB.")
+    try:
+        data = json.loads(raw.decode("utf-8-sig"))
+    except UnicodeDecodeError:
+        _fail("RECOVERY_INPUT_INVALID", f"{path} is not UTF-8 text.")
+    except json.JSONDecodeError as exc:
+        _fail(
+            "RECOVERY_INPUT_INVALID",
+            f"{path} is not valid JSON (line {exc.lineno}, column {exc.colno}).",
+        )
+    if (
+        not isinstance(data, dict)
+        or set(data) != set(RECOVERY_KEYS)
+        or not all(isinstance(value, str) for value in data.values())
+    ):
+        _fail(
+            "RECOVERY_INPUT_INVALID",
+            f"{path} must hold one JSON object with exactly the text fields "
+            f"{', '.join(RECOVERY_KEYS)}.",
+        )
+    return {key: data[key] for key in RECOVERY_KEYS}
+
+
+@admin_app.command("recover-admin")
+def recover_admin_command(
+    ctx: typer.Context,
+    input_file: Annotated[
+        Path,
+        typer.Option(
+            "--input",
+            help=(
+                "Private JSON file (owner only, at most 8 KiB) with username, "
+                "password_hash, operator and reason."
+            ),
+        ),
+    ],
+) -> None:
+    """Replace a lost admin password while the service is stopped.
+
+    Make the hash with 'ontocurator admin hash-password'; the file never holds
+    the password itself. The operator and the reason are audited, and all
+    sessions of the admin end.
+    """
+    from ontocurator.storage.lease import exclusive_lease
+
+    request = _read_recovery_input(input_file)
+    with _open_database(ctx) as db, exclusive_lease(db.engine) as alone:
+        if not alone:
+            _fail(
+                "SERVICE_RUNNING",
+                "Stop the Ontocurator service first; it is still running.",
+            )
+        user = AccountService(db).recover_admin(**request)
+    typer.echo(f"Recovered '{user.username}'; all of its sessions were ended.")
 
 
 def main() -> None:
