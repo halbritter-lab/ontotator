@@ -194,6 +194,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Progress */
+        get: operations["progress_api_v1_projects__key__progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Export */
+        post: operations["request_export_api_v1_projects__key__exports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/templates": {
         parameters: {
             query?: never;
@@ -307,6 +341,40 @@ export interface paths {
         get?: never;
         /** Set Member */
         put: operations["set_member_api_v1_projects__key__members__username__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job */
+        get: operations["get_job_api_v1_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Job */
+        get: operations["download_job_api_v1_jobs__job_id__download_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1000,6 +1068,25 @@ export interface components {
             /** Refused */
             refused: components["schemas"]["RefusedAssignment"][];
         };
+        /** Assignee */
+        Assignee: {
+            /** Assignment Id */
+            assignment_id: number;
+            /** Username */
+            username: string;
+            /** Pseudonym */
+            pseudonym: string;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "in_progress" | "submitted" | "reopened";
+        };
         /** AssignmentOpenResponse */
         AssignmentOpenResponse: {
             /** Workspace Id */
@@ -1208,28 +1295,6 @@ export interface components {
             text_sha256: string;
         };
         /**
-         * DocumentSummary
-         * @description Metadata-only summary of a document in a package.
-         */
-        DocumentSummary: {
-            /** Document Id */
-            document_id: string;
-            /** Language */
-            language: string;
-            /** Text Length */
-            text_length: number;
-            /** Position */
-            position: number;
-            /**
-             * Status
-             * @default not_started
-             * @enum {string}
-             */
-            status: "not_started" | "in_progress" | "completed";
-            /** Has Review Inputs */
-            has_review_inputs?: boolean | null;
-        };
-        /**
          * Draft
          * @description Mutable, revisioned working state of a workspace.
          */
@@ -1322,6 +1387,19 @@ export interface components {
             text_sha256: string;
             /** Version */
             version: string;
+        };
+        /** ExportCreated */
+        ExportCreated: {
+            /** Job Id */
+            job_id: number;
+        };
+        /** ExportRequest */
+        ExportRequest: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "t1" | "edit_log";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1486,6 +1564,31 @@ export interface components {
              * @enum {string}
              */
             severity: "error" | "warning";
+        };
+        /** JobView */
+        JobView: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
         };
         /**
          * LayerDefinition
@@ -1812,6 +1915,100 @@ export interface components {
             /** Languages */
             languages?: string[];
         };
+        /** ProgressDocument */
+        ProgressDocument: {
+            /** Document Id */
+            document_id: string;
+            /** Language */
+            language: string;
+            /** Position */
+            position: number | null;
+            /** Assignees */
+            assignees?: components["schemas"]["Assignee"][];
+        };
+        /** ProgressPerson */
+        ProgressPerson: {
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+            /**
+             * In Progress
+             * @default 0
+             */
+            in_progress: number;
+            /**
+             * Submitted
+             * @default 0
+             */
+            submitted: number;
+            /**
+             * Reopened
+             * @default 0
+             */
+            reopened: number;
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Pseudonym */
+            pseudonym: string;
+        };
+        /** ProgressTotals */
+        ProgressTotals: {
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+            /**
+             * In Progress
+             * @default 0
+             */
+            in_progress: number;
+            /**
+             * Submitted
+             * @default 0
+             */
+            submitted: number;
+            /**
+             * Reopened
+             * @default 0
+             */
+            reopened: number;
+            /**
+             * Documents
+             * @default 0
+             */
+            documents: number;
+            /**
+             * Unassigned
+             * @default 0
+             */
+            unassigned: number;
+        };
+        /** ProjectDocumentSummary */
+        ProjectDocumentSummary: {
+            /** Document Id */
+            document_id: string;
+            /** Language */
+            language: string;
+            /** Text Length */
+            text_length: number;
+            /** Position */
+            position: number | null;
+            /**
+             * Status
+             * @default not_started
+             * @enum {string}
+             */
+            status: "not_started" | "in_progress" | "completed";
+            /** Has Review Inputs */
+            has_review_inputs?: boolean | null;
+            /** Assignees */
+            assignees?: components["schemas"]["Assignee"][] | null;
+        };
         /** ProjectPin */
         ProjectPin: {
             /** Ontology Id */
@@ -1826,6 +2023,14 @@ export interface components {
              * @enum {string}
              */
             t1_profile: "generic" | "hpo-phenotype";
+        };
+        /** ProjectProgress */
+        ProjectProgress: {
+            /** Documents */
+            documents: components["schemas"]["ProgressDocument"][];
+            /** People */
+            people: components["schemas"]["ProgressPerson"][];
+            totals: components["schemas"]["ProgressTotals"];
         };
         /** ProjectSettings */
         ProjectSettings: {
@@ -3113,6 +3318,72 @@ export interface operations {
             };
         };
     };
+    progress_api_v1_projects__key__progress_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectProgress"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_export_api_v1_projects__key__exports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     templates_api_v1_projects_templates_get: {
         parameters: {
             query?: never;
@@ -3357,6 +3628,66 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Member"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_api_v1_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_job_api_v1_jobs__job_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3833,6 +4164,9 @@ export interface operations {
             query?: {
                 annotator_id?: string | null;
                 mode?: ("independent" | "review" | "assisted") | null;
+                language?: string | null;
+                status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened") | null;
+                q?: string | null;
             };
             header?: never;
             path: {
@@ -3848,7 +4182,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentSummary"][];
+                    "application/json": components["schemas"]["ProjectDocumentSummary"][];
                 };
             };
             /** @description Validation Error */

@@ -25,6 +25,7 @@ from ontocurator.api.admin_routes import router as admin_router
 from ontocurator.api.auth_routes import router as auth_router
 from ontocurator.api.health import ReadinessProbe
 from ontocurator.api.health import router as health_router
+from ontocurator.api.job_routes import router as job_router
 from ontocurator.api.me_routes import router as me_router
 from ontocurator.api.ontology_routes import router as ontology_router
 from ontocurator.api.project_routes import router as project_router
@@ -405,6 +406,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(admin_router)
     app.include_router(ontology_router)
     app.include_router(project_router)
+    app.include_router(job_router)
     app.include_router(upload_router)
     app.include_router(me_router)
     app.include_router(auth_router)

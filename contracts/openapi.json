@@ -644,6 +644,100 @@
         }
       }
     },
+    "/api/v1/projects/{key}/progress": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Progress",
+        "operationId": "progress_api_v1_projects__key__progress_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectProgress"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/exports": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Request Export",
+        "operationId": "request_export_api_v1_projects__key__exports_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/templates": {
       "get": {
         "tags": [
@@ -1003,6 +1097,83 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Job",
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/download": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Download Job",
+        "operationId": "download_job_api_v1_jobs__job_id__download_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1672,6 +1843,61 @@
               ],
               "title": "Mode"
             }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "unassigned",
+                    "open",
+                    "in_progress",
+                    "submitted",
+                    "reopened"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
           }
         ],
         "responses": {
@@ -1682,7 +1908,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/DocumentSummary"
+                    "$ref": "#/components/schemas/ProjectDocumentSummary"
                   },
                   "title": "Response List Package Documents Api V1 Projects  Project Key  Documents Get"
                 }
@@ -2616,6 +2842,49 @@
         ],
         "title": "AssignResponse"
       },
+      "Assignee": {
+        "properties": {
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "pseudonym": {
+            "type": "string",
+            "title": "Pseudonym"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review"
+            ],
+            "title": "Task"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "in_progress",
+              "submitted",
+              "reopened"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "username",
+          "pseudonym",
+          "task",
+          "status"
+        ],
+        "title": "Assignee"
+      },
       "AssignmentOpenResponse": {
         "properties": {
           "workspace_id": {
@@ -3145,57 +3414,6 @@
         "title": "Document",
         "description": "Immutable document containing original text and UTF-8 byte SHA-256."
       },
-      "DocumentSummary": {
-        "properties": {
-          "document_id": {
-            "type": "string",
-            "title": "Document Id"
-          },
-          "language": {
-            "type": "string",
-            "title": "Language"
-          },
-          "text_length": {
-            "type": "integer",
-            "title": "Text Length"
-          },
-          "position": {
-            "type": "integer",
-            "title": "Position"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "not_started",
-              "in_progress",
-              "completed"
-            ],
-            "title": "Status",
-            "default": "not_started"
-          },
-          "has_review_inputs": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Has Review Inputs"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "document_id",
-          "language",
-          "text_length",
-          "position"
-        ],
-        "title": "DocumentSummary",
-        "description": "Metadata-only summary of a document in a package."
-      },
       "Draft": {
         "properties": {
           "key": {
@@ -3423,6 +3641,37 @@
         ],
         "title": "EvidenceSnapshot",
         "description": "Immutable snapshot of evidence bound to text and document."
+      },
+      "ExportCreated": {
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "ExportCreated"
+      },
+      "ExportRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "t1",
+              "edit_log"
+            ],
+            "title": "Kind"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ExportRequest"
       },
       "HTTPValidationError": {
         "properties": {
@@ -3694,6 +3943,79 @@
           "message"
         ],
         "title": "Issue"
+      },
+      "JobView": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "result",
+          "error",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "JobView"
       },
       "LayerDefinition": {
         "properties": {
@@ -4519,6 +4841,193 @@
         "type": "object",
         "title": "ProfilePatch"
       },
+      "ProgressDocument": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "assignees": {
+            "items": {
+              "$ref": "#/components/schemas/Assignee"
+            },
+            "type": "array",
+            "title": "Assignees"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "language",
+          "position"
+        ],
+        "title": "ProgressDocument"
+      },
+      "ProgressPerson": {
+        "properties": {
+          "open": {
+            "type": "integer",
+            "title": "Open",
+            "default": 0
+          },
+          "in_progress": {
+            "type": "integer",
+            "title": "In Progress",
+            "default": 0
+          },
+          "submitted": {
+            "type": "integer",
+            "title": "Submitted",
+            "default": 0
+          },
+          "reopened": {
+            "type": "integer",
+            "title": "Reopened",
+            "default": 0
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "pseudonym": {
+            "type": "string",
+            "title": "Pseudonym"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "display_name",
+          "pseudonym"
+        ],
+        "title": "ProgressPerson"
+      },
+      "ProgressTotals": {
+        "properties": {
+          "open": {
+            "type": "integer",
+            "title": "Open",
+            "default": 0
+          },
+          "in_progress": {
+            "type": "integer",
+            "title": "In Progress",
+            "default": 0
+          },
+          "submitted": {
+            "type": "integer",
+            "title": "Submitted",
+            "default": 0
+          },
+          "reopened": {
+            "type": "integer",
+            "title": "Reopened",
+            "default": 0
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents",
+            "default": 0
+          },
+          "unassigned": {
+            "type": "integer",
+            "title": "Unassigned",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ProgressTotals"
+      },
+      "ProjectDocumentSummary": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "text_length": {
+            "type": "integer",
+            "title": "Text Length"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress",
+              "completed"
+            ],
+            "title": "Status",
+            "default": "not_started"
+          },
+          "has_review_inputs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Review Inputs"
+          },
+          "assignees": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Assignee"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignees"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "language",
+          "text_length",
+          "position"
+        ],
+        "title": "ProjectDocumentSummary"
+      },
       "ProjectPin": {
         "properties": {
           "ontology_id": {
@@ -4553,6 +5062,34 @@
           "sha256"
         ],
         "title": "ProjectPin"
+      },
+      "ProjectProgress": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/ProgressDocument"
+            },
+            "type": "array",
+            "title": "Documents"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/ProgressPerson"
+            },
+            "type": "array",
+            "title": "People"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/ProgressTotals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "documents",
+          "people",
+          "totals"
+        ],
+        "title": "ProjectProgress"
       },
       "ProjectSettings": {
         "properties": {

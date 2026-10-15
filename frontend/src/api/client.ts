@@ -5,7 +5,7 @@
 
 import type { components } from "./generated";
 
-export type DocumentSummary = components["schemas"]["DocumentSummary"];
+export type DocumentSummary = components["schemas"]["ProjectDocumentSummary"];
 export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
 export type OpenWorkspaceRequest = components["schemas"]["OpenWorkspaceRequest"];
