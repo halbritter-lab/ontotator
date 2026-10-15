@@ -72,7 +72,9 @@ class Annotation(BaseModel):
     # The axes whose value was set by a default, not chosen by anyone (T1
     # ``basis: defaulted``); every other set value is chosen. Part of the
     # content, but left out of it while empty, so older versions stay valid.
-    axes_defaulted: list[str] = Field(default_factory=list)
+    axes_defaulted: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     evidence_refs: list[EvidenceRef] = Field(default_factory=list)
     provenance: Provenance
 
