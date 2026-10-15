@@ -40,6 +40,16 @@ describe("SearchPanel", () => {
     expect(screen.getByText("Search by name or code (e.g. HP:0001250)")).toBeDefined();
   });
 
+  it("clear_search_is_named_and_clears_the_query", async () => {
+    const input = renderPanel(vi.fn().mockResolvedValue({ search_id: "s", candidates: [] }));
+    fireEvent.change(input, { target: { value: "seizure" } });
+    const clear = screen.getByRole("button", { name: "Clear search" });
+    expect(clear.getAttribute("title")).toBe("Clear search");
+    fireEvent.click(clear);
+    expect((input as HTMLInputElement).value).toBe("");
+    expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
+  });
+
   it("sends one auto request per input, for a code and for a keyword", async () => {
     const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
     const input = renderPanel(searchOntology);

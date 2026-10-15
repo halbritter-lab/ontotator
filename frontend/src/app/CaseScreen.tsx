@@ -154,6 +154,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [logoutProceed, setLogoutProceed] = useState<(() => void) | null>(null);
   const [logoutSaving, setLogoutSaving] = useState(false);
+  const logoutRejectedBaseline = useRef(0);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   // "Finish & Submit" was clicked and waits for pending saves before it validates.
   const [submitPending, setSubmitPending] = useState(false);
@@ -416,7 +417,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     leaveGuardRef.current = (proceed) => {
       const queue = queueRef.current;
       if (queue.pendingCount() === 0 && queue.getState() !== "saving") proceed();
-      else setLogoutProceed(() => proceed);
+      else {
+        logoutRejectedBaseline.current = queue.rejectedCount();
+        setLogoutProceed(() => proceed);
+      }
     };
     return () => { leaveGuardRef.current = null; };
   }, [leaveGuardRef]);
@@ -424,10 +428,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const saveAndLogout = async () => {
     if (!logoutProceed || logoutSaving) return;
     setLogoutSaving(true);
-    const rejectedBefore = queueRef.current.rejectedCount();
     try {
       await queueRef.current.flush();
-      if (queueRef.current.rejectedCount() !== rejectedBefore) {
+      if (queueRef.current.rejectedCount() !== logoutRejectedBaseline.current) {
         setActionError((current) => current ?? "A change could not be saved; you are still logged in.");
         return;
       }

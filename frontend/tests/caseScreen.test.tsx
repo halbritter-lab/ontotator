@@ -162,6 +162,19 @@ describe("CaseScreen integration", () => {
       if (error instanceof ValidationError) expect(screen.getByRole("alert").textContent).toBe("Save refused");
     });
 
+    it("a_command_rejected_while_logout_waits_does_not_log_out", async () => {
+      const state = setup(true);
+      act(() => state.leaveGuardRef.current?.(state.onLogout));
+      await screen.findByRole("dialog", { name: "Unsaved changes" });
+      state.reject(new ValidationError("Save refused while waiting"));
+      await screen.findByText("Save refused while waiting");
+      fireEvent.click(screen.getByRole("button", { name: "Save and log out" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(state.onLogout).not.toHaveBeenCalled();
+      expect(screen.getByRole("alert").textContent).toBe("Save refused while waiting");
+      expect(screen.getByRole("group", { name: "Case" })).toBeDefined();
+    });
+
     it("logout_without_changes_has_no_dialog", () => {
       const state = setup();
       act(() => state.leaveGuardRef.current?.(state.onLogout));

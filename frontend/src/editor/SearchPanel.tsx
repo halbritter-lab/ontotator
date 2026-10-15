@@ -1,4 +1,5 @@
-import { Button } from "../ui/Button";
+import { IconButton } from "../ui/IconButton";
+import { IconClose } from "../ui/icons";
 import React, { useEffect, useRef, useState } from "react";
 import type { SearchCandidate } from "../api/client";
 import { SearchLanguageButton } from "./SearchLanguageButton";
@@ -117,14 +118,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             autoComplete="off"
           />
           {queryInput && (
-            <Button
-              type="button"
-              variant="secondary" size="sm"
-              onClick={handleClear}
-              title="Clear search"
-            >
-              ✕
-            </Button>
+            <IconButton label="Clear search" icon={<IconClose />} size="sm" onClick={handleClear} title="Clear search" />
           )}
           {languageControl && <SearchLanguageButton control={languageControl} />}
         </div>

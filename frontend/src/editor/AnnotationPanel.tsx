@@ -149,13 +149,10 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         </div>
       )}
 
-      {/* 1. Header with Ontology Term */}
+      {/* 1. Term heading */}
       <div className="detail-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase" }}>
-              Ontology Term
-            </span>
             <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "2px 0 4px" }}>
               <TermName termId={currentTerm} label={termLabel} />
             </h2>
