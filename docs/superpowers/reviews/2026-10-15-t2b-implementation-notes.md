@@ -113,3 +113,39 @@ answer; the least surprising option was taken and should be confirmed.
   completed Argon2 runs (patched `verify_secret`) for a wrong password, `None`, broken, non-ASCII and
   undecodable hashes and surrogate passwords: always exactly one. `tests/test_passwords.py` now reports
   `26 passed` (adds `needs_rehash` and eight supplied-hash policy cases).
+- Task 4: `_issue_code` "deletes the unused codes of the same user and purpose" -> it deletes all unused
+  codes of the user, whatever their purpose, because the plan's own test
+  (`test_a_reset_code_lives_fifteen_minutes_and_replaces_older_codes`) expects a reset code to end an
+  unused setup code; a user has at most one usable code.
+- Task 4: the advisory lock id helper `_lock_id` lived in `storage/repository.py` -> it moved to
+  `storage/database.py` as `advisory_lock_id` (the repository keeps `_lock_id` as an alias), so
+  `bootstrap_admin` can take `pg_advisory_xact_lock` without importing the repository.
+- Task 4/5: `accounts.py` imports `revoke_user_sessions` and `token_digest` from `sessions.py`, and
+  `sessions.py` imports `normalize_username` inside `_attempt_name`, because the two modules need each
+  other and a top-level import both ways is circular.
+- Task 4 (technical): every account change locks the user row (`FOR UPDATE`) first; `redeem_code` then
+  locks the code row, so a code redeemed twice at once sets the password once. `create_user` checks the
+  name and inserts with `ON CONFLICT DO NOTHING`, so a concurrent creation of the same name gives
+  `USERNAME_TAKEN`, not an integrity error. Two extra tests cover both races
+  (`test_a_code_redeemed_twice_at_once_sets_the_password_once`,
+  `test_one_username_created_twice_at_once_is_taken_once`), so `tests/test_accounts.py` reports
+  `18 passed` and both files `28 passed`.
+- Task 4 (technical): all timestamps (`created_at`, `updated_at`, `changed_at`, `used_at`,
+  `expires_at`, sessions, attempts and `audit_events.at`) come from the injected `now`, so
+  `record_audit` gained an optional `at` argument; without it the database clock applies.
+- Task 4: unspecified error codes -> `USER_NOT_FOUND` (reset code, admin flag, activation of an unknown
+  user), `DISPLAY_NAME_INVALID` (empty display name) and `PSEUDONYM_TAKEN` (a given pseudonym already in
+  use). A generated pseudonym skips numbers an admin already assigned by hand. `Actor.user(id, username)`
+  gives the label `user:<username>`, used for `user.password_set` (details `{purpose}`).
+  `audit_events.target_id` is the username, since usernames never change.
+- Task 4 **[user-flow choice]**: `set_system_admin`/`set_active` with the value the user already has
+  change nothing: no generation bump, no revoked sessions, no audit row.
+- Task 4 **[user-flow choice]**: `bootstrap_admin` with an existing user `admin` (created by the CLI
+  before the first start) makes it an active system admin and sets its password instead of failing.
+- Task 4: `AccessDenied` (403) and `LoginFailed` (401) are defined in `domain/errors.py`; their HTTP
+  handlers are left to Task 6, because `errors.py` has no status mapping (`api/app.py` has the handlers).
+- Task 5 (technical): a failure is counted when it lies in `[now - window, now]`; an attempt while
+  locked is itself recorded as a failure, so continued attempts keep the lock (as the plan's
+  `succeeded = matches and not locked and user exists` implies). Attempts are not serialised per
+  account, so concurrent logins may exceed the limit by the number in flight. An invalid username is
+  recorded lower-cased and cut to 128 characters; a user agent is cut to 512.

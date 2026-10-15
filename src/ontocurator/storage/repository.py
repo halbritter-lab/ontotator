@@ -8,7 +8,6 @@ are append-only (T2 D6): the application role can only insert and read them.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -51,7 +50,7 @@ from ontocurator.packages.models import (
     ValidatedPackage,
     is_tree_walk,
 )
-from ontocurator.storage.database import Database
+from ontocurator.storage.database import Database, advisory_lock_id
 from ontocurator.storage.tables import (
     AnnotationSnapshotRow,
     DocumentRow,
@@ -139,10 +138,7 @@ def _workspace_aliases(key: WorkspaceKey) -> tuple[str, ...]:
     return tuple(sorted(keys))
 
 
-def _lock_id(*parts: str) -> int:
-    """A signed 64-bit advisory lock id derived from a name."""
-    digest = hashlib.sha256("\x1f".join(parts).encode("utf-8")).digest()
-    return int.from_bytes(digest[:8], "big", signed=True)
+_lock_id = advisory_lock_id
 
 
 # Search event IDs are global, but the primary key is per project. Writers that

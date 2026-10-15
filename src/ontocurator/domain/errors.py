@@ -50,3 +50,23 @@ class ModeNotAllowed(DomainError):
 
     def __init__(self, details: str | dict[str, Any] | None = None) -> None:
         super().__init__("MODE_NOT_ALLOWED", details)
+
+
+class AccessDenied(DomainError):
+    """Raised when the principal may not do or see what it asked for (HTTP 403)."""
+
+
+LOGIN_FAILED_MESSAGE = (
+    "Username or password is wrong, or the account is locked for 15 minutes."
+)
+
+
+class LoginFailed(DomainError):
+    """Raised for every failed login, whatever the reason (HTTP 401, index D-j).
+
+    The message is fixed, so a reply never tells a wrong password, an unknown
+    user, an inactive account and a lockout apart (Q8).
+    """
+
+    def __init__(self) -> None:
+        super().__init__("LOGIN_FAILED", LOGIN_FAILED_MESSAGE)
