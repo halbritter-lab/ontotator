@@ -71,6 +71,7 @@ class OntologyRegistry:
         self._package_builds: dict[str, Future[OntologyService]] = {}
         self._registered_paths: dict[str, Path] = {}
         self._failures: dict[str, OntologyLoadFailure] = {}
+        self._unavailable: set[str] = set()
         self._lock = threading.RLock()
         # Serialises changes; see the class docstring. Always taken before
         # ``_lock`` and the per-digest load locks, never while holding them.
@@ -195,6 +196,7 @@ class OntologyRegistry:
             with self._lock:
                 service = self._services.setdefault(sha, service)
                 self._failures.pop(sha, None)
+                self._unavailable.discard(sha)
                 self._load_locks.pop(sha, None)
             return service
 
@@ -204,6 +206,7 @@ class OntologyRegistry:
         with self._lock:
             self._services[sha] = service
             self._failures.pop(sha, None)
+            self._unavailable.discard(sha)
 
     @staticmethod
     def load_resource(
@@ -423,15 +426,25 @@ class OntologyRegistry:
             self._load_or_record(sha, path)
         return self.failures()
 
-    def preload(self, shas: Iterable[str]) -> None:
+    def preload(self, shas: Iterable[str], *, retry_unavailable: bool = False) -> None:
         """Parse the registered ontologies of ``shas`` now; record failures.
 
-        Digests that are not registered or already failed are skipped.
+        Discover cold persisted pins by their expected digest. Readiness may
+        retry absent/unreadable or hash-mismatched files after a volume repair;
+        malformed ontology content stays failed. Loaded services do no file IO.
         """
         for sha in sorted(s.lower() for s in shas):
             with self._lock:
+                if sha in self._services:
+                    continue
                 path = self._registered_paths.get(sha)
-                skip = path is None or sha in self._failures
+                skip = sha in self._failures and not (
+                    retry_unavailable and sha in self._unavailable
+                )
+            if path is None and self.base_dir is not None:
+                path = BlobStore(self.base_dir / "blobs").path(sha)
+                with self._lock:
+                    self._registered_paths.setdefault(sha, path)
             if not skip and path is not None:
                 # A background preload must survive any malformed file.
                 self._load_or_record(sha, path, Exception)
@@ -454,6 +467,13 @@ class OntologyRegistry:
             failure = OntologyLoadFailure(sha256=sha, path=path, error=str(exc))
             with self._lock:
                 self._failures[sha] = failure
+                if isinstance(exc, OSError) or (
+                    isinstance(exc, DomainError)
+                    and exc.code in {"ONTOLOGY_NOT_FOUND", "ONTOLOGY_HASH_MISMATCH"}
+                ):
+                    self._unavailable.add(sha)
+                else:
+                    self._unavailable.discard(sha)
             logger.warning("Could not load ontology %s (sha256 %s): %s", path, sha, exc)
 
     def failures(self) -> list[OntologyLoadFailure]:

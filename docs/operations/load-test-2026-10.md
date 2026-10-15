@@ -1,7 +1,8 @@
 # P9 representative load test — 2026-10-15
 
-The first representative run **failed**. Performance acceptance is open; the
-results below do not establish support for 30 concurrent users.
+Both representative runs **failed the P9 latency targets**. Performance
+acceptance remains open. The second run completed without request failures,
+but does not establish the required response times for 30 concurrent users.
 
 ## Reproduction and resources
 
@@ -99,3 +100,48 @@ edits, multiple submission origins, imported workspace aliases and review
 rounds; scope tests cover project and user visibility. These focused checks
 establish the reduced query count and tested semantics. They do not establish
 latency, memory limits or full-workload acceptance.
+
+## Rerun after the two contained fixes
+
+Source: `0d51f5417ad5b6fa641f6bdcdd41870159ac20ed`; rebuilt image:
+`sha256:3abc065be2a007d995a4c97cb464729c7f7b9fe7a4582cb4dff7a0e4a2f7ea6b`.
+Machine, HPO, corpus, accounts, workload, warmup, thresholds, worker count and
+Compose CPU/RAM limits were unchanged. Seeding exited 0 in 174.61 seconds;
+warmup exited 1 in 61.67 seconds; the five-minute measured process exited 1 in
+301.64 seconds. Its owned project/volumes were removed afterward.
+
+The final console table records:
+
+| Operation | Requests | Failures | p50 ms | p95 ms | p99 ms | Result |
+|---|---:|---:|---:|---:|---:|---|
+| Search | 2,238 | 0 | 380 | 1,400 | 1,900 | FAIL (<150 ms required) |
+| Open | 907 | 0 | 230 | 1,100 | 1,400 | FAIL (<300 ms required) |
+| Write | 3,679 | 0 | 300 | 1,300 | 1,900 | FAIL (<150 ms required) |
+| Dashboard | 444 | 0 | 550 | 2,000 | 2,600 | FAIL (<500 ms required) |
+| Setup/login | 30 | 0 | 230 | 1,000 | 1,200 | — |
+
+The final console totals 7,298 requests with no failures; no failure-driven user
+stops were observed. The last periodic CSV snapshot contains 7,294 requests
+(two fewer search and two fewer write completions) at approximately 24.36
+requests/second, also with zero failures and the same displayed percentiles.
+These original artifacts are retained as written; they have not been reconciled
+by editing the results. Evidence is under `build/p9/`: logs, CSV/HTML, execution
+identity/limits and 30-second runtime samples. The instrument-free application
+image was used; external runtime observations did not change its configuration.
+
+The sampled cgroup peak was 2,115,624,960 bytes, close to the 2 GiB limit, with
+zero swap and zero max/OOM events. Runtime observations found approximately
+two CPUs consumed by the app, CPU pressure/throttling, and substantially less
+PostgreSQL CPU/memory use. Two PostgreSQL snapshots had no ungranted locks;
+sampled transactions were short, and the inspected app log tail had no pool
+timeout/traceback matches. These observations support CPU saturation rather
+than recurrence of the baseline swap/pool collapse. They do not exclude brief
+unobserved waits or identify the specific function consuming CPU.
+
+The dashboard still loads complete text and constructs validated `Document`
+objects for metadata; lexical scoring and endpoint model/SQL conversions are
+other candidate costs. Their CPU contributions have not been measured. A
+separate temporary diagnostic build will collect sampled per-route CPU/wall and
+SQL/function profiles before another optimization decision. Instrumented
+latencies will be diagnostic only. P9 remains open; no resource, pool, workload
+or target relaxation has been used.

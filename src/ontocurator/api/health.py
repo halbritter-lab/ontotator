@@ -29,6 +29,7 @@ def check_readiness(app: FastAPI) -> dict[str, bool]:
     leaves. Failures expose booleans only, never SQL or connection details.
     """
     checks = _unavailable()
+    pinned: set[str] | None = None
     repo = getattr(app.state, "repo", None)
     url = (
         repo.db.engine.url
@@ -56,14 +57,16 @@ def check_readiness(app: FastAPI) -> dict[str, bool]:
                 pinned = set(
                     conn.execute(select(ProjectOntologyRow.sha256).distinct()).scalars()
                 )
-                checks["ontologies"] = not any(
-                    failure.sha256 in pinned
-                    for failure in app.state.ontology_registry.failures()
-                )
     except SQLAlchemyError:
         pass
     finally:
         engine.dispose()
+    if pinned is not None:
+        # Cold pins added by another worker/CLI may need heavy parsing. Release
+        # the health connection before loading or waiting on registry locks.
+        registry = app.state.ontology_registry
+        registry.preload(pinned, retry_unavailable=True)
+        checks["ontologies"] = pinned <= {sha for sha, _ in registry.services()}
     return checks
 
 
