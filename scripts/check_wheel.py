@@ -24,15 +24,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_DIR = REPO_ROOT / "src" / "ontocurator"
 MIGRATION_VERSIONS = PACKAGE_DIR / "storage" / "migrations" / "versions"
 
+MIGRATION_FILES = sorted(path.name for path in MIGRATION_VERSIONS.glob("*.py"))
+
 REQUIRED_WHEEL_FILES = [
     "ontocurator/__init__.py",
     "ontocurator/cli.py",
     "ontocurator/storage/migrations/env.py",
     "ontocurator/storage/migrations/script.py.mako",
-    *sorted(
-        f"ontocurator/storage/migrations/versions/{path.name}"
-        for path in MIGRATION_VERSIONS.glob("*.py")
-    ),
+    *(f"ontocurator/storage/migrations/versions/{name}" for name in MIGRATION_FILES),
     "ontocurator/web/index.html",
 ]
 
@@ -92,6 +91,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
     out_dir: Path = args.out_dir.resolve()
+    if not MIGRATION_FILES:
+        sys.exit(f"Error: No migration files found in {MIGRATION_VERSIONS}.")
     if not (PACKAGE_DIR / "web" / "index.html").is_file():
         sys.exit(
             f"Error: {PACKAGE_DIR / 'web' / 'index.html'} is missing; "

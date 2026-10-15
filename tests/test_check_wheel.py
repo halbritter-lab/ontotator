@@ -1,12 +1,13 @@
 """The wheel check of scripts/check.sh: required files and asset kinds."""
 
-import sys
+import importlib.util
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-import check_wheel  # noqa: E402
+SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "check_wheel.py"
+_spec = importlib.util.spec_from_file_location("check_wheel", SCRIPT)
+assert _spec is not None and _spec.loader is not None
+check_wheel = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(check_wheel)
 
 
 def test_a_complete_wheel_misses_nothing() -> None:

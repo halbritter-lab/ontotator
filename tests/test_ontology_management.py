@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 
@@ -182,3 +183,60 @@ def test_uploaded_ontologies_are_listed_after_a_restart(
     assert len(ontologies) == 1
     assert ontologies[0]["ontology_id"] == "hp"
     assert ontologies[0]["term_count"] == 2
+
+
+def test_a_broken_entry_in_the_ontologies_folder_does_not_stop_the_start(
+    tmp_path: Path,
+) -> None:
+    ws = tmp_path / "workspace"
+    stored = ws / "ontologies"
+    stored.mkdir(parents=True)
+    (stored / "hp.json").write_text(json.dumps(SAMPLE_OBO_JSON), encoding="utf-8")
+    # A folder whose name looks like an ontology file is skipped.
+    (stored / "folder.json").mkdir()
+    (stored / "broken.json").write_text("{not json", encoding="utf-8")
+
+    app = create_app(
+        AppConfig(
+            workspace_dir=ws,
+            database_url=database_url_for(ws / "editor.db"),
+            session_token="test-token",
+        )
+    )
+    client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+
+    listed = client.get("/api/v1/ontologies").json()
+    loaded = [item for item in listed if item.get("status") != "failed"]
+    assert [item["ontology_id"] for item in loaded] == ["hp"]
+
+
+def test_an_unreadable_stored_ontology_does_not_stop_the_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ontocurator.ontology.registry import OntologyRegistry
+
+    ws = tmp_path / "workspace"
+    stored = ws / "ontologies"
+    stored.mkdir(parents=True)
+    (stored / "hp.json").write_text(json.dumps(SAMPLE_OBO_JSON), encoding="utf-8")
+    (stored / "locked.json").write_text("{}", encoding="utf-8")
+    original = OntologyRegistry.register_path
+
+    def register_path(self: OntologyRegistry, path: Path | str) -> str:
+        if Path(path).name == "locked.json":
+            raise PermissionError("locked by another process")
+        return original(self, path)
+
+    monkeypatch.setattr(OntologyRegistry, "register_path", register_path)
+
+    app = create_app(
+        AppConfig(
+            workspace_dir=ws,
+            database_url=database_url_for(ws / "editor.db"),
+            session_token="test-token",
+        )
+    )
+    client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+
+    listed = client.get("/api/v1/ontologies").json()
+    assert [item["ontology_id"] for item in listed] == ["hp"]

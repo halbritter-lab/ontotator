@@ -90,9 +90,14 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 else:
                     registry.register_path(config.ontology_path)
             # Uploaded ontologies are stored here; register them again after a
-            # restart.
+            # restart. An entry that cannot be read must not stop the start.
             for stored in sorted((config.workspace_dir / "ontologies").glob("*.json")):
-                registry.register_path(stored)
+                if not stored.is_file():
+                    continue
+                try:
+                    registry.register_path(stored)
+                except (OSError, DomainError) as exc:
+                    logger.warning("Skipping stored ontology %s: %s", stored, exc)
             # Eagerly parse registered files; failures are logged and reported by
             # GET /api/v1/ontologies instead of being silently dropped.
             registry.load_registered()

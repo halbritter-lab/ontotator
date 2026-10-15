@@ -1,7 +1,8 @@
-"""Optional presets of a preconfigured distribution (``ontocurator-settings.json``).
+"""Mode and identity presets in the format of ``ontocurator-settings.json``.
 
-The file lives next to the executable (or in the folder given with
-``--provision-dir``). Every key is optional::
+``serve`` no longer reads such a file: ``AppConfig.distribution`` is always the
+default until T2c replaces the presets with project roles. Every key is
+optional::
 
     {
       "default_mode": "independent",

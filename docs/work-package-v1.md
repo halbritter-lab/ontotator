@@ -30,8 +30,8 @@ The ZIP archive must contain exactly the following six files at the archive root
 Work packages associate each task with a defined set of context axes. Profiles are resolved at import/upload using the following precedence:
 1. **Inline Manifest Profile**: If `manifest.axes_config` is explicitly specified (including empty `[]`), it takes precedence. Its canonical hash must match `manifest.axes_config_sha256`.
 2. **Built-in System Profiles**: Built-ins `editor-axes/v1` and `clinical-phenotype/v1` are resolved automatically without requiring external config files. Attempting to override these reserved names with contradictory configurations is rejected.
-3. **CLI Fallback (`--axes-config PATH`)**: When starting the server (`ontocurator serve --axes-config path/to/axes.json`), an external JSON profile definition can be loaded. If a package declares an `axes_definition` matching this profile's `definition_name`, the CLI profile is used as the fallback resolver.
-4. **Unresolvable Profile**: If an unknown `axes_definition` is referenced without an inline `axes_config` or matching CLI profile, the package is rejected with an `UNRESOLVABLE_PROFILE` error.
+3. **No External Fallback**: The former CLI fallback (`ontocurator serve --axes-config PATH`) was removed with the desktop distribution; no external profile file is loaded at start.
+4. **Unresolvable Profile**: If an unknown `axes_definition` is referenced without an inline `axes_config`, the package is rejected with an `UNRESOLVABLE_PROFILE` error.
 
 ## Legacy Encoding & Mixed-History Exports
 

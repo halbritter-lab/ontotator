@@ -30,5 +30,6 @@ class AppConfig(BaseModel):
     port: int = 8000
     web_dir: Path | None = None
     axes_config: AxesConfig | None = None
-    # Presets of this installation (ontocurator-settings.json).
+    # Mode and identity presets. `serve` no longer reads ontocurator-settings.json,
+    # so these are always the defaults until T2c replaces them with project roles.
     distribution: DistributionSettings = Field(default_factory=DistributionSettings)

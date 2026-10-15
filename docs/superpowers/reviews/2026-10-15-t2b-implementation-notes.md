@@ -59,3 +59,11 @@ answer; the least surprising option was taken and should be confirmed.
   `build_release.py` command is replaced by `check_wheel.py`. The SQLite storage/backup prose stays for
   T2e (as in T2a). `.github/workflows/ci.yml` still calls `scripts/build_release.py`; left untouched as
   instructed (no CI, index R2).
+- Task 1 (review fix): the plan only said to register `<workspace>/ontologies/*.json` with
+  `register_path` -> `create_app` skips entries that are not files and logs a warning for an entry that
+  raises `OSError` or `DomainError`, because a folder named `*.json` or an unreadable file aborted the
+  start. Tests: `test_a_broken_entry_in_the_ontologies_folder_does_not_stop_the_start` and
+  `test_an_unreadable_stored_ontology_does_not_stop_the_start`. The same review also removed the dead
+  `.legacy-config-*` CSS and the `--provision-dir` and `--axes-config` mentions in the docs.
+  `scripts/check_wheel.py` now fails if it finds no migrations, and `tests/test_check_wheel.py` loads the
+  script with `importlib` instead of changing `sys.path`.
