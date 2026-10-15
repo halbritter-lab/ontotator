@@ -567,11 +567,11 @@ def test_import_prepared_before_a_profile_change_rolls_back(tmp_path, monkeypatc
     from t1_fixtures import create_project as seed
 
     from ontocurator.domain.profiles import TaskProfile, profile_hash
-    from ontocurator.exchange import jobs
+    from ontocurator.exchange import uploads
 
     db = database_for(tmp_path / "project.db", data_dir=tmp_path)
     seed(db)
-    real = jobs._read_delivery
+    real = uploads.read_sources
 
     def change_during_parse(*args, **kwargs):
         delivery = real(*args, **kwargs)
@@ -592,7 +592,7 @@ def test_import_prepared_before_a_profile_change_rolls_back(tmp_path, monkeypatc
             )
         return delivery
 
-    monkeypatch.setattr(jobs, "_read_delivery", change_during_parse)
+    monkeypatch.setattr(uploads, "read_sources", change_during_parse)
     result = run_import(db, bundle(tmp_path / "stale.zip", [unit("EN100017")]))
     assert result.status == "failed"
     with db.transaction() as conn:

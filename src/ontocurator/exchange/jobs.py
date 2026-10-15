@@ -8,10 +8,8 @@ a system admin (Q5).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import tempfile
-import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -37,7 +35,6 @@ from ontocurator.jobs.queue import Handler, Job, JobContext
 from ontocurator.storage.database import Database
 from ontocurator.storage.tables import JobRow, ProjectRow, StoredFileRow, UserRow
 
-MANIFEST = "manifest.json"
 # How many ontospan issues a failed job names in its error.
 MAX_ISSUES = 20
 
@@ -110,34 +107,6 @@ def _warnings(report: ontospan.ValidationReport) -> list[str]:
     return sorted({issue.code for issue in report.warnings})
 
 
-@dataclass(frozen=True)
-class _Delivery:
-    bundle_id: str | None
-    manifest_sha256: str | None
-    units: list[ontospan.AnnotatedDocument]
-
-
-def _read_delivery(path: Path, filename: str) -> tuple[_Delivery, list[str]]:
-    """The units of a bundle (ZIP) or of a single ``.json`` unit, unvalidated
-    against the ontologies; the format itself is checked."""
-    report = ontospan.ValidationReport()
-    try:
-        if filename.lower().endswith(".json"):
-            unit = ontospan.load_annotated_document(path.read_bytes(), report=report)
-            return _Delivery(None, None, [unit]), _warnings(report)
-        manifest, units = ontospan.read_bundle(path, report=report)
-    except ontospan.FormatError:
-        raise _invalid(report) from None
-    with zipfile.ZipFile(path) as archive:
-        manifest_bytes = archive.read(MANIFEST)
-    return (
-        _Delivery(
-            manifest.bundle_id, hashlib.sha256(manifest_bytes).hexdigest(), units
-        ),
-        _warnings(report),
-    )
-
-
 def _validate(
     units: Sequence[ontospan.AnnotatedDocument],
     ontologies: Mapping[str, ontospan.OntologyView],
@@ -152,24 +121,6 @@ def _validate(
     if not report.ok:
         raise _invalid(report)
     return _warnings(report)
-
-
-def _producers(units: Sequence[ontospan.AnnotatedDocument]) -> list[dict[str, Any]]:
-    """The distinct tool actors of the delivery, in order of appearance."""
-    producers: list[dict[str, Any]] = []
-    for unit in units:
-        for actor in unit.annotation_set.actors:
-            if actor.kind != "tool":
-                continue
-            entry = {
-                "name": actor.name,
-                "version": actor.version,
-                "model": actor.model,
-                "run_id": actor.run_id,
-            }
-            if entry not in producers:
-                producers.append(entry)
-    return producers
 
 
 def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:

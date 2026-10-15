@@ -328,3 +328,9 @@ def test_full_validation_replaces_unchecked_hierarchy_warning(tmp_path):
         ontologies={"hp": ontospan.ObographOntology.load(HP_PATH)},
     )
     assert not issues
+
+
+def test_empty_sets_retain_source_actor_labels_for_import_audit(tmp_path):
+    units, _issues = read(tmp_path, annotations=[])
+    assert units[0].set is None
+    assert units[0].source_actors == (TOOL,)

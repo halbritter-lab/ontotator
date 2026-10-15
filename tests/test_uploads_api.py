@@ -408,7 +408,10 @@ def test_proposal_metadata_has_current_document_scope(staged, tmp_path):
     assert metadata.status_code == 200, metadata.text
     assert metadata.json()["document_id"] == "doc"
     assert metadata.json()["actors"][0]["model"] == "bge-m3"
-    assert metadata.json()["imported_by_pseudonym"] == "root"
+    assert (
+        metadata.json()["imported_by_pseudonym"]
+        == admin.get("/api/v1/auth/me").json()["pseudonym"]
+    )
     stranger = logged_in(app, "stranger")
     assert (
         stranger.get(f"/api/v1/projects/proj/proposal-sets/{set_id}").status_code == 404
@@ -424,7 +427,8 @@ def test_editor_proposals_include_notes_and_set_id(staged, tmp_path):
     path = bundle(tmp_path / "one.zip", [unit("doc")])
     upload = _ready(app, admin, kind="t1", name=path.name, data=path.read_bytes())
     assert _commit(app, admin, upload).status == "succeeded"
-    response = admin.post(
+    reviewer = logged_in(app, "reviewer", projects={"proj": ["adjudicator"]})
+    response = reviewer.post(
         "/api/v1/workspaces/review-inputs",
         json={"project_key": "proj", "document_id": "doc", "mode": "review"},
     )
@@ -530,3 +534,56 @@ def test_repeated_bundle_sources_keep_one_set_and_accurate_unit_counts(
     } == {k: v for k, v in upload["preview"]["counts"].items() if k in job.result}
     assert job.result["sets_added"] == job.result["sets_skipped"] == 1
     assert _count(app, ProposalSetRow) == 1
+
+
+@pytest.mark.parametrize("change", ["revoke", "unrelated_document"])
+def test_commit_rechecks_after_a_real_import_lock_wait(staged, change):
+    from sqlalchemy import text
+    from test_admin_write_authority import _wait_for_database_lock
+
+    from ontocurator.storage.repository import _lock_id
+
+    app, admin = staged
+    lead = logged_in(app, "lead", projects={"proj": ["lead"]})
+    upload = _ready(app, lead)
+    queued = lead.post(
+        f"{BASE}/{upload['id']}/commit", json={"plan_sha256": upload["plan_sha256"]}
+    ).json()
+    db = app.state.repo.db
+    with db.engine.begin() as holder:
+        holder.execute(select(func.pg_advisory_xact_lock(_lock_id("import"))))
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pending = pool.submit(_run, app, queued["job_id"])
+            try:
+                _wait_for_database_lock(app, pending)
+                if change == "revoke":
+                    app.state.memberships.set_roles(
+                        Actor.cli(), "proj", "lead", ["annotator"]
+                    )
+                else:
+                    holder.execute(
+                        text(
+                            "INSERT INTO ontocurator.documents (project_id, document_id, position, language, text, text_sha256) SELECT id, 'unrelated', 0, 'de', 'Else', :sha FROM ontocurator.projects WHERE project_key = 'proj'"
+                        ),
+                        {"sha": hashlib.sha256(b"Else").hexdigest()},
+                    )
+            finally:
+                holder.commit()
+            job = pending.result(timeout=15)
+    assert job.status == "failed", job.result
+    assert ("NOT_ALLOWED" if change == "revoke" else "UPLOAD_STALE") in job.error
+    assert app.state.repo.get_document("proj", "a") is None
+    assert admin.get(f"{BASE}/{upload['id']}").json()["status"] == "failed"
+
+
+def test_empty_sets_keep_original_tool_producers_in_import_audit(staged, tmp_path):
+    app, admin = staged
+    path = bundle(tmp_path / "empty.zip", [unit("doc", annotations=[])])
+    upload = _ready(app, admin, kind="t1", name=path.name, data=path.read_bytes())
+    job = _commit(app, admin, upload)
+    assert job.status == "succeeded", job.error
+    assert job.result["documents_only"] == 1
+    assert job.result["producers"] == [
+        {"name": "phentrieve", "version": "1.4.0", "model": "bge-m3", "run_id": "run-7"}
+    ]
+    assert _count(app, ProposalSetRow) == 0

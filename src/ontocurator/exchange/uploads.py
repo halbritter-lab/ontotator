@@ -30,7 +30,7 @@ from ontocurator.exchange.plan import (
 from ontocurator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet
 from ontocurator.exchange.text import read_text_upload
 from ontocurator.jobs.queue import Job, JobContext, JobQueue
-from ontocurator.projects.runtime import project_state
+from ontocurator.projects.runtime import project_state, require_state
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import Repository, _lock_id
 from ontocurator.storage.tables import (
@@ -71,7 +71,7 @@ def lock_import(conn: Connection, key: str, actor: Actor) -> int:
     return project_id
 
 
-def prepare_plan(
+def read_sources(
     db: Database,
     conn: Connection,
     key: str,
@@ -79,8 +79,8 @@ def prepare_plan(
     kind: str,
     language: str | None,
     files: Sequence[dict[str, Any]],
-) -> tuple[ImportPlan, list[tuple[str, list[IncomingUnit]]]]:
-    """Caller holds the import/structure locks before any state is read."""
+) -> tuple[list[tuple[str, list[IncomingUnit]]], list[Issue]]:
+    """Read source bytes once, retaining original file and producer identities."""
     repo = Repository(db)
     row = conn.execute(select(ProjectRow).where(ProjectRow.id == project_id)).one()
     profile = TaskProfile.model_validate(row.task_profile)
@@ -125,12 +125,45 @@ def prepare_plan(
             )
             sources.append((file["sha256"], units))
             issues.extend(found)
+    return sources, issues
+
+
+def prepare_plan(
+    db: Database,
+    conn: Connection,
+    key: str,
+    project_id: int,
+    kind: str,
+    language: str | None,
+    files: Sequence[dict[str, Any]],
+    *,
+    prepared: tuple[list[tuple[str, list[IncomingUnit]]], list[Issue]] | None = None,
+) -> tuple[ImportPlan, list[tuple[str, list[IncomingUnit]]]]:
+    """Caller holds import/structure locks before fresh inventory and planning."""
+    row = conn.execute(select(ProjectRow).where(ProjectRow.id == project_id)).one()
+    profile = TaskProfile.model_validate(row.task_profile)
+    sources, reader_issues = (
+        prepared
+        if prepared is not None
+        else read_sources(db, conn, key, project_id, kind, language, files)
+    )
+    issues = list(reader_issues)
+    if kind == "text" and row.languages and language not in row.languages:
+        issues.append(
+            Issue(
+                code="LANGUAGE_NOT_IN_PROJECT",
+                unit="",
+                message="Language is not enabled for this project.",
+            )
+        )
     documents = dict(
         conn.execute(
             select(DocumentRow.document_id, DocumentRow.text_sha256).where(
                 DocumentRow.project_id == project_id
             )
-        ).tuples()
+        )
+        .tuples()
+        .all()
     )
     texts: dict[str, list[str]] = defaultdict(list)
     for doc_id, sha in documents.items():
@@ -148,13 +181,16 @@ def prepare_plan(
         {"structure": project_state(conn, key), "languages": row.languages}
     )
     state = ProjectImportState(documents, texts, sets, context)
-    return plan_import(
-        [u for _, us in sources for u in us],
-        state,
-        profile,
-        ProjectRules.of(row),
-        issues,
-    ), sources
+    return (
+        plan_import(
+            [u for _, us in sources for u in us],
+            state,
+            profile,
+            ProjectRules.of(row),
+            issues,
+        ),
+        sources,
+    )
 
 
 def apply_plan(
@@ -245,7 +281,7 @@ def _summary(
     for sha, units in sources:
         producers = []
         for unit in units:
-            for actor in unit.set.actors if unit.set else []:
+            for actor in unit.source_actors or (unit.set.actors if unit.set else []):
                 entry = {
                     k: actor.get(k) for k in ("name", "version", "model", "run_id")
                 }
@@ -274,21 +310,22 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     from ontocurator.exchange.jobs import requester
 
     db, key = ctx.db, job.payload["project"]
-    # Requester is checked again after all lock waits by lock_import.
     actor, _ = requester(db, job)
+    files = [
+        {"filename": job.payload["filename"], "sha256": job.payload["blob_sha256"]}
+    ]
+    kind, language = job.payload.get("kind", "t1"), job.payload.get("language")
+    # Parse once before waiting, then verify the captured structural snapshot
+    # under the write locks. The actual inventory/rules/plan are loaded fresh.
+    with db.transaction() as conn:
+        expected = project_state(conn, key)
+        project_id = Repository(db)._require_project(conn, key)
+        prepared = read_sources(db, conn, key, project_id, kind, language, files)
     with db.transaction() as conn:
         project_id = lock_import(conn, key, actor)
-        files = [
-            {"filename": job.payload["filename"], "sha256": job.payload["blob_sha256"]}
-        ]
+        require_state(conn, key, expected)
         plan, sources = prepare_plan(
-            db,
-            conn,
-            key,
-            project_id,
-            job.payload.get("kind", "t1"),
-            job.payload.get("language"),
-            files,
+            db, conn, key, project_id, kind, language, files, prepared=prepared
         )
         counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
         summary = _summary(plan, sources, counts)

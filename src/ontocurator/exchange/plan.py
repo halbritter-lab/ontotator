@@ -58,6 +58,8 @@ class IncomingUnit:
     bundle_id: str | None = None
     manifest_sha256: str | None = None
     set: IncomingSet | None = None
+    # Also retained for empty sets, whose documents-only import has no set.
+    source_actors: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -231,6 +233,7 @@ def read_t1_upload(
                 bundle_id,
                 manifest_sha256,
                 incoming_set,
+                tuple(a.model_dump(mode="json") for a in aset.actors),
             )
         )
     return result, issues
