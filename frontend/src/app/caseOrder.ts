@@ -1,4 +1,4 @@
-import type { DocumentSummary } from "../api/client";
+import type { DocumentSummary, TaskSummary } from "../api/client";
 
 /**
  * Whether a case can be opened in the current mode. The server only sets
@@ -43,4 +43,18 @@ export function sharedIdPrefix(ids: string[], minLength = 8): string {
     while (cut > 0 && !ID_SEPARATORS.includes(prefix[cut - 1])) cut--;
   }
   return cut >= minLength ? prefix.slice(0, cut) : "";
+}
+
+/** Adjacent assignments of the same project and task, in the supplied server order. */
+export function orderTasks(
+  tasks: readonly TaskSummary[],
+  current: TaskSummary,
+): { previous?: number; next?: number } {
+  const matching = tasks.filter((task) => task.project_key === current.project_key && task.task === current.task);
+  const index = matching.findIndex((task) => task.assignment_id === current.assignment_id);
+  if (index < 0) return {};
+  const adjacent: { previous?: number; next?: number } = {};
+  if (index > 0) adjacent.previous = matching[index - 1].assignment_id;
+  if (index + 1 < matching.length) adjacent.next = matching[index + 1].assignment_id;
+  return adjacent;
 }
