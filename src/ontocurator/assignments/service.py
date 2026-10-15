@@ -362,23 +362,36 @@ class AssignmentService:
         with self.db.transaction() as conn:
             target = self._target(conn, username)
             project = self._prepare(conn, actor, key, target)
-            existing = self.active_for(conn, project["id"], document_id, target, task)
-            if existing is not None:
-                self._require_target(conn, project, target, task)
-                return existing
-            eligibility = self._eligible(
-                conn, project, document_id, target, task, confirm_language
+            return self._assign_locked(
+                conn, actor, project, document_id, target, task, confirm_language
             )
-            return self._create(
-                conn,
-                actor,
-                project,
-                document_id,
-                target,
-                task,
-                eligibility,
-                self._now(),
-            )
+
+    def _assign_locked(
+        self,
+        conn: Connection,
+        actor: Actor,
+        project: RowMapping,
+        document_id: str,
+        target: int,
+        task: Task,
+        confirm_language: bool,
+    ) -> Assignment:
+        """Assign on caller's connection under preheld authority/target locks.
+
+        Bulk callers acquire the complete sorted target union before this seam.
+        No joined Database scope: a caller can isolate routine row refusals with
+        conn.begin_nested without poisoning its outer transaction.
+        """
+        existing = self.active_for(conn, project["id"], document_id, target, task)
+        if existing is not None:
+            self._require_target(conn, project, target, task)
+            return existing
+        eligibility = self._eligible(
+            conn, project, document_id, target, task, confirm_language
+        )
+        return self._create(
+            conn, actor, project, document_id, target, task, eligibility, self._now()
+        )
 
     def reassign(
         self,

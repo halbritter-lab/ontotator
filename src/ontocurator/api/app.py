@@ -386,6 +386,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "ASSIGNMENT_REVOKED": 409,
                     "ASSIGNMENT_NOT_SUBMITTED": 409,
                     "ASSIGNMENT_EXISTS": 409,
+                    "DISTRIBUTION_STALE": 409,
                     "SELF_LOCKOUT": 409,
                     "UPLOAD_STALE": 409,
                     "PASSWORD_WRONG": 403,

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from sqlalchemy import select
 
 from ontocurator.api.identity import PrincipalDep
@@ -16,6 +16,11 @@ from ontocurator.api.routes import (
     get_access,
     open_workspace,
 )
+from ontocurator.assignments.confirmations import (
+    ConfirmationRow,
+    DistributionConfirmationService,
+)
+from ontocurator.assignments.proposals import DistributionContext, DistributionService
 from ontocurator.assignments.service import (
     MODE_FOR_TASK,
     Assignment,
@@ -57,12 +62,62 @@ class AssignmentRowRequest(BaseModel):
     username: str
 
 
+class DistributionContextView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    document_ids: list[str] = Field(min_length=1)
+    task: Task
+    per_document: StrictInt = Field(ge=1)
+    seed: StrictInt
+    state_sha256: str = Field(pattern="^[a-f0-9]{64}$")
+
+    def to_domain(self) -> DistributionContext:
+        return DistributionContext(
+            tuple(self.document_ids),
+            self.task,
+            self.per_document,
+            self.seed,
+            self.state_sha256,
+        )
+
+
+class ProposalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    document_ids: list[str] = Field(min_length=1)
+    task: Task
+    per_document: StrictInt = Field(default=1, ge=1)
+    seed: StrictInt | None = None
+
+
+class ProposalRow(BaseModel):
+    document_id: str
+    language: str
+    username: str
+    display_name: str
+    load_before: int
+
+
+class UnassignableDocument(BaseModel):
+    document_id: str
+    language: str
+    reason: Literal["NO_READER", "TOO_FEW_READERS"]
+    eligible_count: int
+
+
+class ProposalResponse(BaseModel):
+    rows: list[ProposalRow]
+    unassignable: list[UnassignableDocument]
+    seed: int
+    per_document: int
+    context: DistributionContextView
+
+
 class AssignRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     rows: list[AssignmentRowRequest]
     task: Task
     confirm_language: bool = False
     seed: int | None = None
+    context: DistributionContextView | None = None
 
 
 class RefusedAssignment(AssignmentRowRequest):
@@ -146,6 +201,20 @@ def assign(
     key: str, body: AssignRequest, request: Request, principal: PrincipalDep
 ) -> AssignResponse:
     _guard(request, key)
+    if body.context is not None:
+        outcome = DistributionConfirmationService(request.app.state.repo.db).confirm(
+            Actor.user(principal.user_id, principal.username),
+            key,
+            [ConfirmationRow(row.document_id, row.username) for row in body.rows],
+            body.context.to_domain(),
+            task=body.task,
+            seed=body.seed,
+            confirm_language=body.confirm_language,
+        )
+        return AssignResponse(
+            created=_views(request, list(outcome.created)),
+            refused=[RefusedAssignment(**asdict(row)) for row in outcome.refused],
+        )
     created = []
     refused = []
     for row in body.rows:
@@ -163,6 +232,44 @@ def assign(
         except DomainError as exc:
             refused.append(RefusedAssignment(**row.model_dump(), code=exc.code))
     return AssignResponse(created=_views(request, created), refused=refused)
+
+
+@router.post("/projects/{key}/assignments/proposal")
+def propose_assignments(
+    key: str, body: ProposalRequest, request: Request, principal: PrincipalDep
+) -> ProposalResponse:
+    _guard(request, key)
+    prepared = DistributionService(request.app.state.repo.db).propose(
+        Actor.user(principal.user_id, principal.username),
+        key,
+        body.document_ids,
+        body.task,
+        per_document=body.per_document,
+        seed=body.seed,
+    )
+    documents = {d.document_id: d for d in prepared.snapshot.documents}
+    members = {m.user_id: m for m in prepared.snapshot.members}
+    return ProposalResponse(
+        rows=[
+            ProposalRow(
+                document_id=document_id,
+                language=documents[document_id].language,
+                username=members[user_id].username,
+                display_name=members[user_id].display_name,
+                load_before=members[user_id].load,
+            )
+            for document_id, user_id in prepared.proposal.rows
+        ],
+        unassignable=[
+            UnassignableDocument(
+                **asdict(item), language=documents[item.document_id].language
+            )
+            for item in prepared.proposal.unassignable
+        ],
+        seed=prepared.context.seed,
+        per_document=prepared.context.per_document,
+        context=DistributionContextView(**asdict(prepared.context)),
+    )
 
 
 @router.post("/assignments/{assignment_id}/open")
