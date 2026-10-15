@@ -119,7 +119,8 @@ class Annotator(HttpUser):
 
     @task(2)
     def open_document(self):
-        document = self.rng.choice(self.environment.load_manifest["documents"])
+        from loadtest.seed import assigned_documents
+        document = self.rng.choice(assigned_documents(self.username, self.environment.load_manifest["documents"]))
         with self.client.post(
             "/api/v1/workspaces/open",
             json={

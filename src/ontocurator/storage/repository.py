@@ -1615,8 +1615,24 @@ class Repository:
         of it is half committed.
         """
         with self.db.transaction() as conn:
+            self._before_workspace_locks(conn, key)
             self._lock_draft(conn, key)
             return self._open_draft(conn, key, targets)
+
+    def _before_workspace_locks(self, conn: Connection, key: WorkspaceKey) -> None:
+        """Request-specific authority locks, before any draft lock."""
+
+    def _before_new_mutation(self, conn: Connection, key: WorkspaceKey) -> None:
+        """Request-specific gate, after successful replay/revision checks."""
+
+    def _after_new_mutation(
+        self,
+        conn: Connection,
+        key: WorkspaceKey,
+        result: Draft | Submission,
+        at: datetime,
+    ) -> None:
+        """Status changes after storage, before receipt, in the same transaction."""
 
     @staticmethod
     def _lock_draft(conn: Connection, key: WorkspaceKey) -> None:
@@ -1856,6 +1872,7 @@ class Repository:
         key_string = _key_str(key)
         request_hash = canonical_hash(envelope.model_dump())
         with self.db.transaction() as conn:
+            self._before_workspace_locks(conn, key)
             # Shared across independent drafts, exclusive against structural
             # changes/imports. Always acquire before the per-draft lock.
             conn.execute(
@@ -1895,6 +1912,7 @@ class Repository:
                 )
             if before_operation is not None:
                 before_operation(conn)
+            self._before_new_mutation(conn, key)
             draft = self._open_draft(conn, key, None)
             # Taken before the operation, which may change the draft in place.
             state_before = DraftState.of(draft)
@@ -1979,6 +1997,7 @@ class Repository:
                 response = _submission_payload(result)
             else:
                 raise ValueError(f"Unsupported operation return type: {type(result)}")
+            self._after_new_mutation(conn, key, result, now)
             conn.execute(
                 insert(MutationReceiptRow).values(
                     project_id=project_id,

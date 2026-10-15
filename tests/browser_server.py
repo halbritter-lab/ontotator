@@ -374,6 +374,9 @@ if __name__ == "__main__":
                 user = existing
             for key in filter(None, (projects or "").split(",")):
                 grant_all(user.id, user.username, key)
+                from auth_harness import provision_assignments
+
+                provision_assignments(app, user.username, key, ROLES)
             if existing is not None:
                 if not setup:
                     return {"username": user.username, "pseudonym": user.pseudonym}
@@ -414,6 +417,9 @@ if __name__ == "__main__":
                 raise HTTPException(500, job.error)
             user = app.state.accounts.get_by_username(username)
             grant_all(user.id, user.username, T1_PROJECT)
+            from auth_harness import provision_assignments
+
+            provision_assignments(app, user.username, T1_PROJECT, ROLES)
             return dict(job.result or {})
 
         app.router.routes.insert(0, app.router.routes.pop())
