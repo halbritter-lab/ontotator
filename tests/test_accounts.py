@@ -10,14 +10,23 @@ from pathlib import Path
 
 import pytest
 from pg_harness import column_values, database_for
-from sqlalchemy import select, update
+from sqlalchemy import insert, select, update
 
 from ontocurator.auth.accounts import CODE_LIFETIME, AccountService
 from ontocurator.auth.audit import Actor
 from ontocurator.auth.passwords import hash_password
 from ontocurator.auth.sessions import SessionService
 from ontocurator.domain.errors import DomainError, LoginFailed
-from ontocurator.storage.tables import AuditEventRow, UserRow
+from ontocurator.storage.tables import (
+    AnnotationSnapshotRow,
+    AuditEventRow,
+    DraftRow,
+    ProjectRow,
+    ReviewDecisionRow,
+    SearchEventRow,
+    SubmissionRow,
+    UserRow,
+)
 
 PASSWORD = "correct horse battery"
 NEW_PASSWORD = "another long passphrase"
@@ -324,3 +333,107 @@ def test_the_code_of_an_inactive_user_is_refused(services: Services) -> None:
         services.accounts.redeem_code("alice", issued.code, PASSWORD)
 
     assert _code(error) == "CODE_INVALID"
+
+
+def _store_t2a_work(services: Services) -> None:
+    """Work written before accounts existed, under annotator ids ann-0002..0006."""
+    workspace_key = {
+        "package_id": "p",
+        "document_id": "d1",
+        "annotator_id": "ann-0006",
+        "mode": "annotate",
+        "scope_id": "",
+        "target_set_id": "t",
+    }
+    actor = {"actor_id": "ann-0004", "kind": "human"}
+    with services.accounts.db.transaction() as conn:
+        project_id = conn.execute(
+            insert(ProjectRow)
+            .values(
+                project_key="p",
+                name="P",
+                manifest={},
+                manifest_sha256="0",
+                task_profile={},
+                task_profile_sha256="0",
+            )
+            .returning(ProjectRow.id)
+        ).scalar_one()
+        draft_id = conn.execute(
+            insert(DraftRow)
+            .values(
+                project_id=project_id,
+                draft_key="p:d1:ann-0002:annotate::t",
+                document_id="d1",
+                annotator_id="ann-0002",
+                mode="annotate",
+                scope_id="",
+                target_set_id="t",
+                targets={},
+                updated_at=services.clock(),
+            )
+            .returning(DraftRow.id)
+        ).scalar_one()
+        conn.execute(
+            insert(SubmissionRow).values(
+                project_id=project_id,
+                submission_id="s1",
+                local_key="p:d1:ann-0003:annotate::t",
+                origin_key="p:d1:ann-0003:annotate::t",
+                document_id="d1",
+                annotator_id="ann-0003",
+                mode="annotate",
+                draft_revision=1,
+                payload={},
+                created_at="2026-01-01T00:00:00Z",
+            )
+        )
+        conn.execute(
+            insert(AnnotationSnapshotRow).values(
+                project_id=project_id,
+                annotation_id="a1",
+                version="v1",
+                document_id="d1",
+                payload={"annotation": {"provenance": {"actor": actor}}},
+            )
+        )
+        conn.execute(
+            insert(ReviewDecisionRow).values(
+                draft_id=draft_id,
+                decision_id="r1",
+                position=0,
+                target_id="a1",
+                target_version="v1",
+                outcome="confirmed",
+                reviewer_id="ann-0005",
+                payload={},
+            )
+        )
+        conn.execute(
+            insert(SearchEventRow).values(
+                project_id=project_id,
+                event_id="e1",
+                workspace_key="p:d1:ann-0006:annotate::t",
+                local_key="p:d1:ann-0006:annotate::t",
+                annotation_id="a1",
+                payload={"workspace_key": workspace_key},
+                timestamp="2026-01-01T00:00:00Z",
+            )
+        )
+
+
+def test_a_new_user_never_inherits_the_annotator_id_of_stored_work(
+    services: Services,
+) -> None:
+    _store_t2a_work(services)
+
+    assert services.accounts.bootstrap_admin(hash_password(PASSWORD)) == "created"
+    issued = services.accounts.create_user(ADMIN, "alice", "Alice")
+
+    admin = services.accounts.get_by_username("admin")
+    assert admin is not None
+    assert admin.pseudonym == "ann-0001"
+    assert issued.user.pseudonym == "ann-0007"
+    # Claiming a historical identity stays an explicit choice of an admin.
+    claimed = services.accounts.create_user(ADMIN, "bob", "Bob", pseudonym="ann-0002")
+    assert claimed.user.pseudonym == "ann-0002"

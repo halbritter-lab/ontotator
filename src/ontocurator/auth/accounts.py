@@ -29,6 +29,7 @@ from sqlalchemy import (
     exists,
     func,
     select,
+    union,
     update,
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -46,9 +47,14 @@ from ontocurator.domain.errors import DomainError
 from ontocurator.storage.database import Database, advisory_lock_id
 from ontocurator.storage.tables import (
     SCHEMA,
+    AnnotationSnapshotRow,
+    DraftRow,
     InstanceStateRow,
     OneTimeCodeRow,
     PasswordCredentialRow,
+    ReviewDecisionRow,
+    SearchEventRow,
+    SubmissionRow,
     UserRow,
 )
 
@@ -123,6 +129,28 @@ def _user(row: Row[Any]) -> User:
         is_system_admin=row.is_system_admin,
         active=row.active,
     )
+
+
+def _annotator_ids_in_use(conn: Connection) -> set[str]:
+    """Every ``ann-...`` id of a user or of stored work.
+
+    Work carries annotator ids in drafts, submissions, review decisions, the
+    actors of annotation snapshots and the workspace keys of search events.
+    """
+    actor = AnnotationSnapshotRow.payload[
+        ("annotation", "provenance", "actor", "actor_id")
+    ].astext
+    event_annotator = SearchEventRow.payload[("workspace_key", "annotator_id")].astext
+    columns = (
+        UserRow.pseudonym,
+        DraftRow.annotator_id,
+        SubmissionRow.annotator_id,
+        ReviewDecisionRow.reviewer_id,
+        actor,
+        event_annotator,
+    )
+    ids = union(*(select(column).where(column.like("ann-%")) for column in columns))
+    return {str(value) for value in conn.execute(ids).scalars()}
 
 
 def _code_invalid() -> DomainError:
@@ -262,13 +290,18 @@ class AccountService:
 
     @staticmethod
     def _next_pseudonym(conn: Connection) -> str:
-        """The next free ``ann-NNNN``; numbers an admin assigned by hand are skipped."""
+        """The next free ``ann-NNNN``.
+
+        Numbers an admin assigned by hand are skipped, and so is every
+        annotator id that stored work carries (see ``_annotator_ids_in_use``):
+        a new account must not inherit work written before accounts existed.
+        Claiming such an identity takes an explicit ``pseudonym``.
+        """
+        taken = _annotator_ids_in_use(conn)
         while True:
             number = conn.execute(select(_PSEUDONYMS.next_value())).scalar_one()
             candidate = f"ann-{number:04d}"
-            if not conn.execute(
-                select(exists().where(UserRow.pseudonym == candidate))
-            ).scalar():
+            if candidate not in taken:
                 return candidate
 
     def issue_reset_code(self, actor: Actor, username: str) -> IssuedCode:
