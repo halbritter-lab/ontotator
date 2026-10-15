@@ -161,3 +161,144 @@ conservative option was taken and should be confirmed.
   vitest 321 passed in 33 files; Playwright 34 passed. The one pytest warning (Starlette's `httpx`
   test client deprecation) predates T2d. `frontend/node_modules` had to be installed in the new
   worktree first (`npm --prefix frontend ci`).
+
+# Batch B (Tasks 4–6)
+
+Worktree `.worktrees/t2d-ontologies-exchange`, from `36d80f3`. Entries marked
+**[open question]** are user-flow or domain questions; the current behaviour was kept.
+
+## Task 4: projects and T1 import
+
+- Migration 0004 gained `proposal_sets` (append-only: triggers, `SELECT, INSERT` only) and the
+  `proposal_annotations` columns `proposal_set_id` and `notes`, as planned. The unique key is
+  named `uq_proposal_sets_identity` (the convention's name exceeds 63 characters).
+- `Repository.create_project(key, name, description, profile, pins)` checks that every profile
+  ontology is pinned with the profile's sha256 to a stored ontology file of the same release and
+  that nothing else is pinned (`PIN_MISMATCH` with a `differences` list); an existing key is
+  `PROJECT_EXISTS`. `ScopedRepository.create_project` needs `CREATE_PROJECT`, audits
+  `project.create` for any actor (also `cli:`) and makes a creating user a member with every role.
+  `project_pins` returns the `Pin`s; `add_documents_and_proposals` (needs `IMPORT_DOCUMENTS`)
+  writes everything in one transaction and calls `on_done` there (the audit).
+- New documents get positions after the existing ones, in delivery order.
+- **Set kinds (user decision Q33):** `exchange/t1.py: IMPORTABLE_SET_KINDS` is the one place
+  that decides: a kind with its rule (`tool_output`: every set actor is a tool). Empty sets of
+  any kind create the document only. Any other non-empty set refuses the whole import with
+  `T1_SET_KIND` (`units`, `set_kinds`, `accepted`). Implemented here for the CLI/job import; T3a
+  can reuse `check_importable` for its upload.
+- **Tool provenance (I3):** set actors of kind `tool` need `name` and `version`; an annotation's
+  tool actor passes if it has both or names such a set actor by `actor_id` (the usual T1 shape).
+- `PIN_MISMATCH` on import compares per layer the ontology id, the version (= release), the
+  sha256 if given, the allowed roots (order matters) and also the T1 profile (not in the plan;
+  a `generic` bundle for an `hpo-phenotype` pin would be read with other axis rules).
+- Order of the checks: format (ontospan, without ontologies; `T1_INVALID` with codes), pins,
+  set kinds, tool provenance, the Task 1 mapping (`T1_UNSUPPORTED`, `T1_UNKNOWN_*`), then
+  validation against the pinned ontologies (`T1_INVALID`). The mapping comes before the
+  ontology validation so that, e.g., a modifier is reported as `T1_UNSUPPORTED`.
+- Jobs act for `jobs.requested_by` with that user's rights (an inactive user is refused); a job
+  without a user is the CLI operator with system-admin rights (`exchange/jobs.py:
+  operator_access`). The `project.import` details also carry `job_id` and `source_sha256`.
+- CLI: `admin projects create` (the profile's sha256 is replaced by `--pin` before it is stored);
+  `admin import` zips a directory bundle before storing it; with `--no-wait` it only queues.
+  If a server worker claims the job first, the CLI waits for its outcome.
+
+## Task 5: T1 export and the edit log
+
+- `Repository.t1_export_content` reads profile, pins, documents, proposals, the latest
+  submission per (document, annotator, mode) and the consenting contributors in one snapshot;
+  `edit_log` returns the pseudonymised lines. Scoped versions need `EXPORT_ALL_WORK` and
+  `EXPORT_EDIT_LOG`.
+- "Latest": `latest_submissions` per origin, then the one recorded last (`recorded_at`, then
+  draft revision) per (document, annotator, mode).
+- A project without submissions fails the export job with `EXPORT_EMPTY` (ontospan refuses an
+  empty bundle). A unit that does not validate fails with `T1_INVALID` and the ontospan codes.
+- The export result and audit hold `sha256`, `bundle_id`, `units`, `contributors` and the
+  counts; the edit-log result `sha256` and `events`. JSONL lines are compact JSON.
+- CLI `admin export` / `admin export-edit-log` refuse an existing output file before running
+  (`OUTPUT_EXISTS`) and write it exclusively.
+
+## Task 6: retiring the v2 work package
+
+- Removed from the product: `POST /api/v1/packages`, `GET /api/v1/workspaces/{id}/export`,
+  `GET /api/v1/packages/{id}/export`, and now also `POST /api/v1/ontologies` (batch A kept it
+  until here); `PackageImportService`, `OntologyUploadService`, `application/exports.py`,
+  `application/analysis.py`, the CLI `analyze`, `scripts/create_demo_package.py`.
+- Moved to `tests/support/`: `v2_reader.py`, `v2_writer.py`, `v2_exports.py` (plus
+  `package_export_zip` / `workspace_export_zip`, which write what the removed routes wrote),
+  `v2_import.py` (`PackageImportService`), `v2_samples.py` (the sample package helpers that
+  other tests imported from the deleted `test_packages.py`) and `ontology_upload.py` (the old
+  `OntologyUploadService`, still used by one registry concurrency test).
+- `tests/fixtures/demo_package.zip` stays (used by `test_project_modes.py` and `test_api.py`);
+  `tests/fixtures/legacy_v1/` is deleted.
+- `auth_harness.upload_package(client, files=...)` imports as the client's user through the
+  scoped repository and answers like the old route (403 `ADMIN_REQUIRED`, 413, 422);
+  `add_ontology(app, path)` stores through `OntologyStore`.
+- Tests deleted because they only covered removed HTTP behaviour: the two `ADMIN_REQUIRED`
+  upload tests and the export cases of the identity tests (`test_auth_api.py`), the workspace
+  export filename test and the upload size-cap test (`test_review_findings.py`), the ontology
+  JSON upload answer (`test_translation_api.py`), the frontend `ontologyUpload.test.tsx`, the
+  upload/import first-run tests and the export describe. The translation API tests now add files
+  through the store; assertions on the removed answer text (`message`) are gone, the language
+  checks use the store's `languages`.
+- Frontend: the package and ontology/translation upload, the missing-ontology prompt, the
+  dashboard "Export package (.zip)" button and both case-screen export buttons ("Export (.zip)"
+  in the header was not in the plan's list but used the removed route) are gone; the guide
+  reads "No projects are available to you yet. Ask an administrator to add you to a project."
+- Browser server: every scenario project is seeded at start-up (in memory, through the test
+  `PackageImportService`, so ontologies are prepared as before). Test users are no longer
+  system admins (an admin sees every seeded project); `/__test_user__?projects=` grants every
+  role. `/__test_translation__` and `/__test_import__` (T1 bundle into `t1-browser`, job inline)
+  are POST routes. `importPackage(page, query, packageId, annotator)` keeps its signature.
+
+## Resolved (2026-10-15, user)
+
+The three open questions of batch A, decided after Tasks 4–6 and implemented as a final commit
+(`feat(exchange): keep the basis of axis values and align HPO profiles with T1`):
+
+1. **Basis of axis values is kept.** `Annotation.axes_defaulted` lists the axes whose value was
+   defaulted; it enters the snapshot payload and hash only when not empty, so every existing
+   version stays valid and no migration is needed (the payload is JSONB). Import stores the T1
+   basis (`exchange/t1.py: imported_axis_values`); `Annotation.with_axes` (used by `set_axes`)
+   keeps the flag of a value set again unchanged and makes only changed values chosen; export
+   writes flagged values as `defaulted` (`_axes`). Adopting or editing a proposal keeps its
+   defaults. The app applies no axis defaults while editing today; the only other default is the
+   export's for empty HPO axes, already `defaulted`. The audit/result key `dropped_basis` is now
+   `defaulted_axes`; `ExportCounts.defaulted_axes` counts every exported defaulted value.
+2. **Project profiles are aligned to T1.** `exchange/t1.py: check_t1_profile`, called by
+   `Repository.create_project`, refuses with `PROFILE_NOT_T1` (`problems`: layer, axis, the
+   values not in T1, or `values: null` for an axis T1 lacks) any `hpo-phenotype` layer whose
+   axes are not T1's or whose options are not a subset of T1's closed lists; hiding values is
+   allowed. The example profile `profiles/hpo-context-example-v1.json` now offers
+   experiencer `patient | family_member | other | unknown` and temporality
+   `current | historical | unknown`. Seed packages (v2 test fixtures, no pins) are not checked;
+   `STANDARD_CLINICAL_AXES` in `domain/axes.py` still has `future` and is used only by them.
+3. **Reviewer as actor stays.** `exchange/t1.py: reviewed_provenance`; the proposal reference in
+   `source_refs` is asserted by `test_t1_mapping.py::test_review_decisions_map_to_methods_and_counts`
+   and `test_t1_export.py::test_review_submissions_export_adopted_and_edited_annotations`.
+
+## Open questions
+
+- None on user flow. A small one for T3: the import refuses a delivery whose layer `profile`
+  differs from the pin's `t1_profile` (see Task 4); confirm when T3 shows pins.
+
+## Gate
+
+- `bash scripts/check.sh` at `eab4dbf` (Tasks 4–6): all steps green ("All local checks
+  passed.", 521 s). Backend 907 passed, 1 skipped (POSIX-only); vitest 315 passed in 32 files;
+  Playwright 34 passed.
+- At `2c3c332` (decisions 1–3) the backend step failed: 3 cases of
+  `test_review_validation_regressions.py::test_package_rejects_invalid_annotation_type_and_axes`
+  forge versions from `model_dump()`, which then contained `axes_defaulted: []`. Fixed in
+  `89f1fa5` (`exclude_if` on the empty list); those tests, `test_t1_mapping.py` and
+  `test_domain.py` pass. The full gate was started again at `89f1fa5` but stopped on request
+  (budget); its result is not recorded.
+
+## Handoff (2026-10-15)
+
+- **Done:** Tasks 4 (`756b924`), 5 (`b5e5e81`), 6 (`eab4dbf`), user decisions (1)–(3)
+  (`2c3c332`, fix `89f1fa5`), this notes file. Nothing is uncommitted; no `wip` commit needed.
+- **Remains:** only the confirmation run of the full gate at the head below.
+- **Next steps:** `npm --prefix frontend ci` if needed, then `bash scripts/check.sh` in the
+  worktree; if green, the branch is ready for review. If the backend step fails, look first at
+  tests that compute snapshot versions from `model_dump()` (see Gate).
+- **Failing tests known:** none after `89f1fa5` in the targeted runs.
+- **Head:** the commit that adds this section (parent `89f1fa5`).
