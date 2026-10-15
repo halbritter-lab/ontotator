@@ -145,6 +145,9 @@ def test_a_supplied_hash_must_be_argon2id_with_our_parameters() -> None:
         (OURS.replace(",t=2,", ",t=11,"), "at most"),
         (OURS.replace(",p=1$", ",p=9$"), "at most"),
         ("$argon2id$v=19$m=19456,t=2,p=1$AAAA$AAAA", "decoded"),
+        (PasswordHasher(hash_len=4, salt_len=8).hash(PASSWORD), "digest"),
+        (PasswordHasher(hash_len=31).hash(PASSWORD), "digest"),
+        (PasswordHasher(salt_len=8).hash(PASSWORD), "salt"),
     ],
     ids=[
         "trailing-newline",
@@ -155,6 +158,9 @@ def test_a_supplied_hash_must_be_argon2id_with_our_parameters() -> None:
         "time-above-cap",
         "parallelism-above-cap",
         "undecodable",
+        "truncated",
+        "short-digest",
+        "short-salt",
     ],
 )
 def test_a_supplied_hash_outside_the_policy_is_refused(

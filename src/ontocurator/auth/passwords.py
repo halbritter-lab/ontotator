@@ -14,7 +14,7 @@ import contextlib
 import re
 import unicodedata
 
-from argon2 import PasswordHasher, Type, extract_parameters
+from argon2 import Parameters, PasswordHasher, Type, extract_parameters
 from argon2.exceptions import VerifyMismatchError
 from argon2.low_level import ARGON2_VERSION
 
@@ -124,6 +124,11 @@ def needs_rehash(stored_hash: str) -> bool:
         params = extract_parameters(stored_hash)
     except Exception:
         return True
+    return _weaker_than_ours(params)
+
+
+def _weaker_than_ours(params: Parameters) -> bool:
+    """Whether a hash with ``params`` is weaker than ours, or not Argon2id v=19."""
     return (
         params.type is not Type.ID
         or params.version != ARGON2_VERSION
@@ -138,7 +143,8 @@ def needs_rehash(stored_hash: str) -> bool:
 def assert_policy(stored_hash: str) -> None:
     """Refuse a supplied hash that is not a usable Argon2id hash within bounds.
 
-    Its parameters must be at least ours and at most the caps.
+    Its parameters must be at least ours and at most the caps, and its digest
+    and salt at least as long as ours.
     """
     match = _PHC.fullmatch(stored_hash)
     if match is None:
@@ -164,8 +170,14 @@ def assert_policy(stored_hash: str) -> None:
     try:
         _HASHER.verify(stored_hash, b"")
     except VerifyMismatchError:
-        return
+        pass
     except Exception as exc:
         raise PasswordRuleError(
             "The password hash cannot be decoded by Argon2."
         ) from exc
+    # The cost parameters passed above, so only a short digest or salt is left.
+    if _weaker_than_ours(extract_parameters(stored_hash)):
+        raise PasswordRuleError(
+            f"The Argon2id hash must have a digest of at least {_HASHER.hash_len}"
+            f" bytes and a salt of at least {_HASHER.salt_len} bytes."
+        )
