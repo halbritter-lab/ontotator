@@ -41,7 +41,8 @@ file may remain if a later file is invalid; the administration UI must refresh
 inventory after failed batches. Framework multipart parsing precedes this
 endpoint limit. Atomic document import is a separate Task 6 requirement.
 
-Task 5 rules and later administration tasks remain open. A separately tracked
-administrator-write authorization follow-up is undergoing verification before
-the final combined gate. No fresh container/full gate or P9 latency acceptance
+Task 5 rules and later administration tasks remain open. The separately tracked
+[administrator-write authorization follow-up](2026-10-15-t3a-admin-authority-review.md)
+has also passed focused verification and independent review. No fresh
+container/full gate or P9 latency acceptance
 is claimed for this task; the final administration gate remains required.

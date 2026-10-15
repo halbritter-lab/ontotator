@@ -38,5 +38,7 @@ PostgreSQL/auth tests after a reproduced audit-lock deadlock was corrected.
 The [project administration slice](2026-10-15-t3a-projects-review.md) passed
 independent scoped review after thirteen reproduced concurrency failures were
 fixed; all thirteen regressions and 113 affected tests then passed, with one
-expected Windows skip. A separate administrator-write authorization follow-up
-is undergoing verification. Later T3a tasks remain open.
+expected Windows skip. The subsequent
+[administrator-write authority correction](2026-10-15-t3a-admin-authority-review.md)
+also passed independent review, 160 affected tests plus one Windows skip,
+and 38 final focused tests. Later T3a tasks remain open.
