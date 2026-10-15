@@ -241,6 +241,46 @@
   border-color: var(--danger);
 }
 
+.form-control[aria-invalid="true"],
+.form-select[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+textarea.form-control {
+  resize: vertical;
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.form-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  font-size: var(--size-md);
+  cursor: pointer;
+}
+
+.form-checkbox {
+  flex: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  border: 1px solid var(--border-strong);
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.form-checkbox-row:has(input:disabled),
+.form-checkbox:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 /* Success messages (e.g. after importing a package) */
 
 .notice {
