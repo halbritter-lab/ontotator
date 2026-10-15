@@ -14,7 +14,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Protocol
+from typing import BinaryIO, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -31,12 +31,31 @@ class RunningStack(Protocol):
     def host(self) -> str: ...
 
     def compose(
-        self, *args: str, check: bool = True
+        self, *args: str, check: bool = True, stdin: BinaryIO | None = None
     ) -> subprocess.CompletedProcess[str]: ...
 
     def exec(
         self, service: str, *args: str, check: bool = True
     ) -> subprocess.CompletedProcess[str]: ...
+
+
+def copy_fixture(stack: RunningStack, source: Path, target: str) -> None:
+    """Stream public fixture bytes through the process's writable /tmp mount.
+
+    Docker archive-copy refuses read-only containers even for tmpfs destinations.
+    The bytes here are public test corpus only, never credentials.
+    """
+    with source.open("rb") as handle:
+        stack.compose(
+            "exec",
+            "-T",
+            "app",
+            "python",
+            "-c",
+            "import pathlib, sys; pathlib.Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())",
+            target,
+            stdin=handle,
+        )
 
 
 def seed(stack: RunningStack) -> None:
@@ -84,7 +103,7 @@ def seed(stack: RunningStack) -> None:
             ) from None
 
     for filename in ("hp.json", "smoke-profile.json", "smoke-bundle.zip"):
-        stack.compose("cp", str(FIXTURES / filename), f"app:/tmp/{filename}")
+        copy_fixture(stack, FIXTURES / filename, f"/tmp/{filename}")
     stack.exec("app", "ontocurator", "admin", "ontologies", "add", "/tmp/hp.json")
     stack.exec(
         "app",
@@ -149,7 +168,7 @@ class ExistingStack:
             self.command += ["-p", project]
 
     def compose(
-        self, *args: str, check: bool = True
+        self, *args: str, check: bool = True, stdin: BinaryIO | None = None
     ) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(
             self.command + list(args),
@@ -158,6 +177,7 @@ class ExistingStack:
             capture_output=True,
             text=True,
             timeout=180,
+            stdin=stdin,
         )
         if check and result.returncode:
             raise RuntimeError(

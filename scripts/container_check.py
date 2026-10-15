@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+from typing import BinaryIO
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -82,10 +83,21 @@ def service_status(output: str) -> str:
 
 
 def run(
-    args: list[str], *, env: dict[str, str], check: bool = True, stage: str = "docker"
+    args: list[str],
+    *,
+    env: dict[str, str],
+    check: bool = True,
+    stage: str = "docker",
+    stdin: BinaryIO | None = None,
 ) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
-        args, cwd=ROOT, env=env, text=True, capture_output=True, timeout=180
+        args,
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=180,
+        stdin=stdin,
     )
     if check and result.returncode:
         raise DockerCommandError(
@@ -126,7 +138,7 @@ class Stack:
             self.files.append(str(override))
 
     def compose(
-        self, *args: str, check: bool = True
+        self, *args: str, check: bool = True, stdin: BinaryIO | None = None
     ) -> subprocess.CompletedProcess[str]:
         command = ["docker", "compose", "-p", self.project]
         for file in self.files:
@@ -151,6 +163,7 @@ class Stack:
             env=self.env,
             check=check,
             stage=f"compose {operation}{service} project={self.project}",
+            stdin=stdin,
         )
 
     def up(self, *, wait: bool = True) -> None:
@@ -264,6 +277,11 @@ def main() -> int:
     parser.add_argument(
         "--image", help="Reuse this local image for app and migrate; never build"
     )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Seed and run browser smoke on the same healthy stack",
+    )
     args = parser.parse_args()
     failures = 0
 
@@ -276,7 +294,14 @@ def main() -> int:
         stack = Stack(Path(temporary), args.image)
         try:
             stack.up()
-            # Task 6 seeds and runs browser smoke here, sharing this healthy stack.
+            if args.smoke:
+                from seed_stack import run_browser_smoke, seed
+
+                print("Smoke: seeding the healthy stack", flush=True)
+                seed(stack)
+                print("Smoke: running browser checks", flush=True)
+                run_browser_smoke(stack)
+                report("stack browser smoke", True)
             report(
                 "non-root uid 1001",
                 stack.exec("app", "id", "-u").stdout.strip() == "1001",
