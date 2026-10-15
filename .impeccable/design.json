@@ -98,7 +98,7 @@
       "kind": "chip",
       "description": "Visible status text with a non-colour shape.",
       "html": "<span class=\"ds-status\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"m3.25 8.5 3 3 6.5-7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg>Completed</span>",
-      "css": ".ds-status{display:inline-flex;align-items:center;gap:var(--space-1);font-family:var(--font-sans);font-size:var(--size-xs);line-height:var(--leading-xs);padding:2px var(--space-2);border-radius:var(--radius-sm);color:var(--success);background:var(--success-light)}"
+      "css": ".ds-status{display:inline-flex;align-items:center;gap:var(--space-1);font-family:var(--font-sans);font-size:var(--size-sm);line-height:var(--leading-sm);font-weight:var(--weight-strong);padding:2px var(--space-2);border-radius:var(--radius-sm);color:var(--success);background:var(--success-light)}"
     },
     {
       "name": "Document Mark",
