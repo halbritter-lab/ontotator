@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import dataclasses
+import copy
 import hashlib
 import logging
 import re
@@ -200,16 +200,34 @@ class OntologyService:
         replaced or removed leaves nothing behind. This service is not touched
         and keeps answering until the caller swaps the new one in.
         """
-        terms = {
-            term_id: dataclasses.replace(term, translations={})
-            for term_id, term in self.ontology.terms.items()
-        }
-        ontology = Ontology(
-            terms,
-            self.ontology.release,
-            dominant_prefix=self.ontology.dominant_prefix,
-        )
+        ontology = self._untranslated_snapshot()
         return self._build(ontology, self.ref, translation_paths)
+
+    def _untranslated_snapshot(self) -> Ontology:
+        ontology = copy.deepcopy(self.ontology)
+        for term in ontology.terms.values():
+            term.translations = {}
+        return ontology
+
+    def pinned_view(self, translation_paths: Iterable[Path]) -> OntologyService:
+        """Restore captured names and reuse the identical corpus's fitted data.
+
+        Resource equality is checked by the registry before calling this. Terms
+        and their lookup references are isolated; expensive lexical fits are
+        shared through views bound to this snapshot, including cached subsets.
+        """
+        ontology = self._untranslated_snapshot()
+        loaded, skipped = apply_translations(ontology, translation_paths)
+        lexical = self.engine.lexical
+        if not isinstance(lexical, LanguageLexicalIndex):
+            raise TypeError("Pinned views require a language lexical index")
+        return OntologyService(
+            ontology,
+            SearchEngine(ontology, lexical.with_ontology(ontology)),
+            self.ref,
+            translations=loaded,
+            skipped_translations=skipped,
+        )
 
     def active_languages(self, requested: Sequence[str] | None) -> list[str]:
         """The loaded translation languages a search looks at.
