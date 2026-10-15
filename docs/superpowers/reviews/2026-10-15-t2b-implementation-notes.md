@@ -512,3 +512,11 @@ answer; the least surprising option was taken and should be confirmed.
 - Behind a reverse proxy, `--forwarded-allow-ips` must name the proxy's address. Otherwise login
   throttling sees every client as the proxy's single address, and 30 failed logins within 15
   minutes, from anyone, lock everyone out. The deployment contract is finalised in T2e.
+
+## Final gate
+
+- `bash scripts/check.sh` at `a62534c`: all steps green ("All local checks passed.", 458 s).
+  Backend 751 passed, 1 skipped (the POSIX-only recovery file permission test on Windows); vitest
+  319 passed in 33 files; Playwright 34 passed. Playwright went from 36 to 34: Task 1 removed
+  `legacy-config.spec.ts` (2 tests) and the provisioning test, and Task 9 replaced the first-run test
+  with two tests. The one pytest warning (Starlette's `httpx` test client deprecation) predates T2b.
