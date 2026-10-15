@@ -52,6 +52,11 @@ class AssignmentView(BaseModel):
     display_name: str
 
 
+class AssignmentOpenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    review_round_target_set_id: str | None = None
+
+
 class AssignmentOpenResponse(OpenWorkspaceResponse):
     assignment: AssignmentView
 
@@ -278,6 +283,7 @@ def open_assignment(
     request: Request,
     principal: PrincipalDep,
     ws_svc: WorkspaceSvcDep,
+    body: AssignmentOpenRequest | None = None,
 ) -> AssignmentOpenResponse:
     with request.app.state.repo.db.transaction() as conn:
         row = conn.execute(
@@ -293,6 +299,9 @@ def open_assignment(
             project_key=assignment.project_key,
             document_id=assignment.document_id,
             mode=MODE_FOR_TASK[assignment.task],
+            review_round_target_set_id=(
+                body.review_round_target_set_id if body is not None else None
+            ),
         ),
         request,
         ws_svc,

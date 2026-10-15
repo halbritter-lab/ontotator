@@ -1104,6 +1104,11 @@ export interface components {
              */
             status: "open" | "in_progress" | "submitted" | "reopened";
         };
+        /** AssignmentOpenRequest */
+        AssignmentOpenRequest: {
+            /** Review Round Target Set Id */
+            review_round_target_set_id?: string | null;
+        };
         /** AssignmentOpenResponse */
         AssignmentOpenResponse: {
             /** Workspace Id */
@@ -3052,7 +3057,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssignmentOpenRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
