@@ -79,7 +79,7 @@ const caseWithEndedSession = (relogin: CurrentUser, view = caseView()) => {
   const alice = testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" });
   sessionsOf(alice);
   oneCaseServer();
-  vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view });
+  vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view });
   let sessionOpen = false;
   const fetchMock = fakeServer({
     "POST /api/v1/workspaces/ws/commands": () => sessionOpen
@@ -413,7 +413,7 @@ describe("the login gate", () => {
     const alice = testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" });
     const me = sessionsOf(alice, alice, alice);
     oneCaseServer();
-    vi.spyOn(api, "openWorkspace").mockResolvedValue({ workspace_id: "ws", view: caseView() });
+    vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view: caseView() });
     const fetchMock = fakeServer({
       "POST /api/v1/workspaces/ws/commands": () =>
         jsonResponse(403, { code: "CSRF_FAILED", details: "The page is out of date; reload it." }),

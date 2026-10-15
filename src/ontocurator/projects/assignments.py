@@ -39,6 +39,8 @@ def revoke_assignments(
     project_id: int,
     assignments: list[dict[str, object]],
     now: datetime,
+    *,
+    reason: str | None = "membership",
 ) -> None:
     """Revoke rows and audit each, preserving submissions and drafts."""
     for assignment in assignments:
@@ -56,7 +58,7 @@ def revoke_assignments(
             target_id=assignment_id,
             project_id=project_id,
             details={
-                "reason": "membership",
+                "reason": reason,
                 "document_id": assignment["document_id"],
                 "task": assignment["task"],
             },

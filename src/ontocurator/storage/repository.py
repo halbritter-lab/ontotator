@@ -1615,8 +1615,70 @@ class Repository:
         of it is half committed.
         """
         with self.db.transaction() as conn:
+            self._before_workspace_locks(conn, key)
             self._lock_draft(conn, key)
             return self._open_draft(conn, key, targets)
+
+    def _before_workspace_locks(self, conn: Connection, key: WorkspaceKey) -> None:
+        """Keep a contextual principal stable before any draft/assignment lock."""
+        principal = current_principal.get()
+        if principal is not None:
+            from ontocurator.auth.authority import lock_user_authority
+
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock_shared(
+                        _lock_id("members", key.project_key)
+                    )
+                )
+            )
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock_shared(
+                        _lock_id("project", key.project_key)
+                    )
+                )
+            )
+            lock_user_authority(conn, principal.user_id)
+
+    def _before_new_mutation(self, conn: Connection, key: WorkspaceKey) -> None:
+        """Request-specific gate, after successful replay/revision checks."""
+
+    def _after_new_mutation(
+        self,
+        conn: Connection,
+        key: WorkspaceKey,
+        result: Draft | Submission,
+        at: datetime,
+    ) -> None:
+        """Status changes after storage, before receipt, in the same transaction."""
+        principal = current_principal.get()
+        if principal is None:
+            return
+        from ontocurator.assignments.service import TASK_FOR_MODE
+        from ontocurator.storage.tables import AssignmentRow
+
+        project_id = self._require_project(conn, key.project_key)
+        statement = update(AssignmentRow).where(
+            AssignmentRow.project_id == project_id,
+            AssignmentRow.document_id == key.document_id,
+            AssignmentRow.user_id == principal.user_id,
+            AssignmentRow.task == TASK_FOR_MODE[key.mode],
+            AssignmentRow.revoked_at.is_(None),
+        )
+        if isinstance(result, Submission):
+            statement = statement.where(
+                AssignmentRow.status.in_(["open", "in_progress", "reopened"])
+            ).values(
+                status="submitted",
+                last_submission_id=result.submission_id,
+                updated_at=at,
+            )
+        else:
+            statement = statement.where(AssignmentRow.status == "open").values(
+                status="in_progress", updated_at=at
+            )
+        conn.execute(statement)
 
     @staticmethod
     def _lock_draft(conn: Connection, key: WorkspaceKey) -> None:
@@ -1856,6 +1918,7 @@ class Repository:
         key_string = _key_str(key)
         request_hash = canonical_hash(envelope.model_dump())
         with self.db.transaction() as conn:
+            self._before_workspace_locks(conn, key)
             # Shared across independent drafts, exclusive against structural
             # changes/imports. Always acquire before the per-draft lock.
             conn.execute(
@@ -1895,6 +1958,7 @@ class Repository:
                 )
             if before_operation is not None:
                 before_operation(conn)
+            self._before_new_mutation(conn, key)
             draft = self._open_draft(conn, key, None)
             # Taken before the operation, which may change the draft in place.
             state_before = DraftState.of(draft)
@@ -1979,6 +2043,7 @@ class Repository:
                 response = _submission_payload(result)
             else:
                 raise ValueError(f"Unsupported operation return type: {type(result)}")
+            self._after_new_mutation(conn, key, result, now)
             conn.execute(
                 insert(MutationReceiptRow).values(
                     project_id=project_id,

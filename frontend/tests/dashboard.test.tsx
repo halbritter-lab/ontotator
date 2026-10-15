@@ -145,7 +145,7 @@ describe("Curation Dashboard Start Screen", () => {
     vi.spyOn(api, "listProjects").mockResolvedValue(samplePackages as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(sampleDocuments as any);
     const openSpy = vi.spyOn(api, "openWorkspace").mockResolvedValue({
-      workspace_id: "ws-hero",
+      read_only: false, workspace_id: "ws-hero",
       view: {
         document: { document_id: "doc-002", text: "Text", language: "de", text_sha256: "sha" },
         key: { project_key: "pediatric-hpo-pkg", document_id: "doc-002", annotator_id: "annotator-1", mode: "independent", scope_id: "s", target_set_id: "t" },

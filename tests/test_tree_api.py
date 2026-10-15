@@ -779,7 +779,11 @@ def test_tree_requests_pass_the_same_checks_as_a_search(app_client):
             resp = _tree(
                 client, ws_key, endpoint, term_id="HP:0001250", **extra, **fields
             )
-            assert resp.status_code == 422, (endpoint, fields, resp.text)
+            assert resp.status_code == (404 if code == "DOCUMENT_NOT_FOUND" else 422), (
+                endpoint,
+                fields,
+                resp.text,
+            )
             assert resp.json()["code"] == code, (endpoint, fields)
 
     assert _events(client, ws_key) == []

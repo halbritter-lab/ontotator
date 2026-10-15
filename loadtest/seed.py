@@ -335,6 +335,9 @@ def main() -> None:
                 headers={"X-CSRF-Token": response.json()["csrf_token"]},
             ).raise_for_status()
         admin("projects", "add-member", "load", username, "--role", "annotator")
+        # Every original user may choose any of the 1000 documents. The real
+        # CLI's omitted --document option provisions that entire working set.
+        admin("assign", "load", username, "--confirm-language")
     print(
         f"Seeded {args.compose_project}: 30 users, 1000 documents, 3000 proposals; HPO {release}. Workers load uploaded ontologies automatically on first use; warm up before measurement."
     )

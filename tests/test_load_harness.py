@@ -181,3 +181,120 @@ def test_container_transfer_preserves_binary_stdin(tmp_path):
     source.write_bytes(original)
     seed_module().stream_to_container([sys.executable, str(shim)], source, str(target))
     assert target.read_bytes() == original
+
+
+def test_every_load_user_keeps_the_original_full_candidate_universe(monkeypatch):
+    import ast
+    from types import SimpleNamespace
+
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[1]))
+    tree = ast.parse(
+        (Path(__file__).parents[1] / "loadtest/locustfile.py").read_text(
+            encoding="utf-8"
+        )
+    )
+    annotator = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "Annotator"
+    )
+    method = next(
+        node
+        for node in annotator.body
+        if isinstance(node, ast.FunctionDef) and node.name == "open_document"
+    )
+    method.decorator_list = []
+    namespace = {}
+    exec(
+        compile(
+            ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+            "actual-open-document",
+            "exec",
+        ),
+        namespace,
+    )
+    documents = [f"load-{index:04d}" for index in range(1, 1001)]
+    pools = []
+
+    class StopAtChoice(Exception):
+        pass
+
+    class ObserveChoice:
+        def choice(self, pool):
+            pools.append(pool)
+            raise StopAtChoice()
+
+    for index in range(1, 31):
+        actor = SimpleNamespace(
+            username=f"load-{index:02d}",
+            rng=ObserveChoice(),
+            environment=SimpleNamespace(load_manifest={"documents": documents}),
+        )
+        with pytest.raises(StopAtChoice):
+            namespace["open_document"](actor)
+    assert len(pools) == 30
+    assert all(pool is documents for pool in pools)
+    assert sum(map(len, pools)) == 30000
+
+
+def test_load_seed_assigns_the_same_full_pool_through_real_cli(monkeypatch, tmp_path):
+    import subprocess
+    import sys
+    from types import SimpleNamespace
+
+    seed = seed_module()
+    commands = []
+
+    def run(command, **kwargs):
+        tail = command[command.index("admin") + 1 :]
+        commands.append(tail)
+        output = (
+            "Setup code (single use, valid until 2026-10-15 UTC):\n  setup-token\n"
+            if tail[:2] == ["users", "create"]
+            else ""
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=output)
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, *args, **kwargs):
+            return SimpleNamespace(
+                raise_for_status=lambda: None, json=lambda: {"csrf_token": "test"}
+            )
+
+    documents = [f"load-{index:04d}" for index in range(1, 1001)]
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "seed",
+            "--hpo",
+            str(tmp_path / "hp.json"),
+            "--out",
+            str(tmp_path / "out"),
+            "--compose-project",
+            "synthetic",
+            "--password",
+            "synthetic-password",
+        ],
+    )
+    monkeypatch.setattr(seed, "read_hpo", lambda path: ([], "2026-06-23", "a" * 64))
+    monkeypatch.setattr(seed, "build_assets", lambda *args: {"documents": documents})
+    monkeypatch.setattr(seed, "stream_to_container", lambda *args: None)
+    monkeypatch.setattr(seed.subprocess, "run", run)
+    monkeypatch.setattr(seed.httpx, "Client", Client)
+    seed.main()
+    # Omitting --document uses the real CLI's existing all-documents branch,
+    # so the full corpus is provisioned once for each original load user.
+    assert [command for command in commands if command[0] == "assign"] == [
+        ["assign", "load", f"load-{index:02d}", "--confirm-language"]
+        for index in range(1, 31)
+    ]
