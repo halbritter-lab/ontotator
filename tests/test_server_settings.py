@@ -68,6 +68,21 @@ def test_production_refuses_plaintext_database_passwords(
         settings.server_settings(env)
 
 
+@pytest.mark.parametrize("with_password_file", [False, True])
+@pytest.mark.parametrize("query_key", ["password", "pass%77ord"])
+def test_production_refuses_database_password_query_parameters(
+    tmp_path: Path, with_password_file: bool, query_key: str
+) -> None:
+    env = production_env(tmp_path)
+    if not with_password_file:
+        del env["ONTOCURATOR_DATABASE_PASSWORD_FILE"]
+    secret = "query-secret-marker"
+    env["ONTOCURATOR_DATABASE_URL"] += f"?{query_key}={secret}"
+    with pytest.raises(settings.SettingsError, match="ONTOCURATOR_DATABASE_URL") as exc:
+        settings.server_settings(env)
+    assert secret not in str(exc.value)
+
+
 def test_production_refuses_direct_admin_hash(tmp_path: Path) -> None:
     env = production_env(tmp_path)
     env["ONTOCURATOR_ADMIN_PASSWORD_HASH"] = "secret-hash"

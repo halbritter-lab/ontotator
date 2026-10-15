@@ -78,14 +78,15 @@ def server_settings(env: Mapping[str, str] | None = None) -> ServerSettings:
         ):
             if name in env:
                 raise SettingsError(f"{name} must come from {name}_FILE in production")
-        # Check before adding a file password: an inline URL password is a
-        # plaintext secret as well, including when no PASSWORD setting exists.
+        # Check before adding a file password: authority and query passwords
+        # are plaintext secrets. Psycopg query options override URL credentials;
+        # SQLAlchemy decodes query keys, including percent-encoded "password".
         raw_url = env.get("ONTOCURATOR_DATABASE_URL", "")
         try:
-            inline_password = make_url(raw_url).password
+            parsed_url = make_url(raw_url)
         except ArgumentError:
             raise SettingsError("ONTOCURATOR_DATABASE_URL is not a valid URL") from None
-        if inline_password is not None:
+        if parsed_url.password is not None or "password" in parsed_url.query:
             raise SettingsError(
                 "ONTOCURATOR_DATABASE_URL must not contain a password; use ONTOCURATOR_DATABASE_PASSWORD_FILE"
             )
