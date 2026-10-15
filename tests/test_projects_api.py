@@ -617,14 +617,19 @@ def test_reciprocal_membership_edits_do_not_deadlock_on_audit_foreign_keys(
     alice = app.state.accounts.get_by_username("alice")
     bob = app.state.accounts.get_by_username("bob")
     barrier = Barrier(2)
-    real = memberships.record_audit
+    real = memberships.require_project_management
 
-    def synchronized_audit(*args, **kwargs):
-        if args[2] == "project.member_remove":
-            barrier.wait(timeout=10)
+    def synchronized_authority(*args, **kwargs):
+        # Reciprocal user pairs now acquire actor SHARE / target NO KEY UPDATE
+        # in ID order. Rendezvous before those locks, since intersecting pairs
+        # correctly serialize; forcing an audit rendezvous would require both
+        # incompatible user-lock sets to be held at once.
+        barrier.wait(timeout=10)
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(memberships, "record_audit", synchronized_audit)
+    monkeypatch.setattr(
+        memberships, "require_project_management", synchronized_authority
+    )
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(
             app.state.memberships.set_roles,

@@ -13,7 +13,8 @@ from sqlalchemy import Connection, delete, func, insert, select, update
 from ontocurator.auth.accounts import normalize_languages
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.memberships import grant_roles
-from ontocurator.authz.policy import ROLES
+from ontocurator.authz.policy import ROLES, Action
+from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile, profile_hash
@@ -256,8 +257,14 @@ class ProjectService:
         if "languages" in fields:
             fields["languages"] = sorted(normalize_languages(change.languages))
         with self.db.transaction() as conn:
+            conn.execute(
+                select(func.pg_advisory_xact_lock_shared(_lock_id("members", key)))
+            )
             conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", key))))
             row = self._project(conn, key)
+            require_project_management(
+                conn, actor, key, row["id"], Action.MANAGE_PROJECT_SETTINGS
+            )
             combined = dict(row) | fields
             validate_guideline(combined["guideline_url"], combined["guideline_version"])
             validate_hidden_values(
@@ -317,8 +324,14 @@ class ProjectService:
     ) -> ProjectSettings:
         with self.db.transaction() as conn:
             # Existing imports take global import first, then this project lock.
+            conn.execute(
+                select(func.pg_advisory_xact_lock_shared(_lock_id("members", key)))
+            )
             conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", key))))
             row = self._project(conn, key)
+            require_project_management(
+                conn, actor, key, row["id"], Action.MANAGE_PROJECT_SETTINGS
+            )
             if self._locked(conn, row["id"]):
                 raise DomainError(
                     "PROJECT_IN_USE",

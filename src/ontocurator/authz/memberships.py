@@ -17,7 +17,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.auth.tokens import revoke_user_sessions
-from ontocurator.authz.policy import ROLES, Access, Role
+from ontocurator.authz.policy import ROLES, Access, Action, Role
+from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.errors import DomainError
 from ontocurator.storage.database import Database
 from ontocurator.storage.tables import ProjectMembershipRow, ProjectRow, UserRow
@@ -149,6 +150,15 @@ class MembershipService:
         with self.db.transaction() as conn:
             self._lock_project(conn, project_key)
             project_id = _project_id(conn, project_key)
+            user_id = self._user_id(conn, username)
+            require_project_management(
+                conn,
+                actor,
+                project_key,
+                project_id,
+                Action.MANAGE_MEMBERS,
+                target_user_id=user_id,
+            )
             user = _lock_user(conn, username)
             added = grant_roles(
                 conn, actor, project_id, user.id, user.username, wanted, now
@@ -179,8 +189,8 @@ class MembershipService:
         with self.db.transaction() as conn:
             self._lock_project(conn, project_key)
             project_id = _project_id(conn, project_key)
-            user = _lock_user(conn, username)
-            current = self._roles(conn, project_id, user.id)
+            user_id = self._user_id(conn, username)
+            current = self._roles(conn, project_id, user_id)
             return self.set_roles(
                 actor,
                 project_key,
@@ -188,6 +198,16 @@ class MembershipService:
                 current - (wanted if wanted is not None else current),
                 revoke_assignments=revoke_assignments,
             )
+
+    @staticmethod
+    def _user_id(conn: Connection, username: str) -> int:
+        name = normalize_username(username)
+        user_id = conn.execute(
+            select(UserRow.id).where(UserRow.username == name)
+        ).scalar_one_or_none()
+        if user_id is None:
+            raise DomainError("USER_NOT_FOUND", f"There is no user '{name}'.")
+        return user_id
 
     @staticmethod
     def _lock_project(conn: Connection, key: str) -> None:
@@ -217,6 +237,15 @@ class MembershipService:
         with self.db.transaction() as conn:
             self._lock_project(conn, project_key)
             project_id = _project_id(conn, project_key)
+            user_id = self._user_id(conn, username)
+            require_project_management(
+                conn,
+                actor,
+                project_key,
+                project_id,
+                Action.MANAGE_MEMBERS,
+                target_user_id=user_id,
+            )
             user = _lock_user(conn, username)
             current = self._roles(conn, project_id, user.id)
             if current == wanted:

@@ -4,7 +4,6 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
-from ontocurator.api.admin_routes import admin_users
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.routes import get_access
 from ontocurator.auth.audit import Actor
@@ -20,7 +19,12 @@ from ontocurator.projects.service import (
     ProjectSettings,
     ProjectSettingsChange,
 )
-from ontocurator.storage.tables import ProjectMembershipRow, ProjectRow, UserRow
+from ontocurator.storage.tables import (
+    ProjectMembershipRow,
+    ProjectRow,
+    UserLanguageRow,
+    UserRow,
+)
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
@@ -159,32 +163,44 @@ def update_profile(
 def members(key: str, principal: PrincipalDep, request: Request) -> list[Member]:
     _guard(request, Action.VIEW_PROJECT, key)
     accounts = request.app.state.accounts
-    # Check actual existence even for administrators with installation-wide rights.
-    _service(request).settings(key)
-    with accounts.db.transaction() as conn:
-        ids = conn.execute(
-            select(UserRow.id)
+    with accounts.db.snapshot() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == key)
+        ).scalar_one_or_none()
+        if project_id is None:
+            raise project_not_found(key)
+        rows = conn.execute(
+            select(
+                UserRow.id,
+                UserRow.username,
+                UserRow.display_name,
+                UserRow.pseudonym,
+                ProjectMembershipRow.role,
+            )
             .join(ProjectMembershipRow, UserRow.id == ProjectMembershipRow.user_id)
-            .join(ProjectRow, ProjectRow.id == ProjectMembershipRow.project_id)
-            .where(ProjectRow.project_key == key)
-            .distinct()
-        ).scalars()
-        wanted = set(ids)
-        users = admin_users(
-            accounts, [user for user in accounts.list_users() if user.id in wanted]
-        )
-    return [
-        Member(
-            username=user.username,
-            display_name=user.display_name,
-            pseudonym=user.pseudonym,
-            roles=next(
-                project.roles for project in user.projects if project.project_key == key
-            ),
-            languages=user.languages,
-        )
-        for user in users
-    ]
+            .where(ProjectMembershipRow.project_id == project_id)
+            .order_by(UserRow.username, ProjectMembershipRow.role)
+        ).all()
+        by_id: dict[int, Member] = {}
+        for row in rows:
+            member = by_id.setdefault(
+                row.id,
+                Member(
+                    username=row.username,
+                    display_name=row.display_name,
+                    pseudonym=row.pseudonym,
+                    roles=[],
+                    languages=[],
+                ),
+            )
+            member.roles.append(row.role)
+        for user_id, language in conn.execute(
+            select(UserLanguageRow.user_id, UserLanguageRow.language)
+            .where(UserLanguageRow.user_id.in_(by_id))
+            .order_by(UserLanguageRow.language)
+        ).tuples():
+            by_id[user_id].languages.append(language)
+        return list(by_id.values())
 
 
 @router.put("/{key}/members/{username}")
