@@ -327,6 +327,13 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         units.append(unit)
         for name in counts:
             counts[name] += unit_counts[name]  # type: ignore[literal-required]
+    # write_bundle checks the format without ontology views. Validate against
+    # the same pinned ontologies as import before storing an export artifact.
+    ontologies: dict[str, ontospan.OntologyView] = {
+        ontology_id: ontospan.ObographOntology.load(db.blobs.path(pin.sha256))
+        for ontology_id, pin in content.pins.items()
+    }
+    _validate(units, ontologies)
     now = datetime.now(UTC).replace(microsecond=0)
     bundle_id = f"{project}-{now:%Y%m%dT%H%M%SZ}"
     contributors = [

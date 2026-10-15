@@ -341,6 +341,33 @@ def test_an_export_that_does_not_fit_the_profile_fails_with_codes(
     assert "temporality" in job.error
 
 
+def test_an_export_outside_the_pinned_roots_fails_without_an_artifact(
+    db: Database,
+) -> None:
+    original = _own(db, "ann-0001", "a1", None, {"assertion": "present"})
+    outside = snapshot(
+        original.annotation.model_copy(update={"term_id": "HP:0000001"}),
+        original.evidence,
+        _document(db),
+        hpo_profile(),
+    )
+    _submit(db, "ann-0001", "independent", [outside], submission_id="s-outside")
+
+    job = _run(db, "t1_export")
+
+    assert job.status == "failed"
+    assert job.error is not None and "T1_INVALID" in job.error
+    assert "outside_allowed_roots" in job.error
+    assert job.result is None
+    with db.transaction() as conn:
+        assert (
+            conn.execute(
+                select(AuditEventRow.id).where(AuditEventRow.action == "project.export")
+            ).first()
+            is None
+        )
+
+
 def test_an_export_without_submissions_fails(db: Database) -> None:
     job = _run(db, "t1_export")
 
