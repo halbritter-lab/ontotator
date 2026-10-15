@@ -6,6 +6,8 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
+import socket
 import threading
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -38,6 +40,7 @@ from ontocurator.domain.errors import (
     PayloadTooLarge,
     RevisionConflict,
 )
+from ontocurator.jobs.queue import Handler, JobContext, JobQueue, Worker
 from ontocurator.ontology.translations import parse_translation_name
 from ontocurator.storage.database import Database
 from ontocurator.storage.lease import RuntimeLease
@@ -77,9 +80,14 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
         return
     await run_in_threadpool(lease.acquire)
     keeper = asyncio.create_task(_keep_lease(lease))
+    # Each server process runs queued jobs (P6, index D-l).
+    worker = Worker(app.state.jobs, f"{socket.gethostname()}:{os.getpid()}")
+    app.state.job_worker = worker
+    worker.start()
     try:
         yield
     finally:
+        await run_in_threadpool(worker.stop)
         keeper.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await keeper
@@ -205,6 +213,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
             app.state.ontologies_ready = ready
             app.state.ontology_store = store
+            # Handlers are added by the import and export tasks (T2d Tasks 4, 5).
+            handlers: dict[str, Handler] = {}
+            app.state.jobs = JobQueue(
+                db,
+                handlers,
+                context=JobContext(
+                    db=db,
+                    registry=registry,
+                    store=store,
+                    data_dir=config.workspace_dir,
+                ),
+            )
             threading.Thread(
                 target=preload, name="preload-ontologies", daemon=True
             ).start()

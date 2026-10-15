@@ -565,3 +565,31 @@ class ProjectOntologyRow(Base):
     sha256: Mapped[str] = mapped_column(ForeignKey(OntologyFileRow.sha256))
     allowed_roots: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
     t1_profile: Mapped[str] = mapped_column(server_default=text("'generic'"))
+
+
+class JobRow(Base):
+    """A long-running import or export, claimed by one worker (P6, index D-l)."""
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed')", name="status"
+        ),
+        Index("ix_jobs_status_id", "status", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    kind: Mapped[str]
+    status: Mapped[str]
+    project_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id)
+    )
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    requested_label: Mapped[str]
+    payload: Mapped[dict[str, Any]]
+    result: Mapped[dict[str, Any] | None]
+    error: Mapped[str | None]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    started_at: Mapped[datetime | None]
+    finished_at: Mapped[datetime | None]
+    worker: Mapped[str | None]
