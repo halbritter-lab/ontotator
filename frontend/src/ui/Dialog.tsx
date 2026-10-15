@@ -16,9 +16,18 @@ export interface DialogProps {
 const activeDialogs: HTMLElement[] = [];
 let originalOverflow = "";
 const isActive = (element: HTMLElement) => !element.closest("[inert]") && activeDialogs.filter((dialog) => !dialog.closest("[inert]")).at(-1) === element;
+function isRendered(element: HTMLElement): boolean {
+  const visibility = getComputedStyle(element).visibility;
+  if (visibility === "hidden" || visibility === "collapse") return false;
+  // display is not inherited: a visible-looking child can belong to a hidden subtree.
+  for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+    if (getComputedStyle(ancestor).display === "none") return false;
+  }
+  return true;
+}
 function focusableElements(element: HTMLElement): HTMLElement[] {
   return Array.from(element.querySelectorAll<HTMLElement>('a[href],button,input:not([type="hidden"]),select,textarea,[tabindex],[contenteditable="true"]'))
-    .filter((item) => item.tabIndex >= 0 && !item.matches(":disabled") && !item.closest('[hidden],[inert],[aria-hidden="true"]') && getComputedStyle(item).display !== "none" && getComputedStyle(item).visibility !== "hidden");
+    .filter((item) => item.tabIndex >= 0 && !item.matches(":disabled") && !item.closest('[hidden],[inert],[aria-hidden="true"]') && isRendered(item));
 }
 
 export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false, initialFocus, size = "md", footer, children }: DialogProps): JSX.Element | null {

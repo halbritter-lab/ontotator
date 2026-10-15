@@ -28,6 +28,24 @@ it("traps_tab_and_shift_tab", async () => {
   await user.tab();
   expect(document.activeElement).toBe(screen.getByRole("button", { name: "First" }));
 });
+it.each(["initial", "forward", "backward"] as const)("skips_buttons_with_display_none_ancestors_for_%s_focus", (direction) => {
+  render(<Dialog open title="Edit">
+    <div style={{ display: "none" }}><button>Hidden first</button></div>
+    <button>First visible</button><button>Last visible</button>
+    <div style={{ display: "none" }}><button>Hidden last</button></div>
+  </Dialog>);
+  const first = screen.getByRole("button", { name: "First visible" });
+  const last = screen.getByRole("button", { name: "Last visible" });
+  if (direction === "initial") {
+    expect(document.activeElement).toBe(first);
+  } else {
+    const start = direction === "forward" ? last : first;
+    start.focus();
+    const allowedDefault = fireEvent.keyDown(start, { key: "Tab", shiftKey: direction === "backward" });
+    expect(allowedDefault).toBe(false);
+    expect(document.activeElement).toBe(direction === "forward" ? first : last);
+  }
+});
 it("escape_closes_and_focus_returns_in_strict_mode", async () => {
   function Example() { const [open, setOpen] = useState(false); return <><button onClick={() => setOpen(true)}>Open</button><Dialog open={open} title="Edit" onClose={() => setOpen(false)}><input aria-label="Name" /></Dialog></>; }
   const user = userEvent.setup();
