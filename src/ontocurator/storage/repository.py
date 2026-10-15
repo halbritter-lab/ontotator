@@ -9,6 +9,7 @@ are append-only (T2 D6): the application role can only insert and read them.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 from urllib.parse import quote
@@ -27,6 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from ontocurator.auth.context import current_principal
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.canonical import canonical_hash
@@ -57,6 +59,7 @@ from ontocurator.storage.tables import (
     DraftAnnotationRow,
     DraftEvidenceRow,
     DraftRow,
+    EditEventRow,
     EvidenceSnapshotRow,
     MutationReceiptRow,
     ProjectResourceRow,
@@ -161,6 +164,71 @@ def _draft_payload(draft: Draft) -> dict[str, Any]:
     payload = draft.model_dump(mode="json")
     payload["annotations"] = [encode_snapshot(a) for a in draft.annotations]
     return payload
+
+
+@dataclass(frozen=True)
+class DraftState:
+    """The complete content of a draft at one revision (``edit_events.state``).
+
+    Annotations and evidence are sorted ``(id, version)`` pairs of the
+    content-addressed snapshots, so a revision is reconstructed by a lookup.
+    """
+
+    annotations: tuple[tuple[str, str], ...] = ()
+    evidence: tuple[tuple[str, str], ...] = ()
+    decisions: tuple[dict[str, Any], ...] = ()
+    checked_layer_ids: tuple[str, ...] = ()
+
+    @classmethod
+    def of(cls, draft: Draft) -> DraftState:
+        return cls(
+            annotations=tuple(
+                sorted(
+                    (a.annotation.annotation_id, a.version) for a in draft.annotations
+                )
+            ),
+            evidence=tuple(
+                sorted((e.mention.evidence_id, e.version) for e in draft.evidence)
+            ),
+            decisions=tuple(d.model_dump(mode="json") for d in draft.decisions),
+            checked_layer_ids=tuple(draft.checked_layer_ids),
+        )
+
+    @classmethod
+    def from_json(cls, stored: dict[str, Any]) -> DraftState:
+        return cls(
+            annotations=tuple((str(i), str(v)) for i, v in stored["annotations"]),
+            evidence=tuple((str(i), str(v)) for i, v in stored["evidence"]),
+            decisions=tuple(stored["decisions"]),
+            checked_layer_ids=tuple(stored["checked_layer_ids"]),
+        )
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "annotations": [list(pair) for pair in self.annotations],
+            "evidence": [list(pair) for pair in self.evidence],
+            "decisions": list(self.decisions),
+            "checked_layer_ids": list(self.checked_layer_ids),
+        }
+
+
+@dataclass(frozen=True)
+class EditEvent:
+    """One row of the edit log (``edit_events``)."""
+
+    id: int
+    project_id: int
+    draft_id: int
+    user_id: int | None
+    session_id: int | None
+    at: datetime
+    mutation_id: str
+    kind: str
+    command: dict[str, Any]
+    revision_before: int
+    revision_after: int
+    state: dict[str, Any]
+    submission_id: str | None
 
 
 class Repository:
@@ -824,6 +892,7 @@ class Repository:
         *,
         local_key: str,
         imported: bool,
+        last_edit_event_id: int | None = None,
     ) -> None:
         origin = submission.origin_key
         statement = pg_insert(SubmissionRow).values(
@@ -837,6 +906,7 @@ class Repository:
             draft_revision=submission.draft_revision,
             payload=_submission_payload(submission),
             created_at=submission.created_at,
+            last_edit_event_id=last_edit_event_id,
         )
         # Imported submissions may already be known; a local one must be new.
         conn.execute(statement.on_conflict_do_nothing() if imported else statement)
@@ -1177,6 +1247,10 @@ class Repository:
         Writers of one draft are serialised by a transaction-scoped advisory
         lock. A retried mutation ID with the same payload replays the stored
         response; with another payload it is a conflict.
+
+        Every committed command is logged in ``edit_events`` in the same
+        transaction (D6), with the user and session of the running request
+        (none outside a request). A replay logs nothing.
         """
         key_string = _key_str(key)
         request_hash = canonical_hash(envelope.model_dump())
@@ -1209,7 +1283,10 @@ class Repository:
                     f"REVISION_CONFLICT: Expected revision "
                     f"{envelope.expected_revision}, current is {current_revision}"
                 )
-            result = operation(self._open_draft(conn, key, None))
+            draft = self._open_draft(conn, key, None)
+            # Taken before the operation, which may change the draft in place.
+            state_before = DraftState.of(draft)
+            result = operation(draft)
             draft_row = self._draft_row(conn, project_id, key_string)
             if draft_row is None:
                 raise DomainError("DRAFT_NOT_CREATED", key_string)
@@ -1252,6 +1329,15 @@ class Repository:
                     result.evidence,
                     result.decisions,
                 )
+                self._log_edit(
+                    conn,
+                    project_id,
+                    draft_row.id,
+                    envelope,
+                    current_revision,
+                    DraftState.of(result),
+                    at=now,
+                )
                 response = _draft_payload(result)
             elif isinstance(result, Submission):
                 conn.execute(
@@ -1259,8 +1345,24 @@ class Repository:
                     .where(DraftRow.id == draft_row.id)
                     .values(revision=new_revision, updated_at=now)
                 )
+                # The event first: the submission references it.
+                event_id = self._log_edit(
+                    conn,
+                    project_id,
+                    draft_row.id,
+                    envelope,
+                    current_revision,
+                    state_before,
+                    at=now,
+                    submission_id=result.submission_id,
+                )
                 self._insert_submission(
-                    conn, project_id, result, local_key=key_string, imported=False
+                    conn,
+                    project_id,
+                    result,
+                    local_key=key_string,
+                    imported=False,
+                    last_edit_event_id=event_id,
                 )
                 response = _submission_payload(result)
             else:
@@ -1276,6 +1378,90 @@ class Repository:
                 )
             )
             return result
+
+    @staticmethod
+    def _log_edit(
+        conn: Connection,
+        project_id: int,
+        draft_id: int,
+        envelope: MutationEnvelope,
+        revision_before: int,
+        state: DraftState,
+        *,
+        at: datetime,
+        submission_id: str | None = None,
+    ) -> int:
+        """Append one ``edit_events`` row; its ID."""
+        principal = current_principal.get()
+        return int(
+            conn.execute(
+                insert(EditEventRow)
+                .values(
+                    project_id=project_id,
+                    draft_id=draft_id,
+                    user_id=principal.user_id if principal else None,
+                    session_id=principal.session_id if principal else None,
+                    at=at,
+                    mutation_id=envelope.mutation_id,
+                    kind="edit" if submission_id is None else "submit",
+                    command=envelope.payload,
+                    revision_before=revision_before,
+                    revision_after=revision_before + 1,
+                    state=state.to_json(),
+                    submission_id=submission_id,
+                )
+                .returning(EditEventRow.id)
+            ).scalar_one()
+        )
+
+    def _draft_events(self, key: WorkspaceKey) -> Any:
+        """Edit events of the draft of ``key`` (a statement to refine)."""
+        return (
+            select(EditEventRow)
+            .join(DraftRow, DraftRow.id == EditEventRow.draft_id)
+            .join(ProjectRow, ProjectRow.id == DraftRow.project_id)
+            .where(
+                ProjectRow.project_key == key.package_id,
+                EditEventRow.project_id == ProjectRow.id,
+                DraftRow.draft_key == _key_str(key),
+            )
+        )
+
+    def edit_events(self, key: WorkspaceKey) -> list[EditEvent]:
+        """The edit log of one draft, oldest first; empty for an unknown draft.
+
+        Raises:
+            DomainError: ``PACKAGE_NOT_FOUND``.
+        """
+        with self.db.transaction() as conn:
+            self._require_project(conn, key.package_id)
+            rows = conn.execute(self._draft_events(key).order_by(EditEventRow.id)).all()
+        return [EditEvent(**row._asdict()) for row in rows]
+
+    def draft_state_at(self, key: WorkspaceKey, revision: int) -> DraftState:
+        """The content of a draft after ``revision``; empty for revision 0.
+
+        Raises:
+            DomainError: ``PACKAGE_NOT_FOUND``, or ``REVISION_NOT_FOUND`` when
+                no logged command of the draft produced ``revision`` (e.g. the
+                revision a draft resumed from a submission started at).
+        """
+        if revision == 0:
+            return DraftState()
+        with self.db.transaction() as conn:
+            self._require_project(conn, key.package_id)
+            row = conn.execute(
+                self._draft_events(key)
+                .where(EditEventRow.revision_after == revision)
+                .order_by(EditEventRow.id.desc())
+                .limit(1)
+            ).one_or_none()
+        if row is None:
+            raise DomainError(
+                "REVISION_NOT_FOUND",
+                f"No logged command made revision {revision} of this draft.",
+            )
+        return DraftState.from_json(row.state)
 
     def get_document_status(
         self,

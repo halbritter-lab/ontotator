@@ -137,6 +137,8 @@ CALLS: dict[str, Callable[[Repository], object]] = {
         _key("B")
     ),
     "export_package": lambda r: r.export_package("B"),
+    "edit_events": lambda r: r.edit_events(_key("B")),
+    "draft_state_at": lambda r: r.draft_state_at(_key("B"), 1),
 }
 
 

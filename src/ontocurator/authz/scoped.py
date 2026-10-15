@@ -38,7 +38,7 @@ from ontocurator.packages.models import (
     ValidatedPackage,
 )
 from ontocurator.storage.database import Database
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.repository import DraftState, EditEvent, Repository
 from ontocurator.storage.tables import UserRow
 
 # Public methods that touch no project data.
@@ -299,3 +299,13 @@ class ScopedRepository(Repository):
         return super().export_package(
             package_id, include_captured_conditions=include_captured_conditions
         )
+
+    # --- edit log ----------------------------------------------------------- #
+
+    def edit_events(self, key: WorkspaceKey) -> list[EditEvent]:
+        self._visible(key.package_id)
+        return super().edit_events(key)
+
+    def draft_state_at(self, key: WorkspaceKey, revision: int) -> DraftState:
+        self._visible(key.package_id)
+        return super().draft_state_at(key, revision)
