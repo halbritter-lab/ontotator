@@ -68,7 +68,8 @@ def test_a_caught_failure_inside_a_snapshot_does_not_doom_it(tmp_path: Path) -> 
     db = database_for(tmp_path / "a.db")
 
     with db.snapshot() as conn:
-        # Nothing can have been written, so the snapshot may go on reading.
+        # Nothing can have been written, so the snapshot may go on reading
+        # (a database error, unlike this Python error, would abort it).
         with pytest.raises(RuntimeError, match="refused"), db.transaction():
             raise RuntimeError("refused")
         with pytest.raises(RuntimeError, match="refused"), db.snapshot():

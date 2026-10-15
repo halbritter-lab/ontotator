@@ -695,7 +695,6 @@ def test_a_local_search_event_with_a_known_id_is_refused(tmp_path: Path) -> None
 def _wait_until_blocked_or_done(repo: Repository, future: Future[object]) -> None:
     """Return once ``future`` finished or a session of its database waits for a lock."""
     deadline = time.monotonic() + 10
-    pause = threading.Event()
     while not future.done():
         with repo.db.engine.connect() as conn:
             waiting = conn.execute(
@@ -707,7 +706,7 @@ def _wait_until_blocked_or_done(repo: Repository, future: Future[object]) -> Non
         if waiting:
             return
         assert time.monotonic() < deadline, "neither finished nor waiting"
-        pause.wait(0.01)
+        time.sleep(0.01)
 
 
 def test_an_import_racing_a_local_save_of_its_event_id_is_refused(

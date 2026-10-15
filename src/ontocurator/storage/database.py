@@ -48,7 +48,8 @@ class Database:
     the writes of the failed call cannot be told apart from the others, so the
     outermost scope rolls back and raises ``TransactionRollbackOnly``, chained
     to the first such exception, even if the caller caught it. A snapshot has
-    no writes, so a failure inside it does not doom it.
+    no writes, so a caught Python-level failure inside it does not doom it; a
+    database error still aborts it, and later statements in it fail.
 
     ``snapshot()`` is a read-only REPEATABLE READ transaction for reads that
     must form one consistent view, such as an export.
@@ -131,6 +132,7 @@ class Database:
         """A scope that joined ``current``: its failure dooms a writing transaction.
 
         A snapshot is read-only, so a failure inside it leaves nothing to undo.
+        A database error still aborts the snapshot on the server.
         """
         try:
             yield
