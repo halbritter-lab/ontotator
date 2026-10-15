@@ -22,7 +22,7 @@ class AppConfig(BaseModel):
     ontology_path: Path | None = None
     ontology_paths: list[Path] = []
     # Folders besides <workspace>/ontologies in which translation files
-    # (hp-de.babelon.tsv) are looked for, e.g. ontologies/ next to the executable.
+    # (hp-de.babelon.tsv) are looked for (serve --translations-dir).
     translation_dirs: list[Path] = []
     expected_ontology_ref: OntologyRef | None = None
     session_token: str
@@ -30,12 +30,5 @@ class AppConfig(BaseModel):
     port: int = 8000
     web_dir: Path | None = None
     axes_config: AxesConfig | None = None
-    # Presets of a preconfigured distribution (ontocurator-settings.json).
+    # Presets of this installation (ontocurator-settings.json).
     distribution: DistributionSettings = Field(default_factory=DistributionSettings)
-    # Active settings file (config.json) and the settings file of an earlier
-    # per-user installation; both None disables the "earlier installation" notice.
-    config_path: Path | None = None
-    legacy_config_path: Path | None = None
-    # True when the bundle ships ontocurator-settings.json: then the settings
-    # of an earlier installation are ignored entirely.
-    preconfigured: bool = False

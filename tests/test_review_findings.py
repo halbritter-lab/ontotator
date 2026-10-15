@@ -585,8 +585,6 @@ def _obo(version: str, labels: dict[str, str], **meta_by_id) -> bytes:  # type: 
 def test_ontology_upload_is_content_addressed_and_never_overwrites(
     tmp_path: Path,
 ) -> None:
-    from ontocurator.config_store import load_persistent_config
-
     client, _ = _app(tmp_path)
     old_release = _obo("2025-01-01", {"HP:0000001": "All"})
     new_release = _obo("2026-01-01", {"HP:0000001": "All", "HP:0000118": "Pheno"})
@@ -613,8 +611,6 @@ def test_ontology_upload_is_content_addressed_and_never_overwrites(
     assert again.status_code == 200
     assert Path(again.json()["path"]) == first_path
 
-    persisted = {p.resolve() for p in load_persistent_config().ontology_paths}
-    assert persisted == {first_path.resolve(), second_path.resolve()}
     listed = {o["sha256"] for o in client.get("/api/v1/ontologies").json()}
     assert old_sha in listed
 

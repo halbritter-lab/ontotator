@@ -37,7 +37,7 @@ if [ -z "${ONTOCURATOR_TEST_PG_URL:-}" ]; then
         || fail "Docker is not reachable. Start Docker Desktop (or the Docker daemon) and run this script again, or set ONTOCURATOR_TEST_PG_URL."
 fi
 
-# The release build check writes its wheel here (build/ is ignored by Git).
+# The wheel check writes its wheel here (build/ is ignored by Git).
 wheel_dir=build/check-wheel
 trap 'rm -rf "$wheel_dir"' EXIT
 
@@ -49,9 +49,9 @@ step "mypy" uv run mypy src
 step "OpenAPI drift" uv run python scripts/export_openapi.py --check
 step "frontend typecheck" npm --prefix frontend run typecheck
 step "TypeScript API drift" npm --prefix frontend run api:check
-# Packages the committed web assets: no npm ci, no rewrite of src/ontocurator/web.
-step "release build (wheel contents)" uv run python scripts/build_release.py \
-    --skip-frontend --skip-npm-ci --out-dir "$wheel_dir"
+# uv lock --check, then the wheel from the committed web assets and its contents.
+step "wheel build (lock and contents)" uv run python scripts/check_wheel.py \
+    --out-dir "$wheel_dir"
 # Bounded workers: one jsdom worker per core exhausted memory on a 16 GB machine
 # with Docker running. Override with CHECK_VITEST_WORKERS.
 step "frontend unit tests" npm --prefix frontend test -- \

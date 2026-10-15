@@ -17,7 +17,6 @@ const mockServer = (opts: {
   openPackage?: string | null;
   lastAnnotator?: string | null;
   modeByPackage?: Record<string, Mode>;
-  notices?: { level: "warning" | "info"; code: string; message: string; file?: string | null }[];
   packages?: string[];
 }) => {
   vi.spyOn(api, "getSettings").mockResolvedValue({
@@ -26,7 +25,6 @@ const mockServer = (opts: {
     annotator_id: opts.annotator ?? null,
     open_package: opts.openPackage ?? null,
   });
-  vi.spyOn(api, "getProvisioning").mockResolvedValue({ notices: (opts.notices ?? []) as any });
   vi.spyOn(api, "getPreferences").mockResolvedValue({
     last_annotator_id: opts.lastAnnotator ?? null,
     mode_by_package: opts.modeByPackage ?? {},
@@ -93,42 +91,5 @@ describe("preconfigured distribution settings", () => {
     const select = screen.getByLabelText(/^Work package$/i, { selector: "select" }) as HTMLSelectElement;
     expect(select.value).toBe("study-xy");
     expect(list).toHaveBeenLastCalledWith("study-xy", expect.anything());
-  });
-
-  it("shows provisioning warnings and information on the dashboard", async () => {
-    mockServer({
-      notices: [
-        {
-          level: "warning",
-          code: "PACKAGE_CHANGED",
-          message: "Package 'study-xy' in the packages folder (s.zip) differs from the already imported version.",
-          file: "s.zip",
-        },
-        {
-          level: "info",
-          code: "ONTOLOGY_NEW_VERSION",
-          message: "A new version of hp.json was registered; existing packages keep using the version they were created with.",
-          file: "hp.json",
-        },
-      ],
-    });
-    render(<App />);
-    const warning = await screen.findByRole("alert", { name: /Delivery notice/i });
-    expect(warning.textContent).toMatch(/differs from the already imported version/);
-    expect(warning.className).toMatch(/notice-warning/);
-    const info = screen.getByRole("status", { name: /Delivery information/i });
-    expect(info.textContent).toMatch(/A new version of hp.json was registered/);
-    fireEvent.click(within(warning).getByRole("button", { name: /Dismiss/i }));
-    expect(screen.queryByRole("alert", { name: /Delivery notice/i })).toBeNull();
-  });
-
-  it("works with older servers without settings or provisioning endpoints", async () => {
-    mockServer({});
-    vi.spyOn(api, "getSettings").mockRejectedValue(new Error("404"));
-    vi.spyOn(api, "getProvisioning").mockRejectedValue(new Error("404"));
-    render(<App />);
-    await screen.findByRole("table");
-    const select = screen.getByLabelText(/Working mode/i, { selector: "select" }) as HTMLSelectElement;
-    expect(select.value).toBe("independent");
   });
 });

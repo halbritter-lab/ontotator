@@ -41,18 +41,6 @@ test("first run: guide, import from the guide and required identity", async ({ p
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 0");
 });
 
-test("provisioning: a changed package in the packages folder is reported on the dashboard", async ({ page }) => {
-  await page.goto(LAUNCH_URL);
-  const warning = page.getByRole("alert", { name: "Delivery notice" });
-  await expect(warning).toContainText(
-    "Package 'provisioned-fixture' in the packages folder (provisioned.zip) differs from the already imported version. "
-      + "The changed version was NOT imported. To ship changed content, use a new package ID.",
-  );
-  await expect(warning).toHaveClass(/notice-warning/);
-  await warning.getByRole("button", { name: "Dismiss notice" }).click();
-  await expect(warning).toHaveCount(0);
-});
-
 test("real backend: review, resume, reload, submit and authenticated export", async ({ page }) => {
   await importFixture(page, "browser-reviewer");
   await page.locator("#mode-select").selectOption("review");

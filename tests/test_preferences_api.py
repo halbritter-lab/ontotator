@@ -255,7 +255,7 @@ def test_a_key_of_an_earlier_version_is_ignored_and_dropped_on_the_next_save(
     assert resp.json() == {**kept, "last_annotator_id": "AB"}
     stored = json.loads(path.read_text(encoding="utf-8"))
     assert "tree_pinned_by_annotator" not in stored
-    assert stored == {**kept, "last_annotator_id": "AB", "legacy_config": None}
+    assert stored == {**kept, "last_annotator_id": "AB"}
 
 
 def test_the_tree_pin_is_no_longer_a_preference(app_client):

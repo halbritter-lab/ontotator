@@ -49,19 +49,10 @@ def test_serve_on_an_unmigrated_database_points_to_db_upgrade(
 
     url = unmigrated_database_url(tmp_path / "empty.db")
 
-    with patch("ontocurator.cli.run_server") as mock_run:
+    with patch("ontocurator.cli.uvicorn.run") as mock_run:
         result = runner.invoke(
             app,
-            [
-                "serve",
-                "-w",
-                str(tmp_path),
-                "--database-url",
-                url,
-                "--no-browser",
-                "--port",
-                "0",
-            ],
+            ["serve", "--data-dir", str(tmp_path), "--database-url", url],
         )
 
     assert result.exit_code == 1

@@ -149,20 +149,6 @@ class OntologyUploadService:
             return registered
         return None
 
-    @staticmethod
-    def persist(path: Path) -> None:
-        """Remember the stored file so it is registered again after restart."""
-        from ontocurator.config_store import (
-            load_persistent_config,
-            save_persistent_config,
-        )
-
-        config = load_persistent_config()
-        resolved = path.resolve()
-        if resolved not in [p.resolve() for p in config.ontology_paths]:
-            config.ontology_paths.append(resolved)
-            save_persistent_config(config)
-
 
 @dataclass(frozen=True)
 class StoredTranslation:

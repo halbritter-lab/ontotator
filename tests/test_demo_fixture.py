@@ -4,13 +4,10 @@ import io
 import json
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from typer.testing import CliRunner
 
 from ontocurator.api.app import create_app
-from ontocurator.cli import app as cli_app
 from ontocurator.config import AppConfig
 
 DEMO = Path(__file__).parent / "fixtures" / "demo_package.zip"
@@ -38,25 +35,3 @@ def test_demo_fixture_imports_via_api_without_installed_ontology(
     docs = client.get(f"/api/v1/packages/{package_id}/documents")
     assert docs.status_code == 200, docs.text
     assert len(docs.json()) == 2
-
-
-def test_demo_fixture_opens_via_dropped_zip(tmp_path: Path) -> None:
-    with patch("ontocurator.cli.run_server") as mock_run:
-        result = CliRunner().invoke(
-            cli_app,
-            [
-                "serve",
-                "-w",
-                str(tmp_path),
-                "--package",
-                str(DEMO),
-                "--no-browser",
-                "--port",
-                "0",
-            ],
-        )
-    assert result.exit_code == 0, result.output
-    assert "Warning" not in result.output
-    assert "&package_id=demo-klinik-pakete-01" in result.output
-    api_app = mock_run.call_args[0][0]
-    assert len(api_app.state.repo.list_manifests()) == 1

@@ -183,10 +183,7 @@ def write_notices(
         py_license = Path(sys.base_prefix) / "lib" / "python3" / "LICENSE.txt"
     runtime.write_text(
         f"Python {sys.version.split()[0]} runtime (Python Software Foundation License)\n"
-        "https://docs.python.org/3/license.html\n\n"
-        "The executable launcher is produced by PyInstaller, whose bootloader is\n"
-        "licensed under the GPL with an exception permitting distribution with\n"
-        "applications under any license: https://pyinstaller.org/en/stable/license.html\n"
+        "https://docs.python.org/3/license.html\n"
         + (
             "\n" + py_license.read_text(encoding="utf-8", errors="replace")
             if py_license.is_file()

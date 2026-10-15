@@ -76,19 +76,6 @@ def _check_search_languages(
     return checked
 
 
-class LegacyConfigDecision(BaseModel):
-    """What was decided about the settings file of an earlier installation.
-
-    Bound to the file's SHA-256: if that file changes later, the notice is
-    shown again.
-    """
-
-    model_config = ConfigDict(extra="ignore")
-
-    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    action: Literal["dismissed", "imported"]
-
-
 class Preferences(BaseModel):
     """Workspace preferences returned by ``GET /api/v1/preferences``."""
 
@@ -101,15 +88,6 @@ class Preferences(BaseModel):
     search_languages_by_annotator: dict[str, list[str]] = Field(default_factory=dict)
 
     validate_annotator = field_validator("last_annotator_id")(_check_annotator)
-
-
-class _StoredPreferences(Preferences):
-    """File content: the public preferences plus internal bookkeeping."""
-
-    legacy_config: LegacyConfigDecision | None = None
-
-    def public(self) -> Preferences:
-        return Preferences.model_validate(self.model_dump(exclude={"legacy_config"}))
 
 
 class PreferencesUpdate(BaseModel):
@@ -136,24 +114,24 @@ class PreferencesStore:
         self.path = path
         self._lock = threading.Lock()
 
-    def _read(self) -> _StoredPreferences:
+    def _read(self) -> Preferences:
         try:
             raw = self.path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return _StoredPreferences()
+            return Preferences()
         except OSError as exc:
             logger.warning("Cannot read %s: %s", self.path, exc)
-            return _StoredPreferences()
+            return Preferences()
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
             logger.warning("Ignoring unreadable preferences file %s", self.path)
-            return _StoredPreferences()
+            return Preferences()
         if not isinstance(data, dict):
-            return _StoredPreferences()
+            return Preferences()
         # Only the keys known today are taken over. Whatever else an earlier
         # version left in the file is ignored, and gone with the next write.
-        prefs = _StoredPreferences()
+        prefs = Preferences()
         with contextlib.suppress(ValidationError):
             prefs.last_annotator_id = Preferences.model_validate(
                 {"last_annotator_id": data.get("last_annotator_id")}
@@ -173,21 +151,11 @@ class PreferencesStore:
                 codes = _clean_languages(languages)
                 if isinstance(annotator_id, str) and codes is not None:
                     prefs.search_languages_by_annotator[annotator_id] = codes
-        with contextlib.suppress(ValidationError):
-            if isinstance(data.get("legacy_config"), dict):
-                prefs.legacy_config = LegacyConfigDecision.model_validate(
-                    data["legacy_config"]
-                )
         return prefs
 
     def load(self) -> Preferences:
         with self._lock:
-            return self._read().public()
-
-    def legacy_decision(self) -> LegacyConfigDecision | None:
-        """Decision about an earlier installation's settings file, if any."""
-        with self._lock:
-            return self._read().legacy_config
+            return self._read()
 
     def update(self, change: PreferencesUpdate) -> Preferences:
         with self._lock:
@@ -201,18 +169,9 @@ class PreferencesStore:
                     change.search_languages_by_annotator
                 )
             self._write(prefs)
-            return prefs.public()
+            return prefs
 
-    def record_legacy_config(
-        self, sha256: str, action: Literal["dismissed", "imported"]
-    ) -> None:
-        """Remember the decision about an earlier installation's settings file."""
-        with self._lock:
-            prefs = self._read()
-            prefs.legacy_config = LegacyConfigDecision(sha256=sha256, action=action)
-            self._write(prefs)
-
-    def _write(self, prefs: _StoredPreferences) -> None:
+    def _write(self, prefs: Preferences) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_name(f".preferences.{secrets.token_hex(4)}.tmp")
         try:

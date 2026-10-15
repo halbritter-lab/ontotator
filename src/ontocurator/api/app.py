@@ -15,13 +15,7 @@ from ontocurator import settings
 from ontocurator.api.routes import router
 from ontocurator.api.security import verify_security
 from ontocurator.api.tree_routes import router as tree_router
-from ontocurator.application.legacy_config import (
-    LegacyConfigInUse,
-    LegacyConfigNotFound,
-    LegacyConfigService,
-)
 from ontocurator.application.preferences import PREFERENCES_FILENAME, PreferencesStore
-from ontocurator.application.provisioning import ProvisioningStatus
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import (
     DomainError,
@@ -95,6 +89,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                     )
                 else:
                     registry.register_path(config.ontology_path)
+            # Uploaded ontologies are stored here; register them again after a
+            # restart.
+            for stored in sorted((config.workspace_dir / "ontologies").glob("*.json")):
+                registry.register_path(stored)
             # Eagerly parse registered files; failures are logged and reported by
             # GET /api/v1/ontologies instead of being silently dropped.
             registry.load_registered()
@@ -117,17 +115,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             app.state.config = config
             app.state.repo = repo
             app.state.ontology_registry = registry
-            app.state.provisioning = ProvisioningStatus()
             app.state.preferences = PreferencesStore(
                 config.workspace_dir / PREFERENCES_FILENAME
-            )
-            app.state.legacy_config = LegacyConfigService(
-                legacy_path=config.legacy_config_path,
-                active_config_path=config.config_path,
-                preconfigured=config.preconfigured,
-                workspace_dir=config.workspace_dir,
-                preferences=app.state.preferences,
-                registry=registry,
             )
         except BaseException:
             # Never let a failing clean-up hide why the start failed.
@@ -211,24 +200,6 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=422,
-            content={"code": exc.code, "details": exc.details or str(exc)},
-        )
-
-    @app.exception_handler(LegacyConfigNotFound)
-    async def legacy_not_found_handler(
-        _req: Request, exc: LegacyConfigNotFound
-    ) -> JSONResponse:
-        return JSONResponse(
-            status_code=404,
-            content={"code": exc.code, "details": exc.details or str(exc)},
-        )
-
-    @app.exception_handler(LegacyConfigInUse)
-    async def legacy_in_use_handler(
-        _req: Request, exc: LegacyConfigInUse
-    ) -> JSONResponse:
-        return JSONResponse(
-            status_code=409,
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 

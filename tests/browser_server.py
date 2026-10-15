@@ -2,7 +2,6 @@
 
 import hashlib
 import io
-import json
 import os
 import sys
 import tempfile
@@ -13,15 +12,8 @@ from fastapi import Query
 from fastapi.responses import Response
 from pg_harness import database_url_for
 
-from ontocurator import file_manager
 from ontocurator.api.app import create_app
-from ontocurator.application.provisioning import (
-    ProvisioningLedger,
-    ProvisioningStatus,
-    provision_packages,
-)
 from ontocurator.config import AppConfig
-from ontocurator.config_store import legacy_config_path
 from ontocurator.domain.annotations import ActorRef, Annotation, Provenance, snapshot
 from ontocurator.domain.documents import (
     Document,
@@ -152,26 +144,6 @@ def fixture_package(
     return result.getvalue()
 
 
-def provision_changed_package(app, root: Path) -> None:  # type: ignore[no-untyped-def]
-    """Real start-up provisioning: a package, then a changed one with the same ID."""
-    folder = root / "provision" / "packages"
-    folder.mkdir(parents=True)
-    target = folder / "provisioned.zip"
-    ledger = ProvisioningLedger(root)
-    for created_at in ("2026-10-01T00:00:00Z", "2026-10-02T00:00:00Z"):
-        target.write_bytes(fixture_package("provisioned-fixture", created_at))
-        status = ProvisioningStatus()
-        provision_packages(
-            root / "provision",
-            app.state.repo,
-            app.state.ontology_registry,
-            ledger,
-            status,
-            lambda *_: None,
-        )
-    app.state.provisioning = status
-
-
 # 30 tool proposals: enough to overflow the case sidebar at any window height.
 MANY_PROPOSALS = [
     ("tool", "HP:0001252", 0, 9) if number % 2 == 0 else ("tool", "HP:0001250", 14, 21)
@@ -205,30 +177,11 @@ def scenario_package(scenario: str) -> bytes:
     return result.getvalue()
 
 
-def write_legacy_config(path: Path) -> None:
-    """Settings of a fictitious earlier installation (one file no longer exists)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        "workspace_dir": str(path.parent / "old-workspace"),
-        "ontology_paths": [str(path.parent / "old-ontologies" / "hp-2024.json")],
-        "port": 8123,
-        "auto_open_browser": False,
-    }
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(
         prefix="hpo-browser-", ignore_cleanup_errors=True
     ) as tmp:
         root = Path(tmp)
-        # Test/admin override: never look at the real per-user settings file.
-        os.environ.setdefault(
-            "ONTOCURATOR_LEGACY_CONFIG_PATH", str(root / "legacy" / "config.json")
-        )
-        legacy_path = legacy_config_path()
-        # Never open a real file manager window from the browser tests.
-        file_manager.open_folder = lambda folder: None
         config = AppConfig(
             workspace_dir=root,
             database_url=database_url_for(root / "editor.db"),
@@ -236,11 +189,8 @@ if __name__ == "__main__":
             session_token="browser-test-token",
             port=PORT,
             web_dir=ROOT / "frontend/dist",
-            config_path=root / "config.json",
-            legacy_config_path=legacy_path,
         )
         app = create_app(config)
-        provision_changed_package(app, root)
 
         @app.get("/__synthetic_fixture__")
         def fixture(scenario: str | None = Query(None)) -> Response:
@@ -261,12 +211,6 @@ if __name__ == "__main__":
                 data = fixture_package()
             return Response(data, media_type="application/zip")
 
-        @app.post("/__legacy_fixture__")
-        def legacy_fixture() -> dict[str, str]:
-            write_legacy_config(legacy_path)
-            return {"path": str(legacy_path)}
-
-        # These explicit test-only routes must precede the static catch-all.
-        app.router.routes.insert(0, app.router.routes.pop())
+        # The explicit test-only route must precede the static catch-all.
         app.router.routes.insert(0, app.router.routes.pop())
         uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")

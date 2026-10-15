@@ -142,11 +142,9 @@ def test_invalid_upload_does_not_overwrite_or_delete_existing_ontology(
     assert existing_ont.read_text(encoding="utf-8") == original_content
 
 
-def test_ontologies_listed_on_app_startup_from_persistent_config(
+def test_uploaded_ontologies_are_listed_after_a_restart(
     tmp_path: Path,
 ) -> None:
-    from ontocurator.config_store import load_persistent_config
-
     ws = tmp_path / "workspace"
     config_1 = AppConfig(
         workspace_dir=ws,
@@ -165,14 +163,12 @@ def test_ontologies_listed_on_app_startup_from_persistent_config(
     )
     assert res_upload.status_code == 200
 
-    # Restart app: load persistent config and initialize App 2
-    p_cfg = load_persistent_config()
-    assert len(p_cfg.ontology_paths) >= 1
+    # Restart: the second app finds the upload in <workspace>/ontologies.
+    assert len(list((ws / "ontologies").glob("*.json"))) == 1
 
     config_2 = AppConfig(
         workspace_dir=ws,
         database_url=database_url_for(ws / "editor.db"),
-        ontology_paths=p_cfg.ontology_paths,
         session_token="test-token-2",
         port=8001,
         host="127.0.0.1",
