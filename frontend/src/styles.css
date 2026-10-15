@@ -1144,6 +1144,11 @@ body {
 }
 
 /* Login and code forms (LoginScreen), on the full-page card above */
+.login-overlay {
+  /* After the session ended: the editor stays visible underneath. */
+  background: rgba(15, 23, 42, 0.45);
+}
+
 .login-card {
   width: 100%;
   max-width: 420px;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ConflictError, ValidationError } from "../src/api/client";
-import { createMutationQueue, type QueueState } from "../src/editor/autosave";
+import { AuthError, ConflictError, ValidationError } from "../src/api/client";
+import { createMutationQueue, UnsavedChangesError, type QueueState } from "../src/editor/autosave";
 
 describe("createMutationQueue", () => {
   beforeEach(() => {
@@ -150,5 +150,29 @@ describe("createMutationQueue", () => {
     refused.catch(() => undefined);
     await queue.flush();
     expect(queue.rejectedCount()).toBe(1);
+  });
+
+  it.each([
+    ["an ended session (401)", () => new AuthError("Log in to continue.", undefined, "NOT_AUTHENTICATED", 401)],
+    ["a stale CSRF token (403 CSRF_FAILED)", () => new AuthError("The page is out of date; reload it.", undefined, "CSRF_FAILED")],
+  ])("keeps the operation and every later one on %s until a retry", async (_name, refusal) => {
+    const queue = createMutationQueue({ initialRevision: 0 });
+    const first = vi.fn().mockRejectedValueOnce(refusal()).mockResolvedValue({ revision: 1 });
+    const second = vi.fn().mockResolvedValue({ revision: 2 });
+    const done1 = queue.enqueue(first);
+    const done2 = queue.enqueue(second);
+    await vi.waitFor(() => expect(queue.getState()).toBe("error"));
+    expect(queue.pendingCount()).toBe(2);
+    expect(queue.rejectedCount()).toBe(0);
+    expect(second).not.toHaveBeenCalled();
+    const flushed = await queue.flush().catch((e) => e);
+    expect(flushed).toBeInstanceOf(UnsavedChangesError);
+    expect(flushed.message).toMatch(/session has ended; your changes are kept/);
+
+    await queue.retry();
+    await expect(done1).resolves.toEqual({ revision: 1 });
+    await expect(done2).resolves.toEqual({ revision: 2 });
+    expect(queue.getState()).toBe("saved");
+    expect(queue.rejectedCount()).toBe(0);
   });
 });

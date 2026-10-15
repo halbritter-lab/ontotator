@@ -91,9 +91,11 @@ export interface AppProps {
   /** The logged-in user (from the login gate). Without it the app asks `api.me()` itself. */
   user?: CurrentUser | null;
   onLogout?: () => void;
+  /** Why this user's editor was opened, e.g. another tab logged in as someone else. */
+  sessionNotice?: string;
 }
 
-export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
+export const App: React.FC<AppProps> = ({ user: givenUser, onLogout, sessionNotice }) => {
   const documentRequest = useRef(0);
   const packageInputRef = useRef<HTMLInputElement>(null);
   const ontologyInputRef = useRef<HTMLInputElement>(null);
@@ -136,6 +138,7 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sessionNoticeShown, setSessionNoticeShown] = useState(true);
   const [isUploading, setIsUploading] = useState<boolean>(false);
 
   // In-app ontology state
@@ -624,6 +627,14 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
                 {isUploadingOntology ? "Uploading..." : "Upload missing ontology (.json)"}
               </button>
             </div>
+          </div>
+        )}
+        {sessionNotice && sessionNoticeShown && (
+          <div role="status" className="notice notice-info">
+            <span>{sessionNotice}</span>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSessionNoticeShown(false)} aria-label="Dismiss message">
+              ✕
+            </button>
           </div>
         )}
         {notice && (

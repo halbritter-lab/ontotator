@@ -82,26 +82,51 @@ export function isSessionExpired(err: unknown): boolean {
   return err instanceof AuthError && err.status === 401 && err.code === "NOT_AUTHENTICATED";
 }
 
-type SessionExpiredListener = () => void;
-const sessionExpiredListeners = new Set<SessionExpiredListener>();
+/** True if the server refused a write for a stale CSRF token (another tab logged in again). */
+export function isCsrfRejected(err: unknown): boolean {
+  return err instanceof AuthError && err.status === 403 && err.code === "CSRF_FAILED";
+}
 
-/** Subscribe to "the session has ended" notifications from any API call. Returns an unsubscribe function. */
-export function onSessionExpired(listener: SessionExpiredListener): () => void {
-  sessionExpiredListeners.add(listener);
-  return () => {
-    sessionExpiredListeners.delete(listener);
+/** True if a request failed only for want of a valid session; retrying after a new login may work. */
+export function isSessionProblem(err: unknown): boolean {
+  return isSessionExpired(err) || isCsrfRejected(err);
+}
+
+type Listener = () => void;
+
+function signal() {
+  const listeners = new Set<Listener>();
+  return {
+    subscribe(listener: Listener): () => void {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    notify(): void {
+      for (const listener of [...listeners]) {
+        try {
+          listener();
+        } catch {
+          // a broken listener must not break the API call
+        }
+      }
+    },
   };
 }
 
-function notifySessionExpired(): void {
-  for (const listener of [...sessionExpiredListeners]) {
-    try {
-      listener();
-    } catch {
-      // a broken listener must not break the API call
-    }
-  }
-}
+const sessionExpired = signal();
+const csrfRejected = signal();
+const sessionRestored = signal();
+
+/** Subscribe to "the session has ended" (a 401 outside `/api/v1/auth/`). Returns an unsubscribe function. */
+export const onSessionExpired = sessionExpired.subscribe;
+/** Subscribe to "a write was refused for a stale CSRF token". Returns an unsubscribe function. */
+export const onCsrfRejected = csrfRejected.subscribe;
+/** Subscribe to "the same user has a valid session again": refused saves may be retried. */
+export const onSessionRestored = sessionRestored.subscribe;
+/** Announce that the same user has a valid session again (called by the login gate). */
+export const notifySessionRestored = sessionRestored.notify;
 
 export class ConflictError extends ApiError {
   constructor(message = "Revision conflict detected", code = "REVISION_CONFLICT", details?: ApiErrorDetails) {
@@ -176,6 +201,9 @@ export class ApiClient {
       headers.set("Content-Type", "application/json");
     }
 
+    // Only an answer to a request sent with the current token speaks for the current session;
+    // a late 401 for a request sent before a new login must not end the new session.
+    const sent = this.csrfToken;
     const response = await fetch(url, { ...options, headers, credentials: "same-origin" });
 
     if (!response.ok) {
@@ -198,10 +226,11 @@ export class ApiClient {
 
       if (response.status === 401) {
         // A failed login or code redemption is no expiry.
-        if (!endpoint.startsWith("/api/v1/auth/")) notifySessionExpired();
+        if (!endpoint.startsWith("/api/v1/auth/") && this.csrfToken === sent) sessionExpired.notify();
         throw new AuthError(message, details, code ?? "NOT_AUTHENTICATED", 401);
       }
       if (response.status === 403) {
+        if (code === "CSRF_FAILED" && this.csrfToken === sent) csrfRejected.notify();
         throw new AuthError(message, details, code);
       }
       if (response.status === 409) {
@@ -427,6 +456,7 @@ export class ApiClient {
   }
 
   private async downloadFile(url: string, fallbackName: string): Promise<string> {
+    const sent = this.csrfToken;
     const response = await fetch(url, { credentials: "same-origin" });
     if (!response.ok) {
       let detail = "";
@@ -439,7 +469,7 @@ export class ApiClient {
         // not JSON
       }
       if (response.status === 401) {
-        notifySessionExpired();
+        if (this.csrfToken === sent) sessionExpired.notify();
         throw new AuthError(detail || "Log in to continue.", detail, code ?? "NOT_AUTHENTICATED", 401);
       }
       throw new ApiError(

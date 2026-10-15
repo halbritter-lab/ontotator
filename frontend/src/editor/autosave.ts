@@ -1,4 +1,4 @@
-import { ApiError, ConflictError } from "../api/client";
+import { ApiError, ConflictError, isSessionProblem } from "../api/client";
 
 export type QueueState = "saved" | "dirty" | "saving" | "error" | "conflict";
 
@@ -43,14 +43,23 @@ export class DiscardedChangesError extends Error {
   }
 }
 
+export const SESSION_ENDED_MESSAGE =
+  "Your session has ended; your changes are kept and will be saved after you log in again.";
+
 export class UnsavedChangesError extends Error {
   readonly state: QueueState;
-  constructor(state: QueueState) {
+  /** True when the edits wait for a new login (not for the server or a reload). */
+  readonly sessionEnded: boolean;
+  constructor(state: QueueState, cause?: unknown) {
+    const sessionEnded = state === "error" && isSessionProblem(cause);
     super(
       state === "conflict"
         ? "The case was changed elsewhere. Reload the case to continue."
+        : sessionEnded
+        ? SESSION_ENDED_MESSAGE
         : "Pending changes could not be saved (server unreachable?).",
     );
+    this.sessionEnded = sessionEnded;
     this.name = "UnsavedChangesError";
     this.state = state;
   }
@@ -104,14 +113,18 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
             lastError = error;
             updateState("conflict");
             operation.reject(error);
-          } else if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) {
+          } else if (
+            error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429
+            && !isSessionProblem(error)
+          ) {
             // A rejected command was not applied. Let the user correct it.
             queue.shift();
             rejected += 1;
             operation.reject(error);
           } else {
+            // Transport errors and an ended session (401, stale CSRF token): nothing was
+            // applied, so keep the operation and its caller pending until a retry.
             lastError = error;
-            // Keep both the operation and its caller pending until an explicit retry.
             updateState("error");
           }
         }
@@ -144,10 +157,10 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
     },
     async flush() {
       while (queue.length) {
-        if (state === "error" || state === "conflict") throw new UnsavedChangesError(state);
+        if (state === "error" || state === "conflict") throw new UnsavedChangesError(state, lastError);
         await process();
       }
-      if (state === "error" || state === "conflict") throw new UnsavedChangesError(state);
+      if (state === "error" || state === "conflict") throw new UnsavedChangesError(state, lastError);
     },
     pendingCount: () => queue.length,
     rejectedCount: () => rejected,

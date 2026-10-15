@@ -372,9 +372,43 @@ answer; the least surprising option was taken and should be confirmed.
 - Task 8: `tests/session.ts` -> `testUser` derives the username as `user-<pseudonym>` (lower-cased,
   other characters as `-`) and uses the pseudonym as display name. `dashboard.test.tsx` had no token
   imports or calls to remove. Otherwise the inventory table matched the tests.
-- Task 8 **[user-flow choice]**: an ended session switches the gate to the login screen and unmounts
-  the editor, so an open case and edits not yet saved are dropped; after logging in again the
-  dashboard starts fresh. The old session-lost screen lay over the still-mounted app.
+- Task 8 (review fix) **[user-flow choice]**: the plan's gate states were checking, anonymous and
+  ready, and an ended session unmounted the editor -> a fourth state `expired(user)` keeps `<App>`
+  mounted and shows the login as a modal dialog over it (`role="dialog"`, `aria-modal`, focus on the
+  username field, notice "Your session has ended. Please log in again."). Logging in again as the same
+  username returns to `ready` with the new user (new CSRF token) without remounting, and
+  `notifySessionRestored()` (new in `client.ts`, with `onSessionRestored`) makes the open case retry
+  its queue like its `online` handler. Another username gets a fresh editor (`<App key={username}>`),
+  so the previous person's unsaved edits are dropped, since they cannot be saved under the new
+  identity. A deliberate logout still unmounts the editor.
+- Task 8 (review fix): the autosave queue treated a 401 as a refused command and dropped it and every
+  later edit -> `isSessionProblem(err)` (a 401 `NOT_AUTHENTICATED` or a 403 `CSRF_FAILED`, new in
+  `client.ts`) is checked before the 4xx branch and handled like a transport error: the operation and
+  its caller stay pending, `lastError` is set and the state is `error`. The case status then reads
+  "Session ended – changes kept", and `UnsavedChangesError` (submit, export, leaving the case) says
+  "Your session has ended; your changes are kept and will be saved after you log in again." instead of
+  "server unreachable"; the leave dialog adds "Leaving now discards N edit(s)."
+- Task 8 (review fix): a late 401 for a request sent before a new login ended the new session ->
+  `request()` and downloads remember the CSRF token they were sent with and notify an expiry (or a
+  CSRF failure) only if the client still holds that token when the answer arrives. The gate clears the
+  token on expiry, so further 401s of the old session stay silent.
+- Task 8 (review fix) **[user-flow choice]**: another tab logging in swaps the cookie, so this tab's
+  writes get 403 `CSRF_FAILED` -> the client announces it (`onCsrfRejected`) and the gate calls
+  `me()` once (no parallel checks): the same username stores the new token and restores as above (the
+  refused write itself is not repeated, except queued case edits); another user gets a fresh editor
+  with the notice "You are now logged in as <display name> (from another tab)." (dismissable,
+  `role="status"`, new `App` prop `sessionNotice`); a 401 from `me()` opens the login dialog
+  (`expired`); any other failure changes nothing (the queue keeps its Retry button).
+- Task 8 (review fix): when `/redeem-code` sets the password but its login answers 401 (e.g. a
+  lockout), the form switches to the login view, keeps the username and says "Your password is set.
+  Log in with it now." Switching between the login and the code view moves the focus to the new
+  heading (`tabIndex=-1`). The dialog backdrop is `.login-overlay` (translucent, editor visible).
+- Task 8 (review fix): new tests: `tests/session.test.tsx` (now 12) adds the late 401, the redeem
+  401, the `me()` network-error notice, the logout, expiry with a re-login as the same user (the
+  queued `check_layer` is sent again with the new token and the case stays open), a re-login as
+  another user (fresh dashboard, the edit is not sent again) and both `CSRF_FAILED` outcomes;
+  `tests/autosave.test.ts` adds the 401 and `CSRF_FAILED` cases (`it.each`, 2). Full vitest: 316 in
+  33 files.
 - Task 8 **[user-flow choice]**: a `me()` failure that is not an `AuthError` (server unreachable)
   shows the login form with "Ontocurator could not check your session: ...". A failed logout other
   than 401 still returns to the login screen, with "Logging out failed (...). Your session may still

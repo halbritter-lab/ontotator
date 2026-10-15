@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   api,
+  isSessionProblem,
+  onSessionRestored,
   ValidationError,
   type AnnotationSnapshot,
   type AxesValues,
@@ -15,6 +17,7 @@ import {
   createMutationQueue,
   DiscardedChangesError,
   isNetworkError,
+  SESSION_ENDED_MESSAGE,
   UnsavedChangesError,
   type MutationQueue,
   type QueueState,
@@ -422,6 +425,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         error.state === "conflict" ? "Case was changed elsewhere" : "Changes not saved",
         error.state === "conflict"
           ? `This case was changed in another window or session. ${pending} unsaved edit(s) in this window will be discarded.`
+          : error.sessionEnded
+          ? `${SESSION_ENDED_MESSAGE} Leaving now discards ${pending} edit(s).`
           : `${pending} edit(s) could not be saved because the server is unreachable. Leaving discards them.`,
         "Discard edits and leave",
       );
@@ -466,15 +471,24 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
     window.addEventListener("offline", goOffline);
     window.addEventListener("online", goOnline);
+    // Logged in again as the same user: save what waited for the session.
+    const unsubscribe = onSessionRestored(() => {
+      if (queueRef.current.getState() === "error") void queueRef.current.retry();
+    });
     return () => {
       window.removeEventListener("offline", goOffline);
       window.removeEventListener("online", goOnline);
+      unsubscribe();
     };
   }, []);
 
   const statusText =
     queueState === "conflict" ? "Changed elsewhere – reload required"
-    : queueState === "error" ? (isNetworkError(queueError) || isOffline ? "Offline – changes not saved" : "Save error – changes not saved")
+    : queueState === "error" ? (
+      isSessionProblem(queueError) ? "Session ended – changes kept"
+      : isNetworkError(queueError) || isOffline ? "Offline – changes not saved"
+      : "Save error – changes not saved"
+    )
     : queueState === "saving" ? "Saving..."
     : queueState === "dirty" ? "Unsaved changes"
     : isOffline ? "Offline"
