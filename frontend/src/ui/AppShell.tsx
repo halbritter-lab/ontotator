@@ -21,6 +21,7 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
     <header className="app-header shell-header">
       <div className="shell-heading">
         <span className="shell-product">Ontocurator</span>
+        <span className="shell-subtitle">Clinical Curation Workbench</span>
         {!!breadcrumb?.length && <nav aria-label="Breadcrumb"><ol className="shell-breadcrumb">
           {breadcrumb.map((crumb, index) => <li key={index}>
             {index === breadcrumb.length - 1 ? <span aria-current="page">{crumb.label}</span>
