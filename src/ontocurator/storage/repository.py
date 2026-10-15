@@ -2069,7 +2069,8 @@ class Repository:
                     status = "completed"
                     # Never compare a draft revision across unrelated origins.
                     if draft_row is not None and (
-                        len(current) != 1 or draft_row.revision > current[0].draft_revision
+                        len(current) != 1
+                        or draft_row.revision > current[0].draft_revision
                     ):
                         status = "in_progress"
                         break
