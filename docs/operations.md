@@ -181,23 +181,76 @@ Migrations are forward-only. `/readyz` refuses any schema differing from the ima
 
 Back up PostgreSQL and the `ontocurator-data` volume as one recovery point. PostgreSQL holds accounts, sessions, projects, annotations, ontology metadata and jobs; `/data` holds referenced blobs, ontology/translation files and exports. Neither half alone is complete.
 
-Quiesce all writers: stop app and ensure no CLI writes or migration jobs run during backup. Leave PostgreSQL running, take a custom-format database dump with the bootstrap role, then archive the app data volume before restarting app. On a Linux host:
+**Deployment validation pending: the following paired backup/restore procedure has not been executed against a deployment.** Syntax and tool options have been checked; validate a complete recovery on an isolated host before relying on it.
+
+Quiesce all writers: stop every app instance connected to this database, block new CLI writes, and wait for any running imports, exports or migration jobs to finish. Keep this maintenance restriction until both backup artifacts are complete. Leave PostgreSQL running. Use a new private backup directory for each recovery point. Run this block in Bash on the Linux deployment host against the intended source Compose project:
 
 ```bash
+set -euo pipefail
 umask 077
-mkdir -p /private/backup/RECOVERY_POINT
+backup_dir=/private/backup/RECOVERY_POINT
+mkdir "$backup_dir" # parent must exist; refuses an existing recovery point
 docker compose stop app
-docker compose exec -T postgres pg_dump -U ontocurator_bootstrap -d ontocurator -Fc > /private/backup/RECOVERY_POINT/database.dump
+app_container="$(docker compose ps --all --quiet app)"
+test -n "$app_container"
+data_volume="$(docker inspect --format '{{range .Mounts}}{{if and (eq .Destination "/data") (eq .Type "volume")}}{{.Name}}{{end}}{{end}}' "$app_container")"
+test -n "$data_volume"
+helper_image="$(docker inspect --format '{{.Config.Image}}' "$app_container")"
+test -n "$helper_image"
+printf '%s\n' "$helper_image" > "$backup_dir/image-reference.txt"
+docker compose exec -T postgres pg_dump --username=ontocurator_bootstrap --dbname=ontocurator --format=custom > "$backup_dir/database.dump"
+docker run --rm --network none --read-only --user 0:0 --security-opt no-new-privileges \
+    --mount "type=volume,src=$data_volume,dst=/source,readonly" \
+    --entrypoint tar "$helper_image" --numeric-owner --create --file=- --directory=/source . > "$backup_dir/data.tar"
+test -s "$backup_dir/database.dump"
+test -s "$backup_dir/data.tar"
+(cd "$backup_dir" && sha256sum database.dump data.tar image-reference.txt > SHA256SUMS)
+docker compose up -d --wait app
 ```
 
-Resolve the actual volume name for your Compose project (typically `PROJECT_ontocurator-data`), then archive it using your host's volume-backup tooling with numeric ownership preserved. Keep the verified image reference, deployed Compose settings, ontology release identities and protected role credentials with the recovery record. Check both copies succeeded before `docker compose up -d --wait app`. Protect backups as clinical data and test restoration in isolation. Bash redirection writes binary output safely; older PowerShell versions may corrupt native binary redirection.
+The volume is resolved from app's actual `/data` mount, never guessed from a project name. The archive helper uses the same verified image, has no network, reads the source volume read-only and records numeric owners. If any command fails, app stays stopped; investigate before releasing the maintenance restriction. Keep deployed Compose settings, ontology release identities and protected role credentials with this recovery record. `pg_dump` does not back up role passwords. Protect backups as clinical data. Bash streams binary data safely; older PowerShell versions may corrupt native binary redirection.
 
-Restore into a stopped, isolated stack in this order:
+Restore only into a **fresh isolated target**, using the same image digest and role names. Prepare a separate deployment directory containing the matching Compose file, private `.env` and service-specific secrets. Its bootstrap/owner/app credentials must initialize the roles and match that target's consuming files. Remove app's bootstrap admin `_FILE` setting as described earlier: the restored database already contains admin. Configure a separate test origin/proxy; do not attach the target to the live proxy network or allow users/CLI writers during restoration.
 
-1. Select the image/configuration matching the backup and provision the same database roles using protected credentials. On a fresh PostgreSQL volume, start only `postgres` so its init script creates the roles/schema. Keep `migrate` and app stopped.
-2. Restore the app data archive into its volume, preserving UID/GID 1001 and file permissions.
-3. Restore the database dump as bootstrap using `pg_restore --clean --if-exists` and the intended database connection. Retain ownership restoration and the dump's grants; the original `ontocurator_owner` and `ontocurator_app` role names must exist. Verify schema/object ownership belongs to the owner role and app has only its intended grants.
-4. Start the matching migration/app services, check readiness and verify an ontology search, project document and export. Upgrade only after this matched recovery point works.
+The following block starts PostgreSQL alone so initialization provisions `ontocurator_bootstrap`, `ontocurator_owner` and `ontocurator_app`. Creating app's stopped container resolves its actual data volume without starting app or migrations. It then restores blobs before streaming the paired dump into PostgreSQL. Choose a unique target project; the guards refuse existing project containers or labelled volumes.
+
+```bash
+set -euo pipefail
+umask 077
+backup_dir=/private/backup/RECOVERY_POINT
+restore_dir=/absolute/private/isolated-restore
+restore_project=ontocurator-restore-unique
+(cd "$backup_dir" && sha256sum --check SHA256SUMS)
+export ONTOCURATOR_IMAGE="$(cat "$backup_dir/image-reference.txt")"
+export ONTOCURATOR_EDGE_NETWORK="${restore_project}-edge"
+restore_compose=(docker compose --project-name "$restore_project" --env-file "$restore_dir/.env" --file "$restore_dir/docker-compose.yml")
+test -z "$("${restore_compose[@]}" ps --all --quiet)"
+test -z "$(docker volume ls --quiet --filter "label=com.docker.compose.project=$restore_project")"
+"${restore_compose[@]}" config --quiet
+"${restore_compose[@]}" up -d --wait postgres
+"${restore_compose[@]}" create app
+restore_app="$("${restore_compose[@]}" ps --all --quiet app)"
+test -n "$restore_app"
+restore_volume="$(docker inspect --format '{{range .Mounts}}{{if and (eq .Destination "/data") (eq .Type "volume")}}{{.Name}}{{end}}{{end}}' "$restore_app")"
+test -n "$restore_volume"
+docker run --rm -i --network none --read-only --user 0:0 --security-opt no-new-privileges \
+    --mount "type=volume,src=$restore_volume,dst=/restore" \
+    --entrypoint tar "$ONTOCURATOR_IMAGE" --numeric-owner --same-owner --preserve-permissions --extract --file=- --directory=/restore < "$backup_dir/data.tar"
+"${restore_compose[@]}" exec -T postgres pg_restore --username=ontocurator_bootstrap --dbname=ontocurator --clean --if-exists --exit-on-error < "$backup_dir/database.dump"
+"${restore_compose[@]}" exec -T postgres psql --username=ontocurator_bootstrap --dbname=ontocurator --set=ON_ERROR_STOP=1 \
+    --command="SELECT nspname, pg_get_userbyid(nspowner) AS owner FROM pg_namespace WHERE nspname = 'ontocurator';"
+```
+
+The schema owner printed above must be `ontocurator_owner`. `pg_restore` retains the dump's ownership and grants; do not add `--no-owner` or `--no-acl`. The bootstrap role restores as superuser inside PostgreSQL, while app continues to receive only its application-role secret. Archive extraction preserves numeric ownership (including app UID/GID 1001) and modes. Keep both app and migrations stopped if any restore command fails.
+
+Only after both halves restore successfully, start the matching migration/app services and check status:
+
+```bash
+"${restore_compose[@]}" up -d --wait
+"${restore_compose[@]}" ps --all
+```
+
+Require successful migration completion and healthy app, then verify login, an ontology search, a restored project document and a new export through the isolated test origin. This is the deployment validation still required for the procedure. Upgrade only after the matched recovery point works.
 
 Do not initialize or restore against the only copy of an existing deployment. A restored database containing admin does not need a bootstrap admin hash; keep its `_FILE` setting removed as described above.
 
