@@ -12,6 +12,11 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from ontocurator.api.document_projection import (
+    AssignmentFilter,
+    ProjectDocumentSummary,
+    project_documents,
+)
 from ontocurator.api.identity import (
     PrincipalDep,
     own_annotator,
@@ -23,7 +28,6 @@ from ontocurator.application.preferences import Preferences, PreferencesUpdate
 from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.workspaces import (
-    DocumentSummary,
     EditorProposal,
     WorkspaceService,
     WorkspaceView,
@@ -290,15 +294,17 @@ def update_preferences(
     return _preferences_store(request).update(principal.user_id, change)
 
 
-@router.get("/projects/{project_key}/documents")
+@router.get("/projects/{project_key}/documents", response_model_exclude_unset=True)
 def list_package_documents(
     project_key: str,
     request: Request,
-    ws_svc: WorkspaceSvcDep,
     principal: PrincipalDep,
     annotator_id: str | None = None,
     mode: WorkspaceMode | None = None,
-) -> list[DocumentSummary]:
+    language: str | None = None,
+    status: AssignmentFilter | None = None,
+    q: str | None = None,
+) -> list[ProjectDocumentSummary]:
     """List documents showing metadata only, without proposal counts.
 
     The status is the logged-in user's; a system admin or a lead of the
@@ -310,13 +316,16 @@ def list_package_documents(
     Raises:
         AccessDenied: ``MODE_NOT_ALLOWED`` (403) for review mode without it.
     """
-    if mode == "review":
-        require_mode(request, project_key, mode)
-    annotator_id = own_annotator(
-        principal, annotator_id, may_read_others=may_read_others(request, project_key)
-    )
-    return ws_svc.list_documents(
-        project_key, annotator_id, mode, reveal_review_inputs=mode == "review"
+    return project_documents(
+        request.app.state.repo.db,
+        Actor.user(principal.user_id, principal.username),
+        get_access(request),
+        project_key,
+        annotator_id=annotator_id,
+        mode=mode,
+        language=language,
+        status=status,
+        q=q,
     )
 
 

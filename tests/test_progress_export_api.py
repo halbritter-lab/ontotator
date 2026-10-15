@@ -11,16 +11,22 @@ from auth_harness import HARNESS, logged_in
 from sqlalchemy import delete, event, insert, select, update
 from t1_fixtures import HP_PATH, bundle, create_project, run_import, unit
 from test_auth_api import _app
+from test_pg_repository import _key, _submission
+from test_storage import _sample_package
 from test_t1_export import DOC, _own, _submit
 
+from ontocurator.domain.errors import DomainError
+from ontocurator.domain.scopes import build_scope
 from ontocurator.exchange.jobs import store_file
 from ontocurator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,
+    DraftRow,
     JobRow,
     ProjectMembershipRow,
     ProjectRow,
+    SubmissionRow,
     UserRow,
 )
 
@@ -34,9 +40,13 @@ def project(tmp_path):
     create_project(db)
     imported = run_import(db, bundle(tmp_path / "in.zip", [unit(DOC), unit("second")]))
     assert imported.status == "succeeded", imported.error
-    lead = logged_in(app, "lead", projects={"proj": ["lead"]})
+    lead = logged_in(app, "lead", projects={"proj": ["lead"]}, assignments=[])
     worker = logged_in(
-        app, "worker", pseudonym="blind-worker", projects={"proj": ["annotator"]}
+        app,
+        "worker",
+        pseudonym="blind-worker",
+        projects={"proj": ["annotator"]},
+        assignments=[],
     )
     with db.transaction() as conn:
         project_id = conn.execute(
@@ -364,6 +374,44 @@ def test_current_other_exporter_can_download(project):
     )
 
 
+def test_export_download_rechecks_lost_export_privilege(project):
+    app, lead, _, pid = project
+    sha = store_file(app.state.repo.db, b"{}\n")
+    job = _job(
+        app, pid, requester="lead", kind="edit_log_export", result={"sha256": sha}
+    )
+    user = app.state.accounts.get_by_username("lead")
+    with app.state.repo.db.transaction() as conn:
+        conn.execute(
+            delete(ProjectMembershipRow).where(
+                ProjectMembershipRow.project_id == pid,
+                ProjectMembershipRow.user_id == user.id,
+            )
+        )
+        conn.execute(
+            insert(ProjectMembershipRow).values(
+                project_id=pid, user_id=user.id, role="annotator"
+            )
+        )
+    assert lead.get(f"/api/v1/jobs/{job}").status_code == 200
+    assert lead.get(f"/api/v1/jobs/{job}/download").status_code == 403
+    assert _download_audits(app) == []
+
+
+def test_export_result_payload_must_match_job_project(project):
+    app, lead, _, pid = project
+    sha = store_file(app.state.repo.db, b"{}\n")
+    job = _job(
+        app,
+        pid,
+        kind="edit_log_export",
+        result={"sha256": sha},
+        payload={"project": "other"},
+    )
+    assert lead.get(f"/api/v1/jobs/{job}/download").status_code == 404
+    assert _download_audits(app) == []
+
+
 def test_jobs_of_other_projects_are_invisible(project):
     app, _, worker, _ = project
     create_project(app.state.repo.db, "foreign")
@@ -437,3 +485,181 @@ def test_poll_projects_only_typed_public_fields(project):
         }
     stranger = logged_in(app, "other-worker", projects={"proj": ["annotator"]})
     assert stranger.get(f"/api/v1/jobs/{job}").status_code == 404
+
+
+def test_documents_filter_by_language_status_and_prefix(project):
+    app, lead, _, pid = project
+    assignment = _assignment(app, pid, DOC, "worker", "in_progress")
+    _assignment(app, pid, "second", "worker", "submitted", revoked=True)
+    assert lead.get(f"{BASE}/documents", params={"language": "en"}).json() == []
+    response = lead.get(
+        f"{BASE}/documents",
+        params={"language": "de", "status": "in_progress", "q": "EN"},
+    )
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert [(row["document_id"], row["position"]) for row in rows] == [(DOC, 9)]
+    assert rows[0]["assignees"][0]["assignment_id"] == assignment
+    assert rows[0]["text_length"] == len(app.state.repo.get_document("proj", DOC).text)
+    assert (
+        lead.get(f"{BASE}/documents", params={"status": "unassigned"}).json()[0][
+            "document_id"
+        ]
+        == "second"
+    )
+    assert lead.get(f"{BASE}/documents", params={"q": "EN%"}).json() == []
+    assert (
+        lead.get(f"{BASE}/documents", params={"status": "completed"}).status_code == 422
+    )
+
+
+def test_document_filters_preserve_current_assignment_visibility(project):
+    app, _, worker, pid = project
+    _assignment(app, pid, DOC, "worker", "open")
+    _assignment(app, pid, "second", "lead", "submitted", task="review")
+    response = worker.get(f"{BASE}/documents")
+    assert response.status_code == 200, response.text
+    assert [(d["document_id"], d["position"]) for d in response.json()] == [(DOC, 9)]
+    assert "assignees" not in response.json()[0]
+    assert worker.get(f"{BASE}/documents", params={"status": "submitted"}).json() == []
+    assert worker.get(f"{BASE}/documents", params={"status": "unassigned"}).json() == []
+    assert worker.get(f"{BASE}/documents", params={"q": "second"}).json() == []
+    assert worker.get(f"{BASE}/documents", params={"mode": "review"}).status_code == 403
+    assert (
+        worker.get(f"{BASE}/documents", params={"annotator_id": "lead"}).status_code
+        == 403
+    )
+
+
+@pytest.mark.parametrize("mode", ["independent", "assisted", "review"])
+@pytest.mark.parametrize(
+    "scenario",
+    ["empty", "imported", "newer", "origins", "round", "checked", "conflict"],
+)
+def test_document_list_preserves_legacy_status_semantics(tmp_path, mode, scenario):
+    app = _app(tmp_path)
+    repo = app.state.repo
+    package = _sample_package("pkg-a")
+    key = _key().model_copy(
+        update={
+            "mode": mode,
+            "scope_id": build_scope(package.manifest.task_profile, mode).scope_id,
+        }
+    )
+    if scenario in {"imported", "newer", "origins", "round"}:
+        package.submissions = {
+            "old": _submission(
+                key.model_copy(update={"project_key": "origin-a"}), 2
+            ).model_copy(update={"submission_id": "old"}),
+            "new": _submission(
+                key.model_copy(update={"project_key": "origin-a"}), 7
+            ).model_copy(update={"submission_id": "new"}),
+        }
+        if scenario == "origins":
+            package.submissions["other"] = _submission(
+                key.model_copy(update={"project_key": "origin-b"}), 99
+            ).model_copy(update={"submission_id": "other"})
+    repo.import_package(package)
+    local = (
+        key.model_copy(update={"target_set_id": "targets-0"})
+        if mode == "independent"
+        else key
+    )
+    if scenario in {"newer", "origins", "checked", "round"}:
+        if scenario == "round":
+            local = local.model_copy(update={"target_set_id": "another-round"})
+        repo.open_draft(local)
+        with repo.db.transaction() as conn:
+            if scenario in {"newer", "round"}:
+                conn.execute(update(DraftRow).values(revision=8))
+            elif scenario == "checked":
+                conn.execute(update(DraftRow).values(checked_layer_ids=["hpo-layer"]))
+    if scenario == "conflict":
+        first = _submission(key, 3)
+        with repo.db.transaction() as conn:
+            pid = conn.execute(select(ProjectRow.id)).scalar_one()
+            from ontocurator.storage.repository import _key_str
+
+            for identifier in ["first", "second"]:
+                payload = first.model_copy(
+                    update={"submission_id": identifier}
+                ).model_dump(mode="json")
+                conn.execute(
+                    insert(SubmissionRow).values(
+                        project_id=pid,
+                        submission_id=identifier,
+                        local_key=_key_str(key),
+                        origin_key=_key_str(key),
+                        document_id="doc-1",
+                        annotator_id="ann-1",
+                        mode=mode,
+                        draft_revision=3,
+                        payload=payload,
+                        created_at=first.created_at,
+                    )
+                )
+        with pytest.raises(DomainError, match="CONFLICTING_SUBMISSION_REVISION"):
+            repo.get_document_statuses("pkg-a", "ann-1", mode)
+    else:
+        expected = repo.get_document_statuses("pkg-a", "ann-1", mode).get(
+            "doc-1", "not_started"
+        )
+    lead = logged_in(
+        app, "status-lead", projects={"pkg-a": ["lead", "adjudicator"]}, assignments=[]
+    )
+    response = lead.get(
+        "/api/v1/projects/pkg-a/documents",
+        params={"annotator_id": "ann-1", "mode": mode},
+    )
+    if scenario == "conflict":
+        assert response.status_code == 422, response.text
+        assert response.json()["code"] == "CONFLICTING_SUBMISSION_REVISION"
+    else:
+        assert response.status_code == 200, response.text
+        assert response.json()[0]["status"] == expected
+
+
+@pytest.mark.parametrize("count", [1, 100])
+def test_document_list_queries_are_bounded_and_metadata_only(project, count):
+    app, lead, _, pid = project
+    with app.state.repo.db.transaction() as conn:
+        conn.execute(
+            insert(DocumentRow),
+            [
+                {
+                    "project_id": pid,
+                    "document_id": f"extra-{i}",
+                    "language": "de",
+                    "position": 30 + i,
+                    "text": "Text.",
+                    "text_sha256": "0" * 64,
+                }
+                for i in range(count)
+            ],
+        )
+    statements = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(app.state.repo.db.engine, "before_cursor_execute", record)
+    try:
+        response = lead.get(f"{BASE}/documents", params={"mode": "independent"})
+    finally:
+        event.remove(app.state.repo.db.engine, "before_cursor_execute", record)
+    assert response.status_code == 200, response.text
+    assert len(response.json()) == count + 2
+    assert len(statements) <= 30
+    assert not any(
+        "submissions.payload," in sql or "submissions.payload \n" in sql
+        for sql in statements
+    )
+    assert not any(
+        "annotation_snapshots" in sql or "evidence_snapshots" in sql
+        for sql in statements
+    )
+    document_queries = [
+        sql for sql in statements if "FROM ontocurator.documents" in sql
+    ]
+    assert len(document_queries) == 1
+    assert "length(ontocurator.documents.text)" in document_queries[0]

@@ -6,11 +6,12 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
+from ontocurator.api.document_projection import Assignee
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.job_routes import EXPORT_ACTIONS, authorized_project
 from ontocurator.api.routes import get_access
 from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Action, Task, can
+from ontocurator.authz.policy import Action, can
 from ontocurator.authz.scoped import project_not_found
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.profile_templates import PROFILE_TEMPLATES
@@ -63,17 +64,6 @@ class Member(BaseModel):
     pseudonym: str
     roles: list[str]
     languages: list[str]
-
-
-AssignmentStatus = Literal["open", "in_progress", "submitted", "reopened"]
-
-
-class Assignee(BaseModel):
-    assignment_id: int
-    username: str
-    pseudonym: str
-    task: Task
-    status: AssignmentStatus
 
 
 class ProgressDocument(BaseModel):

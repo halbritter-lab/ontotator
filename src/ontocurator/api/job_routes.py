@@ -1,7 +1,7 @@
 """Project-associated job polling and authorized export artifact delivery."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -25,7 +25,7 @@ EXPORT_ACTIONS = {"t1": Action.EXPORT_ALL_WORK, "edit_log": Action.EXPORT_EDIT_L
 class JobView(BaseModel):
     id: int
     kind: str
-    status: str
+    status: Literal["queued", "running", "succeeded", "failed"]
     result: dict[str, Any] | None
     error: str | None
     created_at: datetime
@@ -112,11 +112,17 @@ def download_job(
                 raise _not_found() from None
             raise
         row = conn.execute(
-            select(JobRow.kind, JobRow.status, JobRow.result, JobRow.finished_at).where(
-                JobRow.id == job_id, JobRow.project_id == project_id
-            )
+            select(
+                JobRow.kind,
+                JobRow.status,
+                JobRow.result,
+                JobRow.finished_at,
+                JobRow.payload["project"].astext.label("payload_project"),
+            ).where(JobRow.id == job_id, JobRow.project_id == project_id)
         ).one_or_none()
         if row is None or row.kind not in {"t1_export", "edit_log_export"}:
+            raise _not_found()
+        if row.payload_project != key:
             raise _not_found()
         kind = "t1" if row.kind == "t1_export" else "edit_log"
         # Export privilege is required even for the original requester.
