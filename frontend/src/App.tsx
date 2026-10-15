@@ -1,23 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
-  initSessionToken,
-  onSessionLost,
-  parseLaunchHash,
-  sessionLostReasonOf,
-  setActiveSessionToken,
-  takeLaunchPackageId,
+  isSessionExpired,
   ApiError,
+  type CurrentUser,
   type DocumentSummary,
   type OpenWorkspaceResponse,
   type PackageManifest,
   type OntologyInfo,
-  type SessionLostReason,
 } from "./api/client";
 import type { components } from "./api/generated";
 import { CaseScreen } from "./app/CaseScreen";
 import { CaseErrorBoundary } from "./app/ErrorBoundary";
-import { SessionLostScreen } from "./app/SessionLostScreen";
 
 export type WorkspaceMode = "independent" | "review" | "assisted";
 export type ReviewTargetSet = components["schemas"]["ReviewTargetSet"];
@@ -39,17 +33,6 @@ export const modeExplanations: Record<WorkspaceMode, string> = {
   review: "Check suggested terms one by one: confirm, reject or change.",
   assisted: "Suggested terms are shown while you annotate.",
 };
-
-export const MAX_IDENTITY_LENGTH = 64;
-
-/** Why an identity cannot be used (mirrors the server rules), or null if it is fine. */
-export function identityProblem(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return "Enter your initials or a short ID.";
-  if ([...trimmed].length > MAX_IDENTITY_LENGTH) return `Use at most ${MAX_IDENTITY_LENGTH} characters.`;
-  if (/\p{C}/u.test(trimmed)) return "Remove invisible or control characters.";
-  return null;
-}
 
 /**
  * Older builds kept the identity and mode in the browser, so a new copy on a
@@ -81,13 +64,11 @@ const ALL_MODES: WorkspaceMode[] = ["independent", "review", "assisted"];
 export interface AppSettings {
   allowedModes: WorkspaceMode[];
   defaultMode: WorkspaceMode;
-  annotatorId: string | null;
   openPackage: string | null;
 }
 const DEFAULT_SETTINGS: AppSettings = {
   allowedModes: ALL_MODES,
   defaultMode: "independent",
-  annotatorId: null,
   openPackage: null,
 };
 
@@ -106,38 +87,39 @@ export const ontologySummary = (ontology: OntologyInfo): string => {
 };
 const casesText = (n: number) => `${n} ${n === 1 ? "case" : "cases"}`;
 
-export const App: React.FC = () => {
+export interface AppProps {
+  /** The logged-in user (from the login gate). Without it the app asks `api.me()` itself. */
+  user?: CurrentUser | null;
+  onLogout?: () => void;
+}
+
+export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const documentRequest = useRef(0);
   const packageInputRef = useRef<HTMLInputElement>(null);
   const ontologyInputRef = useRef<HTMLInputElement>(null);
   const missingOntologyInputRef = useRef<HTMLInputElement>(null);
-  const annotatorFieldRef = useRef<HTMLInputElement>(null);
 
   const [packages, setPackages] = useState<PackageManifest[]>([]);
   const [packagesLoaded, setPackagesLoaded] = useState(false);
   const [selectedPackageId, setSelectedPackageIdState] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-  // Committed identity (used for API calls); the input field is edited separately.
-  const [annotatorId, setAnnotatorIdState] = useState<string>("");
-  const [annotatorInput, setAnnotatorInput] = useState<string>("");
-  // Identity the person confirmed ("You are annotating as ...") in this page session.
-  const [confirmedAnnotator, setConfirmedAnnotator] = useState<string | null>(null);
-  const [pendingOpen, setPendingOpen] = useState<{ docId: string; identity: string } | null>(null);
+  // The annotator is always the logged-in user's pseudonym.
+  const [fetchedUser, setFetchedUser] = useState<CurrentUser | null>(null);
+  const user = givenUser !== undefined ? givenUser : fetchedUser;
+  const annotatorId = user?.pseudonym ?? "";
+  const isAdmin = user?.is_system_admin === true;
   const [roundSelection, setRoundSelection] = useState<{ docId: string; identity: string; rounds: string[] } | null>(null);
   const [selectedRound, setSelectedRound] = useState("");
   const [mode, setMode] = useState<WorkspaceMode>("independent");
   const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
 
-  // Async flows (start-up, reconnect) must see current values, not stale closures.
-  const annotatorRef = useRef("");
+  // Async flows (start-up) must see current values, not stale closures.
+  const annotatorRef = useRef(annotatorId);
+  annotatorRef.current = annotatorId;
   const selectedPackageRef = useRef<string | null>(null);
   const modeByPackageRef = useRef<Record<string, WorkspaceMode>>({});
   const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS);
-  const setAnnotatorId = (id: string) => {
-    annotatorRef.current = id;
-    setAnnotatorIdState(id);
-  };
   const setSelectedPackageId = (id: string | null) => {
     selectedPackageRef.current = id;
     setSelectedPackageIdState(id);
@@ -155,7 +137,6 @@ export const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [sessionLost, setSessionLost] = useState<SessionLostReason | null>(null);
 
   // In-app ontology state
   const [ontologies, setOntologies] = useState<OntologyInfo[]>([]);
@@ -165,13 +146,9 @@ export const App: React.FC = () => {
   } | null>(null);
   const [isUploadingOntology, setIsUploadingOntology] = useState<boolean>(false);
 
-  /** Show an error, unless it only means the access key expired (then show the reopen page). */
+  /** Show an error, unless it only means the session ended (then the login gate takes over). */
   const reportError = (prefix: string, err: unknown) => {
-    const reason = sessionLostReasonOf(err);
-    if (reason) {
-      setSessionLost(reason);
-      return;
-    }
+    if (isSessionExpired(err)) return;
     setError(`${prefix}: ${errorText(err)}`);
   };
 
@@ -195,7 +172,6 @@ export const App: React.FC = () => {
         defaultMode: isMode(raw?.default_mode) && allowedModes.includes(raw.default_mode)
           ? raw.default_mode
           : allowedModes[0],
-        annotatorId: raw?.annotator_id && !identityProblem(raw.annotator_id) ? raw.annotator_id.trim() : null,
         openPackage: raw?.open_package || null,
       };
       settingsRef.current = next;
@@ -211,22 +187,8 @@ export const App: React.FC = () => {
       const modes: Record<string, WorkspaceMode> = {};
       for (const [pkg, m] of Object.entries(prefs?.mode_by_package ?? {})) if (isMode(m)) modes[pkg] = m;
       modeByPackageRef.current = modes;
-      // A preset identity (personalised installation) wins over the last one used;
-      // either way the person still confirms it before the first case opens.
-      const last = settingsRef.current.annotatorId ?? prefs?.last_annotator_id?.trim();
-      if (!annotatorRef.current && last && !identityProblem(last)) {
-        setAnnotatorId(last);
-        setAnnotatorInput(last);
-      }
-    } catch (err: unknown) {
-      const reason = sessionLostReasonOf(err);
-      if (reason) setSessionLost(reason);
-      // Otherwise start without preferences.
-      const preset = settingsRef.current.annotatorId;
-      if (!annotatorRef.current && preset) {
-        setAnnotatorId(preset);
-        setAnnotatorInput(preset);
-      }
+    } catch {
+      // Start without preferences.
     }
   };
 
@@ -270,9 +232,6 @@ export const App: React.FC = () => {
       setPackages(list);
       setPackagesLoaded(true);
       const preferred = preferredPackageId && list.some((p) => p.package_id === preferredPackageId) ? preferredPackageId : null;
-      if (preferredPackageId && !preferred && list.length > 0) {
-        setError(`Package "${preferredPackageId}" from the launch link was not found.`);
-      }
       const current = selectedPackageRef.current;
       const preset = settingsRef.current.openPackage;
       const next = preferred
@@ -287,39 +246,22 @@ export const App: React.FC = () => {
     }
   };
 
-  const bootstrap = async (launchPackageId: string | null) => {
+  const bootstrap = async () => {
+    // Rendered without a user (component tests), the app asks for the session itself.
+    if (givenUser === undefined) {
+      const me = await api.me().catch(() => null);
+      annotatorRef.current = me?.pseudonym ?? "";
+      setFetchedUser(me);
+    }
     await loadSettings();
     await loadPreferences();
-    await loadPackages(launchPackageId);
+    await loadPackages();
     void loadOntologies();
   };
 
-  /** Use a new access key (from the address bar or a pasted link) and reload everything. */
-  const reconnect = (packageId: string | null) => {
-    setSessionLost(null);
-    setError(null);
-    void bootstrap(packageId);
-  };
-  const reconnectRef = useRef(reconnect);
-  reconnectRef.current = reconnect;
-
   useEffect(() => {
     clearLegacyStorage();
-    initSessionToken();
-    const unsubscribe = onSessionLost((reason) => setSessionLost(reason));
-    void bootstrap(takeLaunchPackageId());
-    // Pasting a fresh link into this tab only changes the fragment: no page reload happens.
-    const onHashChange = () => {
-      const launch = parseLaunchHash(window.location.hash);
-      if (!launch.token && !launch.packageId) return;
-      initSessionToken();
-      reconnectRef.current(takeLaunchPackageId());
-    };
-    window.addEventListener("hashchange", onHashChange);
-    return () => {
-      unsubscribe();
-      window.removeEventListener("hashchange", onHashChange);
-    };
+    void bootstrap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -331,17 +273,6 @@ export const App: React.FC = () => {
       void api.updatePreferences({ mode_by_package: { [selectedPackageId]: nextMode } }).catch(() => undefined);
       void refreshDocuments(selectedPackageId, { annotator: annotatorRef.current, mode: nextMode });
     }
-  };
-
-  // Identity is applied on blur/Enter only (not on every keystroke). Returns the committed value.
-  const commitAnnotator = (): string => {
-    const next = annotatorInput.trim();
-    if (next && identityProblem(next)) return annotatorRef.current;
-    if (next !== annotatorInput) setAnnotatorInput(next);
-    if (next === annotatorRef.current) return next;
-    setAnnotatorId(next);
-    if (selectedPackageId) void refreshDocuments(selectedPackageId, { annotator: next, mode });
-    return next;
   };
 
   const importPackageFile = async (file: File) => {
@@ -408,7 +339,7 @@ export const App: React.FC = () => {
   const openCase = async (docId: string, opts: { forceRemount?: boolean; identity?: string; roundId?: string } = {}) => {
     if (!selectedPackageId) throw new Error("No work package selected.");
     const identity = opts.identity ?? annotatorRef.current;
-    if (identityProblem(identity)) throw new Error("Enter your initials before opening a case.");
+    if (!identity) throw new Error("Log in to open cases.");
     let res: OpenWorkspaceResponse;
     try {
       res = await api.openWorkspace({
@@ -451,36 +382,13 @@ export const App: React.FC = () => {
     }
   };
 
-  /** "Open case": requires an identity and asks once per page session to confirm it. */
+  /** "Open case": works under the logged-in user's pseudonym. */
   const requestOpen = (docIdToOpen?: string) => {
     const targetDoc = docIdToOpen ?? selectedDocId;
-    if (!selectedPackageId || !targetDoc || isOpening) return;
-    if (identityProblem(annotatorInput)) {
-      annotatorFieldRef.current?.focus();
-      return;
-    }
-    const identity = commitAnnotator();
+    const identity = annotatorRef.current;
+    if (!selectedPackageId || !targetDoc || isOpening || !identity) return;
     setSelectedDocId(targetDoc);
-    if (identity !== confirmedAnnotator) {
-      setPendingOpen({ docId: targetDoc, identity });
-      return;
-    }
     void handleOpenWorkspace(targetDoc, identity);
-  };
-
-  const confirmIdentity = () => {
-    if (!pendingOpen) return;
-    const { docId, identity } = pendingOpen;
-    setPendingOpen(null);
-    setConfirmedAnnotator(identity);
-    void api.updatePreferences({ last_annotator_id: identity }).catch(() => undefined);
-    void handleOpenWorkspace(docId, identity);
-  };
-
-  const changeIdentity = () => {
-    setPendingOpen(null);
-    annotatorFieldRef.current?.focus();
-    annotatorFieldRef.current?.select();
   };
 
   const handleExportPackage = async () => {
@@ -525,8 +433,6 @@ export const App: React.FC = () => {
   const inProgressCount = documents.filter((d) => d.status === "in_progress").length;
   const completedCount = documents.filter((d) => d.status === "completed").length;
 
-  const identityIssue = identityProblem(annotatorInput);
-  const identityMissing = !annotatorInput.trim();
   const hasPackages = packages.length > 0;
   const showGuide = packagesLoaded && !hasPackages;
 
@@ -553,16 +459,6 @@ export const App: React.FC = () => {
       </div>
   );
 
-  const sessionScreen = sessionLost && (
-    <SessionLostScreen
-      reason={sessionLost}
-      onConnect={(token, packageId) => {
-        setActiveSessionToken(token);
-        reconnect(packageId);
-      }}
-    />
-  );
-
   if (activeWorkspace) {
     const currentDocId = activeWorkspace.view.document.document_id;
     const reload = () => openCase(currentDocId, { forceRemount: true, roundId: mode === "review" ? activeWorkspace.view.key.target_set_id : undefined });
@@ -578,6 +474,7 @@ export const App: React.FC = () => {
             view={activeWorkspace.view}
             workspaceId={activeWorkspace.workspace_id}
             documentList={documents}
+            annotatorName={user?.display_name}
             onNavigateCase={(docId) => openCase(docId)}
             onReload={reload}
             onSubmitted={async () => {
@@ -587,7 +484,6 @@ export const App: React.FC = () => {
           />
         </CaseErrorBoundary>
         {roundSelectionDialog}
-        {sessionScreen}
       </>
     );
   }
@@ -628,7 +524,7 @@ export const App: React.FC = () => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-primary)" }}>
-      {fileInputs}
+      {isAdmin && fileInputs}
       {roundSelectionDialog}
       {/* App Header */}
       <header className="app-header">
@@ -653,15 +549,27 @@ export const App: React.FC = () => {
               Ontologies: {ontologyLabels.join(", ")}
             </span>
           )}
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => ontologyInputRef.current?.click()}
-            disabled={isUploadingOntology}
-          >
-            {isUploadingOntology ? "Uploading..." : "Add ontology (.json) or translation (.tsv)"}
-          </button>
-          {hasPackages && importButton(false)}
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => ontologyInputRef.current?.click()}
+              disabled={isUploadingOntology}
+            >
+              {isUploadingOntology ? "Uploading..." : "Add ontology (.json) or translation (.tsv)"}
+            </button>
+          )}
+          {isAdmin && hasPackages && importButton(false)}
+          {user && (
+            <span className="current-user" data-testid="current-user" title={`Logged in as ${user.username}`}>
+              {user.display_name} · {user.pseudonym}
+            </span>
+          )}
+          {user && onLogout && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onLogout}>
+              Log out
+            </button>
+          )}
         </div>
       </header>
 
@@ -741,7 +649,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {showGuide && (
+        {showGuide && (isAdmin ? (
           <section className="getting-started" aria-labelledby="getting-started-title">
             <h2 id="getting-started-title">Get started</h2>
             <ol className="getting-started-steps">
@@ -754,23 +662,22 @@ export const App: React.FC = () => {
               </li>
               <li>
                 <div>
-                  <strong>Enter your initials</strong>
-                  <span>Your annotations are saved under them.</span>
-                </div>
-              </li>
-              <li>
-                <div>
                   <strong>Open a case</strong>
                   <span>Pick a case from the list and click “Open case”.</span>
                 </div>
               </li>
             </ol>
           </section>
-        )}
+        ) : (
+          <section className="getting-started" aria-labelledby="getting-started-title">
+            <h2 id="getting-started-title">Get started</h2>
+            <p>No work packages are available yet. Ask an administrator to add one.</p>
+          </section>
+        ))}
 
         {hasPackages && (
           <>
-            {/* Package, identity and mode */}
+            {/* Package and mode */}
             <div
               style={{
                 background: "var(--bg-surface)",
@@ -779,7 +686,7 @@ export const App: React.FC = () => {
                 border: "1px solid var(--border-color)",
                 marginBottom: 20,
                 display: "grid",
-                gridTemplateColumns: "1.2fr 1fr 1fr",
+                gridTemplateColumns: "1.2fr 1fr",
                 gap: 16,
                 alignItems: "start",
               }}
@@ -800,50 +707,6 @@ export const App: React.FC = () => {
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div className="form-group" style={{ margin: 0 }}>
-                <label htmlFor="annotator-input" className="form-label" style={{ marginBottom: 4 }}>
-                  Your initials / ID
-                </label>
-                <input
-                  id="annotator-input"
-                  ref={annotatorFieldRef}
-                  type="text"
-                  className={`form-control${identityIssue && !identityMissing ? " is-invalid" : ""}`}
-                  required
-                  aria-required="true"
-                  aria-invalid={identityIssue ? true : undefined}
-                  aria-describedby="annotator-hint"
-                  maxLength={MAX_IDENTITY_LENGTH * 2}
-                  autoComplete="off"
-                  value={annotatorInput}
-                  onChange={(e) => setAnnotatorInput(e.target.value)}
-                  onBlur={() => { commitAnnotator(); }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      commitAnnotator();
-                    } else if (e.key === "Escape") {
-                      setAnnotatorInput(annotatorId);
-                    }
-                  }}
-                  placeholder="e.g. JPL"
-                />
-                <div
-                  id="annotator-hint"
-                  className={`field-hint${identityIssue && !identityMissing ? " field-hint-error" : ""}`}
-                >
-                  {identityMissing ? (
-                    "Required. Your annotations are saved under this name."
-                  ) : identityIssue ? (
-                    identityIssue
-                  ) : (
-                    <>
-                      Working as <strong data-testid="dashboard-identity">{annotatorInput.trim()}</strong>
-                    </>
-                  )}
-                </div>
               </div>
 
               <div className="form-group" style={{ margin: 0 }}>
@@ -916,13 +779,13 @@ export const App: React.FC = () => {
                     type="button"
                     className="btn btn-primary"
                     style={{ padding: "8px 18px", fontWeight: 600 }}
-                    disabled={isOpening || !!identityIssue}
+                    disabled={isOpening || !annotatorId}
                     onClick={() => requestOpen(heroDoc.document_id)}
                   >
                     {isOpening ? "Opening..." : "Open case"}
                   </button>
-                  {identityIssue && (
-                    <span className="field-hint">Enter your initials first.</span>
+                  {!annotatorId && (
+                    <span className="field-hint">Log in to open cases.</span>
                   )}
                 </div>
               </div>
@@ -977,7 +840,7 @@ export const App: React.FC = () => {
                   disabled={!selectedPackageId || !annotatorId || isExporting}
                   title={annotatorId
                     ? `Export all finished cases of ${annotatorId} (${modeLabels[mode]}) in this package as ZIP`
-                    : "Enter your initials first"}
+                    : "Log in to export"}
                   style={{ padding: "6px 14px" }}
                 >
                   {isExporting ? "Exporting..." : "Export package (.zip)"}
@@ -1063,32 +926,6 @@ export const App: React.FC = () => {
         )}
       </div>
 
-      {pendingOpen && (
-        <div className="modal-overlay">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="confirm-identity-title"
-            className="modal-content"
-          >
-            <h2 id="confirm-identity-title" style={{ fontSize: "1.1rem", margin: "0 0 8px" }}>
-              You are annotating as {pendingOpen.identity}
-            </h2>
-            <p style={{ margin: "0 0 16px", color: "var(--text-muted)", fontSize: "0.9rem" }}>
-              Your annotations and decisions are saved under these initials. If this is not you, change them first.
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button type="button" className="btn btn-secondary" onClick={changeIdentity}>
-                Change initials
-              </button>
-              <button type="button" className="btn btn-primary" onClick={confirmIdentity} autoFocus>
-                Yes, continue
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {sessionScreen}
     </div>
   );
 };

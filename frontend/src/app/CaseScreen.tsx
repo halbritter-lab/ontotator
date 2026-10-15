@@ -114,6 +114,8 @@ export interface CaseScreenProps {
   onReload?: () => Promise<void>;
   /** Called after a successful submission (e.g. to refresh the case list). */
   onSubmitted?: () => void | Promise<void>;
+  /** The logged-in user's display name, shown with the pseudonym. */
+  annotatorName?: string;
 }
 
 export const CaseScreen: React.FC<CaseScreenProps> = ({
@@ -124,6 +126,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   documentList,
   onReload,
   onSubmitted,
+  annotatorName,
 }) => {
   const [pendingAnnotation, setPendingAnnotation] = useState<{
     annotationId: string;
@@ -1388,10 +1391,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <span
             className="badge"
             data-testid="annotator-identity"
-            title="Your annotations and decisions are saved under these initials"
+            title="Your annotations and decisions are saved under this pseudonym"
             style={{ background: "var(--bg-secondary)", color: "var(--text-main)", fontSize: "0.78rem" }}
           >
-            Annotating as <strong>{view.key.annotator_id}</strong>
+            Annotating as{" "}
+            <strong>{annotatorName ? `${annotatorName} (${view.key.annotator_id})` : view.key.annotator_id}</strong>
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

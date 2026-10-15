@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, setActiveSessionToken } from "../src/api/client";
+import { api } from "../src/api/client";
 import { App } from "../src/App";
 
 const ALL_MODES = ["independent", "review", "assisted"] as const;
@@ -41,7 +41,6 @@ beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
   history.replaceState(null, "", "/");
-  setActiveSessionToken(null);
 });
 afterEach(() => {
   cleanup();
@@ -69,19 +68,6 @@ describe("preconfigured distribution settings", () => {
     const values = Array.from(select.options).map((o) => o.value);
     expect(values).toEqual(["independent", "review"]);
     await waitFor(() => expect(list).toHaveBeenLastCalledWith("pkg-a", expect.objectContaining({ mode: "review" })));
-  });
-
-  it("prefills a preset identity but still asks for confirmation", async () => {
-    mockServer({ annotator: "JPL", lastAnnotator: "OTHER" });
-    const open = vi.spyOn(api, "openWorkspace").mockResolvedValue(undefined as any);
-    render(<App />);
-    await screen.findByRole("table");
-    const input = screen.getByLabelText(/Your initials/i) as HTMLInputElement;
-    await waitFor(() => expect(input.value).toBe("JPL"));
-    fireEvent.click(screen.getByRole("button", { name: /^Open case$/i }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(/You are annotating as JPL/)).toBeDefined();
-    expect(open).not.toHaveBeenCalled();
   });
 
   it("preselects the configured package", async () => {

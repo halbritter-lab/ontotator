@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { api, ApiError } from "../src/api/client";
+import { loggedInAs } from "./session";
 
 describe("In-App Ontology Management and Recovery", () => {
   it("renders recovery prompt when package upload fails with ONTOLOGY_NOT_FOUND and allows uploading missing ontology", async () => {
@@ -18,6 +19,7 @@ describe("In-App Ontology Management and Recovery", () => {
       term_count: 15000,
     });
 
+    loggedInAs("annotator-1");
     render(<App />);
 
     await waitFor(() => {
@@ -64,6 +66,7 @@ describe("In-App Ontology Management and Recovery", () => {
       ontologies: [],
     });
 
+    loggedInAs("annotator-1");
     render(<App />);
     await waitFor(() => expect(screen.getByText("Ontologies: HP")).toBeDefined());
 
@@ -96,6 +99,7 @@ describe("In-App Ontology Management and Recovery", () => {
       term_count: 15000,
     });
 
+    loggedInAs("annotator-1");
     render(<App />);
     const input = await screen.findByLabelText("Ontology (.json) or translation file (.tsv)");
     const json = new File(['{"graphs": []}'], "hp.json", { type: "application/json" });

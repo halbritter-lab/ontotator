@@ -1,22 +1,22 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiClient, api, initSessionToken, setActiveSessionToken, ValidationError } from "../src/api/client";
+import { api, ValidationError } from "../src/api/client";
 import { App } from "../src/App";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
 import { createMutationQueue } from "../src/editor/autosave";
 import { TextPane } from "../src/editor/TextPane";
+import { loggedInAs } from "./session";
 
 describe("Workflow Regressions", () => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.getSelection()?.removeAllRanges(); });
 
-// Identity now comes from the workspace preferences and is confirmed once per page.
+// The identity comes from the session; the preferences only keep the working modes.
 const asAnnotator = (id: string) => {
+  loggedInAs(id);
   vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
   vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
 };
-const confirmIdentity = async () => {
-  fireEvent.click(await screen.findByRole("button", { name: /Yes, continue/i }));
-};
+const confirmIdentity = async () => {};
 
 it("uses current span callbacks after selecting an annotation", () => {
   const initial = vi.fn(), current = vi.fn();
@@ -155,23 +155,6 @@ it("submits the API payload and preserves its envelope through a lost-response r
  fireEvent.click(screen.getByText(/Retry|Erneut versuchen/i));
  await waitFor(() => expect(screen.getByText(/Case successfully submitted|Fall erfolgreich abgegeben/i)).toBeDefined());
  expect(submit.mock.calls[1][1]).toEqual(submit.mock.calls[0][1]);
-});
-
-it("restores the tab token on reload and downloads exports with authorization", async () => {
- window.sessionStorage.clear();
- setActiveSessionToken(null);
- history.replaceState(null, "", "/#token=secret");
- expect(initSessionToken()).toBe("secret");
- expect(window.location.hash).toBe("");
- setActiveSessionToken(null);
- expect(initSessionToken()).toBe("secret");
- const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(["zip"]) });
- vi.stubGlobal("fetch", fetchMock);
- vi.stubGlobal("URL", Object.assign(class extends URL {}, { createObjectURL: vi.fn(() => "blob:download"), revokeObjectURL: vi.fn() }));
- vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
- await new ApiClient().downloadExport("ws");
- await new Promise((resolve) => setTimeout(resolve, 0));
- expect(fetchMock).toHaveBeenCalledWith("/api/v1/workspaces/ws/export", { headers: { Authorization: "Bearer secret" } });
 });
 
 it("flush yields while a write is outstanding", async () => {

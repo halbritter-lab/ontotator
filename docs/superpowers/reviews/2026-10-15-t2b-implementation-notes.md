@@ -361,6 +361,34 @@ answer; the least surprising option was taken and should be confirmed.
   active admin, a weak hash, and a BOM file that is accepted) and
   `test_an_unreachable_database_is_a_short_error`; `tests/test_admin_cli.py` now has 18 tests
   (17 pass and 1 is skipped on Windows), `tests/test_lease.py` 5.
+- Task 8: `isSessionExpired(err)` was not defined further -> it is true only for an `AuthError`
+  with status 401 and code `NOT_AUTHENTICATED`, so a refused login (`LOGIN_FAILED`) or a 403 is never
+  taken for an ended session. A 401 on a download notifies like `request()` and throws that
+  `AuthError`; a 403 on a download stays the plain `Export failed (403): ...` error.
+- Task 8: `last_annotator_id` (preferences) and `annotator_id` (`GET /settings` presets) -> the
+  frontend no longer reads or writes either (no prefill, no write on opening a case); the backend
+  models and the contract are unchanged, because backend changes are out of scope for this task.
+  Both can go in the backend later (T2c replaces the presets).
+- Task 8: `tests/session.ts` -> `testUser` derives the username as `user-<pseudonym>` (lower-cased,
+  other characters as `-`) and uses the pseudonym as display name. `dashboard.test.tsx` had no token
+  imports or calls to remove. Otherwise the inventory table matched the tests.
+- Task 8 **[user-flow choice]**: an ended session switches the gate to the login screen and unmounts
+  the editor, so an open case and edits not yet saved are dropped; after logging in again the
+  dashboard starts fresh. The old session-lost screen lay over the still-mounted app.
+- Task 8 **[user-flow choice]**: a `me()` failure that is not an `AuthError` (server unreachable)
+  shows the login form with "Ontocurator could not check your session: ...". A failed logout other
+  than 401 still returns to the login screen, with "Logging out failed (...). Your session may still
+  be open." While the session is checked, a plain "Checking your session..." card is shown.
+- Task 8 **[user-flow choice]**: the current user and "Log out" appear in the dashboard header only
+  (the case header shows the "Annotating as name (pseudonym)" badge); "Log out" is rendered only
+  when the app has an `onLogout` (from the gate). The admin's first-run guide has two steps (import,
+  open a case) instead of three; the identity column of the dashboard grid is gone; the package
+  export button's hint without a user reads "Log in to export". The "Package ... from the launch link
+  was not found" error is gone with the launch link. The login trims the username, not the password.
+- Task 8: the dead `.session-lost-advanced` CSS was replaced by `.login-card`, `.login-form`,
+  `.login-link` and `.current-user`. The Playwright specs in `frontend/browser` still use the launch
+  token and the initials, and the embedded web assets were not rebuilt; both are Task 9. Counts:
+  `tests/session.test.tsx` 4, full vitest 306 in 33 files (17 tests deleted per the table, 4 added).
 
 ## Open risks
 

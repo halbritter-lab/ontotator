@@ -1105,7 +1105,7 @@ body {
   color: var(--text-muted);
 }
 
-/* Full-page notice when the page's access key is no longer valid */
+/* Full-page login and session notices */
 .session-lost {
   position: fixed;
   inset: 0;
@@ -1143,27 +1143,45 @@ body {
   font-size: 0.9rem !important;
 }
 
-.session-lost-advanced {
-  margin-top: 16px;
-  font-size: 0.85rem;
+/* Login and code forms (LoginScreen), on the full-page card above */
+.login-card {
+  width: 100%;
+  max-width: 420px;
 }
 
-.session-lost-advanced summary {
-  cursor: pointer;
-  color: var(--text-muted);
-}
-
-.session-lost-advanced form {
-  margin-top: 10px;
+.login-form {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.session-lost-advanced input {
-  flex: 1;
-  font-family: var(--font-mono);
+.login-form .form-label {
+  margin: 8px 0 0;
+}
+
+.login-form .btn-primary {
+  margin-top: 14px;
+}
+
+.login-link {
+  background: none;
+  border: none;
+  padding: 6px 0;
+  color: var(--primary);
+  font-size: 0.88rem;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.login-link:hover {
+  text-decoration: underline;
+}
+
+/* The logged-in user in the dashboard header: display name · pseudonym */
+.current-user {
   font-size: 0.82rem;
+  color: var(--text-main);
+  white-space: nowrap;
 }
 
 /* Search languages: flag button at the right edge of the search box */

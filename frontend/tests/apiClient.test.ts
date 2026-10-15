@@ -4,7 +4,6 @@ import {
   AuthError,
   ConflictError,
   ValidationError,
-  initSessionToken,
 } from "../src/api/client";
 
 describe("ApiClient and session management", () => {
@@ -16,37 +15,10 @@ describe("ApiClient and session management", () => {
     window.location.hash = "";
   });
 
-  it("extracts token from URL hash and clears fragment", () => {
-    window.location.hash = "#token=my-secret-test-token";
-    const replaceStateSpy = vi.spyOn(history, "replaceState");
-
-    const token = initSessionToken();
-    expect(token).toBe("my-secret-test-token");
-    expect(replaceStateSpy).toHaveBeenCalled();
-  });
-
-  it("adds Authorization header to outgoing requests", async () => {
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => [{ package_id: "pkg-1", created_at: "2026-10-01" }],
-    });
-    globalThis.fetch = fetchSpy;
-
-    const client = new ApiClient({ token: "auth-token-123" });
-    const pkgs = await client.listPackages();
-
-    const [url, init] = fetchSpy.mock.calls[0];
-    expect(url).toBe("/api/v1/packages");
-    expect((init.headers as Headers).get("Authorization")).toBe("Bearer auth-token-123");
-    expect(pkgs).toHaveLength(1);
-    expect(pkgs[0].package_id).toBe("pkg-1");
-  });
-
   it("posts tree requests to the tree endpoints", async () => {
     const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
     globalThis.fetch = fetchSpy;
-    const client = new ApiClient({ token: "tok" });
+    const client = new ApiClient();
     const workspace_key = {
       package_id: "pkg",
       document_id: "doc",
@@ -77,7 +49,7 @@ describe("ApiClient and session management", () => {
       }),
     });
 
-    const client = new ApiClient({ token: "tok" });
+    const client = new ApiClient();
     await expect(
       client.applyCommand("ws-1", {
         mutation_id: "m-1",
@@ -97,7 +69,7 @@ describe("ApiClient and session management", () => {
       }),
     });
 
-    const client = new ApiClient({ token: "tok" });
+    const client = new ApiClient();
     await expect(
       client.submitWorkspace("ws-1", {
         mutation_id: "m-2",
@@ -116,7 +88,7 @@ describe("ApiClient and session management", () => {
       }),
     });
 
-    const client = new ApiClient({ token: "bad-tok" });
+    const client = new ApiClient();
     await expect(client.listPackages()).rejects.toThrow(AuthError);
   });
 });

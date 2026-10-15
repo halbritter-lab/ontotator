@@ -2,15 +2,15 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { api } from "../src/api/client";
+import { loggedInAs } from "./session";
 
-// Identity now comes from the workspace preferences and is confirmed once per page.
+// The identity comes from the session; the preferences only keep the working modes.
 const asAnnotator = (id: string) => {
+  loggedInAs(id);
   vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
   vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
 };
-const confirmIdentity = async () => {
-  fireEvent.click(await screen.findByRole("button", { name: /Yes, continue/i }));
-};
+const confirmIdentity = async () => {};
 
 describe("Curation Dashboard Start Screen", () => {
   const samplePackages = [

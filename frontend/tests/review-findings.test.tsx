@@ -5,11 +5,7 @@ import {
   ApiClient,
   ApiError,
   ConflictError,
-  initSessionToken,
   parseContentDispositionFilename,
-  parseLaunchHash,
-  setActiveSessionToken,
-  takeLaunchPackageId,
 } from "../src/api/client";
 import { App } from "../src/App";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
@@ -20,6 +16,7 @@ import { SearchPanel } from "../src/editor/SearchPanel";
 import { SearchManager } from "../src/editor/searchState";
 import { TextPane } from "../src/editor/TextPane";
 import { getOffsetMapBuildCount, toCodepoint, toUtf16 } from "../src/spans/offsets";
+import { loggedInAs } from "./session";
 
 const key = {
   package_id: "pkg",
@@ -93,14 +90,13 @@ const reviewView = (decisions: any[] = [], annotations: any[] = [], evidence: an
   return view;
 };
 
-// Identity now comes from the workspace preferences and is confirmed once per page.
+// The identity comes from the session; the preferences only keep the working modes.
 const asAnnotator = (id: string) => {
+  loggedInAs(id);
   vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
   vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: id, mode_by_package: {} });
 };
-const confirmIdentity = async () => {
-  fireEvent.click(await screen.findByRole("button", { name: /Yes, continue/i }));
-};
+const confirmIdentity = async () => {};
 
 const docs = [
   { document_id: "doc-1", text_length: 10, language: "en", position: 1, status: "completed" as const },
@@ -116,33 +112,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
-});
-
-describe("A2/token: launch hash and token storage", () => {
-  it("parses #token=T&package_id=P, strips the hash and never stores the token in localStorage", () => {
-    expect(parseLaunchHash("#token=T&package_id=P")).toEqual({ token: "T", packageId: "P" });
-    setActiveSessionToken(null);
-    window.localStorage.setItem("hpo-editor-token", "stale");
-    history.replaceState(null, "", "/#token=abc%2B1&package_id=pkg-2");
-    expect(initSessionToken()).toBe("abc+1");
-    expect(window.location.hash).toBe("");
-    expect(takeLaunchPackageId()).toBe("pkg-2");
-    expect(takeLaunchPackageId()).toBeNull();
-    expect(window.localStorage.getItem("hpo-editor-token")).toBeNull();
-    // Reload: memory is gone but the tab-scoped sessionStorage still has it.
-    setActiveSessionToken(null);
-    expect(initSessionToken()).toBe("abc+1");
-  });
-
-  it("preselects the package passed in the launch link", async () => {
-    history.replaceState(null, "", "/#token=t&package_id=pkg-b");
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg-a" }, { package_id: "pkg-b" }] as any);
-    const list = vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    render(<App />);
-    await waitFor(() => expect(list).toHaveBeenCalled());
-    expect(list.mock.calls[0][0]).toBe("pkg-b");
-    expect((screen.getByLabelText("Work package") as HTMLSelectElement).value).toBe("pkg-b");
-  });
 });
 
 describe("A1/A7: dashboard blinding, identity and persistence", () => {
@@ -179,29 +148,6 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     fireEvent.change(within(dialog).getByLabelText("Review round"), { target: { value: "round-b" } });
     fireEvent.click(within(dialog).getByRole("button", { name: /Resume round/i }));
     await waitFor(() => expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ review_round_target_set_id: "round-b", targets: null })));
-  });
-
-  it("does not refetch on every keystroke, applies the identity on blur and keeps it out of the browser", async () => {
-    vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
-    const list = vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
-    render(<App />);
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
-    const field = screen.getByLabelText(/Your initials \/ ID/i);
-    fireEvent.change(field, { target: { value: "d" } });
-    fireEvent.change(field, { target: { value: "dr" } });
-    fireEvent.change(field, { target: { value: "dr-x" } });
-    expect(list).toHaveBeenCalledTimes(1);
-    fireEvent.blur(field);
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
-    expect(list.mock.calls[1][1]).toEqual({ annotator_id: "dr-x", mode: "independent" });
-    expect(window.localStorage.length).toBe(0);
-    fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });
-    expect(save).toHaveBeenCalledWith({ mode_by_package: { pkg: "review" } });
-    expect(window.localStorage.length).toBe(0);
-    expect(inputs).not.toHaveBeenCalled();
   });
 
   it("dedupes ontology badges, keeps hero and selection consistent and disables open while loading", async () => {
@@ -252,10 +198,11 @@ describe("Export", () => {
     vi.stubGlobal("URL", Object.assign(class extends URL {}, { createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() }));
     let downloaded = "";
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloaded = this.download; });
-    const name = await new ApiClient({ token: "t" }).downloadPackageExport("pkg", { annotator_id: "dr a", mode: "review" });
+    const name = await new ApiClient().downloadPackageExport("pkg", { annotator_id: "dr a", mode: "review" });
     expect(name).toBe("pkg_dr-a_review.zip");
     expect(downloaded).toBe("pkg_dr-a_review.zip");
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/packages/pkg/export?annotator_id=dr+a&mode=review");
+    expect(fetchMock.mock.calls[0][1]).toEqual({ credentials: "same-origin" });
     await new Promise((r) => setTimeout(r, 0));
   });
 

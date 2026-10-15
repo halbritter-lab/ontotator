@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ValidationError } from "../src/api/client";
 import { App } from "../src/App";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
+import { loggedInAs } from "./session";
 
 const key = {
   package_id: "pkg",
@@ -622,6 +623,7 @@ describe("the tree in the App", () => {
       mode_by_package: {},
       tree_pinned_by_annotator: { "dr-a": false },
     };
+    loggedInAs("dr-a");
     vi.spyOn(api, "getPreferences").mockResolvedValue(stored);
     const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: "dr-a", mode_by_package: {} });
     vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg", ontology: { release: "test" } }] as any);
@@ -638,7 +640,6 @@ describe("the tree in the App", () => {
       expect(screen.getByRole("button", { name: /Open case/i }).hasAttribute("disabled")).toBe(false),
     );
     fireEvent.click(screen.getByRole("button", { name: /Open case/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /Yes, continue/i }));
     await waitFor(() => expect(entry(container, "a1")).not.toBeNull());
 
     const panel = await openPanel(container, "a1");
