@@ -39,9 +39,10 @@ npm --prefix frontend ci
 npm --prefix frontend exec -- playwright install chromium
 bash scripts/check.sh
 CHECK_CONTAINERS=1 bash scripts/check.sh
+CHECK_CONTAINERS=1 CHECK_IMAGE=ontocurator:release bash scripts/check.sh
 ```
 
-Run the gate from Git Bash, Linux or macOS. It covers linting, formatting, typing, OpenAPI/TypeScript drift, wheel contents, unit tests and browser tests. Docker must be running for the PostgreSQL tests, or `ONTOCURATOR_TEST_PG_URL` must name a disposable test PostgreSQL superuser database. Container checks additionally need Docker and a build secret or a verified reusable image. There is no active CI gate; run the local checks before merging. See [local verification](docs/operations.md#local-verification) and the [representative load-test harness](loadtest/README.md). A passing harness test is not a measured performance result.
+Run the gate from Git Bash, Linux or macOS. It covers linting, formatting, typing, OpenAPI/TypeScript drift, wheel contents, unit tests and browser tests. Docker must be running for the PostgreSQL tests, or `ONTOCURATOR_TEST_PG_URL` must name a disposable test PostgreSQL superuser database. Container checks add browser smoke on the same disposable stack and need Docker and a build secret or a verified reusable image; set `CHECK_IMAGE` to that local image reference. There is no active CI gate; run the local checks before merging. See [local verification](docs/operations.md#local-verification) and the [representative load-test harness](loadtest/README.md). A passing harness test is not a measured performance result.
 
 ## Licensing
 

@@ -127,14 +127,17 @@ docker compose exec app ontocurator admin users activate alice
 docker compose exec app ontocurator admin users list
 ```
 
-Stage inputs on writable tmpfs, then register them into persistent storage. `docker compose cp` may preserve host ownership; ensure staged inputs are readable by UID 1001. Only use releases whose licenses permit your intended use.
+Stage inputs on writable tmpfs, then register them into persistent storage. Stream incoming files through `exec -T`: the Docker daemon can refuse `docker compose cp` into a container with a read-only root even when the target is writable tmpfs. The helper below writes as app's UID 1001. Only use releases whose licenses permit your intended use.
 
 ```bash
-docker compose cp ./hp.json app:/tmp/hp.json
-docker compose cp ./hp-de.babelon.tsv app:/tmp/hp-de.babelon.tsv
+stage_file() {
+    docker compose exec -T app python -c 'import sys; from pathlib import Path; Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())' "$2" < "$1"
+}
+stage_file ./hp.json /tmp/hp.json
+stage_file ./hp-de.babelon.tsv /tmp/hp-de.babelon.tsv
 docker compose exec app ontocurator admin ontologies add /tmp/hp.json /tmp/hp-de.babelon.tsv
 docker compose exec app ontocurator admin ontologies list
-docker compose cp ./profile.json app:/tmp/profile.json
+stage_file ./profile.json /tmp/profile.json
 ```
 
 Replace `ONTOLOGY_SHA256` with the full hash printed for the ontology JSON; the task profile must define ontology id `hp` and the intended layers. [smoke-profile.json](../tests/fixtures/smoke-profile.json) illustrates the JSON structure with synthetic fixtures; supply your own release identity, hash and protocol. See the [scientific workflow](scientific-workflow.md) for protocol guidance. Workers discover uploaded ontologies on use; no restart is needed for a new upload.
@@ -150,7 +153,7 @@ To remove that membership later, use `docker compose exec app ontocurator admin 
 Import T1 documents/proposals and export submissions/edit logs, then copy outputs off the container. Choose fresh output filenames: existing outputs are refused.
 
 ```bash
-docker compose cp ./proposals.zip app:/tmp/proposals.zip
+stage_file ./proposals.zip /tmp/proposals.zip
 docker compose exec app ontocurator admin import ward-7 /tmp/proposals.zip
 docker compose exec app ontocurator admin export ward-7 /tmp/results.zip
 docker compose cp app:/tmp/results.zip ./results.zip
@@ -235,10 +238,17 @@ Install dependencies with `uv sync --dev --locked`, `npm --prefix frontend ci` a
 ```bash
 bash scripts/check.sh
 CHECK_CONTAINERS=1 bash scripts/check.sh
+CHECK_CONTAINERS=1 CHECK_IMAGE=ontocurator:release bash scripts/check.sh
 ```
 
 The base gate includes backend PostgreSQL and Playwright tests plus formatting, linting, typing, API drift and wheel checks. `ONTOCURATOR_TEST_PG_URL` can target a disposable test superuser database; never production. `CHECK_VITEST_WORKERS` bounds frontend test parallelism (default 4). There is no active CI gate.
 
-The checker supports `uv run python scripts/container_check.py --image ontocurator:release` to reuse a verified local image; without `--image` it builds the dev image with `GITHUB_TOKEN_FILE`. It uses a unique disposable Compose project, temporary build placeholders for image reuse and cleans up that project's volumes. It verifies readiness failures, permissions and production network settings. Browser smoke/`CHECK_IMAGE` integration is being finalized alongside this guide; consult committed `scripts/check.sh` and checker `--help` before relying on those options.
+`CHECK_CONTAINERS=1` adds the container checker and browser smoke on one shared stack. Set `CHECK_IMAGE` to reuse a verified local image for app and migrations; otherwise the checker builds the dev image with `GITHUB_TOKEN_FILE`. For the container checks and smoke alone, run:
+
+```bash
+uv run python scripts/container_check.py --image ontocurator:release --smoke
+```
+
+The checker uses a unique disposable Compose project, temporary build placeholders for image reuse and cleans up that project's volumes. It seeds a project, runs browser smoke while the stack is healthy, then verifies readiness failures, permissions and production network settings. `--smoke` is optional for direct checker invocation. The seed/load-test harnesses stream inputs over stdin into writable `/tmp`; ontology uploads become searchable while workers remain running.
 
 For representative performance measurements, follow [loadtest/README.md](../loadtest/README.md). Use a fresh separate dev project, real HPO release from 2026-06-23 or newer, 1,000 synthetic documents and 30 synthetic users. Warm separately, then measure five minutes under the actual two-worker app and Compose limits. Record CPU/RAM, Docker version, image identity, ontology SHA/release, workload, percentiles, errors and resource evidence. Strict p95 targets are search 150 ms, open 300 ms, write 150 ms and dashboard 500 ms; equality fails. Preserve failed results and profile before tuning. Full measurement and performance acceptance remain pending until an actual run and report exist; harness tests provide no performance evidence. Generated `loadtest/results/` artifacts stay local by default.
