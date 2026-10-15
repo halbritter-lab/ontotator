@@ -683,6 +683,15 @@ def test_cli_assignment_requires_explicit_audited_language_confirmation(assigned
     created = runner.invoke(cli, [*arguments, "--confirm-language"])
     assert created.exit_code == 0, created.output
     assert "doc-alpha" in created.output
+    # The seed path omits --document: every document is assigned, and existing
+    # rows are idempotent rather than recreated or audited twice.
+    all_documents = runner.invoke(cli, [*arguments[:-2], "--confirm-language"])
+    assert all_documents.exit_code == 0, all_documents.output
+    assert {
+        row.document_id
+        for row in AssignmentService(app.state.repo.db).list(PROJECT, user="alice")
+    } == {"doc-alpha", "doc-beta"}
+    assert "doc-alpha" in all_documents.output and "doc-beta" in all_documents.output
     with app.state.repo.db.transaction() as conn:
         actions = list(
             conn.execute(

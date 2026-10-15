@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
-from auth_harness import logged_in
+from auth_harness import ensure_assignment, logged_in
 from sqlalchemy import insert, select
 from test_auth_api import _app
 
@@ -498,6 +498,7 @@ def test_authenticated_edit_rejects_stale_prepared_profile(
                 language="en",
             )
         )
+    ensure_assignment(app, "root", "phenotypes", "d1", "annotate")
     opened = admin.post(
         "/api/v1/workspaces/open",
         json={"project_key": "phenotypes", "document_id": "d1", "mode": "independent"},

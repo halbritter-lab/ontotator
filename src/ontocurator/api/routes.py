@@ -407,9 +407,8 @@ def open_workspace(
         target_set_id=target_set_id,
     )
     view = ws_svc.open(key, targets)
-    with ws_svc.repo.db.transaction() as conn:
-        assert isinstance(ws_svc.repo, ScopedRepository)
-        assignment = ws_svc.repo.require_workable(conn, view.key)
+    assert isinstance(ws_svc.repo, ScopedRepository)
+    assignment = ws_svc.repo.workspace_assignment(view.key)
     return OpenWorkspaceResponse(
         workspace_id=encode_workspace_id(view.key),
         view=view,
