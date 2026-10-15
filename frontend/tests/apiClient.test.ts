@@ -4,6 +4,7 @@ import {
   AuthError,
   ConflictError,
   ValidationError,
+  onSessionExpired,
 } from "../src/api/client";
 
 describe("ApiClient and session management", () => {
@@ -13,6 +14,37 @@ describe("ApiClient and session management", () => {
 
   afterEach(() => {
     window.location.hash = "";
+  });
+
+  it("lists tasks and opens assignments through documented endpoints with CSRF on writes", async () => {
+    const tasks = [{ assignment_id: 7 }];
+    const workspace = { workspace_id: "ws-7", view: {}, assignment: { id: 7 }, read_only: true };
+    const fetchSpy = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => tasks })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => workspace });
+    globalThis.fetch = fetchSpy;
+    const client = new ApiClient();
+    client.setCsrfToken("csrf-test");
+    expect(await client.listMyTasks()).toEqual(tasks);
+    expect(await client.openAssignment(7)).toEqual(workspace);
+    expect(fetchSpy.mock.calls.map(([url, init]) => [url, init.method, init.body])).toEqual([
+      ["/api/v1/me/tasks", "GET", undefined],
+      ["/api/v1/assignments/7/open", "POST", undefined],
+    ]);
+    expect(new Headers(fetchSpy.mock.calls[0][1].headers).has("X-CSRF-Token")).toBe(false);
+    expect(new Headers(fetchSpy.mock.calls[1][1].headers).get("X-CSRF-Token")).toBe("csrf-test");
+    expect(fetchSpy.mock.calls.every(([, init]) => init.credentials === "same-origin")).toBe(true);
+  });
+
+  it.each(["list", "open"])("preserves existing session-expiry signaling for task %s requests", async (method) => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ code: "NOT_AUTHENTICATED", details: "Please log in" }) });
+    const listener = vi.fn();
+    const stop = onSessionExpired(listener);
+    const client = new ApiClient();
+    try {
+      await expect(method === "list" ? client.listMyTasks() : client.openAssignment(7)).rejects.toMatchObject({ status: 401, code: "NOT_AUTHENTICATED" });
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally { stop(); }
   });
 
   it("posts tree requests to the tree endpoints", async () => {

@@ -1,0 +1,238 @@
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api, ApiError, notifySessionRestored, type ProjectSummary, type TaskSummary } from "../src/api/client";
+import { MyTasks } from "../src/tasks/MyTasks";
+
+const project = (key: string, name: string, can_manage = false): ProjectSummary => ({
+  project_key: key, name, description: null, roles: [], allowed_modes: [], document_count: 0, can_manage,
+});
+const task = (id: number, status: TaskSummary["status"], key = "p", name = "Project P"): TaskSummary => ({
+  assignment_id: id, project_key: key, project_name: name, document_id: `doc-${id}`, language: "de", task: id === 2 ? "review" : "annotate", status, updated_at: "2026-10-15T10:30:00Z",
+});
+const tasks = [task(4, "reopened"), task(2, "in_progress", "q", "Project Q"), task(3, "open"), task(1, "submitted")];
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+};
+
+describe("My tasks component", () => {
+  beforeEach(() => { vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks); });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("lists real task metadata in server order and delegates opening through the callback", async () => {
+    const onNavigate = vi.fn();
+    render(<MyTasks projects={[]} onNavigate={onNavigate} />);
+    const rows = await screen.findAllByTestId("task-row");
+    expect(rows.map(row => within(row).getByText(/^doc-/).textContent)).toEqual(["doc-4", "doc-2", "doc-3", "doc-1"]);
+    expect(within(rows[1]).getByText("Review")).toBeDefined();
+    expect(within(rows[0]).getByText("Annotate")).toBeDefined();
+    expect(within(rows[0]).getByText("Reopened")).toBeDefined();
+    expect(within(rows[0]).getByText("de")).toBeDefined();
+    expect(rows[0].querySelector("time")?.getAttribute("datetime")).toBe(tasks[0].updated_at);
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Open" }));
+    expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 4 });
+  });
+
+  it("shows loading while the request is pending", async () => {
+    const pending = deferred<TaskSummary[]>();
+    vi.mocked(api.listMyTasks).mockReturnValue(pending.promise);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    expect(screen.getByRole("status").textContent).toContain("Loading tasks");
+    expect(screen.queryByRole("table")).toBeNull();
+    await act(async () => { pending.resolve([]); });
+    expect(await screen.findByText("No documents are assigned to you yet.")).toBeDefined();
+  });
+
+  it("filters by the controlled raw project key and updates only through navigation", async () => {
+    const onNavigate = vi.fn();
+    const props = { projects: [], onNavigate };
+    const view = render(<MyTasks {...props} />);
+    await screen.findAllByTestId("task-row");
+    const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
+    expect(select.id).toBe("project-select");
+    expect(within(select).getByRole("option", { name: "Project Q (q)" })).toBeDefined();
+    fireEvent.change(select, { target: { value: "q" } });
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q" });
+    expect(select.value).toBe("");
+    expect(screen.getAllByTestId("task-row")).toHaveLength(4);
+    view.rerender(<MyTasks {...props} project="q" />);
+    expect(select.value).toBe("q");
+    expect(screen.getAllByTestId("task-row")).toHaveLength(1);
+    expect(screen.getByLabelText("Task counts").textContent).toMatch(/Open: 0.*In progress: 1.*Submitted: 0/);
+    fireEvent.change(select, { target: { value: "" } });
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks" });
+    expect(api.listMyTasks).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts reopened as Open without altering its visible status", async () => {
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    expect(screen.getByLabelText("Task counts").textContent).toMatch(/Open: 2.*In progress: 1.*Submitted: 1/);
+    expect(screen.getByText("Reopened")).toBeDefined();
+  });
+
+  it("distinguishes duplicate project names for filters and same-document task context", async () => {
+    const onNavigate = vi.fn();
+    vi.mocked(api.listMyTasks).mockResolvedValue([
+      { ...task(11, "open", "p", "Research"), document_id: "shared-doc" },
+      { ...task(12, "open", "q", "Research"), document_id: "shared-doc" },
+    ]);
+    render(<MyTasks projects={[project("p", "Research"), project("q", "Research")]} onNavigate={onNavigate} />);
+    const rows = await screen.findAllByTestId("task-row");
+    const select = screen.getByRole("combobox", { name: "Project" });
+    expect((within(select).getByRole("option", { name: "Research (p)" }) as HTMLOptionElement).value).toBe("p");
+    expect((within(select).getByRole("option", { name: "Research (q)" }) as HTMLOptionElement).value).toBe("q");
+    expect(within(rows[0]).getByText("Research (p)")).toBeDefined();
+    expect(within(rows[1]).getByText("Research (q)")).toBeDefined();
+    expect(rows[0].getAttribute("aria-label")).toBe("Research (p): shared-doc");
+    expect(rows[1].getAttribute("aria-label")).toBe("Research (q): shared-doc");
+    fireEvent.change(select, { target: { value: "q" } });
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q" });
+    fireEvent.click(within(rows[1]).getByRole("button", { name: "Open" }));
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "task", assignmentId: 12 });
+  });
+
+  it("distinguishes duplicate project names in all-managed empty-state assignment links", async () => {
+    const onNavigate = vi.fn();
+    vi.mocked(api.listMyTasks).mockResolvedValue([]);
+    render(<MyTasks projects={[project("p", "Research", true), project("q", "Research", true)]} onNavigate={onNavigate} />);
+    const first = await screen.findByRole("link", { name: "Assign documents in Research (p)" });
+    const second = screen.getByRole("link", { name: "Assign documents in Research (q)" });
+    expect(first.getAttribute("href")).toBe("#/projects/p/documents");
+    expect(second.getAttribute("href")).toBe("#/projects/q/documents");
+    fireEvent.click(second);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "q" });
+  });
+
+  it("keeps a selected empty project visible by its current project summary name", async () => {
+    render(<MyTasks project="empty%/project" projects={[project("empty%/project", "Empty project", true)]} onNavigate={vi.fn()} />);
+    await screen.findByText("No documents are assigned to you yet.");
+    const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
+    expect(select.value).toBe("empty%/project");
+    expect(select.selectedOptions[0].textContent).toBe("Empty project (empty%/project)");
+    expect(screen.getByRole("link", { name: "Assign documents" }).getAttribute("href")).toBe("#/projects/empty%25%2Fproject/documents");
+  });
+
+  it("keeps unknown route filters without inventing a project or choosing another one", async () => {
+    render(<MyTasks project="unavailable" projects={[project("p", "Managed", true)]} onNavigate={vi.fn()} />);
+    await screen.findByText("No documents are assigned to you yet.");
+    const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
+    expect(select.value).toBe("unavailable");
+    expect(select.selectedOptions[0].textContent).toBe("unavailable");
+    expect(screen.queryByRole("link", { name: /Assign documents/ })).toBeNull();
+  });
+
+  it("shows ordinary empty notice without inventing an assignment action", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([]);
+    render(<MyTasks projects={[project("p", "P")]} onNavigate={vi.fn()} />);
+    await screen.findByText("No documents are assigned to you yet.");
+    expect(screen.queryByRole("link", { name: /Assign documents/ })).toBeNull();
+  });
+
+  it("keeps an empty raw route filter distinct from All projects", async () => {
+    const onNavigate = vi.fn();
+    render(<MyTasks project="" projects={[]} onNavigate={onNavigate} />);
+    await screen.findByText("No documents are assigned to you yet.");
+    const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
+    expect(select.value).toBe("");
+    expect(select.selectedOptions[0].textContent).toBe("Empty project filter");
+    const all = within(select).getByRole("option", { name: "All projects" }) as HTMLOptionElement;
+    fireEvent.change(select, { target: { value: all.value } });
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks" });
+  });
+
+  it("offers every managed empty project with real links and callback navigation", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([]);
+    const onNavigate = vi.fn();
+    render(<MyTasks projects={[project("p", "Project P", true), project("q", "Project Q", true), project("r", "Other")]} onNavigate={onNavigate} />);
+    const first = await screen.findByRole("link", { name: "Assign documents in Project P (p)" });
+    const second = screen.getByRole("link", { name: "Assign documents in Project Q (q)" });
+    expect(screen.getAllByRole("link")).toHaveLength(2);
+    fireEvent.click(first);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p" });
+    onNavigate.mockClear();
+    fireEvent.click(second, { ctrlKey: true });
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(second.getAttribute("href")).toBe("#/projects/q/documents");
+  });
+
+  it("refreshes only when a visibility change makes the tab visible", async () => {
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    fireEvent(document, new Event("visibilitychange"));
+    expect(api.listMyTasks).toHaveBeenCalledTimes(1);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    vi.mocked(api.listMyTasks).mockResolvedValue([task(8, "open")]);
+    fireEvent(document, new Event("visibilitychange"));
+    expect(await screen.findByText("doc-8")).toBeDefined();
+    expect(api.listMyTasks).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores an older request that resolves after the latest refresh", async () => {
+    const older = deferred<TaskSummary[]>();
+    const newer = deferred<TaskSummary[]>();
+    vi.mocked(api.listMyTasks).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    fireEvent(document, new Event("visibilitychange"));
+    await act(async () => { newer.resolve([task(9, "open")]); });
+    expect(await screen.findByText("doc-9")).toBeDefined();
+    await act(async () => { older.resolve(tasks); });
+    expect(screen.queryByText("doc-4")).toBeNull();
+  });
+
+  it("ignores stale errors and removes refresh subscriptions on unmount", async () => {
+    const older = deferred<TaskSummary[]>();
+    vi.mocked(api.listMyTasks).mockReturnValueOnce(older.promise).mockResolvedValue(tasks);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const view = render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    fireEvent(document, new Event("visibilitychange"));
+    await screen.findAllByTestId("task-row");
+    await act(async () => { older.reject(new Error("old error")); });
+    expect(screen.queryByRole("alert")).toBeNull();
+    view.unmount();
+    fireEvent(document, new Event("visibilitychange"));
+    notifySessionRestored();
+    expect(api.listMyTasks).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards a pending reply after unmount", async () => {
+    const pending = deferred<TaskSummary[]>();
+    vi.mocked(api.listMyTasks).mockReturnValue(pending.promise);
+    const view = render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    view.unmount();
+    await act(async () => { pending.resolve(tasks); });
+    expect(screen.queryByTestId("task-row")).toBeNull();
+  });
+
+  it("uses shared code messages and lets the user retry without a login gate", async () => {
+    vi.mocked(api.listMyTasks).mockRejectedValueOnce(new ApiError(404, "raw", "PROJECT_NOT_FOUND")).mockResolvedValueOnce(tasks);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    expect((await screen.findByRole("alert")).textContent).toContain("You do not have access to this project");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findAllByTestId("task-row");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("falls back to the server message and clears old tasks after a failed refresh", async () => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    vi.mocked(api.listMyTasks).mockRejectedValue(new ApiError(500, "Server is temporarily unavailable", "NEW_CODE"));
+    fireEvent(document, new Event("visibilitychange"));
+    expect((await screen.findByRole("alert")).textContent).toContain("Server is temporarily unavailable");
+    expect(screen.queryByTestId("task-row")).toBeNull();
+  });
+
+  it("refreshes through the existing session-restored signal", async () => {
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    vi.mocked(api.listMyTasks).mockResolvedValue([task(8, "open")]);
+    act(() => { notifySessionRestored(); });
+    expect(await screen.findByText("doc-8")).toBeDefined();
+  });
+});
