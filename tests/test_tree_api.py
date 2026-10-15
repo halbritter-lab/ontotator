@@ -583,6 +583,50 @@ def test_tree_requests_are_refused_in_a_mode_the_roles_do_not_give(tmp_path):
     assert _event(client, browse_id) == before
 
 
+def test_expanding_a_walk_leaves_its_copy_in_another_project(tmp_path):
+    config = AppConfig(
+        workspace_dir=tmp_path,
+        database_url=database_url_for(tmp_path / "copies.db"),
+        ontology_paths=[FIXTURE_PATH],
+    )
+    app = create_app(config)
+    _import(AutoLoginClient(app), make_layered_package("single"))
+    alice = logged_in(
+        app, "alice", pseudonym="alice", projects={"pkg-scenario-a": ["annotator"]}
+    )
+    ws_id, ws_key = _open(alice, "pkg-scenario-a", annotator="alice")
+    created = _command(
+        alice,
+        ws_id,
+        0,
+        {
+            "command": "create_annotation",
+            "annotation_id": "ann-1",
+            "layer_id": "hpo-layer",
+            "type_id": "phenotype",
+            "term_id": "HP:0001250",
+        },
+    )
+    assert created.status_code == 200, created.text
+    browse_id = _open_walk(alice, ws_key, "HP:0001252")
+    # A copy of the project, walk included, in project B; Alice is not a member.
+    repo = app.state.repo
+    copy = repo.export_package("pkg-scenario-a")
+    copy.manifest = copy.manifest.model_copy(update={"package_id": "pkg-copy-b"})
+    repo.import_package(copy)
+    before = repo.get_search_event(browse_id, "pkg-copy-b")
+    assert before is not None
+
+    resp = _tree(
+        alice, ws_key, "node", browse_id=browse_id, term_id="HP:0000365", expand=True
+    )
+
+    assert resp.status_code == 200, resp.text
+    grown = repo.get_search_event(browse_id, "pkg-scenario-a")
+    assert grown is not None and grown.candidates[-1] == "HP:0000407"
+    assert repo.get_search_event(browse_id, "pkg-copy-b") == before
+
+
 def _two_layers_one_ontology():
     """Scenario C with both editable layers on the HPO."""
     package = make_layered_package("multi_editable")

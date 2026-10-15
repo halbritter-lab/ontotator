@@ -311,7 +311,9 @@ class Repository:
                 conn.execute(
                     select(func.pg_advisory_xact_lock(SEARCH_EVENT_IDENTITY_LOCK))
                 )
-            longest = self._verify_existing_snapshots(conn, package)
+            self._verify_existing_snapshots(
+                conn, package, self._project_id(conn, manifest.package_id)
+            )
             existing = conn.execute(
                 select(
                     ProjectRow.id,
@@ -346,7 +348,7 @@ class Repository:
                 )
                 .returning(ProjectRow.id)
             ).scalar_one()
-            self._insert_project_content(conn, project_id, package, profile, longest)
+            self._insert_project_content(conn, project_id, package, profile)
             self._store_resources(conn, project_id, manifest.search_conditions, files)
             if on_create is not None:
                 on_create(conn, project_id)
@@ -358,7 +360,6 @@ class Repository:
         project_id: int,
         package: ValidatedPackage,
         profile: TaskProfile,
-        longest: dict[str, SearchEventRecord],
     ) -> None:
         package_id = package.manifest.package_id
         order = {
@@ -407,22 +408,23 @@ class Repository:
             self._insert_search_event(
                 conn,
                 project_id,
-                longest.get(event.event_id, event),
+                event,
                 local_key=_key_str(local),
                 imported=True,
             )
 
     def _verify_existing_snapshots(
-        self, conn: Connection, package: ValidatedPackage
-    ) -> dict[str, SearchEventRecord]:
+        self, conn: Connection, package: ValidatedPackage, project_id: int | None
+    ) -> None:
         """Never keep conflicting immutable content under an existing identity.
 
         Identities are global, as in the desktop workspace: a snapshot,
         submission or search event of any project with the same identity must
-        have the same content. Two exports of one tree walk keep the longer one:
-        shorter stored copies are updated, and the returned map gives, per
-        event ID, a stored copy longer than the incoming event, so that every
-        copy of an event ID stays equal.
+        have the same content; a tree walk may be the same walk seen at another
+        moment. Copies of a walk grow per project: a re-import into the
+        importing project (``project_id``, None for a new one) keeps the longer
+        state of its own copy, and no other project's copy is changed or handed
+        to the importing project.
         """
         for (annotation_id, version), snap in package.annotations.items():
             expected = canonical_hash(encode_snapshot(snap))
@@ -452,7 +454,6 @@ class Repository:
             ).scalars():
                 if Submission.model_validate(stored) != submission:
                     raise InvalidPackage("Conflicting immutable submission content")
-        longest: dict[str, SearchEventRecord] = {}
         for event in package.search_events:
             # Lock the stored copies so that a concurrent append cannot be
             # overwritten by the update below.
@@ -466,27 +467,22 @@ class Repository:
                 (row.project_id, SearchEventRecord.model_validate(row.payload))
                 for row in rows
             ]
-            winner = event
-            for _project_id, existing in copies:
+            for copy_project_id, existing in copies:
                 if existing == event:
                     continue
                 if not _same_tree_walk(existing, event):
                     raise InvalidPackage("Conflicting search event content")
-                if len(existing.candidates) > len(winner.candidates):
-                    winner = existing
-            for project_id, existing in copies:
-                if len(winner.candidates) > len(existing.candidates):
+                if copy_project_id == project_id and len(event.candidates) > len(
+                    existing.candidates
+                ):
                     conn.execute(
                         update(SearchEventRow)
                         .where(
                             SearchEventRow.project_id == project_id,
                             SearchEventRow.event_id == event.event_id,
                         )
-                        .values(payload=winner.model_dump(mode="json"))
+                        .values(payload=event.model_dump(mode="json"))
                     )
-            if winner is not event:
-                longest[event.event_id] = winner
-        return longest
 
     @staticmethod
     def _verify_existing_package_content(
@@ -1603,8 +1599,8 @@ class Repository:
         """Store a new event in the project of its workspace.
 
         An event ID is new across all projects, as under the desktop editor's
-        global key: a growing walk updates every copy of its ID, so a second
-        event under a known ID would overwrite another project's event.
+        global key: an import checks a known ID against every stored copy, and
+        a lookup without a project expects one content per ID.
         """
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, event.workspace_key.package_id)
@@ -1670,10 +1666,11 @@ class Repository:
         and stores nothing, for an unknown event and for one that fails these
         checks.
 
-        Every copy of an event ID, in any project, holds the same walk. All
-        copies are locked, in the order an import locks them, and grow
-        together, so two requests of one walk cannot lose each other's terms
-        and a concurrent import keeps them.
+        Only the copy in the project of ``workspace_key`` grows (without one,
+        the first copy): browsing in one project never changes another
+        project's copy. That copy is locked, as an import locks it, so two
+        requests of one walk cannot lose each other's terms and a concurrent
+        re-import keeps them.
         """
         with self.db.transaction() as conn:
             project_id: int | None = None
@@ -1681,16 +1678,17 @@ class Repository:
                 project_id = self._project_id(conn, workspace_key.package_id)
                 if project_id is None:
                     return None
-            rows = conn.execute(
-                select(SearchEventRow.project_id, SearchEventRow.payload)
-                .where(SearchEventRow.event_id == event_id)
-                .order_by(SearchEventRow.project_id)
-                .with_for_update()
-            ).all()
-            own = [r for r in rows if project_id in (None, r.project_id)]
-            if not own:
+            statement = select(SearchEventRow.project_id, SearchEventRow.payload).where(
+                SearchEventRow.event_id == event_id
+            )
+            if project_id is not None:
+                statement = statement.where(SearchEventRow.project_id == project_id)
+            own = conn.execute(
+                statement.order_by(SearchEventRow.project_id).limit(1).with_for_update()
+            ).first()
+            if own is None:
                 return None
-            event = SearchEventRecord.model_validate(own[0].payload)
+            event = SearchEventRecord.model_validate(own.payload)
             if (
                 not is_tree_walk(event)
                 or (workspace_key is not None and event.workspace_key != workspace_key)
@@ -1703,11 +1701,12 @@ class Repository:
             if added:
                 event.candidates = [*event.candidates, *added]
                 event.ranked_ids = [*event.ranked_ids, *added]
-                # By event ID alone: this also reaches a copy that an import,
-                # which this call waited for, committed after the select above.
                 conn.execute(
                     update(SearchEventRow)
-                    .where(SearchEventRow.event_id == event_id)
+                    .where(
+                        SearchEventRow.project_id == own.project_id,
+                        SearchEventRow.event_id == event_id,
+                    )
                     .values(payload=event.model_dump(mode="json"))
                 )
             return event
