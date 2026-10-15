@@ -1966,36 +1966,147 @@ class Repository:
         mode: str,
     ) -> Literal["not_started", "in_progress", "completed"]:
         """Progress of one annotator in one mode on one document."""
-        keys = self.list_workspace_keys(package_id, annotator_id, mode, document_id)
-        any_completed = False
+        return self._document_statuses(package_id, annotator_id, mode, document_id).get(
+            document_id, "not_started"
+        )
+
+    def get_document_statuses(
+        self, package_id: str, annotator_id: str, mode: str
+    ) -> dict[str, Literal["not_started", "in_progress", "completed"]]:
+        """Progress facts for one project's annotator/mode; absent means not started.
+
+        Read all workspace facts in a bounded number of statements. Immutable
+        submissions still resolve by complete origin and revision, never clocks.
+        """
+        return self._document_statuses(package_id, annotator_id, mode)
+
+    def _document_statuses(
+        self,
+        package_id: str,
+        annotator_id: str,
+        mode: str,
+        document_id: str | None = None,
+    ) -> dict[str, Literal["not_started", "in_progress", "completed"]]:
+        profile = self.get_task_profile(package_id)
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, package_id)
-            for key in keys:
-                current = latest_submissions(
-                    self._submissions_for_workspace(conn, project_id, key)
+            drafts = select(
+                DraftRow.id,
+                DraftRow.draft_key,
+                DraftRow.document_id,
+                DraftRow.mode,
+                DraftRow.scope_id,
+                DraftRow.target_set_id,
+                DraftRow.revision,
+                DraftRow.checked_layer_ids,
+                (
+                    exists().where(DraftAnnotationRow.draft_id == DraftRow.id)
+                    | exists().where(ReviewDecisionRow.draft_id == DraftRow.id)
+                ).label("has_content"),
+            ).where(
+                DraftRow.project_id == project_id,
+                DraftRow.annotator_id == annotator_id,
+                DraftRow.mode == mode,
+            )
+            submissions = (
+                select(SubmissionRow.local_key, SubmissionRow.payload)
+                .where(
+                    SubmissionRow.project_id == project_id,
+                    SubmissionRow.annotator_id == annotator_id,
+                    SubmissionRow.mode == mode,
                 )
-                row = self._draft_row(conn, project_id, _key_str(key))
+                .order_by(SubmissionRow.created_at, SubmissionRow.submission_id)
+            )
+            if document_id is not None:
+                drafts = drafts.where(DraftRow.document_id == document_id)
+                submissions = submissions.where(
+                    SubmissionRow.document_id == document_id
+                )
+            draft_rows = conn.execute(drafts).all()
+            submission_rows = conn.execute(submissions).all()
+
+        rows_by_key = {row.draft_key: row for row in draft_rows}
+        keys: dict[str, WorkspaceKey] = {}
+        for row in draft_rows:
+            key = WorkspaceKey(
+                package_id=package_id,
+                document_id=row.document_id,
+                annotator_id=annotator_id,
+                mode=row.mode,
+                scope_id=row.scope_id,
+                target_set_id=row.target_set_id,
+            )
+            keys[_key_str(key)] = key
+        submissions_by_key: dict[str, list[Submission]] = {}
+        for stored in submission_rows:
+            submission = Submission.model_validate(stored.payload)
+            submissions_by_key.setdefault(stored.local_key, []).append(submission)
+            origin = submission.origin_key
+            key = (
+                origin
+                if origin.package_id == package_id
+                else _local_import_key(origin, package_id, profile)
+            )
+            keys.setdefault(_key_str(key), key)
+
+        by_document: dict[str, list[WorkspaceKey]] = {}
+        for key in sorted(
+            keys.values(),
+            key=lambda k: (k.document_id, k.mode, k.scope_id, k.target_set_id),
+        ):
+            by_document.setdefault(key.document_id, []).append(key)
+        statuses: dict[str, Literal["not_started", "in_progress", "completed"]] = {}
+        for doc_id, document_keys in by_document.items():
+            status: Literal["not_started", "in_progress", "completed"] = "not_started"
+            for key in document_keys:
+                current = latest_submissions(
+                    submission
+                    for alias in _workspace_aliases(key)
+                    for submission in submissions_by_key.get(alias, [])
+                )
+                draft_row = rows_by_key.get(_key_str(key))
                 if current:
-                    any_completed = True
+                    status = "completed"
                     # Never compare a draft revision across unrelated origins.
-                    if row is not None and (
-                        len(current) != 1 or row.revision > current[0].draft_revision
+                    if draft_row is not None and (
+                        len(current) != 1 or draft_row.revision > current[0].draft_revision
                     ):
-                        return "in_progress"
+                        status = "in_progress"
+                        break
                     continue
-                if row is None:
+                if draft_row is None:
                     continue
-                if row.revision > 0 or row.checked_layer_ids:
-                    return "in_progress"
-                has_content = conn.execute(
-                    select(
-                        exists().where(DraftAnnotationRow.draft_id == row.id)
-                        | exists().where(ReviewDecisionRow.draft_id == row.id)
+                if draft_row.revision > 0 or draft_row.checked_layer_ids:
+                    status = "in_progress"
+                    break
+                if draft_row.has_content:
+                    status = "in_progress"
+                    break
+            statuses[doc_id] = status
+        return statuses
+
+    def review_input_document_ids(self, package_id: str) -> set[str]:
+        """Documents with proposals, exposing presence only (never others' work)."""
+        with self.db.transaction() as conn:
+            return set(
+                conn.execute(
+                    select(AnnotationSnapshotRow.document_id)
+                    .join(
+                        ProposalAnnotationRow,
+                        and_(
+                            ProposalAnnotationRow.project_id
+                            == AnnotationSnapshotRow.project_id,
+                            ProposalAnnotationRow.annotation_id
+                            == AnnotationSnapshotRow.annotation_id,
+                            ProposalAnnotationRow.version
+                            == AnnotationSnapshotRow.version,
+                        ),
                     )
-                ).scalar_one()
-                if has_content:
-                    return "in_progress"
-        return "completed" if any_completed else "not_started"
+                    .join(ProjectRow, ProjectRow.id == AnnotationSnapshotRow.project_id)
+                    .where(ProjectRow.project_key == package_id)
+                    .distinct()
+                ).scalars()
+            )
 
     # --- submissions -------------------------------------------------------- #
 

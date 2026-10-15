@@ -131,6 +131,10 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     "get_document_status": lambda r: r.get_document_status(
         "B", "doc-beta", "ann-0001", "independent"
     ),
+    "get_document_statuses": lambda r: r.get_document_statuses(
+        "B", "ann-0001", "independent"
+    ),
+    "review_input_document_ids": lambda r: r.review_input_document_ids("B"),
     "get_submissions_for_workspace": lambda r: r.get_submissions_for_workspace(
         _key("B")
     ),

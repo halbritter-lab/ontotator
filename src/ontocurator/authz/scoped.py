@@ -325,6 +325,16 @@ class ScopedRepository(Repository):
 
     # --- submissions -------------------------------------------------------- #
 
+    def get_document_statuses(
+        self, package_id: str, annotator_id: str, mode: str
+    ) -> dict[str, Literal["not_started", "in_progress", "completed"]]:
+        self._visible(package_id)
+        return super().get_document_statuses(package_id, annotator_id, mode)
+
+    def review_input_document_ids(self, package_id: str) -> set[str]:
+        self._visible(package_id)
+        return super().review_input_document_ids(package_id)
+
     def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
         self._visible(key.package_id)
         return super().get_submissions_for_workspace(key)
