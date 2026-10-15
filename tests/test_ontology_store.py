@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from auth_harness import logged_in
 from layered_fixtures import make_layered_package
 from pg_harness import database_for, database_url_for
 from sqlalchemy import insert, select
@@ -192,6 +193,47 @@ def test_without_pins_nothing_is_preloaded(tmp_path: Path) -> None:
     registry: OntologyRegistry = app.state.ontology_registry
     assert registry.services() == []
     assert registry.registered_path(HP_SHA) is not None
+
+
+@pytest.mark.parametrize("captured", [False, True])
+def test_running_worker_searches_ontology_added_by_another_worker(
+    tmp_path: Path, captured: bool
+) -> None:
+    from ontocurator.storage.repository import Repository
+
+    app = create_app(_config(tmp_path))
+    assert app.state.ontologies_ready.wait(30)
+    registry: OntologyRegistry = app.state.ontology_registry
+    # A separate CLI process has its own database engine and registry.
+    db = _db(tmp_path)
+    writer = OntologyStore(db, OntologyRegistry(base_dir=db.data_dir), db.data_dir)
+    writer.add(Actor.cli(), "hp.json", HP.read_bytes())
+    _pin_hp(db)
+    package_id = make_layered_package("single").manifest.package_id
+    if captured:
+        writer.registry.ensure_package_conditions(Repository(db), package_id)
+
+    outsider = logged_in(app, "outsider")
+    body = {"package_id": package_id, "document_id": "doc-alpha", "mode": "independent"}
+    assert outsider.post("/api/v1/workspaces/open", json=body).status_code == 404
+    assert registry.services() == []
+    member = logged_in(app, "member", projects={package_id: ["annotator"]})
+    opened = member.post("/api/v1/workspaces/open", json=body)
+    assert opened.status_code == 200, opened.text
+    searched = member.post(
+        "/api/v1/search",
+        json={
+            "workspace_key": opened.json()["view"]["key"],
+            "annotation_id": "new-annotation",
+            "layer_id": "hpo-layer",
+            "query": "HP:0001250",
+            "route": "id",
+            "k": 5,
+        },
+    )
+    assert searched.status_code == 200, searched.text
+    assert searched.json()["candidates"][0]["term_id"] == "HP:0001250"
+    assert searched.json()["ontology_sha256"] == HP_SHA
 
 
 def test_translations_are_found_after_a_restart(tmp_path: Path) -> None:

@@ -25,6 +25,7 @@ from ontocurator.ontology.translations import (
     discover_translation_files,
     parse_translation_name,
 )
+from ontocurator.storage.blobs import BlobStore
 from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
 
 logger = logging.getLogger(__name__)
@@ -463,9 +464,22 @@ class OntologyRegistry:
             registered = self._registered_paths.get(sha)
         if cached is not None:
             return self._bind_release(cached, ont_def)
+        if registered is None and self.base_dir is not None:
+            # Another worker/CLI may have stored this pinned digest since our
+            # startup. Discover only its content-addressed file on a cold miss;
+            # _load_once validates the hash and serialises parsing as usual.
+            try:
+                persisted = BlobStore(self.base_dir / "blobs").path(sha)
+            except ValueError:
+                persisted = None
+            if persisted is not None and persisted.is_file():
+                registered = persisted
         if registered is not None:
             ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
-            return self._bind_release(self._load_once(sha, registered, ref), ont_def)
+            service = self._load_once(sha, registered, ref)
+            with self._lock:
+                self._registered_paths.setdefault(sha, registered)
+            return self._bind_release(service, ont_def)
         if ont_def.resource_path:
             res_p = self._resource_file(ont_def.resource_path)
             if res_p is not None:
