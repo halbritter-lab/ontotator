@@ -112,6 +112,12 @@ class ScopedRepository(Repository):
             project_id = self._require_project(conn, project_key)
             return visible_documents(conn, self.access, project_id, project_key)
 
+    def workspace_assignment(self, key: WorkspaceKey) -> Assignment:
+        """The workspace's current authorized assignment, with storage encapsulated."""
+        self._visible(key.project_key)
+        with self.db.transaction() as conn:
+            return self.require_workable(conn, key)
+
     def require_workable(
         self, conn: Connection, key: WorkspaceKey, *, mutation: bool = False
     ) -> Assignment:
