@@ -162,3 +162,22 @@ assert user.drafts["draft-b"]["revision"] == 42
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_container_transfer_preserves_binary_stdin(tmp_path):
+    """Exercise the subprocess stdin boundary; text-mode encoding would corrupt this."""
+    import sys
+
+    shim = tmp_path / "compose_shim.py"
+    shim.write_text(
+        "import subprocess, sys\n"
+        "assert sys.argv[1:6] == ['exec', '-T', 'app', 'python', '-c']\n"
+        "raise SystemExit(subprocess.run([sys.executable, *sys.argv[5:]], stdin=sys.stdin.buffer).returncode)\n",
+        encoding="utf-8",
+    )
+    original = bytes(range(256)) * 2048 + b"\x00\xff\r\n\n"
+    source = tmp_path / "source.bin"
+    target = tmp_path / "target.bin"
+    source.write_bytes(original)
+    seed_module().stream_to_container([sys.executable, str(shim)], source, str(target))
+    assert target.read_bytes() == original

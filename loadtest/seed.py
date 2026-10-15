@@ -198,6 +198,29 @@ def build_assets(
     return manifest
 
 
+def stream_to_container(compose: list[str], source: Path, target: str) -> None:
+    """Write a file through exec stdin, including onto a read-only root's tmpfs."""
+    with source.open("rb") as stream:
+        result = subprocess.run(
+            [
+                *compose,
+                "exec",
+                "-T",
+                "app",
+                "python",
+                "-c",
+                "import sys; from pathlib import Path; Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())",
+                target,
+            ],
+            stdin=stream,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    if result.returncode:
+        raise RuntimeError(f"Compose file transfer failed (exit {result.returncode})")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hpo", type=Path, required=True)
@@ -265,7 +288,7 @@ def main() -> None:
         (args.out / "profile.json", "/tmp/load-profile.json"),
         (args.out / "bundle.zip", "/tmp/load-bundle.zip"),
     ):
-        run("cp", str(local.resolve()), f"app:{remote}")
+        stream_to_container(compose, local, remote)
     admin("ontologies", "add", "/tmp/load-hp.json")
     admin(
         "projects",

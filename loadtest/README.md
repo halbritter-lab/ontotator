@@ -19,8 +19,10 @@ Start the dev stack beforehand with its normal database/admin bootstrap settings
 `--compose-project` is mandatory for seeding; `--compose-file` and `--host` target
 the same stack. `--compose-file` defaults to `docker-compose.dev.yml`; override it
 explicitly for another Compose configuration. The service is named `app`, and
-its CLI obtains the database and data directory from the service environment. Seeding uses `docker compose cp`
-plus `ontocurator admin` for the project, users, memberships and one T1 import,
+its CLI obtains the database and data directory from the service environment.
+Seeding streams file bytes over `docker compose exec -T` into the app container's
+writable `/tmp`, and uses `ontocurator admin` for the project, users, memberships
+and one T1 import,
 and HTTP code redemption for passwords. It does not start or stop containers.
 Rerun against a fresh project/volume: existing users/projects intentionally cause
 an error rather than modifying an unknown dataset. Do not reuse real credentials.
