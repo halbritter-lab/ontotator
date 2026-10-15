@@ -33,6 +33,8 @@ REQUIRED_WHEEL_FILES = [
     "ontocurator/storage/migrations/script.py.mako",
     *(f"ontocurator/storage/migrations/versions/{name}" for name in MIGRATION_FILES),
     "ontocurator/web/index.html",
+    "ontocurator/web/licenses/source-serif-4-OFL.txt",
+    "ontocurator/web/licenses/source-sans-3-OFL.txt",
 ]
 
 

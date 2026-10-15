@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T16:30:00Z",
+  "title": "Design System: Ontocurator",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "shadow-1",
+        "value": "0 1px 2px rgb(31 26 20 / 0.06), 0 0 0 1px rgb(31 26 20 / 0.05)",
+        "purpose": "Modest sheet and panel depth."
+      },
+      {
+        "name": "shadow-2",
+        "value": "0 12px 32px -8px rgb(31 26 20 / 0.22), 0 2px 6px rgb(31 26 20 / 0.08)",
+        "purpose": "Modal elevation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "0.15s ease-out",
+        "purpose": "Control colour and border state changes."
+      },
+      {
+        "name": "spinner",
+        "value": "0.8s linear infinite",
+        "purpose": "Busy feedback; disabled under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "shell-stack",
+        "value": "699px"
+      },
+      {
+        "name": "editor-narrow",
+        "value": "700px"
+      },
+      {
+        "name": "editor-medium",
+        "value": "1024px"
+      },
+      {
+        "name": "editor-wide",
+        "value": "1279px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Shared primary action.",
+      "html": "<button class=\"ds-button-primary\">Save</button>",
+      "css": ".ds-button-primary{font-family:var(--font-sans);font-size:var(--size-md);line-height:var(--leading-md);padding:8px 14px;border:1px solid transparent;border-radius:var(--radius-sm);cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out,color 0.15s ease-out;color:var(--on-accent);background:var(--accent);}.ds-button-primary:hover{background:var(--accent-hover);}.ds-button-primary:focus-visible{outline:var(--focus-width) solid var(--focus-ring);outline-offset:var(--focus-offset);}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Shared secondary action.",
+      "html": "<button class=\"ds-button-secondary\">Action</button>",
+      "css": ".ds-button-secondary{font-family:var(--font-sans);font-size:var(--size-md);line-height:var(--leading-md);padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out,color 0.15s ease-out;color:var(--text);background:transparent;}.ds-button-secondary:hover{background:var(--surface-sunken);border-color:var(--border-strong);}.ds-button-secondary:focus-visible{outline:var(--focus-width) solid var(--focus-ring);outline-offset:var(--focus-offset);}"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Shared quiet action.",
+      "html": "<button class=\"ds-button-quiet\">Action</button>",
+      "css": ".ds-button-quiet{font-family:var(--font-sans);font-size:var(--size-md);line-height:var(--leading-md);padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out,color 0.15s ease-out;color:var(--text-muted);background:transparent;border-color:transparent;}.ds-button-quiet:hover{background:var(--surface-sunken);color:var(--text);}.ds-button-quiet:focus-visible{outline:var(--focus-width) solid var(--focus-ring);outline-offset:var(--focus-offset);}"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Shared danger action.",
+      "html": "<button class=\"ds-button-danger\">Action</button>",
+      "css": ".ds-button-danger{font-family:var(--font-sans);font-size:var(--size-md);line-height:var(--leading-md);padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out,color 0.15s ease-out;color:var(--danger);background:transparent;}.ds-button-danger:hover{background:var(--danger-light);border-color:var(--danger);}.ds-button-danger:focus-visible{outline:var(--focus-width) solid var(--focus-ring);outline-offset:var(--focus-offset);}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "description": "Labelled native input.",
+      "html": "<label class=\"ds-label\" for=\"ds-term\">Term</label><input id=\"ds-term\" class=\"ds-input\" placeholder=\"Search terms\">",
+      "css": ".ds-label{display:block;font-family:var(--font-sans);font-size:var(--size-sm);color:var(--text);font-weight:var(--weight-strong)}.ds-input{font-family:var(--font-sans);font-size:var(--size-md);background:var(--surface-raised);color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius-sm);min-height:var(--control-height);padding:8px 12px}.ds-input:hover{border-color:var(--text-muted)}.ds-input:focus-visible{outline:var(--focus-width) solid var(--focus-ring);outline-offset:var(--focus-offset)}"
+    },
+    {
+      "name": "Breadcrumb",
+      "kind": "nav",
+      "description": "Shell location and ancestor navigation.",
+      "html": "<nav class=\"ds-breadcrumb\" aria-label=\"Breadcrumb\"><a href=\"#project\">Project</a><span aria-hidden=\"true\"> / </span><span aria-current=\"page\">Case</span></nav>",
+      "css": ".ds-breadcrumb{font-family:var(--font-sans);font-size:var(--size-md);color:var(--text-muted)}.ds-breadcrumb a{color:var(--accent)}.ds-breadcrumb a:hover{color:var(--accent-hover)}.ds-breadcrumb a:focus-visible{outline:var(--focus-width) solid var(--focus-ring);outline-offset:var(--focus-offset)}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "description": "Visible status text with a non-colour shape.",
+      "html": "<span class=\"ds-status\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"m3.25 8.5 3 3 6.5-7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg>Completed</span>",
+      "css": ".ds-status{display:inline-flex;align-items:center;gap:var(--space-1);font-family:var(--font-sans);font-size:var(--size-xs);line-height:var(--leading-xs);padding:2px var(--space-2);border-radius:var(--radius-sm);color:var(--success);background:var(--success-light)}"
+    },
+    {
+      "name": "Document Mark",
+      "kind": "custom",
+      "description": "Soft term fill and a solid own-annotation line.",
+      "html": "<p class=\"ds-reading\">Evidence of <span class=\"ds-mark\">clinical finding</span> in the document.</p>",
+      "css": ".ds-reading{font-family:var(--font-serif);font-size:var(--size-reading);line-height:var(--leading-reading);color:var(--text);background:var(--surface-raised)}.ds-mark{background-image:linear-gradient(to bottom,transparent 0 40%,var(--mark-0-fill) 54% 100%);border-bottom:2px solid var(--mark-line);padding:1px 0;box-decoration-break:clone}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Reading document (direction C)",
+    "overview": "Direction C, “reading document”: the text leads and controls recede. Warm paper surfaces, serif clinical text and restrained sans-serif controls support long clinical curation sessions. One primary action per view keeps the next decision clear.",
+    "keyCharacteristics": [
+      "The text leads; controls recede.",
+      "One primary action per view.",
+      "Meaning never depends on colour alone.",
+      "Keyboard first; every action remains available without a shortcut.",
+      "Offline operation: fonts, icons and other assets come from the app's origin."
+    ],
+    "rules": [],
+    "dos": [
+      "Do use `Button`, for example `<Button variant=\"primary\" onClick={save}>Save</Button>`.",
+      "Do use `DataTable` for lists of records, retaining existing row handlers and selectors.",
+      "Do use `InlineMessage tone=\"error\"` for errors and visible text for every status.",
+      "Do use `Dialog` for every modal and `ConfirmDialog` for confirmation decisions.",
+      "Do register every new screen's keys with a description and choose the appropriate density."
+    ],
+    "donts": [
+      "Don't add `<button className=\"btn …\">` for a screen action; use the shared component.",
+      "Don't use inline `style` colours or declare colour literals outside `tokens.css`.",
+      "Don't introduce a new UI library or CDN fonts; assets must work offline.",
+      "Don't use emoji as icons; use the inline SVG icon system with a labelled control.",
+      "Don't distinguish mark states or workflow status by colour alone."
+    ]
+  }
+}
