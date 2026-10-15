@@ -410,7 +410,7 @@ interface DataTableProps<T> {
 - Remove `SHORTCUTS`, `showShortcutHelp`, `isTypingTarget` (now in `ui/shortcuts.ts`), the two keydown effects and `modalOpen` where it only served the shortcuts.
 
 **Dialogs** (straight swaps to `Dialog` / `ConfirmDialog`, names and texts unchanged): "Submit case", the confirm request, "Case submitted", "Historical submission" (CaseScreen) and "Select review round" (App).
-- **Escape** closes "Submit case", the confirm request, "Historical submission" and "Select review round" through their existing Cancel/Close action. "Case submitted" gets no `onClose` (Escape does nothing, as today). **Behaviour change (recorded):** Escape used to do nothing in the first four; ARIA dialog practice and spec §4 ("Escape closes") require it. Open question T6a-Q3.
+- **Escape** closes "Submit case", the confirm request, "Historical submission" and "Select review round" through their existing Cancel/Close action. "Case submitted" gets no `onClose` (Escape does nothing, as today). **Behaviour change (recorded):** Escape used to do nothing in the first four; ARIA dialog practice and spec §4 ("Escape closes") require it. Resolved T6a-Q3.
 - All dialogs now carry `aria-modal="true"` and trap focus; the old ones did partly.
 
 **Tests:**
@@ -456,7 +456,7 @@ The header keeps `app-header` and `current-user`, which `firstRun.test.tsx`, `tr
   - Status tabs keep `dashboard-tab` buttons; the cases table → `DataTable` (label "Clinical Cases"; `rowProps` keeps click-select, double-click and Enter open, Space select, `tabIndex 0`, the title).
   - The missing-ontology prompt, notice (`aria-label="Import result"`) and error → `InlineMessage`; "Get started" → `EmptyState` with the same steps.
   - All inline colour styles go; layout styles move to `dashboard.css`.
-- **Editor in the shell:** `App.tsx` renders `CaseScreen` inside `AppShell` with `density="reading"`, breadcrumb `[project, "Case <document id>"]` as plain text (leaving stays with CaseScreen's "← Dashboard" button and its unsaved-changes path) and **no `onLogout`**; `main` is a flex column filling the viewport so the editor keeps its full height (open question T6a-Q2). CaseScreen's own header becomes a `Toolbar` row under the shell header in Task 9.
+- **Editor in the shell:** `App.tsx` renders `CaseScreen` inside `AppShell` with `density="reading"`, breadcrumb `[project, "Case <document id>"]` as plain text (leaving stays with CaseScreen's "← Dashboard" button and its unsaved-changes path) and, in this task, no `onLogout` yet (Task 9 adds logout from the editor behind the unsaved-changes guard, resolved T6a-Q2); `main` is a flex column filling the viewport so the editor keeps its full height. CaseScreen's own header becomes a `Toolbar` row under the shell header in Task 9.
 - `design.spec.ts` gains `test("design: login and dashboard")`: login page → `login`; dashboard with the default fixture → `dashboard-compact-table`; axe `color-contrast` and the 12 px rule on both; the origin test now also covers the login page.
 
 **Tests** (`appShell.test.tsx`): `shows_product_user_and_logout`; `no_logout_without_handler`; `breadcrumb_marks_the_current_page`; `side_nav_only_when_given`; `skip_link_targets_main`; `density_class_on_main`.
@@ -470,18 +470,23 @@ The header keeps `app-header` and `current-user`, which `firstRun.test.tsx`, `tr
 
 ### Task 9: Editor in the final look; final screenshot review
 
-**Modify** `frontend/src/app/CaseScreen.tsx`, `frontend/src/app/CaseNavigation.tsx`, `frontend/src/editor/*.tsx` (straight swaps only), `styles/screens/editor.css`, `styles/screens/tree.css`, `frontend/browser/design.spec.ts`, `frontend/tests/tokens.test.ts`.
+**Modify** `frontend/src/app/CaseScreen.tsx`, `frontend/src/App.tsx` (editor logout), `frontend/src/app/CaseNavigation.tsx`, `frontend/src/editor/*.tsx` (straight swaps only), `styles/screens/editor.css`, `styles/screens/tree.css`, `frontend/browser/design.spec.ts`, `frontend/tests/tokens.test.ts`.
 
 - **Case header → `Toolbar`** (`className="case-toolbar"`, label "Case"): case navigation, mode badge, identity badge (`annotator-identity`, `annotator-name` kept), save status (`.status-badge` with `role="status"` and the revision title kept), then `IconButton` keyboard, "Retry" (`IconRetry`), "Export (.zip)" (`IconDownload`), primary "Finish & Submit Case" (`IconCheck`). Emoji glyphs go; the accessible names keep their words ("Retry", "Export (.zip)", "Finish & Submit Case").
 - **Buttons, fields and messages** in `CaseScreen`, `CaseNavigation`, `AnnotationPanel`, `ReviewActions`, `LayerControls`, `SearchPanel`, `TreeBrowser` → `Button`, `IconButton`, `Select`, `Textarea`, `InlineMessage` where it is a straight swap (same names, same handlers). The conflict banner and action errors → `InlineMessage` (`aria-label="Revision conflict"` kept).
 - **No inline colours:** `tokens.test.ts` gains `no_colour_literals_in_components` — no `.tsx` under `frontend/src` contains `#[0-9a-fA-F]{3,8}\b` or `rgba?\(` (the flag SVGs are `.svg` and stay).
 - Apply Impeccable `polish` to the editor; then run the skill's finish handoff (`impeccable-finish-reviewer`) once and apply its material fixes.
+- **Logout from the editor (resolved T6a-Q2):**
+  - `CaseScreen` gains `leaveGuardRef?: React.MutableRefObject<((proceed: () => void) => void) | null>`. While mounted it sets the ref to a guard; on unmount it clears it.
+  - The guard: with no pending edits (`queueRef.current.pendingCount() === 0` and no save in flight) it calls `proceed()` at once. Otherwise it opens a `ConfirmDialog` "Unsaved changes" ("Your latest changes are not saved yet."), confirm "Save and log out", cancel "Cancel". Confirm awaits `queueRef.current.flush()`, then calls `proceed()`. If the flush fails (error or revision conflict), it stays in the editor, shows the existing save error and does not log out. Cancel and Escape close the dialog and keep the session.
+  - `App.tsx` passes `onLogout` to the editor's `AppShell` as `() => leaveGuardRef.current ? leaveGuardRef.current(onLogout) : onLogout()`.
+  - Tests (`caseScreen.test.tsx` and `firstRun.test.tsx` or a new `editorLogout.test.tsx`): `logout_with_pending_changes_asks_first_and_cancel_keeps_the_session` (dialog shown, `onLogout` not called, editor still mounted); `save_and_log_out_flushes_the_draft_before_logging_out` (the pending command reaches `/workspaces/ws/commands` before `onLogout`); `a_failed_flush_does_not_log_out`; `logout_without_changes_has_no_dialog` (`onLogout` called at once, no dialog).
 - **`.app-header` in the editor:** `CaseScreen`'s header element was `app-header`; it is now the toolbar, and the shell header carries `app-header`. Any test that located the case header by `.app-header` switches to `.case-toolbar`. **Reason (recorded):** two headers would otherwise share the class.
 - `design.spec.ts`: all screenshots (login, dashboard, both editor states, the four deficiency shots, three viewports) are regenerated; axe and the 12 px rule run on all three screens.
 
 **Final review:** show the user the regenerated `build/design-screenshots/` (spec §7, "at the end"). Changes requested here are made in this task before Task 10.
 
-**Acceptance:** vitest and Playwright pass; the token tests pass; detector triaged; the user has seen the final screenshots. Commit: `feat(editor): editor toolbar, panels and dialogs in the new design`.
+**Acceptance:** vitest and Playwright pass; the token tests pass; detector triaged; the user has seen the final screenshots. Commit: `feat(editor): editor toolbar, panels, dialogs and guarded logout in the new design`.
 
 ---
 
@@ -526,7 +531,7 @@ The header keeps `app-header` and `current-user`, which `firstRun.test.tsx`, `tr
 | §3 marks distinguishable incl. colour-vision deficiencies; AA on marks | 1 (token tests, CVD emulation, computed-style test), 9 |
 | §3 all text AA, functional text ≥ 12 px | 1, 8, 9 (axe `color-contrast`, size rule), token tests |
 | §4 components with vitest tests | 3, 4, 6, 8 |
-| §4 AppShell with breadcrumb, user, logout, optional side nav | 8 |
+| §4 AppShell with breadcrumb, user, logout, optional side nav | 8; logout from the editor 9 |
 | §4 existing screens use components where a straight swap | 7, 8, 9 |
 | §5 registry, input suppression, scope precedence, `?` help, review keys moved unchanged | 5, 6, 7 |
 | §6.1 prototype screenshots | 1 |
@@ -539,17 +544,23 @@ The header keeps `app-header` and `current-user`, which `firstRun.test.tsx`, `tr
 
 - **Mark token names:** the six colours are `--mark-N-fill` (with the shared `--mark-line`), not `--layer-N`. The editor assigns a colour per term (`termColorIndex`, a hash of the term id), not per annotation layer; layers are told apart by `LayerControls`. Naming them "layer" would mislead later plans.
 - **"AI suggestion" state:** marks do not know a proposal's producer. The dashed style marks every proposal under review (`run--target`), which is where AI suggestions appear; the sidebar's `AiBadge` names the tool (T3b Task 10 adds the tool label).
-- **Escape in four dialogs** now closes them (Task 7); spec §4 requires it of `Dialog`, and the old dialogs ignored it.
+- **Escape in four dialogs** now closes them without an action (Task 7); spec §4 requires it of `Dialog`, and the old dialogs ignored it (resolved T6a-Q3).
+- **Logout from the editor** is new (Task 9, resolved T6a-Q2): a guarded logout with a save-or-cancel dialog when changes are pending.
 - **Test tooling:** `@axe-core/playwright` (MPL-2.0) is a dev dependency only; it is not bundled.
 
-## Open questions (provisional defaults in the plan)
+## Resolved Q1–Q3 (2026-10-15, user)
+
+| # | Question | Decision | Task |
+|---|---|---|---|
+| T6a-Q1 | Should a negated finding ("absent") look different in the text? | Yes: a hatch over the mark fill; the axis value stays in the detail pane. | 1 |
+| T6a-Q2 | May a user log out from inside the editor? | Yes. With unsaved changes a `ConfirmDialog` asks first: "Save and log out" (flush, then log out) or "Cancel" (stay logged in). Without unsaved changes the logout is immediate. | 9 |
+| T6a-Q3 | Should Escape close dialogs? | Yes: Escape closes every dialog without an action, except "Case submitted". | 7 |
+
+## Open question
 
 | # | Question | Provisional default | Task |
 |---|---|---|---|
-| T6a-Q1 | Should a negated finding ("absent") look different in the text? | Yes: the hatch pattern over the mark fill; the axis value is in the detail pane as today. | 1 |
-| T6a-Q2 | May a user log out from inside the editor? | Not in T6a: the editor's shell shows the user without "Log out", because leaving must go through the unsaved-changes path. T3b or T6b decides. | 8 |
-| T6a-Q3 | Should Escape close the "Submit case", confirm, "Historical submission" and "Select review round" dialogs? | Yes (Cancel); "Case submitted" keeps ignoring Escape. | 7 |
-| T6a-Q4 | Fonts: Source Serif 4 and Source Sans 3? | Yes; the user can swap them at the Task 1 gate (any OFL pair; the plan's token names stay). | 1 |
+| T6a-Q4 | Fonts: Source Serif 4 and Source Sans 3? | Yes; the user confirms or swaps them at the Task 1 gate (any OFL pair; the plan's token names stay). | 1 |
 
 ## Risks
 
