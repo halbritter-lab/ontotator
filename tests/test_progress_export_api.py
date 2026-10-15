@@ -15,9 +15,12 @@ from test_pg_repository import _key, _submission
 from test_storage import _sample_package
 from test_t1_export import DOC, _own, _submit
 
+from ontocurator.domain.annotations import AnnotationRef
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.exchange.jobs import store_file
+from ontocurator.storage.repository import _key_str
 from ontocurator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
@@ -640,6 +643,88 @@ def test_document_list_preserves_legacy_status_semantics(tmp_path, mode, scenari
     else:
         assert response.status_code == 200, response.text
         assert response.json()[0]["status"] == expected
+
+
+@pytest.mark.parametrize("conflict_first", [False, True])
+def test_review_round_conflict_order_matches_existing_reader(tmp_path, conflict_first):
+    app = _app(tmp_path)
+    repo = app.state.repo
+    package = _sample_package("pkg-a")
+    repo.import_package(package)
+    annotation = next(iter(package.annotations.values()))
+    rounds = sorted(
+        [
+            ReviewTargetSet.create([]),
+            ReviewTargetSet.create(
+                [
+                    AnnotationRef(
+                        annotation_id=annotation.annotation.annotation_id,
+                        version=annotation.version,
+                    )
+                ]
+            ),
+        ],
+        key=lambda targets: targets.target_set_id,
+    )
+    active_targets, conflict_targets = (
+        (rounds[1], rounds[0]) if conflict_first else rounds
+    )
+    active = _key().model_copy(
+        update={
+            "mode": "review",
+            "scope_id": build_scope(package.manifest.task_profile, "review").scope_id,
+            "target_set_id": active_targets.target_set_id,
+        }
+    )
+    conflicting = active.model_copy(
+        update={"target_set_id": conflict_targets.target_set_id}
+    )
+    repo.open_draft(active, active_targets)
+    with repo.db.transaction() as conn:
+        pid = conn.execute(select(ProjectRow.id)).scalar_one()
+        conn.execute(
+            update(DraftRow)
+            .where(DraftRow.project_id == pid, DraftRow.draft_key == _key_str(active))
+            .values(revision=1)
+        )
+        for identifier in ["first", "second"]:
+            submission = _submission(conflicting, 3).model_copy(
+                update={"submission_id": identifier, "targets": conflict_targets}
+            )
+            conn.execute(
+                insert(SubmissionRow).values(
+                    project_id=pid,
+                    submission_id=identifier,
+                    local_key=_key_str(conflicting),
+                    origin_key=_key_str(conflicting),
+                    document_id=conflicting.document_id,
+                    annotator_id=conflicting.annotator_id,
+                    mode="review",
+                    draft_revision=3,
+                    payload=submission.model_dump(mode="json"),
+                    created_at=submission.created_at,
+                )
+            )
+    if conflict_first:
+        with pytest.raises(DomainError, match="CONFLICTING_SUBMISSION_REVISION"):
+            repo.get_document_statuses("pkg-a", "ann-1", "review")
+    else:
+        assert repo.get_document_statuses("pkg-a", "ann-1", "review") == {
+            "doc-1": "in_progress"
+        }
+    lead = logged_in(
+        app, "status-lead", projects={"pkg-a": ["lead", "adjudicator"]}, assignments=[]
+    )
+    response = lead.get(
+        "/api/v1/projects/pkg-a/documents",
+        params={"annotator_id": "ann-1", "mode": "review"},
+    )
+    if conflict_first:
+        assert response.status_code == 422, response.text
+        assert response.json()["code"] == "CONFLICTING_SUBMISSION_REVISION"
+    else:
+        assert response.status_code == 200, response.text
+        assert response.json()[0]["status"] == "in_progress"
 
 
 @pytest.mark.parametrize("count", [1, 100])

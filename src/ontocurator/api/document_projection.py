@@ -131,7 +131,19 @@ def _legacy_statuses(
             workspace = origin
         keys.setdefault(_key_str(workspace), workspace)
     statuses: dict[str, DocumentStatus] = {}
-    for workspace in keys.values():
+    for workspace in sorted(
+        keys.values(),
+        key=lambda workspace: (
+            workspace.document_id,
+            workspace.mode,
+            workspace.scope_id,
+            workspace.target_set_id,
+        ),
+    ):
+        # Match the existing reader's per-document early exit: later rounds
+        # (including conflicting history) are not examined after active work.
+        if statuses.get(workspace.document_id) == "in_progress":
+            continue
         current: dict[str, int] = {}
         revisions: set[tuple[str, int]] = set()
         for alias in _workspace_aliases(workspace):
