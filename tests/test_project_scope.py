@@ -114,6 +114,7 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     "manifest_hash": lambda r: r.manifest_hash("B"),
     "get_task_profile": lambda r: r.get_task_profile("B"),
     "get_axes_config": lambda r: r.get_axes_config("B"),
+    "get_project_rules": lambda r: r.get_project_rules("B"),
     "get_document": lambda r: r.get_document("B", "doc-beta"),
     "list_documents": lambda r: r.list_documents("B"),
     "get_annotation_snapshot": lambda r: r.get_annotation_snapshot("a", "v", "B"),

@@ -31,10 +31,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from ontocurator.auth.context import current_principal
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import AxesConfig
+from ontocurator.domain.axis_visibility import editor_profile, legacy_axes_config
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
 from ontocurator.domain.profiles import OntologyDefinition, TaskProfile, profile_hash
+from ontocurator.domain.project_rules import ProjectRules
 from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
@@ -1236,15 +1238,27 @@ class Repository:
             )
         return TaskProfile.model_validate(stored)
 
+    def get_project_rules(self, project_key: str) -> ProjectRules:
+        """Read the project's opt-in restrictions by name."""
+        with self.db.transaction() as conn:
+            row = conn.execute(
+                select(
+                    ProjectRow.contiguous_mentions_only,
+                    ProjectRow.require_chosen_axes,
+                    ProjectRow.hidden_axis_values,
+                ).where(ProjectRow.project_key == project_key)
+            ).one_or_none()
+        if row is None:
+            raise DomainError("PACKAGE_NOT_FOUND", f"Project '{project_key}' not found")
+        return ProjectRules.of(row)
+
     def get_axes_config(self, project_key: str) -> AxesConfig:
         """AxesConfig synthesized from the task profile, for older callers."""
-        profile = self.get_task_profile(project_key)
-        name = profile.preset or "custom"
-        for layer in profile.layers:
-            for annotation_type in layer.annotation_types:
-                if annotation_type.axes:
-                    return AxesConfig(definition_name=name, axes=annotation_type.axes)
-        return AxesConfig(definition_name=name, axes=[])
+        return legacy_axes_config(
+            editor_profile(
+                self.get_task_profile(project_key), self.get_project_rules(project_key)
+            )
+        )
 
     # --- documents and proposals ------------------------------------------- #
 

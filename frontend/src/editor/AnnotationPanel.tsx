@@ -38,6 +38,7 @@ export interface AnnotationPanelProps {
   onSelectEvidence: (evidenceId: string) => void;
   onUpdateTerm: (termId: string, searchId?: string) => void;
   onUpdateAxes: (axes: Partial<Axes>) => void;
+  onConfirmAxis?: (axisId: string) => void;
   onAttachMention: (segments: CodepointSegment[]) => void;
   onDetachMention: (evidenceId: string) => void;
   onDeleteAnnotation: (annotationId: string) => void;
@@ -75,6 +76,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   onSelectEvidence,
   onUpdateTerm,
   onUpdateAxes,
+  onConfirmAxis,
   onDetachMention,
   onDeleteAnnotation,
   onSetIntent,
@@ -203,6 +205,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           {axesConfig.map((axis) => {
             const val = axesValues[axis.id] ?? "";
             const isRequired = !axis.allow_empty;
+            const unavailable = val !== "" && !axis.options.includes(val);
+            const unavailableLabel = `${val} (current unavailable value)`;
             const options = [
               ...(axis.allow_empty ? [{ value: "", label: "Not specified" }] : []),
               ...axis.options.map((option) => ({ value: option, label: ({
@@ -210,6 +214,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                 patient: "Patient", other: "Other person", current: "Current",
                 historical: "Historical", future: "Future",
               } as Record<string, string>)[option] ?? option })),
+              ...(unavailable ? [{ value: val, label: unavailableLabel }] : []),
             ];
             const updateAxis = (value: string) => onUpdateAxes({
               ...axesValues,
@@ -227,6 +232,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                       <label key={option.value} className="axis-option">
                         <input type="radio" name={`axis-${ann.annotation_id}-${axis.id}`}
                           value={option.value} checked={val === option.value}
+                          disabled={unavailable && option.value === val}
                           onChange={() => updateAxis(option.value)} />
                         <span>{option.label}</span>
                       </label>
@@ -237,8 +243,20 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     value={val} onChange={(e) => updateAxis(e.target.value)}>
                     {axis.allow_empty && <option value="">Not specified</option>}
                     {!axis.allow_empty && <option value="" disabled>Please select</option>}
+                    {unavailable && <option value={val} disabled>{unavailableLabel}</option>}
                     {axis.options.map((option) => <option key={option} value={option}>{option}</option>)}
                   </Select>
+                )}
+                {ann.axes_defaulted?.includes(axis.id) && val !== "" && (
+                  <div>
+                    <p className="form-hint">Default value; confirm it or choose a value.</p>
+                    {onConfirmAxis && !unavailable && (
+                      <Button type="button" variant="secondary" size="sm"
+                        onClick={() => onConfirmAxis(axis.id)}>
+                        Confirm {axis.label} value
+                      </Button>
+                    )}
+                  </div>
                 )}
               </fieldset>
             );

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
@@ -12,6 +13,7 @@ from ontocurator.domain.axes import validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError, IncompleteReview
 from ontocurator.domain.profiles import TaskProfile, resolve_type
+from ontocurator.domain.project_rules import rule_violations
 from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import (
@@ -308,6 +310,33 @@ class SubmissionService:
             if k not in seen_snaps:
                 seen_snaps.add(k)
                 deduped_snaps.append(s)
+
+        evidence_by_id = {
+            (e.mention.evidence_id, e.version): e
+            for snap in deduped_snaps
+            for e in snap.evidence
+        }
+        for snap in deduped_snaps:
+            for ref in snap.annotation.evidence_refs:
+                identity = (ref.evidence_id, ref.version)
+                if identity not in evidence_by_id:
+                    evidence = self.repo.get_evidence_snapshot(
+                        ref.evidence_id, ref.version, key.project_key
+                    )
+                    if evidence is not None:
+                        evidence_by_id[identity] = evidence
+        violations = rule_violations(
+            deduped_snaps,
+            evidence_by_id,
+            task_profile,
+            self.repo.get_project_rules(key.project_key),
+            at_submission=True,
+        )
+        if violations:
+            raise DomainError(
+                "PROJECT_RULE_VIOLATION",
+                {"violations": [asdict(violation) for violation in violations]},
+            )
 
         canonical_content = {
             "key": key.model_dump(),

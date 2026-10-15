@@ -148,6 +148,7 @@ class SetAxesCommand(BaseModel):
     command: Literal["set_axes"] = "set_axes"
     annotation_id: str
     axes_values: dict[str, str | None] = Field(default_factory=dict)
+    chosen_axis_ids: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -494,30 +495,30 @@ class EditingService:
             return term_id
         return term_id if status.status == "unknown" else status.term_id
 
-    def _is_verified_adoption(
+    def _adoption_source(
         self,
         draft: Draft,
         cmd: CreateAnnotationCommand,
         doc: Document,
         layer_id: str,
-    ) -> bool:
-        """True only if the cited source is an existing package proposal for this
-        document, layer and exact term. Only then may an obsolete or unknown
-        imported term be copied into the draft (it still blocks submission)."""
-        if not cmd.source_annotation_id:
-            return False
+        type_id: str,
+    ) -> AnnotationSnapshot | None:
+        """Resolve the exact source before inheriting immutable provenance."""
+        if not cmd.source_annotation_id or not cmd.source_version:
+            return None
         for source in self.repo.list_annotations_for_document(
             draft.key.project_key, doc.document_id
         ):
             if (
                 source.annotation.annotation_id == cmd.source_annotation_id
-                and (cmd.source_version is None or source.version == cmd.source_version)
-                and source.annotation.term_id == cmd.term_id
+                and source.version == cmd.source_version
                 and source.annotation.layer_id == layer_id
+                and source.annotation.type_id == type_id
                 and source.document_id == doc.document_id
+                and source.text_sha256 == doc.text_sha256
             ):
-                return True
-        return False
+                return source
+        return None
 
     @staticmethod
     def _ensure_evidence_identity(
@@ -581,12 +582,19 @@ class EditingService:
 
         type_def = resolve_type(profile, target_layer, target_type)
 
-        if self._is_verified_adoption(draft, cmd, doc, target_layer):
+        source = self._adoption_source(draft, cmd, doc, target_layer, target_type)
+        if source is not None and source.annotation.term_id == cmd.term_id:
             # Store the primary ID like a normal creation; provenance still
             # points at the adopted source annotation.
             term_id = self._primary_term_id(services[target_layer], cmd.term_id)
         else:
             term_id = self._validate_term_for_layer(services[target_layer], cmd.term_id)
+
+        if (cmd.source_annotation_id or cmd.source_version) and source is None:
+            raise DomainError(
+                "INVALID_ADOPTION_SOURCE",
+                "Adoption requires an exact source in the same document, layer and type",
+            )
 
         if any(
             a.annotation.annotation_id == cmd.annotation_id for a in draft.annotations
@@ -638,6 +646,14 @@ class EditingService:
             type_id=target_type,
             term_id=term_id,
             axes_values=cmd.axes_values,
+            axes_defaulted=[
+                axis
+                for axis in source.annotation.axes_defaulted
+                if cmd.axes_values.get(axis) not in (None, "")
+                and cmd.axes_values.get(axis) == source.annotation.axes_values.get(axis)
+            ]
+            if source is not None
+            else [],
             evidence_refs=evidence_refs,
             provenance=prov,
         )
@@ -731,7 +747,24 @@ class EditingService:
         except ValueError as exc:
             raise DomainError("INVALID_AXES", str(exc)) from exc
 
+        axis_ids = {axis.id for axis in type_def.axes}
+        if any(
+            axis not in axis_ids or cmd.axes_values.get(axis) in (None, "")
+            for axis in cmd.chosen_axis_ids
+        ):
+            raise DomainError(
+                "INVALID_AXES", "Only known axes with a nonempty value can be confirmed"
+            )
         updated_ann = existing.annotation.with_axes(cmd.axes_values)
+        updated_ann = updated_ann.model_copy(
+            update={
+                "axes_defaulted": [
+                    axis
+                    for axis in updated_ann.axes_defaulted
+                    if axis not in cmd.chosen_axis_ids
+                ]
+            }
+        )
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap

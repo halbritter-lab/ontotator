@@ -584,6 +584,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (copy.annotation.term_id !== source.annotation.term_id) return true;
     if (copy.annotation.type_id !== source.annotation.type_id) return true;
     if (JSON.stringify(normalizeAxes(copy.annotation.axes_values)) !== JSON.stringify(normalizeAxes(source.annotation.axes_values))) return true;
+    if (JSON.stringify([...(copy.annotation.axes_defaulted ?? [])].sort()) !== JSON.stringify([...(source.annotation.axes_defaulted ?? [])].sort())) return true;
     const copyEvidence = (copy.annotation.evidence_refs ?? [])
       .map((ref) => (latestDraft.current.evidence ?? []).find((ev) => ev.mention.evidence_id === ref.evidence_id))
       .filter((ev): ev is NonNullable<typeof ev> => !!ev);
@@ -893,7 +894,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followAnnotationId]);
 
-  const handleUpdateAxes = async (axesValues: Partial<AxesValues>) => {
+  const handleUpdateAxes = async (axesValues: Partial<AxesValues>, confirmedAxisId?: string) => {
     if (!selectedAnnotationId || !selectedAnnotation) return;
     const annotationId = selectedAnnotationId;
     await mutateAnnotationAndSyncDecision(annotationId, () =>
@@ -901,6 +902,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         command: "set_axes",
         annotation_id: annotationId,
         axes_values: axesValues as Record<string, string | null>,
+        chosen_axis_ids: confirmedAxisId ? [confirmedAxisId] : Object.keys(axesValues).filter(
+          (axis) => axesValues[axis] != null && axesValues[axis] !== "" && axesValues[axis] !== selectedAnnotation.annotation.axes_values?.[axis]
+        ),
       })
     );
   };
@@ -1806,6 +1810,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
               onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
               onUpdateAxes={(axesValues) => { void handleUpdateAxes(axesValues).catch(reportError); }}
+              onConfirmAxis={(axisId) => { void handleUpdateAxes(selectedAnnotation!.annotation.axes_values ?? {}, axisId).catch(reportError); }}
               onAttachMention={(segments) =>
                 handleSelection({ segments, intent: "new_mention" })
               }
