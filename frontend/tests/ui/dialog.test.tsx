@@ -1,0 +1,80 @@
+import { StrictMode, createRef, useState } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it, vi } from "vitest";
+import { Dialog } from "../../src/ui/Dialog";
+import { useShortcut } from "../../src/ui/shortcuts";
+
+afterEach(cleanup);
+it("has_dialog_role_modal_flag_and_name", () => {
+  render(<Dialog open title="Settings" heading={<span>Custom heading</span>} footer={<button>Save</button>}>Content</Dialog>);
+  expect(screen.getByRole("dialog", { name: "Settings" }).getAttribute("aria-modal")).toBe("true");
+  expect(screen.getByRole("heading").textContent).toBe("Custom heading");
+  expect(screen.getByRole("button").closest(".modal-actions")).not.toBeNull();
+});
+it("focuses_initial_or_first_focusable", () => {
+  const initial = createRef<HTMLInputElement>();
+  const view = render(<Dialog open title="Edit" initialFocus={initial}><button>First</button><input ref={initial} aria-label="Name" /></Dialog>);
+  expect(document.activeElement).toBe(screen.getByRole("textbox"));
+  view.rerender(<Dialog open={false} title="Edit">Hidden</Dialog>);
+  view.rerender(<Dialog open title="Edit"><button disabled>Disabled</button><button>First</button></Dialog>);
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "First" }));
+});
+it("traps_tab_and_shift_tab", async () => {
+  const user = userEvent.setup();
+  render(<><button>Outside</button><Dialog open title="Edit"><button>First</button><button>Last</button></Dialog></>);
+  await user.tab({ shift: true });
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Last" }));
+  await user.tab();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "First" }));
+});
+it("escape_closes_and_focus_returns_in_strict_mode", async () => {
+  function Example() { const [open, setOpen] = useState(false); return <><button onClick={() => setOpen(true)}>Open</button><Dialog open={open} title="Edit" onClose={() => setOpen(false)}><input aria-label="Name" /></Dialog></>; }
+  const user = userEvent.setup();
+  render(<StrictMode><Example /></StrictMode>);
+  await user.click(screen.getByRole("button"));
+  expect(screen.getByRole("dialog", { name: "Edit" })).not.toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole("textbox"));
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open" }));
+});
+it("without_onClose_escape_does_nothing", () => {
+  render(<Dialog open title="Wait">Waiting</Dialog>);
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  expect(screen.getByRole("dialog")).not.toBeNull();
+});
+it("backdrop_closes_only_when_enabled", () => {
+  const close = vi.fn();
+  const view = render(<Dialog open title="Edit" onClose={close}><button>Inside</button></Dialog>);
+  fireEvent.click(screen.getByRole("dialog").parentElement!);
+  expect(close).not.toHaveBeenCalled();
+  view.rerender(<Dialog open title="Edit" onClose={close} closeOnBackdrop><button>Inside</button></Dialog>);
+  fireEvent.click(screen.getByRole("button"));
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("dialog").parentElement!);
+  expect(close).toHaveBeenCalledOnce();
+});
+it("blocks_screen_shortcuts_while_open_and_respects_inert_ancestor", () => {
+  const screenHandler = vi.fn(); const dialogHandler = vi.fn(); const close = vi.fn();
+  function Bindings() { useShortcut("1", screenHandler); useShortcut("2", dialogHandler, { scope: "dialog" }); return null; }
+  render(<><Bindings /><div data-testid="root"><Dialog open title="Edit" onClose={close}><button>Inside</button></Dialog></div></>);
+  fireEvent.keyDown(window, { key: "1" }); fireEvent.keyDown(window, { key: "2" });
+  expect(screenHandler).not.toHaveBeenCalled(); expect(dialogHandler).toHaveBeenCalledOnce();
+  screen.getByTestId("root").setAttribute("inert", "");
+  fireEvent.keyDown(window, { key: "Escape" }); expect(close).not.toHaveBeenCalled();
+});
+it("locks_scrolling_until_the_last_dialog_closes_and_restores_the_original_style", () => {
+  document.body.style.overflow = "auto";
+  const first = render(<Dialog open title="First">Text</Dialog>);
+  const second = render(<Dialog open title="Second">Text</Dialog>);
+  expect(document.body.style.overflow).toBe("hidden");
+  first.unmount(); expect(document.body.style.overflow).toBe("hidden");
+  second.unmount(); expect(document.body.style.overflow).toBe("auto");
+  document.body.style.overflow = "";
+});
+it("keeps_focus_in_an_empty_dialog", async () => {
+  render(<Dialog open title="Wait">Waiting</Dialog>);
+  await userEvent.setup().tab();
+  expect(document.activeElement).toBe(screen.getByRole("dialog"));
+});

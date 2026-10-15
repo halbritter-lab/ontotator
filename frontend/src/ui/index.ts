@@ -11,3 +11,7 @@ export * from "./TextInput";
 export * from "./Select";
 export * from "./Textarea";
 export * from "./Checkbox";
+export * from "./Dialog";
+export * from "./ConfirmDialog";
+export * from "./ShortcutHelp";
+export * from "./DataTable";
