@@ -1,13 +1,16 @@
-"""Project settings and membership administration."""
+"""Project settings, membership administration, progress and export requests."""
+
+from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from ontocurator.api.identity import PrincipalDep
+from ontocurator.api.job_routes import EXPORT_ACTIONS, authorized_project
 from ontocurator.api.routes import get_access
 from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Action, can
+from ontocurator.authz.policy import Action, Task, can
 from ontocurator.authz.scoped import project_not_found
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.profile_templates import PROFILE_TEMPLATES
@@ -20,6 +23,8 @@ from ontocurator.projects.service import (
     ProjectSettingsChange,
 )
 from ontocurator.storage.tables import (
+    AssignmentRow,
+    DocumentRow,
     ProjectMembershipRow,
     ProjectRow,
     UserLanguageRow,
@@ -58,6 +63,150 @@ class Member(BaseModel):
     pseudonym: str
     roles: list[str]
     languages: list[str]
+
+
+AssignmentStatus = Literal["open", "in_progress", "submitted", "reopened"]
+
+
+class Assignee(BaseModel):
+    assignment_id: int
+    username: str
+    pseudonym: str
+    task: Task
+    status: AssignmentStatus
+
+
+class ProgressDocument(BaseModel):
+    document_id: str
+    language: str
+    position: int | None
+    assignees: list[Assignee] = Field(default_factory=list)
+
+
+class AssignmentCounts(BaseModel):
+    open: int = 0
+    in_progress: int = 0
+    submitted: int = 0
+    reopened: int = 0
+
+
+class ProgressPerson(AssignmentCounts):
+    username: str
+    display_name: str
+    pseudonym: str
+
+
+class ProgressTotals(AssignmentCounts):
+    documents: int = 0
+    unassigned: int = 0
+
+
+class ProjectProgress(BaseModel):
+    documents: list[ProgressDocument]
+    people: list[ProgressPerson]
+    totals: ProgressTotals
+
+
+class ExportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["t1", "edit_log"]
+
+
+class ExportCreated(BaseModel):
+    job_id: int
+
+
+@router.get("/{key}/progress")
+def progress(key: str, principal: PrincipalDep, request: Request) -> ProjectProgress:
+    actor = Actor.user(principal.user_id, principal.username)
+    with request.app.state.repo.db.transaction() as conn:
+        project_id = authorized_project(conn, key, actor, Action.VIEW_PROGRESS)
+        # One bounded metadata projection, without document text or workspace
+        # snapshots. Unrevoked history stays visible to project leads even if
+        # an assignee later loses a task role or becomes inactive.
+        rows = conn.execute(
+            select(
+                DocumentRow.document_id,
+                DocumentRow.language,
+                DocumentRow.position,
+                AssignmentRow.id.label("assignment_id"),
+                AssignmentRow.task,
+                AssignmentRow.status,
+                UserRow.username,
+                UserRow.display_name,
+                UserRow.pseudonym,
+            )
+            .select_from(DocumentRow)
+            .outerjoin(
+                AssignmentRow,
+                (AssignmentRow.project_id == DocumentRow.project_id)
+                & (AssignmentRow.document_id == DocumentRow.document_id)
+                & AssignmentRow.revoked_at.is_(None),
+            )
+            .outerjoin(UserRow, UserRow.id == AssignmentRow.user_id)
+            .where(DocumentRow.project_id == project_id)
+            .order_by(
+                DocumentRow.position.nulls_last(),
+                DocumentRow.document_id,
+                UserRow.username,
+                AssignmentRow.task,
+                AssignmentRow.id,
+            )
+        ).all()
+        documents: dict[str, ProgressDocument] = {}
+        people: dict[str, ProgressPerson] = {}
+        totals = ProgressTotals()
+        for row in rows:
+            document = documents.setdefault(
+                row.document_id,
+                ProgressDocument(
+                    document_id=row.document_id,
+                    language=row.language,
+                    position=row.position,
+                ),
+            )
+            if row.assignment_id is None:
+                continue
+            assignee = Assignee(
+                assignment_id=row.assignment_id,
+                username=row.username,
+                pseudonym=row.pseudonym,
+                task=row.task,
+                status=row.status,
+            )
+            document.assignees.append(assignee)
+            person = people.setdefault(
+                row.username,
+                ProgressPerson(
+                    username=row.username,
+                    display_name=row.display_name,
+                    pseudonym=row.pseudonym,
+                ),
+            )
+            setattr(person, assignee.status, getattr(person, assignee.status) + 1)
+            setattr(totals, assignee.status, getattr(totals, assignee.status) + 1)
+        totals.documents = len(documents)
+        totals.unassigned = sum(
+            not document.assignees for document in documents.values()
+        )
+        return ProjectProgress(
+            documents=list(documents.values()),
+            people=sorted(people.values(), key=lambda p: p.username),
+            totals=totals,
+        )
+
+
+@router.post("/{key}/exports")
+def request_export(
+    key: str, body: ExportRequest, principal: PrincipalDep, request: Request
+) -> ExportCreated:
+    actor = Actor.user(principal.user_id, principal.username)
+    with request.app.state.repo.db.transaction() as conn:
+        project_id = authorized_project(conn, key, actor, EXPORT_ACTIONS[body.kind])
+        job_id = request.app.state.jobs.enqueue(
+            f"{body.kind}_export", {"project": key}, project_id=project_id, actor=actor
+        )
+        return ExportCreated(job_id=job_id)
 
 
 def _service(request: Request) -> ProjectService:
