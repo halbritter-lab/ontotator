@@ -158,6 +158,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  // "Finish & Submit" was clicked and waits for pending saves before it validates.
+  const [submitPending, setSubmitPending] = useState(false);
   const [textCheckedConfirmed, setTextCheckedConfirmed] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   // Reviewer notes typed in the UI, keyed by target; kept even when a decision is reset.
@@ -1114,9 +1116,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Confirmed proposals are submitted as they are, next to the draft's own annotations.
   const confirmedCount = (draft.decisions ?? []).filter((d) => d.outcome === "confirmed").length;
 
-  // Step 1: validate, save pending edits and open the confirmation dialog.
+  // Step 1: save pending edits, validate the saved draft and open the confirmation dialog.
   const handleSubmitWorkspace = async () => {
     setSubmitError(null);
+
+    // Validate only after pending saves (e.g. "Mark ... as verified") have finished;
+    // the draft from before them would give a stale validation result.
+    const rejectedBefore = queueRef.current.rejectedCount();
+    setSubmitPending(true);
+    try {
+      await queueRef.current.flush();
+    } catch (error) { reportError(error); return; } finally { setSubmitPending(false); }
+    // A save the server refused already shows its error; do not continue to submit.
+    if (queueRef.current.rejectedCount() !== rejectedBefore) return;
 
     const checkedIds = latestDraft.current.checked_layer_ids ?? [];
     const unchecked = editableLayerIds.filter((id) => !checkedIds.includes(id));
@@ -1127,10 +1139,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       setSubmitError(`Please mark all editable layers as verified before submitting: ${uncheckedNames}`);
       return;
     }
-
-    try {
-      await queueRef.current.flush();
-    } catch (error) { reportError(error); return; }
 
     setTextCheckedConfirmed(false);
     setSubmitDialogOpen(true);
@@ -1429,7 +1437,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             type="button"
             className="btn btn-primary btn-sm"
             onClick={handleSubmitWorkspace}
-            title="Finish and submit case"
+            disabled={submitPending}
+            aria-busy={submitPending}
+            title={submitPending ? "Saving changes before submitting" : "Finish and submit case"}
             style={{ fontWeight: 600, padding: "5px 12px" }}
           >
             ✓ Finish & Submit Case

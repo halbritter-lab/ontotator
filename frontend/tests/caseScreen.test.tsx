@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
-import { api } from "../src/api/client";
+import { api, ValidationError, type Draft } from "../src/api/client";
 
 it("never pre-fills clinical axis values (no assertion default for HPO terms)", () => {
   const axes = [
@@ -500,5 +500,62 @@ describe("CaseScreen integration", () => {
     });
   });
 
-});
+  describe("Finish & Submit while a save is pending", () => {
+    // Two layers, one editable: submitting requires the editable layer to be verified.
+    const twoLayerView = (): WorkspaceView => ({
+      ...sampleView,
+      scope: { ...sampleView.scope!, editable_layer_ids: ["phenotype"], reference_layer_ids: ["disease"] },
+      layers: [
+        sampleView.layers![0],
+        { ...sampleView.layers![0], layer_id: "disease", label: "Disease", access: "reference" },
+      ],
+    });
+    const deferred = <T,>() => {
+      let resolve!: (value: T) => void;
+      let reject!: (error: unknown) => void;
+      const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+      return { promise, resolve, reject };
+    };
+    const finishButton = () => screen.getByRole("button", { name: /Finish & Submit Case/i });
 
+    it("waits for the save and validates against the saved draft", async () => {
+      const view = twoLayerView();
+      const save = deferred<Draft>();
+      const apply = vi.spyOn(api, "applyCommand").mockReturnValue(save.promise);
+      render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+      fireEvent.click(finishButton());
+
+      // No validation against the draft from before the save ...
+      expect(screen.queryByRole("alert")).toBeNull();
+      // ... and the click is not lost: the button reports that it waits for the save.
+      await waitFor(() => expect(finishButton().getAttribute("aria-busy")).toBe("true"));
+      expect(screen.queryByRole("dialog", { name: /Submit case/i })).toBeNull();
+
+      save.resolve({ ...view.draft, revision: 1, checked_layer_ids: ["phenotype"] });
+
+      expect(await screen.findByRole("dialog", { name: /Submit case/i })).toBeDefined();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(finishButton().getAttribute("aria-busy")).not.toBe("true");
+    });
+
+    it("shows the error of a failed save and opens no submit dialog", async () => {
+      const view = twoLayerView();
+      view.draft = { ...view.draft, checked_layer_ids: ["phenotype"] };
+      const save = deferred<Draft>();
+      vi.spyOn(api, "applyCommand").mockReturnValue(save.promise);
+      render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+
+      // Reset the verification; the server refuses this edit.
+      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      fireEvent.click(finishButton());
+      save.reject(new ValidationError("Layer cannot be changed"));
+
+      expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Layer cannot be changed");
+      await waitFor(() => expect(finishButton().getAttribute("aria-busy")).not.toBe("true"));
+      expect(screen.queryByRole("dialog", { name: /Submit case/i })).toBeNull();
+    });
+  });
+});

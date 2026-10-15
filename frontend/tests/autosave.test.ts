@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ConflictError } from "../src/api/client";
+import { ConflictError, ValidationError } from "../src/api/client";
 import { createMutationQueue, type QueueState } from "../src/editor/autosave";
 
 describe("createMutationQueue", () => {
@@ -140,5 +140,15 @@ describe("createMutationQueue", () => {
     release({ revision: 2 });
     await queue.flush();
     expect(queue.getRevision()).toBe(9);
+  });
+
+  it("counts the operations the server rejected, so a caller can tell that a flush lost edits", async () => {
+    const queue = createMutationQueue({ initialRevision: 0 });
+    expect(queue.rejectedCount()).toBe(0);
+    await queue.enqueue(async () => ({ revision: 1 }));
+    const refused = queue.enqueue(async () => { throw new ValidationError("invalid term"); });
+    refused.catch(() => undefined);
+    await queue.flush();
+    expect(queue.rejectedCount()).toBe(1);
   });
 });

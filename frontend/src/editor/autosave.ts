@@ -24,6 +24,8 @@ export interface MutationQueue {
   flush: () => Promise<void>;
   /** Number of operations not yet acknowledged by the server. */
   pendingCount: () => number;
+  /** Number of operations the server rejected (not applied) since the queue was created. */
+  rejectedCount: () => number;
   /** Last transport/server error that stopped the queue (null when healthy). */
   getLastError: () => unknown;
   /**
@@ -65,6 +67,7 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
   let disposed = false;
   let processing: Promise<void> | null = null;
   let lastError: unknown = null;
+  let rejected = 0;
   const queue: QueuedOperation<any>[] = [];
   const updateState = (next: QueueState) => {
     if (state !== next) { state = next; options.onState?.(next); }
@@ -104,6 +107,7 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
           } else if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) {
             // A rejected command was not applied. Let the user correct it.
             queue.shift();
+            rejected += 1;
             operation.reject(error);
           } else {
             lastError = error;
@@ -146,6 +150,7 @@ export function createMutationQueue(options: MutationQueueOptions): MutationQueu
       if (state === "error" || state === "conflict") throw new UnsavedChangesError(state);
     },
     pendingCount: () => queue.length,
+    rejectedCount: () => rejected,
     getLastError: () => lastError,
     discardPending(nextRevision) {
       const dropped = queue.splice(0);
