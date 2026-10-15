@@ -33,6 +33,8 @@ export type OntologyDefinition = components["schemas"]["OntologyDefinition"];
 export type Preferences = components["schemas"]["Preferences"];
 export type PreferencesUpdate = components["schemas"]["PreferencesUpdate"];
 export type ProjectSummary = components["schemas"]["ProjectSummary"];
+export type TaskSummary = components["schemas"]["TaskSummary"];
+export type AssignmentWorkspace = components["schemas"]["AssignmentOpenResponse"];
 /** The logged-in user; `csrf_token` goes back in `X-CSRF-Token` with every write. */
 export type CurrentUser = components["schemas"]["CurrentUser"];
 export type TermLookup = { layer_id: string; term_id: string };
@@ -150,6 +152,14 @@ export class ApiClient {
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? "";
+  }
+
+  async listMyTasks(): Promise<TaskSummary[]> {
+    return this.request<TaskSummary[]>("/api/v1/me/tasks", { method: "GET" });
+  }
+
+  async openAssignment(id: number): Promise<AssignmentWorkspace> {
+    return this.request<AssignmentWorkspace>(`/api/v1/assignments/${id}/open`, { method: "POST" });
   }
 
   setCsrfToken(token: string | null): void {
