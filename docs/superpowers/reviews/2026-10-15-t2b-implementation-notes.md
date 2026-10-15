@@ -520,3 +520,42 @@ answer; the least surprising option was taken and should be confirmed.
   319 passed in 33 files; Playwright 34 passed. Playwright went from 36 to 34: Task 1 removed
   `legacy-config.spec.ts` (2 tests) and the provisioning test, and Task 9 replaced the first-run test
   with two tests. The one pytest warning (Starlette's `httpx` test client deprecation) predates T2b.
+
+## Codex review (gpt-6.1-sol) fixes
+
+The report is in `2026-10-15-t2b-codex-review.md` (review of `2920c6c`). Each fix began with a
+failing test.
+
+- Finding 1 (pseudonym inherits stored work): `_next_pseudonym` skips every `ann-...` id that a
+  user or stored work carries: drafts, submissions, review decisions (`reviewer_id`), annotation
+  snapshot actors and the workspace keys of search events. Evidence snapshots carry no annotator id.
+  Claiming a historical identity stays an explicit `pseudonym=` (CLI `--pseudonym`); there is no
+  mapping UI. Test: `test_a_new_user_never_inherits_the_annotator_id_of_stored_work`.
+- Finding 2 (address limit race): a login takes `pg_advisory_xact_lock` on a hash of the client
+  address, then on the name, then the user row, always in this order, and reads its timestamp only
+  after the locks are held. Test: `test_concurrent_failures_from_one_address_stop_at_the_threshold`
+  (29 recorded failures, four concurrent attempts: exactly 30 counted, 3 throttled).
+- Finding 3 (lease not retried): `RuntimeLease` is required from `acquire` until `release`; while
+  it is required but not held, every `check` tries to take it again and never returns True. Test:
+  `test_a_failed_reconnection_is_retried_by_later_checks`.
+- Finding 4 (login timing): the name lock is taken whether or not a user has the name. Deviation:
+  the dummy hash keeps our parameters instead of the strongest accepted policy, because that would
+  make every regular account (our parameters) distinguishable from an unknown name and make every
+  unknown-name login cost up to 256 MiB. Instead `needs_rehash` is true for any hash whose
+  parameters differ from ours, so the first successful login replaces a stronger supplied hash
+  (bootstrap, recovery). This reverses the earlier "a stronger hash is kept" fix; until that first
+  login, the account is still distinguishable. Tests:
+  `test_a_failed_login_locks_and_verifies_alike_for_any_username` (both locks held during
+  verification, same Argon2 parameters for a known and an unknown name),
+  `test_a_stronger_stored_hash_is_replaced_with_ours_at_login`,
+  `test_every_hash_but_ours_needs_a_rehash`.
+- Finding 5 (truncated supplied hashes): `assert_policy` refuses a digest or salt shorter than
+  ours, through the same check as `needs_rehash` used before (`_weaker_than_ours`). Test cases
+  `truncated`, `short-digest` and `short-salt` of
+  `test_a_supplied_hash_outside_the_policy_is_refused`.
+- New risk: logins from one address now run one after another, also for many users behind one
+  NAT or one untrusted proxy address (see `--forwarded-allow-ips` above).
+- Gate: `bash scripts/check.sh` at `31f5fad`: all steps green (503 s). Backend 758 passed,
+  1 skipped; vitest 319 passed in 33 files; Playwright 34 passed. One unrelated run of
+  `tests/test_lease.py` saw `test_a_lost_lease_connection_is_noticed_and_replaced` fail once
+  (`check()` returned True right after the backend was terminated); it passed in every later run.
