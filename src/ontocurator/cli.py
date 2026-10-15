@@ -867,6 +867,9 @@ def import_command(
             readable=True,
         ),
     ],
+    language: Annotated[
+        str | None, typer.Option("--language", help="Language of plain text documents.")
+    ] = None,
     no_wait: Annotated[
         bool,
         typer.Option("--no-wait", help="Only queue the job for the server's worker."),
@@ -884,7 +887,13 @@ def import_command(
         job = _run_job(
             db,
             "t1_import",
-            {"project": project, "blob_sha256": sha, "filename": filename},
+            {
+                "project": project,
+                "blob_sha256": sha,
+                "filename": filename,
+                "kind": "text" if path.suffix.lower() == ".txt" else "t1",
+                "language": language,
+            },
             wait=not no_wait,
         )
     if job is None:

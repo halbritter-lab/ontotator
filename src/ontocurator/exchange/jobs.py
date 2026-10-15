@@ -8,10 +8,8 @@ a system admin (Q5).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import tempfile
-import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -29,21 +27,14 @@ from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
 from ontocurator.exchange.t1 import (
     ExportCounts,
-    ImportCounts,
-    ImportedDocument,
-    ImportedSet,
-    check_importable,
-    document_from_unit,
     layers_for,
-    pin_differences,
     submission_to_unit,
-    unit_to_proposals,
 )
+from ontocurator.exchange.uploads import upload_commit, upload_preview
 from ontocurator.jobs.queue import Handler, Job, JobContext
 from ontocurator.storage.database import Database
 from ontocurator.storage.tables import JobRow, ProjectRow, StoredFileRow, UserRow
 
-MANIFEST = "manifest.json"
 # How many ontospan issues a failed job names in its error.
 MAX_ISSUES = 20
 
@@ -116,34 +107,6 @@ def _warnings(report: ontospan.ValidationReport) -> list[str]:
     return sorted({issue.code for issue in report.warnings})
 
 
-@dataclass(frozen=True)
-class _Delivery:
-    bundle_id: str | None
-    manifest_sha256: str | None
-    units: list[ontospan.AnnotatedDocument]
-
-
-def _read_delivery(path: Path, filename: str) -> tuple[_Delivery, list[str]]:
-    """The units of a bundle (ZIP) or of a single ``.json`` unit, unvalidated
-    against the ontologies; the format itself is checked."""
-    report = ontospan.ValidationReport()
-    try:
-        if filename.lower().endswith(".json"):
-            unit = ontospan.load_annotated_document(path.read_bytes(), report=report)
-            return _Delivery(None, None, [unit]), _warnings(report)
-        manifest, units = ontospan.read_bundle(path, report=report)
-    except ontospan.FormatError:
-        raise _invalid(report) from None
-    with zipfile.ZipFile(path) as archive:
-        manifest_bytes = archive.read(MANIFEST)
-    return (
-        _Delivery(
-            manifest.bundle_id, hashlib.sha256(manifest_bytes).hexdigest(), units
-        ),
-        _warnings(report),
-    )
-
-
 def _validate(
     units: Sequence[ontospan.AnnotatedDocument],
     ontologies: Mapping[str, ontospan.OntologyView],
@@ -160,24 +123,6 @@ def _validate(
     return _warnings(report)
 
 
-def _producers(units: Sequence[ontospan.AnnotatedDocument]) -> list[dict[str, Any]]:
-    """The distinct tool actors of the delivery, in order of appearance."""
-    producers: list[dict[str, Any]] = []
-    for unit in units:
-        for actor in unit.annotation_set.actors:
-            if actor.kind != "tool":
-                continue
-            entry = {
-                "name": actor.name,
-                "version": actor.version,
-                "model": actor.model,
-                "run_id": actor.run_id,
-            }
-            if entry not in producers:
-                producers.append(entry)
-    return producers
-
-
 def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     """Import a T1 bundle or unit into a project as documents and proposals.
 
@@ -186,95 +131,9 @@ def t1_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     if a unit cannot be represented, or if a set kind or tool provenance is
     not accepted (Q11, Q33, T7 I3). Audited as ``project.import``.
     """
-    db = ctx.db
-    project = job.payload["project"]
-    blob = job.payload["blob_sha256"]
-    filename = job.payload.get("filename") or ""
-    actor, access = requester(db, job)
-    repo = ScopedRepository(db, access, actor)
-    from ontocurator.projects.runtime import project_state
+    from ontocurator.exchange.uploads import run_import
 
-    with db.transaction() as conn:
-        prepared_structure = project_state(conn, project)[0]
-    profile = repo.get_task_profile(project)
-    pins = repo.project_pins(project)
-
-    delivery, warnings = _read_delivery(db.blobs.path(blob), filename)
-    layers = [layer for unit in delivery.units for layer in unit.annotation_set.layers]
-    differences = pin_differences(layers, profile, pins)
-    if differences:
-        raise DomainError("PIN_MISMATCH", {"differences": differences})
-    check_importable(delivery.units)
-    documents: list[ImportedDocument] = []
-    sets: list[ImportedSet] = []
-    defaulted_axes = 0
-    for unit in delivery.units:
-        document = document_from_unit(unit)
-        documents.append(ImportedDocument(document, unit.document.source_text_sha256))
-        aset = unit.annotation_set
-        if not aset.annotations:
-            continue  # T7 O2: the document only
-        proposals = unit_to_proposals(
-            unit, profile, document, bundle_id=delivery.bundle_id
-        )
-        defaulted_axes += proposals.defaulted_axes
-        sets.append(
-            ImportedSet(
-                document_id=document.document_id,
-                bundle_id=delivery.bundle_id,
-                manifest_sha256=delivery.manifest_sha256,
-                annotation_set_id=aset.annotation_set_id,
-                set_kind=aset.set_kind,
-                actors=[a.model_dump(mode="json") for a in aset.actors],
-                payload=aset.model_dump(mode="json"),
-                proposals=proposals,
-            )
-        )
-    # Against the pinned ontologies, once every unit can be represented.
-    ontologies: dict[str, ontospan.OntologyView] = {
-        ontology_id: ontospan.ObographOntology.load(db.blobs.path(pin.sha256))
-        for ontology_id, pin in pins.items()
-    }
-    warnings = sorted({*warnings, *_validate(delivery.units, ontologies)})
-    summary: dict[str, Any] = {}
-
-    def audit(conn: Any, project_id: int, counts: ImportCounts) -> None:
-        if project_state(conn, project)[0] != prepared_structure:
-            from ontocurator.domain.errors import RevisionConflict
-
-            raise RevisionConflict(
-                "Project structure changed while preparing the import; retry."
-            )
-        summary.update(
-            {
-                "bundle_id": delivery.bundle_id,
-                "manifest_sha256": delivery.manifest_sha256,
-                "producers": _producers(delivery.units),
-                "units": len(delivery.units),
-                **counts,
-                "defaulted_axes": defaulted_axes,
-            }
-        )
-        record_audit(
-            conn,
-            actor,
-            "project.import",
-            target_type="project",
-            target_id=project,
-            project_id=project_id,
-            details={**summary, "job_id": job.id, "source_sha256": blob},
-        )
-
-    repo.add_documents_and_proposals(
-        project,
-        documents,
-        sets,
-        source_sha256=blob,
-        imported_by=actor.user_id,
-        job_id=job.id,
-        on_done=audit,
-    )
-    return {**summary, "warnings": warnings}
+    return run_import(job, ctx)
 
 
 def _project_id(db: Database, project: str) -> int:
@@ -396,6 +255,8 @@ def edit_log_export(job: Job, ctx: JobContext) -> dict[str, Any]:
 
 
 HANDLERS: dict[str, Handler] = {
+    "upload_preview": upload_preview,
+    "upload_commit": upload_commit,
     "t1_import": t1_import,
     "t1_export": t1_export,
     "edit_log_export": edit_log_export,

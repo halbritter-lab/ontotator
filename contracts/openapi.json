@@ -604,6 +604,316 @@
         }
       }
     },
+    "/api/v1/projects/{key}/uploads": {
+      "post": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Create Upload",
+        "operationId": "create_upload_api_v1_projects__key__uploads_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_upload_api_v1_projects__key__uploads_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "List Uploads",
+        "operationId": "list_uploads_api_v1_projects__key__uploads_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UploadView"
+                  },
+                  "title": "Response List Uploads Api V1 Projects  Key  Uploads Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/uploads/{upload_id}": {
+      "get": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Get Upload",
+        "operationId": "get_upload_api_v1_projects__key__uploads__upload_id__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/uploads/{upload_id}/commit": {
+      "post": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Commit Upload",
+        "operationId": "commit_upload_api_v1_projects__key__uploads__upload_id__commit_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitUpload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/uploads/{upload_id}/discard": {
+      "post": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Discard Upload",
+        "operationId": "discard_upload_api_v1_projects__key__uploads__upload_id__discard_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/proposal-sets/{set_id}": {
+      "get": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Get Proposal Set",
+        "operationId": "get_proposal_set_api_v1_projects__key__proposal_sets__set_id__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Set Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalSetView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me/profile": {
       "get": {
         "tags": [
@@ -1044,7 +1354,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/AnnotationSnapshot"
+                    "$ref": "#/components/schemas/EditorProposal"
                   },
                   "type": "array",
                   "title": "Response Get Review Inputs Api V1 Workspaces Review Inputs Post"
@@ -1850,6 +2160,43 @@
         "title": "AxisDefinition",
         "description": "Definition of an individual annotation contextual axis."
       },
+      "Body_create_upload_api_v1_projects__key__uploads_post": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "t1",
+              "text"
+            ],
+            "title": "Kind"
+          },
+          "files[]": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files[]"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "files[]"
+        ],
+        "title": "Body_create_upload_api_v1_projects__key__uploads_post"
+      },
       "Body_upload_ontologies_api_v1_admin_ontologies__post": {
         "properties": {
           "files[]": {
@@ -1885,6 +2232,43 @@
           "expires_at"
         ],
         "title": "CodeResponse"
+      },
+      "Collision": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "existing_sha256": {
+            "type": "string",
+            "title": "Existing Sha256"
+          },
+          "new_sha256": {
+            "type": "string",
+            "title": "New Sha256"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "existing_sha256",
+          "new_sha256"
+        ],
+        "title": "Collision"
+      },
+      "CommitUpload": {
+        "properties": {
+          "plan_sha256": {
+            "type": "string",
+            "title": "Plan Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "plan_sha256"
+        ],
+        "title": "CommitUpload"
       },
       "CreateProjectRequest": {
         "properties": {
@@ -2184,6 +2568,103 @@
         "title": "Draft",
         "description": "Mutable, revisioned working state of a workspace."
       },
+      "Duplicate": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "text_sha256": {
+            "type": "string",
+            "title": "Text Sha256"
+          },
+          "same_text_as": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Same Text As"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "text_sha256",
+          "same_text_as"
+        ],
+        "title": "Duplicate"
+      },
+      "EditorProposal": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "ontocurator-annotation/v3",
+            "title": "Schema Version",
+            "default": "ontocurator-annotation/v3"
+          },
+          "annotation": {
+            "$ref": "#/components/schemas/Annotation"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSnapshot"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "text_sha256": {
+            "type": "string",
+            "title": "Text Sha256"
+          },
+          "ontology_sha256": {
+            "type": "string",
+            "title": "Ontology Sha256"
+          },
+          "layer_config_sha256": {
+            "type": "string",
+            "title": "Layer Config Sha256"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "proposal_set_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Set Id"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "annotation",
+          "evidence",
+          "document_id",
+          "text_sha256",
+          "ontology_sha256",
+          "layer_config_sha256",
+          "version"
+        ],
+        "title": "EditorProposal",
+        "description": "Editor projection; producer metadata never changes snapshot hashes."
+      },
       "EvidenceMention": {
         "properties": {
           "evidence_id": {
@@ -2277,6 +2758,130 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "ImportPlan": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedDocument"
+            },
+            "type": "array",
+            "title": "Documents"
+          },
+          "duplicates": {
+            "items": {
+              "$ref": "#/components/schemas/Duplicate"
+            },
+            "type": "array",
+            "title": "Duplicates"
+          },
+          "collisions": {
+            "items": {
+              "$ref": "#/components/schemas/Collision"
+            },
+            "type": "array",
+            "title": "Collisions"
+          },
+          "proposal_sets": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedSet"
+            },
+            "type": "array",
+            "title": "Proposal Sets"
+          },
+          "documents_only": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Documents Only"
+          },
+          "normalised_count": {
+            "type": "integer",
+            "title": "Normalised Count",
+            "default": 0
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Errors"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "state_sha256": {
+            "type": "string",
+            "title": "State Sha256"
+          },
+          "plan_sha256": {
+            "type": "string",
+            "title": "Plan Sha256",
+            "default": ""
+          },
+          "committable": {
+            "type": "boolean",
+            "title": "Committable",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "state_sha256"
+        ],
+        "title": "ImportPlan"
+      },
+      "ImportedProposals": {
+        "properties": {
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationSnapshot"
+            },
+            "type": "array",
+            "title": "Annotations"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSnapshot"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "notes": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Notes"
+          },
+          "defaulted_axes": {
+            "type": "integer",
+            "title": "Defaulted Axes",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "annotations",
+          "evidence"
+        ],
+        "title": "ImportedProposals",
+        "description": "The proposals of one unit.\n\n``notes`` maps every annotation id to its T1 provenance notes; they are not\npart of the snapshot. ``defaulted_axes`` counts the axis values that arrived\nwith ``basis: defaulted``; they stay defaulted (``Annotation.axes_defaulted``)."
+      },
       "IndexConfiguration": {
         "properties": {
           "algorithm": {
@@ -2367,6 +2972,49 @@
         "type": "object",
         "title": "IndexConfiguration",
         "description": "Declared defaults and application algorithms, separate from the runtime."
+      },
+      "Issue": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "annotation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity",
+            "default": "error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "unit",
+          "message"
+        ],
+        "title": "Issue"
       },
       "LayerDefinition": {
         "properties": {
@@ -2849,6 +3497,142 @@
           "release"
         ],
         "title": "PinnedOntology"
+      },
+      "PlannedDocument": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "text_sha256": {
+            "type": "string",
+            "title": "Text Sha256"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "add",
+              "unchanged"
+            ],
+            "title": "Action"
+          },
+          "normalised": {
+            "type": "boolean",
+            "title": "Normalised"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "source_text_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Text Sha256"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "language",
+          "text_sha256",
+          "action",
+          "normalised",
+          "label"
+        ],
+        "title": "PlannedDocument"
+      },
+      "PlannedSet": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "annotation_set_id": {
+            "type": "string",
+            "title": "Annotation Set Id"
+          },
+          "bundle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Id"
+          },
+          "manifest_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Sha256"
+          },
+          "set_kind": {
+            "type": "string",
+            "title": "Set Kind"
+          },
+          "actors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Actors"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "proposals": {
+            "$ref": "#/components/schemas/ImportedProposals"
+          },
+          "refused": {
+            "items": {
+              "$ref": "#/components/schemas/RuleViolation"
+            },
+            "type": "array",
+            "title": "Refused"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "add",
+              "already_imported"
+            ],
+            "title": "Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "annotation_set_id",
+          "bundle_id",
+          "manifest_sha256",
+          "set_kind",
+          "actors",
+          "payload",
+          "proposals",
+          "refused",
+          "action"
+        ],
+        "title": "PlannedSet"
       },
       "Preferences": {
         "properties": {
@@ -3349,6 +4133,73 @@
         "title": "ProjectSummary",
         "description": "A project on the dashboard, with what the user may do in it."
       },
+      "ProposalSetView": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "annotation_set_id": {
+            "type": "string",
+            "title": "Annotation Set Id"
+          },
+          "bundle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Id"
+          },
+          "set_kind": {
+            "type": "string",
+            "title": "Set Kind"
+          },
+          "actors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Actors"
+          },
+          "imported_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Imported At"
+          },
+          "imported_by_pseudonym": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported By Pseudonym"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "annotation_set_id",
+          "bundle_id",
+          "set_kind",
+          "actors",
+          "imported_at",
+          "imported_by_pseudonym"
+        ],
+        "title": "ProposalSetView"
+      },
       "Provenance": {
         "properties": {
           "actor": {
@@ -3528,6 +4379,38 @@
         ],
         "title": "ReviewTargetSet",
         "description": "Immutable, sorted set of targeted annotation references for a review round."
+      },
+      "RuleViolation": {
+        "properties": {
+          "annotation_id": {
+            "type": "string",
+            "title": "Annotation Id"
+          },
+          "rule": {
+            "type": "string",
+            "enum": [
+              "discontinuous_mention",
+              "hidden_axis_value",
+              "axis_not_chosen"
+            ],
+            "title": "Rule"
+          },
+          "detail": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "annotation_id",
+          "rule",
+          "detail"
+        ],
+        "title": "RuleViolation",
+        "description": "A project restriction violated by one annotation's immutable content."
       },
       "RuntimeIdentity": {
         "properties": {
@@ -4544,6 +5427,135 @@
         "title": "TreeTermDetail",
         "description": "What the detail pane shows for the selected node."
       },
+      "UploadCreated": {
+        "properties": {
+          "upload_id": {
+            "type": "integer",
+            "title": "Upload Id"
+          },
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload_id",
+          "job_id"
+        ],
+        "title": "UploadCreated"
+      },
+      "UploadFileInfo": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "sha256",
+          "size"
+        ],
+        "title": "UploadFileInfo"
+      },
+      "UploadView": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "t1",
+              "text"
+            ],
+            "title": "Kind"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/UploadFileInfo"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Sha256"
+          },
+          "commit_job_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Job Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "language",
+          "files",
+          "status",
+          "preview",
+          "plan_sha256",
+          "commit_job_id",
+          "created_at"
+        ],
+        "title": "UploadView"
+      },
       "UserProject": {
         "properties": {
           "project_key": {
@@ -4690,7 +5702,7 @@
           },
           "available_inputs": {
             "items": {
-              "$ref": "#/components/schemas/AnnotationSnapshot"
+              "$ref": "#/components/schemas/EditorProposal"
             },
             "type": "array",
             "title": "Available Inputs"

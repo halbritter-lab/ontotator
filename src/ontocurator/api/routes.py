@@ -24,6 +24,7 @@ from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.workspaces import (
     DocumentSummary,
+    EditorProposal,
     WorkspaceService,
     WorkspaceView,
 )
@@ -39,7 +40,6 @@ from ontocurator.authz.policy import (
     can,
 )
 from ontocurator.authz.scoped import ScopedRepository, project_not_found
-from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
@@ -352,7 +352,7 @@ def get_review_inputs(
     request: Request,
     ws_svc: WorkspaceSvcDep,
     principal: PrincipalDep,
-) -> list[AnnotationSnapshot]:
+) -> list[EditorProposal]:
     """Get selectable proposal versions for setting up a review round."""
     own_annotator(principal, req.annotator_id)
     require_mode(request, req.project_key, req.mode)

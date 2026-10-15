@@ -1414,6 +1414,73 @@ class Repository:
             )
         return [decode_snapshot(p) for p in stored]
 
+    def get_proposal_set(self, project_key: str, set_id: int) -> dict[str, Any]:
+        """Producer metadata, with its actual owning document association."""
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            row = (
+                conn.execute(
+                    select(
+                        ProposalSetRow.id,
+                        ProposalSetRow.document_id,
+                        ProposalSetRow.annotation_set_id,
+                        ProposalSetRow.bundle_id,
+                        ProposalSetRow.set_kind,
+                        ProposalSetRow.actors,
+                        ProposalSetRow.imported_at,
+                        UserRow.pseudonym.label("imported_by_pseudonym"),
+                    )
+                    .outerjoin(UserRow, UserRow.id == ProposalSetRow.imported_by)
+                    .where(
+                        ProposalSetRow.id == set_id,
+                        ProposalSetRow.project_id == project_id,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if row is None or self.get_document(project_key, row.document_id) is None:
+                raise DomainError("PROPOSAL_SET_NOT_FOUND", "Proposal set not found.")
+            return dict(row)
+
+    def proposal_metadata(
+        self, project_key: str, document_id: str
+    ) -> dict[tuple[str, str], dict[str, Any]]:
+        """Metadata keyed by immutable annotation reference in one document."""
+        if self.get_document(project_key, document_id) is None:
+            raise DomainError("DOCUMENT_NOT_FOUND", "Document not found.")
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            rows = conn.execute(
+                select(
+                    ProposalAnnotationRow.annotation_id,
+                    ProposalAnnotationRow.version,
+                    ProposalAnnotationRow.proposal_set_id,
+                    ProposalAnnotationRow.notes,
+                )
+                .join(
+                    AnnotationSnapshotRow,
+                    and_(
+                        AnnotationSnapshotRow.project_id
+                        == ProposalAnnotationRow.project_id,
+                        AnnotationSnapshotRow.annotation_id
+                        == ProposalAnnotationRow.annotation_id,
+                        AnnotationSnapshotRow.version == ProposalAnnotationRow.version,
+                    ),
+                )
+                .where(
+                    ProposalAnnotationRow.project_id == project_id,
+                    AnnotationSnapshotRow.document_id == document_id,
+                )
+            )
+            return {
+                (r.annotation_id, r.version): {
+                    "proposal_set_id": r.proposal_set_id,
+                    "notes": r.notes,
+                }
+                for r in rows
+            }
+
     # --- submissions and search events: insertion -------------------------- #
 
     @staticmethod
