@@ -40,6 +40,13 @@ class DocumentSummary(BaseModel):
     has_review_inputs: bool | None = None
 
 
+class EditorProposal(AnnotationSnapshot):
+    """Editor projection; producer metadata never changes snapshot hashes."""
+
+    proposal_set_id: int | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
 class WorkspaceView(BaseModel):
     """Loaded view of a workspace including document, draft and submissions."""
 
@@ -53,7 +60,7 @@ class WorkspaceView(BaseModel):
     layers: list[LayerDefinition] = Field(default_factory=list)
     ontologies: list[OntologyDefinition] = Field(default_factory=list)
     checked_layer_ids: list[str] = Field(default_factory=list)
-    available_inputs: list[AnnotationSnapshot] = Field(default_factory=list)
+    available_inputs: list[EditorProposal] = Field(default_factory=list)
     submissions: list[Submission] = Field(default_factory=list)
     term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = Field(
         default_factory=dict
@@ -146,7 +153,7 @@ class WorkspaceService:
 
     def get_review_inputs(
         self, project_key: str, document_id: str
-    ) -> list[AnnotationSnapshot]:
+    ) -> list[EditorProposal]:
         """The document's proposals on the layers a review may edit.
 
         Never other members' submissions or drafts: anything not assigned to
@@ -155,12 +162,30 @@ class WorkspaceService:
         """
         profile = self.repo.get_task_profile(project_key)
         scope = build_scope(profile, "review")
+        return self._editor_proposals(
+            project_key,
+            document_id,
+            [
+                snap
+                for snap in self.repo.list_annotations_for_document(
+                    project_key, document_id
+                )
+                if snap.annotation.layer_id in scope.editable_layer_ids
+            ],
+        )
+
+    def _editor_proposals(
+        self, project_key: str, document_id: str, snapshots: list[AnnotationSnapshot]
+    ) -> list[EditorProposal]:
+        metadata = (
+            self.repo.proposal_metadata(project_key, document_id) if snapshots else {}
+        )
         return [
-            snap
-            for snap in self.repo.list_annotations_for_document(
-                project_key, document_id
+            EditorProposal(
+                **snap.model_dump(),
+                **metadata.get((snap.annotation.annotation_id, snap.version), {}),
             )
-            if snap.annotation.layer_id in scope.editable_layer_ids
+            for snap in snapshots
         ]
 
     def open(
@@ -328,7 +353,9 @@ class WorkspaceService:
             layers=layers,
             ontologies=ontologies,
             checked_layer_ids=draft.checked_layer_ids,
-            available_inputs=available_inputs,
+            available_inputs=self._editor_proposals(
+                key.project_key, key.document_id, available_inputs
+            ),
             submissions=submissions,
             term_statuses=term_statuses,
             axes_definition=axes_profile.definition_name,

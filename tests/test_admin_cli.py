@@ -445,3 +445,19 @@ def test_ontologies_add_and_list(tmp_path: Path) -> None:
     refused = _admin(tmp_path, "ontologies", "add", str(broken))
     assert refused.exit_code == 1
     assert "INVALID_ONTOLOGY" in refused.output
+
+
+def test_cli_imports_plain_text(tmp_path: Path) -> None:
+    from t1_fixtures import create_project
+
+    from ontocurator.storage.repository import Repository
+
+    db = database_for(tmp_path / "editor.db")
+    create_project(db)
+    path = tmp_path / "plain.txt"
+    path.write_bytes(b"Plain text.\r\n")
+    result = _admin(tmp_path, "import", "proj", str(path), "--language", "de")
+    assert result.exit_code == 0, result.output
+    assert "documents_added: 1" in result.output
+    doc = Repository(db).get_document("proj", "plain")
+    assert doc is not None and doc.language == "de" and doc.text == "Plain text.\n"

@@ -297,6 +297,16 @@ class ScopedRepository(Repository):
 
     # --- drafts and mutations ---------------------------------------------- #
 
+    def get_proposal_set(self, project_key: str, set_id: int) -> dict[str, Any]:
+        self._visible(project_key)
+        return super().get_proposal_set(project_key, set_id)
+
+    def proposal_metadata(
+        self, project_key: str, document_id: str
+    ) -> dict[tuple[str, str], dict[str, Any]]:
+        self._visible(project_key)
+        return super().proposal_metadata(project_key, document_id)
+
     def list_workspace_keys(
         self,
         project_key: str,

@@ -194,6 +194,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Uploads */
+        get: operations["list_uploads_api_v1_projects__key__uploads_get"];
+        put?: never;
+        /** Create Upload */
+        post: operations["create_upload_api_v1_projects__key__uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/uploads/{upload_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Upload */
+        get: operations["get_upload_api_v1_projects__key__uploads__upload_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/uploads/{upload_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit Upload */
+        post: operations["commit_upload_api_v1_projects__key__uploads__upload_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/uploads/{upload_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard Upload */
+        post: operations["discard_upload_api_v1_projects__key__uploads__upload_id__discard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/proposal-sets/{set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Proposal Set */
+        get: operations["get_proposal_set_api_v1_projects__key__proposal_sets__set_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/profile": {
         parameters: {
             query?: never;
@@ -786,6 +872,18 @@ export interface components {
              */
             allow_empty: boolean;
         };
+        /** Body_create_upload_api_v1_projects__key__uploads_post */
+        Body_create_upload_api_v1_projects__key__uploads_post: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "t1" | "text";
+            /** Files[] */
+            "files[]": string[];
+            /** Language */
+            language?: string | null;
+        };
         /** Body_upload_ontologies_api_v1_admin_ontologies__post */
         Body_upload_ontologies_api_v1_admin_ontologies__post: {
             /** Files[] */
@@ -800,6 +898,20 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+        };
+        /** Collision */
+        Collision: {
+            /** Document Id */
+            document_id: string;
+            /** Existing Sha256 */
+            existing_sha256: string;
+            /** New Sha256 */
+            new_sha256: string;
+        };
+        /** CommitUpload */
+        CommitUpload: {
+            /** Plan Sha256 */
+            plan_sha256: string;
         };
         /** CreateProjectRequest */
         CreateProjectRequest: {
@@ -914,6 +1026,44 @@ export interface components {
             /** Checked Layer Ids */
             checked_layer_ids?: string[];
         };
+        /** Duplicate */
+        Duplicate: {
+            /** Document Id */
+            document_id: string;
+            /** Text Sha256 */
+            text_sha256: string;
+            /** Same Text As */
+            same_text_as: string[];
+        };
+        /**
+         * EditorProposal
+         * @description Editor projection; producer metadata never changes snapshot hashes.
+         */
+        EditorProposal: {
+            /**
+             * Schema Version
+             * @default ontocurator-annotation/v3
+             * @constant
+             */
+            schema_version: "ontocurator-annotation/v3";
+            annotation: components["schemas"]["Annotation"];
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceSnapshot"][];
+            /** Document Id */
+            document_id: string;
+            /** Text Sha256 */
+            text_sha256: string;
+            /** Ontology Sha256 */
+            ontology_sha256: string;
+            /** Layer Config Sha256 */
+            layer_config_sha256: string;
+            /** Version */
+            version: string;
+            /** Proposal Set Id */
+            proposal_set_id?: number | null;
+            /** Notes */
+            notes?: string[];
+        };
         /**
          * EvidenceMention
          * @description Evidence mention spanning one or more ordered, non-overlapping segments.
@@ -956,6 +1106,67 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** ImportPlan */
+        ImportPlan: {
+            /** Documents */
+            documents?: components["schemas"]["PlannedDocument"][];
+            /** Duplicates */
+            duplicates?: components["schemas"]["Duplicate"][];
+            /** Collisions */
+            collisions?: components["schemas"]["Collision"][];
+            /** Proposal Sets */
+            proposal_sets?: components["schemas"]["PlannedSet"][];
+            /** Documents Only */
+            documents_only?: string[];
+            /**
+             * Normalised Count
+             * @default 0
+             */
+            normalised_count: number;
+            /** Errors */
+            errors?: components["schemas"]["Issue"][];
+            /** Warnings */
+            warnings?: components["schemas"]["Issue"][];
+            /** Counts */
+            counts?: {
+                [key: string]: number;
+            };
+            /** State Sha256 */
+            state_sha256: string;
+            /**
+             * Plan Sha256
+             * @default
+             */
+            plan_sha256: string;
+            /**
+             * Committable
+             * @default true
+             */
+            committable: boolean;
+        };
+        /**
+         * ImportedProposals
+         * @description The proposals of one unit.
+         *
+         *     ``notes`` maps every annotation id to its T1 provenance notes; they are not
+         *     part of the snapshot. ``defaulted_axes`` counts the axis values that arrived
+         *     with ``basis: defaulted``; they stay defaulted (``Annotation.axes_defaulted``).
+         */
+        ImportedProposals: {
+            /** Annotations */
+            annotations: components["schemas"]["AnnotationSnapshot"][];
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceSnapshot"][];
+            /** Notes */
+            notes?: {
+                [key: string]: string[];
+            };
+            /**
+             * Defaulted Axes
+             * @default 0
+             */
+            defaulted_axes: number;
         };
         /**
          * IndexConfiguration
@@ -1037,6 +1248,23 @@ export interface components {
              * @default sha256-annotator-annotation-query-k-languages/1
              */
             display_shuffle: string;
+        };
+        /** Issue */
+        Issue: {
+            /** Code */
+            code: string;
+            /** Unit */
+            unit: string;
+            /** Annotation Id */
+            annotation_id?: string | null;
+            /** Message */
+            message: string;
+            /**
+             * Severity
+             * @default error
+             * @enum {string}
+             */
+            severity: "error" | "warning";
         };
         /**
          * LayerDefinition
@@ -1241,6 +1469,55 @@ export interface components {
             /** Release */
             release: string;
         };
+        /** PlannedDocument */
+        PlannedDocument: {
+            /** Document Id */
+            document_id: string;
+            /** Language */
+            language: string;
+            /** Text Sha256 */
+            text_sha256: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "add" | "unchanged";
+            /** Normalised */
+            normalised: boolean;
+            /** Label */
+            label: string;
+            /** Source Text Sha256 */
+            source_text_sha256?: string | null;
+        };
+        /** PlannedSet */
+        PlannedSet: {
+            /** Document Id */
+            document_id: string;
+            /** Annotation Set Id */
+            annotation_set_id: string;
+            /** Bundle Id */
+            bundle_id: string | null;
+            /** Manifest Sha256 */
+            manifest_sha256: string | null;
+            /** Set Kind */
+            set_kind: string;
+            /** Actors */
+            actors: {
+                [key: string]: unknown;
+            }[];
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            proposals: components["schemas"]["ImportedProposals"];
+            /** Refused */
+            refused: components["schemas"]["RuleViolation"][];
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "add" | "already_imported";
+        };
         /**
          * Preferences
          * @description A user's preferences returned by ``GET /api/v1/preferences``.
@@ -1431,6 +1708,30 @@ export interface components {
             /** Can Manage */
             can_manage: boolean;
         };
+        /** ProposalSetView */
+        ProposalSetView: {
+            /** Id */
+            id: number;
+            /** Document Id */
+            document_id: string;
+            /** Annotation Set Id */
+            annotation_set_id: string;
+            /** Bundle Id */
+            bundle_id: string | null;
+            /** Set Kind */
+            set_kind: string;
+            /** Actors */
+            actors: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Imported By Pseudonym */
+            imported_by_pseudonym: string | null;
+        };
         /**
          * Provenance
          * @description Origin and extraction details for an annotation or statement.
@@ -1498,6 +1799,23 @@ export interface components {
             target_set_id: string;
             /** Targets */
             targets: components["schemas"]["AnnotationRef"][];
+        };
+        /**
+         * RuleViolation
+         * @description A project restriction violated by one annotation's immutable content.
+         */
+        RuleViolation: {
+            /** Annotation Id */
+            annotation_id: string;
+            /**
+             * Rule
+             * @enum {string}
+             */
+            rule: "discontinuous_mention" | "hidden_axis_value" | "axis_not_chosen";
+            /** Detail */
+            detail: {
+                [key: string]: string;
+            };
         };
         /** RuntimeIdentity */
         RuntimeIdentity: {
@@ -1891,6 +2209,48 @@ export interface components {
             /** External Url */
             external_url?: string | null;
         };
+        /** UploadCreated */
+        UploadCreated: {
+            /** Upload Id */
+            upload_id: number;
+            /** Job Id */
+            job_id: number;
+        };
+        /** UploadFileInfo */
+        UploadFileInfo: {
+            /** Filename */
+            filename: string;
+            /** Sha256 */
+            sha256: string;
+            /** Size */
+            size: number;
+        };
+        /** UploadView */
+        UploadView: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "t1" | "text";
+            /** Language */
+            language: string | null;
+            /** Files */
+            files: components["schemas"]["UploadFileInfo"][];
+            /** Status */
+            status: string;
+            preview: components["schemas"]["ImportPlan"] | null;
+            /** Plan Sha256 */
+            plan_sha256: string | null;
+            /** Commit Job Id */
+            commit_job_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** UserProject */
         UserProject: {
             /** Project Key */
@@ -1952,7 +2312,7 @@ export interface components {
             /** Checked Layer Ids */
             checked_layer_ids?: string[];
             /** Available Inputs */
-            available_inputs?: components["schemas"]["AnnotationSnapshot"][];
+            available_inputs?: components["schemas"]["EditorProposal"][];
             /** Submissions */
             submissions?: components["schemas"]["Submission"][];
             /** Term Statuses */
@@ -2409,6 +2769,204 @@ export interface operations {
             };
         };
     };
+    list_uploads_api_v1_projects__key__uploads_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_upload_api_v1_projects__key__uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_upload_api_v1_projects__key__uploads_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_upload_api_v1_projects__key__uploads__upload_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                upload_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_upload_api_v1_projects__key__uploads__upload_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                upload_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitUpload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_upload_api_v1_projects__key__uploads__upload_id__discard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                upload_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_proposal_set_api_v1_projects__key__proposal_sets__set_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                set_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalSetView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_profile_api_v1_me_profile_get: {
         parameters: {
             query?: never;
@@ -2756,7 +3314,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AnnotationSnapshot"][];
+                    "application/json": components["schemas"]["EditorProposal"][];
                 };
             };
             /** @description Validation Error */

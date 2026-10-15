@@ -31,6 +31,7 @@ from ontocurator.api.project_routes import router as project_router
 from ontocurator.api.routes import router
 from ontocurator.api.security import install_security
 from ontocurator.api.tree_routes import router as tree_router
+from ontocurator.api.upload_routes import router as upload_router
 from ontocurator.auth.accounts import AccountService
 from ontocurator.auth.preferences import UserPreferencesStore
 from ontocurator.auth.sessions import SessionService
@@ -56,7 +57,14 @@ from ontocurator.storage.schema import current_revision, head_revision
 logger = logging.getLogger(__name__)
 
 # Answered with 404, so a non-member cannot tell "missing" from "not yours".
-NOT_FOUND_CODES = frozenset({"PROJECT_NOT_FOUND", "PACKAGE_NOT_FOUND"})
+NOT_FOUND_CODES = frozenset(
+    {
+        "PROJECT_NOT_FOUND",
+        "PACKAGE_NOT_FOUND",
+        "UPLOAD_NOT_FOUND",
+        "PROPOSAL_SET_NOT_FOUND",
+    }
+)
 
 
 async def _keep_lease(lease: RuntimeLease) -> None:
@@ -370,6 +378,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                 if exc.code in NOT_FOUND_CODES
                 else {
                     "SELF_LOCKOUT": 409,
+                    "UPLOAD_STALE": 409,
                     "PASSWORD_WRONG": 403,
                     "PROJECT_EXISTS": 409,
                     "PROJECT_IN_USE": 409,
@@ -383,6 +392,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(admin_router)
     app.include_router(ontology_router)
     app.include_router(project_router)
+    app.include_router(upload_router)
     app.include_router(me_router)
     app.include_router(auth_router)
     app.include_router(router)
