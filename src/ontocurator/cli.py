@@ -25,6 +25,8 @@ from ontocurator.auth.audit import Actor
 from ontocurator.authz.memberships import MembershipService
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import DomainError
+from ontocurator.ontology.registry import OntologyRegistry
+from ontocurator.ontology.store import OntologyFile, OntologyStore
 from ontocurator.storage.database import Database
 
 app = typer.Typer(
@@ -311,7 +313,7 @@ def serve(
 
     workspace = data_dir.resolve()
     try:
-        (workspace / "ontologies").mkdir(parents=True, exist_ok=True)
+        workspace.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         typer.echo(f"Error: Cannot create data folder {workspace}: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -400,9 +402,14 @@ projects_app = typer.Typer(
     help="Projects and their members (roles: lead, annotator, adjudicator).",
     no_args_is_help=True,
 )
+ontologies_app = typer.Typer(
+    help="Ontology and translation files on the data volume.",
+    no_args_is_help=True,
+)
 app.add_typer(admin_app, name="admin")
 admin_app.add_typer(users_app, name="users")
 admin_app.add_typer(projects_app, name="projects")
+admin_app.add_typer(ontologies_app, name="ontologies")
 
 RECOVERY_INPUT_MAX_BYTES = 8 * 1024
 RECOVERY_KEYS = ("username", "password_hash", "operator", "reason")
@@ -682,6 +689,49 @@ def projects_remove_member(
             Actor.cli(), project, username, role or None
         )
     _print_roles(username.strip().lower(), project, roles)
+
+
+def _ontology_store(db: Database) -> OntologyStore:
+    return OntologyStore(db, OntologyRegistry(), db.data_dir)
+
+
+def _print_ontology_file(item: OntologyFile) -> None:
+    typer.echo(f"{item.sha256}  {item.prefix}  {item.release or '-'}  {item.kind}")
+
+
+@ontologies_app.command("add")
+def ontologies_add(
+    ctx: typer.Context,
+    files: Annotated[
+        list[Path],
+        typer.Argument(
+            help=(
+                "OBO Graph JSON ontologies (.json) or babelon translations "
+                "(<prefix>-<language>.babelon.tsv)."
+            ),
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+) -> None:
+    """Store files in the data volume; prints sha256, prefix, release and kind.
+
+    Every file is checked first. Adding a stored file again changes nothing.
+    The data volume is ONTOCURATOR_DATA_DIR (default ./data).
+    """
+    with _open_database(ctx) as db:
+        store = _ontology_store(db)
+        for path in files:
+            _print_ontology_file(store.add(Actor.cli(), path.name, path.read_bytes()))
+
+
+@ontologies_app.command("list")
+def ontologies_list(ctx: typer.Context) -> None:
+    """One line per stored file: sha256, prefix, release and kind, oldest first."""
+    with _open_database(ctx) as db:
+        for item in _ontology_store(db).list():
+            _print_ontology_file(item)
 
 
 @admin_app.command("hash-password")

@@ -532,11 +532,12 @@ def test_ontology_upload_is_content_addressed_and_never_overwrites(
     )
     assert first.status_code == 200, first.text
     assert second.status_code == 200, second.text
+    # Stored in the blob store by content: two releases never share a file.
     first_path = Path(first.json()["path"])
     second_path = Path(second.json()["path"])
     assert first_path != second_path
     old_sha = hashlib.sha256(old_release).hexdigest()
-    assert first_path.name == f"hp-{old_sha[:12]}.json"
+    assert first_path.name == old_sha
     assert first_path.read_bytes() == old_release
     assert second_path.read_bytes() == new_release
 
@@ -569,7 +570,7 @@ def test_upload_routes_enforce_size_caps_without_blocking_event_loop(
     resp = client.post("/api/v1/ontologies", files={"file": ("hp.json", big, "x")})
     assert resp.status_code == 413
     assert resp.json()["code"] == "PAYLOAD_TOO_LARGE"
-    assert not any((config.workspace_dir / "ontologies").glob("*"))
+    assert not any((config.workspace_dir / "blobs").rglob("*"))
     resp = client.post("/api/v1/packages", files={"file": ("p.zip", b"x" * 65, "x")})
     assert resp.status_code == 413
 

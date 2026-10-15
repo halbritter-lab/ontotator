@@ -28,8 +28,11 @@ TOKEN = "translation-test"
 
 
 def _folder(tmp_path: Path, *files: Path) -> Path:
-    """``<workspace>/ontologies`` holding copies of the given files."""
-    folder = tmp_path / "workspace" / "ontologies"
+    """``<workspace>/translations`` holding copies of the given files.
+
+    That is where the ontology store places uploaded translation files.
+    """
+    folder = tmp_path / "workspace" / "translations"
     folder.mkdir(parents=True, exist_ok=True)
     for source in files:
         shutil.copyfile(source, folder / source.name)
@@ -236,7 +239,7 @@ def test_uploading_a_translation_reloads_the_ontology(tmp_path: Path) -> None:
     assert body["ontologies"][0]["translations"] == [
         {"language": "de", "filenames": ["hp-de.babelon.tsv"], "term_count": 4}
     ]
-    stored = tmp_path / "workspace" / "ontologies" / "hp-de.babelon.tsv"
+    stored = tmp_path / "workspace" / "translations" / "hp-de.babelon.tsv"
     assert stored.read_bytes() == DE.read_bytes()
     # No staging folder is left behind.
     assert [p.name for p in stored.parent.iterdir() if p.name.startswith(".")] == []
@@ -268,7 +271,7 @@ def test_uploading_the_same_name_replaces_the_file(tmp_path: Path) -> None:
         {"language": "de", "filenames": ["hp-de.babelon.tsv"], "term_count": 1},
         {"language": "es", "filenames": ["hp-es.babelon.tsv"], "term_count": 3},
     ]
-    folder = tmp_path / "workspace" / "ontologies"
+    folder = tmp_path / "workspace" / "translations"
     assert (folder / "hp-de.babelon.tsv").read_bytes() == smaller
     assert sorted(p.name for p in folder.iterdir()) == [
         "hp-de.babelon.tsv",
@@ -322,7 +325,7 @@ def test_upload_without_a_matching_ontology_is_stored_with_a_notice(
     assert body["assigned"] is False
     assert body["ontologies"] == []
     assert "no loaded ontology has the prefix 'HP'" in body["message"]
-    stored = tmp_path / "workspace" / "ontologies" / "hp-de.babelon.tsv"
+    stored = tmp_path / "workspace" / "translations" / "hp-de.babelon.tsv"
     assert stored.read_bytes() == DE.read_bytes()
     assert _listed(client)["mondo"]["translations"] == []
 
@@ -416,7 +419,7 @@ def test_uploading_a_file_with_a_byte_order_mark_works(tmp_path: Path) -> None:
         "hp-de.babelon.tsv was added. HP 2026-06-23: de 4 terms."
     )
     # Stored as it was sent, mark included.
-    stored = tmp_path / "workspace" / "ontologies" / "hp-de.babelon.tsv"
+    stored = tmp_path / "workspace" / "translations" / "hp-de.babelon.tsv"
     assert stored.read_bytes() == marked
     assert _search(client, key, "Krampfanfall")["candidates"][0]["term_id"] == (
         "HP:0001250"

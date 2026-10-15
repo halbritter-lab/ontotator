@@ -416,3 +416,32 @@ def test_members_can_be_added_listed_and_removed(tmp_path: Path) -> None:
         "project.member_remove",
     ]
     assert all(r.actor_label.startswith("cli:") for r in rows)
+
+
+def test_ontologies_add_and_list(tmp_path: Path) -> None:
+    import hashlib
+
+    fixtures = Path(__file__).parent / "fixtures"
+    hp, de = fixtures / "hp.json", fixtures / "hp-de.babelon.tsv"
+    hp_sha = hashlib.sha256(hp.read_bytes()).hexdigest()
+    de_sha = hashlib.sha256(de.read_bytes()).hexdigest()
+
+    added = _admin(tmp_path, "ontologies", "add", str(hp), str(de))
+
+    assert added.exit_code == 0, added.output
+    lines = [f"{hp_sha}  hp  2026-06-23  ontology", f"{de_sha}  hp  -  translation"]
+    assert added.output.splitlines() == lines
+    assert (tmp_path / "data" / "blobs" / hp_sha[:2] / hp_sha).is_file()
+
+    again = _admin(tmp_path, "ontologies", "add", str(hp))
+    assert again.output.splitlines() == lines[:1]
+
+    listed = _admin(tmp_path, "ontologies", "list")
+    assert listed.exit_code == 0, listed.output
+    assert listed.output.splitlines() == lines
+
+    broken = tmp_path / "broken.json"
+    broken.write_text("{not json", encoding="utf-8")
+    refused = _admin(tmp_path, "ontologies", "add", str(broken))
+    assert refused.exit_code == 1
+    assert "INVALID_ONTOLOGY" in refused.output

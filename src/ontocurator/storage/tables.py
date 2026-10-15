@@ -521,3 +521,47 @@ class EditEventRow(Base):
     revision_after: Mapped[int]
     state: Mapped[dict[str, Any]]
     submission_id: Mapped[str | None]
+
+
+# --- Ontologies and jobs (T2d, migration 0004) ----------------------------
+
+
+class OntologyFileRow(Base):
+    """An uploaded ontology or translation file; the bytes are in the blob store."""
+
+    __tablename__ = "ontology_files"
+    __table_args__ = (
+        CheckConstraint("kind IN ('ontology', 'translation')", name="kind"),
+        Index("ix_ontology_files_prefix_kind", "prefix", "kind"),
+    )
+
+    sha256: Mapped[str] = mapped_column(
+        ForeignKey(StoredFileRow.sha256), primary_key=True
+    )
+    kind: Mapped[str]
+    # The lower-case dominant prefix, e.g. ``hp``.
+    prefix: Mapped[str]
+    release: Mapped[str | None]
+    filename: Mapped[str]
+    language: Mapped[str | None]
+    uploaded_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    uploaded_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ProjectOntologyRow(Base):
+    """A project's pin of one profile ontology to an uploaded file (P7)."""
+
+    __tablename__ = "project_ontologies"
+    __table_args__ = (
+        CheckConstraint(
+            "t1_profile IN ('generic', 'hpo-phenotype')", name="t1_profile"
+        ),
+    )
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    ontology_id: Mapped[str] = mapped_column(primary_key=True)
+    sha256: Mapped[str] = mapped_column(ForeignKey(OntologyFileRow.sha256))
+    allowed_roots: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
+    t1_profile: Mapped[str] = mapped_column(server_default=text("'generic'"))

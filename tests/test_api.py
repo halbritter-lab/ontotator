@@ -918,7 +918,7 @@ def test_selection_from_the_similar_block_records_its_positions(app_client):
 def test_a_failing_start_closes_the_database(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from ontocurator.ontology.registry import OntologyRegistry
+    from ontocurator.ontology.store import OntologyStore
     from ontocurator.storage.database import Database
 
     closed: list[Database] = []
@@ -928,11 +928,11 @@ def test_a_failing_start_closes_the_database(
         closed.append(self)
         original_close(self)
 
-    def broken(_self: OntologyRegistry) -> None:
+    def broken(_self: OntologyStore) -> None:
         raise RuntimeError("ontology start failed")
 
     monkeypatch.setattr(Database, "close", tracking_close)
-    monkeypatch.setattr(OntologyRegistry, "load_registered", broken)
+    monkeypatch.setattr(OntologyStore, "register_all", broken)
     config = AppConfig(
         workspace_dir=tmp_path,
         database_url=database_url_for(tmp_path / "start.db"),
@@ -947,7 +947,7 @@ def test_a_failing_start_closes_the_database(
 def test_a_failing_close_does_not_hide_why_the_start_failed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from ontocurator.ontology.registry import OntologyRegistry
+    from ontocurator.ontology.store import OntologyStore
     from ontocurator.storage.database import Database
 
     original_close = Database.close
@@ -959,11 +959,11 @@ def test_a_failing_close_does_not_hide_why_the_start_failed(
             failures.append(self)
             raise RuntimeError("close failed")
 
-    def broken(_self: OntologyRegistry) -> None:
+    def broken(_self: OntologyStore) -> None:
         raise RuntimeError("ontology start failed")
 
     monkeypatch.setattr(Database, "close", failing_close)
-    monkeypatch.setattr(OntologyRegistry, "load_registered", broken)
+    monkeypatch.setattr(OntologyStore, "register_all", broken)
     config = AppConfig(
         workspace_dir=tmp_path,
         database_url=database_url_for(tmp_path / "start.db"),

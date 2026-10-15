@@ -22,16 +22,13 @@ from ontocurator.api.identity import (
     principal_of,
     require_system_admin,
 )
+from ontocurator.application import uploads
 from ontocurator.application.editing import EditorService
 from ontocurator.application.exports import ExportService
 from ontocurator.application.preferences import Preferences, PreferencesUpdate
 from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.uploads import (
-    OntologyUploadService,
-    PackageImportService,
-    TranslationUploadService,
-)
+from ontocurator.application.uploads import PackageImportService, copy_limited
 from ontocurator.application.workspaces import (
     DocumentSummary,
     WorkspaceService,
@@ -50,7 +47,7 @@ from ontocurator.authz.policy import (
 )
 from ontocurator.authz.scoped import ScopedRepository, project_not_found
 from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.errors import AccessDenied, DomainError, PayloadTooLarge
+from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import (
@@ -63,6 +60,7 @@ from ontocurator.domain.workspace import (
 from ontocurator.ontology.provenance import SearchRequest, SearchResult
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
+from ontocurator.ontology.store import OntologyStore
 from ontocurator.packages.models import (
     SearchEventRecord,
     ValidatedPackage,
@@ -772,41 +770,48 @@ def upload_ontology(
 ) -> OntologyInfo | TranslationUploadInfo:
     """Upload an ontology (``.json``) or a translation file (``.tsv``).
 
-    An ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` in
-    ``<workspace>/ontologies``, where it is registered again after a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is
-    stored under its own name, replaces a file of that name, and the ontology
-    it belongs to is reloaded. System admins only.
+    The file goes to the ontology store (blob store and ``ontology_files``,
+    audited as ``ontology.add``) and is registered at every start. A
+    translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) replaces a file
+    of that name, and the ontology it belongs to is reloaded. System admins
+    only. Until T3 this route stays for the web UI; the admin CLI is the
+    supported way (D5).
     """
     require_system_admin(principal)
-    config = getattr(request.app.state, "config", None)
-    directory = (
-        (config.workspace_dir / "ontologies")
-        if config
-        else Path("./workspace/ontologies")
-    )
-    if (file.filename or "").lower().endswith(".tsv"):
-        return _upload_translation(file, ontology, directory)
-    uploads = OntologyUploadService(ontology, directory)
+    store: OntologyStore = request.app.state.ontology_store
+    actor = Actor.user(principal.user_id, principal.username)
+    name = file.filename or ""
+    is_translation = name.lower().endswith(".tsv")
+    buffer = io.BytesIO()
+    if is_translation:
+        limit = uploads.MAX_TRANSLATION_UPLOAD_BYTES
+        copy_limited(file.file, buffer, limit, "Translation upload")
+    else:
+        limit = uploads.MAX_ONTOLOGY_UPLOAD_BYTES
+        copy_limited(file.file, buffer, limit, "Ontology upload")
+    data = buffer.getvalue()
+    if is_translation:
+        return _upload_translation(store, actor, name, data, ontology)
     try:
-        stored = uploads.store(file.file, file.filename)
-    except PayloadTooLarge:
-        raise
+        stored_file, service = store.add_ontology(actor, name, data)
     except DomainError as exc:
         raise HTTPException(
             status_code=400, detail=f"Failed to register ontology: {exc}"
         ) from exc
-    return _ontology_info(stored.sha256, stored.service, stored.path)
+    return _ontology_info(
+        stored_file.sha256, service, ontology.registered_path(stored_file.sha256)
+    )
 
 
 def _upload_translation(
-    file: UploadFile, ontology: OntologyRegistry, directory: Path
+    store: OntologyStore,
+    actor: Actor,
+    name: str,
+    data: bytes,
+    ontology: OntologyRegistry,
 ) -> TranslationUploadInfo:
     try:
-        stored = TranslationUploadService(ontology, directory).store(
-            file.file, file.filename
-        )
-    except PayloadTooLarge:
-        raise
+        _file, stored = store.add_translation(actor, name, data)
     except DomainError as exc:
         # A failed reload, or a file that could not be moved into place, is
         # not the uploader's mistake.

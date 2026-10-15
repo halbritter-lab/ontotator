@@ -434,10 +434,12 @@ export interface paths {
          * Upload Ontology
          * @description Upload an ontology (``.json``) or a translation file (``.tsv``).
          *
-         *     An ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` in
-         *     ``<workspace>/ontologies``, where it is registered again after a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is
-         *     stored under its own name, replaces a file of that name, and the ontology
-         *     it belongs to is reloaded. System admins only.
+         *     The file goes to the ontology store (blob store and ``ontology_files``,
+         *     audited as ``ontology.add``) and is registered at every start. A
+         *     translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) replaces a file
+         *     of that name, and the ontology it belongs to is reloaded. System admins
+         *     only. Until T3 this route stays for the web UI; the admin CLI is the
+         *     supported way (D5).
          */
         post: operations["upload_ontology_api_v1_ontologies_post"];
         delete?: never;

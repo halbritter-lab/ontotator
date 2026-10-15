@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import threading
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -37,6 +38,7 @@ from ontocurator.domain.errors import (
     PayloadTooLarge,
     RevisionConflict,
 )
+from ontocurator.ontology.translations import parse_translation_name
 from ontocurator.storage.database import Database
 from ontocurator.storage.lease import RuntimeLease
 from ontocurator.storage.repository import Repository
@@ -136,17 +138,22 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 )
 
             from ontocurator.ontology.registry import OntologyRegistry
+            from ontocurator.ontology.store import OntologyStore
 
             registry = OntologyRegistry(
                 base_dir=config.workspace_dir,
-                translation_dirs=[
-                    config.workspace_dir / "ontologies",
-                    *config.translation_dirs,
-                ],
+                translation_dirs=config.translation_dirs,
             )
+            store = OntologyStore(db, registry, config.workspace_dir)
+            # Uploaded ontologies are registered (parsed on first use) and
+            # uploaded translations placed where the loader finds them. A file
+            # that cannot be read is logged; it must not stop the start.
+            store.register_all()
+            # Files named on the command line are for development: parsed now.
+            configured = []
             for p in config.ontology_paths:
                 if p.is_file():
-                    registry.register_path(p)
+                    configured.append(registry.register_path(p))
                 else:
                     logger.warning("Configured ontology file not found: %s", p)
             if config.ontology_path and config.ontology_path.is_file():
@@ -161,22 +168,11 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                         )
                     )
                 else:
-                    registry.register_path(config.ontology_path)
-            # Uploaded ontologies are stored here; register them again after a
-            # restart. An entry that cannot be read must not stop the start.
-            for stored in sorted((config.workspace_dir / "ontologies").glob("*.json")):
-                if not stored.is_file():
-                    continue
-                try:
-                    registry.register_path(stored)
-                except (OSError, DomainError) as exc:
-                    logger.warning("Skipping stored ontology %s: %s", stored, exc)
-            # Eagerly parse registered files; failures are logged and reported by
-            # GET /api/v1/ontologies instead of being silently dropped.
-            registry.load_registered()
+                    configured.append(registry.register_path(config.ontology_path))
+            registry.preload(configured)
 
             for definition, data in repo.ontology_resources():
-                if registry.get_service(definition.sha256) is None:
+                if not registry.has_ontology(definition.sha256):
                     registry.register_service(
                         registry.load_resource(
                             data, definition, registry.translation_files()
@@ -184,11 +180,34 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                     )
             # A file that cannot be read was already reported while its ontology
             # loaded. What is left to say: files that belong to no ontology at all.
+            known_prefixes = {
+                item.prefix for item in store.list() if item.kind == "ontology"
+            }
             for stray in registry.unassigned_translations():
+                parsed = parse_translation_name(stray.name)
+                if parsed is not None and parsed[0] in known_prefixes:
+                    continue
                 logger.warning(
                     "Translation file %s matches no loaded ontology and is skipped.",
                     stray,
                 )
+
+            # Each worker preloads the pinned ontologies in the background;
+            # any other one loads on first use and stays cached (P7).
+            ready = threading.Event()
+            pinned = store.pinned_shas()
+
+            def preload() -> None:
+                try:
+                    registry.preload(pinned)
+                finally:
+                    ready.set()
+
+            app.state.ontologies_ready = ready
+            app.state.ontology_store = store
+            threading.Thread(
+                target=preload, name="preload-ontologies", daemon=True
+            ).start()
 
             app.state.config = config
             app.state.repo = repo

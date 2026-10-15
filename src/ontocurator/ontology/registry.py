@@ -373,16 +373,41 @@ class OntologyRegistry:
                 if sha not in self._services and sha not in self._failures
             ]
         for sha, path in pending:
-            try:
-                self.get_service(sha)
-            except (DomainError, OntologyError, OSError, ValueError, KeyError) as exc:
-                failure = OntologyLoadFailure(sha256=sha, path=path, error=str(exc))
-                with self._lock:
-                    self._failures[sha] = failure
-                logger.warning(
-                    "Could not load ontology %s (sha256 %s): %s", path, sha, exc
-                )
+            self._load_or_record(sha, path)
         return self.failures()
+
+    def preload(self, shas: Iterable[str]) -> None:
+        """Parse the registered ontologies of ``shas`` now; record failures.
+
+        Digests that are not registered or already failed are skipped.
+        """
+        for sha in sorted(s.lower() for s in shas):
+            with self._lock:
+                path = self._registered_paths.get(sha)
+                skip = path is None or sha in self._failures
+            if not skip and path is not None:
+                # A background preload must survive any malformed file.
+                self._load_or_record(sha, path, Exception)
+
+    def _load_or_record(
+        self,
+        sha: str,
+        path: Path,
+        expected: type[Exception] | tuple[type[Exception], ...] = (
+            DomainError,
+            OntologyError,
+            OSError,
+            ValueError,
+            KeyError,
+        ),
+    ) -> None:
+        try:
+            self.get_service(sha)
+        except expected as exc:
+            failure = OntologyLoadFailure(sha256=sha, path=path, error=str(exc))
+            with self._lock:
+                self._failures[sha] = failure
+            logger.warning("Could not load ontology %s (sha256 %s): %s", path, sha, exc)
 
     def failures(self) -> list[OntologyLoadFailure]:
         """Registered ontologies that failed to load, in registration order."""
