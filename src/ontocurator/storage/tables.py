@@ -38,6 +38,7 @@ APPEND_ONLY_TABLES = (
     "evidence_snapshots",
     "submissions",
     "audit_events",
+    "edit_events",
 )
 
 NAMING_CONVENTION = {
@@ -67,6 +68,7 @@ class ProjectRow(Base):
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     project_key: Mapped[str] = mapped_column(unique=True)
     name: Mapped[str]
+    description: Mapped[str | None]
     manifest: Mapped[dict[str, Any]]
     manifest_sha256: Mapped[str]
     task_profile: Mapped[dict[str, Any]]
@@ -289,6 +291,10 @@ class SubmissionRow(Base):
     payload: Mapped[dict[str, Any]]
     created_at: Mapped[str]
     recorded_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # The edit event of the submit command (T2c); NULL for imported submissions.
+    last_edit_event_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(f"{SCHEMA}.edit_events.id")
+    )
 
 
 class SearchEventRow(Base):
@@ -462,3 +468,56 @@ class InstanceStateRow(Base):
     key: Mapped[str] = mapped_column(primary_key=True)
     value: Mapped[Any] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+# --- Projects and the edit log (T2c, migration 0003) --------------------
+
+
+class ProjectMembershipRow(Base):
+    """One role of a user in a project; roles combine freely (E9)."""
+
+    __tablename__ = "project_memberships"
+    __table_args__ = (
+        CheckConstraint("role IN ('lead', 'annotator', 'adjudicator')", name="role"),
+        Index("ix_project_memberships_user_id", "user_id"),
+    )
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id), primary_key=True
+    )
+    role: Mapped[str] = mapped_column(primary_key=True)
+    added_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    added_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+
+
+class EditEventRow(Base):
+    """One committed editing command (append-only, T2 D6).
+
+    ``state`` is the complete draft content after the command, as sorted
+    snapshot identities, so any revision is a lookup, not a replay.
+    """
+
+    __tablename__ = "edit_events"
+    __table_args__ = (
+        CheckConstraint("kind IN ('edit', 'submit')", name="kind"),
+        Index("ix_edit_events_project_id_draft_id_id", "project_id", "draft_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    draft_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(DraftRow.id))
+    user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    session_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(SessionRow.id)
+    )
+    at: Mapped[datetime] = mapped_column(server_default=func.now())
+    mutation_id: Mapped[str]
+    kind: Mapped[str]
+    command: Mapped[dict[str, Any]]
+    revision_before: Mapped[int]
+    revision_after: Mapped[int]
+    state: Mapped[dict[str, Any]]
+    submission_id: Mapped[str | None]

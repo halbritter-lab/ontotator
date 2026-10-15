@@ -162,3 +162,37 @@ def test_a_failing_migration_leaves_neither_a_version_nor_a_partial_schema(
         assert tables == 0
         assert current_revision(conn) is None
     engine.dispose()
+
+
+def test_a_project_role_is_lead_annotator_or_adjudicator(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "a.db")
+    with owner_engine(db).begin() as conn:
+        conn.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.projects (project_key, name, manifest,"
+                " manifest_sha256, task_profile, task_profile_sha256)"
+                " VALUES ('p', 'p', '{}', 'm', '{}', 't')"
+            )
+        )
+        conn.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.users (username, display_name, pseudonym)"
+                " VALUES ('alice', 'Alice', 'ann-0001')"
+            )
+        )
+
+    def add(role: str) -> None:
+        with db.engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"INSERT INTO {SCHEMA}.project_memberships (project_id, user_id,"
+                    f" role) SELECT p.id, u.id, :role FROM {SCHEMA}.projects p,"
+                    f" {SCHEMA}.users u"
+                ),
+                {"role": role},
+            )
+
+    for role in ("lead", "annotator", "adjudicator"):
+        add(role)
+    with pytest.raises(IntegrityError, match="ck_project_memberships_role"):
+        add("owner")
