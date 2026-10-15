@@ -1,0 +1,117 @@
+/*
+ * Design tokens: direction C, "reading document". Light theme only.
+ * Every colour of the interface is declared here as a #rrggbb literal (the token
+ * tests parse them); every other stylesheet refers to these custom properties.
+ * Draft values (T6a Task 1); frozen after the prototype is approved (Task 2).
+ */
+:root {
+  /* Surfaces: warm paper, a brighter sheet for the document, a sunken band for bars. */
+  --surface: #f7f4ee;
+  --surface-raised: #fffdf8;
+  --surface-sunken: #efebe3;
+
+  /* Text */
+  --text: #1f1a14;
+  --text-muted: #5f574b;
+  --on-accent: #ffffff;
+
+  /* Lines: hairlines decorate, strong lines bound controls (>= 3:1). */
+  --border: #ddd6c8;
+  --border-strong: #8c8170;
+
+  /* Accent and states */
+  --accent: #1d4e89;
+  --accent-hover: #163d6b;
+  --accent-light: #e3ebf5;
+  --success: #2f6b3a;
+  --success-light: #e4efe3;
+  --warning: #8a5a00;
+  --warning-light: #f6ecd6;
+  --danger: #a23b2a;
+  --danger-light: #f6e2dd;
+
+  /* Focus */
+  --focus-ring: #1d4e89;
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* Mark fills: one per term colour index; the line style, not the hue, carries the state. */
+  --mark-0-fill: #b1ae68;
+  --mark-1-fill: #cff3e3;
+  --mark-2-fill: #ffdba8;
+  --mark-3-fill: #ddd9f6;
+  --mark-4-fill: #d49da8;
+  --mark-5-fill: #78afed;
+
+  /* Mark states */
+  --mark-line: #3b342b;
+  --mark-selected: #1d4e89;
+  --mark-negated-hatch: #8c8170;
+
+  /* Type */
+  --font-serif: "Source Serif 4 Variable", Georgia, "Times New Roman", serif;
+  --font-sans: "Source Sans 3 Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --size-xs: 0.75rem;      /* 12px */
+  --size-sm: 0.8125rem;    /* 13px */
+  --size-md: 0.875rem;     /* 14px */
+  --size-base: 0.9375rem;  /* 15px */
+  --size-reading: 1.125rem; /* 18px */
+  --size-xl: 1.375rem;     /* 22px */
+  --size-2xl: 1.75rem;     /* 28px */
+  --leading-xs: 1rem;
+  --leading-sm: 1.125rem;
+  --leading-md: 1.25rem;
+  --leading-base: 1.375rem;
+  --leading-reading: 1.875rem;
+  --leading-xl: 1.75rem;
+  --leading-2xl: 2.125rem;
+  --weight-regular: 400;
+  --weight-strong: 600;
+  --measure-reading: 68ch;
+
+  /* Space */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Shape */
+  --radius-sm: 3px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --shadow-1: 0 1px 2px rgb(31 26 20 / 0.06), 0 0 0 1px rgb(31 26 20 / 0.05);
+  --shadow-2: 0 12px 32px -8px rgb(31 26 20 / 0.22), 0 2px 6px rgb(31 26 20 / 0.08);
+
+  /* Density defaults (reading); `.density-compact` tightens them. */
+  --body-font: var(--font-sans);
+  --body-size: var(--size-base);
+  --body-leading: var(--leading-base);
+  --row-height: 44px;
+  --cell-pad-y: 10px;
+  --cell-pad-x: 16px;
+  --control-height: 36px;
+}
+
+.density-reading {
+  --body-font: var(--font-sans);
+  --body-size: var(--size-base);
+  --body-leading: var(--leading-base);
+  --row-height: 44px;
+  --cell-pad-y: 10px;
+  --cell-pad-x: 16px;
+  --control-height: 36px;
+}
+
+.density-compact {
+  --body-font: var(--font-sans);
+  --body-size: var(--size-md);
+  --body-leading: var(--leading-md);
+  --row-height: 34px;
+  --cell-pad-y: 6px;
+  --cell-pad-x: 12px;
+  --control-height: 30px;
+}

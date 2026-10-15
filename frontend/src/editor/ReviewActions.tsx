@@ -196,7 +196,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
               ● {currentDecision.outcome.toUpperCase()}
             </span>
           ) : (
-            <span className="badge" style={{ backgroundColor: "#f1f5f9", color: "#64748b" }}>
+            <span className="badge" style={{ backgroundColor: "var(--surface-sunken)", color: "var(--text-muted)" }}>
               Pending
             </span>
           )}
@@ -277,10 +277,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           aria-pressed={currentDecision?.outcome === "confirmed"}
           style={{
             backgroundColor: currentDecision?.outcome === "confirmed" ? "var(--success)" : "var(--success-light)",
-            color: currentDecision?.outcome === "confirmed" ? "#ffffff" : "var(--success)",
-            borderColor: currentDecision?.outcome === "confirmed" ? "var(--success)" : "#86efac",
+            color: currentDecision?.outcome === "confirmed" ? "var(--on-accent)" : "var(--success)",
+            borderColor: currentDecision?.outcome === "confirmed" ? "var(--success)" : "var(--border-strong)",
             fontWeight: currentDecision?.outcome === "confirmed" ? 700 : "normal",
-            boxShadow: currentDecision?.outcome === "confirmed" ? "0 0 0 2px rgba(34, 197, 94, 0.4)" : undefined,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -291,7 +290,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           title={currentDecision?.outcome === "confirmed" ? "Click to clear confirmation (Key: 1)" : "Accept proposal as-is (Key: 1)"}
         >
           <span>✓ Confirm</span>
-          <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>1</kbd>
+          <kbd style={{ fontSize: "var(--size-xs)", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>1</kbd>
         </button>
 
         <button
@@ -300,10 +299,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           aria-pressed={currentDecision?.outcome === "rejected"}
           style={{
             backgroundColor: currentDecision?.outcome === "rejected" ? "var(--danger)" : "var(--danger-light)",
-            color: currentDecision?.outcome === "rejected" ? "#ffffff" : "var(--danger)",
-            borderColor: currentDecision?.outcome === "rejected" ? "var(--danger)" : "#fca5a5",
+            color: currentDecision?.outcome === "rejected" ? "var(--on-accent)" : "var(--danger)",
+            borderColor: currentDecision?.outcome === "rejected" ? "var(--danger)" : "var(--border-strong)",
             fontWeight: currentDecision?.outcome === "rejected" ? 700 : "normal",
-            boxShadow: currentDecision?.outcome === "rejected" ? "0 0 0 2px rgba(239, 68, 68, 0.4)" : undefined,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -313,7 +311,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           title={currentDecision?.outcome === "rejected" ? "Click to clear rejection (Key: 2)" : "Reject proposal (Key: 2)"}
         >
           <span>✕ Reject</span>
-          <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>2</kbd>
+          <kbd style={{ fontSize: "var(--size-xs)", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>2</kbd>
         </button>
 
         <button
@@ -322,10 +320,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           aria-pressed={currentDecision?.outcome === "changed"}
           style={{
             backgroundColor: currentDecision?.outcome === "changed" ? "var(--primary)" : "var(--primary-light)",
-            color: currentDecision?.outcome === "changed" ? "#ffffff" : "var(--primary)",
-            borderColor: currentDecision?.outcome === "changed" ? "var(--primary)" : "#93c5fd",
+            color: currentDecision?.outcome === "changed" ? "var(--on-accent)" : "var(--primary)",
+            borderColor: currentDecision?.outcome === "changed" ? "var(--primary)" : "var(--border-strong)",
             fontWeight: currentDecision?.outcome === "changed" ? 700 : "normal",
-            boxShadow: currentDecision?.outcome === "changed" ? "0 0 0 2px rgba(59, 130, 246, 0.4)" : undefined,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -347,7 +344,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           }
         >
           <span>✎ Edit & Replace</span>
-          <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>3</kbd>
+          <kbd style={{ fontSize: "var(--size-xs)", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>3</kbd>
         </button>
 
         <button
@@ -356,10 +353,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           aria-pressed={currentDecision?.outcome === "uncertain"}
           style={{
             backgroundColor: currentDecision?.outcome === "uncertain" ? "var(--warning)" : "var(--warning-light)",
-            color: currentDecision?.outcome === "uncertain" ? "#ffffff" : "var(--warning)",
-            borderColor: currentDecision?.outcome === "uncertain" ? "var(--warning)" : "#fde68a",
+            color: currentDecision?.outcome === "uncertain" ? "var(--on-accent)" : "var(--warning)",
+            borderColor: currentDecision?.outcome === "uncertain" ? "var(--warning)" : "var(--border-strong)",
             fontWeight: currentDecision?.outcome === "uncertain" ? 700 : "normal",
-            boxShadow: currentDecision?.outcome === "uncertain" ? "0 0 0 2px rgba(245, 158, 11, 0.4)" : undefined,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -369,7 +365,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           title={currentDecision?.outcome === "uncertain" ? "Click to clear uncertain status (Key: 4)" : "Clinically or textually undecidable (Key: 4)"}
         >
           <span>? Uncertain</span>
-          <kbd style={{ fontSize: "0.68rem", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>4</kbd>
+          <kbd style={{ fontSize: "var(--size-xs)", opacity: 0.75, background: "rgba(0,0,0,0.08)", padding: "1px 5px", borderRadius: 3 }}>4</kbd>
         </button>
       </div>
 
@@ -402,7 +398,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             padding: 12,
             background: "var(--bg-primary)",
             borderRadius: "var(--radius)",
-            border: "1px solid #93c5fd",
+            border: "1px solid var(--border)",
             marginBottom: 12,
           }}
         >
@@ -530,12 +526,12 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           style={{ fontSize: "0.8rem" }}
         />
         {!currentDecision && note.trim() && (
-          <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 4 }}>
+          <div style={{ fontSize: "var(--size-xs)", color: "var(--text-muted)", marginTop: 4 }}>
             The note is saved together with the next decision.
           </div>
         )}
         {currentDecision && (currentDecision.note ?? "") !== note.trim() && (
-          <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 4 }}>
+          <div style={{ fontSize: "var(--size-xs)", color: "var(--text-muted)", marginTop: 4 }}>
             Unsaved note – saved automatically when you leave the field.
           </div>
         )}

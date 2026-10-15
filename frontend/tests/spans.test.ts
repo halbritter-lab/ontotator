@@ -88,6 +88,31 @@ describe("SpanEditor Unicode adapter", () => {
     handle.destroy();
   });
 
+  it("a_negated_mention_marks_its_runs", () => {
+    const text = "no hearing loss, mild hypotonia";
+    const mentions: MentionDisplay[] = [
+      { evidence_id: "ev-neg", segments: [{ start: 3, end: 15 }], kind: "own", negated: true },
+      { evidence_id: "ev-pos", segments: [{ start: 11, end: 31 }], kind: "own" },
+    ];
+
+    const handle = mountSpanEditor(container, text, mentions, vi.fn(), vi.fn());
+    const runFor = (ids: string) => container.querySelector(`.run[data-mentions="${ids}"]`);
+
+    // Only the negated mention's runs: alone ("hearing ") and overlapping ("loss").
+    expect(runFor("ev-neg")?.textContent).toBe("hearing ");
+    expect(runFor("ev-neg")?.classList.contains("run--negated")).toBe(true);
+    expect(runFor("ev-neg,ev-pos")?.textContent).toBe("loss");
+    expect(runFor("ev-neg,ev-pos")?.classList.contains("run--negated")).toBe(true);
+    expect(runFor("ev-pos")?.classList.contains("run--negated")).toBe(false);
+    expect(container.querySelectorAll(".run--negated")).toHaveLength(2);
+
+    // Clearing the flag removes the class on the next render.
+    handle.setMentions(mentions.map((m) => ({ ...m, negated: false })));
+    expect(container.querySelectorAll(".run--negated")).toHaveLength(0);
+
+    handle.destroy();
+  });
+
   it("delivers selection in Unicode codepoints and respects selection intent", () => {
     const text = "A😀e\u0301\r\nB";
     let capturedPayload: SelectionPayload | null = null;

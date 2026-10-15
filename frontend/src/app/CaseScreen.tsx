@@ -46,6 +46,7 @@ import { TextPane } from "../editor/TextPane";
 import { TreeBrowser } from "../editor/TreeBrowser";
 import { useTermLabels } from "../editor/useTermLabels";
 import { termColorIndex, type MentionDisplay, type SelectionPayload } from "../spans/adapter";
+import { isNegated } from "../editor/negation";
 import { CaseNavigation } from "./CaseNavigation";
 import { adjacentCase } from "./caseOrder";
 
@@ -277,6 +278,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           segments: ev.mention.segments.map((s) => ({ start: s.start, end: s.end })),
           kind: "own" as const,
           colorIndex: termColorIndex(termId),
+          negated: owner ? isNegated(owner.annotation) : false,
         };
       });
   }, [draft.evidence, visibleEvidenceIds, draft.annotations]);
@@ -355,6 +357,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           segments: ev.mention.segments,
           kind: "target" as const,
           colorIndex: colorIdx,
+          negated: isNegated(snap.annotation),
         });
       }
     }
@@ -399,6 +402,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     segments: ev.mention.segments,
     kind: "source" as const,
     colorIndex: termColorIndex(s.annotation.term_id),
+    negated: isNegated(s.annotation),
   }))), [visibleSources]);
   const selectSource = (id: string) => {
     setSelectedTargetId(null);
@@ -1526,7 +1530,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       {/* Main Workspace Layout */}
       <div className={`app-layout mobile-pane-${mobilePane}${treeWalk && !treeCollapsed ? " tree-open" : ""}`}>
         {/* Left: Sidebar (Annotations & Review Targets) */}
-        <aside className="sidebar">
+        <aside className="sidebar density-compact">
           {/* Multi-layer controls (rendered only if >1 layer) */}
           <LayerControls
             layers={view.layers ?? []}
@@ -1558,10 +1562,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         key={refKey(t)}
                         data-list-key={`target:${refKey(t)}`}
                         className={`doc-item ${isSelected ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}`}
-                        style={{
-                          opacity: isResolved && !isSelected ? 0.55 : 1,
-                          background: isResolved && !isSelected ? "rgba(0, 0, 0, 0.02)" : undefined,
-                        }}
                         onClick={() => {
                           const targetKey = refKey(t);
                           if (selectedTargetId === targetKey) {
@@ -1592,18 +1592,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                             <span
                               className="badge"
                               style={{
-                                fontSize: "0.72rem",
+                                fontSize: "var(--size-xs)",
                                 fontWeight: 600,
                                 padding: "2px 6px",
                                 backgroundColor:
                                   dec.outcome === "confirmed" ? "var(--success-light)"
                                   : dec.outcome === "rejected" ? "var(--danger-light)"
-                                  : dec.outcome === "changed" ? "#e2e8f0"
+                                  : dec.outcome === "changed" ? "var(--surface-sunken)"
                                   : "var(--warning-light)",
                                 color:
                                   dec.outcome === "confirmed" ? "var(--success)"
                                   : dec.outcome === "rejected" ? "var(--danger)"
-                                  : dec.outcome === "changed" ? "#475569"
+                                  : dec.outcome === "changed" ? "var(--text-muted)"
                                   : "var(--warning)",
                               }}
                             >
@@ -1741,7 +1741,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
                         {layerName && (view.layers ?? []).length > 1 && (
-                          <span className="badge" style={{ fontSize: "0.7rem" }}>{layerName}</span>
+                          <span className="badge" style={{ fontSize: "var(--size-xs)" }}>{layerName}</span>
                         )}
                       </div>
                       <div className="doc-meta">
@@ -1799,7 +1799,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         />
 
         {/* Right: Annotation & Search Panel + Review Actions */}
-        <div className="inspector-pane" ref={inspectorRef}>
+        <div className="inspector-pane density-compact" ref={inspectorRef}>
           {selectedSource ? (
             <section className="detail-pane" aria-label="Reference details">
               <div className="detail-section">

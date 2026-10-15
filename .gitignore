@@ -49,3 +49,8 @@ workspace/
 .worktrees/
 worktrees/
 .superpowers/
+
+# Impeccable (per-developer state)
+.impeccable/config.local.json
+.impeccable/review/
+.impeccable/hook.cache.json

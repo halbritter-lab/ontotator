@@ -490,6 +490,7 @@ export class SpanEditor {
         for (const m of runMentions) {
           if (m.kind) node.classList.add(`run--${m.kind}`);
         }
+        if (runMentions.some((m) => m.negated)) node.classList.add("run--negated");
         const activeMention = runMentions.find((m) => this.activeIds.has(m.mention_id));
         const primaryMention = activeMention || runMentions[0];
         if (primaryMention && typeof primaryMention.colorIndex === "number") {

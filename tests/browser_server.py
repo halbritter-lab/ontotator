@@ -164,6 +164,94 @@ MANY_PROPOSALS = [
 ]
 
 
+DESIGN_TEXT = (
+    "Clinical summary\n\n"
+    "The patient is a 14-month-old girl referred for evaluation of developmental "
+    "delay. Since the age of six months she has had recurrent seizures, most of them "
+    "brief dialeptic seizures with staring and loss of contact; one episode of status "
+    "epilepticus at 11 months required intensive care.\n\n"
+    "On examination she shows marked generalized hypotonia with head lag and poor "
+    "truncal control. Deep tendon reflexes cannot be elicited at the knees or ankles "
+    "(areflexia). There is no hearing impairment: newborn hearing screening and a "
+    "follow-up audiogram at 12 months were normal.\n\n"
+    "Family history is notable for a maternal cousin with spinal muscular atrophy. "
+    "An epileptic encephalopathy is considered the working diagnosis; genetic testing "
+    "(exome sequencing, trio) is pending."
+)
+
+# (layer, term, quoted text, occurrence index) of the design scenario's annotations.
+DESIGN_PROPOSALS = [
+    ("target-layer", "HP:0001250", "seizures", 1),
+    ("target-layer", "HP:0011146", "dialeptic seizures", 0),
+    ("target-layer", "HP:0002133", "status epilepticus", 0),
+    ("target-layer", "HP:0001252", "generalized hypotonia", 0),
+    ("target-layer", "HP:0001284", "areflexia", 0),
+    ("target-layer", "HP:0000365", "hearing impairment", 0),
+    ("reference-layer", "MONDO:0001250", "spinal muscular atrophy", 0),
+    ("reference-layer", "MONDO:0005071", "epileptic encephalopathy", 0),
+]
+
+
+def design_package() -> bytes:
+    """A longer synthetic letter for the design screenshots (T6a): tool proposals
+    with evidence, one overlap, and two read-only references."""
+    base = make_layered_package("assisted")
+    profile = base.manifest.task_profile
+    text = DESIGN_TEXT
+    doc = Document(
+        document_id="doc-design",
+        text=text,
+        language="en",
+        text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+    )
+    annotations, evidence = {}, {}
+    for number, (layer, term, quote, occurrence) in enumerate(DESIGN_PROPOSALS):
+        start = -1
+        for _ in range(occurrence + 1):
+            start = text.index(quote, start + 1)
+        ev = EvidenceSnapshot.create(
+            mention=EvidenceMention(
+                evidence_id=f"ev-design-{number}",
+                segments=[Segment(start=start, end=start + len(quote))],
+            ),
+            document=doc,
+        )
+        reference = layer == "reference-layer"
+        ann = Annotation(
+            annotation_id=f"design-{number}",
+            document_id=doc.document_id,
+            layer_id=layer,
+            type_id="disease" if reference else "phenotype",
+            term_id=term,
+            axes_values={} if reference else {"assertion": "present"},
+            evidence_refs=[
+                EvidenceRef(evidence_id=ev.mention.evidence_id, version=ev.version)
+            ],
+            provenance=Provenance(
+                actor=ActorRef(actor_id="source-tool", kind="tool"), method="import"
+            ),
+        )
+        snap = snapshot(ann, [ev], doc, profile)
+        annotations[(ann.annotation_id, snap.version)] = snap
+        evidence[(ev.mention.evidence_id, ev.version)] = ev
+    pkg = ValidatedPackage(
+        manifest=PackageManifest(
+            package_id="pkg-design-states",
+            format_version="ontocurator-work-package/v2",
+            document_order=[doc.document_id],
+            task_profile=profile,
+            task_profile_sha256=profile_hash(profile),
+            created_at="2026-10-15T00:00:00Z",
+        ),
+        documents={doc.document_id: doc},
+        annotations=annotations,
+        evidence=evidence,
+    )
+    result = io.BytesIO()
+    PackageWriter.write_to_stream(pkg, result)
+    return result.getvalue()
+
+
 def scenario_package(scenario: str) -> bytes:
     fixture_scenario = "assisted" if scenario == "review_references" else scenario
     pkg = make_layered_package(fixture_scenario)  # type: ignore[arg-type]
@@ -217,6 +305,8 @@ if __name__ == "__main__":
                 data = fixture_package(
                     package_id="pkg-many-proposals", proposals=MANY_PROPOSALS
                 )
+            elif scenario == "design_states":
+                data = design_package()
             elif scenario == "translations":
                 data = fixture_package(package_id="translation-fixture")
             else:

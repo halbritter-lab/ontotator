@@ -3,6 +3,17 @@ import { importPackage, mentionWithOffsets, openCase, selectText } from "./helpe
 
 const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
 
+/** The six mark fills of the design tokens, as computed `rgb(...)` strings. */
+const markFills = (page: Page) =>
+  page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement);
+    return [0, 1, 2, 3, 4, 5].map((n) => {
+      const hex = root.getPropertyValue(`--mark-${n}-fill`).trim();
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+      return `rgb(${r}, ${g}, ${b})`;
+    });
+  });
+
 test.describe("Evidence Spans Proof & Verification", () => {
   test("review mode: proposal evidence spans are precisely marked with DOM metadata and visual highlights", async ({ page }) => {
     await importFixture(page, "reviewer-spans-proof");
@@ -25,9 +36,11 @@ test.describe("Evidence Spans Proof & Verification", () => {
     const hypMentions = await hypRun.getAttribute("data-mentions");
     expect(hypMentions).toContain("ev-0");
 
-    // Verify visual highlight CSS: background-color is var(--span-highlight) (#fef08a -> rgb(254, 240, 138))
+    // The mark is coloured from the palette: one of the six --mark-N-fill tokens.
+    const fills = await markFills(page);
+    expect(fills).toHaveLength(6);
     const hypBgColor = await hypRun.evaluate((el) => window.getComputedStyle(el).backgroundColor);
-    expect(hypBgColor).toMatch(/rgb\(251, 207, 232\)|rgb\(254, 240, 138\)/);
+    expect(fills).toContain(hypBgColor);
 
     // 2. Switch to second proposal (HP:0001250 Seizure, span [14:21])
     await page.locator(".doc-item").filter({ hasText: "HP:0001250" }).click();
@@ -43,7 +56,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
     expect(seizureMentions).toContain("ev-1");
 
     const seizureBgColor = await seizureRun.evaluate((el) => window.getComputedStyle(el).backgroundColor);
-    expect(seizureBgColor).toMatch(/rgb\(254, 240, 138\)|rgb\(187, 247, 208\)|rgb\(254, 215, 170\)|rgb\(233, 213, 255\)|rgb\(251, 207, 232\)|rgb\(191, 219, 254\)/);
+    expect(fills).toContain(seizureBgColor);
   });
 
   test("independent mode: selecting text creates marked evidence spans with active highlight and handles picking", async ({ page }) => {
@@ -71,9 +84,9 @@ test.describe("Evidence Spans Proof & Verification", () => {
     // Since this span was just created/selected, it should have .run--hot
     await expect(markedSpan).toHaveClass(/run--hot/);
 
-    // Verify active selection color: var(--span-selected) (#bae6fd -> rgb(186, 230, 253))
+    // The selected mark keeps its palette fill (the selection is a frame, not a colour).
     const selectedBgColor = await markedSpan.evaluate((el) => window.getComputedStyle(el).backgroundColor);
-    expect(["rgb(186, 230, 253)", "rgb(251, 207, 232)"]).toContain(selectedBgColor);
+    expect(await markFills(page)).toContain(selectedBgColor);
 
     // The mention shows the quoted text; its exact offsets are in the tooltip
     await expect(mentionWithOffsets(page, "[0:9]")).toHaveText("“Hypotonia”");

@@ -32,6 +32,8 @@ export interface MentionDisplay {
   is_suggestion?: boolean;
   kind?: "own" | "target" | "source";
   colorIndex?: number;
+  /** The annotation's assertion is "absent": its runs get a hatch. */
+  negated?: boolean;
 }
 
 export interface SelectionPayload {
@@ -66,6 +68,7 @@ interface VendorMention {
   spans: VendorSpan[];
   kind?: "own" | "target" | "source";
   colorIndex?: number;
+  negated?: boolean;
 }
 
 /**
@@ -99,6 +102,7 @@ export function mentionsToVendor(
       spans,
       kind: mention.kind,
       colorIndex: mention.colorIndex,
+      negated: mention.negated,
     });
   }
   return result;

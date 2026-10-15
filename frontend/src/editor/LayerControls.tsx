@@ -95,7 +95,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     style={{
                       background: "var(--border-color)",
                       color: "var(--text-muted)",
-                      fontSize: "0.7rem",
+                      fontSize: "var(--size-xs)",
                       padding: "2px 6px",
                     }}
                   >
@@ -107,7 +107,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                   <span
                     data-testid={`badge-checked-${layer.layer_id}`}
                     className="badge badge-success"
-                    style={{ fontSize: "0.7rem", padding: "2px 6px" }}
+                    style={{ fontSize: "var(--size-xs)", padding: "2px 6px" }}
                   >
                     ✓ verified
                   </span>

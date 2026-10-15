@@ -1,35 +1,28 @@
 :root {
-  --bg-primary: #f8fafc;
-  --bg-surface: #ffffff;
-  --border-color: #e2e8f0;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --primary: #0284c7;
-  --primary-hover: #0369a1;
-  --primary-light: #e0f2fe;
-  --success: #16a34a;
-  --success-light: #dcfce7;
-  --warning: #d97706;
-  --warning-light: #fef3c7;
-  --danger: #dc2626;
-  --danger-light: #fee2e2;
-  --span-highlight: #fef08a;
-  --span-selected: #bae6fd;
-  --span-color-0: #fef08a;
-  --span-color-0-border: #eab308;
-  --span-color-1: #bbf7d0;
-  --span-color-1-border: #22c55e;
-  --span-color-2: #fed7aa;
-  --span-color-2-border: #f97316;
-  --span-color-3: #e9d5ff;
-  --span-color-3-border: #a855f7;
-  --span-color-4: #fbcfe8;
-  --span-color-4-border: #ec4899;
-  --span-color-5: #bfdbfe;
-  --span-color-5-border: #3b82f6;
-  --radius: 6px;
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Aliases of the old names onto the design tokens (styles/tokens.css), so the whole
+     app takes the new colours at once. Removed when the styles are split (T6a Task 2). */
+  --bg-primary: var(--surface);
+  --bg-surface: var(--surface-raised);
+  --bg-secondary: var(--surface-sunken);
+  --border-color: var(--border);
+  --text-main: var(--text);
+  --primary: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --primary-light: var(--accent-light);
+  --span-highlight: var(--mark-2-fill);
+  --span-selected: var(--accent-light);
+  --span-color-0: var(--mark-0-fill);
+  --span-color-0-border: var(--mark-line);
+  --span-color-1: var(--mark-1-fill);
+  --span-color-1-border: var(--mark-line);
+  --span-color-2: var(--mark-2-fill);
+  --span-color-2-border: var(--mark-line);
+  --span-color-3: var(--mark-3-fill);
+  --span-color-3-border: var(--mark-line);
+  --span-color-4: var(--mark-4-fill);
+  --span-color-4-border: var(--mark-line);
+  --span-color-5: var(--mark-5-fill);
+  --span-color-5-border: var(--mark-line);
 }
 
 * {
@@ -121,7 +114,7 @@ body {
 .badge-ai {
   background: linear-gradient(135deg, #7c3aed, #db2777);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: var(--size-xs);
   font-weight: 600;
   padding: 2px 6px;
 }
@@ -653,13 +646,13 @@ body {
   cursor: pointer;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  border-radius: 3px;
+  border-radius: 0;
   /* No horizontal padding or margin: marking, selecting or resizing never moves the text. */
   padding: 1px 0;
   margin: 0;
 }
 
-/* 6-color pastel palette */
+/* Six mark fills, one per term colour index (styles/tokens.css). */
 .run--color-0 {
   background-color: var(--span-color-0);
 }
@@ -679,28 +672,38 @@ body {
   background-color: var(--span-color-5);
 }
 
-/* Structural distinction: own vs target vs source */
-.run--own {
-  border-bottom: 2px solid #0284c7;
+/* The state of a mark is carried by its line, not by its hue: own annotations are
+   underlined solid, proposals under review dashed, read-only references dotted. */
+.run--source {
+  border-bottom: 2px dotted var(--mark-line);
 }
 
 .run--target {
-  border-bottom: 2px dashed #9333ea;
+  border-bottom: 2px dashed var(--mark-line);
 }
 
-.run--source {
-  border-bottom: 2px dotted #64748b;
+/* Last, so an own annotation wins where it overlaps a proposal or a reference. */
+.run--own {
+  border-bottom: 2px solid var(--mark-line);
 }
 
 .run--multi {
   border-bottom-width: 3px;
 }
 
+/* A negated finding (assertion "absent"): a diagonal hatch over the fill. */
+.run--negated {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 5px,
+    var(--mark-negated-hatch) 5px 6px
+  );
+}
+
 /* Active / Selected mention */
 .mention-span.selected {
-  outline: 2px solid #0284c7;
+  outline: 2px solid var(--mark-selected);
   outline-offset: 1px;
-  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.35);
   font-weight: 500;
   position: relative;
   z-index: 1;
@@ -710,7 +713,7 @@ body {
    side lines only where a segment really starts or ends. Pieces split by an
    overlapping annotation or a line break therefore show no false edges. */
 .run--hot {
-  --hot: #0284c7;
+  --hot: var(--mark-selected);
   --hot-rows: 0 -2px 0 var(--hot), 0 2px 0 var(--hot);
   --hot-left: -2px 0 0 var(--hot), -2px -2px 0 var(--hot), -2px 2px 0 var(--hot);
   --hot-right: 2px 0 0 var(--hot), 2px -2px 0 var(--hot), 2px 2px 0 var(--hot);
@@ -756,7 +759,7 @@ body {
   width: 3px;
   height: 1.6em;
   border-radius: 2px;
-  background: #0c4a6e;
+  background: var(--mark-selected);
 }
 
 /* Wider grab area; its knob tells a handle apart from the selection outline. */
@@ -767,14 +770,14 @@ body {
   top: -0.29em;
   width: 10px;
   height: 1.6em;
-  background: radial-gradient(circle at 50% 4px, #0c4a6e 4px, transparent 4.6px) no-repeat;
+  background: radial-gradient(circle at 50% 4px, var(--mark-selected) 4px, transparent 4.6px) no-repeat;
   margin-top: -6px;
   padding-bottom: 6px;
 }
 
 .resize-handle--end::after {
   background-position: 0 100%;
-  background-image: radial-gradient(circle at 50% calc(100% - 4px), #0c4a6e 4px, transparent 4.6px);
+  background-image: radial-gradient(circle at 50% calc(100% - 4px), var(--mark-selected) 4px, transparent 4.6px);
   margin-top: 0;
 }
 
@@ -795,7 +798,7 @@ body {
 }
 
 .resize-handle:focus-visible::before {
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.45);
+  box-shadow: 0 0 0 3px var(--accent-light);
 }
 
 .text-container.resizing {
@@ -1262,7 +1265,7 @@ body {
 }
 
 .lang-code {
-  font-size: 0.7rem;
+  font-size: var(--size-xs);
   font-weight: 600;
   line-height: 12px;
   color: var(--text-muted);
@@ -1360,13 +1363,13 @@ body {
 
 .tree-count {
   flex-shrink: 0;
-  font-size: 0.72rem;
+  font-size: var(--size-xs);
   color: var(--text-muted);
 }
 
 .tree-current {
   flex-shrink: 0;
-  font-size: 0.7rem;
+  font-size: var(--size-xs);
   font-weight: 600;
   color: var(--primary);
   border: 1px solid var(--primary);
@@ -1491,7 +1494,7 @@ body {
 }
 
 .tree-detail__group h4 {
-  font-size: 0.72rem;
+  font-size: var(--size-xs);
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -1632,7 +1635,7 @@ body {
 .tree-id {
   flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--size-xs);
   color: var(--text-muted);
 }
 
@@ -1659,4 +1662,449 @@ body {
 
 .tree-detail__ids .tree-detail__id {
   margin-bottom: 0;
+}
+
+/* ==========================================================================
+   Direction C, "reading document": editor prototype (T6a Task 1).
+   Paper-like surfaces; the clinical text is set in a serif on a raised sheet
+   with room to read; controls recede into sans, hairlines and muted labels.
+   Overrides the rules above; Task 2 folds them into base, components and
+   screen files.
+   ========================================================================== */
+
+/* The ontology tree host keeps its exact class name (tests pin it), so it
+   takes compact density here instead of through a class. */
+.tree-host {
+  --body-size: var(--size-md);
+  --body-leading: var(--leading-md);
+  --row-height: 34px;
+  --cell-pad-y: 6px;
+  --cell-pad-x: 12px;
+  --control-height: 30px;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--size-base);
+  line-height: var(--leading-base);
+  color: var(--text);
+  background-color: var(--surface);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-light);
+  color: var(--text);
+}
+
+/* Case header: flat, on the paper, one filled action. */
+.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-2) var(--space-5);
+  min-height: 56px;
+}
+
+.app-title {
+  font-size: var(--size-base);
+  font-weight: var(--weight-strong);
+  gap: var(--space-3);
+}
+
+.badge {
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-strong);
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.badge-independent,
+.badge-review,
+.badge-assisted {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.badge-ai {
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: var(--size-xs);
+}
+
+.identity-badge {
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-regular);
+  padding-inline: 0;
+}
+
+.identity-badge strong {
+  color: var(--text);
+  font-weight: var(--weight-strong);
+}
+
+.status-badge {
+  font-size: var(--size-sm);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.status-saved,
+.status-saving {
+  background: transparent;
+}
+
+/* Buttons recede: hairline secondaries, one filled primary. */
+.btn {
+  font-family: var(--font-sans);
+  font-size: var(--size-md);
+  line-height: var(--leading-md);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out, color 0.15s ease-out;
+}
+
+.btn-sm {
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  padding: 5px 10px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-sunken);
+  border-color: var(--border-strong);
+}
+
+.btn-secondary:disabled:hover {
+  background: transparent;
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--border);
+}
+
+.btn-danger:hover {
+  background: var(--danger-light);
+  border-color: var(--danger);
+}
+
+.btn-danger:disabled:hover {
+  background: transparent;
+}
+
+.btn-primary:disabled,
+.btn-primary:disabled:hover {
+  background: var(--border-strong);
+}
+
+.btn:focus-visible,
+.dashboard-table tr:focus-visible,
+.axis-option:has(input:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Side panes: compact sans on the paper, hairlines instead of boxes. */
+
+/* A decided proposal (changed or rejected) steps back: muted text on the sunken
+   band instead of transparency, so its text keeps AA contrast. */
+.doc-item--resolved:not(.selected) {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+
+.doc-item--resolved:not(.selected) .badge-ai {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.app-layout {
+  background: var(--surface);
+}
+
+.sidebar,
+.inspector-pane,
+.detail-pane,
+.tree-host,
+.tree-browser {
+  background: var(--surface);
+  font-size: var(--body-size);
+  line-height: var(--body-leading);
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+}
+
+.inspector-pane,
+.tree-host {
+  border-left: 1px solid var(--border);
+}
+
+.sidebar-header,
+.sidebar-scroll .sidebar-header {
+  padding: var(--space-3) var(--cell-pad-x) var(--space-2);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-strong);
+  color: var(--text-muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-item,
+.reference-item {
+  padding: var(--cell-pad-y) var(--cell-pad-x);
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s ease-out;
+}
+
+.doc-item:hover,
+.reference-item:hover {
+  background: var(--surface-sunken);
+}
+
+.doc-item.selected,
+.reference-item[aria-pressed="true"] {
+  background: var(--surface-raised);
+  border-left-color: var(--accent);
+}
+
+.doc-id,
+.reference-item .term-name {
+  font-size: var(--size-md);
+  font-weight: var(--weight-strong);
+}
+
+.doc-meta,
+.term-name small {
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.detail-section {
+  padding: var(--space-4) var(--cell-pad-x);
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-section h3 {
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-strong);
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.form-label {
+  font-size: var(--size-sm);
+  font-weight: var(--weight-strong);
+  color: var(--text);
+}
+
+.form-control,
+.form-select {
+  font-family: var(--font-sans);
+  font-size: var(--size-md);
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-sm);
+  min-height: var(--control-height);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
+}
+
+.axis-option {
+  font-size: var(--size-sm);
+  border-color: var(--border);
+  background: transparent;
+  border-radius: var(--radius-sm);
+}
+
+.axis-option:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-sunken);
+}
+
+.axis-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+/* Search results: a ruled list, not a stack of cards. */
+.candidate-list {
+  gap: 0;
+  border-top: 1px solid var(--border);
+}
+
+.candidate-card,
+.candidate-card.candidate-obsolete {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: var(--space-2) var(--space-1);
+}
+
+.candidate-card:hover:not(.candidate-obsolete) {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+}
+
+.candidate-card.candidate-obsolete {
+  background: var(--surface-sunken);
+}
+
+.candidate-label {
+  font-size: var(--size-md);
+}
+
+.candidate-def {
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.tree-browser__header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.tree-browser__header h2 {
+  font-size: var(--size-sm);
+  color: var(--text-muted);
+}
+
+/* The document: a raised sheet on the paper, set in the serif at reading size. */
+.center-pane {
+  background: var(--surface);
+}
+
+.pane-toolbar {
+  background: transparent;
+  border-bottom: 0;
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--size-sm);
+  color: var(--text-muted);
+}
+
+.pane-toolbar__intent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pane-toolbar__label {
+  font-size: var(--size-sm);
+  font-weight: var(--weight-regular);
+  color: var(--text-muted);
+}
+
+.intent-badge {
+  background: transparent;
+  color: var(--text);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-strong);
+  padding-inline: 0;
+}
+
+.intent-badge--extend {
+  background: var(--warning-light);
+  color: var(--warning);
+  padding-inline: var(--space-2);
+}
+
+.text-container.density-reading {
+  flex: 1 1 auto;
+  width: calc(100% - 2 * var(--space-5));
+  max-width: calc(var(--measure-reading) + 2 * var(--space-7) + 2px);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-7) var(--space-7);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  box-shadow: var(--shadow-1);
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-size: var(--size-reading);
+  line-height: var(--leading-reading);
+  color: var(--text);
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.text-container.density-reading:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: -3px;
+}
+
+.modal-overlay {
+  background: color-mix(in srgb, var(--text) 40%, transparent);
+}
+
+.modal-content {
+  background: var(--surface-raised);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+}
+
+@media (max-width: 1024px) {
+  .inspector-pane {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .text-container.density-reading {
+    width: calc(100% - 2 * var(--space-4));
+    padding: var(--space-5) var(--space-6) var(--space-6);
+  }
+}
+
+@media (max-width: 700px) {
+  .mobile-pane-tabs {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .mobile-pane-tabs button {
+    font-size: var(--size-md);
+  }
+  .mobile-pane-tabs button[aria-pressed="true"] {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .pane-toolbar {
+    padding-inline: var(--space-4);
+  }
+  .text-container.density-reading {
+    width: 100%;
+    margin: 0;
+    padding: var(--space-5) var(--space-4) var(--space-6);
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    box-shadow: none;
+  }
 }

@@ -120,7 +120,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           style={{
             padding: "8px 12px",
             background: "var(--primary-light)",
-            borderBottom: "1px solid #93c5fd",
+            borderBottom: "1px solid var(--border)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -272,7 +272,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           <div
             style={{
               padding: "10px 12px",
-              background: "#f8fafc",
+              background: "var(--surface)",
               border: "1px dashed var(--border-color)",
               borderRadius: "var(--radius)",
               fontSize: "0.85rem",
