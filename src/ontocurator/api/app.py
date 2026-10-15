@@ -22,6 +22,8 @@ from starlette.concurrency import run_in_threadpool
 
 from ontocurator import settings
 from ontocurator.api.auth_routes import router as auth_router
+from ontocurator.api.health import ReadinessProbe
+from ontocurator.api.health import router as health_router
 from ontocurator.api.routes import router
 from ontocurator.api.security import install_security
 from ontocurator.api.tree_routes import router as tree_router
@@ -76,7 +78,10 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
     """
     lease: RuntimeLease | None = getattr(app.state, "runtime_lease", None)
     if lease is None:
-        yield
+        try:
+            yield
+        finally:
+            app.state.draining = True
         return
     await run_in_threadpool(lease.acquire)
     keeper = asyncio.create_task(_keep_lease(lease))
@@ -87,6 +92,7 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        app.state.draining = True
         await run_in_threadpool(worker.stop)
         keeper.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -108,6 +114,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         openapi_url="/openapi.json",
         lifespan=_runtime_lease,
     )
+    app.state.draining = False
+    app.state.readiness_probe = ReadinessProbe()
 
     if config is not None:
         # Initialize storage and ontology
@@ -359,6 +367,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(router)
     app.include_router(tree_router)
+    app.include_router(health_router)
 
     # Mount static assets if provided or embedded
     web_path: Path | None = None
