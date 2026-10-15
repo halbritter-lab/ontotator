@@ -12,7 +12,7 @@ no main merge, push or deployment has occurred.
 - [x] T2e: reviewed Docker/Compose/health/operations implementation and functional container acceptance.
 - [x] T6a: all ten design-foundation tasks, final review, bundled assets/fonts and integrated acceptance.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
-- [ ] T3a: administration backend in progress; project-key rename accepted, schema/policy accepted, user/profile API under verification.
+- [ ] T3a: administration backend in progress (3/10 tasks accepted: project-key rename, schema/policy, users/profile API); projects/settings/members in preparation.
 - [ ] T3b: administration UI.
 - [ ] T5: variants and translation-review application workflows; the format-1.1 prerequisite is already complete.
 - [ ] T4a: workflows and stage tasks.
@@ -32,5 +32,7 @@ The subsequent T3a rename passed its full local gate: 1,053 backend tests plus o
 POSIX skip, 436 frontend tests and 39 browser cases, with all static/contract/wheel
 checks. See the [rename acceptance](2026-10-15-t3a-task1-review.md). The following
 schema/policy slice passed independent review and 123 focused PostgreSQL/policy
-tests after correcting its exact migration constraint names. Later T3a tasks
-remain open.
+tests after correcting its exact migration constraint names. The subsequent
+[users/profile slice](2026-10-15-t3a-users-review.md) passed review and 127 focused
+PostgreSQL/auth tests after a reproduced audit-lock deadlock was corrected.
+Later T3a tasks remain open.
