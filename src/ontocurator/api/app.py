@@ -21,9 +21,11 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from ontocurator import settings
+from ontocurator.api.admin_routes import router as admin_router
 from ontocurator.api.auth_routes import router as auth_router
 from ontocurator.api.health import ReadinessProbe
 from ontocurator.api.health import router as health_router
+from ontocurator.api.me_routes import router as me_router
 from ontocurator.api.routes import router
 from ontocurator.api.security import install_security
 from ontocurator.api.tree_routes import router as tree_router
@@ -361,10 +363,16 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     async def domain_error_handler(_req: Request, exc: DomainError) -> JSONResponse:
         return JSONResponse(
             # A foreign project looks like a missing one (E3).
-            status_code=404 if exc.code in NOT_FOUND_CODES else 422,
+            status_code=(
+                404
+                if exc.code in NOT_FOUND_CODES
+                else {"SELF_LOCKOUT": 409, "PASSWORD_WRONG": 403}.get(exc.code, 422)
+            ),
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 
+    app.include_router(admin_router)
+    app.include_router(me_router)
     app.include_router(auth_router)
     app.include_router(router)
     app.include_router(tree_router)

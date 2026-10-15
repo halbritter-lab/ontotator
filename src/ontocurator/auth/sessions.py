@@ -19,13 +19,17 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import Connection, func, insert, select, update
 
 from ontocurator.auth.accounts import normalize_username
+from ontocurator.auth.login_attempts import SessionPolicy as SessionPolicy
+from ontocurator.auth.login_attempts import address_lock as _address_lock
+from ontocurator.auth.login_attempts import login_locked
+from ontocurator.auth.login_attempts import username_lock as _username_lock
 from ontocurator.auth.passwords import hash_password, needs_rehash, verify_password
 
 # ``revoke_user_sessions`` is part of this module's interface (T2b plan, Task 5).
 from ontocurator.auth.tokens import revoke_user_sessions as revoke_user_sessions
 from ontocurator.auth.tokens import token_digest
 from ontocurator.domain.errors import DomainError, LoginFailed
-from ontocurator.storage.database import Database, advisory_lock_id
+from ontocurator.storage.database import Database
 from ontocurator.storage.tables import (
     LoginAttemptRow,
     PasswordCredentialRow,
@@ -40,17 +44,6 @@ MAX_RECORDED_USERNAME = 128
 MAX_RECORDED_USER_AGENT = 512
 # Stands in for characters that cannot be stored (see ``_printable``).
 REPLACEMENT = "\N{REPLACEMENT CHARACTER}"
-
-
-@dataclass(frozen=True)
-class SessionPolicy:
-    """Session lifetimes (Q6) and the login lockout (Q8)."""
-
-    idle: timedelta = timedelta(hours=12)
-    absolute: timedelta = timedelta(days=14)
-    window: timedelta = timedelta(minutes=15)
-    failures_per_account: int = 5
-    failures_per_address: int = 30
 
 
 @dataclass(frozen=True)
@@ -84,16 +77,6 @@ def _attempt_name(username: str) -> str:
         return normalize_username(username)
     except DomainError:
         return _printable(username.strip().lower())[:MAX_RECORDED_USERNAME]
-
-
-def _address_lock(client_ip: str) -> int:
-    """The advisory lock that serialises the logins from one client address."""
-    return advisory_lock_id("login-address", client_ip)
-
-
-def _username_lock(name: str) -> int:
-    """The advisory lock that serialises the logins of one name, known or not."""
-    return advisory_lock_id("login-username", name)
 
 
 class SessionService:
@@ -225,26 +208,7 @@ class SessionService:
         self, conn: Connection, username: str, client_ip: str, now: datetime
     ) -> bool:
         """Whether recent failures lock this account or this address."""
-        since = now - self.policy.window
-        recent_failures = (
-            select(func.count())
-            .select_from(LoginAttemptRow)
-            .where(
-                LoginAttemptRow.succeeded.is_(False),
-                LoginAttemptRow.throttled.is_(False),
-                LoginAttemptRow.at >= since,
-                LoginAttemptRow.at <= now,
-            )
-        )
-        account = conn.execute(
-            recent_failures.where(LoginAttemptRow.username == username)
-        ).scalar_one()
-        if account >= self.policy.failures_per_account:
-            return True
-        address = conn.execute(
-            recent_failures.where(LoginAttemptRow.client_ip == client_ip)
-        ).scalar_one()
-        return bool(address >= self.policy.failures_per_address)
+        return login_locked(conn, username, client_ip, now, self.policy)
 
     def resolve(self, token: str) -> Principal | None:
         """The principal of an open session of an active user, or None.
