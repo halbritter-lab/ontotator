@@ -4,6 +4,91 @@
  */
 
 export interface paths {
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description Log in with username and password; sets the session cookie.
+         *
+         *     Every failure gives the same 401 ``LOGIN_FAILED``.
+         */
+        post: operations["login_api_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/redeem-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem Code
+         * @description Set the password with a setup or reset code, then log in.
+         *
+         *     If the login fails afterwards (a locked account or address), the password
+         *     is set nevertheless and the answer is the 401 of ``/login``.
+         */
+        post: operations["redeem_code_api_v1_auth_redeem_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description End this session and delete the cookie.
+         */
+        post: operations["logout_api_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description The logged-in user.
+         */
+        get: operations["me_api_v1_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -33,7 +118,7 @@ export interface paths {
         };
         /**
          * Get Preferences
-         * @description Workspace-level preferences (last identity, working mode per package).
+         * @description The logged-in user's preferences (working mode per package, ...).
          */
         get: operations["get_preferences_api_v1_preferences_get"];
         /**
@@ -63,7 +148,7 @@ export interface paths {
         put?: never;
         /**
          * Upload Package
-         * @description Upload and atomically import a work package archive.
+         * @description Upload and atomically import a work package archive (system admins).
          *
          *     Runs in the thread pool (plain ``def``); the body is copied with a size cap.
          */
@@ -85,8 +170,10 @@ export interface paths {
          * List Package Documents
          * @description List documents showing metadata only, without proposal counts.
          *
-         *     In review mode (if allowed) each document says whether it has proposals, so
-         *     review navigation can skip documents there is nothing to review in.
+         *     The status is the logged-in user's; a system admin may ask for another
+         *     annotator's. In review mode (if allowed) each document says whether it
+         *     has proposals, so review navigation can skip documents there is nothing
+         *     to review in.
          */
         get: operations["list_package_documents_api_v1_packages__package_id__documents_get"];
         put?: never;
@@ -148,7 +235,7 @@ export interface paths {
         put?: never;
         /**
          * Open Workspace
-         * @description Open or initialize a workspace view.
+         * @description Open or initialize a workspace view of the logged-in user.
          */
         post: operations["open_workspace_api_v1_workspaces_open_post"];
         delete?: never;
@@ -290,6 +377,8 @@ export interface paths {
          * Export Package For Annotator
          * @description Export all work of one annotator on a package as one v2 work package.
          *
+         *     The annotator is the logged-in user (``annotator_id`` omitted or their own
+         *     pseudonym); a system admin may export another annotator's work.
          *     Includes every document of the package and all of the annotator's
          *     submissions, submitted annotations and search events in ``mode`` (all
          *     modes if omitted). Filename:
@@ -344,7 +433,7 @@ export interface paths {
          *     An ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` in
          *     ``<workspace>/ontologies``, where it is registered again after a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is
          *     stored under its own name, replaces a file of that name, and the ontology
-         *     it belongs to is reloaded.
+         *     it belongs to is reloaded. System admins only.
          */
         post: operations["upload_ontology_api_v1_ontologies_post"];
         delete?: never;
@@ -528,6 +617,22 @@ export interface components {
         Body_upload_package_api_v1_packages_post: {
             /** File */
             file: string;
+        };
+        /**
+         * CurrentUser
+         * @description The logged-in user, as the editor shows it (index Q10).
+         */
+        CurrentUser: {
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Pseudonym */
+            pseudonym: string;
+            /** Is System Admin */
+            is_system_admin: boolean;
+            /** Csrf Token */
+            csrf_token: string;
         };
         /**
          * Document
@@ -750,6 +855,13 @@ export interface components {
             /** Annotation Types */
             annotation_types: components["schemas"]["AnnotationTypeDefinition"][];
         };
+        /** LoginRequest */
+        LoginRequest: {
+            /** Username */
+            username: string;
+            /** Password */
+            password: string;
+        };
         /**
          * MutationEnvelope
          * @description Request envelope identifying a write attempt across retries.
@@ -841,7 +953,7 @@ export interface components {
             /** Document Id */
             document_id: string;
             /** Annotator Id */
-            annotator_id: string;
+            annotator_id?: string | null;
             /**
              * Mode
              * @default independent
@@ -900,7 +1012,7 @@ export interface components {
         };
         /**
          * Preferences
-         * @description Workspace preferences returned by ``GET /api/v1/preferences``.
+         * @description A user's preferences returned by ``GET /api/v1/preferences``.
          */
         Preferences: {
             /** Last Annotator Id */
@@ -943,6 +1055,15 @@ export interface components {
             /** Assessment */
             assessment?: string | null;
         };
+        /** RedeemCodeRequest */
+        RedeemCodeRequest: {
+            /** Username */
+            username: string;
+            /** Code */
+            code: string;
+            /** New Password */
+            new_password: string;
+        };
         /**
          * ReviewDecision
          * @description Review decision record for a targeted annotation snapshot.
@@ -972,7 +1093,7 @@ export interface components {
             /** Document Id */
             document_id: string;
             /** Annotator Id */
-            annotator_id: string;
+            annotator_id?: string | null;
             /**
              * Mode
              * @constant
@@ -1501,6 +1622,110 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    login_api_v1_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeem_code_api_v1_auth_redeem_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedeemCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_api_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_api_v1_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUser"];
+                };
+            };
+        };
+    };
     get_settings_api_v1_settings_get: {
         parameters: {
             query?: never;
@@ -1967,8 +2192,8 @@ export interface operations {
     };
     export_package_for_annotator_api_v1_packages__package_id__export_get: {
         parameters: {
-            query: {
-                annotator_id: string;
+            query?: {
+                annotator_id?: string | null;
                 mode?: ("independent" | "review" | "assisted") | null;
             };
             header?: never;

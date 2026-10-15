@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
@@ -40,6 +41,43 @@ def read_secret(name: str, env: Mapping[str, str] | None = None) -> str | None:
     if not value:
         raise SettingsError(f"{name}_FILE is empty")
     return value
+
+
+def canonical_origin(value: str) -> str:
+    """``scheme://host[:port]`` of a public origin such as ``https://ex.org``.
+
+    The scheme and host are lower-cased and a default port is dropped, so the
+    result equals the ``Origin`` header a browser sends for that site. A
+    trailing ``/`` is accepted; any other path, a query, a fragment or
+    credentials are not.
+
+    Raises:
+        SettingsError: for anything else.
+    """
+    problem = "must be an http(s) origin like https://editor.example.org"
+    try:
+        parts = urlsplit(value.strip())
+        port = parts.port
+    except ValueError:
+        raise SettingsError(f"The public origin {problem}") from None
+    if (
+        parts.scheme not in ("http", "https")
+        or not parts.hostname
+        or parts.username is not None
+        or parts.password is not None
+        or parts.path not in ("", "/")
+        or parts.query
+        or parts.fragment
+        or "?" in value
+        or "#" in value
+    ):
+        raise SettingsError(f"The public origin {problem}")
+    host = parts.hostname
+    if ":" in host:
+        host = f"[{host}]"
+    default_port = 443 if parts.scheme == "https" else 80
+    suffix = "" if port in (None, default_port) else f":{port}"
+    return f"{parts.scheme}://{host}{suffix}"
 
 
 def database_url(

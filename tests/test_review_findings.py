@@ -9,6 +9,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from auth_harness import AutoLoginClient
 from pg_harness import database_for, database_url_for
 
 from ontocurator.domain.documents import Document
@@ -476,75 +477,10 @@ def test_editing_shared_evidence_requires_annotation_id(tmp_path: Path) -> None:
     assert exc.value.code == "SHARED_EVIDENCE_REQUIRES_ANNOTATION"
 
 
-# --- Finding 9: security --------------------------------------------------- #
-
-
-def _raw_request(headers: list[tuple[bytes, bytes]], client_host: str = "127.0.0.1"):  # type: ignore[no-untyped-def]
-    from starlette.requests import Request
-
-    return Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/packages",
-            "headers": headers,
-            "client": (client_host, 50000),
-            "query_string": b"",
-        }
-    )
-
-
-def test_non_ascii_bearer_token_is_rejected_not_crashing() -> None:
-    from fastapi import HTTPException
-
-    from ontocurator.api.security import verify_security
-
-    request = _raw_request(
-        [
-            (b"host", b"127.0.0.1:8000"),
-            (b"authorization", "Bearer tökén".encode()),
-        ]
-    )
-    with pytest.raises(HTTPException) as exc:
-        verify_security(request, "secret-token", 8000)
-    assert exc.value.status_code == 403
-
-    ok = _raw_request(
-        [(b"host", b"127.0.0.1:8000"), (b"authorization", b"Bearer secret-token")]
-    )
-    verify_security(ok, "secret-token", 8000)
-
-
-def test_test_client_host_is_only_trusted_when_flag_is_set(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from fastapi.testclient import TestClient
-
-    from ontocurator.api import security
-    from ontocurator.api.app import create_app
-    from ontocurator.config import AppConfig
-
-    app = create_app(
-        AppConfig(
-            workspace_dir=tmp_path,
-            database_url=database_url_for(tmp_path / "db.sqlite"),
-            session_token="tok",
-        )
-    )
-    client = TestClient(app, headers={"Authorization": "Bearer tok"})
-    assert client.get("/api/v1/packages").status_code == 200  # conftest sets flag
-
-    monkeypatch.setattr(security, "ALLOW_TEST_CLIENT_HOST", False)
-    assert client.get("/api/v1/packages").status_code == 403
-    loopback = client.get("/api/v1/packages", headers={"Host": "127.0.0.1:8000"})
-    assert loopback.status_code == 200
-
-
 # --- Finding 2/11/12: ontology upload, registry, layering ------------------ #
 
 
 def _app(tmp_path: Path, **overrides):  # type: ignore[no-untyped-def]
-    from fastapi.testclient import TestClient
 
     from ontocurator.api.app import create_app
     from ontocurator.config import AppConfig
@@ -553,11 +489,10 @@ def _app(tmp_path: Path, **overrides):  # type: ignore[no-untyped-def]
     config = AppConfig(
         workspace_dir=workspace,
         database_url=database_url_for(workspace / "editor.db"),
-        session_token="tok",
         **overrides,
     )
     app = create_app(config)
-    return TestClient(app, headers={"Authorization": "Bearer tok"}), config
+    return AutoLoginClient(app), config
 
 
 def _obo(version: str, labels: dict[str, str], **meta_by_id) -> bytes:  # type: ignore[no-untyped-def]

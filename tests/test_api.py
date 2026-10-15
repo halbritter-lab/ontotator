@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
+from auth_harness import AutoLoginClient
 from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
@@ -41,38 +41,10 @@ def app_client(tmp_path: Path):
         ontology_paths=[FIXTURE_PATH, FIXTURE_PATH.parent / "mondo.json"],
         ontology_path=FIXTURE_PATH,
         expected_ontology_ref=_make_ontology_ref(),
-        session_token="secret-session-token",
     )
     app = create_app(config)
-    client = TestClient(app, headers={"Authorization": "Bearer secret-session-token"})
+    client = AutoLoginClient(app)
     return client, config
-
-
-def test_auth_and_host_validation(app_client):
-    client, _ = app_client
-
-    # 1. Missing Authorization header
-    unauth_client = TestClient(client.app)
-    resp = unauth_client.get("/api/v1/packages")
-    assert resp.status_code == 403
-
-    # 2. Invalid session token
-    bad_token_client = TestClient(
-        client.app, headers={"Authorization": "Bearer wrong-token"}
-    )
-    resp = bad_token_client.get("/api/v1/packages")
-    assert resp.status_code == 403
-
-    # 3. DNS rebinding / invalid Host header
-    rebinding_client = TestClient(
-        client.app,
-        headers={
-            "Authorization": "Bearer secret-session-token",
-            "Host": "attacker.com",
-        },
-    )
-    resp = rebinding_client.get("/api/v1/packages")
-    assert resp.status_code == 403
 
 
 def test_term_labels_resolve_from_package_layer_without_search_event(app_client):
@@ -692,10 +664,9 @@ def test_api_retry_lost_response_before_and_after_restart(tmp_path: Path):
         ontology_paths=[FIXTURE_PATH, FIXTURE_PATH.parent / "mondo.json"],
         ontology_path=FIXTURE_PATH,
         expected_ontology_ref=_make_ontology_ref(),
-        session_token="test-token",
     )
     app = create_app(config)
-    client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+    client = AutoLoginClient(app)
 
     # Upload & open
     pkg_bytes = _create_sample_package_bytes("single")
@@ -754,7 +725,7 @@ def test_api_retry_lost_response_before_and_after_restart(tmp_path: Path):
 
     # 4. Restart server (create fresh app on same db)
     app2 = create_app(config)
-    client2 = TestClient(app2, headers={"Authorization": "Bearer test-token"})
+    client2 = AutoLoginClient(app2)
 
     # 5. Retry after restart (idempotent replay preserves same normalized response)
     res3 = client2.post(f"/api/v1/workspaces/{ws_id}/commands", json=mutation_payload)
@@ -965,7 +936,6 @@ def test_a_failing_start_closes_the_database(
     config = AppConfig(
         workspace_dir=tmp_path,
         database_url=database_url_for(tmp_path / "start.db"),
-        session_token="test-token",
     )
 
     with pytest.raises(RuntimeError, match="ontology start failed"):
@@ -997,7 +967,6 @@ def test_a_failing_close_does_not_hide_why_the_start_failed(
     config = AppConfig(
         workspace_dir=tmp_path,
         database_url=database_url_for(tmp_path / "start.db"),
-        session_token="test-token",
     )
 
     with pytest.raises(RuntimeError, match="ontology start failed"):
@@ -1025,7 +994,6 @@ def test_an_unmigrated_database_is_refused_at_start(
     config = AppConfig(
         workspace_dir=tmp_path,
         database_url=unmigrated_database_url(tmp_path / "empty.db"),
-        session_token="test-token",
     )
 
     with pytest.raises(DomainError) as exc_info:

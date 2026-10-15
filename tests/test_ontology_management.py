@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
+from auth_harness import AutoLoginClient
 from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
@@ -52,12 +52,11 @@ def test_get_and_post_ontologies_endpoint(tmp_path: Path) -> None:
     config = AppConfig(
         workspace_dir=tmp_path / "workspace",
         database_url=database_url_for(tmp_path / "workspace" / "editor.db"),
-        session_token="test-token",
         port=8000,
         host="127.0.0.1",
     )
     app = create_app(config)
-    client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+    client = AutoLoginClient(app)
 
     # Initial list is empty
     res = client.get("/api/v1/ontologies")
@@ -97,12 +96,11 @@ def test_upload_invalid_ontology_returns_400(tmp_path: Path) -> None:
     config = AppConfig(
         workspace_dir=tmp_path / "workspace",
         database_url=database_url_for(tmp_path / "workspace" / "editor.db"),
-        session_token="test-token",
         port=8000,
         host="127.0.0.1",
     )
     app = create_app(config)
-    client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+    client = AutoLoginClient(app)
 
     res_upload = client.post(
         "/api/v1/ontologies",
@@ -124,12 +122,11 @@ def test_invalid_upload_does_not_overwrite_or_delete_existing_ontology(
     config = AppConfig(
         workspace_dir=ws,
         database_url=database_url_for(ws / "editor.db"),
-        session_token="test-token",
         port=8000,
         host="127.0.0.1",
     )
     app = create_app(config)
-    client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+    client = AutoLoginClient(app)
 
     # Attempt to upload an invalid file with the same filename
     res_upload = client.post(
@@ -150,12 +147,11 @@ def test_uploaded_ontologies_are_listed_after_a_restart(
     config_1 = AppConfig(
         workspace_dir=ws,
         database_url=database_url_for(ws / "editor.db"),
-        session_token="test-token",
         port=8000,
         host="127.0.0.1",
     )
     app_1 = create_app(config_1)
-    client_1 = TestClient(app_1, headers={"Authorization": "Bearer test-token"})
+    client_1 = AutoLoginClient(app_1)
 
     # Upload ontology to App 1
     res_upload = client_1.post(
@@ -170,12 +166,11 @@ def test_uploaded_ontologies_are_listed_after_a_restart(
     config_2 = AppConfig(
         workspace_dir=ws,
         database_url=database_url_for(ws / "editor.db"),
-        session_token="test-token-2",
         port=8001,
         host="127.0.0.1",
     )
     app_2 = create_app(config_2)
-    client_2 = TestClient(app_2, headers={"Authorization": "Bearer test-token-2"})
+    client_2 = AutoLoginClient(app_2)
 
     res_list = client_2.get("/api/v1/ontologies")
     assert res_list.status_code == 200
@@ -200,10 +195,9 @@ def test_a_broken_entry_in_the_ontologies_folder_does_not_stop_the_start(
         AppConfig(
             workspace_dir=ws,
             database_url=database_url_for(ws / "editor.db"),
-            session_token="test-token",
         )
     )
-    client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+    client = AutoLoginClient(app)
 
     listed = client.get("/api/v1/ontologies").json()
     loaded = [item for item in listed if item.get("status") != "failed"]
@@ -233,10 +227,9 @@ def test_an_unreadable_stored_ontology_does_not_stop_the_start(
         AppConfig(
             workspace_dir=ws,
             database_url=database_url_for(ws / "editor.db"),
-            session_token="test-token",
         )
     )
-    client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+    client = AutoLoginClient(app)
 
     listed = client.get("/api/v1/ontologies").json()
     assert [item["ontology_id"] for item in listed] == ["hp"]

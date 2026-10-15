@@ -6,21 +6,26 @@ import contextlib
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from ontocurator import settings
+from ontocurator.api.auth_routes import router as auth_router
 from ontocurator.api.routes import router
-from ontocurator.api.security import verify_security
+from ontocurator.api.security import install_security
 from ontocurator.api.tree_routes import router as tree_router
-from ontocurator.application.preferences import PREFERENCES_FILENAME, PreferencesStore
+from ontocurator.auth.accounts import AccountService
+from ontocurator.auth.preferences import UserPreferencesStore
+from ontocurator.auth.sessions import SessionService
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import (
+    AccessDenied,
     DomainError,
     IncompleteReview,
     InvalidPackage,
+    LoginFailed,
     ModeNotAllowed,
     PayloadTooLarge,
     RevisionConflict,
@@ -61,6 +66,17 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                     "DATABASE_NOT_MIGRATED", {"current": current, "head": head}
                 )
             repo = Repository(db)
+            accounts = AccountService(db)
+            sessions = SessionService(db)
+            if (
+                accounts.bootstrap_admin(config.admin_password_hash) == "already_done"
+                and config.admin_password_hash is not None
+            ):
+                logger.warning(
+                    "ONTOCURATOR_ADMIN_PASSWORD_HASH is ignored: the first "
+                    "administrator was created before. Use 'ontocurator admin' "
+                    "to change passwords, and remove the setting."
+                )
 
             from ontocurator.ontology.registry import OntologyRegistry
 
@@ -120,8 +136,11 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             app.state.config = config
             app.state.repo = repo
             app.state.ontology_registry = registry
-            app.state.preferences = PreferencesStore(
-                config.workspace_dir / PREFERENCES_FILENAME
+            app.state.accounts = accounts
+            app.state.sessions = sessions
+            app.state.preferences = UserPreferencesStore(db)
+            app.state.secure_cookies = bool(
+                config.public_origin and config.public_origin.startswith("https://")
             )
         except BaseException:
             # Never let a failing clean-up hide why the start failed.
@@ -129,19 +148,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 db.close()
             raise
 
-        # Security middleware for API requests
-        @app.middleware("http")
-        async def security_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
-            if request.url.path.startswith("/api/"):
-                try:
-                    verify_security(request, config.session_token, config.port)
-                except HTTPException as exc:
-                    content: dict[str, object] = {"detail": exc.detail}
-                    code = getattr(exc, "code", None)
-                    if code:
-                        content["code"] = code
-                    return JSONResponse(status_code=exc.status_code, content=content)
-            return await call_next(request)
+        install_security(app, sessions, config.public_origin)
 
     # Service-level command parsing must report client validation failures as 422.
     @app.exception_handler(ValidationError)
@@ -208,6 +215,20 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 
+    @app.exception_handler(AccessDenied)
+    async def access_denied_handler(_req: Request, exc: AccessDenied) -> JSONResponse:
+        return JSONResponse(
+            status_code=403,
+            content={"code": exc.code, "details": exc.details or str(exc)},
+        )
+
+    @app.exception_handler(LoginFailed)
+    async def login_failed_handler(_req: Request, exc: LoginFailed) -> JSONResponse:
+        return JSONResponse(
+            status_code=401,
+            content={"code": exc.code, "details": exc.details or str(exc)},
+        )
+
     @app.exception_handler(DomainError)
     async def domain_error_handler(_req: Request, exc: DomainError) -> JSONResponse:
         return JSONResponse(
@@ -215,6 +236,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             content={"code": exc.code, "details": exc.details or str(exc)},
         )
 
+    app.include_router(auth_router)
     app.include_router(router)
     app.include_router(tree_router)
 

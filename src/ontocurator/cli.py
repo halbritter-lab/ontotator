@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import secrets
 import tempfile
 from importlib import metadata
 from pathlib import Path
@@ -178,6 +177,19 @@ def serve(
             help="Directory containing built static web assets.",
         ),
     ] = None,
+    public_origin: Annotated[
+        str | None,
+        typer.Option(
+            "--public-origin",
+            envvar="ONTOCURATOR_PUBLIC_ORIGIN",
+            help=(
+                "The address people open, e.g. https://editor.example.org. Writes "
+                "must come from it; with https the session cookie is Secure. "
+                "Default: the address each request names."
+            ),
+            show_default=False,
+        ),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option(
@@ -187,7 +199,23 @@ def serve(
         ),
     ] = False,
 ) -> None:
-    """Start the Ontocurator server."""
+    """Start the Ontocurator server.
+
+    The first administrator ('admin') is created on the first start from the
+    Argon2id hash in ONTOCURATOR_ADMIN_PASSWORD_HASH or the file named by
+    ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE.
+    """
+    from ontocurator import settings
+
+    try:
+        canonical_public_origin = (
+            None if public_origin is None else settings.canonical_origin(public_origin)
+        )
+        admin_password_hash = settings.read_secret("ONTOCURATOR_ADMIN_PASSWORD_HASH")
+    except settings.SettingsError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
     ontology_paths: list[Path] = []
     for path in ontology or []:
         resolved = path.resolve()
@@ -224,16 +252,16 @@ def serve(
         typer.echo(f"Error: Cannot create data folder {workspace}: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    session_token = secrets.token_urlsafe(32)
     config = AppConfig(
         workspace_dir=workspace,
         database_url=database_url,
         ontology_paths=ontology_paths,
         translation_dirs=translation_dirs,
-        session_token=session_token,
         host=host,
         port=port,
         web_dir=resolved_web_dir,
+        public_origin=canonical_public_origin,
+        admin_password_hash=admin_password_hash,
     )
 
     try:
@@ -256,8 +284,8 @@ def serve(
         raise typer.Exit(code=1) from exc
 
     typer.echo(f"Ontocurator {get_version()} is starting.")
-    typer.echo("Open this link in your browser (it contains a private key):")
-    typer.echo(f"  {_base_url(host, port)}/#token={session_token}")
+    typer.echo("Open this address in your browser and log in:")
+    typer.echo(f"  {_base_url(host, port)}/")
     typer.echo(f"Data folder: {workspace}")
     try:
         uvicorn.run(

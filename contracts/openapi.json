@@ -5,6 +5,127 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "description": "Log in with username and password; sets the session cookie.\n\nEvery failure gives the same 401 ``LOGIN_FAILED``.",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/redeem-code": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Redeem Code",
+        "description": "Set the password with a setup or reset code, then log in.\n\nIf the login fails afterwards (a locked account or address), the password\nis set nevertheless and the answer is the 401 of ``/login``.",
+        "operationId": "redeem_code_api_v1_auth_redeem_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "description": "End this session and delete the cookie.",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Me",
+        "description": "The logged-in user.",
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/settings": {
       "get": {
         "summary": "Get Settings",
@@ -27,7 +148,7 @@
     "/api/v1/preferences": {
       "get": {
         "summary": "Get Preferences",
-        "description": "Workspace-level preferences (last identity, working mode per package).",
+        "description": "The logged-in user's preferences (working mode per package, ...).",
         "operationId": "get_preferences_api_v1_preferences_get",
         "responses": {
           "200": {
@@ -104,7 +225,7 @@
       },
       "post": {
         "summary": "Upload Package",
-        "description": "Upload and atomically import a work package archive.\n\nRuns in the thread pool (plain ``def``); the body is copied with a size cap.",
+        "description": "Upload and atomically import a work package archive (system admins).\n\nRuns in the thread pool (plain ``def``); the body is copied with a size cap.",
         "operationId": "upload_package_api_v1_packages_post",
         "requestBody": {
           "content": {
@@ -155,7 +276,7 @@
     "/api/v1/packages/{package_id}/documents": {
       "get": {
         "summary": "List Package Documents",
-        "description": "List documents showing metadata only, without proposal counts.\n\nIn review mode (if allowed) each document says whether it has proposals, so\nreview navigation can skip documents there is nothing to review in.",
+        "description": "List documents showing metadata only, without proposal counts.\n\nThe status is the logged-in user's; a system admin may ask for another\nannotator's. In review mode (if allowed) each document says whether it\nhas proposals, so review navigation can skip documents there is nothing\nto review in.",
         "operationId": "list_package_documents_api_v1_packages__package_id__documents_get",
         "parameters": [
           {
@@ -322,7 +443,7 @@
     "/api/v1/workspaces/open": {
       "post": {
         "summary": "Open Workspace",
-        "description": "Open or initialize a workspace view.",
+        "description": "Open or initialize a workspace view of the logged-in user.",
         "operationId": "open_workspace_api_v1_workspaces_open_post",
         "requestBody": {
           "content": {
@@ -637,7 +758,7 @@
     "/api/v1/packages/{package_id}/export": {
       "get": {
         "summary": "Export Package For Annotator",
-        "description": "Export all work of one annotator on a package as one v2 work package.\n\nIncludes every document of the package and all of the annotator's\nsubmissions, submitted annotations and search events in ``mode`` (all\nmodes if omitted). Filename:\n``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.",
+        "description": "Export all work of one annotator on a package as one v2 work package.\n\nThe annotator is the logged-in user (``annotator_id`` omitted or their own\npseudonym); a system admin may export another annotator's work.\nIncludes every document of the package and all of the annotator's\nsubmissions, submitted annotations and search events in ``mode`` (all\nmodes if omitted). Filename:\n``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.",
         "operationId": "export_package_for_annotator_api_v1_packages__package_id__export_get",
         "parameters": [
           {
@@ -652,9 +773,16 @@
           {
             "name": "annotator_id",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": "string",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Annotator Id"
             }
           },
@@ -768,7 +896,7 @@
       },
       "post": {
         "summary": "Upload Ontology",
-        "description": "Upload an ontology (``.json``) or a translation file (``.tsv``).\n\nAn ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` in\n``<workspace>/ontologies``, where it is registered again after a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is\nstored under its own name, replaces a file of that name, and the ontology\nit belongs to is reloaded.",
+        "description": "Upload an ontology (``.json``) or a translation file (``.tsv``).\n\nAn ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` in\n``<workspace>/ontologies``, where it is registered again after a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is\nstored under its own name, replaces a file of that name, and the ontology\nit belongs to is reloaded. System admins only.",
         "operationId": "upload_ontology_api_v1_ontologies_post",
         "requestBody": {
           "content": {
@@ -1168,6 +1296,40 @@
           "file"
         ],
         "title": "Body_upload_package_api_v1_packages_post"
+      },
+      "CurrentUser": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "pseudonym": {
+            "type": "string",
+            "title": "Pseudonym"
+          },
+          "is_system_admin": {
+            "type": "boolean",
+            "title": "Is System Admin"
+          },
+          "csrf_token": {
+            "type": "string",
+            "title": "Csrf Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "display_name",
+          "pseudonym",
+          "is_system_admin",
+          "csrf_token"
+        ],
+        "title": "CurrentUser",
+        "description": "The logged-in user, as the editor shows it (index Q10)."
       },
       "Document": {
         "properties": {
@@ -1592,6 +1754,27 @@
         "title": "LayerDefinition",
         "description": "Definition of an annotation layer binding an ontology and types."
       },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 256,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "title": "Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
       "MutationEnvelope": {
         "properties": {
           "mutation_id": {
@@ -1789,7 +1972,14 @@
             "title": "Document Id"
           },
           "annotator_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Annotator Id"
           },
           "mode": {
@@ -1828,8 +2018,7 @@
         "type": "object",
         "required": [
           "package_id",
-          "document_id",
-          "annotator_id"
+          "document_id"
         ],
         "title": "OpenWorkspaceRequest",
         "description": "Request payload for opening a workspace draft."
@@ -2035,7 +2224,7 @@
         },
         "type": "object",
         "title": "Preferences",
-        "description": "Workspace preferences returned by ``GET /api/v1/preferences``."
+        "description": "A user's preferences returned by ``GET /api/v1/preferences``."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -2129,6 +2318,33 @@
         "title": "Provenance",
         "description": "Origin and extraction details for an annotation or statement."
       },
+      "RedeemCodeRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 256,
+            "title": "Username"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 1024,
+            "title": "Code"
+          },
+          "new_password": {
+            "type": "string",
+            "maxLength": 1024,
+            "title": "New Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "code",
+          "new_password"
+        ],
+        "title": "RedeemCodeRequest"
+      },
       "ReviewDecision": {
         "properties": {
           "decision_id": {
@@ -2196,7 +2412,14 @@
             "title": "Document Id"
           },
           "annotator_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Annotator Id"
           },
           "mode": {
@@ -2210,7 +2433,6 @@
         "required": [
           "package_id",
           "document_id",
-          "annotator_id",
           "mode"
         ],
         "title": "ReviewInputsRequest",

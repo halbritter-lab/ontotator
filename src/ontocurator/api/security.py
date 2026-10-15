@@ -1,103 +1,94 @@
-"""Security middleware and dependency guards for loopback API."""
+"""Session cookie, CSRF and origin checks for the API (T2 P3, index D-h, D-k).
+
+Every ``/api/`` request needs an open session, named by the HttpOnly cookie
+``ontocurator_session``. A write (POST, PUT, PATCH, DELETE) must also come
+from this site and carry the session's CSRF token in ``X-CSRF-Token``. The
+two routes that have no session yet, login and code redemption, accept a
+write only when the browser says it comes from this site (``Origin`` or
+``Sec-Fetch-Site``); a request that says nothing is refused.
+"""
 
 from __future__ import annotations
 
 import secrets
-from urllib.parse import urlsplit
+from contextvars import ContextVar
 
-from fastapi import HTTPException, Request
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
+from starlette.middleware.base import RequestResponseEndpoint
 
-ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+from ontocurator.auth.sessions import Principal, SessionService
 
-# Starlette's in-process TestClient sends ``Host: testserver`` from client
-# ``testclient``. Production never trusts that transport; the test suite opts in
-# explicitly by setting this flag (see tests/conftest.py).
-ALLOW_TEST_CLIENT_HOST = False
+SESSION_COOKIE = "ontocurator_session"
+CSRF_HEADER = "x-csrf-token"
+UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+PUBLIC_PATHS = frozenset({"/api/v1/auth/login", "/api/v1/auth/redeem-code"})
+CROSS_SITE_MESSAGE = "The request does not come from this site."
 
-# Error codes that tell the browser its session link is no longer valid (e.g.
-# after a restart, which generates a new token) so it can show a friendly
-# "please reopen Ontocurator" page instead of raw errors.
-SESSION_TOKEN_MISSING = "SESSION_TOKEN_MISSING"
-SESSION_TOKEN_INVALID = "SESSION_TOKEN_INVALID"
-
-
-class SecurityError(HTTPException):
-    """403 raised by :func:`verify_security`, optionally with an error code."""
-
-    def __init__(self, detail: str, code: str | None = None) -> None:
-        super().__init__(status_code=403, detail=detail)
-        self.code = code
+# The principal of the running request, visible below the routes (index D-k).
+current_principal: ContextVar[Principal | None] = ContextVar(
+    "ontocurator_principal", default=None
+)
 
 
-def _token_bytes(value: str) -> bytes:
-    """Header values arrive latin-1 decoded; recover their raw bytes."""
-    try:
-        return value.encode("latin-1")
-    except UnicodeEncodeError:
-        return value.encode("utf-8")
+def expected_origin(request: Request, public_origin: str | None) -> str:
+    """The configured public origin, else the origin of the request's own host."""
+    return public_origin or f"{request.url.scheme}://{request.headers.get('host', '')}"
 
 
-def verify_security(request: Request, expected_token: str, port: int = 8000) -> None:
-    """Validate host header against DNS rebinding and verify session token."""
-    # 1. Host header validation
-    host_header = request.headers.get("host", "")
-    try:
-        authority = urlsplit(f"http://{host_header}")
-        host_name = authority.hostname
-        host_port = authority.port or 80
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Invalid Host header") from None
-    is_test_transport = (
-        ALLOW_TEST_CLIENT_HOST
-        and request.client is not None
-        and request.client.host == "testclient"
-        and host_name == "testserver"
-    )
-    if not is_test_transport and (
-        host_name not in ALLOWED_HOSTS
-        or host_port != port
-        or authority.username
-        or authority.password
-        or authority.path
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Forbidden: Host header not permitted on loopback service",
-        )
+def cross_site(
+    request: Request, public_origin: str | None, *, fail_closed: bool
+) -> bool:
+    """Whether the browser says the request comes from another site.
 
-    # 2. Origin validation (if present)
-    origin_header = request.headers.get("origin")
-    if origin_header:
+    With ``fail_closed``, a request that has neither ``Origin`` nor
+    ``Sec-Fetch-Site`` counts as cross-site as well.
+    """
+    origin = request.headers.get("origin")
+    fetch_site = request.headers.get("sec-fetch-site")
+    if origin is not None and origin != expected_origin(request, public_origin):
+        return True
+    if fetch_site is not None and fetch_site not in ("same-origin", "none"):
+        return True
+    return fail_closed and origin is None and fetch_site is None
+
+
+def _error(status: int, code: str, details: str) -> JSONResponse:
+    return JSONResponse(status_code=status, content={"code": code, "details": details})
+
+
+def install_security(
+    app: FastAPI, sessions: SessionService, public_origin: str | None
+) -> None:
+    """Add the middleware that resolves the session and checks writes."""
+
+    @app.middleware("http")
+    async def authenticate(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        path = request.url.path
+        if not path.startswith("/api/"):
+            return await call_next(request)
+        unsafe = request.method in UNSAFE_METHODS
+        if path in PUBLIC_PATHS:  # no session yet
+            if unsafe and cross_site(request, public_origin, fail_closed=True):
+                return _error(403, "CROSS_SITE_REQUEST", CROSS_SITE_MESSAGE)
+            return await call_next(request)
+        token = request.cookies.get(SESSION_COOKIE)
+        principal = await run_in_threadpool(sessions.resolve, token) if token else None
+        if principal is None:
+            return _error(401, "NOT_AUTHENTICATED", "Log in to continue.")
+        if unsafe:
+            if cross_site(request, public_origin, fail_closed=False):
+                return _error(403, "CROSS_SITE_REQUEST", CROSS_SITE_MESSAGE)
+            sent = request.headers.get(CSRF_HEADER, "")
+            # Header values arrive latin-1 decoded, so they always encode.
+            if not secrets.compare_digest(sent.encode(), principal.csrf_token.encode()):
+                return _error(403, "CSRF_FAILED", "The page is out of date; reload it.")
+        request.state.principal = principal
+        reset = current_principal.set(principal)
         try:
-            origin = urlsplit(origin_header)
-            same_origin = (
-                origin.scheme == "http"
-                and origin.hostname == host_name
-                and (origin.port or 80) == host_port
-                and not (
-                    origin.username
-                    or origin.password
-                    or origin.path
-                    or origin.query
-                    or origin.fragment
-                )
-            )
-        except ValueError:
-            same_origin = False
-        if not same_origin:
-            raise HTTPException(
-                status_code=403,
-                detail="Forbidden: Cross-origin request not permitted",
-            )
-
-    # 3. Session token authentication
-    auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise SecurityError(
-            "Forbidden: Missing Bearer authorization token", SESSION_TOKEN_MISSING
-        )
-
-    token = auth_header[len("Bearer ") :].strip()
-    # Compare bytes: compare_digest raises TypeError for non-ASCII str input.
-    if not secrets.compare_digest(_token_bytes(token), expected_token.encode("utf-8")):
-        raise SecurityError("Forbidden: Invalid session token", SESSION_TOKEN_INVALID)
+            return await call_next(request)
+        finally:
+            current_principal.reset(reset)

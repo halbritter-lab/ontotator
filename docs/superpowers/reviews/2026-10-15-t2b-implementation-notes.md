@@ -181,6 +181,61 @@ answer; the least surprising option was taken and should be confirmed.
   user, the correct password while locked, the 60 s `last_seen_at` throttle, both rehash directions,
   the lost-session race and the refused ambient transaction. Counts: `tests/test_accounts.py` 20,
   `tests/test_sessions.py` 17, `tests/test_passwords.py` 26, `tests/test_schema.py` 19.
+- Task 6: the plan did not say what `/redeem-code` answers when the login after the redemption fails
+  -> it answers the normal 401 `LOGIN_FAILED` of `/login` (for example while the account or the
+  address is locked); the password is set anyway and the code is used, so the person logs in on
+  the login page later, because the redemption commits before the login runs (a login cannot join
+  an open transaction).
+- Task 6: the acceptance grep "prints nothing" -> it still matches the embedded bundle
+  `src/ontocurator/web/assets/index-*.js` (built from the frontend that still sends `Authorization:
+  Bearer`) and binary `__pycache__` files; `grep -rnIE … src tests --exclude-dir=web` prints nothing.
+  The bundle cannot be rebuilt before the frontend changes of Task 8; Task 9 rebuilds it.
+- Task 6: `canonical_origin` "http(s), host, no path" -> it also accepts a lone trailing `/`,
+  lower-cases scheme and host and drops the default port (`HTTPS://Editor.Example:443/` ->
+  `https://editor.example`), so the value equals the `Origin` header a browser sends. `AppConfig`
+  validates `public_origin` with it as well, so `create_app` cannot get a non-canonical origin;
+  `serve` checks it first and exits 1 with the `SettingsError`. New tests: 12 cases in
+  `tests/test_settings.py`, `test_serve_refuses_a_public_origin_with_a_path` in `tests/test_cli.py`
+  (whose help test now also expects `--public-origin`).
+- Task 6: `AccessDenied("IDENTITY_MISMATCH")` / `ADMIN_REQUIRED` without details -> both carry a
+  sentence in `details` ("You can only work under your own pseudonym.", "Only a system administrator
+  may do this."), so the 403 body is `{code, details}` like every other domain error.
+  `own_annotator` compares the requested ID exactly (no trimming); a padded own pseudonym is refused.
+- Task 6: `UserPreferencesStore.update` "does a `SELECT … FOR UPDATE` and then an upsert" -> it
+  inserts an empty row if missing (`ON CONFLICT DO NOTHING`), then locks it with `SELECT … FOR
+  UPDATE`, merges and updates, because a row that does not exist yet cannot be locked and two first
+  updates would otherwise overwrite each other. Stored JSON is read tolerantly as the file store did
+  (unknown keys and invalid entries are skipped and dropped by the next update); this has no own test
+  any more, since the six planned preference tests replace the file-store tests.
+- Task 6: "keep only the models" -> `Preferences`/`PreferencesUpdate` are unchanged, including
+  `last_annotator_id`, because the frontend still reads and writes it until Task 8; `_clean_languages`
+  became public (`clean_languages`) for the database store.
+- Task 6: the converted `test_api_regressions.py::test_origin_must_match_bound_host_and_port` sent a
+  foreign `Origin` on a GET -> it sends it on a write (`PUT /preferences`) and expects 403
+  `CROSS_SITE_REQUEST`, because the plan's middleware checks origins on writes only (reads are
+  covered by `SameSite=Lax`); a same-origin write still gives 200.
+- Task 6: `AutoLoginClient` details the plan left open -> an annotator value that
+  `normalize_annotator_id` refuses is skipped (the next rule applies), so a request meant to fail
+  validation does not crash the harness; `ensure_user` keeps an existing user (a restarted app on the
+  same database logs in again); the display name is the pseudonym (or the username); the session
+  cookie is dropped before each harness login. Harness users log in once per annotator switch; the
+  suite did not slow down noticeably. Every annotator ID used through the API is a valid pseudonym
+  (including `dr. Müller/1`); the invalid ones (`"   "`, a zero-width space, `"  JPL "`) occur only
+  in `tests/test_distribution.py` unit tests of the settings parser, which do not use the API, so no
+  test needed a changed ID.
+- Task 6: the conversion script (`%TEMP%/t2b_task6/convert_tests.py`, outside the repo) rewrote 10
+  files (43 replacements); `tests/browser_server.py` lost its `session_token` by hand, and the
+  `serve` test in `tests/test_cli.py` now expects the plain address and no `#token=`.
+- Task 6: README -> the launch paragraph names the login and `ONTOCURATOR_ADMIN_PASSWORD_HASH[_FILE]`,
+  the option table lists `--public-origin`, and the three security items about loopback binding,
+  DNS rebinding and the bearer token are replaced by sessions, CSRF/origin and own identity. The
+  start-up warning for an ignored admin hash points to `ontocurator admin`, which Task 7 adds.
+- Task 6: login and redemption bodies are bounded (`username` 256, `password`/`code`/`new_password`
+  1024 characters; longer gives 422 `VALIDATION_ERROR`), so an absurd body never reaches Argon2.
+  `logout` deletes the cookie with the same attributes it was set with.
+- Task 6: `npm --prefix frontend run typecheck` passed with the regenerated `generated.ts` unchanged
+  otherwise; no frontend code was touched. The Playwright suite was not run (expected to fail until
+  Task 9).
 
 ## Open risks
 

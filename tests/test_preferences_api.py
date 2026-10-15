@@ -1,15 +1,19 @@
-"""First-run UX: workspace preferences and session-token error codes."""
+"""Editor preferences: stored per user in the database."""
 
 from __future__ import annotations
 
-import json
+from pathlib import Path
 
 import pytest
+from auth_harness import logged_in
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from test_api import app_client as _shared_app_client
+from pg_harness import database_url_for
 
-app_client = _shared_app_client
+from ontocurator.api.app import create_app
+from ontocurator.config import AppConfig
 
+URL = "/api/v1/preferences"
 EMPTY_PREFERENCES = {
     "last_annotator_id": None,
     "mode_by_package": {},
@@ -17,255 +21,91 @@ EMPTY_PREFERENCES = {
 }
 
 
-# --------------------------------------------------------------------------- #
-# Session token errors carry a machine-readable code
-# --------------------------------------------------------------------------- #
-
-
-def test_invalid_session_token_has_code(app_client):
-    client, _ = app_client
-    bad = TestClient(client.app, headers={"Authorization": "Bearer stale-token"})
-    resp = bad.get("/api/v1/packages")
-    assert resp.status_code == 403
-    assert resp.json()["code"] == "SESSION_TOKEN_INVALID"
-
-
-def test_missing_session_token_has_code(app_client):
-    client, _ = app_client
-    resp = TestClient(client.app).get("/api/v1/packages")
-    assert resp.status_code == 403
-    assert resp.json()["code"] == "SESSION_TOKEN_MISSING"
-
-
-def test_host_rejection_is_not_a_session_error(app_client):
-    client, _ = app_client
-    resp = client.get("/api/v1/packages", headers={"Origin": "http://evil.example"})
-    assert resp.status_code == 403
-    assert resp.json().get("code") not in {
-        "SESSION_TOKEN_INVALID",
-        "SESSION_TOKEN_MISSING",
-    }
-
-
-# --------------------------------------------------------------------------- #
-# Preferences stored in the workspace (not in the browser)
-# --------------------------------------------------------------------------- #
-
-
-def test_preferences_default_to_empty(app_client):
-    client, config = app_client
-    resp = client.get("/api/v1/preferences")
-    assert resp.status_code == 200
-    assert resp.json() == EMPTY_PREFERENCES
-    assert not (config.workspace_dir / "preferences.json").exists()
-
-
-def test_preferences_round_trip_and_persist_in_workspace(app_client):
-    client, config = app_client
-    resp = client.put(
-        "/api/v1/preferences",
-        json={"last_annotator_id": "  JPL  ", "mode_by_package": {"pkg-a": "review"}},
+def _config(tmp_path: Path) -> AppConfig:
+    return AppConfig(
+        workspace_dir=tmp_path, database_url=database_url_for(tmp_path / "prefs.db")
     )
-    assert resp.status_code == 200, resp.text
-    assert resp.json() == {
-        "last_annotator_id": "JPL",
-        "mode_by_package": {"pkg-a": "review"},
-        "search_languages_by_annotator": {},
-    }
-    stored = json.loads(
-        (config.workspace_dir / "preferences.json").read_text(encoding="utf-8")
-    )
-    assert stored["last_annotator_id"] == "JPL"
 
-    # Partial updates keep the other fields and merge modes per package.
-    resp = client.put(
-        "/api/v1/preferences", json={"mode_by_package": {"pkg-b": "independent"}}
-    )
-    assert resp.json() == {
-        "last_annotator_id": "JPL",
+
+@pytest.fixture
+def app(tmp_path: Path) -> FastAPI:
+    return create_app(_config(tmp_path))
+
+
+def test_preferences_start_empty(app: FastAPI) -> None:
+    response = logged_in(app, "alice").get(URL)
+
+    assert response.status_code == 200
+    assert response.json() == EMPTY_PREFERENCES
+
+
+def test_updates_merge_per_package_and_survive(tmp_path: Path) -> None:
+    client = logged_in(create_app(_config(tmp_path)), "alice")
+
+    first = client.put(URL, json={"mode_by_package": {"pkg-a": "review"}})
+    second = client.put(URL, json={"mode_by_package": {"pkg-b": "independent"}})
+
+    assert first.status_code == second.status_code == 200, second.text
+    merged = {
+        **EMPTY_PREFERENCES,
         "mode_by_package": {"pkg-a": "review", "pkg-b": "independent"},
-        "search_languages_by_annotator": {},
     }
-    assert client.get("/api/v1/preferences").json() == resp.json()
-    # No temporary files are left behind (atomic replace).
-    leftovers = [
-        p.name
-        for p in config.workspace_dir.iterdir()
-        if p.name.startswith(".preferences")
-    ]
-    assert leftovers == []
+    assert second.json() == merged
+    # A restarted server reads the same preferences.
+    restarted = logged_in(create_app(_config(tmp_path)), "alice")
+    assert restarted.get(URL).json() == merged
 
 
-@pytest.mark.parametrize(
-    "bad",
-    ["", "   ", "x" * 65, "dr\x00x", "dr\nx", "a​b"],
-)
-def test_preferences_reject_invalid_identity(app_client, bad):
-    client, config = app_client
-    resp = client.put("/api/v1/preferences", json={"last_annotator_id": bad})
-    assert resp.status_code == 422
-    assert not (config.workspace_dir / "preferences.json").exists()
+def test_search_languages_merge_per_annotator(app: FastAPI) -> None:
+    client = logged_in(app, "alice")
 
-
-def test_preferences_reject_unknown_mode(app_client):
-    client, _ = app_client
-    resp = client.put(
-        "/api/v1/preferences", json={"mode_by_package": {"pkg": "telepathy"}}
+    first = client.put(
+        URL, json={"search_languages_by_annotator": {"ann-1": ["de", "DE"]}}
     )
-    assert resp.status_code == 422
-
-
-def test_corrupt_preferences_file_falls_back_to_defaults(app_client):
-    client, config = app_client
-    (config.workspace_dir / "preferences.json").write_text(
-        "{not json", encoding="utf-8"
+    second = client.put(URL, json={"search_languages_by_annotator": {"ann-2": []}})
+    third = client.put(
+        URL, json={"search_languages_by_annotator": {"ann-1": ["fr", " es "]}}
     )
-    resp = client.get("/api/v1/preferences")
-    assert resp.status_code == 200
-    assert resp.json() == EMPTY_PREFERENCES
 
-
-def test_preferences_require_session_token(app_client):
-    client, _ = app_client
-    resp = TestClient(client.app).get("/api/v1/preferences")
-    assert resp.status_code == 403
-
-
-# --------------------------------------------------------------------------- #
-# Search languages per annotator
-# --------------------------------------------------------------------------- #
-
-
-def test_search_languages_are_stored_per_annotator(app_client):
-    client, config = app_client
-    url = "/api/v1/preferences"
-
-    resp = client.put(
-        url, json={"search_languages_by_annotator": {"  JPL ": ["DE", "es", "de "]}}
-    )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["search_languages_by_annotator"] == {"JPL": ["de", "es"]}
-
-    # Another annotator is added; an empty list is a choice (English only).
-    resp = client.put(url, json={"search_languages_by_annotator": {"AB": []}})
-    assert resp.json()["search_languages_by_annotator"] == {
-        "JPL": ["de", "es"],
-        "AB": [],
+    assert first.status_code == 200, first.text
+    assert first.json()["search_languages_by_annotator"] == {"ann-1": ["de"]}
+    assert second.json()["search_languages_by_annotator"] == {
+        "ann-1": ["de"],
+        "ann-2": [],
     }
-
-    # One annotator's selection is replaced, the other one is kept.
-    resp = client.put(url, json={"search_languages_by_annotator": {"JPL": ["fr"]}})
-    assert resp.json()["search_languages_by_annotator"] == {"JPL": ["fr"], "AB": []}
-
-    # Updating something else leaves the selections alone.
-    resp = client.put(url, json={"last_annotator_id": "AB"})
-    assert resp.json() == {
-        "last_annotator_id": "AB",
-        "mode_by_package": {},
-        "search_languages_by_annotator": {"JPL": ["fr"], "AB": []},
+    assert third.json()["search_languages_by_annotator"] == {
+        "ann-1": ["fr", "es"],
+        "ann-2": [],
     }
-    assert client.get(url).json() == resp.json()
-    stored = json.loads(
-        (config.workspace_dir / "preferences.json").read_text(encoding="utf-8")
-    )
-    assert stored["search_languages_by_annotator"] == {"JPL": ["fr"], "AB": []}
-
-    # A second store on the same file reads the same selections (restart).
-    from ontocurator.application.preferences import PreferencesStore
-
-    again = PreferencesStore(config.workspace_dir / "preferences.json").load()
-    assert again.search_languages_by_annotator == {"JPL": ["fr"], "AB": []}
+    assert client.get(URL).json() == third.json()
 
 
-@pytest.mark.parametrize(
-    "bad",
-    [
-        {"JPL": "de"},
-        {"JPL": [1]},
-        {"JPL": ["de-DE"]},
-        {"JPL": ["x"]},
-        {"JPL": ["de"] * 33},
-        {"": ["de"]},
-        {"dr\nx": ["de"]},
-    ],
-)
-def test_search_languages_reject_invalid_selections(app_client, bad):
-    client, config = app_client
-    resp = client.put(
-        "/api/v1/preferences", json={"search_languages_by_annotator": bad}
-    )
-    assert resp.status_code == 422
-    assert not (config.workspace_dir / "preferences.json").exists()
+def test_each_user_has_their_own_preferences(app: FastAPI) -> None:
+    alice = logged_in(app, "alice")
+    bob = logged_in(app, "bob")
+
+    alice.put(URL, json={"mode_by_package": {"pkg-a": "review"}})
+    bob.put(URL, json={"mode_by_package": {"pkg-a": "assisted"}})
+
+    assert alice.get(URL).json()["mode_by_package"] == {"pkg-a": "review"}
+    assert bob.get(URL).json()["mode_by_package"] == {"pkg-a": "assisted"}
 
 
-def test_unreadable_search_language_entries_are_ignored(app_client):
-    client, config = app_client
-    (config.workspace_dir / "preferences.json").write_text(
-        json.dumps(
-            {
-                "last_annotator_id": "JPL",
-                "search_languages_by_annotator": {
-                    "JPL": ["de"],
-                    "AB": "everything",
-                    "CD": [5],
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-    assert client.get("/api/v1/preferences").json() == {
-        "last_annotator_id": "JPL",
-        "mode_by_package": {},
-        "search_languages_by_annotator": {"JPL": ["de"]},
-    }
+def test_invalid_values_are_refused(app: FastAPI) -> None:
+    client = logged_in(app, "alice")
 
-
-def test_a_key_of_an_earlier_version_is_ignored_and_dropped_on_the_next_save(
-    app_client,
-):
-    """The tree pin is gone: a file that still has it loads, and loses it."""
-    from ontocurator.application.preferences import PreferencesStore
-
-    client, config = app_client
-    path = config.workspace_dir / "preferences.json"
-    old = {
-        "last_annotator_id": "JPL",
-        "mode_by_package": {"pkg-1": "review"},
-        "tree_pinned_by_annotator": {"JPL": False, "AB": True},
-        "search_languages_by_annotator": {"JPL": ["de"]},
-    }
-    path.write_text(json.dumps(old), encoding="utf-8")
-    kept = {
-        "last_annotator_id": "JPL",
-        "mode_by_package": {"pkg-1": "review"},
-        "search_languages_by_annotator": {"JPL": ["de"]},
-    }
-
-    # Loading: no error, everything else is there, the key is not answered.
-    resp = client.get("/api/v1/preferences")
-    assert resp.status_code == 200, resp.text
-    assert resp.json() == kept
-    assert PreferencesStore(path).load().model_dump() == kept
-    # Reading alone does not rewrite the file.
-    assert json.loads(path.read_text(encoding="utf-8")) == old
-
-    # The next save, of something else, writes the file without the key.
-    resp = client.put("/api/v1/preferences", json={"last_annotator_id": "AB"})
-    assert resp.status_code == 200, resp.text
-    assert resp.json() == {**kept, "last_annotator_id": "AB"}
-    stored = json.loads(path.read_text(encoding="utf-8"))
-    assert "tree_pinned_by_annotator" not in stored
-    assert stored == {**kept, "last_annotator_id": "AB"}
-
-
-def test_the_tree_pin_is_no_longer_a_preference(app_client):
-    """An update that still sends it is refused like any unknown field."""
-    client, config = app_client
-
-    resp = client.put(
-        "/api/v1/preferences", json={"tree_pinned_by_annotator": {"JPL": True}}
+    unknown_mode = client.put(URL, json={"mode_by_package": {"pkg": "telepathy"}})
+    bad_language = client.put(
+        URL, json={"search_languages_by_annotator": {"ann-1": ["de-DE"]}}
     )
 
-    assert resp.status_code == 422
-    assert not (config.workspace_dir / "preferences.json").exists()
-    assert client.get("/api/v1/preferences").json() == EMPTY_PREFERENCES
+    assert unknown_mode.status_code == 422
+    assert bad_language.status_code == 422
+    assert client.get(URL).json() == EMPTY_PREFERENCES
+
+
+def test_preferences_need_a_session(app: FastAPI) -> None:
+    response = TestClient(app).get(URL)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "NOT_AUTHENTICATED"

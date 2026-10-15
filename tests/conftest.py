@@ -4,14 +4,6 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def trust_in_process_test_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Allow Starlette's TestClient transport (Host: testserver) in tests only."""
-    from ontocurator.api import security
-
-    monkeypatch.setattr(security, "ALLOW_TEST_CLIENT_HOST", True)
-
-
-@pytest.fixture(autouse=True)
 def database_per_workspace(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
     """Every app and CLI run without an explicit URL gets one database per workspace.
 

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from auth_harness import AutoLoginClient
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
 
@@ -103,10 +104,9 @@ def _client(tmp_path: Path, distribution: DistributionSettings | None = None):
     config = AppConfig(
         workspace_dir=tmp_path,
         database_url=database_url_for(tmp_path / "editor.db"),
-        session_token="tok",
         distribution=distribution or DistributionSettings(),
     )
-    client = TestClient(create_app(config), headers={"Authorization": "Bearer tok"})
+    client = AutoLoginClient(create_app(config))
     resp = client.post(
         "/api/v1/packages",
         files={"file": ("demo.zip", DEMO_PACKAGE.read_bytes(), "application/zip")},

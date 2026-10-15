@@ -1,28 +1,16 @@
-"""Small per-workspace user preferences (last identity, mode per package).
+"""Editor preferences of a user (working mode per package, search languages).
 
-Stored as ``<workspace>/preferences.json`` in the data folder rather than in
-the browser, so a freshly unpacked copy on a shared computer never inherits
-the previous person's identity. Kept out of the database schema on purpose: it
-is convenience state, not curation data, and needs no schema migration.
+The models and their rules live here; ``auth.preferences`` stores them per
+user in the database.
 """
 
 from __future__ import annotations
 
-import contextlib
-import json
-import logging
-import os
-import secrets
-import threading
 import unicodedata
-from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-logger = logging.getLogger(__name__)
-
-PREFERENCES_FILENAME = "preferences.json"
 MAX_ANNOTATOR_ID_LENGTH = 64
 
 MAX_SEARCH_LANGUAGES = 32
@@ -46,7 +34,7 @@ def _check_annotator(value: str | None) -> str | None:
     return None if value is None else normalize_annotator_id(value)
 
 
-def _clean_languages(value: object) -> list[str] | None:
+def clean_languages(value: object) -> list[str] | None:
     """A stored language selection: short lower-case codes, each once."""
     if not isinstance(value, list) or len(value) > MAX_SEARCH_LANGUAGES:
         return None
@@ -69,7 +57,7 @@ def _check_search_languages(
         return None
     checked: dict[str, list[str]] = {}
     for annotator_id, languages in value.items():
-        codes = _clean_languages(languages)
+        codes = clean_languages(languages)
         if codes is None:
             raise ValueError("languages must be a short list of language codes")
         checked[normalize_annotator_id(annotator_id)] = codes
@@ -77,7 +65,7 @@ def _check_search_languages(
 
 
 class Preferences(BaseModel):
-    """Workspace preferences returned by ``GET /api/v1/preferences``."""
+    """A user's preferences returned by ``GET /api/v1/preferences``."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -105,81 +93,3 @@ class PreferencesUpdate(BaseModel):
     validate_search_languages = field_validator("search_languages_by_annotator")(
         _check_search_languages
     )
-
-
-class PreferencesStore:
-    """Read/write ``preferences.json`` atomically (thread-safe in-process)."""
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self._lock = threading.Lock()
-
-    def _read(self) -> Preferences:
-        try:
-            raw = self.path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            return Preferences()
-        except OSError as exc:
-            logger.warning("Cannot read %s: %s", self.path, exc)
-            return Preferences()
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            logger.warning("Ignoring unreadable preferences file %s", self.path)
-            return Preferences()
-        if not isinstance(data, dict):
-            return Preferences()
-        # Only the keys known today are taken over. Whatever else an earlier
-        # version left in the file is ignored, and gone with the next write.
-        prefs = Preferences()
-        with contextlib.suppress(ValidationError):
-            prefs.last_annotator_id = Preferences.model_validate(
-                {"last_annotator_id": data.get("last_annotator_id")}
-            ).last_annotator_id
-        modes = data.get("mode_by_package")
-        if isinstance(modes, dict):
-            for package_id, mode in modes.items():
-                if isinstance(package_id, str) and mode in (
-                    "independent",
-                    "review",
-                    "assisted",
-                ):
-                    prefs.mode_by_package[package_id] = mode
-        selections = data.get("search_languages_by_annotator")
-        if isinstance(selections, dict):
-            for annotator_id, languages in selections.items():
-                codes = _clean_languages(languages)
-                if isinstance(annotator_id, str) and codes is not None:
-                    prefs.search_languages_by_annotator[annotator_id] = codes
-        return prefs
-
-    def load(self) -> Preferences:
-        with self._lock:
-            return self._read()
-
-    def update(self, change: PreferencesUpdate) -> Preferences:
-        with self._lock:
-            prefs = self._read()
-            if "last_annotator_id" in change.model_fields_set:
-                prefs.last_annotator_id = change.last_annotator_id
-            if change.mode_by_package:
-                prefs.mode_by_package.update(change.mode_by_package)
-            if change.search_languages_by_annotator:
-                prefs.search_languages_by_annotator.update(
-                    change.search_languages_by_annotator
-                )
-            self._write(prefs)
-            return prefs
-
-    def _write(self, prefs: Preferences) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_name(f".preferences.{secrets.token_hex(4)}.tmp")
-        try:
-            tmp.write_text(
-                json.dumps(prefs.model_dump(), indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            os.replace(tmp, self.path)
-        finally:
-            if tmp.exists():
-                tmp.unlink()

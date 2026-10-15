@@ -6,7 +6,7 @@ import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from fastapi.testclient import TestClient
+from auth_harness import AutoLoginClient
 from layered_fixtures import make_layered_package
 from pg_harness import database_url_for
 
@@ -24,15 +24,10 @@ def client_at(path, ontology_paths=()):
             workspace_dir=path,
             database_url=database_url_for(path / "editor.db"),
             ontology_paths=list(ontology_paths),
-            session_token="review-test",
         )
     )
     try:
-        with TestClient(
-            app,
-            headers={"Authorization": "Bearer review-test"},
-            raise_server_exceptions=False,
-        ) as client:
+        with AutoLoginClient(app, raise_server_exceptions=False) as client:
             yield client
     finally:
         app.state.repo.db.close()

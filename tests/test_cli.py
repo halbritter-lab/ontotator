@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
+from auth_harness import AutoLoginClient
 from typer.testing import CliRunner
 
 from ontocurator.cli import app
@@ -39,6 +39,7 @@ def test_help_lists_the_commands() -> None:
         "--host",
         "--port",
         "--web-dir",
+        "--public-origin",
         "--verbose",
     ):
         assert option in serve_help.output
@@ -60,6 +61,24 @@ def test_serve_refuses_a_missing_ontology(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "Ontology file not found" in result.output
+    run.assert_not_called()
+
+
+def test_serve_refuses_a_public_origin_with_a_path(tmp_path: Path) -> None:
+    with patch("ontocurator.cli.uvicorn.run") as run:
+        result = runner.invoke(
+            app,
+            [
+                "serve",
+                "--data-dir",
+                str(tmp_path / "data"),
+                "--public-origin",
+                "https://editor.example/app",
+            ],
+        )
+
+    assert result.exit_code == 1
+    assert "public origin" in result.output
     run.assert_not_called()
 
 
@@ -90,10 +109,9 @@ def test_serve_starts_the_app_on_the_given_address(tmp_path: Path) -> None:
     config = api_app.state.config
     assert config.workspace_dir == data_dir.resolve()
     assert config.port == 8123
-    assert f"http://127.0.0.1:8123/#token={config.session_token}" in result.output
+    assert "http://127.0.0.1:8123/" in result.output
+    assert "#token=" not in result.output
 
-    client = TestClient(
-        api_app, headers={"Authorization": f"Bearer {config.session_token}"}
-    )
+    client = AutoLoginClient(api_app)
     listed = client.get("/api/v1/ontologies").json()
     assert [item["ontology_id"] for item in listed] == ["hp"]

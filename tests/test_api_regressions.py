@@ -3,7 +3,7 @@ import json
 import zipfile
 
 import pytest
-from fastapi.testclient import TestClient
+from auth_harness import AutoLoginClient
 from pg_harness import insert_proposal
 from test_api import _create_sample_package_bytes
 from test_api import app_client as _shared_app_client
@@ -18,9 +18,13 @@ app_client = _shared_app_client
     ["http://localhost.attacker.example", "http://127.0.0.1:9999", "null"],
 )
 def test_origin_must_match_bound_host_and_port(app_client, origin):
+    # Reads are not checked (the cookie is SameSite=Lax); a write from another
+    # origin is refused even with the session cookie and the CSRF token.
     client, _ = app_client
-    response = client.get("/api/v1/packages", headers={"Origin": origin})
+    response = client.put("/api/v1/preferences", json={}, headers={"Origin": origin})
     assert response.status_code == 403
+    assert response.json()["code"] == "CROSS_SITE_REQUEST"
+    assert client.put("/api/v1/preferences", json={}).status_code == 200
 
 
 def test_same_origin_is_allowed(app_client):
@@ -65,11 +69,7 @@ def _open(client, config, mode="independent", targets=None, scenario=None):
 def test_invalid_command_body_returns_validation_error_not_server_error(app_client):
     client, config = app_client
     opened = _open(client, config)
-    client = TestClient(
-        client.app,
-        headers={"Authorization": "Bearer secret-session-token"},
-        raise_server_exceptions=False,
-    )
+    client = AutoLoginClient(client.app, raise_server_exceptions=False)
     response = client.post(
         f"/api/v1/workspaces/{opened['workspace_id']}/submit",
         json={

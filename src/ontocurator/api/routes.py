@@ -15,14 +15,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from ontocurator.api.identity import (
+    PrincipalDep,
+    own_annotator,
+    own_key,
+    principal_of,
+    require_system_admin,
+)
 from ontocurator.application.editing import EditorService
 from ontocurator.application.exports import ExportService
-from ontocurator.application.preferences import (
-    PREFERENCES_FILENAME,
-    Preferences,
-    PreferencesStore,
-    PreferencesUpdate,
-)
+from ontocurator.application.preferences import Preferences, PreferencesUpdate
 from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.uploads import (
@@ -35,6 +37,7 @@ from ontocurator.application.workspaces import (
     WorkspaceService,
     WorkspaceView,
 )
+from ontocurator.auth.preferences import UserPreferencesStore
 from ontocurator.distribution_settings import (
     DistributionSettings,
     EffectiveSettings,
@@ -89,7 +92,8 @@ class ReviewInputsRequest(BaseModel):
 
     package_id: str
     document_id: str
-    annotator_id: str
+    # Only the logged-in user's own pseudonym; omitted means the same.
+    annotator_id: str | None = None
     mode: Literal["review"]
 
 
@@ -100,7 +104,8 @@ class OpenWorkspaceRequest(BaseModel):
 
     package_id: str
     document_id: str
-    annotator_id: str
+    # Only the logged-in user's own pseudonym; omitted means the same.
+    annotator_id: str | None = None
     mode: WorkspaceMode = "independent"
     targets: ReviewTargetSet | None = None
     review_round_target_set_id: str | None = None
@@ -201,14 +206,8 @@ ExportSvcDep = Annotated[ExportService, Depends(get_export_service)]
 # --- Routes ------------------------------------------------------------------- #
 
 
-def _preferences_store(request: Request) -> PreferencesStore:
-    store = getattr(request.app.state, "preferences", None)
-    if store is None:
-        config = getattr(request.app.state, "config", None)
-        base = config.workspace_dir if config else Path("./workspace")
-        store = PreferencesStore(base / PREFERENCES_FILENAME)
-        request.app.state.preferences = store
-    return cast(PreferencesStore, store)
+def _preferences_store(request: Request) -> UserPreferencesStore:
+    return cast(UserPreferencesStore, request.app.state.preferences)
 
 
 def _distribution(request: Request) -> DistributionSettings:
@@ -233,15 +232,17 @@ def get_settings(request: Request) -> EffectiveSettings:
 
 
 @router.get("/preferences")
-def get_preferences(request: Request) -> Preferences:
-    """Workspace-level preferences (last identity, working mode per package)."""
-    return _preferences_store(request).load()
+def get_preferences(request: Request, principal: PrincipalDep) -> Preferences:
+    """The logged-in user's preferences (working mode per package, ...)."""
+    return _preferences_store(request).load(principal.user_id)
 
 
 @router.put("/preferences")
-def update_preferences(change: PreferencesUpdate, request: Request) -> Preferences:
+def update_preferences(
+    change: PreferencesUpdate, request: Request, principal: PrincipalDep
+) -> Preferences:
     """Update preferences; omitted fields are kept, modes merge per package."""
-    return _preferences_store(request).update(change)
+    return _preferences_store(request).update(principal.user_id, change)
 
 
 @router.post("/packages")
@@ -249,11 +250,13 @@ def upload_package(
     file: UploadFile,
     repo: RepoDep,
     ontology: OntologyDep,
+    principal: PrincipalDep,
 ) -> dict[str, str | dict[str, object]]:
-    """Upload and atomically import a work package archive.
+    """Upload and atomically import a work package archive (system admins).
 
     Runs in the thread pool (plain ``def``); the body is copied with a size cap.
     """
+    require_system_admin(principal)
     manifest = PackageImportService(repo, ontology).import_upload(file.file)
     return {"package_id": manifest.package_id, "manifest": manifest.model_dump()}
 
@@ -269,14 +272,18 @@ def list_package_documents(
     package_id: str,
     request: Request,
     ws_svc: WorkspaceSvcDep,
+    principal: PrincipalDep,
     annotator_id: str | None = None,
     mode: WorkspaceMode | None = None,
 ) -> list[DocumentSummary]:
     """List documents showing metadata only, without proposal counts.
 
-    In review mode (if allowed) each document says whether it has proposals, so
-    review navigation can skip documents there is nothing to review in.
+    The status is the logged-in user's; a system admin may ask for another
+    annotator's. In review mode (if allowed) each document says whether it
+    has proposals, so review navigation can skip documents there is nothing
+    to review in.
     """
+    annotator_id = own_annotator(principal, annotator_id, may_read_others=True)
     reveal = (
         mode == "review"
         and "review" in _distribution(request).effective_allowed_modes()
@@ -318,8 +325,10 @@ def get_review_inputs(
     req: ReviewInputsRequest,
     request: Request,
     ws_svc: WorkspaceSvcDep,
+    principal: PrincipalDep,
 ) -> list[AnnotationSnapshot]:
     """Get selectable proposal versions for setting up a review round."""
+    own_annotator(principal, req.annotator_id)
     require_mode_allowed(request, req.mode)
     if req.mode != "review":
         raise DomainError(
@@ -334,8 +343,10 @@ def open_workspace(
     req: OpenWorkspaceRequest,
     request: Request,
     ws_svc: WorkspaceSvcDep,
+    principal: PrincipalDep,
 ) -> OpenWorkspaceResponse:
-    """Open or initialize a workspace view."""
+    """Open or initialize a workspace view of the logged-in user."""
+    annotator_id = own_annotator(principal, req.annotator_id)
     require_mode_allowed(request, req.mode)
     targets = req.targets
     if req.review_round_target_set_id is not None and (
@@ -355,7 +366,7 @@ def open_workspace(
     key = WorkspaceKey(
         package_id=req.package_id,
         document_id=req.document_id,
-        annotator_id=req.annotator_id,
+        annotator_id=annotator_id,
         mode=req.mode,
         target_set_id=target_set_id,
     )
@@ -372,9 +383,10 @@ def apply_command(
     envelope: MutationEnvelope,
     request: Request,
     edit_svc: EditorSvcDep,
+    principal: PrincipalDep,
 ) -> Draft:
     """Execute an edit command against a workspace draft."""
-    key = decode_workspace_id(workspace_id)
+    key = own_key(principal, decode_workspace_id(workspace_id))
     require_mode_allowed(request, key.mode)
     return edit_svc.apply(key, envelope)
 
@@ -385,9 +397,10 @@ def record_decision(
     envelope: MutationEnvelope,
     request: Request,
     rev_svc: ReviewSvcDep,
+    principal: PrincipalDep,
 ) -> Draft:
     """Record a reviewer decision against a targeted proposal."""
-    key = decode_workspace_id(workspace_id)
+    key = own_key(principal, decode_workspace_id(workspace_id))
     require_mode_allowed(request, key.mode)
     return rev_svc.decide(key, envelope)
 
@@ -398,9 +411,10 @@ def submit_workspace(
     envelope: MutationEnvelope,
     request: Request,
     sub_svc: SubmissionSvcDep,
+    principal: PrincipalDep,
 ) -> Submission:
     """Commit workspace submission upon verification."""
-    key = decode_workspace_id(workspace_id)
+    key = own_key(principal, decode_workspace_id(workspace_id))
     require_mode_allowed(request, key.mode)
     return sub_svc.submit(key, envelope)
 
@@ -410,9 +424,10 @@ def read_submission(
     workspace_id: str,
     submission_id: str,
     sub_svc: SubmissionSvcDep,
+    principal: PrincipalDep,
 ) -> Submission:
     """Read back historical submission."""
-    key = decode_workspace_id(workspace_id)
+    key = own_key(principal, decode_workspace_id(workspace_id))
     return sub_svc.read(key, submission_id)
 
 
@@ -428,8 +443,9 @@ def layer_ontology(
 
     Checks the working mode, the document, that the layer exists and is
     accessible in the workspace's scope, and that an annotation already in the
-    draft belongs to that layer.
+    draft belongs to that layer. The workspace must be the logged-in user's.
     """
+    own_key(principal_of(request), workspace_key)
     require_mode_allowed(request, workspace_key.mode)
     ws_svc.get_document(workspace_key.package_id, workspace_key.document_id)
     profile = repo.get_task_profile(workspace_key.package_id)
@@ -539,12 +555,13 @@ def _zip_response(pkg: ValidatedPackage, filename: str) -> Response:
 def export_workspace(
     workspace_id: str,
     exp_svc: ExportSvcDep,
+    principal: PrincipalDep,
 ) -> Response:
     """Export scoped workspace package as downloadable ZIP.
 
     Filename: ``<package_id>__<annotator_id>__<document_id>__<YYYYMMDD-HHMMSS>.zip``.
     """
-    key = decode_workspace_id(workspace_id)
+    key = own_key(principal, decode_workspace_id(workspace_id))
     pkg = exp_svc.for_workspace(key)
     return _zip_response(
         pkg, _export_filename(key.package_id, key.annotator_id, key.document_id)
@@ -558,17 +575,21 @@ def export_workspace(
 )
 def export_package_for_annotator(
     package_id: str,
-    annotator_id: str,
     exp_svc: ExportSvcDep,
+    principal: PrincipalDep,
+    annotator_id: str | None = None,
     mode: WorkspaceMode | None = None,
 ) -> Response:
     """Export all work of one annotator on a package as one v2 work package.
 
+    The annotator is the logged-in user (``annotator_id`` omitted or their own
+    pseudonym); a system admin may export another annotator's work.
     Includes every document of the package and all of the annotator's
     submissions, submitted annotations and search events in ``mode`` (all
     modes if omitted). Filename:
     ``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.
     """
+    annotator_id = own_annotator(principal, annotator_id, may_read_others=True)
     pkg = exp_svc.for_package(package_id, annotator_id, mode)
     return _zip_response(pkg, _export_filename(package_id, annotator_id))
 
@@ -678,14 +699,16 @@ def upload_ontology(
     file: UploadFile,
     request: Request,
     ontology: OntologyDep,
+    principal: PrincipalDep,
 ) -> OntologyInfo | TranslationUploadInfo:
     """Upload an ontology (``.json``) or a translation file (``.tsv``).
 
     An ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` in
     ``<workspace>/ontologies``, where it is registered again after a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is
     stored under its own name, replaces a file of that name, and the ontology
-    it belongs to is reloaded.
+    it belongs to is reloaded. System admins only.
     """
+    require_system_admin(principal)
     config = getattr(request.app.state, "config", None)
     directory = (
         (config.workspace_dir / "ontologies")

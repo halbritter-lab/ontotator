@@ -5,7 +5,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from fastapi.testclient import TestClient
+from auth_harness import AutoLoginClient
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
@@ -23,8 +23,8 @@ def test_demo_fixture_is_current_format() -> None:
 def test_demo_fixture_imports_via_api_without_installed_ontology(
     tmp_path: Path,
 ) -> None:
-    app = create_app(AppConfig(workspace_dir=tmp_path, session_token="t"))
-    client = TestClient(app, headers={"Authorization": "Bearer t"})
+    app = create_app(AppConfig(workspace_dir=tmp_path))
+    client = AutoLoginClient(app)
     resp = client.post(
         "/api/v1/packages",
         files={"file": ("demo_package.zip", io.BytesIO(DEMO.read_bytes()))},

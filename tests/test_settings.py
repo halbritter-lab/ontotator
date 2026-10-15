@@ -141,3 +141,34 @@ def test_a_malformed_url_is_refused_without_echoing_it() -> None:
     assert "secret-pw" not in str(info.value)
     assert info.value.__cause__ is None
     assert info.value.__suppress_context__
+
+
+@pytest.mark.parametrize(
+    ("value", "origin"),
+    [
+        ("https://editor.example", "https://editor.example"),
+        ("HTTPS://Editor.Example:443/", "https://editor.example"),
+        ("http://localhost:8000", "http://localhost:8000"),
+        ("http://[::1]:80", "http://[::1]"),
+    ],
+)
+def test_a_public_origin_is_made_canonical(value: str, origin: str) -> None:
+    assert settings.canonical_origin(value) == origin
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "editor.example",
+        "ftp://editor.example",
+        "https://",
+        "https://editor.example/app",
+        "https://editor.example?x=1",
+        "https://editor.example#top",
+        "https://user:pw@editor.example",
+        "https://editor.example:99999",
+    ],
+)
+def test_a_public_origin_is_only_scheme_host_and_port(value: str) -> None:
+    with pytest.raises(SettingsError, match="public origin"):
+        settings.canonical_origin(value)

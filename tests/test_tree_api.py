@@ -4,7 +4,7 @@ import hashlib
 import io
 
 import pytest
-from fastapi.testclient import TestClient
+from auth_harness import AutoLoginClient
 from layered_fixtures import HP_DIGEST, make_layered_package
 from pg_harness import database_url_for
 from sqlalchemy.exc import OperationalError
@@ -156,11 +156,8 @@ def _walk_on(tmp_path, path, term_id):
         workspace_dir=tmp_path,
         database_url=database_url_for(tmp_path / "graph.db"),
         ontology_paths=[path],
-        session_token="secret-session-token",
     )
-    client = TestClient(
-        create_app(config), headers={"Authorization": "Bearer secret-session-token"}
-    )
+    client = AutoLoginClient(create_app(config))
     _import(client, package)
     ws_id, ws_key = _open(client, "pkg-graph")
     resp = _command(
@@ -559,12 +556,9 @@ def test_tree_requests_are_refused_in_a_mode_the_installation_does_not_allow(
         workspace_dir=tmp_path,
         database_url=database_url_for(tmp_path / "blinded.db"),
         ontology_paths=[FIXTURE_PATH, FIXTURE_PATH.parent / "mondo.json"],
-        session_token="secret-session-token",
         distribution=DistributionSettings(allowed_modes=["independent"]),
     )
-    client = TestClient(
-        create_app(config), headers={"Authorization": "Bearer secret-session-token"}
-    )
+    client = AutoLoginClient(create_app(config))
     _import(client, make_layered_package("assisted"))
     _, ws_key = _open(client, "pkg-scenario-b", mode="independent")
     fields = {
@@ -969,11 +963,8 @@ def test_details_show_the_names_of_translation_files_that_are_loaded(tmp_path):
         database_url=database_url_for(tmp_path / "translated.db"),
         ontology_paths=[FIXTURE_PATH, fixtures / "mondo.json"],
         translation_dirs=[fixtures],
-        session_token="secret-session-token",
     )
-    client = TestClient(
-        create_app(config), headers={"Authorization": "Bearer secret-session-token"}
-    )
+    client = AutoLoginClient(create_app(config))
     _import(client, make_layered_package("single"))
     _, ws_key = _open(client, "pkg-scenario-a")
 

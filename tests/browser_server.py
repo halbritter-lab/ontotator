@@ -186,7 +186,6 @@ if __name__ == "__main__":
             workspace_dir=root,
             database_url=database_url_for(root / "editor.db"),
             ontology_paths=[ONTOLOGY, MONDO_ONTOLOGY],
-            session_token="browser-test-token",
             port=PORT,
             web_dir=ROOT / "frontend/dist",
         )

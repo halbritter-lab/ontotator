@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from auth_harness import AutoLoginClient
 from fastapi.testclient import TestClient
 from layered_fixtures import make_layered_package
 from pg_harness import database_url_for
@@ -41,11 +42,10 @@ def _client(tmp_path: Path, **config: Any) -> TestClient:
         AppConfig(
             workspace_dir=workspace,
             database_url=database_url_for(workspace / "editor.db"),
-            session_token=TOKEN,
             **config,
         )
     )
-    return TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"})
+    return AutoLoginClient(app)
 
 
 def _listed(client: TestClient) -> dict[str, Any]:

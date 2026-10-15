@@ -80,11 +80,15 @@ ontocurator serve --data-dir ./data --ontology ./hp.json --ontology ./mondo.json
 ```
 
 The server loads the ontologies given via `--ontology` and those uploaded
-earlier (stored in `<data-dir>/ontologies/`), generates a fresh session token
-and prints the link `http://<host>:<port>/#token=<token>` to open in the
-browser. Stop it with `Ctrl+C`. Passwords come from
-`ONTOCURATOR_MIGRATION_DATABASE_PASSWORD` and `ONTOCURATOR_DATABASE_PASSWORD`
-(or their `_FILE` variants).
+earlier (stored in `<data-dir>/ontologies/`) and prints the address
+`http://<host>:<port>/` to open in the browser, where people log in with the
+username and password an administrator gave them. Stop it with `Ctrl+C`.
+Passwords come from `ONTOCURATOR_MIGRATION_DATABASE_PASSWORD` and
+`ONTOCURATOR_DATABASE_PASSWORD` (or their `_FILE` variants).
+
+On the first start the administrator `admin` is created from the Argon2id hash
+in `ONTOCURATOR_ADMIN_PASSWORD_HASH` (or the file named by
+`ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE`); later starts ignore it.
 
 ### CLI Options
 
@@ -99,6 +103,7 @@ browser. Stop it with `Ctrl+C`. Passwords come from
 | `--host` | | `127.0.0.1` (env `ONTOCURATOR_HOST`) | Address to bind |
 | `--port` | | `8000` (env `ONTOCURATOR_PORT`) | Port to bind |
 | `--web-dir` | | `None` | Custom directory containing built web assets (defaults to embedded) |
+| `--public-origin` | | env `ONTOCURATOR_PUBLIC_ORIGIN` | The address people open (e.g. `https://editor.example.org`); writes must come from it, and with `https` the session cookie is `Secure` |
 | `--verbose` | `-v` | `false` | Log every HTTP request |
 
 Other commands: `ontocurator db upgrade` (schema migrations, as the schema
@@ -118,9 +123,9 @@ listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Security & Offline Guarantees
 
-1. **Loopback-Only Binding**: Service rejects non-loopback addresses (`0.0.0.0`, external IPs) with exit code 1.
-2. **DNS Rebinding Protection**: Host header validation rejects any request not directed at `127.0.0.1`, `localhost`, or `[::1]`.
-3. **Session Authentication**: All API endpoints require `Authorization: Bearer <token>`, preventing unauthorized local processes from tampering with the workspace.
+1. **Accounts and Sessions**: Every API request needs a login session, held in the HttpOnly, `SameSite=Lax` cookie `ontocurator_session` (`Secure` behind an `https` public origin). The server stores only the token's SHA-256.
+2. **CSRF and Origin Checks**: Every write carries the session's CSRF token in `X-CSRF-Token` and must not come from another site; login and code redemption accept only requests the browser marks as coming from this site.
+3. **Own Identity Only**: Everyone annotates under their own pseudonym; a workspace or annotator ID of someone else is refused (`IDENTITY_MISMATCH`). Package and ontology uploads need a system administrator.
 4. **Zero Runtime Network Calls**: Search operates entirely against the pinned local ontology index. No external dense models, cloud APIs, or telemetry are contacted.
 5. **Streaming ZIP Guard**: Package import enforces 64 MB compressed limit, 256 MB uncompressed limit, path traversal sanitization, and atomic tempfile replacement.
 
