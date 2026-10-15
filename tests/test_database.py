@@ -211,3 +211,13 @@ def test_a_password_with_url_characters_survives_the_round_trip(
         db.close()
         with admin.connect() as conn:
             conn.execute(text(f"DROP ROLE {role}"))
+
+
+def test_a_failed_statement_does_not_show_its_parameters(tmp_path: Path) -> None:
+    db = database_for(tmp_path / "params.db")
+
+    with pytest.raises(DBAPIError) as caught, db.transaction() as conn:
+        conn.execute(text("SELECT 1 / 0 WHERE :h <> ''"), {"h": "$argon2id$secret"})
+
+    assert "secret" not in str(caught.value)
+    db.close()

@@ -113,6 +113,16 @@ file (`chmod 600`, at most 8 KiB) with the fields `username`, `password_hash`
 still running and ends all sessions of that admin. No plaintext password is
 written to disk.
 
+`hash-password` prompts without echo only on a real console. Git Bash (mintty)
+on Windows is not one: the password would be read as visible input there. Run
+`winpty ontocurator admin hash-password`, use PowerShell or `cmd`, or pipe the
+password in (`… | ontocurator admin hash-password` reads one line).
+
+Every running server holds a PostgreSQL session-level advisory lock (the
+runtime lease), which the recovery checks. Connect the app to PostgreSQL
+directly or through a session-mode pooler, never a transaction-mode pooler
+(e.g. PgBouncer `pool_mode = transaction`), which would break that lock.
+
 ### CLI Options
 
 `ontocurator serve`:

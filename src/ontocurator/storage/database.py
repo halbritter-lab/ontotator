@@ -79,6 +79,9 @@ class Database:
             pool_size=pool_size,
             max_overflow=max_overflow,
             pool_pre_ping=True,
+            # Never repeat statement parameters (password hashes, codes) in
+            # errors and logs.
+            hide_parameters=True,
         )
         self.data_dir = Path(data_dir)
         self.blobs = BlobStore(self.data_dir / "blobs")

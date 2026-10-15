@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -43,25 +44,44 @@ from ontocurator.storage.schema import current_revision, head_revision
 logger = logging.getLogger(__name__)
 
 
+async def _keep_lease(lease: RuntimeLease) -> None:
+    """Check the lease every ``check_interval`` seconds; take it again if lost."""
+    while True:
+        await asyncio.sleep(lease.check_interval)
+        try:
+            await run_in_threadpool(lease.check)
+        except Exception:
+            logger.error(
+                "The runtime lease could not be taken again; retrying.", exc_info=True
+            )
+
+
 @contextlib.asynccontextmanager
 async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
     """Hold the runtime lease while the server runs (recovery needs it alone).
 
     The app is fully set up by ``create_app``; only the lease belongs to the
-    server's lifetime. Acquiring waits while an offline recovery runs.
+    server's lifetime. Acquiring waits while an offline recovery runs. A
+    background task checks the lease connection and takes the lease again if
+    its session was lost.
     """
     lease: RuntimeLease | None = getattr(app.state, "runtime_lease", None)
     if lease is None:
         yield
         return
     await run_in_threadpool(lease.acquire)
+    keeper = asyncio.create_task(_keep_lease(lease))
     try:
         yield
     finally:
+        keeper.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await keeper
         try:
             await run_in_threadpool(lease.release)
         except Exception:
-            # Closing the engine ends the session, and with it the lease.
+            # The lease connection was invalidated, not pooled, so its
+            # session (and the lock) ended anyway.
             logger.warning("Could not release the runtime lease.", exc_info=True)
 
 

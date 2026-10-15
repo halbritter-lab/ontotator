@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import json
 import os
 import re
@@ -196,6 +197,106 @@ def test_recovery_waits_for_the_service_to_stop(tmp_path: Path) -> None:
     assert principal.username == "admin"
     labels = column_values(AccountService(db), "audit_events", "actor_label")
     assert "recovery:jdoe" in labels
+    db.close()
+
+
+def _fields(password_hash: str, **changes: object) -> dict[str, object]:
+    fields: dict[str, object] = {
+        "username": "admin",
+        "password_hash": password_hash,
+        "operator": "jdoe",
+        "reason": "lost the admin password",
+    }
+    fields.update(changes)
+    return {key: value for key, value in fields.items() if value is not None}
+
+
+_INPUTS = {
+    "not-json": (lambda h: b"{" + h.encode(), "RECOVERY_INPUT_INVALID"),
+    "not-utf8": (lambda h: bytes([0xFF, 0xFE]) + h.encode(), "RECOVERY_INPUT_INVALID"),
+    "a-list": (lambda h: json.dumps([h]).encode(), "RECOVERY_INPUT_INVALID"),
+    "missing-reason": (
+        lambda h: json.dumps(_fields(h, reason=None)).encode(),
+        "RECOVERY_INPUT_INVALID",
+    ),
+    "extra-field": (
+        lambda h: json.dumps(_fields(h, password=NEW_PASSWORD)).encode(),
+        "RECOVERY_INPUT_INVALID",
+    ),
+    "not-text": (
+        lambda h: json.dumps(_fields(h, operator=7)).encode(),
+        "RECOVERY_INPUT_INVALID",
+    ),
+    "too-large": (
+        lambda h: json.dumps(_fields(h, reason="x" * 8192)).encode(),
+        "RECOVERY_INPUT_TOO_LARGE",
+    ),
+    "not-an-admin": (
+        lambda h: json.dumps(_fields(h, username="alice")).encode(),
+        "NOT_AN_ACTIVE_ADMIN",
+    ),
+    "weak-hash": (
+        lambda h: json.dumps(_fields(h.replace("m=19456", "m=1024"))).encode(),
+        "PASSWORD_RULES",
+    ),
+    "with-bom": (lambda h: codecs.BOM_UTF8 + json.dumps(_fields(h)).encode(), None),
+}
+
+
+@pytest.mark.parametrize("case", list(_INPUTS))
+def test_recovery_input_is_checked_without_showing_it(
+    tmp_path: Path, case: str
+) -> None:
+    for args in (
+        ("admin", "--display-name", "Admin", "--system-admin"),
+        ("alice", "--display-name", "Alice"),
+    ):
+        assert _admin(tmp_path, "users", "create", *args).exit_code == 0
+    new_hash = hash_password(NEW_PASSWORD)
+    content, code = _INPUTS[case]
+    recovery = _recovery_file(tmp_path, new_hash)
+    recovery.write_bytes(content(new_hash))
+
+    result = _admin(tmp_path, "recover-admin", "--input", str(recovery))
+
+    if code is None:
+        assert result.exit_code == 0, result.output
+        assert result.output.startswith("Recovered 'admin';")
+        return
+    assert result.exit_code == 1
+    assert f"Error: {code}:" in result.output
+    assert "$argon2id$" not in result.output
+    assert "jdoe" not in result.output
+    assert NEW_PASSWORD not in result.output
+
+
+def test_an_unreachable_database_is_a_short_error(tmp_path: Path) -> None:
+    url = "postgresql://ontocurator_app:pw-not-shown@127.0.0.1:1/ontocurator"
+    result = runner.invoke(app, ["admin", "--database-url", url, "users", "list"])
+
+    assert result.exit_code == 1
+    assert "Error: DATABASE_UNAVAILABLE:" in result.output
+    assert "pw-not-shown" not in result.output
+    assert "Traceback" not in result.output
+
+
+def test_a_database_error_shows_no_parameters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sqlalchemy.exc import ProgrammingError
+
+    def failing(*_args: object, **_kwargs: object) -> None:
+        raise ProgrammingError(
+            "UPDATE x SET h = %(h)s", {"h": "$argon2id$secret"}, ValueError("boom")
+        )
+
+    monkeypatch.setattr(AccountService, "list_users", failing)
+
+    result = _admin(tmp_path, "users", "list")
+
+    assert result.exit_code == 1
+    assert "Error: DATABASE_ERROR: ValueError: boom" in result.output
+    assert "secret" not in result.output
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permissions")

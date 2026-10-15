@@ -416,9 +416,11 @@ def _open_database(ctx: typer.Context) -> Iterator[Database]:
     """The database of ``--database-url``, closed again on every exit.
 
     A ``DomainError`` of the body becomes ``Error: <CODE>: <details>`` and
-    exit 1.
+    exit 1; so does a database error, as ``DATABASE_ERROR`` with the
+    driver's first message line only (never the statement or its
+    parameters, which may hold a password hash).
     """
-    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
     from ontocurator import settings
     from ontocurator.storage.schema import current_revision, head_revision
@@ -449,8 +451,18 @@ def _open_database(ctx: typer.Context) -> Iterator[Database]:
             yield db
         except DomainError as exc:
             _fail(exc.code, exc.details)
+    except SQLAlchemyError as exc:
+        _fail("DATABASE_ERROR", _database_error(exc))
     finally:
         db.close()
+
+
+def _database_error(exc: BaseException) -> str:
+    """The driver's error class and first message line, without SQL or parameters."""
+    cause = getattr(exc, "orig", None) or exc
+    lines = str(cause).strip().splitlines()
+    first = lines[0] if lines and cause is not exc else ""
+    return f"{type(cause).__name__}: {first}" if first else type(cause).__name__
 
 
 def _print_code(issued: IssuedCode) -> None:
@@ -606,20 +618,31 @@ def hash_password_command() -> None:
 
 
 def _read_recovery_input(path: Path) -> dict[str, str]:
-    """The four fields of a private recovery file; errors never show its content."""
+    """The four fields of a private recovery file; errors never show its content.
+
+    The file is opened first and the checks apply to the opened file, so it
+    cannot be swapped in between. On POSIX a symbolic link is refused and a
+    FIFO does not block the open.
+    """
+    flags = os.O_RDONLY
+    if sys.platform == "win32":
+        flags |= os.O_BINARY
+    else:
+        flags |= os.O_NOFOLLOW | os.O_NONBLOCK
     try:
-        info = path.stat()
-        if not stat.S_ISREG(info.st_mode):
-            _fail("RECOVERY_INPUT_INVALID", f"{path} is not a regular file.")
-        if os.name == "posix" and info.st_mode & 0o077:
-            _fail(
-                "RECOVERY_INPUT_NOT_PRIVATE",
-                f"{path} is accessible to other users; make it private first "
-                "(chmod 600).",
-            )
-        if info.st_size > RECOVERY_INPUT_MAX_BYTES:
-            _fail("RECOVERY_INPUT_TOO_LARGE", f"{path} is larger than 8 KiB.")
-        with path.open("rb") as handle:
+        fd = os.open(path, flags)
+        with os.fdopen(fd, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                _fail("RECOVERY_INPUT_INVALID", f"{path} is not a regular file.")
+            if sys.platform != "win32" and info.st_mode & 0o077:
+                _fail(
+                    "RECOVERY_INPUT_NOT_PRIVATE",
+                    f"{path} is accessible to other users; make it private first "
+                    "(chmod 600).",
+                )
+            if info.st_size > RECOVERY_INPUT_MAX_BYTES:
+                _fail("RECOVERY_INPUT_TOO_LARGE", f"{path} is larger than 8 KiB.")
             raw = handle.read(RECOVERY_INPUT_MAX_BYTES + 1)
     except OSError as exc:
         _fail("RECOVERY_INPUT_UNREADABLE", f"Cannot read {path}: {exc.strerror}.")

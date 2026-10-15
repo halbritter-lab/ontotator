@@ -327,6 +327,40 @@ answer; the least surprising option was taken and should be confirmed.
   `with TestClient(app)`), and `admin` in the CLI help test.
 - Task 7: the plan did not mention the README -> a "User administration" section documents the
   `admin` commands and the offline recovery, since the start-up warning (Task 6) points there.
+- Task 7 (review fix): a lost lease session (database restart, idle timeout, dropped connection)
+  silently ended the lease, so `recover-admin` could run beside a live server -> the lifespan runs a
+  background task that calls `RuntimeLease.check()` every `check_interval` seconds (default
+  `CHECK_INTERVAL = 60`, a constructor argument); `check` runs `SELECT 1` on the lease connection
+  and, if that fails, logs an error, discards the connection and takes the lease again on a fresh
+  one (a failed re-acquire is logged and retried at the next check). The task is cancelled before
+  the release at shutdown. A recovery can still slip into the gap of up to one interval between the
+  loss and the next check; accepted, since both need the service mostly idle and the window is
+  short. The README says a transaction-mode pooler (PgBouncer) must not sit in front of the app.
+  Tests: `test_a_lost_lease_connection_is_noticed_and_replaced`,
+  `test_the_running_app_takes_a_lost_lease_again` (the session is ended with
+  `pg_terminate_backend`; the holders are read from `pg_locks`).
+- Task 7 (review fix): acquiring the lease first tries `pg_try_advisory_lock_shared`; if a recovery
+  holds it, it logs "Waiting for an offline admin recovery to finish..." (ASCII dots, for Windows
+  consoles) and then blocks. The server waits for a running recovery without a timeout; accepted,
+  because a recovery holds the lock for milliseconds. Test:
+  `test_a_server_start_waits_for_a_running_recovery`.
+- Task 7 (review fix): an SQLAlchemy error repeated the statement's parameters (for recovery, the
+  new hash) -> `Database` creates its engine with `hide_parameters=True` (server logs too), and the
+  admin commands map any `SQLAlchemyError` to `Error: DATABASE_ERROR: <driver class>: <first message
+  line>` with exit 1. Tests: `test_a_failed_statement_does_not_show_its_parameters`,
+  `test_a_database_error_shows_no_parameters`.
+- Task 7 (review fix): the recovery file was checked with `stat` and then opened -> it is opened
+  first (`O_NOFOLLOW | O_NONBLOCK` on POSIX, so a symlink is refused and a FIFO does not block;
+  plainly on Windows) and the regular-file, permission and size checks use `fstat` of the open
+  file; at most 8 KiB + 1 bytes are read.
+- Task 7 (review fix): under Git Bash (mintty) `stdin.isatty()` is false, so `hash-password` reads
+  the password as a visible line -> documented in the README (`winpty`, PowerShell/`cmd`, or a
+  pipe); no code change.
+- Task 7 (review fix): new tests `test_recovery_input_is_checked_without_showing_it` (10 cases:
+  bad JSON, not UTF-8, not an object, a missing, an extra or a non-text field, too large, not an
+  active admin, a weak hash, and a BOM file that is accepted) and
+  `test_an_unreachable_database_is_a_short_error`; `tests/test_admin_cli.py` now has 18 tests
+  (17 pass and 1 is skipped on Windows), `tests/test_lease.py` 5.
 
 ## Open risks
 
