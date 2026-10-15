@@ -6,6 +6,7 @@ import logging
 import threading
 from collections import OrderedDict
 from collections.abc import Iterable
+from concurrent.futures import Future
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -67,6 +68,7 @@ class OntologyRegistry:
     ) -> None:
         self._services: dict[str, OntologyService] = {}
         self._package_services: OrderedDict[str, OntologyService] = OrderedDict()
+        self._package_builds: dict[str, Future[OntologyService]] = {}
         self._registered_paths: dict[str, Path] = {}
         self._failures: dict[str, OntologyLoadFailure] = {}
         self._lock = threading.RLock()
@@ -259,14 +261,37 @@ class OntologyRegistry:
     def _pinned_service(
         base: OntologyService, condition: SearchCondition, resources: dict[str, bytes]
     ) -> OntologyService:
-        """Parse only captured files, preserving names needed by the TSV loader."""
-        with TemporaryDirectory(prefix="ontocurator-search-") as directory:
-            paths = []
-            for item in condition.translations:
-                path = Path(directory) / item.filename
-                path.write_bytes(resources[item.resource_path])
-                paths.append(path)
-            service = base.with_translations(paths)
+        """Pin a matching view, or rebuild using only captured translation files."""
+        captured = sorted(
+            (
+                item.filename,
+                item.sha256,
+                tuple(item.languages),
+                resources[item.resource_path],
+            )
+            for item in condition.translations
+        )
+        loaded = sorted(
+            (item.filename, item.sha256, item.languages, item.content)
+            for item in base.translations
+        )
+        if captured == loaded:
+            # Uploads replace services; searches only read the ontology and use
+            # the lexical index's own lock for selected-language subset caches.
+            # Pin metadata on a separate view, never on the ambient service.
+            service = copy.copy(base)
+            service.translations = list(base.translations)
+            service.skipped_translations = []
+            service.languages = list(base.languages)
+            service.translation_counts = dict(base.translation_counts)
+        else:
+            with TemporaryDirectory(prefix="ontocurator-search-") as directory:
+                paths = []
+                for item in condition.translations:
+                    path = Path(directory) / item.filename
+                    path.write_bytes(resources[item.resource_path])
+                    paths.append(path)
+                service = base.with_translations(paths)
         actual = [
             (t.filename, t.sha256, list(t.languages)) for t in service.translations
         ]
@@ -333,20 +358,41 @@ class OntologyRegistry:
             service = self._package_services.get(condition.condition_id)
             if service is not None:
                 self._package_services.move_to_end(condition.condition_id)
-        if service is None:
-            # Loading/building happens without holding either registry map lock
-            # or a database transaction. Publication never touches ambient services.
+        if service is not None:
+            return self._bind_release(service, definition)
+        with self._lock:
+            # A builder may have published between the first lookup and joining
+            # its flight. Only in-flight entries are retained, including errors.
+            service = self._package_services.get(condition.condition_id)
+            if service is not None:
+                self._package_services.move_to_end(condition.condition_id)
+                return self._bind_release(service, definition)
+            flight = self._package_builds.get(condition.condition_id)
+            owner = flight is None
+            if flight is None:
+                flight = Future()
+                self._package_builds[condition.condition_id] = flight
+        if not owner:
+            return self._bind_release(flight.result(), definition)
+        try:
+            # No map lock is held while building or waiting. Callers that mutate
+            # drafts must resolve these services before opening their transaction.
             base = self._for_definition(definition)
             service = self._pinned_service(
                 base, condition, repo.get_embedded_files(package_id)
             )
             with self._lock:
-                service = self._package_services.setdefault(
-                    condition.condition_id, service
-                )
+                self._package_services[condition.condition_id] = service
                 self._package_services.move_to_end(condition.condition_id)
                 if len(self._package_services) > 8:
                     self._package_services.popitem(last=False)
+                flight.set_result(service)
+                self._package_builds.pop(condition.condition_id)
+        except BaseException as exc:
+            with self._lock:
+                flight.set_exception(exc)
+                self._package_builds.pop(condition.condition_id)
+            raise
         return self._bind_release(service, definition)
 
     def register_path(self, path: Path | str) -> str:
