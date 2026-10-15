@@ -1,0 +1,122 @@
+import { useSyncExternalStore } from "react";
+
+/** URL state shared by the documents filters and progress-page assign links.
+ * Status stays a transport string; the documents page validates supported filters.
+ */
+export interface ProjectDocumentsQuery {
+  language?: string;
+  status?: string;
+  q?: string;
+  select?: string;
+}
+
+export type Route =
+  | { name: "tasks"; project?: string }
+  | { name: "task"; assignmentId: number }
+  | { name: "me" }
+  | { name: "adminUsers" }
+  | { name: "adminOntologies" }
+  | { name: "projectNew" }
+  | { name: "projectSettings"; key: string }
+  | ({ name: "projectDocuments"; key: string } & ProjectDocumentsQuery)
+  | { name: "projectProgress"; key: string }
+  | { name: "projectExport"; key: string }
+  | { name: "notFound"; hash: string };
+
+export function parseRoute(hash: string): Route {
+  const notFound: Route = { name: "notFound", hash };
+  if (hash === "") return { name: "tasks" };
+  const queryStart = hash.indexOf("?");
+  const path = queryStart === -1 ? hash : hash.slice(0, queryStart);
+  const query = queryStart === -1 ? "" : hash.slice(queryStart + 1);
+
+  try {
+    // URLSearchParams repairs malformed escapes. Reject them instead of
+    // silently navigating to a different project or document identifier.
+    decodeURIComponent(path);
+    decodeURIComponent(query.replace(/\+/g, " "));
+    const params = new URLSearchParams(query);
+    if (path === "#/") {
+      const project = params.get("project");
+      return project === null ? { name: "tasks" } : { name: "tasks", project };
+    }
+    switch (path) {
+      case "#/me": return { name: "me" };
+      case "#/admin/users": return { name: "adminUsers" };
+      case "#/admin/ontologies": return { name: "adminOntologies" };
+      case "#/projects/new": return { name: "projectNew" };
+    }
+    const task = /^#\/tasks\/([1-9]\d*)$/.exec(path);
+    if (task) {
+      const assignmentId = Number(task[1]);
+      return Number.isSafeInteger(assignmentId) ? { name: "task", assignmentId } : notFound;
+    }
+    const project = /^#\/projects\/([^/]+)\/(settings|documents|progress|export)$/.exec(path);
+    if (!project) return notFound;
+    const key = decodeURIComponent(project[1]);
+    switch (project[2]) {
+      case "settings": return { name: "projectSettings", key };
+      case "progress": return { name: "projectProgress", key };
+      case "export": return { name: "projectExport", key };
+      case "documents": {
+        const filters: ProjectDocumentsQuery = {};
+        for (const field of ["language", "status", "q", "select"] as const) {
+          const value = params.get(field);
+          if (value !== null) filters[field] = value;
+        }
+        return { name: "projectDocuments", key, ...filters };
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof URIError)) throw error;
+  }
+  return notFound;
+}
+
+function querySuffix(values: Record<string, string | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined) params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export function routeHref(route: Route): string {
+  switch (route.name) {
+    case "tasks": return `#/${querySuffix({ project: route.project })}`;
+    case "task":
+      if (!Number.isSafeInteger(route.assignmentId) || route.assignmentId <= 0) {
+        throw new RangeError("Assignment ID must be a positive safe integer");
+      }
+      return `#/tasks/${route.assignmentId}`;
+    case "me": return "#/me";
+    case "adminUsers": return "#/admin/users";
+    case "adminOntologies": return "#/admin/ontologies";
+    case "projectNew": return "#/projects/new";
+    case "projectSettings": return `#/projects/${encodeURIComponent(route.key)}/settings`;
+    case "projectDocuments":
+      return `#/projects/${encodeURIComponent(route.key)}/documents${querySuffix({
+        language: route.language, status: route.status, q: route.q, select: route.select,
+      })}`;
+    case "projectProgress": return `#/projects/${encodeURIComponent(route.key)}/progress`;
+    case "projectExport": return `#/projects/${encodeURIComponent(route.key)}/export`;
+    case "notFound": return route.hash;
+  }
+}
+
+const subscribe = (listener: () => void) => {
+  window.addEventListener("hashchange", listener);
+  return () => window.removeEventListener("hashchange", listener);
+};
+const currentHash = () => window.location.hash;
+const serverHash = () => "";
+
+/** Observe the URL; the app shell owns any editor leave/flush guard. */
+export function useRoute(): Route {
+  return parseRoute(useSyncExternalStore(subscribe, currentHash, serverHash));
+}
+
+export function navigate(route: Route): void {
+  window.location.hash = routeHref(route);
+}
