@@ -35,13 +35,18 @@
   --focus-width: 2px;
   --focus-offset: 2px;
 
-  /* Mark fills: one per term colour index; the line style, not the hue, carries the state. */
-  --mark-0-fill: #b1ae68;
-  --mark-1-fill: #cff3e3;
-  --mark-2-fill: #ffdba8;
-  --mark-3-fill: #ddd9f6;
-  --mark-4-fill: #d49da8;
-  --mark-5-fill: #78afed;
+  /* Mark palette: six soft highlighter fills, painted over the lower half of the
+     line. These are palette slots, not meanings: which slot a mark takes (by term,
+     layer, kind, ...) is decided in one place, src/editor/markColours.ts, and the
+     `.run--color-N` block in styles.css binds slot N to these tokens. The state of a
+     mark (own, proposal, reference, negated, selected) is carried by its line style
+     or pattern, never by the fill. */
+  --mark-0-fill: #f8f1a6;
+  --mark-1-fill: #d0edc4;
+  --mark-2-fill: #f9cba8;
+  --mark-3-fill: #cad6fd;
+  --mark-4-fill: #ecd0d6;
+  --mark-5-fill: #b8e8ec;
 
   /* Mark states */
   --mark-line: #3b342b;

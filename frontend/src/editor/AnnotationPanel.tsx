@@ -6,6 +6,7 @@ import { SearchPanel } from "./SearchPanel";
 import { TermName } from "./TermName";
 import type { SearchLanguageControl } from "./searchLanguages";
 import type { SearchManager, WorkspaceKey } from "./searchState";
+import { IconClose, IconTrash } from "../ui/icons";
 
 export type AxesValues = Record<string, string | null>;
 export type Axes = AxesValues;
@@ -85,10 +86,9 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   if (!annotation) {
     return (
       <div className="detail-pane">
-        <div className="detail-section" style={{ textAlign: "center", padding: "40px 20px" }}>
-          <div style={{ fontSize: "1.5rem", marginBottom: 8 }}>📝</div>
-          <h3 style={{ marginBottom: 6 }}>No annotation selected</h3>
-          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+        <div className="detail-section detail-empty">
+          <h3>No annotation selected</h3>
+          <p>
             Select an existing annotation or mention in the text,
             or highlight text to create a new annotation.
           </p>
@@ -178,11 +178,12 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             {onDeselect && (
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="btn btn-quiet btn-sm btn-icon"
                 onClick={onDeselect}
                 title="Clear selection"
+                aria-label="Clear selection"
               >
-                ✕
+                <IconClose />
               </button>
             )}
           </div>
@@ -387,7 +388,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             style={{ width: "100%" }}
             onClick={() => setConfirmDelete(true)}
           >
-            🗑️ Delete Annotation
+            <IconTrash />
+            Delete Annotation
           </button>
         )}
       </div>

@@ -79,15 +79,28 @@ describe("design tokens", () => {
     ).toEqual([]);
   });
 
+  /*
+   * Mark fills are soft highlighters over the lower half of the line (T6a Task 1,
+   * second iteration). The state of a mark is told by its line style or pattern
+   * (solid, dashed, dotted, hatch, frame; see browser/design.spec.ts), so the fills
+   * only have to keep neighbouring terms apart, not carry meaning. Floors, CIEDE2000:
+   * - normal vision, pairwise >= 10 (was 12): clearly different side by side
+   *   (a just-noticeable difference is about 1-2, "obviously different" about 5);
+   * - every fill against the sheet >= 10: a mark is visible without its line;
+   * - simulated protan, deutan and tritan dichromacy (Machado 2009, severity 1),
+   *   pairwise >= 4 (was 8): no two slots collapse into the same colour. Light,
+   *   low-chroma fills cannot reach 8 under dichromacy without becoming heavy
+   *   again, which is what the user rejected; the line styles are the guarantee.
+   */
   it("mark_fills_are_distinct_for_normal_vision", () => {
-    expect(below(pairs(FILLS), deltaE2000, 12)).toEqual([]);
+    expect(below(pairs(FILLS), deltaE2000, 10)).toEqual([]);
     expect(below(cross(FILLS, ["--surface-raised"]), deltaE2000, 10)).toEqual([]);
   });
 
   it("mark_fills_are_distinct_under_colour_vision_deficiencies", () => {
     for (const d of DEFICIENCIES) {
       const simulated = (a: string, b: string) => deltaE2000(simulate(a, d), simulate(b, d));
-      expect(below(pairs(FILLS), simulated, 8), d).toEqual([]);
+      expect(below(pairs(FILLS), simulated, 4), d).toEqual([]);
     }
   });
 });

@@ -8,7 +8,7 @@ export function AiBadge({ provenance }: { provenance: Provenance | null }) {
   const description = `AI-generated: ${provenance.actor.actor_id} · ${provenance.method}`;
   return (
     <span className="badge badge-ai" title={description} aria-label={description}>
-      ✦ AI
+      AI
     </span>
   );
 }

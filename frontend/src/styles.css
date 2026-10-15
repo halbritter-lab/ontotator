@@ -642,7 +642,13 @@ body {
 
 .mention-span,
 .run--marked {
-  background-color: var(--span-highlight);
+  /* A soft highlighter over the lower half of the line, feathered at its top edge.
+     The fill is a palette slot (`--run-fill`, set below); what it means is decided
+     in editor/markColours.ts. */
+  --run-fill: var(--span-highlight);
+  --run-highlight: linear-gradient(to bottom, transparent 0 40%, var(--run-fill) 54% 100%);
+  background-color: transparent;
+  background-image: var(--run-highlight);
   cursor: pointer;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
@@ -652,25 +658,14 @@ body {
   margin: 0;
 }
 
-/* Six mark fills, one per term colour index (styles/tokens.css). */
-.run--color-0 {
-  background-color: var(--span-color-0);
-}
-.run--color-1 {
-  background-color: var(--span-color-1);
-}
-.run--color-2 {
-  background-color: var(--span-color-2);
-}
-.run--color-3 {
-  background-color: var(--span-color-3);
-}
-.run--color-4 {
-  background-color: var(--span-color-4);
-}
-.run--color-5 {
-  background-color: var(--span-color-5);
-}
+/* Palette slots: slot N paints with --mark-N-fill (styles/tokens.css). The only
+   binding of slot to colour; the meaning of a slot lives in editor/markColours.ts. */
+.run--color-0 { --run-fill: var(--mark-0-fill); }
+.run--color-1 { --run-fill: var(--mark-1-fill); }
+.run--color-2 { --run-fill: var(--mark-2-fill); }
+.run--color-3 { --run-fill: var(--mark-3-fill); }
+.run--color-4 { --run-fill: var(--mark-4-fill); }
+.run--color-5 { --run-fill: var(--mark-5-fill); }
 
 /* The state of a mark is carried by its line, not by its hue: own annotations are
    underlined solid, proposals under review dashed, read-only references dotted. */
@@ -691,13 +686,12 @@ body {
   border-bottom-width: 3px;
 }
 
-/* A negated finding (assertion "absent"): a diagonal hatch over the fill. */
+/* A negated finding (assertion "absent"): a fine diagonal hatch over the whole run,
+   on top of the highlighter. */
 .run--negated {
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent 0 5px,
-    var(--mark-negated-hatch) 5px 6px
-  );
+  background-image:
+    repeating-linear-gradient(135deg, transparent 0 5px, var(--mark-negated-hatch) 5px 6px),
+    var(--run-highlight);
 }
 
 /* Active / Selected mention */
@@ -2107,4 +2101,584 @@ body {
     border-radius: 0;
     box-shadow: none;
   }
+}
+
+/* ==========================================================================
+   Direction C, second iteration (T6a Task 1): the case header and both side
+   panes. Emoji give way to inline SVG icons (ui/icons.tsx); boxed cards give
+   way to hairline rules and spacing; the side panes are compact, the text
+   keeps reading density. Behaviour and class names unchanged.
+   ========================================================================== */
+
+.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.btn-sm .icon,
+.decision-tag .icon,
+.layer-tag .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* A control that recedes: no box until hovered. */
+.btn-quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
+.btn-quiet:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+.btn-quiet:disabled:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.btn-icon {
+  gap: 4px;
+  padding-inline: 6px;
+}
+
+kbd.kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  text-align: center;
+}
+
+/* Case header: groups separated by space and one hairline, not by boxes. */
+.app-header {
+  gap: var(--space-4);
+  min-height: 52px;
+}
+
+.app-title {
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.case-label {
+  font-size: var(--size-md);
+  font-weight: var(--weight-strong);
+}
+
+.app-title .badge-independent,
+.app-title .badge-review,
+.app-title .badge-assisted {
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0 0 0 var(--space-3);
+  color: var(--text);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.app-title .identity-badge {
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0 0 0 var(--space-3);
+}
+
+.app-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.app-actions .status-badge {
+  margin-right: var(--space-2);
+  padding-inline: 0;
+  font-weight: var(--weight-regular);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-saving .status-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.app-actions .btn-primary {
+  margin-left: var(--space-2);
+  font-weight: var(--weight-strong);
+  padding: 5px 12px;
+}
+
+/* Left pane: layers. */
+.layer-controls {
+  padding: var(--space-3) var(--cell-pad-x) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.layer-controls__title {
+  margin-bottom: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-strong);
+}
+
+.layer-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 32px;
+}
+
+.layer-item__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+  min-width: 0;
+}
+
+.layer-item__name,
+.layer-item__active {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.layer-item__name {
+  font-size: var(--size-md);
+  white-space: nowrap;
+}
+
+.layer-item.is-active .layer-item__name {
+  font-weight: var(--weight-strong);
+}
+
+.layer-item__active {
+  flex: none;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+
+.layer-item.is-active .layer-item__active {
+  color: var(--accent);
+}
+
+.layer-item__name[aria-disabled="true"],
+.layer-item__active[aria-disabled="true"],
+.layer-item__active--locked {
+  cursor: not-allowed;
+}
+
+.layer-controls input[type="checkbox"],
+.layer-controls input[type="radio"] {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.badge.layer-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-regular);
+}
+
+.badge.layer-tag--verified {
+  border-color: transparent;
+  color: var(--success);
+  font-weight: var(--weight-strong);
+}
+
+.layer-controls__details {
+  margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.layer-controls__type {
+  margin-bottom: var(--space-2);
+}
+
+.layer-controls__label {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--size-xs);
+  font-weight: var(--weight-strong);
+}
+
+.layer-controls__verify {
+  width: 100%;
+}
+
+.layer-controls__verify.is-checked {
+  color: var(--success);
+}
+
+/* Left pane: lists of proposals, references and annotations. */
+.sidebar-header--actions .btn {
+  padding: 2px var(--space-2);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+}
+
+.doc-item.selected,
+.reference-item[aria-pressed="true"] {
+  background: var(--accent-light);
+  border-left: 1px solid var(--accent);
+}
+
+.doc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.doc-meta__line {
+  margin-top: 2px;
+}
+
+.doc-meta__note {
+  font-style: italic;
+}
+
+.decision-tag,
+.badge.decision-tag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-strong);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.decision-tag--open {
+  font-weight: var(--weight-regular);
+}
+
+.decision-tag--confirmed {
+  color: var(--success);
+}
+
+.decision-tag--rejected {
+  color: var(--danger);
+}
+
+.decision-tag--uncertain {
+  color: var(--warning);
+}
+
+.decision-tag--changed {
+  color: var(--accent);
+}
+
+.doc-item--resolved:not(.selected) .decision-tag {
+  color: var(--text-muted);
+}
+
+.replaced-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--size-xs);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.badge.badge-ai,
+.doc-item--resolved:not(.selected) .badge-ai {
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-strong);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.sidebar-footer {
+  padding: var(--space-2) var(--cell-pad-x);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+
+.sidebar-footer:empty {
+  display: none;
+}
+
+.sidebar-footer__error {
+  margin-top: var(--space-1);
+  color: var(--danger);
+  font-size: var(--size-xs);
+}
+
+/* Right pane: the review decision. */
+.review-actions {
+  padding: var(--space-4) var(--cell-pad-x);
+}
+
+.review-actions__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.review-actions__title {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-strong);
+}
+
+.review-actions__state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.detail-section.review-actions__proposal {
+  padding: 0 0 var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.review-actions__term {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--size-base);
+  line-height: var(--leading-base);
+}
+
+.axis-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px var(--space-3);
+  margin: 0 0 var(--space-2);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.axis-list dt {
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.axis-list dd {
+  margin: 0;
+}
+
+.axis-list__empty {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+}
+
+/* The quoted evidence is clinical text: it keeps the reading serif. */
+.review-actions__quote {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-strong);
+  font-family: var(--font-serif);
+  font-size: var(--size-base);
+  line-height: var(--leading-base);
+}
+
+.review-actions__origin {
+  margin: var(--space-3) 0;
+  color: var(--text-muted);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+}
+
+.review-actions__warning {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--danger-light);
+  color: var(--danger);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.decision-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.btn.decision-btn {
+  justify-content: space-between;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--decision-colour);
+  font-size: var(--size-md);
+}
+
+.decision-btn__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.decision-btn--confirmed { --decision-colour: var(--success); }
+.decision-btn--rejected { --decision-colour: var(--danger); }
+.decision-btn--changed { --decision-colour: var(--accent); }
+.decision-btn--uncertain { --decision-colour: var(--warning); }
+
+.btn.decision-btn:hover:not(:disabled) {
+  border-color: var(--decision-colour);
+  background: var(--surface-sunken);
+}
+
+.btn.decision-btn[aria-pressed="true"],
+.btn.decision-btn[aria-pressed="true"]:hover {
+  border-color: var(--decision-colour);
+  background: var(--decision-colour);
+  color: var(--on-accent);
+  font-weight: var(--weight-strong);
+}
+
+.decision-btn[aria-pressed="true"] kbd.kbd {
+  border-color: currentColor;
+  background: transparent;
+  color: inherit;
+}
+
+.review-actions__row {
+  margin-bottom: var(--space-3);
+}
+
+.review-actions__block {
+  margin-bottom: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.review-actions__block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.review-actions__block-head .form-label {
+  margin: 0;
+}
+
+.review-actions__block-title {
+  margin-bottom: var(--space-1);
+  color: var(--accent);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-strong);
+}
+
+.review-actions__block-body {
+  margin-bottom: var(--space-2);
+  font-size: var(--size-sm);
+}
+
+.review-actions__block .form-select {
+  margin-bottom: var(--space-2);
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--size-sm);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--text);
+}
+
+.review-actions__note {
+  margin-bottom: 0;
+}
+
+.review-actions .field-hint {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--size-xs);
+}
+
+.link-button:focus-visible,
+.replaced-link:focus-visible,
+.layer-controls input:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Nothing selected: a quiet note, not a card. */
+.detail-section.detail-empty {
+  padding: var(--space-5) var(--cell-pad-x);
+}
+
+.detail-empty h3 {
+  margin-bottom: var(--space-1);
+  color: var(--text);
+  font-size: var(--size-md);
+}
+
+.detail-empty p {
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
 }

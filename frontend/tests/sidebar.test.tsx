@@ -117,18 +117,18 @@ describe("AI badge in the sidebar", () => {
     expect(toolItem.textContent).not.toContain("• tool");
 
     const humanItem = itemFor(container, "HP:0002");
-    expect(within(humanItem).queryByText("✦ AI")).toBeNull();
+    expect(within(humanItem).queryByText("AI")).toBeNull();
     expect(humanItem.textContent).toContain("• human");
   });
 
   it("marks tool-generated reference annotations in the list and in their details", () => {
     const { container } = renderCase(reviewView());
     const reference = itemFor(container, "HP:0003");
-    expect(within(reference).getByText("✦ AI")).toBeDefined();
+    expect(within(reference).getByText("AI")).toBeDefined();
 
     fireEvent.click(reference);
     const details = screen.getByLabelText("Reference details");
-    expect(within(details).getByText("✦ AI")).toBeDefined();
+    expect(within(details).getByText("AI")).toBeDefined();
     expect(details.textContent).toContain("pheno-nlp · llm-v2");
   });
 
@@ -140,7 +140,7 @@ describe("AI badge in the sidebar", () => {
     const curated = Array.from(container.querySelectorAll<HTMLElement>(".sidebar [data-list-key]"))
       .find((el) => el.dataset.listKey === "annotation:copy")!;
     expect(curated).toBeDefined();
-    expect(within(curated).queryByText("✦ AI")).toBeNull();
+    expect(within(curated).queryByText("AI")).toBeNull();
   });
 });
 
@@ -210,7 +210,7 @@ describe("review outcome and section layout", () => {
       const item = Array.from(container.querySelectorAll<HTMLElement>(".sidebar [data-list-key^='target:']"))
         .find((el) => el.textContent?.includes("HP:0001"))!;
       expect(item.classList.contains("doc-item--resolved"), decision.outcome).toBe(true);
-      expect(within(item).getByText("✦ AI"), decision.outcome).toBeDefined();
+      expect(within(item).getByText("AI"), decision.outcome).toBeDefined();
       cleanup();
     }
   });
@@ -220,12 +220,12 @@ describe("review outcome and section layout", () => {
     view.available_inputs = view.available_inputs!.filter((s) => s.annotation.annotation_id !== "tool-prop");
     const { container } = renderCase(view);
     const item = itemFor(container, "tool-prop");
-    expect(within(item).queryByText("✦ AI")).toBeNull();
+    expect(within(item).queryByText("AI")).toBeNull();
     expect(item.textContent).toContain("• origin unknown");
 
     fireEvent.click(item);
     const details = container.querySelector<HTMLElement>(".inspector-pane")!;
-    expect(within(details).queryByText("✦ AI")).toBeNull();
+    expect(within(details).queryByText("AI")).toBeNull();
     expect(details.textContent).toContain("Source: unknown");
   });
 

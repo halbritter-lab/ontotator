@@ -1,6 +1,7 @@
 import React from "react";
 import type { LayerDefinition, TaskScope } from "../api/client";
 import type { LayerSelection } from "./layerState";
+import { IconCheck } from "../ui/icons";
 
 export interface LayerControlsProps {
   layers: LayerDefinition[];
@@ -35,20 +36,10 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
   const isEditableLayer = (layerId: string) => (scope.editable_layer_ids ?? []).includes(layerId);
 
   return (
-    <div
-      className="layer-controls"
-      data-testid="layer-controls"
-      style={{
-        padding: "12px 14px",
-        background: "var(--bg-surface)",
-        borderBottom: "1px solid var(--border-color)",
-      }}
-    >
-      <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: 8 }}>
-        Layers & Ontologies
-      </div>
+    <div className="layer-controls" data-testid="layer-controls">
+      <div className="layer-controls__title">Layers & Ontologies</div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="layer-list">
         {layers.map((layer) => {
           const isRef = isReferenceLayer(layer.layer_id);
           const isEdit = isEditableLayer(layer.layer_id);
@@ -59,24 +50,10 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
           const layerName = layer.label ?? (layer as any).name ?? layer.layer_id;
 
           return (
-            <div
-              key={layer.layer_id}
-              className="layer-item"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "6px 8px",
-                borderRadius: "var(--radius)",
-                background: isActive ? "var(--bg-primary)" : "transparent",
-                border: isActive ? "1px solid var(--border-color)" : "1px solid transparent",
-              }}
-            >
+            <div key={layer.layer_id} className={`layer-item${isActive ? " is-active" : ""}`}>
               {/* Left: Visibility toggle + Name + Badges */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <label
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: disabled ? "not-allowed" : "pointer" }}
-                >
+              <div className="layer-item__main">
+                <label className="layer-item__name" aria-disabled={disabled || undefined}>
                   <input
                     type="checkbox"
                     aria-label={`Visibility for ${layerName}`}
@@ -84,80 +61,44 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     onChange={() => onToggleVisibility(layer.layer_id)}
                     disabled={disabled}
                   />
-                  <span style={{ fontWeight: isActive ? 600 : 400, fontSize: "0.85rem" }}>
-                    {layerName}
-                  </span>
+                  <span>{layerName}</span>
                 </label>
 
-                {isRef && (
-                  <span
-                    className="badge"
-                    style={{
-                      background: "var(--border-color)",
-                      color: "var(--text-muted)",
-                      fontSize: "var(--size-xs)",
-                      padding: "2px 6px",
-                    }}
-                  >
-                    Reference
-                  </span>
-                )}
+                {isRef && <span className="badge layer-tag">Reference</span>}
 
                 {isChecked && (
-                  <span
-                    data-testid={`badge-checked-${layer.layer_id}`}
-                    className="badge badge-success"
-                    style={{ fontSize: "var(--size-xs)", padding: "2px 6px" }}
-                  >
-                    ✓ verified
+                  <span data-testid={`badge-checked-${layer.layer_id}`} className="badge layer-tag layer-tag--verified">
+                    <IconCheck />
+                    verified
                   </span>
                 )}
               </div>
 
               {/* Right: Active Selection */}
-              <div>
-                {isEdit ? (
-                  <label
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      fontSize: "0.8rem",
-                      cursor: disabled ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="active-layer-radio"
-                      aria-label={`Active layer: ${layerName}`}
-                      checked={isActive}
-                      onChange={() => onSetActiveLayer(layer.layer_id)}
-                      disabled={disabled}
-                    />
-                    <span>{isActive ? "Active" : "Activate"}</span>
-                  </label>
-                ) : (
-                  <label
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      fontSize: "0.8rem",
-                      cursor: "not-allowed",
-                      opacity: 0.5,
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="active-layer-radio"
-                      aria-label={`Active layer: ${layerName}`}
-                      checked={false}
-                      disabled={true}
-                    />
-                    <span>Locked</span>
-                  </label>
-                )}
-              </div>
+              {isEdit ? (
+                <label className="layer-item__active" aria-disabled={disabled || undefined}>
+                  <input
+                    type="radio"
+                    name="active-layer-radio"
+                    aria-label={`Active layer: ${layerName}`}
+                    checked={isActive}
+                    onChange={() => onSetActiveLayer(layer.layer_id)}
+                    disabled={disabled}
+                  />
+                  <span>{isActive ? "Active" : "Activate"}</span>
+                </label>
+              ) : (
+                <label className="layer-item__active layer-item__active--locked">
+                  <input
+                    type="radio"
+                    name="active-layer-radio"
+                    aria-label={`Active layer: ${layerName}`}
+                    checked={false}
+                    disabled={true}
+                  />
+                  <span>Locked</span>
+                </label>
+              )}
             </div>
           );
         })}
@@ -165,14 +106,11 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
 
       {/* Active Layer Details: Types & Check Action */}
       {activeLayer && (
-        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px dashed var(--border-color)" }}>
+        <div className="layer-controls__details">
           {/* Annotation type selector if active layer has multiple types */}
           {activeLayer.annotation_types && activeLayer.annotation_types.length > 1 && (
-            <div style={{ marginBottom: 8 }}>
-              <label
-                htmlFor="active-type-select"
-                style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}
-              >
+            <div className="layer-controls__type">
+              <label htmlFor="active-type-select" className="layer-controls__label">
                 Annotation type for {activeLayer.label ?? (activeLayer as any).name ?? activeLayer.layer_id}
               </label>
               <select
@@ -182,7 +120,6 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                 value={selection.activeTypeId ?? ""}
                 onChange={(e) => onSetActiveType(e.target.value)}
                 disabled={disabled}
-                style={{ fontSize: "0.8rem", padding: "4px 8px" }}
               >
                 {activeLayer.annotation_types.map((typeDef) => (
                   <option key={typeDef.type_id} value={typeDef.type_id}>
@@ -194,28 +131,21 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
           )}
 
           {/* Check active layer action if editable and onCheckLayer provided */}
-          {isEditableLayer(activeLayer.layer_id) && onCheckLayer && (
-            <div style={{ marginTop: 6 }}>
-              {(() => {
-                const isChecked = checkedLayerIds.includes(activeLayer.layer_id);
-                const activeName = activeLayer.label ?? (activeLayer as any).name ?? activeLayer.layer_id;
-                return (
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${isChecked ? "btn-secondary" : "btn-primary"}`}
-                    onClick={() => onCheckLayer(activeLayer.layer_id, !isChecked)}
-                    disabled={disabled}
-                    style={{ width: "100%", fontSize: "0.8rem", padding: "4px 8px" }}
-                    aria-label={`Mark ${activeName} as verified`}
-                  >
-                    {isChecked
-                      ? `✓ ${activeName} verified (Reset)`
-                      : `Mark ${activeName} as verified`}
-                  </button>
-                );
-              })()}
-            </div>
-          )}
+          {isEditableLayer(activeLayer.layer_id) && onCheckLayer && (() => {
+            const isChecked = checkedLayerIds.includes(activeLayer.layer_id);
+            const activeName = activeLayer.label ?? (activeLayer as any).name ?? activeLayer.layer_id;
+            return (
+              <button
+                type="button"
+                className={`btn btn-sm btn-secondary layer-controls__verify${isChecked ? " is-checked" : ""}`}
+                onClick={() => onCheckLayer(activeLayer.layer_id, !isChecked)}
+                disabled={disabled}
+                aria-label={`Mark ${activeName} as verified`}
+              >
+                {isChecked ? <><IconCheck />{activeName} verified (Reset)</> : `Mark ${activeName} as verified`}
+              </button>
+            );
+          })()}
         </div>
       )}
     </div>

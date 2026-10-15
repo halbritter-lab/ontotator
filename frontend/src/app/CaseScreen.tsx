@@ -45,7 +45,9 @@ import { TermName } from "../editor/TermName";
 import { TextPane } from "../editor/TextPane";
 import { TreeBrowser } from "../editor/TreeBrowser";
 import { useTermLabels } from "../editor/useTermLabels";
-import { termColorIndex, type MentionDisplay, type SelectionPayload } from "../spans/adapter";
+import { type MentionDisplay, type SelectionPayload } from "../spans/adapter";
+import { markColourSlot } from "../editor/markColours";
+import { IconCheck, IconClose, IconDownload, IconKeyboard, IconPencil, IconQuestion, IconRetry } from "../ui/icons";
 import { isNegated } from "../editor/negation";
 import { CaseNavigation } from "./CaseNavigation";
 import { adjacentCase } from "./caseOrder";
@@ -277,7 +279,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           evidence_id: ev.mention.evidence_id,
           segments: ev.mention.segments.map((s) => ({ start: s.start, end: s.end })),
           kind: "own" as const,
-          colorIndex: termColorIndex(termId),
+          colorIndex: markColourSlot({ termId, layerId: owner?.annotation.layer_id, kind: "own" }),
           negated: owner ? isNegated(owner.annotation) : false,
         };
       });
@@ -350,7 +352,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         (s) => s.annotation.annotation_id === target.annotation_id && s.version === target.version
       );
       if (!snap) continue;
-      const colorIdx = termColorIndex(target.term_id ?? target.annotation_id);
+      const colorIdx = markColourSlot({
+        termId: target.term_id ?? target.annotation_id,
+        layerId: target.layer_id,
+        kind: "target",
+      });
       for (const ev of snap.evidence ?? []) {
         mentions.push({
           evidence_id: `target:${target.annotation_id}:${target.version}:${ev.mention.evidence_id}:${ev.version}`,
@@ -401,7 +407,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     sourceId: sourceKey(s),
     segments: ev.mention.segments,
     kind: "source" as const,
-    colorIndex: termColorIndex(s.annotation.term_id),
+    colorIndex: markColourSlot({ termId: s.annotation.term_id, layerId: s.annotation.layer_id, kind: "source" }),
     negated: isNegated(s.annotation),
   }))), [visibleSources]);
   const selectSource = (id: string) => {
@@ -1385,10 +1391,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
       <header className="app-header">
-        <div className="app-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="app-title">
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-quiet btn-sm"
             onClick={() => { void leaveCase(onClose); }}
             title="Back to dashboard"
           >
@@ -1402,7 +1408,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               disabled={queueState === "saving"}
             />
           ) : (
-            <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>Case: {view.document.document_id}</span>
+            <span className="case-label">Case: {view.document.document_id}</span>
           )}
           <span
             className={`badge ${
@@ -1437,7 +1443,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </strong>
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="app-actions">
           <span
             role="status"
             title={`Revision ${draft.revision}`}
@@ -1449,17 +1455,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 : "status-saving"
             }`}
           >
-            ● {statusText}
+            <span className="status-dot" aria-hidden="true" />
+            {statusText}
           </span>
 
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-quiet btn-sm btn-icon"
             onClick={() => setShowShortcutHelp(true)}
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
-            ⌨ ?
+            <IconKeyboard />
+            <span aria-hidden="true">?</span>
           </button>
 
           {queueState === "error" && (
@@ -1468,16 +1476,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               className="btn btn-secondary btn-sm"
               onClick={() => queueRef.current.retry()}
             >
-              🔄 Retry
+              <IconRetry />
+              Retry
             </button>
           )}
 
           <button
             onClick={downloadExport}
-            className="btn btn-secondary btn-sm"
+            className="btn btn-quiet btn-sm"
             title="Export case data as ZIP"
           >
-            📥 Export (.zip)
+            <IconDownload />
+            Export (.zip)
           </button>
 
           <button
@@ -1487,9 +1497,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             disabled={submitPending}
             aria-busy={submitPending}
             title={submitPending ? "Saving changes before submitting" : "Finish and submit case"}
-            style={{ fontWeight: 600, padding: "5px 12px" }}
           >
-            ✓ Finish & Submit Case
+            <IconCheck />
+            Finish & Submit Case
           </button>
         </div>
       </header>
@@ -1552,7 +1562,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 <div className="sidebar-header">
                   Review Proposals ({reviewTargets.length})
                 </div>
-                <ul className="doc-list" style={{ borderBottom: "2px solid var(--border-color)" }}>
+                <ul className="doc-list">
                   {reviewTargets.map((t) => {
                     const isSelected = refKey(t) === selectedTargetId;
                     const dec = decisionsMap[refKey(t)];
@@ -1584,39 +1594,20 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           }
                         }}
                       >
-                        <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
-                            <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
-                          </span>
+                        <div className="doc-id doc-row">
+                          <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
                           {dec ? (
-                            <span
-                              className="badge"
-                              style={{
-                                fontSize: "var(--size-xs)",
-                                fontWeight: 600,
-                                padding: "2px 6px",
-                                backgroundColor:
-                                  dec.outcome === "confirmed" ? "var(--success-light)"
-                                  : dec.outcome === "rejected" ? "var(--danger-light)"
-                                  : dec.outcome === "changed" ? "var(--surface-sunken)"
-                                  : "var(--warning-light)",
-                                color:
-                                  dec.outcome === "confirmed" ? "var(--success)"
-                                  : dec.outcome === "rejected" ? "var(--danger)"
-                                  : dec.outcome === "changed" ? "var(--text-muted)"
-                                  : "var(--warning)",
-                              }}
-                            >
-                              {dec.outcome === "confirmed" ? "✓ Confirmed"
-                               : dec.outcome === "rejected" ? "✕ Rejected"
-                               : dec.outcome === "changed" ? "✎ Replaced"
-                               : "? Uncertain"}
+                            <span className={`decision-tag decision-tag--${dec.outcome}`}>
+                              {dec.outcome === "confirmed" ? <><IconCheck />Confirmed</>
+                               : dec.outcome === "rejected" ? <><IconClose />Rejected</>
+                               : dec.outcome === "changed" ? <><IconPencil />Replaced</>
+                               : <><IconQuestion />Uncertain</>}
                             </span>
                           ) : (
-                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>open</span>
+                            <span className="decision-tag decision-tag--open">open</span>
                           )}
                         </div>
-                        <div className="doc-meta" style={{ color: isResolved && !isSelected ? "var(--text-muted)" : undefined }}>
+                        <div className="doc-meta">
                           {dec?.outcome === "changed" ? (
                             (() => {
                               const replSnap = (draft.annotations ?? []).find(
@@ -1626,21 +1617,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                               const replLabel = replSnap ? termLabel(replSnap.annotation.layer_id, replTermId) : null;
                               const displayText = replLabel ? `${replLabel} (${replTermId})` : replTermId;
                               return (
-                                <div style={{ marginTop: 2 }}>
+                                <div className="doc-meta__line">
                                   <button
                                     type="button"
-                                    className="btn btn-link btn-sm"
-                                    style={{
-                                      padding: 0,
-                                      fontSize: "0.75rem",
-                                      color: "var(--primary)",
-                                      textDecoration: "underline",
-                                      cursor: "pointer",
-                                      textAlign: "left",
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: 4,
-                                    }}
+                                    className="replaced-link"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (dec.replacement?.annotation_id) {
@@ -1653,7 +1633,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                     }}
                                     title="Jump to replacement annotation in draft"
                                   >
-                                    ↳ Replaced by: <strong>{displayText}</strong> ↗
+                                    Replaced by: <strong>{displayText}</strong>
                                   </button>
                                   {" "}<AiBadge provenance={t.provenance} />
                                 </div>
@@ -1661,9 +1641,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                             })()
                           ) : dec?.outcome === "rejected" ? (
                             <>
-                              <span style={{ fontStyle: "italic", color: "var(--text-muted)" }}>
-                                ✕ Proposal rejected
-                              </span>
+                              <span className="doc-meta__note">Proposal rejected</span>
                               {" "}<AiBadge provenance={t.provenance} />
                             </>
                           ) : (
@@ -1704,7 +1682,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   className="btn btn-secondary btn-sm"
                   onClick={handleStartSpanless}
                   title="Create new annotation via ontology search"
-                  style={{ fontSize: "0.75rem", padding: "2px 8px" }}
                 >
                   + New Annotation
                 </button>
@@ -1738,10 +1715,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         setSelectedEvidenceId(firstEv ?? null);
                       }}
                     >
-                      <div className="doc-id" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div className="doc-id doc-row">
                         <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
                         {layerName && (view.layers ?? []).length > 1 && (
-                          <span className="badge" style={{ fontSize: "var(--size-xs)" }}>{layerName}</span>
+                          <span className="decision-tag decision-tag--open">{layerName}</span>
                         )}
                       </div>
                       <div className="doc-meta">
@@ -1764,9 +1741,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           </div>}
 
           {/* Submission Box at bottom of sidebar */}
-          <div style={{ padding: 14, borderTop: "1px solid var(--border-color)", background: "var(--bg-primary)" }}>
+          <div className="sidebar-footer">
             {!isSingleLayer && (
-              <div style={{ marginBottom: 10, fontSize: "0.8rem", color: "var(--text-muted)" }}>
+              <div className="sidebar-footer__progress">
                 {editableLayerIds.length > 0 && (
                   <div>
                     Verified: {(draft.checked_layer_ids ?? []).filter(id => editableLayerIds.includes(id)).length} of {editableLayerIds.length} layers
@@ -1775,7 +1752,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               </div>
             )}
             {submitError && (
-              <div style={{ fontSize: "0.75rem", color: "var(--danger)", marginTop: 6 }}>
+              <div className="sidebar-footer__error">
                 {submitError}
               </div>
             )}

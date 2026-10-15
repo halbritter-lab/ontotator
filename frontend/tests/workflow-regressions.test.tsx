@@ -671,12 +671,12 @@ it("hides markings of replaced or rejected review targets in text and grays them
   expect(ownRuns.length).toBeGreaterThan(0);
 
   // 3. In sidebar: target1 has badge '✎ Ersetzt' and resolved styling
-  expect(screen.getByText(/✎ Replaced|✎ Ersetzt/i)).toBeDefined();
+  expect(screen.getByText(/^(Replaced|Ersetzt)$/i)).toBeDefined();
   expect(screen.getByRole("button", { name: /Replaced by:.*HP:0003|Ersetzt durch:.*HP:0003/i })).toBeDefined();
 
   // 4. In sidebar: target2 has badge '✕ Verworfen' and resolved styling
-  expect(screen.getByText(/✕ Rejected|✕ Verworfen/i)).toBeDefined();
-  expect(screen.getByText(/✕ Proposal rejected|✕ Vorschlag verworfen/i)).toBeDefined();
+  expect(screen.getByText(/^(Rejected|Verworfen)$/i)).toBeDefined();
+  expect(screen.getByText(/^(Proposal rejected|Vorschlag verworfen)$/i)).toBeDefined();
 
   // 5. Selecting target1 in sidebar opens ReviewActions in inspector while markings remain completely hidden from text
   fireEvent.click(screen.getAllByText("HP:0001")[0]);

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { importPackage, mentionWithOffsets, openCase, selectText } from "./helpers";
 
 const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
@@ -13,6 +13,12 @@ const markFills = (page: Page) =>
       return `rgb(${r}, ${g}, ${b})`;
     });
   });
+
+/** The palette fill a mark is painted with: marks are a highlighter gradient, so the fill is in background-image. */
+const paintedFill = async (fills: string[], run: Locator) => {
+  const image = await run.evaluate((el) => window.getComputedStyle(el).backgroundImage);
+  return fills.find((fill) => image.includes(fill)) ?? image;
+};
 
 test.describe("Evidence Spans Proof & Verification", () => {
   test("review mode: proposal evidence spans are precisely marked with DOM metadata and visual highlights", async ({ page }) => {
@@ -39,8 +45,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
     // The mark is coloured from the palette: one of the six --mark-N-fill tokens.
     const fills = await markFills(page);
     expect(fills).toHaveLength(6);
-    const hypBgColor = await hypRun.evaluate((el) => window.getComputedStyle(el).backgroundColor);
-    expect(fills).toContain(hypBgColor);
+    expect(fills).toContain(await paintedFill(fills, hypRun));
 
     // 2. Switch to second proposal (HP:0001250 Seizure, span [14:21])
     await page.locator(".doc-item").filter({ hasText: "HP:0001250" }).click();
@@ -55,8 +60,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
     const seizureMentions = await seizureRun.getAttribute("data-mentions");
     expect(seizureMentions).toContain("ev-1");
 
-    const seizureBgColor = await seizureRun.evaluate((el) => window.getComputedStyle(el).backgroundColor);
-    expect(fills).toContain(seizureBgColor);
+    expect(fills).toContain(await paintedFill(fills, seizureRun));
   });
 
   test("independent mode: selecting text creates marked evidence spans with active highlight and handles picking", async ({ page }) => {
@@ -85,8 +89,8 @@ test.describe("Evidence Spans Proof & Verification", () => {
     await expect(markedSpan).toHaveClass(/run--hot/);
 
     // The selected mark keeps its palette fill (the selection is a frame, not a colour).
-    const selectedBgColor = await markedSpan.evaluate((el) => window.getComputedStyle(el).backgroundColor);
-    expect(await markFills(page)).toContain(selectedBgColor);
+    const allFills = await markFills(page);
+    expect(allFills).toContain(await paintedFill(allFills, markedSpan));
 
     // The mention shows the quoted text; its exact offsets are in the tooltip
     await expect(mentionWithOffsets(page, "[0:9]")).toHaveText("“Hypotonia”");

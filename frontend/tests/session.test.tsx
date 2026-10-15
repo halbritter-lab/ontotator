@@ -315,7 +315,7 @@ describe("the login gate", () => {
     const retried = callsTo(fetchMock, "/api/v1/workspaces/ws/commands")[1][1];
     expect(csrfOf(retried)).toBe("csrf-2");
     expect(JSON.parse(retried?.body as string).payload).toEqual({ command: "check_layer", layer_id: "phenotype", checked: true });
-    await screen.findByText(/● Saved/);
+    await screen.findByText(/^Saved$/);
     expect(screen.getByTestId("annotator-identity")).toBeDefined();
   });
 
@@ -404,7 +404,7 @@ describe("the login gate", () => {
 
     logInThrough(dialog, "alice");
     await waitFor(() => expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(2));
-    await screen.findByText(/● Saved/);
+    await screen.findByText(/^Saved$/);
     expect(screen.getByTestId("annotator-identity").closest("[inert]")).toBeNull();
     expect(decide).not.toHaveBeenCalled();
   });

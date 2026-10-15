@@ -195,6 +195,6 @@ describe("ReviewActions", () => {
         onDecide={vi.fn()}
       />
     );
-    expect(screen.queryByText("✦ AI")).toBeNull();
+    expect(screen.queryByText("AI")).toBeNull();
   });
 });
