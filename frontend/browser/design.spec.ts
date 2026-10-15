@@ -92,6 +92,9 @@ test.describe("Design direction C", () => {
     await page.context().clearCookies();
     await openReview(page, "?scenario=design_states", "pkg-design-states", "design-reading");
     await expect(page.locator(".text-container .run--target").first()).toBeVisible();
+    // Term labels resolve after the marks render; capture the settled sidebar.
+    await expect(proposal(page, "HP:0001250")).toContainText("Seizure");
+    await expect(page.locator(".sidebar")).toContainText("spinal muscular atrophy");
     await shoot(page, "editor-review");
 
     await page.context().clearCookies();
