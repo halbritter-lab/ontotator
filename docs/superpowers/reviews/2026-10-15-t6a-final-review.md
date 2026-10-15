@@ -66,3 +66,19 @@ The substitution was disclosed rather than represented as a named tool run.
 
 No source-fix dispatch is required by this review. Local feature integration
 does not imply a main-branch merge, publication or deployment.
+
+## Integrated gate follow-up
+
+The first attempts found one Ruff line wrap and a stale frontend assertion for
+the deliberately removed decorative ontology label. Commits `5e9c309` and
+`41de35c` fix these without product behavior changes. The replacement assertion
+requires the accessible level-2 MONDO term heading. The original whole-source
+reviewer approved this scoped follow-up; the complete frontend suite then
+passed all 436 tests.
+
+The backend step exposed a shared mutable pinned-ontology regression in the
+previously reviewed T2e base (1,022 passed, one failed, one POSIX skip). Its
+independently reviewed correction is recorded in the
+[T2e follow-up](2026-10-15-t2e-final-review.md#integrated-cache-isolation-follow-up).
+The complete combined gate will be rerun on the corrected descendant; these
+partial runs do not establish final browser/container success.

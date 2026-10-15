@@ -70,6 +70,29 @@ The final rebuilt-image/container/full local gate is pending. Earlier-image
 checks and focused correctness tests do not validate that later image or prove
 latency acceptance.
 
+## Integrated cache-isolation follow-up
+
+The combined gate at `41de35c` passed 436 frontend tests but exposed an existing
+tree-detail regression: 1,022 backend tests passed, one failed and one POSIX-only
+test skipped. The equal-resource performance shortcut shared mutable ontology
+terms, allowing later ambient translations into a captured project view.
+
+Fixes `d879a42` and `9a5d68c`, integrated as `121fff1`, snapshot mutable ontology
+data and restore translations from captured bytes. Search engines, exact-name
+lookups and lexical result views bind to that snapshot; the complete fitted
+matrix/vectorizer/rows remain shared. Independent review found that inheriting
+an ambient selected-language subset could still retain uncaptured fitted names.
+The scoped correction starts each pinned subset cache empty and fits selections
+from its own snapshot. The original reviewer reproduced the leak, confirmed its
+resolution and approved the source gate with no new blocking findings.
+
+The unchanged tree regression and 95 focused tests passed after the initial fix;
+42 pure language/construction tests passed after the subset correction, with
+RED evidence for initial-view and eviction rebuild leaks. Ruff and mypy passed.
+Mutable snapshots and independent subset fits add bounded per-view storage and
+first-selection work; final real-HPO memory/latency and integrated acceptance
+remain pending. No limit or latency threshold was relaxed.
+
 The review explicitly leaves these bounds visible:
 
 - Production TLS/DNS/proxy/host provisioning belongs to deployment infrastructure;
