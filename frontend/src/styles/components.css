@@ -474,3 +474,68 @@
 
 /* Shared primitives, Tasks 3–8: Button, Badge, Notice; FormField; Dialog,
    HelpDrawer, DataTable; AppShell. Existing rules above remain their foundation. */
+
+.btn-leading-icon,
+.status-pill-shape {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.btn-spinner {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: button-spin 0.8s linear infinite;
+}
+
+@keyframes button-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-spinner { animation: none; }
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-strong);
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+}
+
+.status-pill--info { color: var(--accent); background: var(--accent-light); }
+.status-pill--success { color: var(--success); background: var(--success-light); }
+.status-pill--warning { color: var(--warning); background: var(--warning-light); }
+.status-pill--danger { color: var(--danger); background: var(--danger-light); }
+
+.status-pill-dot,
+.status-pill-ring {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.status-pill-dot { background: currentColor; }
+.status-pill-ring { border: 1.5px solid currentColor; }
+
+.notice-content { min-width: 0; overflow-wrap: anywhere; }
+.notice-title { display: block; font-weight: var(--weight-strong); }
+.notice > .btn-icon { flex: none; align-self: flex-start; color: inherit; }
+.notice-error { background: var(--danger-light); color: var(--danger); border: 1px solid var(--danger); }
+
+.empty-state { padding: var(--space-5) 0; }
+.empty-state-title { margin: 0; font-size: var(--size-xl); line-height: var(--leading-xl); font-weight: var(--weight-strong); }
+.empty-state-body { margin-top: var(--space-2); color: var(--text-muted); }
+.empty-state-action { margin-top: var(--space-4); }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }

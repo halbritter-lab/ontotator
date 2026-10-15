@@ -27,6 +27,12 @@ function Icon({ children, className }: { children: React.ReactNode; className?: 
 
 type IconProps = { className?: string };
 
+export const IconChevronLeft = (p: IconProps) => <Icon {...p}><path d="m10 3-5 5 5 5" /></Icon>;
+export const IconChevronRight = (p: IconProps) => <Icon {...p}><path d="m6 3 5 5-5 5" /></Icon>;
+export const IconSort = (p: IconProps) => <Icon {...p}><path d="m5 5 3-3 3 3M5 11l3 3 3-3" /></Icon>;
+export const IconSortUp = (p: IconProps) => <Icon {...p}><path d="m4 9 4-4 4 4" /></Icon>;
+export const IconSortDown = (p: IconProps) => <Icon {...p}><path d="m4 7 4 4 4-4" /></Icon>;
+
 export const IconKeyboard = (p: IconProps) => (
   <Icon {...p}>
     <rect x="1.75" y="4" width="12.5" height="8" rx="1.5" />
