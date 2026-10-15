@@ -631,7 +631,7 @@ describe("the tree in the App", () => {
       { document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" },
     ]);
     vi.spyOn(api, "openWorkspace").mockResolvedValue({
-      workspace_id: "ws",
+      read_only: false, workspace_id: "ws",
       view: baseView([snapshot("a1", "HP:A")]),
     });
     mockTree();

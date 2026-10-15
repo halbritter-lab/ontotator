@@ -16,6 +16,12 @@ import httpx
 import ontospan
 
 
+def assigned_documents(username: str, documents: list[str]) -> list[str]:
+    """Stable disjoint document selection for the unchanged 30-user workload."""
+    slot = int(username.removeprefix("load-")) - 1
+    return [document for index, document in enumerate(documents) if index % 30 == slot]
+
+
 def read_hpo(path: Path) -> tuple[list[tuple[str, str]], str, str]:
     raw = path.read_bytes()
     graph = json.loads(raw)["graphs"][0]
@@ -254,7 +260,7 @@ def main() -> None:
         terms, release, sha = read_hpo(args.hpo)
     except (ValueError, KeyError, OSError) as exc:
         parser.error(str(exc))
-    build_assets(args.out, terms, release, sha)
+    manifest = build_assets(args.out, terms, release, sha)
     if args.prepare_only:
         print(
             f"Prepared 1000 documents and 3000 proposals; HPO {release}, SHA256 {sha}"
@@ -335,6 +341,11 @@ def main() -> None:
                 headers={"X-CSRF-Token": response.json()["csrf_token"]},
             ).raise_for_status()
         admin("projects", "add-member", "load", username, "--role", "annotator")
+        selected = assigned_documents(username, manifest["documents"])
+        document_args = [
+            value for document in selected for value in ("--document", document)
+        ]
+        admin("assign", "load", username, "--confirm-language", *document_args)
     print(
         f"Seeded {args.compose_project}: 30 users, 1000 documents, 3000 proposals; HPO {release}. Workers load uploaded ontologies automatically on first use; warm up before measurement."
     )

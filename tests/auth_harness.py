@@ -72,6 +72,51 @@ def grant(
     return True
 
 
+def ensure_assignment(
+    app: FastAPI, username: str, project: str, document_id: str, task: str
+) -> None:
+    """Use real administration; retained revoked work is never recreated."""
+    from ontocurator.assignments.service import AssignmentService
+
+    service = AssignmentService(app.state.repo.db)
+    rows = service.list(
+        project, document_ids=[document_id], user=username, include_revoked=True
+    )
+    if any(row.task == task for row in rows):
+        return
+    # Synthetic users have no language preferences; this explicit override is
+    # audited exactly as it is for an administrator confirming the language.
+    service.assign(HARNESS, project, document_id, username, task, confirm_language=True)
+
+
+def provision_assignments(
+    app: FastAPI, username: str, project: str, roles: Iterable[str]
+) -> None:
+    tasks = []
+    if "annotator" in roles:
+        tasks.append("annotate")
+    if "adjudicator" in roles:
+        tasks.append("review")
+    from ontocurator.assignments.service import AssignmentService
+
+    service = AssignmentService(app.state.repo.db)
+    known = {
+        (row.document_id, row.task)
+        for row in service.list(project, user=username, include_revoked=True)
+    }
+    for document in app.state.repo.list_documents(project):
+        for task in tasks:
+            if (document.document_id, task) not in known:
+                service.assign(
+                    HARNESS,
+                    project,
+                    document.document_id,
+                    username,
+                    task,
+                    confirm_language=True,
+                )
+
+
 def log_in(client: TestClient, username: str) -> dict[str, Any]:
     """Log ``client`` in as ``username``; it sends the CSRF token from now on."""
     # The page's own origin: http://testserver unless the client has another.
@@ -94,6 +139,7 @@ def logged_in(
     system_admin: bool = False,
     pseudonym: str | None = None,
     projects: Mapping[str, Iterable[str]] | None = None,
+    assignments: str | list[tuple[str, str, str]] = "all",
 ) -> TestClient:
     """A new client, logged in as ``username`` (created if needed).
 
@@ -102,6 +148,11 @@ def logged_in(
     ensure_user(app, username, system_admin=system_admin, pseudonym=pseudonym)
     for project, roles in (projects or {}).items():
         assert grant(app, username, project, roles), f"no project '{project}'"
+        if assignments == "all":
+            provision_assignments(app, username, project, roles)
+    if isinstance(assignments, list):
+        for project, document, task in assignments:
+            ensure_assignment(app, username, project, document, task)
     client = TestClient(app)
     log_in(client, username)
     return client
@@ -148,6 +199,8 @@ class AutoLoginClient(TestClient):
             annotator = self._annotator_of(target, kwargs)
             project = self._project_of(target, kwargs)
             joined = project is not None and self._join(annotator, project)
+            if project is not None and (annotator, project) in self.memberships:
+                provision_assignments(self.app, username_for(annotator), project, ROLES)
             if joined or annotator != self.annotator:
                 self.login_as(annotator)
         return super().request(method, url, **kwargs)
@@ -171,14 +224,13 @@ class AutoLoginClient(TestClient):
         self.memberships.add((annotator, project))
         return True
 
-    @staticmethod
-    def _project_of(target: httpx.URL, kwargs: dict[str, Any]) -> str | None:
+    def _project_of(self, target: httpx.URL, kwargs: dict[str, Any]) -> str | None:
         """The project key a request names, if any."""
         body = kwargs.get("json")
         if isinstance(body, dict):
             if isinstance(body.get("project_key"), str):
                 return str(body["project_key"])
-            key = body.get("workspace_key")
+            key = body.get("workspace_key", body.get("key"))
             if isinstance(key, dict) and isinstance(key.get("project_key"), str):
                 return str(key["project_key"])
         parts = target.path.split("/")
@@ -189,6 +241,18 @@ class AutoLoginClient(TestClient):
                 return decode_workspace_id(parts[4]).project_key
             except Exception:  # not a workspace ID (open, review-inputs, ...)
                 return None
+        if (
+            len(parts) > 5
+            and parts[1:4] == ["api", "v1", "assignments"]
+            and parts[4].isdigit()
+        ):
+            from ontocurator.assignments.service import AssignmentService
+
+            with self.app.state.repo.db.transaction() as conn:
+                try:
+                    return AssignmentService._locate(conn, int(parts[4]))
+                except DomainError:
+                    return None
         return None
 
     def _annotator_of(self, target: httpx.URL, kwargs: dict[str, Any]) -> str:
@@ -197,7 +261,7 @@ class AutoLoginClient(TestClient):
             found = _valid_annotator(body.get("annotator_id"))
             if found is not None:
                 return found
-            key = body.get("workspace_key")
+            key = body.get("workspace_key", body.get("key"))
             if isinstance(key, dict):
                 found = _valid_annotator(key.get("annotator_id"))
                 if found is not None:
@@ -218,6 +282,19 @@ class AutoLoginClient(TestClient):
                 return decode_workspace_id(parts[4]).annotator_id
             except Exception:  # not a workspace ID (open, review-inputs, ...)
                 pass
+        if (
+            len(parts) > 5
+            and parts[1:4] == ["api", "v1", "assignments"]
+            and parts[4].isdigit()
+            and parts[5] == "open"
+        ):
+            from ontocurator.assignments.service import AssignmentService
+
+            with self.app.state.repo.db.transaction() as conn:
+                try:
+                    return AssignmentService._get(conn, int(parts[4])).pseudonym
+                except Exception:
+                    pass
         return self.annotator or DEFAULT_ANNOTATOR
 
 

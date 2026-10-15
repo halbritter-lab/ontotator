@@ -85,6 +85,14 @@ def db(tmp_path: Path) -> Database:
 
 
 def test_a_member_sees_only_their_projects(db: Database) -> None:
+    from ontocurator.assignments.service import AssignmentService
+
+    accounts = AccountService(db)
+    user = accounts.create_user(ADMIN, "scope-alice", "Alice").user
+    MembershipService(db).add(ADMIN, "A", user.username, ["annotator"])
+    AssignmentService(db).assign(
+        ADMIN, "A", "doc-beta", user.username, "annotate", confirm_language=True
+    )
     alice = ScopedRepository(db, _access({"A": {"annotator"}}))
 
     assert [m.package_id for m in alice.list_manifests()] == ["A"]
@@ -212,6 +220,7 @@ def test_lookups_without_a_project_are_refused(
 
 
 def test_a_system_admin_sees_every_project(db: Database) -> None:
+    AccountService(db).create_user(ADMIN, "scope-admin", "Admin", system_admin=True)
     admin = ScopedRepository(db, _access(admin=True))
 
     assert sorted(m.package_id for m in admin.list_manifests()) == ["A", "B"]
