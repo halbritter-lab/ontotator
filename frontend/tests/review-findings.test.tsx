@@ -2,10 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   api,
-  ApiClient,
   ApiError,
   ConflictError,
-  parseContentDispositionFilename,
 } from "../src/api/client";
 import { App } from "../src/App";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
@@ -192,43 +190,6 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     expect(cut.className).toBe("identity-name");
     expect(cut.textContent).toBe(name);
     expect(badge.querySelector("strong")!.textContent).toBe(`${name} (dr-a)`);
-  });
-});
-
-describe("Export", () => {
-  it("uses the server filename from Content-Disposition (filename and filename*)", async () => {
-    expect(parseContentDispositionFilename('attachment; filename="case-1_dr-a.zip"')).toBe("case-1_dr-a.zip");
-    expect(parseContentDispositionFilename("attachment; filename*=UTF-8''f%C3%A4lle.zip; filename=\"x.zip\"")).toBe("fälle.zip");
-    expect(parseContentDispositionFilename(null)).toBeNull();
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      headers: new Headers({ "Content-Disposition": 'attachment; filename="pkg_dr-a_review.zip"' }),
-      blob: async () => new Blob(["zip"]),
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("URL", Object.assign(class extends URL {}, { createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() }));
-    let downloaded = "";
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloaded = this.download; });
-    const name = await new ApiClient().downloadPackageExport("pkg", { annotator_id: "dr a", mode: "review" });
-    expect(name).toBe("pkg_dr-a_review.zip");
-    expect(downloaded).toBe("pkg_dr-a_review.zip");
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/packages/pkg/export?annotator_id=dr+a&mode=review");
-    expect(fetchMock.mock.calls[0][1]).toEqual({ credentials: "same-origin" });
-    await new Promise((r) => setTimeout(r, 0));
-  });
-
-  it("reports export failures in English and offers a package-wide export on the dashboard", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
-    await expect(new ApiClient().downloadExport("ws")).rejects.toThrow(/Export failed \(500\)/);
-    vi.unstubAllGlobals();
-    asAnnotator("annotator-1");
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
-    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    const exportSpy = vi.spyOn(api, "downloadPackageExport").mockResolvedValue("x.zip");
-    render(<App />);
-    await waitFor(() => expect(screen.getByRole("table")).toBeDefined());
-    fireEvent.click(screen.getByRole("button", { name: /Export package/i }));
-    await waitFor(() => expect(exportSpy).toHaveBeenCalledWith("pkg", { annotator_id: "annotator-1", mode: "independent" }));
   });
 });
 

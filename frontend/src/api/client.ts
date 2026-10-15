@@ -5,12 +5,6 @@
 
 import type { components } from "./generated";
 
-/** The manifest an upload answers with; the contract leaves it untyped. */
-export interface PackageManifest {
-  package_id?: string;
-  document_order?: string[];
-  [key: string]: unknown;
-}
 export type DocumentSummary = components["schemas"]["DocumentSummary"];
 export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
@@ -45,7 +39,6 @@ export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
 export type OntologyTranslation = components["schemas"]["OntologyTranslation"];
-export type TranslationUploadInfo = components["schemas"]["TranslationUploadInfo"];
 
 export interface OntologyInfo {
   ontology_id: string;
@@ -144,28 +137,6 @@ export class ValidationError extends ApiError {
     super(422, message, code, details);
     this.name = "ValidationError";
   }
-}
-
-/** Extract a filename from a Content-Disposition header (supports RFC 5987 filename*). */
-export function parseContentDispositionFilename(header: string | null | undefined): string | null {
-  if (!header) return null;
-  const star = /filename\*\s*=\s*([^;]+)/i.exec(header);
-  if (star) {
-    let value = star[1].trim().replace(/^"(.*)"$/, "$1");
-    const parts = /^([^']*)'[^']*'(.*)$/.exec(value);
-    if (parts) value = parts[2];
-    try {
-      return decodeURIComponent(value) || null;
-    } catch {
-      return value || null;
-    }
-  }
-  const plain = /filename\s*=\s*("((?:\\.|[^"\\])*)"|[^;]+)/i.exec(header);
-  if (plain) {
-    const value = plain[2] !== undefined ? plain[2].replace(/\\(.)/g, "$1") : plain[1].trim();
-    return value || null;
-  }
-  return null;
 }
 
 export interface ApiClientOptions {
@@ -289,21 +260,6 @@ export class ApiClient {
     } finally {
       this.setCsrfToken(null);
     }
-  }
-
-  async uploadPackage(
-    file: File
-  ): Promise<{ package_id: string; manifest: PackageManifest }> {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    return this.request<{ package_id: string; manifest: PackageManifest }>(
-      "/api/v1/packages",
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
   }
 
   async getPreferences(): Promise<Preferences> {
@@ -453,64 +409,6 @@ export class ApiClient {
     });
   }
 
-  getExportUrl(workspaceId: string): string {
-    return `${this.baseUrl}/api/v1/workspaces/${encodeURIComponent(workspaceId)}/export`;
-  }
-
-  getPackageExportUrl(packageId: string, params: { annotator_id: string; mode: string }): string {
-    const qs = new URLSearchParams({ annotator_id: params.annotator_id, mode: params.mode });
-    return `${this.baseUrl}/api/v1/packages/${encodeURIComponent(packageId)}/export?${qs.toString()}`;
-  }
-
-  private async downloadFile(url: string, fallbackName: string): Promise<string> {
-    const sent = this.csrfToken;
-    const response = await fetch(url, { credentials: "same-origin" });
-    if (!response.ok) {
-      let detail = "";
-      let code: string | undefined;
-      try {
-        const body = await response.json();
-        detail = body?.details || body?.detail || "";
-        code = body?.code || undefined;
-      } catch {
-        // not JSON
-      }
-      if (response.status === 401) {
-        if (this.csrfToken === sent) sessionExpired.notify();
-        throw new AuthError(detail || "Log in to continue.", detail, code ?? "NOT_AUTHENTICATED", 401);
-      }
-      throw new ApiError(
-        response.status,
-        `Export failed (${response.status})${detail ? `: ${detail}` : ""}`,
-      );
-    }
-    const filename =
-      parseContentDispositionFilename(response.headers?.get?.("Content-Disposition")) ?? fallbackName;
-    const objectUrl = URL.createObjectURL(await response.blob());
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-    return filename;
-  }
-
-  async downloadExport(workspaceId: string): Promise<string> {
-    return this.downloadFile(this.getExportUrl(workspaceId), "ontocurator-export.zip");
-  }
-
-  async downloadPackageExport(
-    packageId: string,
-    params: { annotator_id: string; mode: string },
-  ): Promise<string> {
-    return this.downloadFile(
-      this.getPackageExportUrl(packageId, params),
-      `${packageId}-export.zip`,
-    );
-  }
-
   async listOntologies(): Promise<OntologyInfo[]> {
     return this.request<OntologyInfo[]>("/api/v1/ontologies", {
       method: "GET",
@@ -523,15 +421,6 @@ export class ApiClient {
     });
   }
 
-  /** Upload an ontology (.json) or a translation file (.tsv, e.g. hp-de.babelon.tsv). */
-  async uploadOntology(file: File): Promise<OntologyInfo | TranslationUploadInfo> {
-    const formData = new FormData();
-    formData.append("file", file);
-    return this.request<OntologyInfo | TranslationUploadInfo>("/api/v1/ontologies", {
-      method: "POST",
-      body: formData,
-    });
-  }
 }
 
 export const api = new ApiClient();

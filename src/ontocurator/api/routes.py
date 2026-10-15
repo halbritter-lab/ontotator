@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import base64
-import io
 import json
-import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal, cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from ontocurator.api.identity import (
@@ -20,18 +17,11 @@ from ontocurator.api.identity import (
     own_annotator,
     own_key,
     principal_of,
-    require_system_admin,
 )
 from ontocurator.application.editing import EditorService
-from ontocurator.application.exports import ExportService
 from ontocurator.application.preferences import Preferences, PreferencesUpdate
 from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
-from ontocurator.application.uploads import (
-    OntologyUploadService,
-    PackageImportService,
-    TranslationUploadService,
-)
 from ontocurator.application.workspaces import (
     DocumentSummary,
     WorkspaceService,
@@ -50,7 +40,7 @@ from ontocurator.authz.policy import (
 )
 from ontocurator.authz.scoped import ScopedRepository, project_not_found
 from ontocurator.domain.annotations import AnnotationSnapshot
-from ontocurator.domain.errors import AccessDenied, DomainError, PayloadTooLarge
+from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import (
@@ -65,9 +55,7 @@ from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
 from ontocurator.packages.models import (
     SearchEventRecord,
-    ValidatedPackage,
 )
-from ontocurator.packages.writer import PackageWriter
 from ontocurator.storage.repository import Repository
 
 router = APIRouter(prefix="/api/v1")
@@ -219,17 +207,10 @@ def get_submission_service(
     return SubmissionService(repo, ontology)
 
 
-def get_export_service(
-    repo: RepoDep,
-) -> ExportService:
-    return ExportService(repo)
-
-
 WorkspaceSvcDep = Annotated[WorkspaceService, Depends(get_workspace_service)]
 EditorSvcDep = Annotated[EditorService, Depends(get_editor_service)]
 ReviewSvcDep = Annotated[ReviewService, Depends(get_review_service)]
 SubmissionSvcDep = Annotated[SubmissionService, Depends(get_submission_service)]
-ExportSvcDep = Annotated[ExportService, Depends(get_export_service)]
 
 
 # --- Routes ------------------------------------------------------------------- #
@@ -307,25 +288,6 @@ def update_preferences(
 ) -> Preferences:
     """Update preferences; omitted fields are kept, modes merge per package."""
     return _preferences_store(request).update(principal.user_id, change)
-
-
-@router.post("/packages")
-def upload_package(
-    file: UploadFile,
-    repo: RepoDep,
-    ontology: OntologyDep,
-    principal: PrincipalDep,
-) -> dict[str, str | dict[str, object]]:
-    """Upload and atomically import a work package archive (system admins).
-
-    A new project gets the uploader as a member with every role, so the
-    dashboard flow keeps working until projects are imported by the CLI
-    (T2d). Runs in the thread pool (plain ``def``); the body is copied with a
-    size cap.
-    """
-    require_system_admin(principal)
-    manifest = PackageImportService(repo, ontology).import_upload(file.file)
-    return {"package_id": manifest.package_id, "manifest": manifest.model_dump()}
 
 
 @router.get("/packages/{package_id}/documents")
@@ -596,73 +558,6 @@ def search_ontology(
     return result
 
 
-_UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]")
-
-
-def _export_filename(*parts: str) -> str:
-    """``part1__part2__..__YYYYMMDD-HHMMSS.zip`` restricted to [A-Za-z0-9._-]."""
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    safe = [_UNSAFE_FILENAME_CHARS.sub("_", part) or "_" for part in parts]
-    return "__".join([*safe, stamp]) + ".zip"
-
-
-def _zip_response(pkg: ValidatedPackage, filename: str) -> Response:
-    buf = io.BytesIO()
-    PackageWriter.write_to_stream(pkg, buf)
-    return Response(
-        content=buf.getvalue(),
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.get("/workspaces/{workspace_id}/export")
-def export_workspace(
-    workspace_id: str,
-    exp_svc: ExportSvcDep,
-    principal: PrincipalDep,
-) -> Response:
-    """Export scoped workspace package as downloadable ZIP.
-
-    Filename: ``<package_id>__<annotator_id>__<document_id>__<YYYYMMDD-HHMMSS>.zip``.
-    """
-    key = own_key(principal, decode_workspace_id(workspace_id))
-    pkg = exp_svc.for_workspace(key)
-    return _zip_response(
-        pkg, _export_filename(key.package_id, key.annotator_id, key.document_id)
-    )
-
-
-@router.get(
-    "/packages/{package_id}/export",
-    response_class=Response,
-    responses={200: {"content": {"application/zip": {}}}},
-)
-def export_package_for_annotator(
-    package_id: str,
-    request: Request,
-    exp_svc: ExportSvcDep,
-    principal: PrincipalDep,
-    annotator_id: str | None = None,
-    mode: WorkspaceMode | None = None,
-) -> Response:
-    """Export all work of one annotator on a package as one v2 work package.
-
-    The annotator is the logged-in user (``annotator_id`` omitted or their own
-    pseudonym); a system admin or a lead of the project may export another
-    annotator's work (Q5).
-    Includes every document of the package and all of the annotator's
-    submissions, submitted annotations and search events in ``mode`` (all
-    modes if omitted). Filename:
-    ``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.
-    """
-    annotator_id = own_annotator(
-        principal, annotator_id, may_read_others=may_read_others(request, package_id)
-    )
-    pkg = exp_svc.for_package(package_id, annotator_id, mode)
-    return _zip_response(pkg, _export_filename(package_id, annotator_id))
-
-
 class OntologyTranslation(BaseModel):
     """One language an ontology can be searched in besides English."""
 
@@ -682,25 +577,6 @@ class OntologyInfo(BaseModel):
     status: Literal["loaded", "failed"] = "loaded"
     error: str | None = None
     translations: list[OntologyTranslation] = Field(default_factory=list)
-
-
-class TranslationUploadInfo(BaseModel):
-    """Answer to the upload of a translation file (``.tsv``)."""
-
-    filename: str
-    # The language the names of the file are searched as. That is the one in
-    # the file name unless the file marks its names differently; with several
-    # languages in one file, the one in the name if it is among them, else the
-    # first.
-    language: str
-    # Every language names of the file were loaded as. Empty when no ontology
-    # was reloaded (``assigned`` is false).
-    languages: list[str] = Field(default_factory=list)
-    # False when no loaded ontology has the file's prefix yet.
-    assigned: bool
-    message: str
-    # The ontologies that were reloaded with the file.
-    ontologies: list[OntologyInfo] = Field(default_factory=list)
 
 
 def _ontology_info(sha: str, svc: OntologyService, path: Path | None) -> OntologyInfo:
@@ -761,96 +637,3 @@ def list_ontologies(ontology: OntologyDep) -> list[OntologyInfo]:
         for failure in ontology.failures()
     )
     return results
-
-
-@router.post("/ontologies")
-def upload_ontology(
-    file: UploadFile,
-    request: Request,
-    ontology: OntologyDep,
-    principal: PrincipalDep,
-) -> OntologyInfo | TranslationUploadInfo:
-    """Upload an ontology (``.json``) or a translation file (``.tsv``).
-
-    An ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` in
-    ``<workspace>/ontologies``, where it is registered again after a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is
-    stored under its own name, replaces a file of that name, and the ontology
-    it belongs to is reloaded. System admins only.
-    """
-    require_system_admin(principal)
-    config = getattr(request.app.state, "config", None)
-    directory = (
-        (config.workspace_dir / "ontologies")
-        if config
-        else Path("./workspace/ontologies")
-    )
-    if (file.filename or "").lower().endswith(".tsv"):
-        return _upload_translation(file, ontology, directory)
-    uploads = OntologyUploadService(ontology, directory)
-    try:
-        stored = uploads.store(file.file, file.filename)
-    except PayloadTooLarge:
-        raise
-    except DomainError as exc:
-        raise HTTPException(
-            status_code=400, detail=f"Failed to register ontology: {exc}"
-        ) from exc
-    return _ontology_info(stored.sha256, stored.service, stored.path)
-
-
-def _upload_translation(
-    file: UploadFile, ontology: OntologyRegistry, directory: Path
-) -> TranslationUploadInfo:
-    try:
-        stored = TranslationUploadService(ontology, directory).store(
-            file.file, file.filename
-        )
-    except PayloadTooLarge:
-        raise
-    except DomainError as exc:
-        # A failed reload, or a file that could not be moved into place, is
-        # not the uploader's mistake.
-        server_side = ("TRANSLATION_RELOAD_FAILED", "TRANSLATION_STORE_FAILED")
-        status = 500 if exc.code in server_side else 400
-        raise HTTPException(
-            status_code=status, detail=f"Failed to add translation: {exc}"
-        ) from exc
-
-    name = stored.path.name
-    infos = [
-        _ontology_info(sha, svc, ontology.registered_path(sha))
-        for sha, svc in stored.services.items()
-    ]
-    if not infos:
-        message = (
-            f"{name} was stored, but no loaded ontology has the prefix "
-            f"'{stored.prefix.upper()}'. It is used as soon as such an ontology is added."
-        )
-    else:
-        loaded = "; ".join(
-            f"{info.ontology_id.upper()} {info.release}: "
-            + ", ".join(f"{t.language} {t.term_count} terms" for t in info.translations)
-            for info in infos
-        )
-        message = f"{name} was added. {loaded}."
-    language = stored.language
-    languages = list(stored.languages)
-    if languages and languages != [stored.language]:
-        # The file name decides the ontology only; the language of a name is
-        # the one the file gives it.
-        marked = ", ".join(f"'{code}'" for code in languages)
-        searched = marked if len(languages) == 1 else "such"
-        message += (
-            f" The file name says '{stored.language}', but the names in the "
-            f"file are marked as {marked} and are searched as {searched}."
-        )
-        if stored.language not in languages:
-            language = languages[0]
-    return TranslationUploadInfo(
-        filename=name,
-        language=language,
-        languages=languages,
-        assigned=bool(infos),
-        message=message,
-        ontologies=infos,
-    )

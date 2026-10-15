@@ -39,6 +39,7 @@ APPEND_ONLY_TABLES = (
     "submissions",
     "audit_events",
     "edit_events",
+    "proposal_sets",
 )
 
 NAMING_CONVENTION = {
@@ -156,7 +157,11 @@ class EvidenceSnapshotRow(Base):
 
 
 class ProposalAnnotationRow(Base):
-    """An annotation the project offers as input (imported proposals)."""
+    """An annotation the project offers as input (imported proposals).
+
+    ``proposal_set_id`` names the imported T1 set it came with (NULL for seed
+    packages); ``notes`` are the set's provenance notes (T2d).
+    """
 
     __tablename__ = "proposal_annotations"
     __table_args__ = (
@@ -168,11 +173,20 @@ class ProposalAnnotationRow(Base):
                 f"{SCHEMA}.annotation_snapshots.version",
             ],
         ),
+        Index(
+            "ix_proposal_annotations_project_id_proposal_set_id",
+            "project_id",
+            "proposal_set_id",
+        ),
     )
 
     project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     annotation_id: Mapped[str] = mapped_column(primary_key=True)
     version: Mapped[str] = mapped_column(primary_key=True)
+    proposal_set_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(f"{SCHEMA}.proposal_sets.id")
+    )
+    notes: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
 
 
 class ProposalEvidenceRow(Base):
@@ -521,3 +535,114 @@ class EditEventRow(Base):
     revision_after: Mapped[int]
     state: Mapped[dict[str, Any]]
     submission_id: Mapped[str | None]
+
+
+# --- Ontologies and jobs (T2d, migration 0004) ----------------------------
+
+
+class OntologyFileRow(Base):
+    """An uploaded ontology or translation file; the bytes are in the blob store."""
+
+    __tablename__ = "ontology_files"
+    __table_args__ = (
+        CheckConstraint("kind IN ('ontology', 'translation')", name="kind"),
+        Index("ix_ontology_files_prefix_kind", "prefix", "kind"),
+    )
+
+    sha256: Mapped[str] = mapped_column(
+        ForeignKey(StoredFileRow.sha256), primary_key=True
+    )
+    kind: Mapped[str]
+    # The lower-case dominant prefix, e.g. ``hp``.
+    prefix: Mapped[str]
+    release: Mapped[str | None]
+    filename: Mapped[str]
+    language: Mapped[str | None]
+    uploaded_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    uploaded_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ProjectOntologyRow(Base):
+    """A project's pin of one profile ontology to an uploaded file (P7)."""
+
+    __tablename__ = "project_ontologies"
+    __table_args__ = (
+        CheckConstraint(
+            "t1_profile IN ('generic', 'hpo-phenotype')", name="t1_profile"
+        ),
+    )
+
+    project_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id), primary_key=True
+    )
+    ontology_id: Mapped[str] = mapped_column(primary_key=True)
+    sha256: Mapped[str] = mapped_column(ForeignKey(OntologyFileRow.sha256))
+    allowed_roots: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
+    t1_profile: Mapped[str] = mapped_column(server_default=text("'generic'"))
+
+
+class JobRow(Base):
+    """A long-running import or export, claimed by one worker (P6, index D-l)."""
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed')", name="status"
+        ),
+        Index("ix_jobs_status_id", "status", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    kind: Mapped[str]
+    status: Mapped[str]
+    project_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(ProjectRow.id)
+    )
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    requested_label: Mapped[str]
+    payload: Mapped[dict[str, Any]]
+    result: Mapped[dict[str, Any] | None]
+    error: Mapped[str | None]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    started_at: Mapped[datetime | None]
+    finished_at: Mapped[datetime | None]
+    worker: Mapped[str | None]
+
+
+class ProposalSetRow(Base):
+    """An imported T1 annotation set, kept as delivered (append-only, T7 O1).
+
+    One row per (bundle, set, document); a re-import of the same set is
+    skipped. ``manifest_sha256`` is the hash of the bundle's ``manifest.json``
+    bytes; a single ``.json`` unit has neither bundle id nor manifest hash.
+    """
+
+    __tablename__ = "proposal_sets"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "bundle_id",
+            "annotation_set_id",
+            "document_id",
+            name="uq_proposal_sets_identity",
+            postgresql_nulls_not_distinct=True,
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "document_id"],
+            [f"{SCHEMA}.documents.project_id", f"{SCHEMA}.documents.document_id"],
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    document_id: Mapped[str]
+    bundle_id: Mapped[str | None]
+    manifest_sha256: Mapped[str | None]
+    annotation_set_id: Mapped[str]
+    set_kind: Mapped[str]
+    actors: Mapped[list[Any]]
+    payload: Mapped[dict[str, Any]]
+    source_sha256: Mapped[str] = mapped_column(ForeignKey(StoredFileRow.sha256))
+    imported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    imported_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(JobRow.id))

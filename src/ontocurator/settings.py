@@ -6,8 +6,10 @@ from both. The Docker service contract uses only the file form (T2 D1).
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -17,6 +19,89 @@ from sqlalchemy.exc import ArgumentError
 
 class SettingsError(ValueError):
     """A setting is missing, contradictory or unreadable."""
+
+
+@dataclass(frozen=True)
+class ServerSettings:
+    """Validated runtime settings; secret-bearing fields are never repr'd."""
+
+    environment: str
+    data_dir: Path
+    public_origin: str | None
+    trusted_proxies: tuple[str, ...]
+    workers: int
+    admin_password_hash: str | None = field(repr=False)
+    database_url: URL = field(repr=False)
+
+
+def server_settings(env: Mapping[str, str] | None = None) -> ServerSettings:
+    """Read application settings only, without migration/owner credentials."""
+    env = os.environ if env is None else env
+    environment = env.get("ONTOCURATOR_ENV", "development")
+    if environment not in ("development", "production"):
+        raise SettingsError("ONTOCURATOR_ENV must be development or production")
+    production = environment == "production"
+    raw_origin = env.get("ONTOCURATOR_PUBLIC_ORIGIN")
+    origin = None
+    if raw_origin is not None:
+        try:
+            origin = canonical_origin(raw_origin)
+        except SettingsError as exc:
+            raise SettingsError(f"ONTOCURATOR_PUBLIC_ORIGIN: {exc}") from None
+    if production and (origin is None or not origin.startswith("https://")):
+        raise SettingsError("ONTOCURATOR_PUBLIC_ORIGIN must be an https:// origin")
+    raw_proxies = env.get("ONTOCURATOR_TRUSTED_PROXIES", "")
+    proxies: tuple[str, ...] = ()
+    if raw_proxies:
+        try:
+            proxies = tuple(
+                str(ipaddress.ip_address(ip.strip())) for ip in raw_proxies.split(",")
+            )
+        except ValueError:
+            raise SettingsError(
+                "ONTOCURATOR_TRUSTED_PROXIES must contain exact IP addresses"
+            ) from None
+    if production and not proxies:
+        raise SettingsError("ONTOCURATOR_TRUSTED_PROXIES is required in production")
+    try:
+        workers = int(env.get("ONTOCURATOR_WORKERS", "2"))
+    except ValueError:
+        raise SettingsError(
+            "ONTOCURATOR_WORKERS must be an integer from 1 to 16"
+        ) from None
+    if not 1 <= workers <= 16:
+        raise SettingsError("ONTOCURATOR_WORKERS must be an integer from 1 to 16")
+    if production:
+        for name in (
+            "ONTOCURATOR_DATABASE_PASSWORD",
+            "ONTOCURATOR_ADMIN_PASSWORD_HASH",
+        ):
+            if name in env:
+                raise SettingsError(f"{name} must come from {name}_FILE in production")
+        # Check before adding a file password: authority and query passwords
+        # are plaintext secrets. Psycopg query options override URL credentials;
+        # SQLAlchemy decodes query keys, including percent-encoded "password".
+        raw_url = env.get("ONTOCURATOR_DATABASE_URL", "")
+        try:
+            parsed_url = make_url(raw_url)
+        except ArgumentError:
+            raise SettingsError("ONTOCURATOR_DATABASE_URL is not a valid URL") from None
+        if parsed_url.password is not None or "password" in parsed_url.query:
+            raise SettingsError(
+                "ONTOCURATOR_DATABASE_URL must not contain a password; use ONTOCURATOR_DATABASE_PASSWORD_FILE"
+            )
+    url = database_url(env)
+    return ServerSettings(
+        environment=environment,
+        data_dir=Path(
+            env.get("ONTOCURATOR_DATA_DIR", "/data" if production else "data")
+        ),
+        public_origin=origin,
+        trusted_proxies=proxies,
+        workers=workers,
+        admin_password_hash=read_secret("ONTOCURATOR_ADMIN_PASSWORD_HASH", env),
+        database_url=url,
+    )
 
 
 def read_secret(name: str, env: Mapping[str, str] | None = None) -> str | None:

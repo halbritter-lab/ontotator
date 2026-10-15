@@ -47,7 +47,7 @@ import { TreeBrowser } from "../editor/TreeBrowser";
 import { useTermLabels } from "../editor/useTermLabels";
 import { type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { markColourSlot } from "../editor/markColours";
-import { IconCheck, IconClose, IconDownload, IconKeyboard, IconPencil, IconQuestion, IconRetry } from "../ui/icons";
+import { IconCheck, IconClose, IconKeyboard, IconPencil, IconQuestion, IconRetry } from "../ui/icons";
 import { isNegated } from "../editor/negation";
 import { Dialog } from "../ui/Dialog";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -487,11 +487,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     : isOffline ? "Offline"
     : "Saved";
   const statusIsError = queueState === "conflict" || queueState === "error" || isOffline;
-
-  const downloadExport = async () => {
-    try { await queueRef.current.flush(); await api.downloadExport(workspaceId); }
-    catch (error) { reportError(error); }
-  };
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -1398,15 +1393,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           )}
 
           <button
-            onClick={downloadExport}
-            className="btn btn-quiet btn-sm"
-            title="Export case data as ZIP"
-          >
-            <IconDownload />
-            Export (.zip)
-          </button>
-
-          <button
             type="button"
             className="btn btn-primary btn-sm"
             onClick={handleSubmitWorkspace}
@@ -1873,13 +1859,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               Review next case (Case {nextDoc.position}) →
             </button>
           )}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={downloadExport}
-          >
-            📥 Download export
-          </button>
           <button
             type="button"
             className="btn btn-secondary"

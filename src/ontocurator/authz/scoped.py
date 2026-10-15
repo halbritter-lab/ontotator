@@ -10,9 +10,9 @@ either overridden here or listed in ``PROJECT_FREE``; a test enforces that.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from sqlalchemy import Connection, select
 
@@ -31,6 +31,7 @@ from ontocurator.domain.workspace import (
     Submission,
     WorkspaceKey,
 )
+from ontocurator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet, Pin
 from ontocurator.ontology.conditions import SearchCondition
 from ontocurator.packages.models import (
     PackageManifest,
@@ -41,6 +42,7 @@ from ontocurator.storage.database import Database
 from ontocurator.storage.repository import (
     DraftState,
     EditEvent,
+    ProjectExport,
     ProjectInfo,
     Repository,
 )
@@ -125,6 +127,85 @@ class ScopedRepository(Repository):
                 on_create(conn, project_id)
 
         return super().import_package(package, fallback_axes_config, on_create=created)
+
+    def create_project(
+        self,
+        key: str,
+        name: str,
+        description: str | None,
+        profile: TaskProfile,
+        pins: Mapping[str, Pin],
+        *,
+        on_create: Callable[[Connection, int], None] | None = None,
+    ) -> None:
+        """Create a project (system admins only), audited as ``project.create``.
+
+        A creating user becomes a member with every role, as for
+        :meth:`import_package`.
+        """
+        if not can(self.access, Action.CREATE_PROJECT):
+            raise AccessDenied("NOT_ALLOWED", "You may not create projects.")
+        actor = self.actor
+
+        def created(conn: Connection, project_id: int) -> None:
+            now = datetime.now(UTC)
+            if actor is not None:
+                record_audit(
+                    conn,
+                    actor,
+                    "project.create",
+                    target_type="project",
+                    target_id=key,
+                    project_id=project_id,
+                    details={
+                        "name": name,
+                        "profile_id": profile.profile_id,
+                        "pins": {
+                            ontology_id: pin.sha256
+                            for ontology_id, pin in sorted(pins.items())
+                        },
+                    },
+                    at=now,
+                )
+            if actor is not None and actor.user_id is not None:
+                username = conn.execute(
+                    select(UserRow.username).where(UserRow.id == actor.user_id)
+                ).scalar_one()
+                grant_roles(
+                    conn, actor, project_id, actor.user_id, username, ROLES, now
+                )
+            if on_create is not None:
+                on_create(conn, project_id)
+
+        super().create_project(key, name, description, profile, pins, on_create=created)
+
+    def project_pins(self, package_id: str) -> dict[str, Pin]:
+        self._visible(package_id)
+        return super().project_pins(package_id)
+
+    def add_documents_and_proposals(
+        self,
+        package_id: str,
+        documents: Sequence[ImportedDocument],
+        proposal_sets: Sequence[ImportedSet],
+        *,
+        source_sha256: str,
+        imported_by: int | None = None,
+        job_id: int | None = None,
+        on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
+    ) -> ImportCounts:
+        self._visible(package_id)
+        if not can(self.access, Action.IMPORT_DOCUMENTS, package_id):
+            raise AccessDenied("NOT_ALLOWED", "You may not import into this project.")
+        return super().add_documents_and_proposals(
+            package_id,
+            documents,
+            proposal_sets,
+            source_sha256=source_sha256,
+            imported_by=imported_by,
+            job_id=job_id,
+            on_done=on_done,
+        )
 
     def get_search_conditions(self, package_id: str) -> list[SearchCondition] | None:
         self._visible(package_id)
@@ -311,6 +392,20 @@ class ScopedRepository(Repository):
         return super().export_package(
             package_id, include_captured_conditions=include_captured_conditions
         )
+
+    def t1_export_content(self, package_id: str) -> ProjectExport:
+        self._visible(package_id)
+        if not can(self.access, Action.EXPORT_ALL_WORK, package_id):
+            raise AccessDenied("NOT_ALLOWED", "You may not export this project.")
+        return super().t1_export_content(package_id)
+
+    def edit_log(self, package_id: str) -> list[dict[str, Any]]:
+        self._visible(package_id)
+        if not can(self.access, Action.EXPORT_EDIT_LOG, package_id):
+            raise AccessDenied(
+                "NOT_ALLOWED", "You may not export the edit log of this project."
+            )
+        return super().edit_log(package_id)
 
     # --- edit log ----------------------------------------------------------- #
 

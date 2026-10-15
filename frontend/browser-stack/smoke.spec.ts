@@ -1,0 +1,36 @@
+import { expect, test } from "@playwright/test";
+
+test("stack smoke: log in, open the project, annotate, submit", async ({ page }) => {
+  await page.goto("/");
+  const login = page.getByRole("form", { name: "Log in to Ontocurator" });
+  await login.getByLabel("Username").fill("smoke-annotator");
+  // Synthetic DEVELOPMENT ONLY account, created by scripts/seed_stack.py.
+  await login.getByLabel("Password").fill(process.env.STACK_SMOKE_PASSWORD ?? "development-only-smoke-password");
+  await login.getByRole("button", { name: "Log in", exact: true }).click();
+  const projects = page.locator("#package-select");
+  await expect(projects.locator("option[value='smoke']")).toHaveText(/smoke/i);
+  await projects.selectOption("smoke");
+  await page.locator("#mode-select").selectOption("independent");
+  const firstCase = page.getByRole("row").filter({ hasText: "smoke-001" });
+  await expect(firstCase).toContainText("Open");
+  await firstCase.click();
+  await page.getByRole("button", { name: "Open case", exact: true }).click();
+  await expect(page.locator(".text-container")).toContainText("Hypotonia and seizure");
+  await page.getByRole("button", { name: /\+ New Annotation/i }).click();
+  await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
+  await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
+  await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001252");
+  await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
+  await page.getByRole("button", { name: /Finish & Submit Case/i }).click();
+  const submit = page.getByRole("dialog", { name: "Submit case", exact: true });
+  await submit.getByLabel(/Entire text checked for further findings/i).check();
+  await submit.getByRole("button", { name: "Submit case", exact: true }).click();
+  const completed = page.getByRole("dialog", { name: "Case submitted", exact: true });
+  await expect(completed).toContainText("Case successfully submitted");
+  await completed.getByRole("button", { name: "Back to dashboard" }).click();
+  await expect(page.getByRole("row").filter({ hasText: "smoke-001" })).toContainText("Completed");
+  await page.reload();
+  await projects.selectOption("smoke");
+  await page.locator("#mode-select").selectOption("independent");
+  await expect(page.getByRole("row").filter({ hasText: "smoke-001" })).toContainText("Completed");
+});

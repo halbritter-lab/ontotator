@@ -4,10 +4,12 @@ import hashlib
 import io
 
 import pytest
-from auth_harness import AutoLoginClient, logged_in
+from auth_harness import AutoLoginClient, logged_in, upload_package
 from layered_fixtures import HP_DIGEST, make_layered_package
 from pg_harness import database_url_for
 from sqlalchemy.exc import OperationalError
+from support.v2_exports import ExportService
+from support.v2_writer import PackageWriter
 from test_api import app_client as _shared_app_client
 from test_ontology_tree import (
     FIXTURE_PATH,
@@ -18,11 +20,9 @@ from test_ontology_tree import (
 )
 
 from ontocurator.api.app import create_app
-from ontocurator.application.exports import ExportService
 from ontocurator.config import AppConfig
 from ontocurator.domain.profiles import profile_hash
 from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.packages.writer import PackageWriter
 from ontocurator.storage.repository import Repository
 
 app_client = _shared_app_client
@@ -46,7 +46,7 @@ def _import(client, package) -> None:
     buf = io.BytesIO()
     PackageWriter.write_to_stream(package, buf)
     files = {"file": ("package.zip", buf.getvalue(), "application/zip")}
-    resp = client.post("/api/v1/packages", files=files)
+    resp = upload_package(client, files=files)
     assert resp.status_code == 200, resp.text
 
 

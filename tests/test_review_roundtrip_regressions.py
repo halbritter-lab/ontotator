@@ -4,9 +4,11 @@ from pathlib import Path
 import pytest
 from layered_fixtures import make_layered_package
 from pg_harness import database_for
+from support.v2_exports import ExportService
+from support.v2_reader import read_package
+from support.v2_writer import PackageWriter
 
 from ontocurator.application.editing import CreateAnnotationCommand, EditorService
-from ontocurator.application.exports import ExportService
 from ontocurator.application.reviews import DecisionCommand, ReviewService
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.workspaces import WorkspaceService
@@ -21,8 +23,6 @@ from ontocurator.domain.errors import DomainError
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
-from ontocurator.packages.reader import read_package
-from ontocurator.packages.writer import PackageWriter
 from ontocurator.storage.repository import Repository
 
 

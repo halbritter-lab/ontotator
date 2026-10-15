@@ -59,3 +59,32 @@ def test_serve_on_an_unmigrated_database_points_to_db_upgrade(
     assert "ontocurator db upgrade" in result.output
     assert url not in result.output
     mock_run.assert_not_called()
+
+
+@pytest.mark.parametrize("target", ["base", "-1", "+1", "0001:0002", "unknown"])
+def test_upgrade_rejects_non_revision_targets_before_connecting(target: str) -> None:
+    from ontocurator.storage.schema import upgrade
+
+    with pytest.raises(ValueError, match="target"):
+        upgrade("postgresql://unreachable.invalid/db", target=target)
+
+
+def test_upgrade_to_specific_revision_is_forward_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    url = unmigrated_database_url(tmp_path / "target.db")
+    monkeypatch.setenv("ONTOCURATOR_MIGRATION_DATABASE_URL", url)
+    monkeypatch.setenv("ONTOCURATOR_MIGRATE_TARGET", "0001")
+    first = runner.invoke(app, ["db", "upgrade"])
+    assert first.exit_code == 0, first.output
+    assert "revision 0001." in first.output
+    second = runner.invoke(app, ["db", "upgrade", "--target", "0002"])
+    assert second.exit_code == 0, second.output
+    assert "revision 0002." in second.output
+    backwards = runner.invoke(app, ["db", "upgrade", "--target", "0001"])
+    assert backwards.exit_code == 1, backwards.output
+    assert "forward" in backwards.output
+    engine = create_engine(url)
+    with engine.connect() as conn:
+        assert current_revision(conn) == "0002"
+    engine.dispose()

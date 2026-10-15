@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 from pg_harness import database_for
+from support.v2_exports import ExportService
 
 from ontocurator.application.editing import CreateAnnotationCommand, EditorService
-from ontocurator.application.exports import ExportService
 from ontocurator.application.reviews import DecisionCommand, ReviewService
 from ontocurator.application.submissions import SubmissionService, SubmitCommand
 from ontocurator.application.workspaces import WorkspaceService

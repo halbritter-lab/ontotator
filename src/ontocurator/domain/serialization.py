@@ -1,6 +1,10 @@
 from typing import Any, Literal
 
-from ontocurator.domain.annotations import Annotation, AnnotationSnapshot
+from ontocurator.domain.annotations import (
+    Annotation,
+    AnnotationSnapshot,
+    annotation_content,
+)
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import EvidenceSnapshot
 from ontocurator.domain.errors import InvalidAnnotation
@@ -62,18 +66,7 @@ def encode_snapshot(snapshot: AnnotationSnapshot) -> dict[str, Any]:
     )
     return {
         "schema_version": snapshot.schema_version,
-        "annotation": {
-            "annotation_id": snapshot.annotation.annotation_id,
-            "document_id": snapshot.annotation.document_id,
-            "layer_id": snapshot.annotation.layer_id,
-            "type_id": snapshot.annotation.type_id,
-            "term_id": snapshot.annotation.term_id,
-            "axes_values": snapshot.annotation.axes_values,
-            "evidence_refs": [
-                r.model_dump() for r in snapshot.annotation.evidence_refs
-            ],
-            "provenance": snapshot.annotation.provenance.model_dump(),
-        },
+        "annotation": annotation_content(snapshot.annotation),
         "evidence": [e.model_dump() for e in sorted_ev],
         "document_id": snapshot.document_id,
         "text_sha256": snapshot.text_sha256,
@@ -98,18 +91,7 @@ def verify_snapshot(snapshot: AnnotationSnapshot) -> None:
     )
     content = {
         "schema_version": snapshot.schema_version,
-        "annotation": {
-            "annotation_id": snapshot.annotation.annotation_id,
-            "document_id": snapshot.annotation.document_id,
-            "layer_id": snapshot.annotation.layer_id,
-            "type_id": snapshot.annotation.type_id,
-            "term_id": snapshot.annotation.term_id,
-            "axes_values": snapshot.annotation.axes_values,
-            "evidence_refs": [
-                r.model_dump() for r in snapshot.annotation.evidence_refs
-            ],
-            "provenance": snapshot.annotation.provenance.model_dump(),
-        },
+        "annotation": annotation_content(snapshot.annotation),
         "document_id": snapshot.document_id,
         "evidence": [e.model_dump() for e in sorted_ev],
         "layer_config_sha256": snapshot.layer_config_sha256,

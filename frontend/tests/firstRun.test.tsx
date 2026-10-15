@@ -27,30 +27,18 @@ afterEach(() => {
 });
 
 describe("dashboard: guided first run", () => {
-  it("uses real buttons for adding ontologies and importing packages", async () => {
+  it("tells a user without projects to ask an administrator", async () => {
     loggedInAs("annotator-1");
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    vi.spyOn(api, "listPackages").mockResolvedValue([{ package_id: "pkg" }] as any);
-    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
+    vi.spyOn(api, "listPackages").mockResolvedValue([]);
     render(<App />);
-    await screen.findByRole("table");
-    const header = document.querySelector(".app-header") as HTMLElement;
-    expect(within(header).getByRole("button", { name: /Add ontology/i }).tagName).toBe("BUTTON");
-    expect(within(header).getByRole("button", { name: /Import work package/i }).tagName).toBe("BUTTON");
-  });
-
-  it("confirms a successful import with the number of cases", async () => {
-    loggedInAs("annotator-1");
-    vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    vi.spyOn(api, "listPackages").mockResolvedValueOnce([]).mockResolvedValue([{ package_id: "ward-7" }] as any);
-    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    vi.spyOn(api, "uploadPackage").mockResolvedValue({ package_id: "ward-7", manifest: { package_id: "ward-7", document_order: ["a", "b", "c"] } as any });
-    render(<App />);
-    await screen.findByRole("region", { name: /Get started/i });
-    const input = document.querySelector('input[type="file"][accept=".zip"]') as HTMLInputElement;
-    fireEvent.change(input, { target: { files: [new File(["z"], "ward-7.zip")] } });
-    const note = await screen.findByRole("status", { name: /Import result/i });
-    expect(note.textContent).toMatch(/Package 'ward-7' imported – 3 cases/);
+    const guide = await screen.findByRole("region", { name: /Get started/i });
+    expect(guide.textContent).toContain(
+      "No projects are available to you yet. Ask an administrator to add you to a project.",
+    );
+    // Nothing is uploaded or exported in the browser any more (T2d).
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: /Import work package|Add ontology|Export package/i })).toBeNull();
   });
 
   it("uses plain mode labels with one-sentence explanations", async () => {

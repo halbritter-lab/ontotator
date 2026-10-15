@@ -69,6 +69,12 @@ class Annotation(BaseModel):
     type_id: str = "phenotype"
     term_id: str
     axes_values: dict[str, str | None] = Field(default_factory=dict)
+    # The axes whose value was set by a default, not chosen by anyone (T1
+    # ``basis: defaulted``); every other set value is chosen. Part of the
+    # content, but left out of it while empty, so older versions stay valid.
+    axes_defaulted: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     evidence_refs: list[EvidenceRef] = Field(default_factory=list)
     provenance: Provenance
 
@@ -108,7 +114,44 @@ class Annotation(BaseModel):
             self.evidence_refs = sorted(
                 self.evidence_refs, key=lambda r: (r.evidence_id, r.version)
             )
+        unset = [a for a in self.axes_defaulted if self.axes_values.get(a) is None]
+        if unset:
+            raise InvalidAnnotation(f"Defaulted axes without a value: {unset}")
+        self.axes_defaulted = sorted(set(self.axes_defaulted))
         return self
+
+    def with_axes(self, axes_values: dict[str, str | None]) -> "Annotation":
+        """New axis values; a value that is set again unchanged keeps its basis.
+
+        Only a changed value becomes chosen, so a default is never turned into a
+        choice without anyone choosing it.
+        """
+        kept = [
+            axis
+            for axis in self.axes_defaulted
+            if axes_values.get(axis) is not None
+            and axes_values.get(axis) == self.axes_values.get(axis)
+        ]
+        return self.model_copy(
+            update={"axes_values": axes_values, "axes_defaulted": kept}
+        )
+
+
+def annotation_content(annotation: Annotation) -> dict[str, Any]:
+    """The annotation as it enters a snapshot's canonical hash and payload."""
+    content: dict[str, Any] = {
+        "annotation_id": annotation.annotation_id,
+        "document_id": annotation.document_id,
+        "layer_id": annotation.layer_id,
+        "type_id": annotation.type_id,
+        "term_id": annotation.term_id,
+        "axes_values": annotation.axes_values,
+        "evidence_refs": [r.model_dump() for r in annotation.evidence_refs],
+        "provenance": annotation.provenance.model_dump(),
+    }
+    if annotation.axes_defaulted:
+        content["axes_defaulted"] = list(annotation.axes_defaulted)
+    return content
 
 
 class AnnotationSnapshot(BaseModel):
@@ -173,16 +216,7 @@ def snapshot(
 
     canonical_content = {
         "schema_version": schema_version,
-        "annotation": {
-            "annotation_id": annotation.annotation_id,
-            "document_id": annotation.document_id,
-            "layer_id": annotation.layer_id,
-            "type_id": annotation.type_id,
-            "term_id": annotation.term_id,
-            "axes_values": annotation.axes_values,
-            "evidence_refs": [r.model_dump() for r in annotation.evidence_refs],
-            "provenance": annotation.provenance.model_dump(),
-        },
+        "annotation": annotation_content(annotation),
         "document_id": document.document_id,
         "evidence": [e.model_dump() for e in sorted_ev],
         "layer_config_sha256": layer_hash,

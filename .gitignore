@@ -54,3 +54,7 @@ worktrees/
 .impeccable/config.local.json
 .impeccable/review/
 .impeccable/hook.cache.json
+# Private deployment configuration and generated load-test artifacts
+/secrets/
+/.env*
+/loadtest/results/

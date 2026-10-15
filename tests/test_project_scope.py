@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from auth_harness import PASSWORD, ensure_user, logged_in
+from auth_harness import PASSWORD, ensure_user, logged_in, upload_package
 from layered_fixtures import make_layered_package
 from pg_harness import database_for, database_url_for
 from sqlalchemy import select
@@ -98,6 +98,15 @@ def test_a_member_sees_only_their_projects(db: Database) -> None:
 # One call per overridden method, each naming project B.
 CALLS: dict[str, Callable[[Repository], object]] = {
     "import_package": lambda r: r.import_package(_package("B")),
+    "create_project": lambda r: r.create_project(
+        "B", "B", None, _package("B").manifest.task_profile, {}
+    ),
+    "project_pins": lambda r: r.project_pins("B"),
+    "t1_export_content": lambda r: r.t1_export_content("B"),
+    "edit_log": lambda r: r.edit_log("B"),
+    "add_documents_and_proposals": lambda r: r.add_documents_and_proposals(
+        "B", [], [], source_sha256="0" * 64
+    ),
     "get_search_conditions": lambda r: r.get_search_conditions("B"),
     "capture_search_conditions": lambda r: r.capture_search_conditions("B", [], {}),
     "get_embedded_files": lambda r: r.get_embedded_files("B"),
@@ -166,7 +175,7 @@ def test_every_project_method_checks_the_scope(db: Database, method: str) -> Non
     with pytest.raises(DomainError) as error:
         CALLS[method](alice)
 
-    if method == "import_package":
+    if method in ("import_package", "create_project"):
         # Creating or importing is refused alike for missing and foreign keys.
         assert isinstance(error.value, AccessDenied)
         assert error.value.code == "NOT_ALLOWED"
@@ -318,15 +327,15 @@ def test_an_upload_makes_the_uploader_a_member_of_the_new_project(
 ) -> None:
     import io
 
-    from ontocurator.packages.writer import PackageWriter
+    from support.v2_writer import PackageWriter
 
     ensure_user(app, "root", system_admin=True)
     root = logged_in(app, "root")
     buf = io.BytesIO()
     PackageWriter.write_to_stream(_package("C"), buf)
 
-    response = root.post(
-        "/api/v1/packages",
+    response = upload_package(
+        root,
         files={"file": ("c.zip", buf.getvalue(), "application/zip")},
     )
 

@@ -133,31 +133,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/packages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Upload Package
-         * @description Upload and atomically import a work package archive (system admins).
-         *
-         *     A new project gets the uploader as a member with every role, so the
-         *     dashboard flow keeps working until projects are imported by the CLI
-         *     (T2d). Runs in the thread pool (plain ``def``); the body is copied with a
-         *     size cap.
-         */
-        post: operations["upload_package_api_v1_packages_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/packages/{package_id}/documents": {
         parameters: {
             query?: never;
@@ -347,56 +322,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Workspace
-         * @description Export scoped workspace package as downloadable ZIP.
-         *
-         *     Filename: ``<package_id>__<annotator_id>__<document_id>__<YYYYMMDD-HHMMSS>.zip``.
-         */
-        get: operations["export_workspace_api_v1_workspaces__workspace_id__export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/packages/{package_id}/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Package For Annotator
-         * @description Export all work of one annotator on a package as one v2 work package.
-         *
-         *     The annotator is the logged-in user (``annotator_id`` omitted or their own
-         *     pseudonym); a system admin or a lead of the project may export another
-         *     annotator's work (Q5).
-         *     Includes every document of the package and all of the annotator's
-         *     submissions, submitted annotations and search events in ``mode`` (all
-         *     modes if omitted). Filename:
-         *     ``<package_id>__<annotator_id>__<YYYYMMDD-HHMMSS>.zip``.
-         */
-        get: operations["export_package_for_annotator_api_v1_packages__package_id__export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/packages/{package_id}/ontologies": {
         parameters: {
             query?: never;
@@ -430,16 +355,7 @@ export interface paths {
          */
         get: operations["list_ontologies_api_v1_ontologies_get"];
         put?: never;
-        /**
-         * Upload Ontology
-         * @description Upload an ontology (``.json``) or a translation file (``.tsv``).
-         *
-         *     An ontology is stored immutably as ``<stem>-<sha256[:12]>.json`` in
-         *     ``<workspace>/ontologies``, where it is registered again after a restart. A translation file (babelon TSV, e.g. ``hp-de.babelon.tsv``) is
-         *     stored under its own name, replaces a file of that name, and the ontology
-         *     it belongs to is reloaded. System admins only.
-         */
-        post: operations["upload_ontology_api_v1_ontologies_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -528,6 +444,8 @@ export interface components {
             axes_values?: {
                 [key: string]: string | null;
             };
+            /** Axes Defaulted */
+            axes_defaulted?: string[];
             /** Evidence Refs */
             evidence_refs?: components["schemas"]["EvidenceRef"][];
             provenance: components["schemas"]["Provenance"];
@@ -601,16 +519,6 @@ export interface components {
              * @default true
              */
             allow_empty: boolean;
-        };
-        /** Body_upload_ontology_api_v1_ontologies_post */
-        Body_upload_ontology_api_v1_ontologies_post: {
-            /** File */
-            file: string;
-        };
-        /** Body_upload_package_api_v1_packages_post */
-        Body_upload_package_api_v1_packages_post: {
-            /** File */
-            file: string;
         };
         /**
          * CurrentUser
@@ -1309,24 +1217,6 @@ export interface components {
             term_id: string;
         };
         /**
-         * TranslationUploadInfo
-         * @description Answer to the upload of a translation file (``.tsv``).
-         */
-        TranslationUploadInfo: {
-            /** Filename */
-            filename: string;
-            /** Language */
-            language: string;
-            /** Languages */
-            languages?: string[];
-            /** Assigned */
-            assigned: boolean;
-            /** Message */
-            message: string;
-            /** Ontologies */
-            ontologies?: components["schemas"]["OntologyInfo"][];
-        };
-        /**
          * TreeLevel
          * @description An expanded node and the children shown under it.
          */
@@ -1697,43 +1587,6 @@ export interface operations {
             };
         };
     };
-    upload_package_api_v1_packages_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_package_api_v1_packages_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string | {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_package_documents_api_v1_packages__package_id__documents_get: {
         parameters: {
             query?: {
@@ -2037,71 +1890,6 @@ export interface operations {
             };
         };
     };
-    export_workspace_api_v1_workspaces__workspace_id__export_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_package_for_annotator_api_v1_packages__package_id__export_get: {
-        parameters: {
-            query?: {
-                annotator_id?: string | null;
-                mode?: ("independent" | "review" | "assisted") | null;
-            };
-            header?: never;
-            path: {
-                package_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/zip": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     package_ontologies_api_v1_packages__package_id__ontologies_get: {
         parameters: {
             query?: never;
@@ -2149,39 +1937,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OntologyInfo"][];
-                };
-            };
-        };
-    };
-    upload_ontology_api_v1_ontologies_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_ontology_api_v1_ontologies_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OntologyInfo"] | components["schemas"]["TranslationUploadInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

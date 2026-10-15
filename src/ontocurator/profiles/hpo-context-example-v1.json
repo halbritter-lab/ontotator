@@ -41,7 +41,9 @@
               "label": "Experiencer",
               "options": [
                 "patient",
-                "other"
+                "family_member",
+                "other",
+                "unknown"
               ],
               "allow_empty": true
             },
@@ -51,7 +53,7 @@
               "options": [
                 "current",
                 "historical",
-                "future"
+                "unknown"
               ],
               "allow_empty": true
             }

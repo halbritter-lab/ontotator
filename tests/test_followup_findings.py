@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 from pg_harness import database_for
+from support.v2_exports import ExportService
 from test_storage import _sample_package
 
-from ontocurator.application.exports import ExportService
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import (

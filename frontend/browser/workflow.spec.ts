@@ -12,25 +12,25 @@ import {
 
 const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
 
-test("first run: log in, import from the guide, open a case without typing initials", async ({ page }) => {
-  // Show the dashboard as a fresh installation sees it (no packages yet).
-  await page.route("**/api/v1/projects", (route) =>
-    route.request().method() === "GET" ? route.fulfill({ json: [] }) : route.fallback(),
-  );
+test("first run: log in without projects, get a T1 import, open a case without typing initials", async ({ page }) => {
+  // A user without memberships sees the guide, and nothing to upload.
   await loginAs(page, "first-run");
   const guide = page.getByRole("region", { name: "Get started" });
   await expect(guide).toBeVisible();
-  await expect(guide).toContainText("Import work package (.zip)");
+  await expect(guide).toContainText(
+    "No projects are available to you yet. Ask an administrator to add you to a project.",
+  );
   await expect(guide).not.toContainText(/initials/i);
   await expect(page.locator("#mode-select")).toHaveCount(0);
-  await page.unroute("**/api/v1/projects");
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
 
-  const fixture = await page.request.get("/__synthetic_fixture__");
-  const chooser = page.waitForEvent("filechooser");
-  await guide.getByRole("button", { name: "Import work package" }).click();
-  await (await chooser).setFiles({ name: "synthetic.zip", mimeType: "application/zip", buffer: await fixture.body() });
-  await expect(page.getByRole("status", { name: "Import result" })).toContainText("Package 'browser-fixture' imported");
+  // The administrator imports a T1 bundle (the job runs inline) and adds the user.
+  const imported = await page.request.post("/__test_import__?username=first-run");
+  expect(imported.ok()).toBeTruthy();
+  expect(((await imported.json()) as { proposals: number }).proposals).toBeGreaterThan(0);
+  await page.reload();
   await expect(guide).toHaveCount(0);
+  await expect(page.locator("#package-select")).toHaveValue("t1-browser");
 
   // The identity comes from the session: nothing asks for initials or a confirmation.
   await openCase(page);
@@ -67,7 +67,7 @@ test("login: a wrong password is refused; a setup code sets the password and log
   await expect(page.getByTestId("current-user")).toHaveCount(0);
 });
 
-test("real backend: review, resume, reload, submit and authenticated export", async ({ page }) => {
+test("real backend: review, resume, reload and submit", async ({ page }) => {
   await importFixture(page, "browser-reviewer");
   await page.locator("#mode-select").selectOption("review");
   await openCase(page);
@@ -89,11 +89,7 @@ test("real backend: review, resume, reload, submit and authenticated export", as
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 2");
   await submitCase(page);
 
-  const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download export/i }).click();
-  const download = await downloadPromise;
-  expect(await download.failure()).toBeNull();
-  expect(download.suggestedFilename()).toMatch(/\.zip$/);
+  await expect(page.getByRole("button", { name: /Download export/i })).toHaveCount(0);
   await page.reload();
   await page.locator("#package-select").selectOption("browser-fixture");
   await expect(page.locator("#package-select")).toHaveValue("browser-fixture");

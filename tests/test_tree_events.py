@@ -5,14 +5,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from pg_harness import database_for
+from support.v2_exports import ExportService
+from support.v2_reader import PackageReader
+from support.v2_writer import PackageWriter
 from test_storage import _sample_package
 from test_storage_regressions import key_for
 
-from ontocurator.application.exports import ExportService
 from ontocurator.domain.errors import InvalidPackage
 from ontocurator.packages.models import SearchEventRecord
-from ontocurator.packages.reader import PackageReader
-from ontocurator.packages.writer import PackageWriter
 from ontocurator.storage.repository import Repository
 
 

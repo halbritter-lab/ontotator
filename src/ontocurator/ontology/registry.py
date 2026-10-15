@@ -25,6 +25,7 @@ from ontocurator.ontology.translations import (
     discover_translation_files,
     parse_translation_name,
 )
+from ontocurator.storage.blobs import BlobStore
 from ontocurator.vendor.hpo_span_annotator.hpo import OntologyError
 
 logger = logging.getLogger(__name__)
@@ -373,16 +374,41 @@ class OntologyRegistry:
                 if sha not in self._services and sha not in self._failures
             ]
         for sha, path in pending:
-            try:
-                self.get_service(sha)
-            except (DomainError, OntologyError, OSError, ValueError, KeyError) as exc:
-                failure = OntologyLoadFailure(sha256=sha, path=path, error=str(exc))
-                with self._lock:
-                    self._failures[sha] = failure
-                logger.warning(
-                    "Could not load ontology %s (sha256 %s): %s", path, sha, exc
-                )
+            self._load_or_record(sha, path)
         return self.failures()
+
+    def preload(self, shas: Iterable[str]) -> None:
+        """Parse the registered ontologies of ``shas`` now; record failures.
+
+        Digests that are not registered or already failed are skipped.
+        """
+        for sha in sorted(s.lower() for s in shas):
+            with self._lock:
+                path = self._registered_paths.get(sha)
+                skip = path is None or sha in self._failures
+            if not skip and path is not None:
+                # A background preload must survive any malformed file.
+                self._load_or_record(sha, path, Exception)
+
+    def _load_or_record(
+        self,
+        sha: str,
+        path: Path,
+        expected: type[Exception] | tuple[type[Exception], ...] = (
+            DomainError,
+            OntologyError,
+            OSError,
+            ValueError,
+            KeyError,
+        ),
+    ) -> None:
+        try:
+            self.get_service(sha)
+        except expected as exc:
+            failure = OntologyLoadFailure(sha256=sha, path=path, error=str(exc))
+            with self._lock:
+                self._failures[sha] = failure
+            logger.warning("Could not load ontology %s (sha256 %s): %s", path, sha, exc)
 
     def failures(self) -> list[OntologyLoadFailure]:
         """Registered ontologies that failed to load, in registration order."""
@@ -438,9 +464,22 @@ class OntologyRegistry:
             registered = self._registered_paths.get(sha)
         if cached is not None:
             return self._bind_release(cached, ont_def)
+        if registered is None and self.base_dir is not None:
+            # Another worker/CLI may have stored this pinned digest since our
+            # startup. Discover only its content-addressed file on a cold miss;
+            # _load_once validates the hash and serialises parsing as usual.
+            try:
+                persisted = BlobStore(self.base_dir / "blobs").path(sha)
+            except ValueError:
+                persisted = None
+            if persisted is not None and persisted.is_file():
+                registered = persisted
         if registered is not None:
             ref = OntologyRef(release=ont_def.release, sha256=ont_def.sha256)
-            return self._bind_release(self._load_once(sha, registered, ref), ont_def)
+            service = self._load_once(sha, registered, ref)
+            with self._lock:
+                self._registered_paths.setdefault(sha, registered)
+            return self._bind_release(service, ont_def)
         if ont_def.resource_path:
             res_p = self._resource_file(ont_def.resource_path)
             if res_p is not None:

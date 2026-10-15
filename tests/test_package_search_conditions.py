@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from auth_harness import upload_package
 from layered_fixtures import make_layered_package
+from support.v2_exports import ExportService, package_export_zip
+from support.v2_reader import PackageReader
+from support.v2_writer import PackageWriter
 from test_translation_api import (
     DE,
     HP,
@@ -20,21 +24,15 @@ from test_translation_api import (
     _upload,
 )
 
-from ontocurator.application.exports import ExportService
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import InvalidPackage
 from ontocurator.domain.workspace import WorkspaceKey
-from ontocurator.packages.reader import PackageReader
-from ontocurator.packages.writer import PackageWriter
 
 
 def _export(client: Any, key: Any) -> bytes:
-    response = client.get(
-        f"/api/v1/packages/{key['package_id']}/export",
-        params={"annotator_id": key["annotator_id"], "mode": key["mode"]},
+    return package_export_zip(
+        client.app, key["package_id"], key["annotator_id"], key["mode"]
     )
-    assert response.status_code == 200, response.text
-    return bytes(response.content)
 
 
 def _manifest(data: bytes) -> dict[str, Any]:
@@ -71,9 +69,7 @@ def test_global_upload_keeps_captured_package_english_only(tmp_path: Path) -> No
     package.embedded_files = {"ontologies/hp.json": HP.read_bytes()}
     stream = io.BytesIO()
     PackageWriter.write_to_stream(package, stream)
-    response = client.post(
-        "/api/v1/packages", files={"file": ("new.zip", stream.getvalue())}
-    )
+    response = upload_package(client, files={"file": ("new.zip", stream.getvalue())})
     assert response.status_code == 200, response.text
     new_key = dict(key, package_id="new-after-upload")
     assert _search(client, new_key, "Muskelhypotonie")["languages"] == ["en", "de"]
@@ -98,7 +94,7 @@ def test_roundtrip_uses_captured_bytes_without_ambient_translations(
         assert archive.read(resource["resource_path"]) == DE.read_bytes()
 
     fresh = _client(tmp_path / "fresh")
-    imported = fresh.post("/api/v1/packages", files={"file": ("study.zip", data)})
+    imported = upload_package(fresh, files={"file": ("study.zip", data)})
     assert imported.status_code == 200, imported.text
     new_key = dict(key, package_id=imported.json()["package_id"])
     after = _search(fresh, new_key, "Muskelhypotonie")
@@ -205,9 +201,7 @@ def test_import_preserves_historical_runtime_and_records_current_execution(
 
     altered = _alter(data, change).getvalue()
     fresh = _client(tmp_path / "fresh")
-    imported = fresh.post(
-        "/api/v1/packages", files={"file": ("historical.zip", altered)}
-    )
+    imported = upload_package(fresh, files={"file": ("historical.zip", altered)})
     assert imported.status_code == 200, imported.text
     new_key = dict(key, package_id=imported.json()["package_id"])
     after = _search(fresh, new_key, "Muskelhypotonie")
@@ -260,9 +254,7 @@ def test_capture_supports_unused_ontology_declarations_and_digest_aliases(
     stream = io.BytesIO()
     PackageWriter.write_to_stream(package, stream)
     client = _client(tmp_path)
-    imported = client.post(
-        "/api/v1/packages", files={"file": ("extra.zip", stream.getvalue())}
-    )
+    imported = upload_package(client, files={"file": ("extra.zip", stream.getvalue())})
     assert imported.status_code == 200, imported.text
     key = {
         "package_id": imported.json()["package_id"],
@@ -329,8 +321,8 @@ def test_independent_exports_project_captured_resources_with_profile(
     }
     stream = io.BytesIO()
     PackageWriter.write_to_stream(package, stream)
-    imported = client.post(
-        "/api/v1/packages", files={"file": ("layered.zip", stream.getvalue())}
+    imported = upload_package(
+        client, files={"file": ("layered.zip", stream.getvalue())}
     )
     assert imported.status_code == 200, imported.text
     key = {

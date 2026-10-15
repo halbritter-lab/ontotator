@@ -1,5 +1,6 @@
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from ontocurator.domain.profiles import (
     TaskProfile,
 )
 from ontocurator.ontology.registry import OntologyRegistry
+from ontocurator.storage.blobs import BlobStore
 
 
 def _create_synthetic_obo(
@@ -331,3 +333,36 @@ def test_registry_caching_by_sha256(tmp_path: Path):
     svc_first = registry.for_layer(profile, "l1")
     svc_second = registry.for_layer(profile, "l1")
     assert svc_first is svc_second
+
+
+def test_persisted_cold_load_rejects_a_corrupt_blob(tmp_path: Path):
+    from layered_fixtures import make_layered_package
+
+    profile = make_layered_package("single").manifest.task_profile
+    digest = profile.ontologies[0].sha256
+    path = BlobStore(tmp_path / "blobs").path(digest)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"corrupt")
+    registry = OntologyRegistry(base_dir=tmp_path)
+
+    with pytest.raises(DomainError, match="ONTOLOGY_HASH_MISMATCH"):
+        registry.for_layer(profile, "hpo-layer")
+    assert registry.services() == []
+
+
+def test_concurrent_persisted_cold_loads_share_one_service(tmp_path: Path):
+    from layered_fixtures import make_layered_package
+
+    profile = make_layered_package("single").manifest.task_profile
+    BlobStore(tmp_path / "blobs").put(
+        (Path(__file__).parent / "fixtures" / "hp.json").read_bytes()
+    )
+    registry = OntologyRegistry(base_dir=tmp_path)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        services = list(
+            pool.map(lambda _: registry.for_layer(profile, "hpo-layer"), range(16))
+        )
+    assert all(service is services[0] for service in services)
+    assert services[0].validate_term("HP:0001250").status == "valid"
+    assert registry.registered_path(profile.ontologies[0].sha256) is not None

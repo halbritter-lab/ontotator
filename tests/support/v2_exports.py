@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from ontocurator.domain.annotations import AnnotationSnapshot
@@ -276,3 +278,26 @@ class ExportService:
                 }
             },
         )
+
+
+def package_export_zip(
+    app: Any, package_id: str, annotator_id: str, mode: WorkspaceMode | None = None
+) -> bytes:
+    """All work of one annotator as a v2 ZIP, as the removed export route wrote it."""
+    from support.v2_writer import PackageWriter
+
+    pkg = ExportService(app.state.repo).for_package(package_id, annotator_id, mode)
+    buffer = io.BytesIO()
+    PackageWriter.write_to_stream(pkg, buffer)
+    return buffer.getvalue()
+
+
+def workspace_export_zip(app: Any, workspace_id: str) -> bytes:
+    """One workspace as a v2 ZIP, as the removed workspace export wrote it."""
+    from ontocurator.api.routes import decode_workspace_id
+    from support.v2_writer import PackageWriter
+
+    pkg = ExportService(app.state.repo).for_workspace(decode_workspace_id(workspace_id))
+    buffer = io.BytesIO()
+    PackageWriter.write_to_stream(pkg, buffer)
+    return buffer.getvalue()

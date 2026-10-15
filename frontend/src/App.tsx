@@ -90,7 +90,6 @@ export const ontologySummary = (ontology: OntologyInfo): string => {
   const languages = translations.map((item) => `${item.language} ${formatCount(item.term_count)}`);
   return `${id} ${ontology.release} · ${languages.join(" · ")} terms`;
 };
-const casesText = (n: number) => `${n} ${n === 1 ? "case" : "cases"}`;
 
 export interface AppProps {
   /** The logged-in user (from the login gate). Without it the app asks `api.me()` itself. */
@@ -100,9 +99,6 @@ export interface AppProps {
 
 export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const documentRequest = useRef(0);
-  const packageInputRef = useRef<HTMLInputElement>(null);
-  const ontologyInputRef = useRef<HTMLInputElement>(null);
-  const missingOntologyInputRef = useRef<HTMLInputElement>(null);
 
   const [packages, setPackagesState] = useState<ProjectSummary[]>([]);
   const [packagesLoaded, setPackagesLoaded] = useState(false);
@@ -113,7 +109,6 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const [fetchedUser, setFetchedUser] = useState<CurrentUser | null>(null);
   const user = givenUser !== undefined ? givenUser : fetchedUser;
   const annotatorId = user?.pseudonym ?? "";
-  const isAdmin = user?.is_system_admin === true;
   const [roundSelection, setRoundSelection] = useState<{ docId: string; rounds: string[] } | null>(null);
   const [selectedRound, setSelectedRound] = useState("");
   const [mode, setMode] = useState<WorkspaceMode>("independent");
@@ -143,18 +138,10 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
   const [activeWorkspace, setActiveWorkspace] = useState<OpenWorkspaceResponse | null>(null);
   const [workspaceNonce, setWorkspaceNonce] = useState(0);
   const [isOpening, setIsOpening] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState<boolean>(false);
 
   // In-app ontology state
   const [ontologies, setOntologies] = useState<OntologyInfo[]>([]);
-  const [missingOntologyPrompt, setMissingOntologyPrompt] = useState<{
-    message: string;
-    pendingPackageFile?: File;
-  } | null>(null);
-  const [isUploadingOntology, setIsUploadingOntology] = useState<boolean>(false);
 
   /** Show an error, unless it only means the session ended (then the login gate takes over). */
   const reportError = (prefix: string, err: unknown) => {
@@ -264,63 +251,6 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
     }
   };
 
-  const importPackageFile = async (file: File) => {
-    const res = await api.uploadPackage(file);
-    const docs = await loadPackages(res.package_id);
-    const count = res.manifest?.document_order?.length || docs?.length || 0;
-    setNotice(`Package '${res.package_id}' imported – ${casesText(count)}.`);
-  };
-
-  const handleUploadPackage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    setError(null);
-    setNotice(null);
-    try {
-      await importPackageFile(file);
-    } catch (err: unknown) {
-      if (err instanceof ApiError && err.code === "ONTOLOGY_NOT_FOUND") {
-        setMissingOntologyPrompt({
-          message: err.message,
-          pendingPackageFile: file,
-        });
-      } else {
-        reportError("Package import failed", err);
-      }
-    } finally {
-      setIsUploading(false);
-      e.target.value = "";
-    }
-  };
-
-  const handleUploadMissingOntology = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingOntology(true);
-    setError(null);
-    try {
-      const uploaded = await api.uploadOntology(file);
-      await loadOntologies();
-      // A translation file answers with what was loaded, or why it waits for its ontology.
-      if ("filename" in uploaded) setNotice(uploaded.message);
-      const pending = missingOntologyPrompt?.pendingPackageFile;
-      setMissingOntologyPrompt(null);
-      if (pending) {
-        setIsUploading(true);
-        await importPackageFile(pending);
-      }
-    } catch (err: unknown) {
-      reportError("Ontology upload failed", err);
-    } finally {
-      setIsUploadingOntology(false);
-      setIsUploading(false);
-      e.target.value = "";
-    }
-  };
-
   /**
    * Open a case. In review mode, all review proposals for the case are loaded here
    * (and only here). Throws on failure.
@@ -377,19 +307,6 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
     if (!selectedPackageId || !targetDoc || isOpening || !annotatorRef.current) return;
     setSelectedDocId(targetDoc);
     void handleOpenWorkspace(targetDoc);
-  };
-
-  const handleExportPackage = async () => {
-    if (!selectedPackageId || !annotatorId) return;
-    setError(null);
-    setIsExporting(true);
-    try {
-      await api.downloadPackageExport(selectedPackageId, { annotator_id: annotatorId, mode });
-    } catch (err: unknown) {
-      reportError("Package export failed", err);
-    } finally {
-      setIsExporting(false);
-    }
   };
 
   const closeWorkspace = async () => {
@@ -475,43 +392,8 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
     );
   }
 
-  const fileInputs = (
-    <>
-      <input
-        ref={packageInputRef}
-        type="file"
-        accept=".zip"
-        aria-label="Work package file (.zip)"
-        style={{ display: "none" }}
-        onChange={handleUploadPackage}
-        disabled={isUploading}
-      />
-      <input
-        ref={ontologyInputRef}
-        type="file"
-        accept=".json,.tsv"
-        aria-label="Ontology (.json) or translation file (.tsv)"
-        style={{ display: "none" }}
-        onChange={handleUploadMissingOntology}
-        disabled={isUploadingOntology}
-      />
-    </>
-  );
-
-  const importButton = (primary: boolean) => (
-    <button
-      type="button"
-      className={`btn ${primary ? "btn-primary" : "btn-secondary btn-sm"}`}
-      onClick={() => packageInputRef.current?.click()}
-      disabled={isUploading}
-    >
-      {isUploading ? "Importing..." : primary ? "Import work package" : "Import work package (.zip)"}
-    </button>
-  );
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)" }}>
-      {isAdmin && fileInputs}
       {roundSelectionDialog}
       {/* App Header */}
       <header className="app-header">
@@ -536,17 +418,6 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
               Ontologies: {ontologyLabels.join(", ")}
             </span>
           )}
-          {isAdmin && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => ontologyInputRef.current?.click()}
-              disabled={isUploadingOntology}
-            >
-              {isUploadingOntology ? "Uploading..." : "Add ontology (.json) or translation (.tsv)"}
-            </button>
-          )}
-          {isAdmin && hasPackages && importButton(false)}
           {user && (
             <span className="current-user" data-testid="current-user" title={`Logged in as ${user.username}`}>
               {user.display_name} · {user.pseudonym}
@@ -562,65 +433,6 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
 
       {/* Main Dashboard View */}
       <div className="dashboard-container">
-        {missingOntologyPrompt && (
-          <div
-            role="alert"
-            style={{
-              background: "rgba(234, 88, 12, 0.12)",
-              border: "1px solid #ea580c",
-              borderRadius: 8,
-              padding: "16px 20px",
-              marginBottom: 20,
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontWeight: 600, color: "#ea580c", fontSize: "1rem" }}>
-                Missing ontology
-              </span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setMissingOntologyPrompt(null)}
-              >
-                Dismiss
-              </button>
-            </div>
-            <p style={{ margin: 0, fontSize: "0.9rem" }}>{missingOntologyPrompt.message}</p>
-            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
-              This package needs an ontology file that is not loaded yet. Select the matching ontology file (.json) to add it.
-            </p>
-            <div>
-              <input
-                ref={missingOntologyInputRef}
-                type="file"
-                accept=".json"
-                aria-label="Upload missing ontology"
-                style={{ display: "none" }}
-                onChange={handleUploadMissingOntology}
-                disabled={isUploadingOntology}
-              />
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => missingOntologyInputRef.current?.click()}
-                disabled={isUploadingOntology}
-              >
-                {isUploadingOntology ? "Uploading..." : "Upload missing ontology (.json)"}
-              </button>
-            </div>
-          </div>
-        )}
-        {notice && (
-          <div role="status" aria-label="Import result" className="notice notice-success">
-            <span>{notice}</span>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setNotice(null)} aria-label="Dismiss message">
-              ✕
-            </button>
-          </div>
-        )}
         {error && (
           <div
             style={{
@@ -636,31 +448,12 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
           </div>
         )}
 
-        {showGuide && (isAdmin ? (
+        {showGuide && (
           <section className="getting-started" aria-labelledby="getting-started-title">
             <h2 id="getting-started-title">Get started</h2>
-            <ol className="getting-started-steps">
-              <li>
-                <div>
-                  <strong>Import work package (.zip)</strong>
-                  <span>The .zip file you received for this annotation project.</span>
-                </div>
-                {importButton(true)}
-              </li>
-              <li>
-                <div>
-                  <strong>Open a case</strong>
-                  <span>Pick a case from the list and click “Open case”.</span>
-                </div>
-              </li>
-            </ol>
+            <p>No projects are available to you yet. Ask an administrator to add you to a project.</p>
           </section>
-        ) : (
-          <section className="getting-started" aria-labelledby="getting-started-title">
-            <h2 id="getting-started-title">Get started</h2>
-            <p>No work packages are available yet. Ask an administrator to add one.</p>
-          </section>
-        ))}
+        )}
 
         {hasPackages && (
           <>
@@ -824,18 +617,6 @@ export const App: React.FC<AppProps> = ({ user: givenUser, onLogout }) => {
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
                 />
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => { void handleExportPackage(); }}
-                  disabled={!selectedPackageId || !annotatorId || isExporting}
-                  title={annotatorId
-                    ? `Export all finished cases of ${annotatorId} (${modeLabels[mode]}) in this package as ZIP`
-                    : "Log in to export"}
-                  style={{ padding: "6px 14px" }}
-                >
-                  {isExporting ? "Exporting..." : "Export package (.zip)"}
-                </button>
               </div>
             </div>
 

@@ -3,12 +3,12 @@ import json
 import zipfile
 
 import pytest
-from auth_harness import AutoLoginClient
+from auth_harness import AutoLoginClient, upload_package
 from pg_harness import insert_proposal
+from support.v2_exports import workspace_export_zip
+from support.v2_reader import read_package
 from test_api import _create_sample_package_bytes
 from test_api import app_client as _shared_app_client
-
-from ontocurator.packages.reader import read_package
 
 app_client = _shared_app_client
 
@@ -45,8 +45,8 @@ def _open(client, config, mode="independent", targets=None, scenario=None):
     if pkg_id not in installed:
         # Re-importing is only idempotent for identical content; some tests
         # extend the installed package directly in the database.
-        response = client.post(
-            "/api/v1/packages",
+        response = upload_package(
+            client,
             files={"file": ("fixture.zip", archive, "application/zip")},
         )
         assert response.status_code == 200
@@ -163,10 +163,9 @@ def test_search_is_recorded_and_exported(app_client):
     assert response.status_code == 200
     result = response.json()
     assert result.get("search_id")
-    exported = client.get(f"/api/v1/workspaces/{opened['workspace_id']}/export")
-    assert exported.status_code == 200
+    exported = workspace_export_zip(client.app, opened["workspace_id"])
     package = read_package(
-        io.BytesIO(exported.content), registry=client.app.state.ontology_registry
+        io.BytesIO(exported), registry=client.app.state.ontology_registry
     )
     assert len(package.search_events) == 1
     event = package.search_events[0]

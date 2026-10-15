@@ -8,7 +8,6 @@ import json
 import os
 import stat
 import sys
-import tempfile
 from collections.abc import Iterator
 from datetime import UTC
 from importlib import metadata
@@ -25,6 +24,8 @@ from ontocurator.auth.audit import Actor
 from ontocurator.authz.memberships import MembershipService
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import DomainError
+from ontocurator.ontology.registry import OntologyRegistry
+from ontocurator.ontology.store import OntologyFile, OntologyStore
 from ontocurator.storage.database import Database
 
 app = typer.Typer(
@@ -46,73 +47,6 @@ def get_version() -> str:
 def version() -> None:
     """Print current version of Ontocurator."""
     typer.echo(get_version())
-
-
-@app.command("analyze")
-def analyze_command(
-    package: Annotated[Path, typer.Argument(help="Exported v2 work package ZIP.")],
-    output: Annotated[
-        Path | None,
-        typer.Option(
-            "--output", "-o", help="Write analysis JSON here; otherwise print it."
-        ),
-    ] = None,
-    annotator: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--annotator",
-            help="Expected annotator ID (repeatable); absent work is reported.",
-        ),
-    ] = None,
-    mode: Annotated[
-        str | None,
-        typer.Option("--mode", help="Filter independent, review or assisted work."),
-    ] = None,
-) -> None:
-    """Extract current results and missing/negative/uncertain states for analysis."""
-    from typing import cast
-
-    from ontocurator.application.analysis import analyze_package
-    from ontocurator.domain.workspace import WorkspaceMode
-    from ontocurator.packages.reader import read_package
-
-    if output is not None and output.resolve() == package.resolve():
-        raise typer.BadParameter(
-            "must differ from the input package", param_hint="--output"
-        )
-
-    if mode is not None and mode not in {"independent", "review", "assisted"}:
-        raise typer.BadParameter(
-            "must be independent, review or assisted", param_hint="--mode"
-        )
-    try:
-        dataset = analyze_package(
-            read_package(package),
-            annotator_ids=annotator,
-            mode=cast(WorkspaceMode | None, mode),
-        )
-        encoded = json.dumps(dataset, ensure_ascii=False, indent=2) + "\n"
-        if output is None:
-            typer.echo(encoded, nl=False)
-        else:
-            tmp_path: Path | None = None
-            try:
-                with tempfile.NamedTemporaryFile(
-                    mode="w",
-                    encoding="utf-8",
-                    dir=output.parent,
-                    suffix=".analysis.tmp",
-                    delete=False,
-                ) as handle:
-                    tmp_path = Path(handle.name)
-                    handle.write(encoded)
-                os.replace(tmp_path, output)
-            finally:
-                if tmp_path is not None and tmp_path.exists():
-                    tmp_path.unlink()
-    except (DomainError, OSError) as exc:
-        typer.echo(f"Analysis failed: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
 
 
 def _default_web_dir() -> Path | None:
@@ -162,6 +96,12 @@ def _base_url(host: str, port: int) -> str:
 
 @app.command()
 def serve(
+    production: Annotated[
+        bool,
+        typer.Option(
+            "--production", help="Serve using production environment settings only."
+        ),
+    ] = False,
     data_dir: Annotated[
         Path,
         typer.Option(
@@ -262,6 +202,28 @@ def serve(
     """
     from ontocurator import settings
 
+    if production:
+        # Uvicorn's spawned workers read the same enforced environment. Merely
+        # validating an overridden mapping here would leave the factory in dev.
+        os.environ["ONTOCURATOR_ENV"] = "production"
+        try:
+            runtime = settings.server_settings()
+        except settings.SettingsError as exc:
+            typer.echo(f"Error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        uvicorn.run(
+            "ontocurator.api.server:app_from_env",
+            factory=True,
+            host="0.0.0.0",
+            port=8000,
+            workers=runtime.workers,
+            proxy_headers=True,
+            forwarded_allow_ips=",".join(runtime.trusted_proxies),
+            access_log=True,
+            timeout_graceful_shutdown=30,
+        )
+        return
+
     try:
         canonical_public_origin = (
             None if public_origin is None else settings.canonical_origin(public_origin)
@@ -311,7 +273,7 @@ def serve(
 
     workspace = data_dir.resolve()
     try:
-        (workspace / "ontologies").mkdir(parents=True, exist_ok=True)
+        workspace.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         typer.echo(f"Error: Cannot create data folder {workspace}: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -374,7 +336,9 @@ app.add_typer(db_app, name="db")
 
 
 @db_app.command("upgrade")
-def db_upgrade() -> None:
+def db_upgrade(
+    target: str = typer.Option("head", envvar="ONTOCURATOR_MIGRATE_TARGET"),
+) -> None:
     """Upgrade the schema to this version, as the schema owner.
 
     Reads ONTOCURATOR_MIGRATION_DATABASE_URL and the password from
@@ -384,8 +348,10 @@ def db_upgrade() -> None:
     from ontocurator.storage.schema import upgrade
 
     try:
-        head = upgrade(database_url(prefix="ONTOCURATOR_MIGRATION_DATABASE"))
-    except SettingsError as exc:
+        head = upgrade(
+            database_url(prefix="ONTOCURATOR_MIGRATION_DATABASE"), target=target
+        )
+    except (SettingsError, ValueError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"Database schema is at revision {head}.")
@@ -400,9 +366,14 @@ projects_app = typer.Typer(
     help="Projects and their members (roles: lead, annotator, adjudicator).",
     no_args_is_help=True,
 )
+ontologies_app = typer.Typer(
+    help="Ontology and translation files on the data volume.",
+    no_args_is_help=True,
+)
 app.add_typer(admin_app, name="admin")
 admin_app.add_typer(users_app, name="users")
 admin_app.add_typer(projects_app, name="projects")
+admin_app.add_typer(ontologies_app, name="ontologies")
 
 RECOVERY_INPUT_MAX_BYTES = 8 * 1024
 RECOVERY_KEYS = ("username", "password_hash", "operator", "reason")
@@ -682,6 +653,341 @@ def projects_remove_member(
             Actor.cli(), project, username, role or None
         )
     _print_roles(username.strip().lower(), project, roles)
+
+
+def _pairs(values: list[str] | None, option: str) -> dict[str, str]:
+    """``id=value`` options by ontology id."""
+    pairs: dict[str, str] = {}
+    for item in values or []:
+        ontology_id, sep, value = item.partition("=")
+        if not sep or not ontology_id.strip() or not value.strip():
+            raise typer.BadParameter(
+                f"expected <ontology id>=<value>, got {item!r}", param_hint=option
+            )
+        pairs[ontology_id.strip()] = value.strip()
+    return pairs
+
+
+@projects_app.command("create")
+def projects_create(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    name: Annotated[str, typer.Option("--name", help="The project's name.")],
+    profile: Annotated[
+        Path,
+        typer.Option(
+            "--profile",
+            help="The task profile (JSON) with its layers and ontologies.",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    description: Annotated[
+        str | None, typer.Option("--description", help="Optional description.")
+    ] = None,
+    pin: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--pin",
+            help=(
+                "<ontology id>=<sha256> of a stored ontology file; overrides the "
+                "profile's sha256 (repeatable)."
+            ),
+            show_default=False,
+        ),
+    ] = None,
+    allowed_roots: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--allowed-roots",
+            help="<ontology id>=<term>,<term>,... the allowed roots (repeatable).",
+            show_default=False,
+        ),
+    ] = None,
+    t1_profile: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--t1-profile",
+            help="<ontology id>=generic|hpo-phenotype (repeatable; default generic).",
+            show_default=False,
+        ),
+    ] = None,
+) -> None:
+    """Create a project whose profile ontologies are pinned to stored files."""
+    from typing import cast
+
+    from pydantic import ValidationError
+
+    from ontocurator.authz.scoped import ScopedRepository
+    from ontocurator.domain.profiles import TaskProfile
+    from ontocurator.exchange.jobs import operator_access
+    from ontocurator.exchange.t1 import Pin, T1Profile
+
+    try:
+        task_profile = TaskProfile.model_validate_json(
+            profile.read_text(encoding="utf-8")
+        )
+    except (ValidationError, ValueError) as exc:
+        raise typer.BadParameter(
+            f"not a task profile: {exc}", param_hint="--profile"
+        ) from exc
+    shas = _pairs(pin, "--pin")
+    roots = _pairs(allowed_roots, "--allowed-roots")
+    profiles = _pairs(t1_profile, "--t1-profile")
+    defined = {o.ontology_id for o in task_profile.ontologies}
+    for option, given in (("--allowed-roots", roots), ("--t1-profile", profiles)):
+        unknown = sorted(set(given) - defined - set(shas))
+        if unknown:
+            raise typer.BadParameter(
+                f"no ontology {', '.join(unknown)} in the profile", param_hint=option
+            )
+    for value in profiles.values():
+        if value not in ("generic", "hpo-phenotype"):
+            raise typer.BadParameter(
+                f"must be generic or hpo-phenotype, got {value!r}",
+                param_hint="--t1-profile",
+            )
+    task_profile = task_profile.model_copy(
+        update={
+            "ontologies": [
+                o.model_copy(update={"sha256": shas.get(o.ontology_id, o.sha256)})
+                for o in task_profile.ontologies
+            ]
+        }
+    )
+    shas = {**{o.ontology_id: o.sha256 for o in task_profile.ontologies}, **shas}
+    pins = {
+        ontology_id: Pin(
+            sha256=sha,
+            allowed_roots=tuple(
+                root.strip()
+                for root in roots.get(ontology_id, "").split(",")
+                if root.strip()
+            ),
+            t1_profile=cast(T1Profile, profiles.get(ontology_id, "generic")),
+        )
+        for ontology_id, sha in shas.items()
+    }
+    actor = Actor.cli()
+    with _open_database(ctx) as db:
+        ScopedRepository(db, operator_access(actor), actor).create_project(
+            project, name, description, task_profile, pins
+        )
+    shown = ", ".join(f"{key}={item.sha256[:12]}" for key, item in sorted(pins.items()))
+    typer.echo(f"Created project '{project}' ({shown or 'no ontologies'}).")
+
+
+def _zip_directory(folder: Path) -> bytes:
+    """A directory bundle as ZIP bytes, entries sorted by path."""
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(folder.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(folder).as_posix())
+    return buffer.getvalue()
+
+
+def _run_job(db: Database, kind: str, payload: dict[str, Any], *, wait: bool) -> Any:
+    """Enqueue a job for the project in ``payload`` and run it inline.
+
+    Without ``wait`` it only queues the job and returns None. A server's worker
+    may take the job first; then its outcome is awaited. A failed job is
+    ``Error: JOB_FAILED: ...`` and exit 1.
+    """
+    import socket
+    import time
+
+    from sqlalchemy import select
+
+    from ontocurator.exchange.jobs import HANDLERS
+    from ontocurator.jobs.queue import Job, JobContext, JobQueue
+    from ontocurator.storage.tables import ProjectRow
+
+    with db.transaction() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == payload["project"])
+        ).scalar_one_or_none()
+    if project_id is None:
+        _fail("PROJECT_NOT_FOUND", f"There is no project '{payload['project']}'.")
+    queue = JobQueue(db, HANDLERS, context=JobContext(db=db, data_dir=db.data_dir))
+    job_id = queue.enqueue(kind, payload, project_id=project_id, actor=Actor.cli())
+    if not wait:
+        typer.echo(f"Queued job {job_id}; the server's worker runs it.")
+        return None
+    worker = f"cli:{socket.gethostname()}:{os.getpid()}"
+    claimed = queue.claim(job_id, worker)
+    job: Job | None
+    if claimed is not None:
+        job = queue.run(claimed, worker)
+    else:
+        job = queue.get(job_id)
+        while job is not None and job.status in ("queued", "running"):
+            time.sleep(0.5)
+            job = queue.get(job_id)
+    assert job is not None
+    if job.status != "succeeded":
+        _fail("JOB_FAILED", f"job {job.id}: {job.error}")
+    return job
+
+
+IMPORT_COUNTS = (
+    "units",
+    "documents_added",
+    "documents_skipped",
+    "documents_only",
+    "sets_added",
+    "sets_skipped",
+    "proposals",
+    "defaulted_axes",
+)
+
+
+@admin_app.command("import")
+def import_command(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help="A T1 bundle (.zip or directory) or a single T1 unit (.json).",
+            exists=True,
+            readable=True,
+        ),
+    ],
+    no_wait: Annotated[
+        bool,
+        typer.Option("--no-wait", help="Only queue the job for the server's worker."),
+    ] = False,
+) -> None:
+    """Import documents and proposals in the T1 format into a project."""
+    from ontocurator.exchange.jobs import store_file
+
+    if path.is_dir():
+        data, filename = _zip_directory(path), f"{path.name}.zip"
+    else:
+        data, filename = path.read_bytes(), path.name
+    with _open_database(ctx) as db:
+        sha = store_file(db, data)
+        job = _run_job(
+            db,
+            "t1_import",
+            {"project": project, "blob_sha256": sha, "filename": filename},
+            wait=not no_wait,
+        )
+    if job is None:
+        return
+    result = job.result or {}
+    for key in IMPORT_COUNTS:
+        typer.echo(f"{key}: {result.get(key, 0)}")
+    if result.get("warnings"):
+        typer.echo(f"warnings: {', '.join(result['warnings'])}")
+
+
+def _export(
+    ctx: typer.Context, kind: str, project: str, out: Path, *, wait: bool
+) -> None:
+    """Run an export job and copy its file to ``out``, which must not exist."""
+    if wait and out.exists():
+        _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+    with _open_database(ctx) as db:
+        job = _run_job(db, kind, {"project": project}, wait=wait)
+        if job is None:
+            return
+        data = db.blobs.get(job.result["sha256"])
+    try:
+        with out.open("xb") as handle:
+            handle.write(data)
+    except FileExistsError:
+        _fail("OUTPUT_EXISTS", f"{out} exists; choose another file.")
+    result = job.result
+    if kind == "t1_export":
+        counts = result["counts"]
+        typer.echo(
+            f"Wrote {out}: {_plural(result['units'], 'unit')}, "
+            f"{counts['rejected']} rejected and {counts['uncertain']} uncertain "
+            f"decisions left out, {counts['defaulted_axes']} axes defaulted."
+        )
+    else:
+        typer.echo(f"Wrote {out}: {_plural(result['events'], 'event')}.")
+
+
+OutOption = Annotated[
+    Path,
+    typer.Argument(help="The file to write; it must not exist.", dir_okay=False),
+]
+NoWaitOption = Annotated[
+    bool,
+    typer.Option("--no-wait", help="Only queue the job for the server's worker."),
+]
+
+
+@admin_app.command("export")
+def export_command(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    out: OutOption,
+    no_wait: NoWaitOption = False,
+) -> None:
+    """Export the latest submissions as a T1 bundle (ZIP)."""
+    _export(ctx, "t1_export", project, out, wait=not no_wait)
+
+
+@admin_app.command("export-edit-log")
+def export_edit_log_command(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    out: OutOption,
+    no_wait: NoWaitOption = False,
+) -> None:
+    """Export the project's edit log as pseudonymised JSONL."""
+    _export(ctx, "edit_log_export", project, out, wait=not no_wait)
+
+
+def _ontology_store(db: Database) -> OntologyStore:
+    return OntologyStore(db, OntologyRegistry(), db.data_dir)
+
+
+def _print_ontology_file(item: OntologyFile) -> None:
+    typer.echo(f"{item.sha256}  {item.prefix}  {item.release or '-'}  {item.kind}")
+
+
+@ontologies_app.command("add")
+def ontologies_add(
+    ctx: typer.Context,
+    files: Annotated[
+        list[Path],
+        typer.Argument(
+            help=(
+                "OBO Graph JSON ontologies (.json) or babelon translations "
+                "(<prefix>-<language>.babelon.tsv)."
+            ),
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+) -> None:
+    """Store files in the data volume; prints sha256, prefix, release and kind.
+
+    Every file is checked first. Adding a stored file again changes nothing.
+    The data volume is ONTOCURATOR_DATA_DIR (default ./data).
+    """
+    with _open_database(ctx) as db:
+        store = _ontology_store(db)
+        for path in files:
+            _print_ontology_file(store.add(Actor.cli(), path.name, path.read_bytes()))
+
+
+@ontologies_app.command("list")
+def ontologies_list(ctx: typer.Context) -> None:
+    """One line per stored file: sha256, prefix, release and kind, oldest first."""
+    with _open_database(ctx) as db:
+        for item in _ontology_store(db).list():
+            _print_ontology_file(item)
 
 
 @admin_app.command("hash-password")

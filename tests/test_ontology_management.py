@@ -1,12 +1,14 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
-from auth_harness import AutoLoginClient
+from auth_harness import HARNESS, AutoLoginClient
 from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
 from ontocurator.config import AppConfig
+from ontocurator.domain.errors import DomainError
 from ontocurator.ontology.discovery import discover_ontologies
 
 SAMPLE_OBO_JSON = {
@@ -48,188 +50,68 @@ def test_discover_ontologies(tmp_path: Path) -> None:
     assert not_obo_json.resolve() not in discovered
 
 
-def test_get_and_post_ontologies_endpoint(tmp_path: Path) -> None:
-    config = AppConfig(
-        workspace_dir=tmp_path / "workspace",
-        database_url=database_url_for(tmp_path / "workspace" / "editor.db"),
-        port=8000,
-        host="127.0.0.1",
+def _app(ws: Path) -> Any:
+    return create_app(
+        AppConfig(workspace_dir=ws, database_url=database_url_for(ws / "editor.db"))
     )
-    app = create_app(config)
+
+
+def test_stored_ontologies_are_listed_once(tmp_path: Path) -> None:
+    app = _app(tmp_path / "workspace")
     client = AutoLoginClient(app)
+    store = app.state.ontology_store
 
-    # Initial list is empty
-    res = client.get("/api/v1/ontologies")
-    assert res.status_code == 200
-    assert res.json() == []
+    assert client.get("/api/v1/ontologies").json() == []
 
-    # Upload ontology
     file_bytes = json.dumps(SAMPLE_OBO_JSON).encode("utf-8")
-    res_upload = client.post(
-        "/api/v1/ontologies",
-        files={"file": ("hp.json", file_bytes, "application/json")},
-    )
-    assert res_upload.status_code == 200
-    data = res_upload.json()
-    assert data["term_count"] == 2
-    assert "sha256" in data
-    assert data["ontology_id"] == "hp" or "hp" in data["ontology_id"]
+    stored = store.add(HARNESS, "hp.json", file_bytes)
 
-    # Verify listed now
-    res_after = client.get("/api/v1/ontologies")
-    assert res_after.status_code == 200
-    items = res_after.json()
-    assert len(items) == 1
-    assert items[0]["sha256"] == data["sha256"]
-
-    # Uploading the same ontology again returns 200 without duplicate registration
-    res_again = client.post(
-        "/api/v1/ontologies",
-        files={"file": ("hp.json", file_bytes, "application/json")},
-    )
-    assert res_again.status_code == 200
-    res_after_again = client.get("/api/v1/ontologies")
-    assert len(res_after_again.json()) == 1
+    items = client.get("/api/v1/ontologies").json()
+    assert [(i["sha256"], i["ontology_id"], i["term_count"]) for i in items] == [
+        (stored.sha256, "hp", 2)
+    ]
+    # Adding the same ontology again registers nothing new.
+    assert store.add(HARNESS, "hp.json", file_bytes) == stored
+    assert len(client.get("/api/v1/ontologies").json()) == 1
 
 
-def test_upload_invalid_ontology_returns_400(tmp_path: Path) -> None:
-    config = AppConfig(
-        workspace_dir=tmp_path / "workspace",
-        database_url=database_url_for(tmp_path / "workspace" / "editor.db"),
-        port=8000,
-        host="127.0.0.1",
-    )
-    app = create_app(config)
+def test_an_invalid_ontology_is_refused(tmp_path: Path) -> None:
+    app = _app(tmp_path / "workspace")
+
+    with pytest.raises(DomainError) as error:
+        app.state.ontology_store.add(HARNESS, "broken.json", b"{not valid json")
+
+    assert error.value.code == "INVALID_ONTOLOGY"
+
+
+def test_an_invalid_upload_leaves_the_stored_ontology(tmp_path: Path) -> None:
+    app = _app(tmp_path / "workspace")
     client = AutoLoginClient(app)
+    store = app.state.ontology_store
+    original = json.dumps(SAMPLE_OBO_JSON).encode("utf-8")
+    stored = store.add(HARNESS, "hp.json", original)
 
-    res_upload = client.post(
-        "/api/v1/ontologies",
-        files={"file": ("broken.json", b"{not valid json", "application/json")},
-    )
-    assert res_upload.status_code == 400
+    # An invalid file with the same filename
+    with pytest.raises(DomainError):
+        store.add(HARNESS, "hp.json", b"{corrupted content...")
+
+    listed = client.get("/api/v1/ontologies").json()
+    assert [item["sha256"] for item in listed] == [stored.sha256]
+    assert app.state.repo.db.blobs.get(stored.sha256) == original
 
 
-def test_invalid_upload_does_not_overwrite_or_delete_existing_ontology(
-    tmp_path: Path,
-) -> None:
+def test_uploaded_ontologies_are_listed_after_a_restart(tmp_path: Path) -> None:
     ws = tmp_path / "workspace"
-    ont_dir = ws / "ontologies"
-    ont_dir.mkdir(parents=True)
-    existing_ont = ont_dir / "hp.json"
-    original_content = json.dumps(SAMPLE_OBO_JSON)
-    existing_ont.write_text(original_content, encoding="utf-8")
-
-    config = AppConfig(
-        workspace_dir=ws,
-        database_url=database_url_for(ws / "editor.db"),
-        port=8000,
-        host="127.0.0.1",
+    first = _app(ws)
+    stored = first.state.ontology_store.add(
+        HARNESS, "hp.json", json.dumps(SAMPLE_OBO_JSON).encode("utf-8")
     )
-    app = create_app(config)
-    client = AutoLoginClient(app)
+    assert first.state.repo.db.blobs.path(stored.sha256).is_file()
 
-    # Attempt to upload an invalid file with the same filename
-    res_upload = client.post(
-        "/api/v1/ontologies",
-        files={"file": ("hp.json", b"{corrupted content...", "application/json")},
-    )
-    assert res_upload.status_code == 400
+    # Restart: the second app finds the file in the ontology store.
+    client = AutoLoginClient(_app(ws))
 
-    # The original file must still exist and be completely intact!
-    assert existing_ont.is_file()
-    assert existing_ont.read_text(encoding="utf-8") == original_content
-
-
-def test_uploaded_ontologies_are_listed_after_a_restart(
-    tmp_path: Path,
-) -> None:
-    ws = tmp_path / "workspace"
-    config_1 = AppConfig(
-        workspace_dir=ws,
-        database_url=database_url_for(ws / "editor.db"),
-        port=8000,
-        host="127.0.0.1",
-    )
-    app_1 = create_app(config_1)
-    client_1 = AutoLoginClient(app_1)
-
-    # Upload ontology to App 1
-    res_upload = client_1.post(
-        "/api/v1/ontologies",
-        files={"file": ("hp.json", json.dumps(SAMPLE_OBO_JSON), "application/json")},
-    )
-    assert res_upload.status_code == 200
-
-    # Restart: the second app finds the upload in <workspace>/ontologies.
-    assert len(list((ws / "ontologies").glob("*.json"))) == 1
-
-    config_2 = AppConfig(
-        workspace_dir=ws,
-        database_url=database_url_for(ws / "editor.db"),
-        port=8001,
-        host="127.0.0.1",
-    )
-    app_2 = create_app(config_2)
-    client_2 = AutoLoginClient(app_2)
-
-    res_list = client_2.get("/api/v1/ontologies")
-    assert res_list.status_code == 200
-    ontologies = res_list.json()
+    ontologies = client.get("/api/v1/ontologies").json()
     assert len(ontologies) == 1
     assert ontologies[0]["ontology_id"] == "hp"
     assert ontologies[0]["term_count"] == 2
-
-
-def test_a_broken_entry_in_the_ontologies_folder_does_not_stop_the_start(
-    tmp_path: Path,
-) -> None:
-    ws = tmp_path / "workspace"
-    stored = ws / "ontologies"
-    stored.mkdir(parents=True)
-    (stored / "hp.json").write_text(json.dumps(SAMPLE_OBO_JSON), encoding="utf-8")
-    # A folder whose name looks like an ontology file is skipped.
-    (stored / "folder.json").mkdir()
-    (stored / "broken.json").write_text("{not json", encoding="utf-8")
-
-    app = create_app(
-        AppConfig(
-            workspace_dir=ws,
-            database_url=database_url_for(ws / "editor.db"),
-        )
-    )
-    client = AutoLoginClient(app)
-
-    listed = client.get("/api/v1/ontologies").json()
-    loaded = [item for item in listed if item.get("status") != "failed"]
-    assert [item["ontology_id"] for item in loaded] == ["hp"]
-
-
-def test_an_unreadable_stored_ontology_does_not_stop_the_start(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from ontocurator.ontology.registry import OntologyRegistry
-
-    ws = tmp_path / "workspace"
-    stored = ws / "ontologies"
-    stored.mkdir(parents=True)
-    (stored / "hp.json").write_text(json.dumps(SAMPLE_OBO_JSON), encoding="utf-8")
-    (stored / "locked.json").write_text("{}", encoding="utf-8")
-    original = OntologyRegistry.register_path
-
-    def register_path(self: OntologyRegistry, path: Path | str) -> str:
-        if Path(path).name == "locked.json":
-            raise PermissionError("locked by another process")
-        return original(self, path)
-
-    monkeypatch.setattr(OntologyRegistry, "register_path", register_path)
-
-    app = create_app(
-        AppConfig(
-            workspace_dir=ws,
-            database_url=database_url_for(ws / "editor.db"),
-        )
-    )
-    client = AutoLoginClient(app)
-
-    listed = client.get("/api/v1/ontologies").json()
-    assert [item["ontology_id"] for item in listed] == ["hp"]

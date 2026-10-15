@@ -59,6 +59,15 @@ step "frontend unit tests" npm --prefix frontend test -- \
 step "backend tests (PostgreSQL)" uv run pytest -q
 step "browser tests (Playwright)" npm --prefix frontend run test:e2e
 
+if [ "${CHECK_CONTAINERS:-0}" = "1" ]; then
+    container_args=(--smoke)
+    if [ -n "${CHECK_IMAGE:-}" ]; then
+        container_args+=(--image "$CHECK_IMAGE")
+    fi
+    step "container checks and browser smoke" uv run python scripts/container_check.py \
+        "${container_args[@]}"
+fi
+
 echo ""
 echo "Summary:"
 printf '  %s\n' "${summary[@]}"

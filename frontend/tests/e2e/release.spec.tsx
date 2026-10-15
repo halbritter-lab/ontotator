@@ -300,10 +300,10 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
       );
     });
 
-    // Verification of export link availability after submission
+    // The submitted dialog offers no download: exports are made by an administrator (T2d).
     await waitFor(() => {
       expect(screen.getByText(/Case successfully submitted|Fall erfolgreich abgegeben/i)).toBeDefined();
-      expect(screen.getByRole("button", { name: /Download Export|Export herunterladen/i })).toBeDefined();
     });
+    expect(screen.queryByRole("button", { name: /Download Export|Export herunterladen/i })).toBeNull();
   });
 });

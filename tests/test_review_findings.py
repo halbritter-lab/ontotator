@@ -9,14 +9,15 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from auth_harness import AutoLoginClient
+from auth_harness import AutoLoginClient, upload_package
 from pg_harness import database_for, database_url_for
+from support.v2_exports import package_export_zip
+from support.v2_reader import read_package
+from support.v2_writer import write_package, write_package_to_stream
 
 from ontocurator.domain.documents import Document
-from ontocurator.domain.errors import InvalidPackage
+from ontocurator.domain.errors import DomainError, InvalidPackage
 from ontocurator.packages.models import ValidatedPackage
-from ontocurator.packages.reader import read_package
-from ontocurator.packages.writer import write_package, write_package_to_stream
 from ontocurator.storage.repository import Repository
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -24,7 +25,7 @@ HP_PATH = FIXTURES / "hp.json"
 
 
 def _sample_package() -> ValidatedPackage:
-    from test_packages import _create_sample_package
+    from support.v2_samples import _create_sample_package
 
     return _create_sample_package()
 
@@ -520,58 +521,31 @@ def _obo(version: str, labels: dict[str, str], **meta_by_id) -> bytes:  # type: 
 def test_ontology_upload_is_content_addressed_and_never_overwrites(
     tmp_path: Path,
 ) -> None:
+    from auth_harness import HARNESS
+
     client, _ = _app(tmp_path)
+    store = client.app.state.ontology_store
+    blobs = client.app.state.repo.db.blobs
     old_release = _obo("2025-01-01", {"HP:0000001": "All"})
     new_release = _obo("2026-01-01", {"HP:0000001": "All", "HP:0000118": "Pheno"})
 
-    first = client.post(
-        "/api/v1/ontologies", files={"file": ("hp.json", old_release, "x/json")}
-    )
-    second = client.post(
-        "/api/v1/ontologies", files={"file": ("hp.json", new_release, "x/json")}
-    )
-    assert first.status_code == 200, first.text
-    assert second.status_code == 200, second.text
-    first_path = Path(first.json()["path"])
-    second_path = Path(second.json()["path"])
+    first = store.add(HARNESS, "hp.json", old_release)
+    second = store.add(HARNESS, "hp.json", new_release)
+    # Stored in the blob store by content: two releases never share a file.
+    first_path = blobs.path(first.sha256)
+    second_path = blobs.path(second.sha256)
     assert first_path != second_path
     old_sha = hashlib.sha256(old_release).hexdigest()
-    assert first_path.name == f"hp-{old_sha[:12]}.json"
+    assert first_path.name == old_sha
     assert first_path.read_bytes() == old_release
     assert second_path.read_bytes() == new_release
 
-    again = client.post(
-        "/api/v1/ontologies", files={"file": ("renamed.json", old_release, "x/json")}
-    )
-    assert again.status_code == 200
-    assert Path(again.json()["path"]) == first_path
+    again = store.add(HARNESS, "renamed.json", old_release)
+    assert again.sha256 == old_sha
+    assert again.filename == "hp.json"
 
     listed = {o["sha256"] for o in client.get("/api/v1/ontologies").json()}
     assert old_sha in listed
-
-
-def test_upload_routes_enforce_size_caps_without_blocking_event_loop(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import inspect
-
-    from ontocurator.api import routes
-    from ontocurator.application import uploads
-
-    assert not inspect.iscoroutinefunction(routes.upload_ontology)
-    assert not inspect.iscoroutinefunction(routes.upload_package)
-
-    client, config = _app(tmp_path)
-    monkeypatch.setattr(uploads, "MAX_ONTOLOGY_UPLOAD_BYTES", 64)
-    monkeypatch.setattr(uploads, "MAX_PACKAGE_UPLOAD_BYTES", 64)
-    big = _obo("2025-01-01", {"HP:0000001": "All"})
-    assert len(big) > 64
-    resp = client.post("/api/v1/ontologies", files={"file": ("hp.json", big, "x")})
-    assert resp.status_code == 413
-    assert resp.json()["code"] == "PAYLOAD_TOO_LARGE"
-    assert not any((config.workspace_dir / "ontologies").glob("*"))
-    resp = client.post("/api/v1/packages", files={"file": ("p.zip", b"x" * 65, "x")})
-    assert resp.status_code == 413
 
 
 def test_registry_for_layer_does_not_mutate_shared_service(tmp_path: Path) -> None:
@@ -773,7 +747,7 @@ def test_review_confirms_proposal_recorded_with_alt_id(tmp_path: Path) -> None:
     sha = hashlib.sha256(path.read_bytes()).hexdigest()
     service = OntologyService.load(path, OntologyRef(release="2026-02-01", sha256=sha))
 
-    from test_packages import _create_sample_profile
+    from support.v2_samples import _create_sample_profile
 
     profile = _create_sample_profile()
     profile.ontologies[0].sha256 = sha
@@ -842,8 +816,8 @@ def test_term_labels_expose_status_and_replacement(tmp_path: Path) -> None:
     client, _ = _app(tmp_path, ontology_paths=[HP_PATH])
     from test_api import _create_sample_package_bytes
 
-    resp = client.post(
-        "/api/v1/packages",
+    resp = upload_package(
+        client,
         files={"file": ("p.zip", _create_sample_package_bytes("single"), "x")},
     )
     assert resp.status_code == 200, resp.text
@@ -943,47 +917,28 @@ def _annotate(client, annotator: str, document_id: str, term_id: str) -> str:  #
     return ws_id
 
 
-def _filename(response) -> str:  # type: ignore[no-untyped-def]
-    import re
-
-    match = re.search(r'filename="([^"]+)"', response.headers["content-disposition"])
-    assert match, response.headers["content-disposition"]
-    return match.group(1)
-
-
 def test_package_export_contains_all_work_of_one_annotator_and_reimports(
     tmp_path: Path,
 ) -> None:
-    import re
-
     from test_api import _create_sample_package_bytes
 
     from ontocurator.ontology.registry import OntologyRegistry
 
     client, _ = _app(tmp_path / "a", ontology_paths=[HP_PATH])
     archive = _create_sample_package_bytes("single")
-    assert (
-        client.post(
-            "/api/v1/packages", files={"file": ("p.zip", archive, "x")}
-        ).status_code
-        == 200
-    )
+    uploaded = upload_package(client, files={"file": ("p.zip", archive, "x")})
+    assert uploaded.status_code == 200, uploaded.text
     _annotate(client, "dr. Müller/1", "doc-beta", "HP:0001252")
     _annotate(client, "dr. Müller/1", "doc-alpha", "HP:0001250")
     _annotate(client, "other", "doc-beta", "HP:0001250")
 
-    resp = client.get(
-        "/api/v1/packages/pkg-scenario-a/export",
-        params={"annotator_id": "dr. Müller/1", "mode": "independent"},
+    exported = package_export_zip(
+        client.app, "pkg-scenario-a", "dr. Müller/1", "independent"
     )
-    assert resp.status_code == 200, resp.text
-    assert resp.headers["content-type"] == "application/zip"
-    name = _filename(resp)
-    assert re.fullmatch(r"pkg-scenario-a__dr._M_ller_1__\d{8}-\d{6}\.zip", name), name
 
     registry = OntologyRegistry()
     registry.register_path(HP_PATH)
-    pkg = read_package(io.BytesIO(resp.content), registry=registry)
+    pkg = read_package(io.BytesIO(exported), registry=registry)
     assert pkg.manifest.origin_package_id == "pkg-scenario-a"
     assert pkg.manifest.document_order == ["doc-beta", "doc-alpha"]
     assert {s.origin_key.annotator_id for s in pkg.submissions.values()} == {
@@ -1000,11 +955,8 @@ def test_package_export_contains_all_work_of_one_annotator_and_reimports(
     assert pkg.search_events
     assert {e.workspace_key.annotator_id for e in pkg.search_events} == {"dr. Müller/1"}
 
-    other = client.get(
-        "/api/v1/packages/pkg-scenario-a/export", params={"annotator_id": "other"}
-    )
-    assert other.status_code == 200, other.text
-    other_pkg = read_package(io.BytesIO(other.content), registry=registry)
+    other = package_export_zip(client.app, "pkg-scenario-a", "other")
+    other_pkg = read_package(io.BytesIO(other), registry=registry)
     # IAA: both exports pin the same origin package, documents and profile.
     assert other_pkg.manifest.origin_manifest_hash == pkg.manifest.origin_manifest_hash
     assert other_pkg.manifest.task_profile_sha256 == pkg.manifest.task_profile_sha256
@@ -1013,11 +965,11 @@ def test_package_export_contains_all_work_of_one_annotator_and_reimports(
     }
 
     fresh, _ = _app(tmp_path / "b", ontology_paths=[HP_PATH])
-    for data in (resp.content, other.content):
-        imported = fresh.post("/api/v1/packages", files={"file": ("e.zip", data, "x")})
+    for data in (exported, other):
+        imported = upload_package(fresh, files={"file": ("e.zip", data, "x")})
         assert imported.status_code == 200, imported.text
     # Re-importing the identical export is idempotent.
-    again = fresh.post("/api/v1/packages", files={"file": ("e.zip", resp.content, "x")})
+    again = upload_package(fresh, files={"file": ("e.zip", exported, "x")})
     assert again.status_code == 200, again.text
 
 
@@ -1025,32 +977,9 @@ def test_package_export_without_work_is_rejected(tmp_path: Path) -> None:
     from test_api import _create_sample_package_bytes
 
     client, _ = _app(tmp_path, ontology_paths=[HP_PATH])
-    client.post(
-        "/api/v1/packages",
-        files={"file": ("p.zip", _create_sample_package_bytes("single"), "x")},
-    )
-    resp = client.get(
-        "/api/v1/packages/pkg-scenario-a/export", params={"annotator_id": "nobody"}
-    )
-    assert resp.status_code == 422
-    assert resp.json()["code"] == "NO_ANNOTATOR_WORK"
+    archive = _create_sample_package_bytes("single")
+    upload_package(client, files={"file": ("p.zip", archive, "x")})
 
-
-def test_workspace_export_filename_names_annotator_and_document(
-    tmp_path: Path,
-) -> None:
-    import re
-
-    from test_api import _create_sample_package_bytes
-
-    client, _ = _app(tmp_path, ontology_paths=[HP_PATH])
-    client.post(
-        "/api/v1/packages",
-        files={"file": ("p.zip", _create_sample_package_bytes("single"), "x")},
-    )
-    ws_id = _annotate(client, "jp", "doc-beta", "HP:0001252")
-    resp = client.get(f"/api/v1/workspaces/{ws_id}/export")
-    assert resp.status_code == 200
-    assert re.fullmatch(
-        r"pkg-scenario-a__jp__doc-beta__\d{8}-\d{6}\.zip", _filename(resp)
-    )
+    with pytest.raises(DomainError) as error:
+        package_export_zip(client.app, "pkg-scenario-a", "nobody")
+    assert error.value.code == "NO_ANNOTATOR_WORK"

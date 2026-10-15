@@ -15,3 +15,6 @@ src/ontocurator/web/** -text -diff
 
 # Shell scripts run in Git Bash on Windows too; a CR at the line end breaks them.
 *.sh text eol=lf
+
+# PostgreSQL bootstrap validates these public DEVELOPMENT ONLY fixtures as hex.
+docker/dev-passwords/* text eol=lf
