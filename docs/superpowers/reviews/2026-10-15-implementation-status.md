@@ -1,6 +1,6 @@
 # Implementation status
 
-Status after final T3a acceptance and T3b Tasks 1–7 acceptance at `a3c02286` on
+Status after final T3a acceptance and T3b Tasks 1–10 acceptance at `f034b37` on
 2026-10-16. The administration backend is complete on `feat/t3a-admin-backend`;
 UI integration continues on `feat/t3b-admin-ui`. No main merge, push or deployment
 has occurred.
@@ -14,7 +14,7 @@ has occurred.
 - [x] T6a: all ten design-foundation tasks, final review, bundled assets/fonts and integrated acceptance.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
 - [x] T3a: all 10 administration-backend tasks, independent reviews and final backend/frontend/browser/container acceptance; see the [final record](2026-10-16-t3a-final-review.md).
-- [ ] T3b: 7/11 tasks accepted; navigation/editor/profile and users/ontologies/projects/documents pass independent reviews and actual browser journeys. Assignment, progress/export, provenance and final gate remain; see the [navigation record](2026-10-16-t3b-navigation-review.md) and [administration record](2026-10-16-t3b-administration-review.md).
+- [ ] T3b: 10/11 tasks accepted; all features pass independent reviews and the four actual administration journeys pass. Final embedded-assets/image/full-suite/container acceptance remains; see the [navigation record](2026-10-16-t3b-navigation-review.md), [administration record](2026-10-16-t3b-administration-review.md) and [assignment/export/provenance record](2026-10-16-t3b-assignment-export-review.md).
 - [ ] T5: variants and translation-review application workflows; the format-1.1 prerequisite is already complete.
 - [ ] T4a: workflows and stage tasks.
 - [ ] T4b: adjudication, releases and comments.
