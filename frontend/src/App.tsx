@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type CurrentUser, type Profile, type ProjectSummary } from "./api/client";
+import { CaseViewer } from "./variants/CaseViewer";
 import { Shell } from "./app/Shell";
 import { NotFound } from "./app/NotFound";
 import { TaskEditor } from "./tasks/TaskEditor";
@@ -180,6 +181,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "projectSettings": content = <ProjectSettingsPage projectKey={route.key} currentUser={user}
       onSaved={() => setRetry(value => value + 1)} />; break;
     case "projectDocuments": content = <DocumentsPage projectKey={route.key} query={route} onNavigate={go} />; break;
+    case "projectCase": content = <CaseViewer projectKey={route.key} caseId={route.caseId} variant={route.variant} annotations={route.annotations} username={user.username} onNavigate={go} />; break;
     case "projectProgress": content = <ProgressPage projectKey={route.key} onNavigate={go} />; break;
     case "projectExport": content = <ExportPage projectKey={route.key} currentUser={user} />; break;
     case "me": content = <ProfilePage onSaved={setSavedIdentity} />; break;

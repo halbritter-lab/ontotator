@@ -1,4 +1,12 @@
 import { Toolbar } from "../ui/Toolbar";
+import { VariantSelectors } from "../variants/VariantSelectors";
+import { ReadOnlyAnnotationView } from "../variants/ReadOnlyAnnotationView";
+import { useCaseVersions } from "../variants/useCaseVersions";
+import { VariantDetails, variantDescription } from "../variants/CaseViewer";
+import { annotationOptions, pickVariant, refForKey } from "../variants/versionState";
+import { ErrorNotice } from "../admin/ErrorNotice";
+import type { AnnotationVersion } from "../api/client";
+import type { Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
 import { Button } from "../ui/Button";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -101,6 +109,7 @@ export type WorkspaceView = components["schemas"]["WorkspaceView"];
 
 export interface CaseScreenProps {
   readOnly?: boolean;
+  versionContext?: { username: string; assignmentId: number; onNavigate: (route: Route) => void };
   routeLeaveRef?: React.MutableRefObject<RouteLeaveGuard | null>;
   assignmentNavigation?: { tasks: TaskSummary[]; current: TaskSummary; onNavigate: (assignmentId: number) => void };
   onReadonlyRequired?: () => void;
@@ -128,8 +137,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onSubmitted,
   annotatorName,
   leaveGuardRef,
-  readOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired,
+  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext,
 }) => {
+  const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, workspaceId, view.key]);
+  const { versions, versionError, setVersionError, retryVersions } = useCaseVersions(view.key.project_key, view.document.document_id, versionContext, versionIdentity);
+  const [displayed, setDisplayed] = useState<{ identity: string; selection: string; label: string; value: AnnotationVersion | null } | null>(null);
+  const display = displayed?.identity === versionIdentity ? displayed : null;
+  const [versionBusy, setVersionBusy] = useState(false);
+  const versionGeneration = useRef(0);
+  useEffect(() => { versionGeneration.current++; setVersionBusy(false); return () => { versionGeneration.current++; }; }, [versionIdentity]);
+  const readOnly = serverReadOnly || display !== null;
   // A ref also protects callbacks retained before this task became read-only.
   const readOnlyRef = useRef(readOnly);
   readOnlyRef.current = readOnly;
@@ -200,12 +217,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const displayedTerms = useMemo(() => [
     ...(draft.annotations ?? []),
+    ...(display?.value?.annotations ?? []),
     ...(view.available_inputs ?? []),
     ...(view.submissions ?? []).flatMap((submission) => submission.snapshots),
   ].map((snapshot) => ({
     layer_id: snapshot.annotation.layer_id,
     term_id: snapshot.annotation.term_id,
-  })), [draft.annotations, view.available_inputs, view.submissions]);
+  })), [draft.annotations, display?.value, view.available_inputs, view.submissions]);
   const termLabel = useTermLabels(view.key.project_key, displayedTerms);
 
   const searchManager = useMemo(() => new SearchManager(api), []);
@@ -481,40 +499,47 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
    * Flush pending edits before leaving the case. If they cannot be saved (conflict or
    * server unreachable) the user may explicitly discard them and leave anyway.
    */
+  const leaveInProgress = useRef(false);
   const leaveCase = async (action: () => void | Promise<void>): Promise<boolean> => {
-    const rejectedBefore = queueRef.current.rejectedCount();
-    if (rejectedBefore > 0) {
-      setActionError("A change could not be saved. Reload the case before leaving.");
-      return false;
-    }
+    // Local version changes and App routes share the same unsaved-work dialog.
+    // A concurrent transition must not replace its resolver and orphan the first.
+    if (leaveInProgress.current) return false;
+    leaveInProgress.current = true;
     try {
-      await queueRef.current.flush();
-      if (queueRef.current.rejectedCount() !== rejectedBefore) {
+      const rejectedBefore = queueRef.current.rejectedCount();
+      if (rejectedBefore > 0) {
         setActionError("A change could not be saved. Reload the case before leaving.");
         return false;
       }
-    } catch (error) {
-      if (!(error instanceof UnsavedChangesError)) { reportError(error); return false; }
-      const pending = queueRef.current.pendingCount();
-      const ok = await askConfirm(
-        error.state === "conflict" ? "Case was changed elsewhere" : "Changes not saved",
-        error.state === "conflict"
-          ? `This case was changed in another window or session. ${pending} unsaved edit(s) in this window will be discarded.`
-          : error.sessionEnded
-          ? `${SESSION_ENDED_MESSAGE} Leaving now discards ${pending} edit(s).`
-          : `${pending} edit(s) could not be saved because the server is unreachable. Leaving discards them.`,
-        "Discard edits and leave",
-      );
-      if (!ok) return false;
-      queueRef.current.discardPending();
-    }
-    try {
-      await action();
-      return true;
-    } catch (error) {
-      reportError(error);
-      return false;
-    }
+      try {
+        await queueRef.current.flush();
+        if (queueRef.current.rejectedCount() !== rejectedBefore) {
+          setActionError("A change could not be saved. Reload the case before leaving.");
+          return false;
+        }
+      } catch (error) {
+        if (!(error instanceof UnsavedChangesError)) { reportError(error); return false; }
+        const pending = queueRef.current.pendingCount();
+        const ok = await askConfirm(
+          error.state === "conflict" ? "Case was changed elsewhere" : "Changes not saved",
+          error.state === "conflict"
+            ? `This case was changed in another window or session. ${pending} unsaved edit(s) in this window will be discarded.`
+            : error.sessionEnded
+            ? `${SESSION_ENDED_MESSAGE} Leaving now discards ${pending} edit(s).`
+            : `${pending} edit(s) could not be saved because the server is unreachable. Leaving discards them.`,
+          "Discard edits and leave",
+        );
+        if (!ok) return false;
+        queueRef.current.discardPending();
+      }
+      try {
+        await action();
+        return true;
+      } catch (error) {
+        reportError(error);
+        return false;
+      }
+    } finally { leaveInProgress.current = false; }
   };
   const latestLeave = useRef(leaveCase);
   latestLeave.current = leaveCase;
@@ -524,6 +549,35 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     routeLeaveRef.current = guard;
     return () => { if (routeLeaveRef.current === guard) routeLeaveRef.current = null; };
   }, [routeLeaveRef]);
+
+  const chooseAnnotationVersion = async (selection: string) => {
+    if (!versions || versionBusy || selection === (display?.selection ?? "draft")) return;
+    if (selection !== "draft" && selection !== "text" && !refForKey(selection, versions.refs)) return;
+    setVersionBusy(true);
+    const request = ++versionGeneration.current;
+    let load: Promise<void> | undefined;
+    try {
+      await leaveCase(() => {
+        if (request !== versionGeneration.current) return;
+        if (selection === "draft") { setDisplayed(null); readOnlyRef.current = serverReadOnly; return; }
+        const ref = refForKey(selection, versions.refs);
+        readOnlyRef.current = true;
+        setDisplayed({ identity: versionIdentity, selection, label: ref?.label ?? "Text only", value: null });
+        setVersionError(null);
+        if (!ref) return;
+        load = api.getAnnotationVersion(view.key.project_key, view.document.document_id, ref.kind, ref.id).then(value => {
+          if (request === versionGeneration.current) setDisplayed({ identity: versionIdentity, selection, label: ref.label, value });
+        }, error => { if (request === versionGeneration.current) setVersionError(error); });
+      });
+      // The fetch cannot hold the leave guard; departures cancel its generation.
+      await load;
+    } finally { if (request === versionGeneration.current) setVersionBusy(false); }
+  };
+  const navigateVariant = (documentId: string) => {
+    if (versionBusy || !versions || !versionContext || !versions.detail.variants.some(row => row.document_id === documentId)) return;
+    // App's history journal invokes the registered leaveCase guard exactly once.
+    versionContext.onNavigate({ name: "projectCase", key: view.key.project_key, caseId: versions.detail.case_id, variant: documentId });
+  };
 
   /** Resolve a revision conflict by reloading the case from the server. */
   const reloadCase = async () => {
@@ -1539,7 +1593,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         </div>
       </Toolbar>
 
-      {readOnly && <InlineMessage tone="info">Submitted. The project lead can reopen it for changes.</InlineMessage>}
+      {versions && <div className="case-version-controls">
+        <VariantSelectors caseDetail={versions.detail} currentDocumentId={view.document.document_id}
+          annotationOptions={annotationOptions(versions.refs, true)} selectedAnnotation={display?.selection ?? "draft"}
+          disabled={versionBusy && display !== null} onLanguage={language => { const id = pickVariant(versions.detail, language); if (id) navigateVariant(id); }}
+          onVersion={navigateVariant} onAnnotation={selection => { void chooseAnnotationVersion(selection); }} />
+        {versions.detail.variants.find(row => row.document_id === view.document.document_id) && <span className="badge">{variantDescription(versions.detail.variants.find(row => row.document_id === view.document.document_id)!)}</span>}
+        <VariantDetails detail={versions.detail} documentId={view.document.document_id} />
+      </div>}
+      {!!versionError && <><ErrorNotice error={versionError} /><Button onClick={retryVersions}>Retry version list</Button></>}
+      {display && <InlineMessage tone="info"><span>Viewing {display.label} (read-only)</span>
+        <Button disabled={versionBusy} onClick={() => { void chooseAnnotationVersion("draft"); }}>Back to my draft</Button>
+      </InlineMessage>}
+      {serverReadOnly && <InlineMessage tone="info">Submitted. The project lead can reopen it for changes.</InlineMessage>}
       {queueState === "conflict" && (
         <InlineMessage tone="error" aria-label="Revision conflict">
           <span>
@@ -1564,6 +1630,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             disabled={isReloading} onClick={() => { void reloadCase(); }}>Reload case</Button>}
         </InlineMessage>
       )}
+      {display ? <ReadOnlyAnnotationView text={view.document.text} annotations={display.value?.annotations ?? []}
+        evidence={display.value?.evidence ?? []} labelFor={termLabel} /> : <>
       <nav className="mobile-pane-tabs" aria-label="Select view">
         {([ ["list", "List"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
           <button key={pane} type="button" aria-pressed={mobilePane === pane}
@@ -1951,6 +2019,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         )}
       </div>
 
+      </>}
       {historySubmission && <Dialog open title="Historical submission" heading={<>Submission {historySubmission.submission_id}</>} onClose={() => setHistorySubmission(null)}>
         <p>{historySubmission.created_at}</p>
         <p>
