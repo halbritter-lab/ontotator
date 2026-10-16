@@ -28,7 +28,8 @@ from ontocurator.assignments.service import (
     TaskSummary,
 )
 from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import ADMINISTRATION_TASKS, Action, Task, can
+from ontocurator.authz.policy import Action, Task, can
+from ontocurator.authz.visibility import qualifying_assignment
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.storage.tables import AssignmentRow, UserRow
 
@@ -50,6 +51,7 @@ class AssignmentView(BaseModel):
     revoked_at: datetime | None
     last_submission_id: str | None
     display_name: str
+    external_id: str | None = None
 
 
 class AssignmentOpenRequest(BaseModel):
@@ -104,7 +106,14 @@ class ProposalRow(BaseModel):
 class UnassignableDocument(BaseModel):
     document_id: str
     language: str
-    reason: Literal["NO_READER", "TOO_FEW_READERS"]
+    reason: Literal[
+        "NO_READER",
+        "TOO_FEW_READERS",
+        "translation_not_accepted",
+        "not_a_translation",
+        "translation_already_accepted",
+        "variant_source_unknown",
+    ]
     eligible_count: int
 
 
@@ -277,6 +286,27 @@ def propose_assignments(
     )
 
 
+def _owned_assignment(request: Request, user_id: int, assignment_id: int) -> Assignment:
+    with request.app.state.repo.db.transaction() as conn:
+        valid = conn.execute(
+            select(AssignmentRow.id).where(
+                AssignmentRow.id == assignment_id, qualifying_assignment(user_id)
+            )
+        ).first()
+        if valid is None:
+            raise DomainError("ASSIGNMENT_NOT_FOUND")
+        return AssignmentService._get(conn, assignment_id)
+
+
+@router.get("/assignments/{assignment_id}")
+def assignment_metadata(
+    assignment_id: int, request: Request, principal: PrincipalDep
+) -> AssignmentView:
+    return _views(
+        request, [_owned_assignment(request, principal.user_id, assignment_id)]
+    )[0]
+
+
 @router.post("/assignments/{assignment_id}/open")
 def open_assignment(
     assignment_id: int,
@@ -285,17 +315,9 @@ def open_assignment(
     ws_svc: WorkspaceSvcDep,
     body: AssignmentOpenRequest | None = None,
 ) -> AssignmentOpenResponse:
-    with request.app.state.repo.db.transaction() as conn:
-        row = conn.execute(
-            select(AssignmentRow.user_id).where(
-                AssignmentRow.id == assignment_id, AssignmentRow.revoked_at.is_(None)
-            )
-        ).one_or_none()
-        if row is None or row.user_id != principal.user_id:
-            raise DomainError("ASSIGNMENT_NOT_FOUND")
-        assignment = AssignmentService._get(conn, assignment_id)
-        if assignment.task not in ADMINISTRATION_TASKS:
-            raise DomainError("TASK_INVALID")
+    assignment = _owned_assignment(request, principal.user_id, assignment_id)
+    if assignment.task not in MODE_FOR_TASK:
+        raise DomainError("TASK_INVALID")
     response = open_workspace(
         OpenWorkspaceRequest(
             project_key=assignment.project_key,

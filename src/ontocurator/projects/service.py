@@ -59,6 +59,7 @@ class ProjectSettingsChange(BaseModel):
     require_chosen_axes: bool = False
     adjudicator_not_annotator: bool = False
     contiguous_mentions_only: bool = False
+    annotate_accepted_translations_only: bool = True
     hidden_axis_values: HiddenValues = Field(default_factory=dict)
 
 

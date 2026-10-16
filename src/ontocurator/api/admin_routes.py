@@ -38,6 +38,7 @@ class AdminUser(BaseModel):
     active: bool
     languages: list[str]
     projects: list[UserProject]
+    qualification: str | None
 
 
 class CreateUserRequest(BaseModel):
@@ -57,6 +58,7 @@ class PatchUserRequest(BaseModel):
     active: bool = False
     is_system_admin: bool = False
     languages: list[str] = Field(default_factory=list)
+    qualification: str | None = Field(default=None, max_length=200)
 
 
 class CodeResponse(BaseModel):
@@ -93,6 +95,7 @@ def admin_users(accounts: AccountService, users: list[User]) -> list[AdminUser]:
             pseudonym=user.pseudonym,
             is_system_admin=user.is_system_admin,
             active=user.active,
+            qualification=user.qualification,
             languages=sorted(languages[user.id]),
             projects=[
                 UserProject(project_key=key, roles=roles)
@@ -229,7 +232,7 @@ def patch_user(
         profile = {
             key: value
             for key, value in fields.items()
-            if key in {"display_name", "email"}
+            if key in {"display_name", "email", "qualification"}
         }
         updated = accounts.update_profile(actor, username, **profile)
         if "languages" in fields:

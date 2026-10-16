@@ -20,7 +20,13 @@ from ontocurator.assignments.distribution import (
     Candidate,
     DistributionProposal,
     DocumentItem,
+    Unassignable,
     propose_distribution,
+)
+from ontocurator.assignments.eligibility import (
+    VARIANT_COLUMNS,
+    check_variant_assignable,
+    conflicting_tasks,
 )
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import (
@@ -33,6 +39,7 @@ from ontocurator.authz.policy import (
 )
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.variants import VariantInfo
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import _lock_id
 from ontocurator.storage.tables import (
@@ -52,6 +59,9 @@ class SnapshotDocument:
     language: str
     text_sha256: str
     excluded_user_ids: tuple[int, ...]
+    variant: VariantInfo | None = None
+    required_languages: tuple[str, ...] = ()
+    refusal_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -73,6 +83,8 @@ class DistributionSnapshot:
     adjudicator_not_annotator: bool
     documents: tuple[SnapshotDocument, ...]
     members: tuple[SnapshotMember, ...]
+    annotate_accepted_translations_only: bool = True
+    variants: tuple[VariantInfo, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         """JSON-compatible full inputs, stable under unordered query results."""
@@ -159,14 +171,36 @@ def build_proposal(
             task,
         )
     ]
+    language_requirements = {
+        d.document_id: frozenset(d.required_languages or (d.language,))
+        for d in documents
+    }
     proposal = propose_distribution(
         [
             DocumentItem(d.document_id, d.language, frozenset(d.excluded_user_ids))
             for d in documents
+            if d.refusal_reason is None
         ],
         candidates,
         per_document=per_document,
         seed=seed,
+        required_languages=lambda item: language_requirements[item.document_id],
+    )
+    unassignable = {item.document_id: item for item in proposal.unassignable}
+    for d in documents:
+        if d.refusal_reason is not None:
+            unassignable[d.document_id] = Unassignable(
+                d.document_id, d.refusal_reason, 0
+            )
+    proposal = DistributionProposal(
+        proposal.rows,
+        tuple(
+            unassignable[d.document_id]
+            for d in documents
+            if d.document_id in unassignable
+        ),
+        seed,
+        per_document,
     )
     return PreparedDistribution(
         DistributionContext(
@@ -234,18 +268,10 @@ class DistributionService:
         require_project_management(
             conn, actor, key, project_id, Action.MANAGE_ASSIGNMENTS
         )
-        documents = (
+        inventory = (
             conn.execute(
-                select(
-                    DocumentRow.document_id,
-                    DocumentRow.position,
-                    DocumentRow.language,
-                    DocumentRow.text_sha256,
-                )
-                .where(
-                    DocumentRow.project_id == project_id,
-                    DocumentRow.document_id.in_(document_ids),
-                )
+                select(*VARIANT_COLUMNS, DocumentRow.position)
+                .where(DocumentRow.project_id == project_id)
                 .order_by(
                     DocumentRow.position.asc().nulls_last(), DocumentRow.document_id
                 )
@@ -253,9 +279,45 @@ class DistributionService:
             .mappings()
             .all()
         )
+        variants = {
+            row["document_id"]: VariantInfo(
+                **{name: row[name] for name in VariantInfo.__dataclass_fields__}
+            )
+            for row in inventory
+        }
+        selected = set(document_ids)
+        documents = [
+            {
+                name: row[name]
+                for name in ("document_id", "position", "language", "text_sha256")
+            }
+            for row in inventory
+            if row["document_id"] in selected
+        ]
         if len(documents) != len(document_ids):
             # Never look up a missing ID in another project, or echo metadata.
             raise DomainError("DOCUMENT_NOT_FOUND")
+        eligibility: dict[str, tuple[tuple[str, ...], str | None]] = {}
+        for d in documents:
+            try:
+                needed = check_variant_assignable(
+                    project, variants[d["document_id"]], task, variants.get
+                )
+                eligibility[d["document_id"]] = (tuple(sorted(needed)), None)
+            except DomainError as error:
+                reasons = {
+                    "TRANSLATION_NOT_ACCEPTED": "translation_not_accepted",
+                    "NOT_A_TRANSLATION": "not_a_translation",
+                    "VARIANT_SOURCE_UNKNOWN": "variant_source_unknown",
+                }
+                if error.code not in reasons:
+                    raise
+                reason = reasons[error.code]
+                if error.code == "NOT_A_TRANSLATION" and isinstance(
+                    error.details, dict
+                ):
+                    reason = error.details.get("reason", reason)
+                eligibility[d["document_id"]] = ((), reason)
         memberships: dict[int, list[Role]] = {}
         for user_id, role in conn.execute(
             select(ProjectMembershipRow.user_id, ProjectMembershipRow.role).where(
@@ -291,8 +353,12 @@ class DistributionService:
             AssignmentRow.document_id.in_(document_ids),
             AssignmentRow.revoked_at.is_(None),
         )
-        if not project["adjudicator_not_annotator"]:
-            exclusion_query = exclusion_query.where(AssignmentRow.task == task)
+        excluded_tasks = {task} | (
+            set(conflicting_tasks(task))
+            if project["adjudicator_not_annotator"]
+            else set()
+        )
+        exclusion_query = exclusion_query.where(AssignmentRow.task.in_(excluded_tasks))
         for document_id, user_id in conn.execute(exclusion_query):
             exclusions.setdefault(document_id, set()).add(user_id)
         return DistributionSnapshot(
@@ -301,6 +367,9 @@ class DistributionService:
             tuple(
                 SnapshotDocument(
                     **d,
+                    variant=variants[d["document_id"]],
+                    required_languages=eligibility[d["document_id"]][0],
+                    refusal_reason=eligibility[d["document_id"]][1],
                     excluded_user_ids=tuple(
                         sorted(exclusions.get(d["document_id"], ()))
                     ),
@@ -322,6 +391,8 @@ class DistributionService:
                 for u in users
                 if u["id"] in memberships
             ),
+            project["annotate_accepted_translations_only"],
+            tuple(variants[key] for key in sorted(variants)),
         )
 
     def propose(

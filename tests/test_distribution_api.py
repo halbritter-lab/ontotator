@@ -54,6 +54,7 @@ def test_http_proposal_writes_nothing_and_confirmation_audit_reproduces_input(ap
         SnapshotMember,
         build_proposal,
     )
+    from ontocurator.domain.variants import VariantInfo
     from ontocurator.storage.tables import AssignmentRow, AuditEventRow
 
     app, client, project = api
@@ -114,8 +115,15 @@ def test_http_proposal_writes_nothing_and_confirmation_audit_reproduces_input(ap
     original = DistributionSnapshot(
         snapshot["project_key"],
         snapshot["adjudicator_not_annotator"],
-        tuple(SnapshotDocument(**doc) for doc in snapshot["documents"]),
+        tuple(
+            SnapshotDocument(**{**doc, "variant": VariantInfo(**doc["variant"])})
+            for doc in snapshot["documents"]
+        ),
         tuple(SnapshotMember(**member) for member in snapshot["members"]),
+        annotate_accepted_translations_only=snapshot[
+            "annotate_accepted_translations_only"
+        ],
+        variants=tuple(VariantInfo(**variant) for variant in snapshot["variants"]),
     )
     reproduced = build_proposal(original, task="annotate", per_document=1, seed=7)
     assert [list(row) for row in reproduced.proposal.rows] == details[

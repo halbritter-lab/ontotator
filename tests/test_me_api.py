@@ -38,6 +38,7 @@ def test_users_edit_their_own_profile_and_languages(app):
         "username": "alice",
         "pseudonym": before["pseudonym"],
         "languages": ["de", "en"],
+        "qualification": None,
     }
     assert set(client.get("/api/v1/auth/me").json()) == set(before)
     kept = client.patch(

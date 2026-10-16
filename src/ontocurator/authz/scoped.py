@@ -17,6 +17,7 @@ from typing import Any, Literal
 
 from sqlalchemy import Connection, func, select, update
 
+from ontocurator.assignments.eligibility import require_annotation_gate
 from ontocurator.assignments.service import TASK_FOR_MODE, Assignment, AssignmentService
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.auth.authority import lock_user_authority
@@ -157,6 +158,19 @@ class ScopedRepository(Repository):
         # through commit without a global command mutex.
         self.require_workable(conn, key)
 
+    def _before_open_draft(self, conn: Connection, key: WorkspaceKey) -> None:
+        assignment = self.require_workable(conn, key)
+        conn.execute(
+            select(AssignmentRow.id)
+            .where(AssignmentRow.id == assignment.id)
+            .with_for_update(key_share=True)
+        ).one()
+        assignment = self.require_workable(conn, key)
+        if assignment.status != "submitted":
+            require_annotation_gate(
+                conn, self._require_project(conn, key.project_key), key.document_id
+            )
+
     def _before_new_mutation(self, conn: Connection, key: WorkspaceKey) -> None:
         assignment = self.require_workable(conn, key, mutation=True)
         conn.execute(
@@ -167,6 +181,9 @@ class ScopedRepository(Repository):
         # Another compatible draft can submit the same task while this row
         # lock waits (for example legacy assisted versus independent).
         self.require_workable(conn, key, mutation=True)
+        require_annotation_gate(
+            conn, self._require_project(conn, key.project_key), key.document_id
+        )
 
     def _after_new_mutation(
         self,
@@ -667,6 +684,11 @@ class ScopedRepository(Repository):
         self._visible(event.workspace_key.project_key)
         with self.db.transaction() as conn:
             self._before_workspace_locks(conn, event.workspace_key)
+            require_annotation_gate(
+                conn,
+                self._require_project(conn, event.workspace_key.project_key),
+                event.workspace_key.document_id,
+            )
             super().save_search_event(event)
 
     def get_search_event(
@@ -703,6 +725,11 @@ class ScopedRepository(Repository):
         self._document(workspace_key.project_key, workspace_key.document_id)
         with self.db.transaction() as conn:
             self._before_workspace_locks(conn, workspace_key)
+            require_annotation_gate(
+                conn,
+                self._require_project(conn, workspace_key.project_key),
+                workspace_key.document_id,
+            )
             project_id = self._require_project(conn, workspace_key.project_key)
             # A visible supplied workspace must never authorize locking or
             # growing an unrelated persisted event. Association is immutable;

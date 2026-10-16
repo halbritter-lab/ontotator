@@ -103,6 +103,7 @@ class User:
     active: bool
     orcid: str | None = None
     orcid_consent: bool = False
+    qualification: str | None = None
 
 
 @dataclass(frozen=True)
@@ -179,6 +180,7 @@ def _user(row: Row[Any]) -> User:
         active=row.active,
         orcid=row.orcid,
         orcid_consent=row.orcid_consent,
+        qualification=row.qualification,
     )
 
 
@@ -292,6 +294,7 @@ class AccountService:
         email: str | _Unset | None = UNSET,
         orcid: str | _Unset | None = UNSET,
         orcid_consent: bool | _Unset = UNSET,
+        qualification: str | _Unset | None = UNSET,
     ) -> User:
         changes: dict[str, Any] = {}
         if not isinstance(display_name, _Unset):
@@ -302,6 +305,16 @@ class AccountService:
             changes["orcid"] = validate_orcid(orcid) if orcid is not None else None
         if not isinstance(orcid_consent, _Unset):
             changes["orcid_consent"] = orcid_consent
+        if not isinstance(qualification, _Unset):
+            if qualification is not None and (
+                not isinstance(qualification, str) or len(qualification) > 200
+            ):
+                raise DomainError(
+                    "QUALIFICATION_INVALID", "Qualification has at most 200 characters."
+                )
+            changes["qualification"] = (
+                qualification.strip() or None if qualification is not None else None
+            )
         now = self._now()
         with self.db.transaction() as conn:
             user = self._lock_user(conn, username)

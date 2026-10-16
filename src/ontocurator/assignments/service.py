@@ -10,7 +10,7 @@ draft/assignment rows; they need not serialize on this administrative mutex.
 from __future__ import annotations
 
 from builtins import list as List
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
@@ -20,13 +20,17 @@ from sqlalchemy import (
     RowMapping,
     Select,
     case,
-    exists,
     func,
     insert,
     select,
     update,
 )
 
+from ontocurator.assignments.eligibility import (
+    check_variant_assignable,
+    conflicting_tasks,
+    load_variants,
+)
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.policy import (
@@ -40,6 +44,7 @@ from ontocurator.authz.policy import (
 )
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import WorkspaceMode
 from ontocurator.projects.assignments import revoke_assignments
 from ontocurator.storage.database import Database
@@ -79,6 +84,7 @@ class Assignment:
     updated_at: datetime
     revoked_at: datetime | None
     last_submission_id: str | None
+    external_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -91,6 +97,9 @@ class TaskSummary:
     task: Task
     status: AssignmentStatus
     updated_at: datetime
+    external_id: str | None = None
+    source_language: str | None = None
+    target_language: str | None = None
 
 
 def _assignments() -> Select[tuple[object, ...]]:
@@ -108,9 +117,15 @@ def _assignments() -> Select[tuple[object, ...]]:
             AssignmentRow.updated_at,
             AssignmentRow.revoked_at,
             AssignmentRow.last_submission_id,
+            DocumentRow.external_id,
         )
         .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
         .join(UserRow, UserRow.id == AssignmentRow.user_id)
+        .join(
+            DocumentRow,
+            (DocumentRow.project_id == AssignmentRow.project_id)
+            & (DocumentRow.document_id == AssignmentRow.document_id),
+        )
     )
 
 
@@ -261,7 +276,7 @@ class AssignmentService:
             raise DomainError("ASSIGNEE_ROLE_MISSING")
 
     @staticmethod
-    def _eligible(
+    def check_assignable(
         conn: Connection,
         project: RowMapping,
         document_id: str,
@@ -270,16 +285,16 @@ class AssignmentService:
         confirm_language: bool,
         *,
         excluding: int | None = None,
-    ) -> tuple[str, list[str], bool]:
+        variants: Mapping[str, VariantInfo] | None = None,
+    ) -> tuple[str, list[str], bool, list[str]]:
         AssignmentService._require_target(conn, project, target, task)
-        language = conn.execute(
-            select(DocumentRow.language).where(
-                DocumentRow.project_id == project["id"],
-                DocumentRow.document_id == document_id,
-            )
-        ).scalar_one_or_none()
-        if language is None:
+        if variants is None:
+            variants = load_variants(conn, project["id"], document_id)
+        variant = variants.get(document_id)
+        if variant is None:
             raise DomainError("DOCUMENT_NOT_FOUND")
+        required = check_variant_assignable(project, variant, task, variants.get)
+        language = variant.language
         languages = list(
             conn.execute(
                 select(UserLanguageRow.language)
@@ -287,26 +302,29 @@ class AssignmentService:
                 .order_by(UserLanguageRow.language)
             ).scalars()
         )
-        mismatch = language not in languages
+        mismatch = not set(languages) >= required
         if mismatch and not confirm_language:
             raise DomainError(
                 "LANGUAGE_CONFIRMATION_REQUIRED",
-                {"document_language": language, "user_languages": languages},
+                {
+                    "document_language": language,
+                    "user_languages": languages,
+                    "required_languages": sorted(required),
+                },
             )
-        if project["adjudicator_not_annotator"]:
-            opposite: Task = "review" if task == "annotate" else "annotate"
+        if project["adjudicator_not_annotator"] and conflicting_tasks(task):
             conflict = select(AssignmentRow.id).where(
                 AssignmentRow.project_id == project["id"],
                 AssignmentRow.document_id == document_id,
                 AssignmentRow.user_id == target,
-                AssignmentRow.task == opposite,
+                AssignmentRow.task.in_(conflicting_tasks(task)),
                 AssignmentRow.revoked_at.is_(None),
             )
             if excluding is not None:
                 conflict = conflict.where(AssignmentRow.id != excluding)
             if conn.execute(conflict.limit(1)).first() is not None:
                 raise DomainError("ADJUDICATOR_IS_ANNOTATOR")
-        return language, languages, mismatch
+        return language, languages, mismatch, sorted(required)
 
     def _create(
         self,
@@ -316,7 +334,7 @@ class AssignmentService:
         document_id: str,
         target: int,
         task: Task,
-        eligibility: tuple[str, list[str], bool],
+        eligibility: tuple[str, list[str], bool, list[str]],
         now: datetime,
     ) -> Assignment:
         assignment_id = conn.execute(
@@ -333,7 +351,7 @@ class AssignmentService:
             )
             .returning(AssignmentRow.id)
         ).scalar_one()
-        language, languages, mismatch = eligibility
+        language, languages, mismatch, required = eligibility
         if mismatch:
             record_audit(
                 conn,
@@ -342,7 +360,11 @@ class AssignmentService:
                 target_type="assignment",
                 target_id=assignment_id,
                 project_id=project["id"],
-                details={"document_language": language, "user_languages": languages},
+                details={
+                    "document_language": language,
+                    "user_languages": languages,
+                    "required_languages": required,
+                },
                 at=now,
             )
         record_audit(
@@ -383,12 +405,16 @@ class AssignmentService:
         target: int,
         task: Task,
         confirm_language: bool,
+        *,
+        variants: Mapping[str, VariantInfo] | None = None,
     ) -> Assignment:
         """Assign on caller's connection under preheld authority/target locks.
 
         Bulk callers acquire the complete sorted target union before this seam.
         No joined Database scope: a caller can isolate routine row refusals with
-        conn.begin_nested without poisoning its outer transaction.
+        conn.begin_nested without poisoning its outer transaction. An optional
+        lookup must be server-owned, freshly revalidated under project EX; only
+        metadata is reused, never current target authority/languages/conflicts.
         """
         if task not in ADMINISTRATION_TASKS:
             raise DomainError("TASK_INVALID")
@@ -396,8 +422,14 @@ class AssignmentService:
         if existing is not None:
             self._require_target(conn, project, target, task)
             return existing
-        eligibility = self._eligible(
-            conn, project, document_id, target, task, confirm_language
+        eligibility = self.check_assignable(
+            conn,
+            project,
+            document_id,
+            target,
+            task,
+            confirm_language,
+            variants=variants,
         )
         return self._create(
             conn, actor, project, document_id, target, task, eligibility, self._now()
@@ -427,7 +459,7 @@ class AssignmentService:
             )
             if existing is not None and existing.id != assignment_id:
                 raise DomainError("ASSIGNMENT_EXISTS")
-            eligibility = self._eligible(
+            eligibility = self.check_assignable(
                 conn,
                 project,
                 old["document_id"],
@@ -535,24 +567,9 @@ class AssignmentService:
             ]
 
     def my_tasks(self, user_id: int) -> List[TaskSummary]:
-        # One statement rechecks current account/membership/task role, including
-        # retained submitted history after a membership removal (R25).
-        from ontocurator.authz.policy import TASK_ROLES
+        from ontocurator.authz.visibility import qualifying_assignment
+        from ontocurator.domain.variants import resolve_translation_lineage
 
-        eligible = exists(
-            select(ProjectMembershipRow.user_id).where(
-                ProjectMembershipRow.project_id == AssignmentRow.project_id,
-                ProjectMembershipRow.user_id == user_id,
-                ProjectMembershipRow.role.in_(TASK_ROLES["annotate"]),
-            )
-        ).where(AssignmentRow.task == "annotate")
-        review = exists(
-            select(ProjectMembershipRow.user_id).where(
-                ProjectMembershipRow.project_id == AssignmentRow.project_id,
-                ProjectMembershipRow.user_id == user_id,
-                ProjectMembershipRow.role.in_(TASK_ROLES["review"]),
-            )
-        ).where(AssignmentRow.task == "review")
         query = (
             select(
                 AssignmentRow.id.label("assignment_id"),
@@ -560,6 +577,7 @@ class AssignmentService:
                 ProjectRow.name.label("project_name"),
                 AssignmentRow.document_id,
                 DocumentRow.language,
+                DocumentRow.external_id,
                 AssignmentRow.task,
                 AssignmentRow.status,
                 AssignmentRow.updated_at,
@@ -571,12 +589,7 @@ class AssignmentService:
                 & (DocumentRow.document_id == AssignmentRow.document_id),
             )
             .join(UserRow, UserRow.id == AssignmentRow.user_id)
-            .where(
-                AssignmentRow.user_id == user_id,
-                AssignmentRow.revoked_at.is_(None),
-                UserRow.active.is_(True),
-                eligible | review,
-            )
+            .where(qualifying_assignment(user_id))
             .order_by(
                 case(
                     {"reopened": 0, "in_progress": 1, "open": 2, "submitted": 3},
@@ -589,4 +602,35 @@ class AssignmentService:
             )
         )
         with self.db.transaction() as conn:
-            return [TaskSummary(**row) for row in conn.execute(query).mappings()]
+            rows = list(conn.execute(query).mappings())
+            projects = {
+                r["project_key"] for r in rows if r["task"] == "translation_review"
+            }
+            # One metadata query across all task projects, never one per task/doc.
+            from ontocurator.assignments.eligibility import VARIANT_COLUMNS
+
+            variants: dict[str, dict[str, VariantInfo]] = {}
+            for row in conn.execute(
+                select(ProjectRow.project_key, *VARIANT_COLUMNS)
+                .join(ProjectRow, ProjectRow.id == DocumentRow.project_id)
+                .where(ProjectRow.project_key.in_(projects))
+            ).mappings():
+                variant = VariantInfo(
+                    **{name: row[name] for name in VariantInfo.__dataclass_fields__}
+                )
+                variants.setdefault(row["project_key"], {})[variant.document_id] = (
+                    variant
+                )
+            result = []
+            for row in rows:
+                source = target = None
+                if row["task"] == "translation_review":
+                    project_variants = variants[row["project_key"]]
+                    _, original = resolve_translation_lineage(
+                        project_variants[row["document_id"]], project_variants.get
+                    )
+                    source, target = original.language, row["language"]
+                result.append(
+                    TaskSummary(**row, source_language=source, target_language=target)
+                )
+            return result

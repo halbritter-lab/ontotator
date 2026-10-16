@@ -108,7 +108,11 @@ def test_language_confirmation_and_idempotence(core) -> None:
         conn.execute(update(DocumentRow).values(language="de"))
     with pytest.raises(DomainError, match="LANGUAGE_CONFIRMATION_REQUIRED") as error:
         service.assign(Actor.cli(), "p", "first", "alice", "annotate")
-    assert error.value.details == {"document_language": "de", "user_languages": ["en"]}
+    assert error.value.details == {
+        "document_language": "de",
+        "user_languages": ["en"],
+        "required_languages": ["de"],
+    }
     assignment = service.assign(
         Actor.cli(), "p", "first", "alice", "annotate", confirm_language=True
     )

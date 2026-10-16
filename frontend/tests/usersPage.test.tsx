@@ -6,7 +6,7 @@ import { api, ApiError, AuthError, type AdminUser, type CodeResponse, type Creat
 import { UsersPage } from "../src/admin/UsersPage";
 
 const currentUser: CurrentUser = { username: "root", display_name: "Root", pseudonym: "ann-root", is_system_admin: true, csrf_token: "csrf" };
-const root: AdminUser = { username: "root", display_name: "Root", email: null, pseudonym: "ann-root", is_system_admin: true, active: true, languages: ["de"], projects: [] };
+const root: AdminUser = { qualification: null, username: "root", display_name: "Root", email: null, pseudonym: "ann-root", is_system_admin: true, active: true, languages: ["de"], projects: [] };
 const alex: AdminUser = { ...root, username: "alex", display_name: "Alex Smith", email: "alex@example.org", pseudonym: "ann-alex", languages: ["en"], projects: [{ project_key: "study-one", roles: ["lead", "annotator"] }] };
 const created: CreatedUser = { user: { ...alex, username: "bea", display_name: "Beatrice", pseudonym: "ann-bea", is_system_admin: false, projects: [] }, code: "new-setup-secret", expires_at: "2026-10-17T12:30:00Z" };
 const reset: CodeResponse = { code: "new-reset-secret", expires_at: "2026-10-17T13:30:00Z" };

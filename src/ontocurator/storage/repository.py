@@ -1815,6 +1815,7 @@ class Repository:
         with self.db.transaction() as conn:
             self._before_workspace_locks(conn, key)
             self._lock_draft(conn, key)
+            self._before_open_draft(conn, key)
             return self._open_draft(conn, key, targets)
 
     def _before_workspace_locks(self, conn: Connection, key: WorkspaceKey) -> None:
@@ -1839,8 +1840,36 @@ class Repository:
             )
             lock_user_authority(conn, principal.user_id)
 
+    def _before_open_draft(self, conn: Connection, key: WorkspaceKey) -> None:
+        """HTTP-context open gate; trusted nonrequest callers retain their boundary."""
+        principal = current_principal.get()
+        if principal is None:
+            return
+        from ontocurator.assignments.eligibility import require_annotation_gate
+        from ontocurator.assignments.service import TASK_FOR_MODE
+        from ontocurator.storage.tables import AssignmentRow
+
+        project_id = self._require_project(conn, key.project_key)
+        status = conn.execute(
+            select(AssignmentRow.status).where(
+                AssignmentRow.project_id == project_id,
+                AssignmentRow.document_id == key.document_id,
+                AssignmentRow.user_id == principal.user_id,
+                AssignmentRow.task == TASK_FOR_MODE[key.mode],
+                AssignmentRow.revoked_at.is_(None),
+            )
+        ).scalar_one_or_none()
+        if status != "submitted":
+            require_annotation_gate(conn, project_id, key.document_id)
+
     def _before_new_mutation(self, conn: Connection, key: WorkspaceKey) -> None:
         """Request-specific gate, after successful replay/revision checks."""
+        if current_principal.get() is not None:
+            from ontocurator.assignments.eligibility import require_annotation_gate
+
+            require_annotation_gate(
+                conn, self._require_project(conn, key.project_key), key.document_id
+            )
 
     def _after_new_mutation(
         self,
