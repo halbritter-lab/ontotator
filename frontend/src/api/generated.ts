@@ -56,6 +56,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assignments/{assignment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assignment Metadata */
+        get: operations["assignment_metadata_api_v1_assignments__assignment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{assignment_id}/open": {
         parameters: {
             query?: never;
@@ -118,6 +135,74 @@ export interface paths {
         put?: never;
         /** Revoke */
         post: operations["revoke_api_v1_assignments__assignment_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/translation-reviews/{assignment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open Review */
+        get: operations["open_review_api_v1_translation_reviews__assignment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/translation-reviews/{assignment_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Review */
+        put: operations["save_review_api_v1_translation_reviews__assignment_id__draft_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/translation-reviews/{assignment_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Review */
+        post: operations["submit_review_api_v1_translation_reviews__assignment_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/documents/{doc}/translation-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Review Records */
+        get: operations["review_records_api_v1_projects__key__documents__doc__translation_reviews_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1097,6 +1182,8 @@ export interface components {
             languages: string[];
             /** Projects */
             projects: components["schemas"]["UserProject"][];
+            /** Qualification */
+            qualification: string | null;
         };
         /**
          * Annotation
@@ -1234,6 +1321,47 @@ export interface components {
              */
             status: "open" | "in_progress" | "submitted" | "reopened";
         };
+        /** Assignment */
+        Assignment: {
+            /** Id */
+            id: number;
+            /** Project Key */
+            project_key: string;
+            /** Document Id */
+            document_id: string;
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string;
+            /** Pseudonym */
+            pseudonym: string;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review" | "translation_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "in_progress" | "submitted" | "reopened";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Last Submission Id */
+            last_submission_id: string | null;
+            /** External Id */
+            external_id?: string | null;
+        };
         /** AssignmentOpenRequest */
         AssignmentOpenRequest: {
             /** Review Round Target Set Id */
@@ -1298,6 +1426,8 @@ export interface components {
             last_submission_id: string | null;
             /** Display Name */
             display_name: string;
+            /** External Id */
+            external_id?: string | null;
         };
         /**
          * AxisDefinition
@@ -1484,6 +1614,22 @@ export interface components {
             decisions?: components["schemas"]["ReviewDecision"][];
             /** Checked Layer Ids */
             checked_layer_ids?: string[];
+        };
+        /** DraftRequest */
+        DraftRequest: {
+            /** Expected Revision */
+            expected_revision: number;
+            /** Text */
+            text: string;
+            /** Form */
+            form: {
+                [key: string]: unknown;
+            };
+        };
+        /** DraftResponse */
+        DraftResponse: {
+            /** Revision */
+            revision: number;
         };
         /** Duplicate */
         Duplicate: {
@@ -1979,6 +2125,8 @@ export interface components {
             is_system_admin: boolean;
             /** Languages */
             languages?: string[];
+            /** Qualification */
+            qualification?: string | null;
         };
         /** PinnedOntology */
         PinnedOntology: {
@@ -2126,6 +2274,8 @@ export interface components {
             orcid_consent: boolean;
             /** Languages */
             languages: string[];
+            /** Qualification */
+            qualification: string | null;
         };
         /** ProfilePatch */
         ProfilePatch: {
@@ -2145,6 +2295,8 @@ export interface components {
             orcid_consent: boolean;
             /** Languages */
             languages?: string[];
+            /** Qualification */
+            qualification?: string | null;
         };
         /** ProgressDocument */
         ProgressDocument: {
@@ -2308,6 +2460,11 @@ export interface components {
              * @default false
              */
             contiguous_mentions_only: boolean;
+            /**
+             * Annotate Accepted Translations Only
+             * @default true
+             */
+            annotate_accepted_translations_only: boolean;
             /** Hidden Axis Values */
             hidden_axis_values?: {
                 [key: string]: {
@@ -2358,6 +2515,11 @@ export interface components {
              * @default false
              */
             contiguous_mentions_only: boolean;
+            /**
+             * Annotate Accepted Translations Only
+             * @default true
+             */
+            annotate_accepted_translations_only: boolean;
             /** Hidden Axis Values */
             hidden_axis_values?: {
                 [key: string]: {
@@ -2553,6 +2715,17 @@ export interface components {
             /** Reviewer Id */
             reviewer_id: string;
         };
+        /** ReviewDraft */
+        ReviewDraft: {
+            /** Text */
+            text: string;
+            /** Form */
+            form: {
+                [key: string]: unknown;
+            };
+            /** Revision */
+            revision: number;
+        };
         /**
          * ReviewInputsRequest
          * @description Request payload for fetching targeted review inputs.
@@ -2579,6 +2752,33 @@ export interface components {
             target_set_id: string;
             /** Targets */
             targets: components["schemas"]["AnnotationRef"][];
+        };
+        /** ReviewText */
+        ReviewText: {
+            variant: components["schemas"]["VariantInfo"];
+            /** Text */
+            text: string;
+        };
+        /** ReviewWorkspace */
+        ReviewWorkspace: {
+            assignment: components["schemas"]["Assignment"];
+            variant: components["schemas"]["VariantInfo"];
+            translation_ancestor: components["schemas"]["VariantInfo"];
+            /** Text */
+            text: string;
+            source: components["schemas"]["ReviewText"];
+            /** Comparisons */
+            comparisons: components["schemas"]["ReviewText"][];
+            /** Failed Checks */
+            failed_checks: components["schemas"]["TranslationCheck"][];
+            draft: components["schemas"]["ReviewDraft"];
+            /** Qualification */
+            qualification: string | null;
+            /** Previous Reviews */
+            previous_reviews: components["schemas"]["TranslationReviewRecord"][];
+            /** Read Only */
+            read_only: boolean;
+            submitted_record: components["schemas"]["TranslationReviewRecord"] | null;
         };
         /**
          * RuleViolation
@@ -2794,6 +2994,11 @@ export interface components {
             /** Created At */
             created_at: string;
         };
+        /** SubmitRequest */
+        SubmitRequest: {
+            /** Expected Revision */
+            expected_revision: number;
+        };
         /**
          * TaskProfile
          * @description Complete specification of task profile, ontologies, layers, and types.
@@ -2862,6 +3067,12 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** External Id */
+            external_id?: string | null;
+            /** Source Language */
+            source_language?: string | null;
+            /** Target Language */
+            target_language?: string | null;
         };
         /** TemplateInfo */
         TemplateInfo: {
@@ -2926,6 +3137,20 @@ export interface components {
             /** Text */
             text: string;
         };
+        /**
+         * TranslationCheck
+         * @description One automatic check of a translation run.
+         */
+        TranslationCheck: {
+            /** Code */
+            code: string;
+            /** Passed */
+            passed: boolean;
+            /** Detail */
+            detail?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** TranslationCheckView */
         TranslationCheckView: {
             /** Code */
@@ -2934,6 +3159,55 @@ export interface components {
             passed: boolean;
             /** Detail */
             detail?: string | null;
+        };
+        /** TranslationReviewRecord */
+        TranslationReviewRecord: {
+            /** Id */
+            id: number;
+            /** Project Id */
+            project_id: number;
+            /** Document Id */
+            document_id: string;
+            /** Assignment Id */
+            assignment_id: number;
+            /** Reviewer User Id */
+            reviewer_user_id: number;
+            /** Reviewer Pseudonym */
+            reviewer_pseudonym: string;
+            /** Reviewer Qualification */
+            reviewer_qualification: string;
+            /** Reviewer Languages */
+            reviewer_languages: string[];
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "accepted_unchanged" | "accepted_corrected" | "query" | "rejected";
+            /** Clinical Change */
+            clinical_change: boolean;
+            /** Categories */
+            categories: ("omission" | "addition" | "assertion" | "value" | "anatomy" | "terminology" | "source")[];
+            /** Rationale */
+            rationale: string | null;
+            /** Machine Text Sha256 */
+            machine_text_sha256: string;
+            /** Proposed Text */
+            proposed_text: string;
+            /** Proposed Text Sha256 */
+            proposed_text_sha256: string;
+            /** Status Before */
+            status_before: string;
+            /** Status After */
+            status_after: string;
+            /** Created Variant Id */
+            created_variant_id: string | null;
+            /** Review Policy */
+            review_policy: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** TranslationRunView */
         TranslationRunView: {
@@ -3069,7 +3343,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "NO_READER" | "TOO_FEW_READERS";
+            reason: "NO_READER" | "TOO_FEW_READERS" | "translation_not_accepted" | "not_a_translation" | "translation_already_accepted" | "variant_source_unknown";
             /** Eligible Count */
             eligible_count: number;
         };
@@ -3136,6 +3410,36 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VariantInfo */
+        VariantInfo: {
+            /** Document Id */
+            document_id: string;
+            /** Case Id */
+            case_id: string;
+            /** External Id */
+            external_id: string;
+            /** Language */
+            language: string;
+            /** Version */
+            version: number;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "native" | "machine_translation" | "human_translation" | "correction";
+            /** Derived From */
+            derived_from: string | null;
+            /** Translation */
+            translation: {
+                [key: string]: unknown;
+            } | null;
+            /** Translation Status */
+            translation_status: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
+            /** Status Reason */
+            status_reason: string | null;
+            /** Text Sha256 */
+            text_sha256: string;
         };
         /** VariantSummary */
         VariantSummary: {
@@ -3407,6 +3711,37 @@ export interface operations {
             };
         };
     };
+    assignment_metadata_api_v1_assignments__assignment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     open_assignment_api_v1_assignments__assignment_id__open_post: {
         parameters: {
             query?: never;
@@ -3534,6 +3869,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_review_api_v1_translation_reviews__assignment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewWorkspace"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_review_api_v1_translation_reviews__assignment_id__draft_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_review_api_v1_translation_reviews__assignment_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationReviewRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_records_api_v1_projects__key__documents__doc__translation_reviews_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationReviewRecord"][];
                 };
             };
             /** @description Validation Error */

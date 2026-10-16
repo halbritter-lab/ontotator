@@ -384,6 +384,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                 else {
                     "ASSIGNMENT_SUBMITTED": 409,
                     "VARIANT_REVIEW_STALE": 409,
+                    "TRANSLATION_NOT_ACCEPTED": 409,
                     "LANGUAGE_CONFIRMATION_REQUIRED": 409,
                     "REASSIGN_CONFIRMATION_REQUIRED": 409,
                     "ADJUDICATOR_IS_ANNOTATOR": 409,
@@ -407,6 +408,11 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     from ontocurator.api.variant_routes import router as variant_router
 
     app.include_router(assignment_router)
+    from ontocurator.api.translation_review_routes import (
+        router as translation_review_router,
+    )
+
+    app.include_router(translation_review_router)
     app.include_router(variant_router)
     app.include_router(admin_router)
     app.include_router(ontology_router)

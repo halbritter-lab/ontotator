@@ -18,6 +18,7 @@ class Profile(BaseModel):
     orcid: str | None
     orcid_consent: bool
     languages: list[str]
+    qualification: str | None
 
     @classmethod
     def of(cls, accounts: AccountService, user: User) -> "Profile":
@@ -28,6 +29,7 @@ class Profile(BaseModel):
             pseudonym=user.pseudonym,
             orcid=user.orcid,
             orcid_consent=user.orcid_consent,
+            qualification=user.qualification,
             languages=sorted(accounts.languages_of([user.id])[user.id]),
         )
 
@@ -39,6 +41,7 @@ class ProfilePatch(BaseModel):
     orcid: str | None = None
     orcid_consent: bool = False
     languages: list[str] = Field(default_factory=list)
+    qualification: str | None = Field(default=None, max_length=200)
 
 
 class PasswordChange(BaseModel):

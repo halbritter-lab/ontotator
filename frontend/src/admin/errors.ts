@@ -3,8 +3,10 @@ import { ApiError } from "../api/client";
 /** Coverage is checked against the committed backend administration catalog. */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   NOT_A_TRANSLATION: "This text is not in a translation chain.",
+  QUALIFICATION_INVALID: "Qualification has at most 200 characters.",
   QUALIFICATION_REQUIRED: "Add your qualification before submitting a translation review.",
   REVIEW_INVALID: "Check the translation review issues before submitting.",
+  TRANSLATION_NOT_ACCEPTED: "This translation must be accepted before annotation can continue.",
   VARIANT_REVIEW_STALE: "A newer text version exists. Review the current version before creating a correction.",
   CASE_NOT_FOUND: "This case is not available to you.",
   VERSION_NOT_FOUND: "This annotation version is not available to you.",

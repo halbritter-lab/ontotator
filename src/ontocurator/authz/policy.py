@@ -19,8 +19,8 @@ from ontocurator.domain.workspace import WorkspaceMode
 Role = Literal["lead", "annotator", "adjudicator"]
 ROLES: tuple[Role, ...] = get_args(Role)
 Task = Literal["annotate", "review", "translation_review"]
-# Task6 activates administration only after its complete eligibility/dispatch.
-ADMINISTRATION_TASKS = frozenset({"annotate", "review"})
+# Administration uses the central task vocabulary; annotation modes remain separate.
+ADMINISTRATION_TASKS = frozenset(get_args(Task))
 TASK_ROLES: Mapping[Task, frozenset[Role]] = {
     "annotate": frozenset({"annotator"}),
     "review": frozenset({"adjudicator"}),
