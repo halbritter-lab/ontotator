@@ -37,8 +37,13 @@ it('renders only the offered exact snapshot and real supported task IDs', async 
   await screen.findByText('HP:old');
   expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'own', ownRef.id);
   expect(screen.getByText('assertion: present (defaulted)')).toBeTruthy();
-  fireEvent.click(screen.getByRole('link', { name: 'Open my task' }));
+  const translationTask = screen.getByRole('link', { name: 'Open my translation review task' });
+  expect(translationTask.getAttribute('href')).toBe('#/tasks/99');
+  fireEvent.click(translationTask);
+  expect(props.onNavigate).toHaveBeenCalledWith({ name: 'task', assignmentId: 99 });
+  fireEvent.click(screen.getByRole('link', { name: 'Open my annotation task' }));
   expect(props.onNavigate).toHaveBeenCalledWith({ name: 'task', assignmentId: 7 });
+  expect(screen.queryByRole('link', { name: 'Open my review task' })).toBeNull();
   expect(screen.queryByText('Back to my draft')).toBeNull();
 });
 it('does not fetch a forged variant or ref and conceals unavailable cases', async () => {

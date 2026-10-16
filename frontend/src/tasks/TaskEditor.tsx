@@ -6,6 +6,7 @@ import { CaseScreen } from "../app/CaseScreen";
 import { CaseErrorBoundary } from "../app/ErrorBoundary";
 import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
 import { NotFound } from "../app/NotFound";
+import { TranslationReviewScreen } from "../translation/TranslationReviewScreen";
 
 interface TaskEditorProps {
   assignmentId: number;
@@ -15,7 +16,27 @@ interface TaskEditorProps {
   leaveGuardRef: MutableRefObject<((proceed: () => void) => void) | null>;
 }
 
-export function TaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, leaveGuardRef }: TaskEditorProps): JSX.Element {
+export function TaskEditor(props: TaskEditorProps): JSX.Element {
+  const identity = JSON.stringify([props.user.username, props.assignmentId]);
+  const [state, setState] = useState<{ identity: string; task?: TaskSummary["task"]; error?: unknown } | null>(null);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true; setState(null);
+    api.getAssignmentMetadata(props.assignmentId).then(value => {
+      if (active) setState({ identity, task: value.task });
+    }, error => { if (active) setState({ identity, error }); });
+    return () => { active = false; };
+  }, [identity, retry]);
+  if (!state || state.identity !== identity) return <InlineMessage tone="info">Opening task...</InlineMessage>;
+  if (state.error) return <section>{state.error instanceof ApiError && state.error.code === "ASSIGNMENT_NOT_FOUND"
+    ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={state.error} />}
+    <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate({ name: "tasks" })}>Back to my tasks</Button></section>;
+  if (state.task === "translation_review") return <TranslationReviewScreen key={identity} assignmentId={props.assignmentId} username={props.user.username}
+    onNavigate={props.onNavigate} routeLeaveRef={props.routeLeaveRef} leaveGuardRef={props.leaveGuardRef} />;
+  return <AnnotationTaskEditor key={identity} {...props} />;
+}
+
+function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, leaveGuardRef }: TaskEditorProps): JSX.Element {
   const [workspace, setWorkspace] = useState<AssignmentWorkspace | null>(null);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [error, setError] = useState<unknown>(null);

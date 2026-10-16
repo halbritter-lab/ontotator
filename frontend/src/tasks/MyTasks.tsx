@@ -58,13 +58,16 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
   while (options.has(allProjectsValue)) allProjectsValue += "_";
   const managed = projects.filter(item => item.can_manage && (project === undefined || item.project_key === project));
   const columns: Column<TaskSummary>[] = [
-    { id: "document", header: "Document", cell: task => task.document_id },
+    { id: "document", header: "Document", cell: task => task.external_id ?? task.document_id },
     { id: "project", header: "Project", cell: task => projectLabel(task.project_name, task.project_key) },
     { id: "language", header: "Language", cell: task => task.language },
-    { id: "task", header: "Task", cell: task => task.task === "annotate" ? "Annotate" : "Review" },
+    { id: "task", header: "Task", cell: task => task.task === "translation_review" ? `Review translation ${task.source_language ?? "?"} → ${task.target_language ?? task.language}` : task.task === "annotate" ? "Annotate" : "Review" },
     { id: "status", header: "Status", cell: task => <StatusBadge status={task.status}>{statusLabels[task.status]}</StatusBadge> },
     { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{new Date(task.updated_at).toLocaleString()}</time> },
-    { id: "open", header: "Action", cell: task => <Button size="sm" onClick={() => onNavigate({ name: "task", assignmentId: task.assignment_id })}>Open</Button> },
+    { id: "open", header: "Action", cell: task => <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onClick={event => {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault(); onNavigate({ name: "task", assignmentId: task.assignment_id });
+    }}>Open</a> },
   ];
   const empty = <EmptyState title="No documents are assigned to you yet." action={managed.length > 0 &&
     <Toolbar label="Assignment actions">{managed.map(item => {

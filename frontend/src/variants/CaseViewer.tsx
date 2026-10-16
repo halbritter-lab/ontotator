@@ -103,13 +103,13 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
   if (!detail) return <InlineMessage tone="info">Loading case...</InlineMessage>;
   if (!current) return <InlineMessage tone="info">This text version is not available to you.</InlineMessage>;
   const text = textState?.identity === contentIdentity ? textState.value : null;
-  const supported = tasks?.identity === identity ? tasks.value.filter(row => row.project_key === projectKey && row.document_id === current.document_id && (row.task === 'annotate' || row.task === 'review')) : [];
+  const supported = tasks?.identity === identity ? tasks.value.filter(row => row.project_key === projectKey && row.document_id === current.document_id) : [];
   const payloadFailed = payloadError?.identity === payloadIdentity;
   return <section className={`case-viewer${compareOpen ? " case-comparing" : ""}`} aria-label="Case viewer">
     <div className="case-toolbar" role="group" aria-label="Case"><h1>Case: {detail.case_id}</h1><span className="badge">{variantDescription(current)}</span>
       {supported.map((task, index) => <a key={task.assignment_id} href={routeHref({ name: 'task', assignmentId: task.assignment_id })} className="btn btn-secondary"
         onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); onNavigate({ name: 'task', assignmentId: task.assignment_id }); }}>
-        {supported.length === 1 ? 'Open my task' : `Open my ${task.task === 'annotate' ? 'annotation' : 'review'} task${supported.filter(row => row.task === task.task).length > 1 ? ` (${index + 1})` : ''}`}
+        {supported.length === 1 ? 'Open my task' : `Open my ${task.task === 'annotate' ? 'annotation' : task.task === 'translation_review' ? 'translation review' : 'review'} task${supported.filter(row => row.task === task.task).length > 1 ? ` (${index + 1})` : ''}`}
       </a>)}
     </div>
     <VariantSelectors caseDetail={detail} currentDocumentId={current.document_id} annotationOptions={annotationOptions(refs ?? [], false)} selectedAnnotation={selection}

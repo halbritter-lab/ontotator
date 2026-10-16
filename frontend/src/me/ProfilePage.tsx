@@ -1,11 +1,29 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, type OwnProfilePatch, type Profile } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { LanguagesField } from "../admin/LanguagesField";
-import { Button, Checkbox, InlineMessage, TextInput } from "../ui";
+import { Button, Checkbox, Dialog, InlineMessage, TextInput } from "../ui";
+import type { RouteLeaveGuard } from "../app/router";
 
 /** The future app controller can refresh displayed identity from the saved response. */
-export interface ProfilePageProps { onSaved?: (profile: Profile) => void }
+export interface ProfilePageProps {
+  onSaved?: (profile: Profile) => void;
+  routeLeaveRef?: MutableRefObject<RouteLeaveGuard | null>;
+  leaveGuardRef?: MutableRefObject<((proceed: () => void) => void) | null>;
+}
+
+function profileChanges(baseline: Profile, draft: Profile): OwnProfilePatch {
+  const change: OwnProfilePatch = {};
+  if (draft.display_name !== baseline.display_name) change.display_name = draft.display_name;
+  const email = draft.email?.trim() || null;
+  const orcid = draft.orcid?.trim() || null;
+  if (email !== baseline.email) change.email = email;
+  if (orcid !== baseline.orcid) change.orcid = orcid;
+  if (draft.orcid_consent !== baseline.orcid_consent) change.orcid_consent = draft.orcid_consent;
+  if (draft.qualification !== baseline.qualification) change.qualification = draft.qualification ?? null;
+  if (JSON.stringify([...draft.languages].sort()) !== JSON.stringify([...baseline.languages].sort())) change.languages = draft.languages;
+  return change;
+}
 
 function passwordProblem(username: string, next: string, repeat: string): string | undefined {
   const normalized = next.normalize("NFC");
@@ -23,7 +41,7 @@ function passwordProblem(username: string, next: string, repeat: string): string
   if (folded === stripForComparison(username.normalize("NFC")).toLowerCase()) return "The password must differ from the username.";
 }
 
-export function ProfilePage({ onSaved }: ProfilePageProps): JSX.Element {
+export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePageProps): JSX.Element {
   const [model, setModel] = useState<{ baseline: Profile; draft: Profile } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>();
@@ -35,6 +53,40 @@ export function ProfilePage({ onSaved }: ProfilePageProps): JSX.Element {
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [passwords, setPasswords] = useState({ current: "", next: "", repeat: "" });
   const alive = useRef(false);
+  const [leaving, setLeaving] = useState<{ resolve?: (allowed: boolean) => void; proceed?: () => void } | null>(null);
+  const pendingLeave = useRef<typeof leaving>(null);
+  const dirty = !!model && Object.keys(profileChanges(model.baseline, model.draft)).length > 0;
+  const latest = useRef({ dirty, busy, save: async (): Promise<boolean> => false });
+  const closeLeave = (allowed: boolean) => {
+    const request = pendingLeave.current; pendingLeave.current = null; setLeaving(null);
+    request?.resolve?.(allowed); if (allowed && alive.current) request?.proceed?.();
+  };
+  useEffect(() => {
+    let pending: Promise<boolean> | null = null;
+    const guard = () => {
+      if (latest.current.busy) return Promise.resolve(false);
+      if (!latest.current.dirty) return Promise.resolve(true);
+      if (!pending) pending = new Promise<boolean>(resolve => {
+        const request = { resolve: (allowed: boolean) => { pending = null; resolve(allowed); } };
+        pendingLeave.current = request; setLeaving(request);
+      });
+      return pending;
+    };
+    const logout = (proceed: () => void) => {
+      if (latest.current.busy || pendingLeave.current) return;
+      if (!latest.current.dirty) { proceed(); return; }
+      const request = { proceed }; pendingLeave.current = request; setLeaving(request);
+    };
+    if (routeLeaveRef) routeLeaveRef.current = guard;
+    if (leaveGuardRef) leaveGuardRef.current = logout;
+    const unload = (event: BeforeUnloadEvent) => { if (latest.current.dirty) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", unload);
+    return () => {
+      if (routeLeaveRef?.current === guard) routeLeaveRef.current = null;
+      if (leaveGuardRef?.current === logout) leaveGuardRef.current = null;
+      window.removeEventListener("beforeunload", unload); pendingLeave.current?.resolve?.(false); pendingLeave.current = null;
+    };
+  }, [routeLeaveRef, leaveGuardRef]);
 
   useEffect(() => {
     alive.current = true;
@@ -58,32 +110,28 @@ export function ProfilePage({ onSaved }: ProfilePageProps): JSX.Element {
     setSaveError(undefined);
   };
   const save = async () => {
-    if (!model || busy) return;
+    if (!model || busy) return false;
     const { baseline, draft } = model;
-    const change: OwnProfilePatch = {};
-    if (draft.display_name !== baseline.display_name) change.display_name = draft.display_name;
-    const email = draft.email?.trim() || null;
-    const orcid = draft.orcid?.trim() || null;
-    if (email !== baseline.email) change.email = email;
-    if (orcid !== baseline.orcid) change.orcid = orcid;
-    if (draft.orcid_consent !== baseline.orcid_consent) change.orcid_consent = draft.orcid_consent;
-    if (JSON.stringify([...draft.languages].sort()) !== JSON.stringify([...baseline.languages].sort())) change.languages = draft.languages;
+    const change = profileChanges(baseline, draft);
     setSaveError(undefined);
     setSaved(false);
-    if (!Object.keys(change).length) { setSaved(true); return; }
+    if (!Object.keys(change).length) { setSaved(true); return true; }
     setBusy("profile");
     try {
       const response = await api.updateOwnProfile(change);
-      if (!alive.current) return;
+      if (!alive.current) return false;
       setModel({ baseline: response, draft: { ...response, languages: [...response.languages] } });
       setSaved(true);
       onSaved?.(response);
+      return true;
     } catch (error: unknown) {
       if (alive.current) setSaveError(error);
+      return false;
     } finally {
       if (alive.current) setBusy(null);
     }
   };
+  latest.current = { dirty, busy, save };
   const changePassword = async () => {
     if (!model || busy) return;
     setPasswordSaved(false);
@@ -121,6 +169,7 @@ export function ProfilePage({ onSaved }: ProfilePageProps): JSX.Element {
         <TextInput id="profile-display-name" label="Display name" required value={draft.display_name} disabled={!!busy} onChange={(event) => edit({ display_name: event.target.value })} />
         <TextInput id="profile-email" label="E-mail" type="email" value={draft.email ?? ""} disabled={!!busy} onChange={(event) => edit({ email: event.target.value })} />
         <LanguagesField id="profile-languages" label="Languages you can read" value={draft.languages} disabled={!!busy} onChange={(languages) => edit({ languages })} />
+        <TextInput id="profile-qualification" label="Qualification" maxLength={200} value={draft.qualification ?? ""} disabled={!!busy} onChange={event => edit({ qualification: event.target.value })} hint="Required before submitting a translation review." />
         <TextInput id="profile-orcid" label="ORCID" value={draft.orcid ?? ""} disabled={!!busy} onChange={(event) => edit({ orcid: event.target.value })} />
         <Checkbox id="profile-consent" label="Name me (display name and ORCID) as a contributor in exports" checked={draft.orcid_consent} disabled={!!busy} onChange={(event) => edit({ orcid_consent: event.target.checked })} />
         {saveError != null && <ErrorNotice error={saveError} />}
@@ -142,5 +191,11 @@ export function ProfilePage({ onSaved }: ProfilePageProps): JSX.Element {
         <Button type="submit" disabled={!!busy} loading={busy === "password"}>Change password</Button>
       </form>
     </section>
+    {leaving && <Dialog open title="Unsaved profile changes" onClose={busy ? undefined : () => closeLeave(false)}>
+      <p>Your profile changes have not been saved.</p>
+      <Button disabled={!!busy} onClick={() => closeLeave(false)}>Cancel</Button>
+      <Button disabled={!!busy} variant="danger" onClick={() => closeLeave(true)}>{leaving.proceed ? "Discard and log out" : "Discard changes and leave"}</Button>
+      <Button loading={busy === "profile"} onClick={() => { void latest.current.save().then(ok => { if (ok && alive.current) closeLeave(true); }); }}>{leaving.proceed ? "Save and log out" : "Save and leave"}</Button>
+    </Dialog>}
   </div>;
 }

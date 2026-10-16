@@ -31,7 +31,8 @@ describe("My tasks component", () => {
     expect(within(rows[0]).getByText("Reopened")).toBeDefined();
     expect(within(rows[0]).getByText("de")).toBeDefined();
     expect(rows[0].querySelector("time")?.getAttribute("datetime")).toBe(tasks[0].updated_at);
-    fireEvent.click(within(rows[0]).getByRole("button", { name: "Open" }));
+    expect(within(rows[0]).getByRole("link", { name: "Open" }).getAttribute("href")).toBe("#/tasks/4");
+    fireEvent.click(within(rows[0]).getByRole("link", { name: "Open" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 4 });
   });
 
@@ -90,7 +91,7 @@ describe("My tasks component", () => {
     expect(rows[1].getAttribute("aria-label")).toBe("Research (q): shared-doc");
     fireEvent.change(select, { target: { value: "q" } });
     expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q" });
-    fireEvent.click(within(rows[1]).getByRole("button", { name: "Open" }));
+    fireEvent.click(within(rows[1]).getByRole("link", { name: "Open" }));
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "task", assignmentId: 12 });
   });
 
