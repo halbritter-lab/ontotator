@@ -19,6 +19,7 @@ from uuid import uuid4
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
+from ontospan import AnnotatedDocument
 from pg_harness import database_url_for
 from sqlalchemy import select
 
@@ -579,6 +580,17 @@ def register_variant_scenario_route(app: FastAPI) -> None:
     app.router.routes.insert(0, app.router.routes.pop())
 
 
+def translation_review_fixture_texts(
+    source: AnnotatedDocument, target: AnnotatedDocument, failed: AnnotatedDocument
+) -> dict[str, str]:
+    """Export the actual builder/import carrier, including canonical Unicode."""
+    return {
+        "source": source.document.text,
+        "target": target.document.text,
+        "failed": failed.document.text,
+    }
+
+
 def register_translation_review_scenario_route(app: FastAPI) -> None:
     """Fresh pending translations for ordinary-role review journeys only."""
 
@@ -688,11 +700,7 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
             "case_id": case_id,
             "external_id": external_id,
             "documents": documents,
-            "texts": {
-                "source": source_text,
-                "target": target_text,
-                "failed": comparison_text,
-            },
+            "texts": translation_review_fixture_texts(source, target, failed),
             "users": users,
             "assignment_id": assigned_id,
             "import_job_id": imported.id,
