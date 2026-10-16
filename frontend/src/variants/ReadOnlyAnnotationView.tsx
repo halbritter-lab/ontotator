@@ -9,12 +9,13 @@ import type { MentionDisplay } from '../spans/adapter';
 import { Button } from '../ui';
 
 export interface ReadOnlyAnnotationViewProps {
+  onTextElement?: (element: HTMLDivElement | null) => void;
   text: string;
   annotations: AnnotationSnapshot[];
   evidence: AnnotationVersion['evidence'];
   labelFor: (layerId: string | undefined, termId: string) => string | null;
 }
-export function ReadOnlyAnnotationView({ text, annotations, evidence, labelFor }: ReadOnlyAnnotationViewProps): JSX.Element {
+export function ReadOnlyAnnotationView({ text, annotations, evidence, labelFor, onTextElement }: ReadOnlyAnnotationViewProps): JSX.Element {
   const [selected, setSelected] = useState<string | null>(null);
   const mentions = useMemo(() => {
     const result: MentionDisplay[] = [];
@@ -52,7 +53,7 @@ export function ReadOnlyAnnotationView({ text, annotations, evidence, labelFor }
         </p>)}
       </li>)}</ul>
     </aside>}
-    <TextPane text={text} mentions={mentions} selectedEvidenceId={selected} selectionIntent="new_mention"
+    <TextPane onTextElement={onTextElement} text={text} mentions={mentions} selectedEvidenceId={selected} selectionIntent="new_mention"
       readOnly isAttachingMention={false} resizableEvidenceIds={[]} onPick={setSelected} onSelection={() => {}} onChangeIntent={() => {}} />
   </div>;
 }

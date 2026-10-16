@@ -13,7 +13,7 @@ beforeEach(() => {
   vi.spyOn(api, 'getAnnotationVersion').mockResolvedValue(historical);
   vi.spyOn(api, 'resolveTermLabels').mockResolvedValue([]);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const context = { username: 'alice', assignmentId: 1, onNavigate: vi.fn() };
 
 it('resolves real case metadata and displays history separately from the unchanged draft', async () => {
@@ -110,4 +110,60 @@ it('waits for the actual pending draft command before fetching and displaying hi
   fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
   await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
   expect(screen.getByRole('button', { name: /Mark Phenotype as verified/ }).textContent).toContain('Phenotype verified (Reset)');
+});
+
+it('opens and closes comparison without remounting or flushing an unsaved draft, returning focus', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  vi.spyOn(api, 'getVariantText').mockResolvedValue({ document_id: 'source', text: 'COMPARISON SOURCE', text_sha256: 'text' });
+  const command = vi.spyOn(api, 'applyCommand').mockRejectedValue(new TypeError('Offline'));
+  const view = workspaceFixture('target').view;
+  const originalDraft = JSON.stringify(view.draft);
+  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await screen.findByText('Offline – changes not saved');
+  const compare = await screen.findByRole('button', { name: 'Compare' });
+  const editor = document.querySelector('.text-container');
+  const range = document.createRange();
+  const textNode = editor!.querySelector('.run')!.firstChild!;
+  range.setStart(textNode, 0); range.setEnd(textNode, 1);
+  window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+  const calls = command.mock.calls.length;
+  fireEvent.click(compare);
+  await screen.findByText('COMPARISON SOURCE');
+  expect(document.querySelector('.text-container')).toBe(editor);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(command).toHaveBeenCalledTimes(calls);
+  expect(window.getSelection()!.getRangeAt(0).startContainer).toBe(textNode);
+  expect(window.getSelection()!.getRangeAt(0).endOffset).toBe(1);
+  expect(JSON.stringify(view.draft)).toBe(originalDraft);
+  fireEvent.click(screen.getByRole('button', { name: 'Close comparison' }));
+  expect(document.querySelector('.text-container')).toBe(editor);
+  expect(document.activeElement).toBe(compare);
+  expect(screen.queryByText('COMPARISON SOURCE')).toBeNull();
+  expect(screen.getByText('Offline – changes not saved')).toBeTruthy();
+  vi.unstubAllGlobals();
+});
+
+it('keeps the actual comparison and its choices mounted across left draft/history selection', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  vi.spyOn(api, 'getVariantText').mockImplementation(async (_project, doc) => ({ document_id: doc, text: `COMPARE ${doc}`, text_sha256: 'text' }));
+  render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Compare' }));
+  await screen.findByText('COMPARE source');
+  const panel = screen.getByRole('region', { name: 'Comparison' });
+  fireEvent.change(within(panel).getByLabelText('Language'), { target: { value: 'de' } });
+  await screen.findByText('COMPARE other-run');
+  fireEvent.change(within(panel).getByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
+  await within(panel).findByText('HP:old');
+  const leftSelect = document.querySelector<HTMLSelectElement>('.case-version-controls select[id$="-annotations"]')!;
+  fireEvent.change(leftSelect, { target: { value: 'text' } });
+  await screen.findByText('Viewing Text only (read-only)');
+  expect(screen.getByRole('region', { name: 'Comparison' })).toBe(panel);
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('other-run');
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Annotations').value).toBe(refKey(ownRef));
+  await within(panel).findByText('HP:old');
+  fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
+  await waitFor(() => expect(leftSelect.value).toBe('draft'));
+  expect(screen.getByRole('region', { name: 'Comparison' })).toBe(panel);
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('other-run');
 });

@@ -17,6 +17,53 @@ describe("SpanEditor Unicode adapter", () => {
     container.remove();
   });
 
+  it("keeps render-owned paragraph cuts through marks, handles and redraws without changing Unicode selection", () => {
+    const text = "A\u{1f600}e\u0301\n\nB\u{1f600}tail";
+    const mentions: MentionDisplay[] = [{ evidence_id: "cross", segments: [{ start: 1, end: 9 }] }];
+    const select = vi.fn();
+    const handle = mountSpanEditor(container, text, mentions, select, vi.fn(), undefined, undefined, [0, 6]);
+    const verify = () => {
+      expect(container.textContent).toBe(text);
+      const markers = [...container.querySelectorAll<HTMLElement>("[data-paragraph]")];
+      expect(markers.map(node => node.dataset.paragraph)).toEqual(["0", "1"]);
+      expect(markers.map(node => node.nextElementSibling?.getAttribute("data-start"))).toEqual(["0", "7"]);
+      for (const node of markers) {
+        expect(node.textContent).toBe("");
+        expect(node.getAttribute("aria-hidden")).toBe("true");
+        expect(node.hasAttribute("tabindex")).toBe(false);
+      }
+      expect(container.querySelector('.run[data-start="7"]')?.getAttribute("data-mentions")).toBe("cross");
+    };
+    verify();
+    handle.setResizable(["cross"]); handle.setSelected("cross");
+    const edge = container.querySelector<HTMLElement>('.resize-handle[data-edge="start"]')!;
+    edge.focus(); handle.setMentions(mentions);
+    expect(document.activeElement?.getAttribute("data-edge")).toBe("start");
+    verify();
+    const first = container.querySelector('.run[data-start="1"]')!.firstChild!;
+    const last = container.querySelector('.run[data-start="7"]')!.firstChild!;
+    const range = document.createRange(); range.setStart(first, 0); range.setEnd(last, 3);
+    const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+    container.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    expect(select).toHaveBeenLastCalledWith(expect.objectContaining({ segments: [{ start: 1, end: 8 }] }));
+    selection.addRange(range);
+    container.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", shiftKey: true, bubbles: true }));
+    container.dispatchEvent(new KeyboardEvent("keyup", { key: "Shift", bubbles: true }));
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(select).toHaveBeenLastCalledWith(expect.objectContaining({ segments: [{ start: 1, end: 8 }] }));
+    handle.destroy();
+  });
+
+  it.each(["", "one\n\n"])("renders exactly one zero-text marker for empty/trailing-separator text %j", text => {
+    const handle = mountSpanEditor(container, text, [], vi.fn(), vi.fn(), undefined, undefined, [0]);
+    expect(container.querySelectorAll("[data-paragraph]")).toHaveLength(1);
+    expect(container.querySelector("[data-paragraph]")?.textContent).toBe("");
+    expect(container.textContent).toBe(text || "\u00a0");
+    handle.setMentions([]); handle.setResizable([]);
+    expect(container.querySelectorAll("[data-paragraph]")).toHaveLength(1);
+    handle.destroy();
+  });
+
   it("renders text and maps codepoints to DOM runs accurately", () => {
     const text = "A😀e\u0301\r\nB";
     const mentions: MentionDisplay[] = [

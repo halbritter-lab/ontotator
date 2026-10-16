@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../src/api/client';
 import { caseDetail, historical, ownRef } from './variantFixtures';
@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.spyOn(api, 'listMyTasks').mockResolvedValue([]);
   vi.spyOn(api, 'resolveTermLabels').mockResolvedValue([]);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const props = { projectKey: 'pkg', caseId: caseDetail.case_id, variant: 'target', username: 'alice', onNavigate: vi.fn() };
 
 it('reads immutable text without opening work and keeps Text only useful when refs are denied', async () => {
@@ -106,4 +106,62 @@ it('clears task-list failure after a successful explicit retry', async () => {
   await screen.findByRole('link', { name: 'Open my task' });
   expect(screen.queryByText('Task list offline')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+});
+
+it('opens independent comparison alongside the actual viewer without replacing left content or opening a task', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  const open = vi.spyOn(api, 'openAssignment');
+  const { CaseViewer } = await import('../src/variants/CaseViewer');
+  const mounted = render(<CaseViewer {...props} annotations={refKey(ownRef)} />);
+  await screen.findByText('HP:old');
+  const left = mounted.container.querySelector('.text-container');
+  const compare = screen.getByRole('button', { name: 'Compare' });
+  fireEvent.click(compare);
+  await screen.findByText('Immutable source 😃');
+  expect(mounted.container.querySelector('.text-container')).toBe(left);
+  expect(screen.getByText('HP:old')).toBeTruthy();
+  expect(open).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Close comparison' }));
+  expect(mounted.container.querySelector('.text-container')).toBe(left);
+  expect(document.activeElement).toBe(compare);
+  vi.unstubAllGlobals();
+});
+
+it('retains comparison owner, explicit choices and coupling-off through actual deferred viewer Retry', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  vi.mocked(api.listMyTasks).mockRejectedValueOnce(new ApiError(503, 'Task list offline'));
+  const { CaseViewer } = await import('../src/variants/CaseViewer');
+  const mounted = render(<CaseViewer {...props} />);
+  await screen.findByText('Task list offline');
+  fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+  await screen.findByText('Immutable source 😃');
+  const panel = screen.getByRole('region', { name: 'Comparison' });
+  fireEvent.change(within(panel).getByLabelText('Language'), { target: { value: 'de' } });
+  await within(panel).findByText('Immutable other-run 😃');
+  fireEvent.change(within(panel).getByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
+  await within(panel).findByText('HP:old');
+  fireEvent.click(within(panel).getByRole('checkbox', { name: 'Couple scrolling' }));
+  let finishCase!: (value: typeof caseDetail) => void;
+  let finishLeft!: (value: Awaited<ReturnType<typeof api.getVariantText>>) => void;
+  vi.mocked(api.getCase).mockImplementationOnce(() => new Promise(resolve => { finishCase = resolve; }));
+  vi.mocked(api.getVariantText).mockImplementation((_project, doc) => doc === 'target' ? new Promise(resolve => { finishLeft = resolve; })
+    : Promise.resolve({ document_id: doc, text: `Immutable ${doc} 😃`, text_sha256: 'text' }));
+  const priorGets = vi.mocked(api.getAnnotationVersion).mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(screen.getByRole('region', { name: 'Comparison' })).toBe(panel);
+  expect(within(panel).queryByText('HP:old')).toBeNull();
+  expect(within(panel).queryByText('Immutable other-run 😃')).toBeNull();
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('other-run');
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Annotations').value).toBe(refKey(ownRef));
+  expect((within(panel).getByRole('checkbox', { name: 'Couple scrolling' }) as HTMLInputElement).checked).toBe(false);
+  await act(async () => finishCase({ ...caseDetail }));
+  expect(within(panel).queryByText('HP:old')).toBeNull();
+  await act(async () => finishLeft({ document_id: 'target', text: 'Fresh left text', text_sha256: 'text' }));
+  await within(panel).findByText('HP:old');
+  expect(api.getAnnotationVersion).toHaveBeenCalledTimes(priorGets + 1);
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('other-run');
+  expect((within(panel).getByRole('checkbox', { name: 'Couple scrolling' }) as HTMLInputElement).checked).toBe(false);
+  await act(async () => mounted.rerender(<CaseViewer {...props} username="bob" />));
+  expect(screen.queryByRole('region', { name: 'Comparison' })).toBeNull();
+  expect(screen.queryByText('HP:old')).toBeNull();
 });

@@ -79,6 +79,7 @@ export class SpanEditor {
     this.mentions = [];
     this.suggestions = [];
     this.markers = [];
+    this.paragraphStarts = [];
     this.activeIds = new Set();
     this.readOnly = false;
     this.resizableIds = new Set();
@@ -183,6 +184,12 @@ export class SpanEditor {
 
   setSuggestions(suggestions) {
     this.suggestions = suggestions || [];
+    this.render();
+  }
+
+  /** UTF-16 paragraph boundaries, separate from highlighted span markers. */
+  setParagraphStarts(starts) {
+    this.paragraphStarts = starts;
     this.render();
   }
 
@@ -457,13 +464,29 @@ export class SpanEditor {
     const runs = decomposeRuns(
       this.text.length,
       this.mentions,
-      marks.flatMap((m) => [m.start, m.end]),
+      [...marks.flatMap((m) => [m.start, m.end]), ...this.paragraphStarts],
     );
     const tints = normaliseSpans(this.suggestions);
     const fragment = document.createDocumentFragment();
 
+    const paragraphIndexes = new Map(this.paragraphStarts.map((start, index) => [start, index]));
+    const appendParagraph = (offset) => {
+      const index = paragraphIndexes.get(offset);
+      if (index === undefined) return;
+      const marker = document.createElement("span");
+      marker.dataset.paragraph = String(index);
+      marker.setAttribute("aria-hidden", "true");
+      // Empty inline geometry at the line top, without a glyph or a line box of its own.
+      Object.assign(marker.style, {
+        display: "inline-block", width: "0", height: "0", verticalAlign: "top",
+        padding: "0", margin: "0", border: "0", pointerEvents: "none", userSelect: "none",
+      });
+      fragment.appendChild(marker);
+    };
     const { starts, ends } = this._handlesByOffset();
+    if (!runs.length) appendParagraph(0);
     for (const run of runs) {
+      appendParagraph(run.start);
       const node = document.createElement("span");
       node.className = "run";
       node.dataset.start = String(run.start);

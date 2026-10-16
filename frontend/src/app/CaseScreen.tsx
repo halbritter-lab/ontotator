@@ -1,3 +1,4 @@
+import { ComparePane } from "../variants/ComparePane";
 import { Toolbar } from "../ui/Toolbar";
 import { VariantSelectors } from "../variants/VariantSelectors";
 import { ReadOnlyAnnotationView } from "../variants/ReadOnlyAnnotationView";
@@ -143,6 +144,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const { versions, versionError, setVersionError, retryVersions } = useCaseVersions(view.key.project_key, view.document.document_id, versionContext, versionIdentity);
   const [displayed, setDisplayed] = useState<{ identity: string; selection: string; label: string; value: AnnotationVersion | null } | null>(null);
   const display = displayed?.identity === versionIdentity ? displayed : null;
+  const [comparisonIdentity, setComparisonIdentity] = useState<string | null>(null);
+  const compareOpen = comparisonIdentity === versionIdentity;
+  const [leftTextElement, setLeftTextElement] = useState<HTMLDivElement | null>(null);
+  const compareButton = useRef<HTMLButtonElement | null>(null);
+  const closeComparison = () => { setComparisonIdentity(null); compareButton.current?.focus(); };
+  const comparison = compareOpen && versions && versionContext ? <ComparePane
+    projectKey={view.key.project_key} username={versionContext.username} caseDetail={versions.detail}
+    leftDocumentId={view.document.document_id} leftText={view.document.text} leftElement={leftTextElement}
+    leftContext={JSON.stringify([versionIdentity, display?.selection ?? "draft"])} onClose={closeComparison} /> : null;
   const [versionBusy, setVersionBusy] = useState(false);
   const versionGeneration = useRef(0);
   useEffect(() => { versionGeneration.current++; setVersionBusy(false); return () => { versionGeneration.current++; }; }, [versionIdentity]);
@@ -1487,7 +1497,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   return (
     <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []}>
-    <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div ref={rootRef} className={compareOpen ? "case-comparing" : undefined} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
         <div className="app-title">
@@ -1599,6 +1609,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           disabled={versionBusy && display !== null} onLanguage={language => { const id = pickVariant(versions.detail, language); if (id) navigateVariant(id); }}
           onVersion={navigateVariant} onAnnotation={selection => { void chooseAnnotationVersion(selection); }} />
         {versions.detail.variants.find(row => row.document_id === view.document.document_id) && <span className="badge">{variantDescription(versions.detail.variants.find(row => row.document_id === view.document.document_id)!)}</span>}
+        <Button ref={compareButton} aria-expanded={compareOpen} onClick={() => { if (compareOpen) closeComparison(); else setComparisonIdentity(versionIdentity); }}>Compare</Button>
         <VariantDetails detail={versions.detail} documentId={view.document.document_id} />
       </div>}
       {!!versionError && <><ErrorNotice error={versionError} /><Button onClick={retryVersions}>Retry version list</Button></>}
@@ -1630,8 +1641,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             disabled={isReloading} onClick={() => { void reloadCase(); }}>Reload case</Button>}
         </InlineMessage>
       )}
-      {display ? <ReadOnlyAnnotationView text={view.document.text} annotations={display.value?.annotations ?? []}
-        evidence={display.value?.evidence ?? []} labelFor={termLabel} /> : <>
+      <div className="case-reading-layout">
+      {display ? <div className="comparison-reading">
+        <ReadOnlyAnnotationView text={view.document.text} annotations={display.value?.annotations ?? []}
+          evidence={display.value?.evidence ?? []} labelFor={termLabel} onTextElement={setLeftTextElement} />
+      </div> : <>
       <nav className="mobile-pane-tabs" aria-label="Select view">
         {([ ["list", "List"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
           <button key={pane} type="button" aria-pressed={mobilePane === pane}
@@ -1864,6 +1878,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
         {/* Center: Text View */}
         <TextPane
+          onTextElement={setLeftTextElement}
           text={view.document.text}
           mentions={textMentions}
           isAttachingMention={isAttachingMention}
@@ -2020,6 +2035,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       </div>
 
       </>}
+      {comparison}
+      </div>
       {historySubmission && <Dialog open title="Historical submission" heading={<>Submission {historySubmission.submission_id}</>} onClose={() => setHistorySubmission(null)}>
         <p>{historySubmission.created_at}</p>
         <p>
