@@ -14,6 +14,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -372,6 +373,149 @@ def register_test_user_route(
     app.router.routes.insert(0, app.router.routes.pop())
 
 
+def register_variant_scenario_route(app: FastAPI) -> None:
+    """Fresh ordinary-role Task10 data; never installed in the shipped app."""
+
+    @app.post("/__test_variants__")
+    def variants_scenario() -> dict[str, object]:
+        from t1_builders import bundle as variant_bundle
+        from t1_builders import correction_unit, native_unit, translation_unit
+        from t1_fixtures import annotation
+
+        from ontocurator.application.translation_reviews import TranslationReviewService
+        from ontocurator.assignments.service import AssignmentService
+        from ontocurator.authz.policy import Access
+
+        db = app.state.repo.db
+        key = f"variants-{uuid4().hex[:12]}"
+        create_project(db, key)
+        case_id = "EN 1/7 #é"
+        source_id = "source/annotation-versions/own/y %2F #é"
+        source_text = "Hypotonia and seizure. A😀e\u0301\n\n" + DESIGN_TEXT
+        target_text = "Hypotonia und Anfälle. A😀e\u0301\n\n" + DESIGN_TEXT
+        source = native_unit(
+            source_id,
+            "en",
+            source_text,
+            case_id=case_id,
+            annotations=[
+                annotation(
+                    "source-proposal", (0, 9), text=source_text, term_id="HP:0001252"
+                )
+            ],
+        )
+        target = translation_unit(
+            source_id,
+            "de",
+            target_text,
+            source=source,
+            provider="Browser translation A",
+            run_id="run A/1 %é",
+        )
+        other = translation_unit(
+            "translation/variant %2F #é",
+            "de",
+            target_text + "\n\nAlternative translation run.",
+            source=source,
+            provider="Browser translation B",
+            run_id="run B/1",
+        )
+        corrected = correction_unit(target, target_text + "\n\nCorrected conclusion.")
+        with tempfile.TemporaryDirectory() as folder:
+            imported = run_import(
+                db,
+                variant_bundle(Path(folder), [source, target, other, corrected]),
+                key,
+            )
+        if imported.status != "succeeded":
+            raise HTTPException(500, imported.error)
+        inventory = app.state.repo.list_variants(key, case_id=case_id)
+
+        def identity(external_id: str, language: str, version: int) -> str:
+            return next(
+                row.document_id
+                for row in inventory
+                if (row.external_id, row.language, row.version)
+                == (external_id, language, version)
+            )
+
+        documents = {
+            "source": identity(source_id, "en", 1),
+            "target": identity(source_id, "de", 1),
+            "other": identity(other.document.document_id, "de", 1),
+            "corrected": identity(source_id, "de", 2),
+        }
+        accounts = app.state.accounts
+        users = {}
+        for name, role in [
+            ("alice", "annotator"),
+            ("bob", "annotator"),
+            ("reviewer", "annotator"),
+            ("reader", "adjudicator"),
+            ("lead", "lead"),
+        ]:
+            username = f"{key}-{name}"
+            issued = accounts.create_user(Actor.cli(), username, username)
+            accounts.redeem_code(username, issued.code, TEST_PASSWORD)
+            app.state.memberships.add(Actor.cli(), key, username, [role])
+            accounts.set_languages(Actor.cli(), username, ["en", "de"])
+            users[name] = accounts.get_by_username(username)
+        accounts.update_profile(
+            Actor.cli(), users["reviewer"].username, qualification="Physician"
+        )
+        service = AssignmentService(db)
+        review = TranslationReviewService(db, app.state.jobs)
+        reviewer = users["reviewer"]
+        access = Access(
+            reviewer.id,
+            reviewer.pseudonym,
+            False,
+            {key: frozenset({"annotator"})},
+        )
+        # Accepted state comes from actual eligible, qualified review submissions.
+        for name in ("target", "other", "corrected"):
+            assignment = service.assign(
+                Actor.cli(),
+                key,
+                documents[name],
+                reviewer.username,
+                "translation_review",
+            )
+            opened = review.open(access, assignment.id)
+            revision = review.save_draft(
+                access,
+                assignment.id,
+                expected_revision=opened.draft.revision,
+                text=opened.text,
+                form={"decision": "accepted_unchanged", "clinical_change": False},
+            )
+            review.submit(access, assignment.id, expected_revision=revision)
+        assignments = {}
+        for name, document, task in [
+            ("alice", "target", "annotate"),
+            ("alice_source", "source", "annotate"),
+            ("bob", "target", "annotate"),
+            ("reader", "source", "review"),
+        ]:
+            username = users["alice" if name == "alice_source" else name].username
+            assignments[name] = service.assign(
+                Actor.cli(), key, documents[document], username, task
+            ).id
+        return {
+            "project": key,
+            "case_id": case_id,
+            "documents": documents,
+            "texts": {
+                "source": source.document.text,
+                "target": target.document.text,
+            },
+            "users": {name: user.username for name, user in users.items()},
+            "assignments": assignments,
+        }
+
+    app.router.routes.insert(0, app.router.routes.pop())
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(
         prefix="hpo-browser-", ignore_cleanup_errors=True
@@ -412,6 +556,7 @@ if __name__ == "__main__":
                 )
 
         register_test_user_route(app, grant_all)
+        register_variant_scenario_route(app)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:

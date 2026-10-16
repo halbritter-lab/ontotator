@@ -7,6 +7,27 @@ export const TEST_PASSWORD = "browser test passphrase";
 /** The username of a test user: the pseudonym, lower-cased, other characters as "-". */
 export const usernameFor = (pseudonym: string) => pseudonym.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
 
+/** Log in an already provisioned ordinary account without adding any roles/work. */
+export async function loginExisting(page: Page, username: string) {
+  await page.goto(LAUNCH_URL);
+  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  await form.getByLabel("Username", { exact: true }).fill(username);
+  await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
+  await form.getByRole("button", { name: "Log in", exact: true }).click();
+  await expect(page.getByTestId("current-user")).toContainText(username);
+}
+
+/** Current page cookies and freshly read CSRF token; never a second actor context. */
+export async function authenticatedRequest(page: Page, path: string, method = "GET", data?: unknown) {
+  const me = await page.request.get("/api/v1/auth/me");
+  expect(me.ok()).toBeTruthy();
+  const identity = await me.json() as { csrf_token: string };
+  return page.request.fetch(path, { method, data, headers: {
+    Origin: new URL(page.url()).origin,
+    ...(method === "GET" ? {} : { "X-CSRF-Token": identity.csrf_token }),
+  } });
+}
+
 /**
  * Create the user ``pseudonym`` with every role in ``projects`` (idempotent;
  * test-only route of the browser server) and log in through the login screen.
