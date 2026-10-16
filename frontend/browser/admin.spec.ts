@@ -150,7 +150,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await expect(tasks).toHaveCount(1);
   await expect(tasks.getByRole("cell", { name: "one", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "two", exact: true })).toHaveCount(0);
-  await tasks.getByRole("button", { name: "Open", exact: true }).click();
+  await tasks.getByRole("link", { name: "Open", exact: true }).click();
   await selectText(page, 0, 9);
   await page.getByLabel("Search ontology term").fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
@@ -202,7 +202,7 @@ test.describe("Administration through real accounts and jobs", () => {
     const tasks = page.getByTestId("task-row");
     await expect(tasks).toHaveCount(1);
     await expect(tasks).toContainText("Submitted");
-    await tasks.getByRole("button", { name: "Open", exact: true }).click();
+    await tasks.getByRole("link", { name: "Open", exact: true }).click();
     await page.reload();
     await expect(page.getByText("Submitted. The project lead can reopen it for changes.", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Finish & Submit Case/i })).toBeDisabled();

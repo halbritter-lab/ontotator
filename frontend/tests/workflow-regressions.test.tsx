@@ -314,9 +314,10 @@ it("lets the server resolve review targets only after opening explicitly opened 
  const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([proposal("v1", "HP:1"), proposal("v2", "HP:2")]);
  const view = baseView(); view.key.mode = "review"; view.scope.mode = "review";
  assignedList(view);
+ vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view }).assignment);
  const open = vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view }));
  render(<App/>);
- await waitFor(() => expect(screen.getByRole("button", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false));
+ await waitFor(() => expect(screen.getByRole("link", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false));
  // No auto mode detection and no proposal prefetch on package selection.
  expect(screen.queryByLabelText(/Working mode/i)).toBeNull();
  expect(inputs).not.toHaveBeenCalled();
@@ -325,7 +326,7 @@ it("lets the server resolve review targets only after opening explicitly opened 
  expect(inputs).not.toHaveBeenCalled();
  expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
  expect(screen.queryByText("HP:1")).toBeNull();
- fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
+ fireEvent.click(screen.getByRole("link", { name: /^Open$/i }));
  await confirmIdentity();
  await waitFor(() => expect(open).toHaveBeenCalled());
  expect(inputs).not.toHaveBeenCalled();
@@ -340,10 +341,11 @@ it("opens a review workspace without any review targets", async () => {
  asAnnotator("dr-a");
  const view = baseView(); view.key.mode = "review"; view.scope.mode = "review";
  assignedList(view);
+ vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view }).assignment);
  const open = vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view }));
  render(<App/>);
- await waitFor(() => expect(screen.getByRole("button", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false));
- fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
+ await waitFor(() => expect(screen.getByRole("link", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false));
+ fireEvent.click(screen.getByRole("link", { name: /^Open$/i }));
  await confirmIdentity();
  await waitFor(() => expect(open).toHaveBeenCalled());
  expect(open).toHaveBeenCalledWith(1);

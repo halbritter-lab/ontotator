@@ -173,7 +173,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   let content: JSX.Element;
   switch (route.name) {
     case "tasks": content = <MyTasks project={route.project} projects={projects} onNavigate={go} />; break;
-    case "task": content = <TaskEditor key={route.assignmentId} assignmentId={route.assignmentId}
+    case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId])} assignmentId={route.assignmentId}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
     case "adminOntologies": content = <OntologiesPage onNavigate={go} />; break;
@@ -184,7 +184,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "projectCase": content = <CaseViewer projectKey={route.key} caseId={route.caseId} variant={route.variant} annotations={route.annotations} username={user.username} onNavigate={go} />; break;
     case "projectProgress": content = <ProgressPage projectKey={route.key} onNavigate={go} />; break;
     case "projectExport": content = <ExportPage projectKey={route.key} currentUser={user} />; break;
-    case "me": content = <ProfilePage onSaved={setSavedIdentity} />; break;
+    case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
     case "notFound": content = <NotFound onNavigate={go} />; break;
     default: content = <EmptyState title="This page is not available yet.">This section is planned for a later step.</EmptyState>;
   }

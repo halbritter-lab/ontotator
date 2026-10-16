@@ -109,6 +109,7 @@ export function mountSpanEditor(
   onPick: PickCallback,
   onInvalidMentions?: (evidenceIds: string[]) => void,
   onResize?: ResizeCallback,
+  paragraphStarts: readonly number[] = [],
 ): SpanEditorHandle {
   const convert = (items: MentionDisplay[]): VendorMention[] => {
     const invalid: string[] = [];
@@ -163,6 +164,7 @@ export function mountSpanEditor(
     },
   });
 
+  editor.setParagraphStarts(paragraphStarts.map(start => toUtf16(text, start)));
   editor.setBlock(text);
   editor.setMentions(initialVendorMentions);
 

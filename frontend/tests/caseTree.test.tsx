@@ -632,6 +632,7 @@ describe("the tree in the App", () => {
       { document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" },
     ]);
     assignedList(baseView());
+    vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: baseView() }).assignment);
     vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({
       read_only: false, workspace_id: "ws",
       view: baseView([snapshot("a1", "HP:A")]),
@@ -639,9 +640,9 @@ describe("the tree in the App", () => {
     mockTree();
     const { container } = render(<App />);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false),
+      expect(screen.getByRole("link", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false),
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
+    fireEvent.click(screen.getByRole("link", { name: /^Open$/i }));
     await waitFor(() => expect(entry(container, "a1")).not.toBeNull());
 
     const panel = await openPanel(container, "a1");

@@ -30,9 +30,10 @@ describe("editor and page polish", () => {
     assignedList(view());
     vi.spyOn(api, "listOntologies").mockResolvedValue([]);
     vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: view() }));
+    vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: view() }).assignment);
     const onLogout = vi.fn();
     render(<App onLogout={onLogout} />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open$/i }));
+    fireEvent.click(await screen.findByRole("link", { name: /^Open$/i }));
     await screen.findByRole("group", { name: "Case" });
     fireEvent.click(screen.getByRole("button", { name: "Log out" }));
     expect(onLogout).toHaveBeenCalledOnce();

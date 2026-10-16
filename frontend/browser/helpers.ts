@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import type { TaskSummary } from "../src/api/client";
 
 export const LAUNCH_URL = "/";
 /** The password ``tests/browser_server.py`` sets for every test user. */
@@ -6,6 +7,27 @@ export const TEST_PASSWORD = "browser test passphrase";
 
 /** The username of a test user: the pseudonym, lower-cased, other characters as "-". */
 export const usernameFor = (pseudonym: string) => pseudonym.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
+
+/** Log in an already provisioned ordinary account without adding any roles/work. */
+export async function loginExisting(page: Page, username: string) {
+  await page.goto(LAUNCH_URL);
+  const form = page.getByRole("form", { name: "Log in to Ontocurator" });
+  await form.getByLabel("Username", { exact: true }).fill(username);
+  await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
+  await form.getByRole("button", { name: "Log in", exact: true }).click();
+  await expect(page.getByTestId("current-user")).toContainText(username);
+}
+
+/** Current page cookies and freshly read CSRF token; never a second actor context. */
+export async function authenticatedRequest(page: Page, path: string, method = "GET", data?: unknown) {
+  const me = await page.request.get("/api/v1/auth/me");
+  expect(me.ok()).toBeTruthy();
+  const identity = await me.json() as { csrf_token: string };
+  return page.request.fetch(path, { method, data, headers: {
+    Origin: new URL(page.url()).origin,
+    ...(method === "GET" ? {} : { "X-CSRF-Token": identity.csrf_token }),
+  } });
+}
 
 /**
  * Create the user ``pseudonym`` with every role in ``projects`` (idempotent;
@@ -26,11 +48,21 @@ export async function loginAs(page: Page, pseudonym: string, projects: string[] 
 }
 
 /** Open an actual assigned task, retaining the server's row order. */
-export async function openCase(page: Page, options: { task?: "annotate" | "review"; documentId?: string } = {}) {
+export async function openCase(page: Page, options: { task?: "annotate" | "review"; documentId?: string; projectKey?: string } = {}) {
   const task = options.task ?? "annotate";
-  let rows = page.getByTestId("task-row").filter({ has: page.getByRole("cell", { name: task === "review" ? "Review" : "Annotate", exact: true }) });
-  if (options.documentId) rows = rows.filter({ has: page.getByRole("cell", { name: options.documentId, exact: true }) });
-  await rows.first().getByRole("button", { name: "Open", exact: true }).click();
+  const response = await page.request.get("/api/v1/me/tasks");
+  expect(response.ok()).toBeTruthy();
+  const tasks = await response.json() as TaskSummary[];
+  const projectFilter = options.projectKey ?? new URLSearchParams(new URL(page.url()).hash.split("?")[1] ?? "").get("project") ?? undefined;
+  const candidates = tasks.filter(row => row.task === task && (projectFilter === undefined || row.project_key === projectFilter)
+    && (options.documentId === undefined || row.document_id === options.documentId));
+  if (projectFilter === undefined) expect(new Set(candidates.map(row => row.project_key)).size, "Choose an exact project for ambiguous task lists").toBe(1);
+  const selected = candidates[0];
+  expect(selected, "A current assignment must match the exact project/internal document/task").toBeDefined();
+  const documentId = options.documentId ?? selected.document_id;
+  const projectKey = projectFilter ?? selected.project_key;
+  const assignment = tasks.find(row => row.project_key === projectKey && row.document_id === documentId && row.task === task)!;
+  await page.locator(`a[href="#/tasks/${assignment.assignment_id}"]`).click();
   await expect(page.locator(".status-badge")).toBeVisible();
 }
 

@@ -123,9 +123,10 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     view.targets = { target_set_id: "empty", targets: [] };
     view.available_inputs = [];
     assignedList(view);
+    vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view }).assignment);
     const open = vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view }));
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open$/i }));
+    fireEvent.click(await screen.findByRole("link", { name: /^Open$/i }));
     await confirmIdentity();
     await waitFor(() => expect(open).toHaveBeenCalledWith(1));
     expect(inputs).not.toHaveBeenCalled();
@@ -137,11 +138,12 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", allowed_modes: ["review"] }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     assignedList(reviewView());
+    vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: reviewView() }).assignment);
     const open = vi.spyOn(api, "openAssignment")
       .mockRejectedValueOnce(new ApiError(422, "Select the review round to resume", "AMBIGUOUS_REVIEW_ROUND", { rounds: ["round-a", "round-b"] } as any))
       .mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: reviewView() }));
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open$/i }));
+    fireEvent.click(await screen.findByRole("link", { name: /^Open$/i }));
     await confirmIdentity();
     const dialog = await screen.findByRole("dialog", { name: /Select review round/i });
     fireEvent.change(within(dialog).getByLabelText("Review round"), { target: { value: "round-b" } });
@@ -153,10 +155,11 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     asAnnotator("dr-a");
     vi.spyOn(api, "listProjects").mockResolvedValue([]);
     assignedList(baseView());
+    vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: baseView() }).assignment);
     let finishOpen!: (value: any) => void;
     const open = vi.spyOn(api, "openAssignment").mockImplementation(() => new Promise(resolve => { finishOpen = resolve; }));
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open$/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /^Open$/ }));
     await screen.findByText("Opening task...");
     expect(open).toHaveBeenCalledTimes(1);
     await act(async () => finishOpen(assigned({ read_only: false, workspace_id: "ws", view: baseView() })));
@@ -633,10 +636,11 @@ describe("Shortcuts and error handling", () => {
     vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     assignedList(baseView());
+    vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: baseView() }).assignment);
     vi.spyOn(api, "openAssignment").mockRejectedValue(new Error("boom"));
     render(<App />);
     await waitFor(() => expect(screen.getByRole("table")).toBeDefined());
-    fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
+    fireEvent.click(screen.getByRole("link", { name: /^Open$/i }));
     await confirmIdentity();
     await waitFor(() => expect(screen.getByText(/boom/)).toBeDefined());
   });

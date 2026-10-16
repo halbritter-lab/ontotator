@@ -39,6 +39,7 @@ function editorServer() {
   const tasks = [taskOf(first.view, 17), { ...taskOf(second.view, 4), status: "submitted" as "submitted" | "open" }];
   vi.spyOn(api, "listProjects").mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
+  vi.spyOn(api, "getAssignmentMetadata").mockImplementation(async id => assigned(id === 17 ? first : { ...second, read_only: true }, id).assignment);
   const open = vi.spyOn(api, "openAssignment").mockImplementation(async id => assigned(id === 17 ? first : { ...second, read_only: true }, id));
   return { first, second, open, tasks };
 }
@@ -196,7 +197,7 @@ it("refreshes displayed identity from the saved Profile response and keeps the s
   expect(logout).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled();
   clickSection("My tasks");
   const table = await screen.findByRole("table", { name: "My tasks" });
-  fireEvent.click(within(table).getAllByRole("button", { name: "Open" })[0]);
+  fireEvent.click(within(table).getAllByRole("link", { name: "Open" })[0]);
   await waitFor(() => expect(screen.getByTestId("annotator-identity").textContent).toContain("Alice Smith (alice)"));
   expect(first.view.key.annotator_id).toBe("alice");
 });
