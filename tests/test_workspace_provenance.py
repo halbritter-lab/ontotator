@@ -42,7 +42,7 @@ def reference_profile(db, *, reference=True):
                         "access": "editable",
                     }
                 ),
-            ]
+            ],
         }
     )
     with db.transaction() as conn:
