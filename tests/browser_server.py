@@ -10,11 +10,13 @@ import os
 import re
 import sys
 import tempfile
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import uvicorn
-from fastapi import HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from pg_harness import database_url_for
 from sqlalchemy import select
 
@@ -303,6 +305,67 @@ T1_PROJECT = "t1-browser"
 TRANSLATION_NAME = re.compile(r"[a-z]+-[a-z]{2}\.babelon\.tsv")
 
 
+def register_test_user_route(
+    app: FastAPI, grant_project_roles: Callable[[int, str, str], None]
+) -> None:
+    """Register the browser fixture user route ahead of the static frontend."""
+
+    @app.post("/__test_user__")
+    def test_user(
+        request: Request,
+        username: str = Query(...),
+        pseudonym: str = Query(...),
+        setup: bool = Query(False),
+        display_name: str | None = Query(None),
+        projects: str | None = Query(None),
+        assign: Literal["all", "none"] = Query("all"),
+    ) -> dict[str, str]:
+        """Create the user ``username`` with ``pseudonym`` (no system admin).
+
+        The display name is ``display_name``, by default the pseudonym.
+        ``projects`` (comma-separated keys) gives the user every role there,
+        also when the user exists already. ``assign=all`` (the default) also
+        provisions assignments; ``assign=none`` skips only that provisioning.
+
+        With ``setup`` the user keeps a fresh setup (or, if it exists, reset)
+        code, which is returned for the login screen to redeem. Otherwise the
+        code is redeemed with ``TEST_PASSWORD`` at once; an existing user is
+        left as it is, so a repeated call changes nothing.
+        """
+        accounts: AccountService = request.app.state.accounts
+        existing = accounts.get_by_username(username)
+        if existing is None:
+            issued = accounts.create_user(
+                Actor.cli(),
+                username,
+                display_name or pseudonym,
+                pseudonym=pseudonym,
+            )
+            if not setup:
+                accounts.redeem_code(username, issued.code, TEST_PASSWORD)
+            user = issued.user
+        else:
+            user = existing
+        for key in filter(None, (projects or "").split(",")):
+            grant_project_roles(user.id, user.username, key)
+            if assign == "all":
+                from auth_harness import provision_assignments
+
+                provision_assignments(app, user.username, key, ROLES)
+        if existing is not None:
+            if not setup:
+                return {"username": user.username, "pseudonym": user.pseudonym}
+            issued = accounts.issue_reset_code(Actor.cli(), username)
+        if setup:
+            return {"code": issued.code}
+        return {
+            "username": issued.user.username,
+            "pseudonym": issued.user.pseudonym,
+        }
+
+    app.router.routes.insert(0, app.router.routes.pop())
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(
         prefix="hpo-browser-", ignore_cleanup_errors=True
@@ -342,57 +405,7 @@ if __name__ == "__main__":
                     datetime.now(UTC),
                 )
 
-        @app.post("/__test_user__")
-        def test_user(
-            request: Request,
-            username: str = Query(...),
-            pseudonym: str = Query(...),
-            setup: bool = Query(False),
-            display_name: str | None = Query(None),
-            projects: str | None = Query(None),
-        ) -> dict[str, str]:
-            """Create the user ``username`` with ``pseudonym`` (no system admin).
-
-            The display name is ``display_name``, by default the pseudonym.
-            ``projects`` (comma-separated keys) gives the user every role there,
-            also when the user exists already.
-
-            With ``setup`` the user keeps a fresh setup (or, if it exists, reset)
-            code, which is returned for the login screen to redeem. Otherwise the
-            code is redeemed with ``TEST_PASSWORD`` at once; an existing user is
-            left as it is, so a repeated call changes nothing.
-            """
-            accounts: AccountService = request.app.state.accounts
-            existing = accounts.get_by_username(username)
-            if existing is None:
-                issued = accounts.create_user(
-                    Actor.cli(),
-                    username,
-                    display_name or pseudonym,
-                    pseudonym=pseudonym,
-                )
-                if not setup:
-                    accounts.redeem_code(username, issued.code, TEST_PASSWORD)
-                user = issued.user
-            else:
-                user = existing
-            for key in filter(None, (projects or "").split(",")):
-                grant_all(user.id, user.username, key)
-                from auth_harness import provision_assignments
-
-                provision_assignments(app, user.username, key, ROLES)
-            if existing is not None:
-                if not setup:
-                    return {"username": user.username, "pseudonym": user.pseudonym}
-                issued = accounts.issue_reset_code(Actor.cli(), username)
-            if setup:
-                return {"code": issued.code}
-            return {
-                "username": issued.user.username,
-                "pseudonym": issued.user.pseudonym,
-            }
-
-        app.router.routes.insert(0, app.router.routes.pop())
+        register_test_user_route(app, grant_all)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:

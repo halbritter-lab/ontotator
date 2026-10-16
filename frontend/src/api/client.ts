@@ -50,6 +50,8 @@ export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
 export type OntologyTranslation = components["schemas"]["OntologyTranslation"];
+export type AdminOntology = components["schemas"]["AdminOntology"];
+export type OntologyUploadResult = components["schemas"]["OntologyUploadResult"];
 
 export interface OntologyInfo {
   ontology_id: string;
@@ -177,6 +179,16 @@ export class ApiClient {
 
   async adminUpdateUser(username: string, change: AdminUserPatch): Promise<AdminUser> {
     return this.request<AdminUser>(`/api/v1/admin/users/${encodeURIComponent(username)}`, { method: "PATCH", body: JSON.stringify(change) });
+  }
+
+  async adminListOntologies(): Promise<AdminOntology[]> {
+    return this.request<AdminOntology[]>("/api/v1/admin/ontologies/", { method: "GET" });
+  }
+
+  async adminUploadOntologies(files: readonly File[]): Promise<OntologyUploadResult[]> {
+    const body = new FormData();
+    for (const file of files) body.append("files[]", file);
+    return this.request<OntologyUploadResult[]>("/api/v1/admin/ontologies/upload-results", { method: "POST", body });
   }
 
   async listMyTasks(): Promise<TaskSummary[]> {
