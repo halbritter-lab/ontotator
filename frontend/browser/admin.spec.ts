@@ -155,7 +155,8 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
   for (const [axis, value] of [["Assertion", "Present"], ["Experiencer", "Patient"], ["Temporality", "Current"]]) {
     const choice = page.getByRole("group", { name: new RegExp(`^${axis}`) }).getByRole("radio", { name: value, exact: true });
-    await choice.check();
+    // Controlled axes reflect the asynchronous server response, as in design.spec.ts.
+    await choice.click();
     await expect(choice).toBeChecked();
     await expect(page.locator(".status-badge")).toHaveClass(/status-saved/);
   }
