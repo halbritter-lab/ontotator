@@ -1,6 +1,6 @@
 # Implementation status
 
-Status after final T3a/T3b acceptance and T5 review-task acceptance at `eafafe0` on
+Status after final T3a/T3b acceptance and T5 durable-reanchor acceptance at `e6e164e` on
 2026-10-16. The administration backend is complete on `feat/t3a-admin-backend`;
 the administration UI is complete on `feat/t3b-admin-ui`. No main merge, push or deployment
 has occurred.
@@ -15,7 +15,7 @@ has occurred.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
 - [x] T3a: all 10 administration-backend tasks, independent reviews and final backend/frontend/browser/container acceptance; see the [final record](2026-10-16-t3a-final-review.md).
 - [x] T3b: all11 administration-UI tasks, independent reviews, 828 frontend/1594 backend tests, all43 browser cases, matching image/assets and complete container/real-stack gate passed; see the [final record](2026-10-16-t3b-final-review.md).
-- [ ] T5: format1.1, variant storage/import/export, case/text/version API, assigned review service and full review-task eligibility/distribution/HTTP dispatch are accepted. The correction-trigger checks remain explicitly scheduled with the real reanchor handler at Task7. Reanchoring and review export have separate source checkpoints awaiting integration/tests; UI and final gates remain. See the [import record](2026-10-16-t5-variant-import-review.md), [case API record](2026-10-16-t5-case-api-review.md), [review-service record](2026-10-16-t5-review-service-review.md) and [review-task record](2026-10-16-t5-review-task-review.md).
+- [ ] T5: Tasks1–7 are accepted, including both real durable correction triggers, current review eligibility/gate, immutable history and source-associated reanchoring. Review export, the complete Part1 gate, actual frontend and final packaged acceptance remain pending. See the [review-task record](2026-10-16-t5-review-task-review.md) and [reanchor acceptance](2026-10-16-t5-reanchor-review.md).
 - [ ] T4a: workflows and stage tasks.
 - [ ] T4b: adjudication, releases and comments.
 - [ ] T6b: subsequent UX simplification and screen decomposition.
