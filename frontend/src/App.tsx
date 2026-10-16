@@ -12,6 +12,8 @@ import { OntologiesPage } from "./admin/OntologiesPage";
 import { ProjectNewPage } from "./admin/ProjectNewPage";
 import { ProjectSettingsPage } from "./admin/ProjectSettingsPage";
 import { DocumentsPage } from "./admin/DocumentsPage";
+import { ProgressPage } from "./admin/ProgressPage";
+import { ExportPage } from "./admin/ExportPage";
 import { Button, EmptyState, InlineMessage } from "./ui";
 
 export interface AppProps { user?: CurrentUser | null; onLogout?: () => void }
@@ -178,6 +180,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "projectSettings": content = <ProjectSettingsPage projectKey={route.key} currentUser={user}
       onSaved={() => setRetry(value => value + 1)} />; break;
     case "projectDocuments": content = <DocumentsPage projectKey={route.key} query={route} onNavigate={go} />; break;
+    case "projectProgress": content = <ProgressPage projectKey={route.key} onNavigate={go} />; break;
+    case "projectExport": content = <ExportPage projectKey={route.key} currentUser={user} />; break;
     case "me": content = <ProfilePage onSaved={setSavedIdentity} />; break;
     case "notFound": content = <NotFound onNavigate={go} />; break;
     default: content = <EmptyState title="This page is not available yet.">This section is planned for a later step.</EmptyState>;
