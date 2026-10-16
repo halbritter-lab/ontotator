@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type UploadView } from "../api/client";
-import { Button, Field, InlineMessage, Select, TextInput, Toolbar } from "../ui";
+import { api, ApiError, type UploadView, type StatusOverride } from "../api/client";
+import { Button, Checkbox, Field, InlineMessage, Select, TextInput, Toolbar } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { UploadPreview } from "./UploadPreview";
 import { useJob } from "./useJob";
 
-export interface UploadPanelProps { projectKey: string; languages: readonly string[]; onImported: () => void }
+export interface UploadPanelProps { projectKey: string; languages: readonly string[]; onImported: () => void; canOverrideTranslationStatus?: boolean }
 type Operation = { projectKey: string; uploadId: number; jobId: number; stage: "preview" | "commit" };
 const count = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0;
 
-export function UploadPanel({ projectKey, languages, onImported }: UploadPanelProps): JSX.Element {
+export function UploadPanel({ projectKey, languages, onImported, canOverrideTranslationStatus = false }: UploadPanelProps): JSX.Element {
   const [kind, setKind] = useState<"t1" | "text">("t1");
   const [language, setLanguage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -21,6 +21,12 @@ export function UploadPanel({ projectKey, languages, onImported }: UploadPanelPr
   const [listError, setListError] = useState<unknown>();
   const [stale, setStale] = useState(false);
   const [imported, setImported] = useState<string | null>(null);
+  const overrideIdentity = JSON.stringify([projectKey, view?.id, view?.plan_sha256, canOverrideTranslationStatus]);
+  const [overrideDraft, setOverrideDraft] = useState<{ identity: string; values: Record<string, StatusOverride> }>({ identity: "", values: {} });
+  const overrides = overrideDraft.identity === overrideIdentity ? overrideDraft.values : {};
+  const setOverrides = (change: (current: Record<string, StatusOverride>) => Record<string, StatusOverride>) => setOverrideDraft(current => ({ identity: overrideIdentity, values: change(current.identity === overrideIdentity ? current.values : {}) }));
+  const statusOverrides = canOverrideTranslationStatus ? Object.values(overrides) : [];
+  const missingReason = statusOverrides.some(item => !item.reason.trim());
   const lifetime = useRef(0);
   const mutation = useRef(false);
   const request = useRef(0);
@@ -29,6 +35,7 @@ export function UploadPanel({ projectKey, languages, onImported }: UploadPanelPr
   const { job, error: jobError } = useJob(operation?.projectKey === projectKey ? operation.jobId : null);
   const polling = operation !== null && !jobError && (!job || (job.status !== "failed" && job.status !== "succeeded"));
   const busy = working || polling;
+  useEffect(() => { setOverrideDraft({ identity: overrideIdentity, values: {} }); }, [overrideIdentity]);
 
   const refreshList = async (epoch: number) => {
     const generation = ++request.current;
@@ -94,11 +101,11 @@ export function UploadPanel({ projectKey, languages, onImported }: UploadPanelPr
     finally { if (lifetime.current === epoch) { mutation.current = false; setWorking(false); } }
   };
   const commit = async () => {
-    if (mutation.current || busy || stale || view?.status !== "ready" || !view.preview?.committable || !view.plan_sha256) return;
+    if (mutation.current || busy || stale || missingReason || view?.status !== "ready" || !view.preview?.committable || !view.plan_sha256) return;
     const epoch = lifetime.current;
     mutation.current = true; setWorking(true); setError(undefined); setImported(null); handled.current = null;
     try {
-      const created = await api.commitUpload(projectKey, view.id, view.plan_sha256);
+      const created = await (statusOverrides.length ? api.commitUpload(projectKey, view.id, view.plan_sha256, statusOverrides) : api.commitUpload(projectKey, view.id, view.plan_sha256));
       if (lifetime.current === epoch) setOperation({ projectKey, uploadId: created.upload_id, jobId: created.job_id, stage: "commit" });
     } catch (err: unknown) {
       if (lifetime.current === epoch) { setError(err); setStale(err instanceof ApiError && err.code === "UPLOAD_STALE"); }
@@ -148,8 +155,22 @@ export function UploadPanel({ projectKey, languages, onImported }: UploadPanelPr
     {operation?.stage === "commit" && busy && <InlineMessage tone="info">Importing …</InlineMessage>}
     {imported && <InlineMessage tone="success">{imported}</InlineMessage>}
     {view && <><p>Upload {view.id} · {view.status}</p>{view.preview && <UploadPreview plan={view.preview} />}
+      {canOverrideTranslationStatus && view.status === "ready" && view.preview?.variants?.some(item => item.status !== null) && <fieldset disabled={busy || stale}><legend>Accept without review</legend>
+        <p>Explicitly accept a translation without review. A reason is required for every selected variant.</p>
+        {view.preview.variants.filter(item => item.status !== null).map(item => {
+          const identity = JSON.stringify([item.external_id, item.language, item.version]);
+          const selected = overrides[identity];
+          const id = `override-${encodeURIComponent(identity)}`;
+          return <div key={identity}><Checkbox id={id} label={`Accept without review: ${item.external_id} · ${item.language} · v${item.version}`} checked={!!selected} onChange={event => setOverrides(current => {
+            const next = { ...current };
+            if (event.target.checked) next[identity] = { external_id: item.external_id, language: item.language, version: item.version, reason: "" };
+            else delete next[identity];
+            return next;
+          })} />{selected && <TextInput id={`${id}-reason`} label={`Reason: ${item.external_id} · ${item.language} · v${item.version}`} required value={selected.reason} onChange={event => setOverrides(current => ({ ...current, [identity]: { ...selected, reason: event.target.value } }))} />}</div>;
+        })}
+      </fieldset>}
       {view.status === "previewing" && <><InlineMessage tone="info">Checking …</InlineMessage>{view.preview_job_id == null && <Button disabled={busy} onClick={() => { void resume(view.id); }}>Refresh status</Button>}</>}
-      {["ready", "invalid"].includes(view.status) && <Toolbar label="Preview actions"><Button variant="primary" disabled={busy || stale || view.status !== "ready" || !view.preview?.committable || !view.plan_sha256} onClick={() => { void commit(); }}>Import</Button><Button disabled={busy} onClick={() => { void discard(); }}>Discard</Button></Toolbar>}
+      {["ready", "invalid"].includes(view.status) && <Toolbar label="Preview actions"><Button variant="primary" disabled={busy || stale || missingReason || view.status !== "ready" || !view.preview?.committable || !view.plan_sha256} onClick={() => { void commit(); }}>Import</Button><Button disabled={busy} onClick={() => { void discard(); }}>Discard</Button></Toolbar>}
     </>}
     <section className="detail-section"><h3>Recent uploads</h3>{listError !== undefined && <ErrorNotice error={listError} />}<Button disabled={busy} onClick={() => { void refreshList(lifetime.current); }}>Refresh uploads</Button>
       {uploads.length ? <ul>{uploads.map(item => <li key={item.id}>Upload {item.id} · {item.kind} · {item.status} · {item.files.map(file => file.filename).join(", ")} <Button size="sm" disabled={busy} onClick={() => { void resume(item.id); }}>Resume upload {item.id}</Button></li>)}</ul> : <p>No retained uploads.</p>}
