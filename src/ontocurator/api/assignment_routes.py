@@ -28,7 +28,7 @@ from ontocurator.assignments.service import (
     TaskSummary,
 )
 from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Action, Task, can
+from ontocurator.authz.policy import ADMINISTRATION_TASKS, Action, Task, can
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.storage.tables import AssignmentRow, UserRow
 
@@ -294,6 +294,8 @@ def open_assignment(
         if row is None or row.user_id != principal.user_id:
             raise DomainError("ASSIGNMENT_NOT_FOUND")
         assignment = AssignmentService._get(conn, assignment_id)
+        if assignment.task not in ADMINISTRATION_TASKS:
+            raise DomainError("TASK_INVALID")
     response = open_workspace(
         OpenWorkspaceRequest(
             project_key=assignment.project_key,

@@ -383,6 +383,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                 if exc.code in NOT_FOUND_CODES
                 else {
                     "ASSIGNMENT_SUBMITTED": 409,
+                    "VARIANT_REVIEW_STALE": 409,
                     "LANGUAGE_CONFIRMATION_REQUIRED": 409,
                     "REASSIGN_CONFIRMATION_REQUIRED": 409,
                     "ADJUDICATOR_IS_ANNOTATOR": 409,

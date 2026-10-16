@@ -23,7 +23,14 @@ from ontocurator.assignments.distribution import (
     propose_distribution,
 )
 from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import TASK_ROLES, Access, Action, Role, Task, may_take
+from ontocurator.authz.policy import (
+    ADMINISTRATION_TASKS,
+    Access,
+    Action,
+    Role,
+    Task,
+    may_take,
+)
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.errors import DomainError
 from ontocurator.storage.database import Database
@@ -120,7 +127,7 @@ def validate_selection(
         or len(set(document_ids)) != len(document_ids)
     ):
         raise DomainError("DOCUMENT_SELECTION_INVALID")
-    if task not in TASK_ROLES:
+    if task not in ADMINISTRATION_TASKS:
         raise DomainError("TASK_INVALID")
     if type(per_document) is not int or per_document < 1:
         raise DomainError("PER_DOCUMENT_INVALID")

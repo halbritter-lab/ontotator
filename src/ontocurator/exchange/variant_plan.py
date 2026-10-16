@@ -15,6 +15,7 @@ from ontocurator.domain.variants import (
     VariantInfo,
     VariantOrigin,
     is_translation_chain,
+    variant_document_id,
 )
 
 if TYPE_CHECKING:
@@ -230,13 +231,7 @@ def resolve_variants(
                         "VARIANT_VERSION_INVALID",
                         "A correction must derive from the exact preceding version",
                     )
-                doc_id = key[0]
-                if doc_id in occupied:
-                    doc_id = f"{key[0]}~{key[1]}~v{key[2]}"
-                if doc_id in occupied:
-                    raise DomainError(
-                        "VARIANT_ID_COLLISION", f"Internal ID {doc_id} is occupied"
-                    )
+                doc_id = variant_document_id(key[0], key[1], key[2], occupied)
                 status: TranslationStatus | None = None
                 if origin in TRANSLATION_ORIGINS:
                     status = (

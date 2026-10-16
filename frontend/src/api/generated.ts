@@ -1198,7 +1198,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "annotate" | "review";
+            task: "annotate" | "review" | "translation_review";
             /**
              * Confirm Language
              * @default false
@@ -1227,7 +1227,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "annotate" | "review";
+            task: "annotate" | "review" | "translation_review";
             /**
              * Status
              * @enum {string}
@@ -1276,7 +1276,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "annotate" | "review";
+            task: "annotate" | "review" | "translation_review";
             /**
              * Status
              * @enum {string}
@@ -1445,7 +1445,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "annotate" | "review";
+            task: "annotate" | "review" | "translation_review";
             /** Per Document */
             per_document: number;
             /** Seed */
@@ -2393,7 +2393,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "annotate" | "review";
+            task: "annotate" | "review" | "translation_review";
             /**
              * Per Document
              * @default 1
@@ -2851,7 +2851,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "annotate" | "review";
+            task: "annotate" | "review" | "translation_review";
             /**
              * Status
              * @enum {string}

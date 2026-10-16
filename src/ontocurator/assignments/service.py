@@ -29,7 +29,15 @@ from sqlalchemy import (
 
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor, record_audit
-from ontocurator.authz.policy import Access, Action, Role, Task, may_take
+from ontocurator.authz.policy import (
+    ADMINISTRATION_TASKS,
+    TASK_ROLES,
+    Access,
+    Action,
+    Role,
+    Task,
+    may_take,
+)
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.workspace import WorkspaceMode
@@ -225,7 +233,7 @@ class AssignmentService:
         target: int,
         task: Task,
     ) -> None:
-        if task not in MODE_FOR_TASK:
+        if task not in TASK_ROLES:
             raise DomainError("TASK_INVALID")
         user = (
             conn.execute(select(UserRow).where(UserRow.id == target)).mappings().one()
@@ -382,6 +390,8 @@ class AssignmentService:
         No joined Database scope: a caller can isolate routine row refusals with
         conn.begin_nested without poisoning its outer transaction.
         """
+        if task not in ADMINISTRATION_TASKS:
+            raise DomainError("TASK_INVALID")
         existing = self.active_for(conn, project["id"], document_id, target, task)
         if existing is not None:
             self._require_target(conn, project, target, task)
@@ -410,6 +420,8 @@ class AssignmentService:
             if old["status"] != "open" and not confirm_started:
                 raise DomainError("REASSIGN_CONFIRMATION_REQUIRED")
             task = cast(Task, old["task"])
+            if task not in ADMINISTRATION_TASKS:
+                raise DomainError("TASK_INVALID")
             existing = self.active_for(
                 conn, project["id"], old["document_id"], target, task
             )

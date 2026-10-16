@@ -30,6 +30,7 @@ from ontocurator.storage.tables import (
     ProjectRow,
     ProjectSearchConditionsRow,
     SubmissionRow,
+    TranslationReviewRow,
     UserRow,
 )
 
@@ -155,6 +156,12 @@ class ProjectService:
             conn.execute(
                 select(SubmissionRow.submission_id)
                 .where(SubmissionRow.project_id == project_id)
+                .limit(1)
+            ).first()
+            is not None
+            or conn.execute(
+                select(TranslationReviewRow.id)
+                .where(TranslationReviewRow.project_id == project_id)
                 .limit(1)
             ).first()
             is not None

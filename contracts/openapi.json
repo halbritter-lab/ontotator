@@ -3370,7 +3370,8 @@
             "type": "string",
             "enum": [
               "annotate",
-              "review"
+              "review",
+              "translation_review"
             ],
             "title": "Task"
           },
@@ -3451,7 +3452,8 @@
             "type": "string",
             "enum": [
               "annotate",
-              "review"
+              "review",
+              "translation_review"
             ],
             "title": "Task"
           },
@@ -3570,7 +3572,8 @@
             "type": "string",
             "enum": [
               "annotate",
-              "review"
+              "review",
+              "translation_review"
             ],
             "title": "Task"
           },
@@ -4029,7 +4032,8 @@
             "type": "string",
             "enum": [
               "annotate",
-              "review"
+              "review",
+              "translation_review"
             ],
             "title": "Task"
           },
@@ -6279,7 +6283,8 @@
             "type": "string",
             "enum": [
               "annotate",
-              "review"
+              "review",
+              "translation_review"
             ],
             "title": "Task"
           },
@@ -7464,7 +7469,8 @@
             "type": "string",
             "enum": [
               "annotate",
-              "review"
+              "review",
+              "translation_review"
             ],
             "title": "Task"
           },

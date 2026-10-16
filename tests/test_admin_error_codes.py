@@ -30,6 +30,7 @@ PATHS = (
     "exchange",
     "ontology/store.py",
     "application/submissions.py",
+    "application/translation_reviews.py",
     "application/workspaces.py",
     "domain/errors.py",
     "domain/project_rules.py",
