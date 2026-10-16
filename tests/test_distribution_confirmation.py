@@ -155,7 +155,11 @@ def test_human_language_override_is_audited(stored):
         "assignment.create",
         "assignment.distribute",
     ]
-    assert events[0].details == {"document_language": "en", "user_languages": ["de"]}
+    assert events[0].details == {
+        "document_language": "en",
+        "user_languages": ["de"],
+        "required_languages": ["en"],
+    }
     assert events[-1].details["confirm_language"] is True
 
 

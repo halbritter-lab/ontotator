@@ -437,16 +437,47 @@ def test_metadata_reads_are_ordered_case_filtered_and_text_free(stored):
 def test_scoped_metadata_never_reveals_hidden_documents_after_authority_loss(
     stored, loss
 ):
+    import hashlib
+
     db, pid, uid, aid = stored
+    translation_sha = hashlib.sha256(b"Ziel").hexdigest()
     with db.transaction() as conn:
-        conn.execute(insert(DocumentRow).values(**_document(pid)))
+        conn.execute(
+            insert(DocumentRow).values(**_document(pid, text_sha256=translation_sha))
+        )
+        conn.execute(
+            insert(DocumentRow).values(
+                **_document(
+                    pid,
+                    document_id="unrelated",
+                    case_id="other-case",
+                    external_id="unrelated",
+                    origin="native",
+                    derived_from=None,
+                    translation_status=None,
+                    language="fr",
+                    text="Hidden",
+                    text_sha256="c" * 64,
+                )
+            )
+        )
     scoped = ScopedRepository(
         db, Access(uid, "reader", False, {"p": frozenset({"annotator"})})
     )
-    assert [v.document_id for v in scoped.list_variants("p")] == ["native"]
-    assert scoped.find_variants_by_text_sha256("p", "b" * 64) == []
+    assert [v.document_id for v in scoped.list_variants("p")] == [
+        "native",
+        "translation",
+    ]
+    assert scoped.get_variant("p", "translation").document_id == "translation"
+    assert scoped.get_variant_text("p", "translation").text == "Ziel"
+    assert scoped.find_variants_by_text_sha256("p", translation_sha) == []
+    assert scoped.find_variants_by_text_sha256("p", "c" * 64) == []
     with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
-        scoped.get_variant("p", "translation")
+        scoped.get_variant("p", "unrelated")
+    with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
+        scoped.get_document("p", "translation")
+    with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
+        scoped.get_reanchor_items("p", "translation")
     with db.transaction() as conn:
         if loss == "revocation":
             conn.execute(
@@ -463,10 +494,18 @@ def test_scoped_metadata_never_reveals_hidden_documents_after_authority_loss(
             )
         else:
             conn.execute(update(UserRow).where(UserRow.id == uid).values(active=False))
-    assert scoped.list_variants("p") == []
+    if loss == "revocation":
+        assert scoped.list_variants("p") == []
+    else:
+        with pytest.raises(DomainError, match="PROJECT_NOT_FOUND"):
+            scoped.list_variants("p")
     assert scoped.find_variants_by_text_sha256("p", "a" * 64) == []
-    with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
-        scoped.get_variant("p", "native")
+    assert scoped.find_variants_by_text_sha256("p", translation_sha) == []
+    assert scoped.find_variants_by_text_sha256("p", "c" * 64) == []
+    code = "DOCUMENT_NOT_FOUND" if loss == "revocation" else "PROJECT_NOT_FOUND"
+    for document_id in ("native", "translation", "unrelated"):
+        with pytest.raises(DomainError, match=code):
+            scoped.get_variant("p", document_id)
 
 
 @pytest.mark.parametrize("privilege", ["lead", "system_admin"])
