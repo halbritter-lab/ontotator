@@ -437,9 +437,14 @@ def test_metadata_reads_are_ordered_case_filtered_and_text_free(stored):
 def test_scoped_metadata_never_reveals_hidden_documents_after_authority_loss(
     stored, loss
 ):
+    import hashlib
+
     db, pid, uid, aid = stored
+    translation_sha = hashlib.sha256(b"Ziel").hexdigest()
     with db.transaction() as conn:
-        conn.execute(insert(DocumentRow).values(**_document(pid)))
+        conn.execute(
+            insert(DocumentRow).values(**_document(pid, text_sha256=translation_sha))
+        )
         conn.execute(
             insert(DocumentRow).values(
                 **_document(
@@ -465,7 +470,7 @@ def test_scoped_metadata_never_reveals_hidden_documents_after_authority_loss(
     ]
     assert scoped.get_variant("p", "translation").document_id == "translation"
     assert scoped.get_variant_text("p", "translation").text == "Ziel"
-    assert scoped.find_variants_by_text_sha256("p", "b" * 64) == []
+    assert scoped.find_variants_by_text_sha256("p", translation_sha) == []
     assert scoped.find_variants_by_text_sha256("p", "c" * 64) == []
     with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
         scoped.get_variant("p", "unrelated")
@@ -495,7 +500,7 @@ def test_scoped_metadata_never_reveals_hidden_documents_after_authority_loss(
         with pytest.raises(DomainError, match="PROJECT_NOT_FOUND"):
             scoped.list_variants("p")
     assert scoped.find_variants_by_text_sha256("p", "a" * 64) == []
-    assert scoped.find_variants_by_text_sha256("p", "b" * 64) == []
+    assert scoped.find_variants_by_text_sha256("p", translation_sha) == []
     assert scoped.find_variants_by_text_sha256("p", "c" * 64) == []
     code = "DOCUMENT_NOT_FOUND" if loss == "revocation" else "PROJECT_NOT_FOUND"
     for document_id in ("native", "translation", "unrelated"):
