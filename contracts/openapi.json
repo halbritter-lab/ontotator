@@ -238,6 +238,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AssignmentOpenRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2929,6 +2946,24 @@
           "status"
         ],
         "title": "Assignee"
+      },
+      "AssignmentOpenRequest": {
+        "properties": {
+          "review_round_target_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Round Target Set Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AssignmentOpenRequest"
       },
       "AssignmentOpenResponse": {
         "properties": {
