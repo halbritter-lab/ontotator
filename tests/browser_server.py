@@ -13,7 +13,9 @@ import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from time import monotonic, sleep
 from typing import Literal
+from uuid import uuid4
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -50,7 +52,7 @@ if str(ROOT) not in sys.path:
 from support.v2_import import PackageImportService  # noqa: E402
 
 from ontocurator.packages.models import PackageManifest, ValidatedPackage  # noqa: E402
-from ontocurator.storage.tables import ProjectRow  # noqa: E402
+from ontocurator.storage.tables import JobRow, ProjectRow  # noqa: E402
 from tests.layered_fixtures import HP_DIGEST, make_layered_package  # noqa: E402
 from tests.t1_fixtures import (  # noqa: E402
     bundle,
@@ -372,6 +374,211 @@ def register_test_user_route(
     app.router.routes.insert(0, app.router.routes.pop())
 
 
+def register_variant_scenario_route(app: FastAPI) -> None:
+    """Fresh ordinary-role Task10 data; never installed in the shipped app."""
+
+    @app.post("/__test_variants__")
+    def variants_scenario() -> dict[str, object]:
+        from t1_builders import bundle as variant_bundle
+        from t1_builders import correction_unit, native_unit, translation_unit
+        from t1_fixtures import annotation
+
+        from ontocurator.application.translation_reviews import TranslationReviewService
+        from ontocurator.assignments.service import AssignmentService
+        from ontocurator.authz.policy import Access
+
+        db = app.state.repo.db
+        key = f"variants-{uuid4().hex[:12]}"
+        create_project(db, key)
+        case_id = "EN 1/7 #é"
+        source_id = "source/annotation-versions/own/y %2F #é"
+        source_text = "Hypotonia and seizure. A😀e\u0301\n\n" + DESIGN_TEXT
+        target_text = "Hypotonia und Anfälle. A😀e\u0301\n\n" + DESIGN_TEXT
+        source = native_unit(
+            source_id,
+            "en",
+            source_text,
+            case_id=case_id,
+            annotations=[
+                annotation(
+                    "source-proposal", (0, 9), text=source_text, term_id="HP:0001252"
+                )
+            ],
+        )
+        target = translation_unit(
+            source_id,
+            "de",
+            target_text,
+            source=source,
+            provider="Browser translation A",
+            run_id="run A/1 %é",
+        )
+        other = translation_unit(
+            "translation/variant %2F #é",
+            "de",
+            target_text + "\n\nAlternative translation run.",
+            source=source,
+            provider="Browser translation B",
+            run_id="run B/1",
+        )
+        corrected = correction_unit(target, target_text + "\n\nCorrected conclusion.")
+        with tempfile.TemporaryDirectory() as folder:
+            imported = run_import(
+                db,
+                variant_bundle(Path(folder), [source, target, other, corrected]),
+                key,
+                actor=Actor.cli(),
+            )
+        if imported.status != "succeeded":
+            raise HTTPException(500, imported.error)
+        expected_pairs = {
+            (pair["old_document_id"], pair["new_document_id"])
+            for pair in (imported.result or {}).get("reanchor_pairs", [])
+        }
+        if not expected_pairs:
+            raise HTTPException(
+                500, "The correction import did not record its child pair"
+            )
+        deadline = monotonic() + 20
+        while True:
+            # Read only this project's children of this exact import producer.
+            with db.transaction() as conn:
+                children = [
+                    {
+                        "id": row.id,
+                        "status": row.status,
+                        "error": row.error,
+                        "result": row.result,
+                        "old_document_id": row.payload["old_document_id"],
+                        "new_document_id": row.payload["new_document_id"],
+                    }
+                    for row in conn.execute(
+                        select(JobRow)
+                        .join(ProjectRow, JobRow.project_id == ProjectRow.id)
+                        .where(
+                            ProjectRow.project_key == key,
+                            JobRow.kind == "reanchor",
+                            JobRow.payload["project"].as_string() == key,
+                            JobRow.payload["producer"]["kind"].as_string() == "import",
+                            JobRow.payload["producer"]["job_id"].as_integer()
+                            == imported.id,
+                        )
+                        .order_by(JobRow.id)
+                    ).mappings()
+                ]
+            actual_pairs = {
+                (child["old_document_id"], child["new_document_id"])
+                for child in children
+            }
+            if any(child["status"] == "failed" for child in children):
+                raise HTTPException(
+                    500, {"import_job_id": imported.id, "children": children}
+                )
+            if (
+                actual_pairs == expected_pairs
+                and len(children) == len(expected_pairs)
+                and all(child["status"] == "succeeded" for child in children)
+            ):
+                break
+            if monotonic() >= deadline:
+                raise HTTPException(
+                    500,
+                    {
+                        "error": "Import children did not finish",
+                        "import_job_id": imported.id,
+                        "children": children,
+                    },
+                )
+            sleep(0.05)
+        inventory = app.state.repo.list_variants(key, case_id=case_id)
+
+        def identity(external_id: str, language: str, version: int) -> str:
+            return next(
+                row.document_id
+                for row in inventory
+                if (row.external_id, row.language, row.version)
+                == (external_id, language, version)
+            )
+
+        documents = {
+            "source": identity(source_id, "en", 1),
+            "target": identity(source_id, "de", 1),
+            "other": identity(other.document.document_id, "de", 1),
+            "corrected": identity(source_id, "de", 2),
+        }
+        accounts = app.state.accounts
+        users = {}
+        for name, role in [
+            ("alice", "annotator"),
+            ("bob", "annotator"),
+            ("reviewer", "annotator"),
+            ("reader", "adjudicator"),
+            ("lead", "lead"),
+        ]:
+            username = f"{key}-{name}"
+            issued = accounts.create_user(Actor.cli(), username, username)
+            accounts.redeem_code(username, issued.code, TEST_PASSWORD)
+            app.state.memberships.add(Actor.cli(), key, username, [role])
+            accounts.set_languages(Actor.cli(), username, ["en", "de"])
+            users[name] = accounts.get_by_username(username)
+        accounts.update_profile(
+            Actor.cli(), users["reviewer"].username, qualification="Physician"
+        )
+        service = AssignmentService(db)
+        review = TranslationReviewService(db, app.state.jobs)
+        reviewer = users["reviewer"]
+        access = Access(
+            reviewer.id,
+            reviewer.pseudonym,
+            False,
+            {key: frozenset({"annotator"})},
+        )
+        # Accepted state comes from actual eligible, qualified review submissions.
+        for name in ("target", "other", "corrected"):
+            assignment = service.assign(
+                Actor.cli(),
+                key,
+                documents[name],
+                reviewer.username,
+                "translation_review",
+            )
+            opened = review.open(access, assignment.id)
+            revision = review.save_draft(
+                access,
+                assignment.id,
+                expected_revision=opened.draft.revision,
+                text=opened.text,
+                form={"decision": "accepted_unchanged", "clinical_change": False},
+            )
+            review.submit(access, assignment.id, expected_revision=revision)
+        assignments = {}
+        for name, document, task in [
+            ("alice", "target", "annotate"),
+            ("alice_source", "source", "annotate"),
+            ("bob", "target", "annotate"),
+            ("reader", "source", "review"),
+        ]:
+            username = users["alice" if name == "alice_source" else name].username
+            assignments[name] = service.assign(
+                Actor.cli(), key, documents[document], username, task
+            ).id
+        return {
+            "project": key,
+            "import_job_id": imported.id,
+            "children": children,
+            "case_id": case_id,
+            "documents": documents,
+            "texts": {
+                "source": source.document.text,
+                "target": target.document.text,
+            },
+            "users": {name: user.username for name, user in users.items()},
+            "assignments": assignments,
+        }
+
+    app.router.routes.insert(0, app.router.routes.pop())
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(
         prefix="hpo-browser-", ignore_cleanup_errors=True
@@ -412,6 +619,7 @@ if __name__ == "__main__":
                 )
 
         register_test_user_route(app, grant_all)
+        register_variant_scenario_route(app)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:
