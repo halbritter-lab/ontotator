@@ -41,13 +41,15 @@ function DistributionEditor({ projectKey, documents, onClose, onChanged }: Assig
   const stale = batch.error instanceof ApiError && batch.error.code === "DISTRIBUTION_STALE";
   const duplicate = slots.some((slot, index) => slot.username && slots.some((other, otherIndex) => index !== otherIndex && other.document_id === slot.document_id && other.username === slot.username));
   const editedRows: AssignmentRow[] = slots.filter(slot => slot.username).map(({ document_id, username }) => ({ document_id, username }));
+  // Same-task unrevoked assignments, including submitted ones, are idempotent.
+  const newRows = editedRows.filter(row => !(inventory ?? []).some(existing => !existing.revoked_at && existing.project_key === projectKey && existing.document_id === row.document_id && existing.username === row.username && existing.task === proposal?.context.task));
   const confirm = (confirm_language: boolean) => {
     if (!proposal || stale || busy || duplicate || (!confirm_language && batch.attempted)) return;
     void batch.submit({ rows: confirm_language ? batch.languageRows : editedRows, task: proposal.context.task, seed: proposal.seed, context: proposal.context, confirm_language });
   };
   const eligible = members ? eligibleMembers(members, task) : [];
   const loadBefore = new Map<string, number>();
-  for (const row of inventory ?? []) if (!row.revoked_at && ["open", "in_progress", "reopened"].includes(row.status)) loadBefore.set(row.username, (loadBefore.get(row.username) ?? 0) + 1);
+  for (const row of inventory ?? []) if (row.project_key === projectKey && !row.revoked_at && ["open", "in_progress", "reopened"].includes(row.status)) loadBefore.set(row.username, (loadBefore.get(row.username) ?? 0) + 1);
   for (const row of proposal?.rows ?? []) loadBefore.set(row.username, row.load_before);
   return <Dialog open title="Propose distribution" size="lg" onClose={busy || batch.busy ? undefined : onClose} footer={<Button disabled={busy || batch.busy} onClick={onClose}>Close</Button>}>
     <form onSubmit={event => { event.preventDefault(); if (event.currentTarget.reportValidity()) void propose(); }}>
@@ -65,7 +67,7 @@ function DistributionEditor({ projectKey, documents, onClose, onChanged }: Assig
         </Select></td></tr>)}</tbody></table>
       {duplicate && <InlineMessage tone="warning">Choose each person only once per document.</InlineMessage>}
       <section aria-label="Unassignable documents"><h3>Unassignable documents</h3>{proposal.unassignable.length ? <ul>{proposal.unassignable.map(row => <li key={row.document_id}>{row.document_id} ({row.language}): {row.reason === "NO_READER" ? `No member reads ${row.language}` : `Only ${row.eligible_count} reader${row.eligible_count === 1 ? "" : "s"} for ${proposal.per_document} places`}</li>)}</ul> : <p>Every document has a proposal.</p>}</section>
-      <section aria-label="Resulting load"><h3>Resulting load</h3><p>Open, in progress and reopened work across this project, before and after the selected rows.</p><ul>{eligible.map(member => <li key={member.username}>{member.display_name} ({member.username}): {loadBefore.has(member.username) || inventory !== null ? `${loadBefore.get(member.username) ?? 0} → ${(loadBefore.get(member.username) ?? 0) + editedRows.filter(row => row.username === member.username).length}` : "Load unavailable"}</li>)}</ul></section>
+      <section aria-label="Resulting load"><h3>Resulting load</h3><p>Open, in progress and reopened work across this project, before and after the selected rows.</p><ul>{eligible.map(member => <li key={member.username}>{member.display_name} ({member.username}): {loadBefore.has(member.username) || inventory !== null ? `${loadBefore.get(member.username) ?? 0} → ${(loadBefore.get(member.username) ?? 0) + newRows.filter(row => row.username === member.username).length}` : "Load unavailable"}</li>)}</ul></section>
       <Button variant="primary" disabled={busy || batch.busy || batch.attempted || stale || duplicate} onClick={() => confirm(false)}>Confirm</Button>
     </>}
     <BatchFeedback batch={batch} disabled={stale || busy} onConfirmLanguage={() => confirm(true)} />

@@ -38,10 +38,10 @@ it("refreshes all-task project load on each proposal for people chosen as overri
   const charlie = { ...members[0], username: "charlie", display_name: "Charlie" };
   vi.mocked(api.listMembers).mockResolvedValue([...members, charlie]);
   vi.mocked(api.listAssignments).mockResolvedValueOnce([
-    { ...assignment, username: "charlie", task: "review", status: "open" },
-    { ...assignment, username: "charlie", status: "reopened" },
-    { ...assignment, username: "charlie", status: "submitted" },
-    { ...assignment, username: "charlie", status: "in_progress", revoked_at: "2026-10-16T12:00:00Z" },
+    { ...assignment, document_id: "previous-open", username: "charlie", task: "review", status: "open" },
+    { ...assignment, document_id: "previous-reopened", username: "charlie", status: "reopened" },
+    { ...assignment, document_id: "previous-submitted", username: "charlie", status: "submitted" },
+    { ...assignment, document_id: "previous-revoked", username: "charlie", status: "in_progress", revoked_at: "2026-10-16T12:00:00Z" },
   ]).mockResolvedValueOnce([]);
   render(<DistributionDialog {...props()} />); await propose();
   fireEvent.change(screen.getByLabelText("z/doc, slot 1"), { target: { value: "charlie" } });
@@ -50,6 +50,24 @@ it("refreshes all-task project load on each proposal for people chosen as overri
   await waitFor(() => expect(api.listAssignments).toHaveBeenCalledTimes(2));
   await screen.findByText("Proposal #123");
   expect(screen.getByText(/Charlie.*0.*0/)).toBeDefined();
+});
+it.each([
+  { label: "open", existing: { ...assignment, status: "open" as const }, before: 1, after: 1 },
+  { label: "reopened", existing: { ...assignment, status: "reopened" as const }, before: 1, after: 1 },
+  { label: "submitted", existing: { ...assignment, status: "submitted" as const }, before: 0, after: 0 },
+  { label: "revoked", existing: { ...assignment, revoked_at: "2026-10-16T12:00:00Z" }, before: 0, after: 1 },
+  { label: "other task", existing: { ...assignment, task: "review" as const }, before: 1, after: 2 },
+  { label: "other project", existing: { ...assignment, project_key: "another-project" }, before: 0, after: 1 },
+])("projects override load using existing $label assignment identity", async ({ existing, before, after }) => {
+  vi.mocked(api.listAssignments).mockResolvedValue([existing]);
+  vi.mocked(api.proposeDistribution).mockResolvedValue({ ...proposal, rows: [{ ...proposal.rows[1], load_before: 0 }], unassignable: [], per_document: 1, context: { ...proposal.context, document_ids: ["z/doc"], per_document: 1 } });
+  render(<DistributionDialog {...props()} documents={[documents[0]]} />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Propose" })).toHaveProperty("disabled", false));
+  fireEvent.click(screen.getByRole("button", { name: "Propose" })); await screen.findByText("Proposal #123");
+  fireEvent.change(screen.getByLabelText("z/doc, slot 1"), { target: { value: "alice" } });
+  expect(screen.getByText(`Alice (alice): ${before} → ${after}`)).toBeDefined();
+  expect(api.listAssignments).toHaveBeenCalledOnce();
+  expect(api.createAssignments).not.toHaveBeenCalled();
 });
 it("requires a fresh server proposal on stale and never submits the previous context again", async () => {
   vi.mocked(api.createAssignments).mockRejectedValue(new ApiError(409, "stale", "DISTRIBUTION_STALE"));
