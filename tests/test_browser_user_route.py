@@ -17,13 +17,19 @@ class FixtureAccounts:
         self.created = []
         self.redeemed = []
         self.resets = []
+        self.admin_flags = []
 
     def get_by_username(self, username):
         return self.users.get(username)
 
-    def create_user(self, actor, username, display_name, *, pseudonym):
+    def create_user(
+        self, actor, username, display_name, *, pseudonym, system_admin=False
+    ):
         self.created.append((username, display_name, pseudonym))
-        user = SimpleNamespace(id=17, username=username, pseudonym=pseudonym)
+        self.admin_flags.append(system_admin)
+        user = SimpleNamespace(
+            id=17, username=username, pseudonym=pseudonym, is_system_admin=system_admin
+        )
         self.users[username] = user
         return SimpleNamespace(user=user, code="setup-code")
 
@@ -139,3 +145,39 @@ def test_setup_reset_and_existing_user_behavior_is_preserved(
     assert provisions == (
         [] if assign == "none" else [("alice", "project-a", ROLES)] * 3
     )
+
+
+@pytest.mark.parametrize("admin", [None, "false", "true"])
+def test_bootstrap_admin_is_explicit_and_needs_no_project_grants(
+    browser_user_route, admin
+):
+    client, accounts, grants, provisions = browser_user_route
+    params = {
+        "username": "bootstrap",
+        "pseudonym": "bootstrap",
+        "setup": "true",
+        "assign": "none",
+    }
+    if admin is not None:
+        params["system_admin"] = admin
+    response = client.post("/__test_user__", params=params)
+    assert response.status_code == 200, response.text
+    assert response.json() == {"code": "setup-code"}
+    assert accounts.admin_flags == [admin == "true"]
+    assert accounts.redeemed == []
+    assert grants == []
+    assert provisions == []
+
+
+def test_admin_bootstrap_does_not_promote_an_existing_ordinary_user(browser_user_route):
+    client, accounts, grants, provisions = browser_user_route
+    params = {"username": "alice", "pseudonym": "alice", "assign": "none"}
+    assert client.post("/__test_user__", params=params).status_code == 200
+    response = client.post(
+        "/__test_user__", params={**params, "system_admin": "true", "setup": "true"}
+    )
+    assert response.status_code == 409, response.text
+    assert accounts.admin_flags == [False]
+    assert accounts.resets == []
+    assert grants == []
+    assert provisions == []
