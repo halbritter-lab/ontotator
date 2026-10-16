@@ -15,7 +15,7 @@ const callbacks = vi.hoisted(() => ({ panel: null as unknown as AnnotationPanelP
 vi.mock("../src/editor/AnnotationPanel", async original => ({ ...await original<object>(),
   AnnotationPanel: (props: AnnotationPanelProps) => { callbacks.panel = props; return null; } }));
 vi.mock("../src/editor/TextPane", () => ({ TextPane: (props: TextPaneProps) => {
-  callbacks.text = props; return <div className="text-container">{props.text}</div>;
+  callbacks.text = props; return <>{props.header}<div className="text-container">{props.text}</div></>;
 } }));
 vi.mock("../src/editor/ReviewActions", async original => ({ ...await original<object>(),
   ReviewActions: (props: ReviewActionsProps) => { callbacks.review = props; return null; } }));
