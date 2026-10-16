@@ -603,7 +603,7 @@ def test_reversed_sources_keep_canonical_payload_with_its_own_blob(
     first = first.model_copy(
         update={
             "document": first.document.model_copy(
-                update={"language": "de", "source_text_sha256": "b" * 64}
+                update={"language": "en", "source_text_sha256": "b" * 64}
             )
         }
     )

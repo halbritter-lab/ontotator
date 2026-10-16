@@ -23,6 +23,7 @@ from ontocurator.exchange.plan import (
     ImportPlan,
     IncomingUnit,
     Issue,
+    PlannedDocument,
     PlannedSet,
     ProjectImportState,
     plan_import,
@@ -238,19 +239,27 @@ def apply_plan(
     variants = {(v.external_id, v.language, v.version): v for v in plan.variants}
     occurrences = [(sha, unit) for sha, units in sources for unit in units]
     # One physical row per logical identity, in the planner's stable topology.
-    incoming = {
-        variants[identity(unit)].document_id: unit
-        for _, unit in sorted(
-            occurrences, key=lambda entry: entry[1].label, reverse=True
-        )
-    }
+    incoming: dict[str, IncomingUnit] = {}
+    for _, unit in occurrences:
+        incoming.setdefault(variants[identity(unit)].document_id, unit)
+    # Preview ordering includes bundle/set identity and retains stable ties.
+    # Use its first occurrence as the authority for immutable raw provenance.
+    canonical: dict[str, PlannedDocument] = {}
+    for document in plan.documents:
+        canonical.setdefault(document.document_id, document)
     documents = []
     for variant in plan.variants:
         unit = incoming[variant.document_id]
+        chosen = canonical[variant.document_id]
         documents.append(
             ImportedDocument(
-                unit.document.model_copy(update={"document_id": variant.document_id}),
-                unit.source_text_sha256,
+                unit.document.model_copy(
+                    update={
+                        "document_id": variant.document_id,
+                        "language": chosen.language,
+                    }
+                ),
+                chosen.source_text_sha256,
                 VariantInfo(
                     variant.document_id,
                     variant.case_id,
@@ -275,10 +284,7 @@ def apply_plan(
         imported_by=actor.user_id,
         job_id=job_id,
     )
-    counts["documents_skipped"] = (
-        sum(len({identity(unit) for unit in units}) for _, units in sources)
-        - counts["documents_added"]
-    )
+    counts["documents_skipped"] = len(occurrences) - counts["documents_added"]
     counts["documents_only"] = len(plan.documents_only)
     counts["sets_added"] = counts["sets_skipped"] = counts["proposals"] = 0
     planned: dict[tuple[str | None, str, str], PlannedSet] = {}
