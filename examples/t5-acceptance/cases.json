@@ -1,0 +1,26 @@
+{
+  "ready": {
+    "case_id": "synthetic-ready",
+    "source_external_id": "ready-source",
+    "target_external_id": "ready-translation",
+    "source_text_sha256": "9164434a664f83cf6e888445886cc5542f1c44a1fec96a25b489aa262926f514",
+    "target_text_sha256": "d091d07e6657eccfd30e8aeecbfd07276d08f891afc01cd5d22d6a2b0a99f5f3",
+    "checks_passed": true
+  },
+  "failed": {
+    "case_id": "synthetic-failed",
+    "source_external_id": "failed-source",
+    "target_external_id": "failed-translation",
+    "source_text_sha256": "9164434a664f83cf6e888445886cc5542f1c44a1fec96a25b489aa262926f514",
+    "target_text_sha256": "d091d07e6657eccfd30e8aeecbfd07276d08f891afc01cd5d22d6a2b0a99f5f3",
+    "checks_passed": false
+  },
+  "accepted": {
+    "case_id": "synthetic-accepted",
+    "source_external_id": "accepted-source",
+    "target_external_id": "accepted-translation",
+    "source_text_sha256": "9164434a664f83cf6e888445886cc5542f1c44a1fec96a25b489aa262926f514",
+    "target_text_sha256": "d091d07e6657eccfd30e8aeecbfd07276d08f891afc01cd5d22d6a2b0a99f5f3",
+    "checks_passed": true
+  }
+}

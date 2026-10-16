@@ -1,0 +1,15 @@
+{
+  "format": "ontospan/1.1",
+  "writer": "ontospan 1.1.0",
+  "writer_git": "4105ec1259fc04d927d78258fcf4c99f8f014b6a",
+  "bundle_id": "t5-synthetic-acceptance-v1",
+  "created_at": "2026-10-16T00:00:00Z",
+  "documents": 6,
+  "tool_proposals": 6,
+  "sha256": {
+    "hp.json": "279123a1ae5314e4632a0f85be2d82efd50f44ebf0d98e0100ed6859d7cb83e4",
+    "profile.json": "33205828968d54af89d0367e70eac19b4579e2ea0dfede7f2ad1bec7198fb186",
+    "demo.zip": "b988e147aec81c91df11ab31f2cf09854f72241a4c3c70243acd5666eebce8a9",
+    "cases.json": "5f3ea06fff0a023b20340019e5e631b87e0eebc766a215afde673ae284ed706a"
+  }
+}

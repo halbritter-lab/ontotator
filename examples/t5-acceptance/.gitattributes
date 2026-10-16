@@ -1,0 +1,3 @@
+# Public inputs are hashed byte-for-byte, including ontology pin identity.
+*.json -text whitespace=cr-at-eol
+*.zip binary
