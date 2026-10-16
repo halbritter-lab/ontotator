@@ -4,6 +4,8 @@
  */
 
 import type { components } from "./generated";
+import { attachmentFilename, type DownloadPayload } from "./download";
+export type { DownloadPayload } from "./download";
 
 export type DocumentSummary = components["schemas"]["ProjectDocumentSummary"];
 export type ProjectSettings = components["schemas"]["ProjectSettings"];
@@ -11,6 +13,9 @@ export type UploadView = components["schemas"]["UploadView"];
 export type UploadCreated = components["schemas"]["UploadCreated"];
 export type ImportPlan = components["schemas"]["ImportPlan"];
 export type JobView = components["schemas"]["JobView"];
+export type ProjectProgress = components["schemas"]["ProjectProgress"];
+export type ExportKind = components["schemas"]["ExportRequest"]["kind"];
+export type ExportCreated = components["schemas"]["ExportCreated"];
 export interface ProjectDocumentFilters { language?: string; status?: string; q?: string }
 export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
@@ -194,6 +199,7 @@ export class ApiClient {
     return this.request<DocumentSummary[]>(`/api/v1/projects/${encodeURIComponent(key)}/documents${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
 
+
   async createUpload(key: string, kind: "t1" | "text", files: readonly File[], language?: string): Promise<UploadCreated> {
     const body = new FormData(); body.append("kind", kind);
     for (const file of files) body.append("files[]", file);
@@ -219,6 +225,19 @@ export class ApiClient {
 
   async getJob(id: number): Promise<JobView> {
     return this.request<JobView>(`/api/v1/jobs/${id}`, { method: "GET" });
+  }
+
+  async getProgress(key: string): Promise<ProjectProgress> {
+    return this.request<ProjectProgress>(`/api/v1/projects/${encodeURIComponent(key)}/progress`, { method: "GET" });
+  }
+
+  async startExport(key: string, kind: ExportKind): Promise<ExportCreated> {
+    return this.request<ExportCreated>(`/api/v1/projects/${encodeURIComponent(key)}/exports`, { method: "POST", body: JSON.stringify({ kind }) });
+  }
+
+  async downloadJob(id: number): Promise<DownloadPayload> {
+    const response = await this.requestResponse(`/api/v1/jobs/${id}/download`, { method: "GET" });
+    return { blob: await response.blob(), filename: attachmentFilename(response.headers.get("Content-Disposition")) };
   }
 
   async adminListUsers(): Promise<AdminUser[]> {
@@ -269,6 +288,13 @@ export class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    const response = await this.requestResponse(endpoint, options);
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  }
+
+  /** JSON and binary endpoints share authentication and error decoding. */
+  private async requestResponse(endpoint: string, options: RequestInit = {}): Promise<Response> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = new Headers(options.headers ?? {});
 
@@ -327,8 +353,7 @@ export class ApiClient {
       throw new ApiError(response.status, message, code, details);
     }
 
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
+    return response;
   }
 
   /** The logged-in user of this browser's session; 401 without one. Stores the CSRF token. */
