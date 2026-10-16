@@ -111,7 +111,11 @@ it("actual CaseScreen wires target, source, derived and human provenance without
   expect(within(screen.getByLabelText("Reference details")).queryByText("AI")).toBeNull();
   fireEvent.click(item("derived"));
   expect(await screen.findByText("set-1")).toBeTruthy();
-  expect(within(item("derived")).getByText("AI").title).toContain("run-1");
+  // The current curated snapshot remains human; the Source block describes its upstream tool.
+  expect(within(item("derived")).queryByText("AI")).toBeNull();
+  expect(within(container.querySelector<HTMLElement>(".inspector-pane")!).queryByText("AI")).toBeNull();
+  expect(within(screen.getByLabelText("Proposal source")).getByText("Phentrieve 1.4")).toBeTruthy();
+  expect(within(screen.getByLabelText("Proposal source")).getByText("run-1")).toBeTruthy();
   expect(get).toHaveBeenCalledTimes(3);
   expect(mutate).not.toHaveBeenCalled();
 });

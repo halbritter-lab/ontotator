@@ -7,7 +7,8 @@ type Provenance = components["schemas"]["Provenance"];
 /** "AI" marker for annotations produced by a tool; humans and unknown origins get no marker. */
 export function AiBadge({ provenance, source }: { provenance: Provenance | null; source?: EditorProposal }) {
   const { label } = useProposalMetadata(source);
-  const origin = source?.annotation.provenance ?? provenance;
+  // Upstream tool metadata never changes the current annotation's authorship.
+  const origin = provenance;
   if (origin?.actor.kind !== "tool") return null;
   const description = `AI-generated: ${origin.actor.actor_id} · ${origin.method}`;
   return (
