@@ -2,7 +2,9 @@ import { IconButton } from "../ui/IconButton";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/Button";
 import React, { useState } from "react";
-import type { AnnotationSnapshot, SearchCandidate } from "../api/client";
+import { ProposalSource } from "./ProposalSource";
+import { AiBadge } from "./AiBadge";
+import type { EditorProposal, AnnotationSnapshot, SearchCandidate } from "../api/client";
 import type { components } from "../api/generated";
 import type { CodepointSegment } from "../spans/adapter";
 import { SearchPanel } from "./SearchPanel";
@@ -17,6 +19,7 @@ export type EvidenceSnapshot = components["schemas"]["EvidenceSnapshot"];
 export type AxisDefinition = components["schemas"]["AxisDefinition"];
 
 export interface AnnotationPanelProps {
+  source?: EditorProposal;
   readOnly?: boolean;
   annotation: AnnotationSnapshot | null;
   allEvidence: Record<string, EvidenceSnapshot>;
@@ -63,6 +66,7 @@ export function quoteSegments(text: string, segments: { start: number; end: numb
 
 export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   annotation,
+  source,
   readOnly = false,
   allEvidence,
   workspaceKey,
@@ -122,6 +126,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
   return (
     <div className="detail-pane">
+      <ProposalSource source={source} />
       {/* Target Proposal Counter-Annotation Banner */}
       {linkedTarget && (
         <div
@@ -159,7 +164,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "2px 0 4px" }}>
-              <TermName termId={currentTerm} label={termLabel} />
+              <TermName termId={currentTerm} label={termLabel} />{" "}<AiBadge provenance={ann.provenance} source={source} />
             </h2>
             {onShowInTree && currentTerm && (
               <Button

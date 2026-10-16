@@ -2,7 +2,8 @@ import { IconButton } from "../ui/IconButton";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/Button";
 import React, { useEffect, useRef, useState } from "react";
-import type { AnnotationSnapshot } from "../api/client";
+import { ProposalSource } from "./ProposalSource";
+import type { EditorProposal, AnnotationSnapshot } from "../api/client";
 import type { components } from "../api/generated";
 import { TermName } from "./TermName";
 import { AiBadge } from "./AiBadge";
@@ -38,6 +39,7 @@ export interface DecisionPayload {
 }
 
 export interface ReviewActionsProps {
+  source?: EditorProposal;
   readOnly?: boolean;
   target: TargetProposal;
   termLabel?: string | null;
@@ -58,6 +60,7 @@ export interface ReviewActionsProps {
 }
 
 export const ReviewActions: React.FC<ReviewActionsProps> = ({
+  source,
   target,
   readOnly = false,
   termLabel,
@@ -232,11 +235,12 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           <p>Version: {target.version}</p>
         </details>
       </div>
+      <ProposalSource source={source} />
       {/* Origin Info */}
       <div className="review-actions__origin">
         {target.provenance ? (
           <>
-            <AiBadge provenance={target.provenance} />{" "}
+            <AiBadge provenance={target.provenance} source={source} />{" "}
             Source: <strong>{target.provenance.actor.kind}</strong> ({target.provenance.actor.actor_id}) •
             Method: {target.provenance.method}
           </>

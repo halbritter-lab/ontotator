@@ -13,6 +13,8 @@ export type ImportPlan = components["schemas"]["ImportPlan"];
 export type JobView = components["schemas"]["JobView"];
 export interface ProjectDocumentFilters { language?: string; status?: string; q?: string }
 export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
+export type EditorProposal = components["schemas"]["EditorProposal"];
+export type ProposalSetView = components["schemas"]["ProposalSetView"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
 export type OpenWorkspaceRequest = components["schemas"]["OpenWorkspaceRequest"];
 export type OpenWorkspaceResponse = components["schemas"]["OpenWorkspaceResponse"];
@@ -336,6 +338,11 @@ export class ApiClient {
     const user = await this.request<CurrentUser>("/api/v1/auth/me", { method: "GET" });
     this.setCsrfToken(user.csrf_token);
     return user;
+  }
+
+  /** Raw transport; metadata lifetime and deduplication belong to the workspace. */
+  async getProposalSet(projectKey: string, setId: number, signal?: AbortSignal): Promise<ProposalSetView> {
+    return this.request<ProposalSetView>(`/api/v1/projects/${encodeURIComponent(projectKey)}/proposal-sets/${setId}`, { method: "GET", signal });
   }
 
   async getProfile(): Promise<Profile> {
