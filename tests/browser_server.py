@@ -5,6 +5,7 @@ product any more). Test-only routes create users with project memberships,
 add a fixture translation and import a T1 bundle.
 """
 
+import base64
 import hashlib
 import os
 import re
@@ -661,6 +662,7 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
     def translation_review_scenario(
         assignment: Literal["none", "target", "failed"] = "none",
         unequal: bool = False,
+        manager: bool = False,
     ) -> dict[str, object]:
         from t1_builders import bundle as variant_bundle
         from t1_builders import native_unit, translation_unit
@@ -730,11 +732,14 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
         }
         accounts = app.state.accounts
         users = {}
-        for name, role in [
+        roles = [
             ("lead", "lead"),
             ("reviewer", "annotator"),
             ("other", "annotator"),
-        ]:
+        ]
+        if manager:
+            roles.extend([("manager", "lead"), ("historian", "annotator")])
+        for name, role in roles:
             username = f"{key}-{name}"
             issued = accounts.create_user(Actor.cli(), username, username)
             accounts.redeem_code(username, issued.code, TEST_PASSWORD)
@@ -770,6 +775,108 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
                 row.document_id: row.translation_status for row in inventory
             },
         }
+
+    app.router.routes.insert(0, app.router.routes.pop())
+
+
+def register_variant_admin_scenario_routes(app: FastAPI) -> None:
+    """Unimported public bytes and exact real-worker child proof; test server only."""
+
+    @app.post("/__test_admin_upload__")
+    def admin_upload() -> dict[str, object]:
+        from t1_builders import bundle as variant_bundle
+        from t1_builders import native_unit, translation_unit
+
+        key = f"admin-upload-{uuid4().hex[:12]}"
+        create_project(app.state.repo.db, key)
+        external = "Dose /5 %é"
+        source = native_unit(external, "en", "Dose 5 mg.", case_id="Public case /7")
+        target = translation_unit(
+            external,
+            "de",
+            "Dosis 5 mg.",
+            source=source,
+            checks=(("units_added", False), ("numbers_changed", True)),
+            provider="Generic browser MT",
+            run_id="admin upload run /1",
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            data = variant_bundle(Path(folder), [source, target]).read_bytes()
+        username = f"{key}-lead"
+        issued = app.state.accounts.create_user(Actor.cli(), username, username)
+        app.state.accounts.redeem_code(username, issued.code, TEST_PASSWORD)
+        app.state.memberships.add(Actor.cli(), key, username, ["lead"])
+        return {
+            "project": key,
+            "username": username,
+            "external_id": external,
+            "filename": "public-variants.zip",
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "base64": base64.b64encode(data).decode("ascii"),
+        }
+
+    app.router.routes.insert(0, app.router.routes.pop())
+
+    @app.get("/__test_review_child__")
+    def review_child(project: str, review_id: int) -> dict[str, object]:
+        from ontocurator.storage.tables import TranslationReviewRow
+
+        db = app.state.repo.db
+        with db.transaction() as conn:
+            record = conn.execute(
+                select(
+                    TranslationReviewRow.document_id,
+                    TranslationReviewRow.created_variant_id,
+                )
+                .join(ProjectRow, TranslationReviewRow.project_id == ProjectRow.id)
+                .where(
+                    ProjectRow.project_key == project,
+                    TranslationReviewRow.id == review_id,
+                )
+            ).one_or_none()
+        if record is None or record.created_variant_id is None:
+            raise HTTPException(404, "No correction for this exact review/project")
+        deadline = monotonic() + 30
+        while True:
+            with db.transaction() as conn:
+                children = [
+                    dict(row)
+                    for row in conn.execute(
+                        select(
+                            JobRow.id,
+                            JobRow.status,
+                            JobRow.error,
+                            JobRow.payload,
+                            JobRow.result,
+                        )
+                        .join(ProjectRow, JobRow.project_id == ProjectRow.id)
+                        .where(
+                            ProjectRow.project_key == project,
+                            JobRow.kind == "reanchor",
+                            JobRow.payload["project"].as_string() == project,
+                            JobRow.payload["producer"]["kind"].as_string() == "review",
+                            JobRow.payload["producer"]["review_id"].as_integer()
+                            == review_id,
+                        )
+                    ).mappings()
+                ]
+            if len(children) > 1 or any(
+                child["status"] == "failed" for child in children
+            ):
+                raise HTTPException(500, {"review_id": review_id, "children": children})
+            if children and children[0]["status"] == "succeeded":
+                payload = children[0]["payload"]
+                if (payload["old_document_id"], payload["new_document_id"]) != (
+                    record.document_id,
+                    record.created_variant_id,
+                ):
+                    raise HTTPException(500, "Review child pair mismatch")
+                return {"review_id": review_id, "children": children}
+            if monotonic() >= deadline:
+                raise HTTPException(
+                    500, {"error": "Review child timeout", "children": children}
+                )
+            sleep(0.05)
 
     app.router.routes.insert(0, app.router.routes.pop())
 
@@ -816,6 +923,7 @@ if __name__ == "__main__":
         register_test_user_route(app, grant_all)
         register_variant_scenario_route(app)
         register_translation_review_scenario_route(app)
+        register_variant_admin_scenario_routes(app)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:
