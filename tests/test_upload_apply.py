@@ -60,5 +60,8 @@ def test_repeated_set_identity_keeps_the_first_planned_add(monkeypatch):
     assert result["sets_added"] == 1
     assert result["sets_skipped"] == 1
     assert result["documents_added"] == result["documents_skipped"] == 1
-    assert calls[0][0][0].payload == aset.model_dump(mode="json")
-    assert [call[1]["source_sha256"] for call in calls] == ["a" * 64, "b" * 64]
+    set_calls = [call for call in calls if call[0]]
+    assert len(set_calls) == 1
+    assert set_calls[0][0][0].payload == aset.model_dump(mode="json")
+    assert set_calls[0][1]["source_sha256"] == "a" * 64
+    assert not calls[-1][0]  # the repeated identity never steals source ownership

@@ -920,6 +920,13 @@ def import_command(
     language: Annotated[
         str | None, typer.Option("--language", help="Language of plain text documents.")
     ] = None,
+    accept_translation: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--accept-translation",
+            help="Accept EXTERNAL_ID:LANG:VERSION=REASON (repeatable; IDs may contain colons). ",
+        ),
+    ] = None,
     no_wait: Annotated[
         bool,
         typer.Option("--no-wait", help="Only queue the job for the server's worker."),
@@ -927,6 +934,12 @@ def import_command(
 ) -> None:
     """Import documents and proposals in the T1 format into a project."""
     from ontocurator.exchange.jobs import store_file
+    from ontocurator.exchange.variant_overrides import parse_overrides
+
+    try:
+        overrides = parse_overrides(accept_translation or [])
+    except DomainError as exc:
+        _fail(exc.code, exc.details)
 
     if path.is_dir():
         data, filename = _zip_directory(path), f"{path.name}.zip"
@@ -943,6 +956,7 @@ def import_command(
                 "filename": filename,
                 "kind": "text" if path.suffix.lower() == ".txt" else "t1",
                 "language": language,
+                "status_overrides": [item.model_dump() for item in overrides],
             },
             wait=not no_wait,
         )

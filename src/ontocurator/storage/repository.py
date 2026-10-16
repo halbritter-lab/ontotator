@@ -934,8 +934,24 @@ class Repository:
                     {
                         "project_id": project_id,
                         "document_id": doc_id,
-                        "case_id": doc_id,
-                        "external_id": doc_id,
+                        "case_id": entry.variant.case_id if entry.variant else doc_id,
+                        "external_id": entry.variant.external_id
+                        if entry.variant
+                        else doc_id,
+                        "version": entry.variant.version if entry.variant else 1,
+                        "origin": entry.variant.origin if entry.variant else "native",
+                        "derived_from": entry.variant.derived_from
+                        if entry.variant
+                        else None,
+                        "translation": entry.variant.translation
+                        if entry.variant
+                        else None,
+                        "translation_status": entry.variant.translation_status
+                        if entry.variant
+                        else None,
+                        "status_reason": entry.variant.status_reason
+                        if entry.variant
+                        else None,
                         "position": position,
                         "language": entry.document.language,
                         "text": entry.document.text,
@@ -1038,6 +1054,7 @@ class Repository:
                 raise DomainError(
                     "PACKAGE_NOT_FOUND", f"No package found for package '{project_key}'"
                 )
+            variants = {v.document_id: v for v in self._variants(project_key)}
             documents = {
                 row.document_id: ImportedDocument(
                     Document(
@@ -1047,6 +1064,7 @@ class Repository:
                         text_sha256=row.text_sha256,
                     ),
                     row.source_text_sha256,
+                    variants[row.document_id],
                 )
                 for row in conn.execute(
                     select(

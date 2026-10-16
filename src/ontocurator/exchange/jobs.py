@@ -181,6 +181,16 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     layers = layers_for(content.profile, content.pins)
     units: list[ontospan.AnnotatedDocument] = []
     counts: ExportCounts = {"rejected": 0, "uncertain": 0, "defaulted_axes": 0}
+    source_variant_hashes = {
+        doc_id: entry.document.text_sha256
+        for doc_id, entry in content.documents.items()
+    }
+    case_sizes: dict[str, int] = {}
+    for entry in content.documents.values():
+        if entry.variant is not None:
+            case_sizes[entry.variant.case_id] = (
+                case_sizes.get(entry.variant.case_id, 0) + 1
+            )
     for submission in content.submissions:
         key = submission.origin_key
         stored = content.documents[key.document_id]
@@ -193,6 +203,10 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             set_id=f"{project}:{key.annotator_id}:{key.mode}:{submission.submission_id}",
             source_text_sha256=stored.source_text_sha256,
             guideline_ref=content.guideline_ref,
+            variant=stored.variant,
+            source_variant_hashes=source_variant_hashes,
+            single_native_case=stored.variant is None
+            or case_sizes[stored.variant.case_id] == 1,
         )
         units.append(unit)
         for name in counts:

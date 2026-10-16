@@ -1231,6 +1231,8 @@ export interface components {
         CommitUpload: {
             /** Plan Sha256 */
             plan_sha256: string;
+            /** Status Overrides */
+            status_overrides?: components["schemas"]["StatusOverride"][];
         };
         /** CreateProjectRequest */
         CreateProjectRequest: {
@@ -1435,6 +1437,13 @@ export interface components {
         };
         /** ImportPlan */
         ImportPlan: {
+            /** Variants */
+            variants?: components["schemas"]["PlannedVariant"][];
+            /**
+             * Input Sha256
+             * @default
+             */
+            input_sha256: string;
             /** Documents */
             documents?: components["schemas"]["PlannedDocument"][];
             /** Duplicates */
@@ -1884,6 +1893,38 @@ export interface components {
              * @enum {string}
              */
             action: "add" | "already_imported";
+        };
+        /** PlannedVariant */
+        PlannedVariant: {
+            /** Document Id */
+            document_id: string;
+            /** External Id */
+            external_id: string;
+            /** Language */
+            language: string;
+            /** Case Id */
+            case_id: string;
+            /** Version */
+            version: number;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "native" | "machine_translation" | "human_translation" | "correction";
+            /** Derived From */
+            derived_from: string | null;
+            /** Derived In Upload */
+            derived_in_upload: boolean;
+            /** Translation */
+            translation: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
+            /** Failed Checks */
+            failed_checks: string[];
+            /** Status Reason */
+            status_reason?: string | null;
         };
         /**
          * Preferences
@@ -2511,6 +2552,17 @@ export interface components {
             start: number;
             /** End */
             end: number;
+        };
+        /** StatusOverride */
+        StatusOverride: {
+            /** External Id */
+            external_id: string;
+            /** Language */
+            language: string;
+            /** Version */
+            version: number;
+            /** Reason */
+            reason: string;
         };
         /**
          * Submission

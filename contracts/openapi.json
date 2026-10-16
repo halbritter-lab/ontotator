@@ -3262,6 +3262,13 @@
           "plan_sha256": {
             "type": "string",
             "title": "Plan Sha256"
+          },
+          "status_overrides": {
+            "items": {
+              "$ref": "#/components/schemas/StatusOverride"
+            },
+            "type": "array",
+            "title": "Status Overrides"
           }
         },
         "additionalProperties": false,
@@ -3785,6 +3792,18 @@
       },
       "ImportPlan": {
         "properties": {
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedVariant"
+            },
+            "type": "array",
+            "title": "Variants"
+          },
+          "input_sha256": {
+            "type": "string",
+            "title": "Input Sha256",
+            "default": ""
+          },
           "documents": {
             "items": {
               "$ref": "#/components/schemas/PlannedDocument"
@@ -4762,6 +4781,118 @@
           "action"
         ],
         "title": "PlannedSet"
+      },
+      "PlannedVariant": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "native",
+              "machine_translation",
+              "human_translation",
+              "correction"
+            ],
+            "title": "Origin"
+          },
+          "derived_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived From"
+          },
+          "derived_in_upload": {
+            "type": "boolean",
+            "title": "Derived In Upload"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translated",
+                  "automatic_check_failed",
+                  "ready_for_review",
+                  "reviewed",
+                  "accepted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "failed_checks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Failed Checks"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "external_id",
+          "language",
+          "case_id",
+          "version",
+          "origin",
+          "derived_from",
+          "derived_in_upload",
+          "translation",
+          "status",
+          "failed_checks"
+        ],
+        "title": "PlannedVariant"
       },
       "Preferences": {
         "properties": {
@@ -6335,6 +6466,36 @@
         ],
         "title": "Segment",
         "description": "Zero-based Unicode codepoint interval [start, end)."
+      },
+      "StatusOverride": {
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "external_id",
+          "language",
+          "version",
+          "reason"
+        ],
+        "title": "StatusOverride"
       },
       "Submission": {
         "properties": {

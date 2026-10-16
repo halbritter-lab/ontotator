@@ -18,11 +18,11 @@ from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile
 from ontocurator.domain.project_rules import ProjectRules
+from ontocurator.domain.variants import VariantInfo
 from ontocurator.exchange.plan import (
     ImportPlan,
     IncomingUnit,
     Issue,
-    PlannedDocument,
     PlannedSet,
     ProjectImportState,
     plan_import,
@@ -30,6 +30,12 @@ from ontocurator.exchange.plan import (
 )
 from ontocurator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet
 from ontocurator.exchange.text import read_text_upload
+from ontocurator.exchange.variant_overrides import (
+    StatusOverride,
+    normalize_overrides,
+    validate_targets,
+)
+from ontocurator.exchange.variant_plan import identity
 from ontocurator.jobs.queue import Job, JobContext, JobQueue
 from ontocurator.projects.runtime import project_state, require_state
 from ontocurator.storage.database import Database
@@ -181,9 +187,19 @@ def prepare_plan(
         ).tuples()
     )
     context = canonical_hash(
-        {"structure": project_state(conn, key), "languages": row.languages}
+        {
+            "structure": project_state(conn, key),
+            "languages": row.languages,
+            "annotate_accepted_translations_only": row.annotate_accepted_translations_only,
+        }
     )
-    state = ProjectImportState(documents, texts, sets, context)
+    state = ProjectImportState(
+        documents,
+        texts,
+        sets,
+        context,
+        {v.document_id: v for v in Repository(db).list_variants(key)},
+    )
     return (
         plan_import(
             [u for _, us in sources for u in us],
@@ -219,57 +235,80 @@ def apply_plan(
                 "issues": [i.model_dump() for i in plan.errors],
             },
         )
-    counts: ImportCounts = {
-        "documents_added": plan.counts["documents_added"],
-        "documents_skipped": plan.counts["documents_skipped"],
-        "documents_only": plan.counts["documents_only"],
-        "sets_added": plan.counts["sets_added"],
-        "sets_skipped": plan.counts["sets_skipped"],
-        "proposals": plan.counts["proposals"],
+    variants = {(v.external_id, v.language, v.version): v for v in plan.variants}
+    occurrences = [(sha, unit) for sha, units in sources for unit in units]
+    # One physical row per logical identity, in the planner's stable topology.
+    incoming = {
+        variants[identity(unit)].document_id: unit
+        for _, unit in sorted(
+            occurrences, key=lambda entry: entry[1].label, reverse=True
+        )
     }
+    documents = []
+    for variant in plan.variants:
+        unit = incoming[variant.document_id]
+        documents.append(
+            ImportedDocument(
+                unit.document.model_copy(update={"document_id": variant.document_id}),
+                unit.source_text_sha256,
+                VariantInfo(
+                    variant.document_id,
+                    variant.case_id,
+                    variant.external_id,
+                    variant.language,
+                    variant.version,
+                    variant.origin,
+                    variant.derived_from,
+                    variant.translation,
+                    variant.status,
+                    variant.status_reason,
+                    unit.document.text_sha256,
+                ),
+            )
+        )
+    repo = Repository(db)
+    counts = repo.add_documents_and_proposals(
+        project,
+        documents,
+        [],
+        source_sha256=sources[0][0] if sources else "",
+        imported_by=actor.user_id,
+        job_id=job_id,
+    )
+    counts["documents_skipped"] = (
+        sum(len({identity(unit) for unit in units}) for _, units in sources)
+        - counts["documents_added"]
+    )
+    counts["documents_only"] = len(plan.documents_only)
+    counts["sets_added"] = counts["sets_skipped"] = counts["proposals"] = 0
     planned: dict[tuple[str | None, str, str], PlannedSet] = {}
     for item in plan.proposal_sets:
         planned.setdefault(
             (item.bundle_id, item.annotation_set_id, item.document_id), item
         )
-    # For an equal identity the planner orders by label, then its stable input
-    # order. Keep that exact occurrence attached to its original source blob.
     owners: dict[tuple[str | None, str, str], tuple[str, int, int]] = {}
     for source_index, (_, units) in enumerate(sources):
         for unit_index, unit in enumerate(units):
-            if unit.set is None:
-                continue
-            identity = (
-                unit.bundle_id,
-                unit.set.annotation_set_id,
-                unit.document.document_id,
-            )
-            candidate = (unit.label, source_index, unit_index)
-            if identity not in owners or candidate < owners[identity]:
-                owners[identity] = candidate
-    canonical_documents: dict[str, PlannedDocument] = {}
-    for document in plan.documents:
-        canonical_documents.setdefault(document.document_id, document)
-    seen: set[tuple[str | None, str, str]] = set()
-    actual = {"documents_added": 0, "sets_added": 0, "proposals": 0}
+            if unit.set is not None:
+                variant = variants[identity(unit)]
+                key = (unit.bundle_id, unit.set.annotation_set_id, variant.document_id)
+                candidate = (unit.label, source_index, unit_index)
+                if key not in owners or candidate < owners[key]:
+                    owners[key] = candidate
     for source_index, (sha, units) in enumerate(sources):
         sets = []
         for unit_index, unit in enumerate(units):
             if unit.set is None:
                 continue
-            identity = (
-                unit.bundle_id,
-                unit.set.annotation_set_id,
-                unit.document.document_id,
-            )
-            item = planned[identity]
-            if (
-                identity in seen
-                or item.action != "add"
-                or owners[identity][1:] != (source_index, unit_index)
-            ):
+            variant = variants[identity(unit)]
+            key = (unit.bundle_id, unit.set.annotation_set_id, variant.document_id)
+            item = planned[key]
+            if owners[key][1:] != (source_index, unit_index):
+                counts["sets_skipped"] += 1
                 continue
-            seen.add(identity)
+            if item.action != "add":
+                counts["sets_skipped"] += 1
+                continue
             sets.append(
                 ImportedSet(
                     item.document_id,
@@ -282,31 +321,76 @@ def apply_plan(
                     item.proposals,
                 )
             )
-        result = Repository(db).add_documents_and_proposals(
+        result = repo.add_documents_and_proposals(
             project,
-            [
-                ImportedDocument(
-                    unit.document.model_copy(
-                        update={
-                            "language": canonical_documents[
-                                unit.document.document_id
-                            ].language
-                        }
-                    ),
-                    canonical_documents[unit.document.document_id].source_text_sha256,
-                )
-                for unit in units
-            ],
+            [],
             sets,
             source_sha256=sha,
             imported_by=actor.user_id,
             job_id=job_id,
         )
-        for name in actual:
-            actual[name] += result[name]  # type: ignore[literal-required]
-    for name, value in actual.items():
-        counts[name] = value  # type: ignore[literal-required]
+        for name in ("sets_added", "sets_skipped", "proposals"):
+            counts[name] += result[name]
+    # Task7 will enqueue its real handler atomically here. The immutable
+    # variant.derived_from/document_id pair preserves its old/new job IDs.
     return counts
+
+
+def _overrides(
+    conn: Connection,
+    actor: Actor,
+    key: str,
+    project_id: int,
+    plan: ImportPlan,
+    values: Sequence[StatusOverride | dict[str, Any]],
+) -> dict[str, str]:
+    normalized = normalize_overrides(values)
+    if normalized:
+        if actor.user_id is None and not actor.label.startswith("cli:"):
+            raise DomainError(
+                "NOT_ALLOWED",
+                "Only the explicit CLI operator may override without a user",
+            )
+        require_project_management(
+            conn, actor, key, project_id, Action.OVERRIDE_TRANSLATION_STATUS
+        )
+    return validate_targets(plan, normalized)
+
+
+def _apply_overrides(
+    conn: Connection,
+    actor: Actor,
+    project_id: int,
+    plan: ImportPlan,
+    accepted: dict[str, str],
+) -> None:
+    variants = {v.document_id: v for v in plan.variants}
+    for document_id, reason in accepted.items():
+        previous = variants[document_id]
+        if previous.status == "accepted" and previous.status_reason == reason:
+            continue
+        conn.execute(
+            update(DocumentRow)
+            .where(
+                DocumentRow.project_id == project_id,
+                DocumentRow.document_id == document_id,
+            )
+            .values(translation_status="accepted", status_reason=reason)
+        )
+        record_audit(
+            conn,
+            actor,
+            "variant.status_override",
+            target_type="document",
+            target_id=document_id,
+            project_id=project_id,
+            details={
+                "document_id": document_id,
+                "from": previous.status,
+                "to": "accepted",
+                "reason": reason,
+            },
+        )
 
 
 def _summary(
@@ -364,7 +448,11 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
         plan, sources = prepare_plan(
             db, conn, key, project_id, kind, language, files, prepared=prepared
         )
+        accepted = _overrides(
+            conn, actor, key, project_id, plan, job.payload.get("status_overrides", [])
+        )
         counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
+        _apply_overrides(conn, actor, project_id, plan, accepted)
         summary = _summary(plan, sources, counts)
         record_audit(
             conn,
@@ -410,7 +498,16 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                     raise DomainError(
                         "UPLOAD_STALE", "Project changed since preview; upload again."
                     )
+                accepted = _overrides(
+                    conn,
+                    actor,
+                    key,
+                    project_id,
+                    plan,
+                    job.payload.get("status_overrides", []),
+                )
                 counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
+                _apply_overrides(conn, actor, project_id, plan, accepted)
                 result = _summary(plan, sources, counts)
                 values: dict[str, Any] = {"status": "committed"}
             else:
@@ -547,17 +644,37 @@ class UploadService:
             raise DomainError("UPLOAD_NOT_FOUND", "Upload not found.")
         return row
 
-    def commit(self, key: str, upload_id: int, digest: str) -> dict[str, int]:
+    def commit(
+        self,
+        key: str,
+        upload_id: int,
+        digest: str,
+        status_overrides: Sequence[StatusOverride] = (),
+    ) -> dict[str, int]:
+        normalized = normalize_overrides(status_overrides)
         with self.db.transaction() as conn:
-            project_id = self._project(conn, key)
+            project_id = lock_import(conn, key, self.actor)
             row = self._row(conn, project_id, upload_id)
             if row.status != "ready" or row.plan_sha256 != digest:
                 raise DomainError(
                     "UPLOAD_STALE", "Upload is not ready or the plan hash changed."
                 )
+            if normalized:
+                plan, _ = prepare_plan(
+                    self.db, conn, key, project_id, row.kind, row.language, row.files
+                )
+                if plan.plan_sha256 != digest:
+                    raise DomainError(
+                        "UPLOAD_STALE", "Project changed since preview; upload again."
+                    )
+                _overrides(conn, self.actor, key, project_id, plan, normalized)
             job_id = self.queue.enqueue(
                 "upload_commit",
-                {"project": key, "upload_id": upload_id},
+                {
+                    "project": key,
+                    "upload_id": upload_id,
+                    "status_overrides": [item.model_dump() for item in normalized],
+                },
                 project_id=project_id,
                 actor=self.actor,
             )

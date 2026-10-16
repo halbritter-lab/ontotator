@@ -6,7 +6,7 @@ import hashlib
 import re
 import zipfile
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -22,6 +22,7 @@ from ontocurator.domain.project_rules import (
     RuleViolation,
     rule_violations,
 )
+from ontocurator.domain.variants import VariantInfo
 from ontocurator.exchange.t1 import (
     ImportedProposals,
     Pin,
@@ -29,6 +30,12 @@ from ontocurator.exchange.t1 import (
     document_from_unit,
     pin_differences,
     unit_to_proposals,
+)
+from ontocurator.exchange.variant_plan import (
+    PlannedVariant,
+    identity,
+    metadata,
+    resolve_variants,
 )
 
 
@@ -60,6 +67,9 @@ class IncomingUnit:
     set: IncomingSet | None = None
     # Also retained for empty sets, whose documents-only import has no set.
     source_actors: tuple[dict[str, Any], ...] = ()
+    case_id: str | None = None
+    variant: ontospan.Variant | None = None
+    translation: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +79,7 @@ class ProjectImportState:
     sets: frozenset[tuple[str | None, str, str]] = frozenset()
     # Caller fingerprints fresh pins/roots/settings not already in profile/rules.
     context_sha256: str = ""
+    variants: Mapping[str, VariantInfo] = field(default_factory=dict)
 
 
 class PlannedDocument(BaseModel):
@@ -107,6 +118,8 @@ class PlannedSet(BaseModel):
 
 
 class ImportPlan(BaseModel):
+    variants: list[PlannedVariant] = Field(default_factory=list)
+    input_sha256: str = ""
     documents: list[PlannedDocument] = Field(default_factory=list)
     duplicates: list[Duplicate] = Field(default_factory=list)
     collisions: list[Collision] = Field(default_factory=list)
@@ -234,6 +247,11 @@ def read_t1_upload(
                 manifest_sha256,
                 incoming_set,
                 tuple(a.model_dump(mode="json") for a in aset.actors),
+                raw.document.case_id,
+                raw.document.variant,
+                raw.document.translation.model_dump(mode="json")
+                if raw.document.translation
+                else None,
             )
         )
     return result, issues
@@ -245,6 +263,9 @@ def _state_hash(
     return canonical_hash(
         {
             "documents": dict(state.documents),
+            "variants": {
+                key: asdict(value) for key, value in sorted(state.variants.items())
+            },
             "texts": {sha: sorted(set(ids)) for sha, ids in state.texts.items()},
             "sets": sorted(
                 state.sets,
@@ -275,6 +296,64 @@ def plan_import(
     plan = ImportPlan(state_sha256=_state_hash(state, profile, rules))
     for issue in reader_issues:
         (plan.errors if issue.severity == "error" else plan.warnings).append(issue)
+    variants, internal_ids, variant_issues = resolve_variants(
+        units, state.variants, state.documents
+    )
+    plan.variants = variants
+    plan.input_sha256 = canonical_hash(
+        sorted(
+            [
+                {
+                    "label": u.label,
+                    "identity": identity(u),
+                    "text_sha256": u.document.text_sha256,
+                    "source_text_sha256": u.source_text_sha256,
+                    "source_actors": u.source_actors,
+                    "bundle_id": u.bundle_id,
+                    "manifest_sha256": u.manifest_sha256,
+                    **metadata(u),
+                }
+                for u in units
+            ],
+            key=canonical_hash,
+        )
+    )
+    for code, label, message in variant_issues:
+        plan.errors.append(Issue(code=code, unit=label, message=message))
+    for unit in units:
+        if (
+            identity(unit) not in internal_ids
+            and unit.document.document_id in state.documents
+            and state.documents[unit.document.document_id] != unit.document.text_sha256
+        ):
+            plan.collisions.append(
+                Collision(
+                    document_id=unit.document.document_id,
+                    existing_sha256=state.documents[unit.document.document_id],
+                    new_sha256=unit.document.text_sha256,
+                )
+            )
+    remapped = []
+    order = {variant.document_id: index for index, variant in enumerate(variants)}
+    for unit in units:
+        target_id = internal_ids.get(identity(unit))
+        if target_id is None:
+            continue
+        doc = unit.document.model_copy(update={"document_id": target_id})
+        aset = unit.set
+        if aset is not None and target_id != unit.document.document_id:
+            raw = ontospan.AnnotatedDocument(
+                document=ontospan.Document.model_validate(unit.document.model_dump()),
+                annotation_set=ontospan.AnnotationSet.model_validate(aset.payload),
+            )
+            aset = replace(
+                aset,
+                proposals=unit_to_proposals(
+                    raw, profile, doc, bundle_id=unit.bundle_id
+                ),
+            )
+        remapped.append(replace(unit, document=doc, set=aset))
+    units = remapped
     documents = dict(state.documents)
     texts = {sha: set(ids) for sha, ids in state.texts.items()}
     for doc_id, sha in state.documents.items():
@@ -287,7 +366,7 @@ def plan_import(
     for unit in sorted(
         units,
         key=lambda u: (
-            u.document.document_id,
+            order[u.document.document_id],
             u.bundle_id or "",
             u.set.annotation_set_id if u.set else "",
             u.label,

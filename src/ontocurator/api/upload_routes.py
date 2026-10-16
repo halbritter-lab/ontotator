@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from ontocurator.api.identity import PrincipalDep
@@ -16,6 +16,7 @@ from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import PayloadTooLarge
 from ontocurator.exchange.jobs import store_file
 from ontocurator.exchange.uploads import UploadFileInfo, UploadService, UploadView
+from ontocurator.exchange.variant_overrides import StatusOverride
 
 router = APIRouter(prefix="/api/v1/projects/{key}", tags=["uploads"])
 
@@ -28,6 +29,7 @@ class UploadCreated(BaseModel):
 class CommitUpload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     plan_sha256: str
+    status_overrides: list[StatusOverride] = Field(default_factory=list)
 
 
 class ProposalSetView(BaseModel):
@@ -114,7 +116,9 @@ def commit_upload(
 ) -> UploadCreated:
     _guard(request, Action.IMPORT_DOCUMENTS, key)
     return UploadCreated(
-        **_service(request, principal).commit(key, upload_id, body.plan_sha256)
+        **_service(request, principal).commit(
+            key, upload_id, body.plan_sha256, body.status_overrides
+        )
     )
 
 

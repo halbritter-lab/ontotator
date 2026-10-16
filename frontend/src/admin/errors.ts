@@ -2,6 +2,13 @@ import { ApiError } from "../api/client";
 
 /** Coverage is checked against the committed backend administration catalog. */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
+  OVERRIDE_NOT_APPLICABLE: "The override must name one translation variant in this import.",
+  OVERRIDE_REASON_REQUIRED: "Accepting a translation requires a reason.",
+  VARIANT_CASE_MISMATCH: "The variant and its source must belong to the same case.",
+  VARIANT_ID_COLLISION: "The variant ID is already in use.",
+  VARIANT_SOURCE_AMBIGUOUS: "Several source variants match. Supply the case identity.",
+  VARIANT_SOURCE_UNKNOWN: "The source variant was not found in this project or upload.",
+  VARIANT_VERSION_INVALID: "A correction must follow the preceding version of the same text and language.",
   PASSWORD_WRONG: "The current password is wrong.",
   NOT_AUTHENTICATED: "Your session has ended. Please log in again.",
   NOT_ALLOWED: "You do not have permission to do this.",

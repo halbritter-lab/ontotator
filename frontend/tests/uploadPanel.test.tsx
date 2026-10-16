@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ConflictError, type ImportPlan, type UploadView } from "../src/api/client";
 import { UploadPanel } from "../src/admin/UploadPanel";
 import { UploadPreview } from "../src/admin/UploadPreview";
-const plan: ImportPlan = {
+const plan: ImportPlan = { input_sha256: "input-hash",
   documents: [], duplicates: [], collisions: [], proposal_sets: [], documents_only: ["doc"], normalised_count: 1,
   errors: [], warnings: [], counts: { documents_added: 8, documents_skipped: 2, documents_only: 1, sets_added: 2, proposals: 99 },
   state_sha256: "state", plan_sha256: "real-plan", committable: true,

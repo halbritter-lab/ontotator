@@ -40,6 +40,7 @@ from ontocurator.domain.profiles import (
     resolve_type,
 )
 from ontocurator.domain.review import ReviewDecision
+from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import Submission
 
 T1Profile = Literal["generic", "hpo-phenotype"]
@@ -78,6 +79,7 @@ class ImportedDocument:
 
     document: Document
     source_text_sha256: str | None = None
+    variant: VariantInfo | None = None
 
 
 @dataclass(frozen=True)
@@ -525,6 +527,9 @@ def submission_to_unit(
     set_id: str,
     source_text_sha256: str | None = None,
     guideline_ref: str | None = None,
+    variant: VariantInfo | None = None,
+    source_variant_hashes: Mapping[str, str] | None = None,
+    single_native_case: bool = True,
 ) -> tuple[ontospan.AnnotatedDocument, ExportCounts]:
     """One ``individual`` set with the annotator's resulting annotations (Q12).
 
@@ -599,12 +604,12 @@ def submission_to_unit(
         )
 
     unit = ontospan.AnnotatedDocument(
-        document=ontospan.Document(
-            document_id=document.document_id,
-            language=document.language,
-            text=document.text,
-            text_sha256=document.text_sha256,
+        document=document_to_t1(
+            document,
+            variant,
+            source_variant_hashes or {},
             source_text_sha256=source_text_sha256,
+            single_native_case=single_native_case,
         ),
         annotation_set=ontospan.AnnotationSet(
             annotation_set_id=set_id,
@@ -619,3 +624,53 @@ def submission_to_unit(
         ),
     )
     return unit, counts
+
+
+def document_to_t1(
+    document: Document,
+    variant: VariantInfo | None,
+    source_variant_hashes: Mapping[str, str],
+    *,
+    source_text_sha256: str | None = None,
+    single_native_case: bool = True,
+) -> ontospan.Document:
+    """Export external identity and ancestry from one coherent project snapshot."""
+    extra: dict[str, Any] = {}
+    plain_native = (
+        variant is not None
+        and single_native_case
+        and variant.origin == "native"
+        and variant.version == 1
+    )
+    if plain_native and variant is not None:
+        if variant.case_id != variant.external_id:
+            extra["case_id"] = variant.case_id
+    elif variant is not None:
+        if (
+            variant.derived_from is not None
+            and variant.derived_from not in source_variant_hashes
+        ):
+            raise DomainError(
+                "VARIANT_SOURCE_UNKNOWN", "Export source variant is unavailable"
+            )
+        extra = {
+            "case_id": variant.case_id,
+            "variant": ontospan.Variant(
+                version=variant.version,
+                origin=variant.origin,
+                derived_from=source_variant_hashes[variant.derived_from]
+                if variant.derived_from
+                else None,
+            ),
+            "translation": ontospan.Translation.model_validate(variant.translation)
+            if variant.translation is not None
+            else None,
+        }
+    return ontospan.Document(
+        document_id=variant.external_id if variant else document.document_id,
+        language=document.language,
+        text=document.text,
+        text_sha256=document.text_sha256,
+        source_text_sha256=source_text_sha256,
+        **extra,
+    )
