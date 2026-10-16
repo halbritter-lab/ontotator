@@ -26,10 +26,11 @@ it("uses the assigned task list, cleans old identity preferences and routes thro
   expect(localStorage.getItem("ontocurator.annotatorId")).toBeNull();
   expect(localStorage.getItem("ontocurator.mode.pkg")).toBeNull();
   expect(preferences).not.toHaveBeenCalled();
+  vi.spyOn(api, "adminListUsers").mockResolvedValue([]);
   clickSection("Users");
   await waitFor(() => expect(window.location.hash).toBe("#/admin/users"));
   expect(screen.getAllByRole("banner")).toHaveLength(1);
-  expect(screen.getByText(/not available yet/i)).toBeDefined();
+  expect(await screen.findByRole("heading", { name: "Users" })).toBeDefined();
 });
 
 function editorServer() {

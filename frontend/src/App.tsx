@@ -7,6 +7,11 @@ import { parseRoute, routeHref, type Route, type RouteLeaveGuard } from "./app/r
 import { MyTasks } from "./tasks/MyTasks";
 import { ProfilePage } from "./me/ProfilePage";
 import { ErrorNotice } from "./admin/ErrorNotice";
+import { UsersPage } from "./admin/UsersPage";
+import { OntologiesPage } from "./admin/OntologiesPage";
+import { ProjectNewPage } from "./admin/ProjectNewPage";
+import { ProjectSettingsPage } from "./admin/ProjectSettingsPage";
+import { DocumentsPage } from "./admin/DocumentsPage";
 import { Button, EmptyState, InlineMessage } from "./ui";
 
 export interface AppProps { user?: CurrentUser | null; onLogout?: () => void }
@@ -157,13 +162,22 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const go = (next: Route) => { void requestRoute(next); };
   const logout = () => {
     const proceed = () => onLogout?.();
-    if (logoutGuardRef.current) logoutGuardRef.current(proceed); else proceed();
+    if (logoutGuardRef.current) logoutGuardRef.current(proceed);
+    else void (routeLeaveRef.current?.() ?? Promise.resolve(true)).then(allowed => {
+      if (allowed && alive.current) proceed();
+    });
   };
   let content: JSX.Element;
   switch (route.name) {
     case "tasks": content = <MyTasks project={route.project} projects={projects} onNavigate={go} />; break;
     case "task": content = <TaskEditor key={route.assignmentId} assignmentId={route.assignmentId}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
+    case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
+    case "adminOntologies": content = <OntologiesPage onNavigate={go} />; break;
+    case "projectNew": content = <ProjectNewPage onNavigate={next => { setRetry(value => value + 1); go(next); }} />; break;
+    case "projectSettings": content = <ProjectSettingsPage projectKey={route.key} currentUser={user}
+      onSaved={() => setRetry(value => value + 1)} />; break;
+    case "projectDocuments": content = <DocumentsPage projectKey={route.key} query={route} onNavigate={go} />; break;
     case "me": content = <ProfilePage onSaved={setSavedIdentity} />; break;
     case "notFound": content = <NotFound onNavigate={go} />; break;
     default: content = <EmptyState title="This page is not available yet.">This section is planned for a later step.</EmptyState>;
