@@ -1,10 +1,10 @@
 # Implementation status
 
-Status after final T3a/T3b acceptance and complete T5 Part1 verification at
-`b8d48b1` on 2026-10-16. The administration backend and UI are complete.
-User-authorized local main integration contains stable proof `b9544a6`;
-final gated T5 will follow before functional interim acceptance. No remote push
-or deployment has occurred.
+Status on 2026-10-16 after completed T5 implementation and functional interim
+verification. Local main contains runtime e72e2fa; the final acceptance proof is
+documentation only. The persistent synthetic demo is available for user
+acceptance; see the [local guide](../../operations/t5-interim-acceptance.md).
+No remote push or production deployment has occurred.
 
 - [x] Ontospan format 1.1: variant/translation/release schemas available; dependency pinned to `4105ec1`.
 - [x] T2a: PostgreSQL persistence and migrations.
@@ -16,7 +16,7 @@ or deployment has occurred.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
 - [x] T3a: all 10 administration-backend tasks, independent reviews and final backend/frontend/browser/container acceptance; see the [final record](2026-10-16-t3a-final-review.md).
 - [x] T3b: all11 administration-UI tasks, independent reviews, 828 frontend/1594 backend tests, all43 browser cases, matching image/assets and complete container/real-stack gate passed; see the [final record](2026-10-16-t3b-final-review.md).
-- [ ] T5: Tasks1–14 and the complete Part1 normal gate are accepted. The Part1 gate has 828 frontend, 2003 backend with one POSIX skip, and all43 existing browser cases passing. Subsequent work has separate focused and actual browser evidence: the combined comparison/review invocation passes all9 selected cases; administration has three unique journeys passing across the initial and failed-only runs; pending/provenance has four unique journeys passing across initial and changed-case runs. Final Task15 integrated/package/demo acceptance remains pending. See the [gate record](2026-10-16-t5-review-export-review.md), [version viewer](2026-10-16-t5-version-viewer-review.md), [comparison](2026-10-16-t5-comparison-review.md), [translation review UI](2026-10-16-t5-translation-review-ui-review.md), [variant administration](2026-10-16-t5-variant-administration-review.md) and [pending/provenance](2026-10-16-t5-pending-provenance-review.md).
+- [x] T5: all15 tasks accepted for functional interim review. Complete frontend1188 passed; backend2055 passed with one POSIX skip at unchanged backend source; all74 unique browser cases passed across the full run and one same-source infrastructure retry. Final image, nine container checks, real stack smoke, separate packaged correction/reanchor/export validation and stop/restart persistence passed. Two review tasks and one annotation task remain OPEN for the user. See the [final verification](2026-10-16-t5-final-review.md) and [acceptance guide](../../operations/t5-interim-acceptance.md).
 - [ ] T4a: workflows and stage tasks.
 - [ ] T4b: adjudication, releases and comments.
 - [ ] T6b: subsequent UX simplification and screen decomposition.
