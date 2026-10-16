@@ -4,6 +4,23 @@ import type { components } from '../src/api/generated';
 import { authenticatedRequest, loginExisting, mentionWithOffsets } from './helpers';
 
 test.setTimeout(90_000);
+async function recordGeometry(page: Page, label: string) {
+  const data = await page.evaluate(() => ({
+    viewport: { width: innerWidth, height: innerHeight },
+    surfaces: [...document.querySelectorAll('.text-container, .compare-controls, .pane-toolbar, .sidebar, .inspector-pane, .tree-host')].map(element => ({
+      className: element.className, rect: element.getBoundingClientRect().toJSON(),
+      scrollTop: element.scrollTop, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight,
+    })),
+    selection: window.getSelection()?.toString(),
+  }));
+  await test.info().attach(label, { body: Buffer.from(JSON.stringify(data)), contentType: 'application/json' });
+}
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus && !page.isClosed()) {
+    await recordGeometry(page, 'failure-geometry-selection');
+    await info.attach('failure-viewport', { body: await page.screenshot(), contentType: 'image/png' });
+  }
+});
 type Ref = components['schemas']['VersionRef'];
 type Workspace = components['schemas']['AssignmentOpenResponse'];
 type Scenario = {
@@ -34,8 +51,16 @@ async function scenario(page: Page): Promise<Scenario> {
 }
 async function openViewer(page: Page, s: Scenario, doc = s.documents.target) {
   await page.goto(caseUrl(s, doc));
-  await expect(page.getByRole('region', { name: 'Case viewer' })).toBeVisible();
+  const viewer = page.getByRole('region', { name: 'Case viewer' });
+  await expect(viewer).toBeVisible();
+  await expect(viewer.locator(':scope > .variant-selectors').getByLabel('Text version', { exact: true })).toHaveValue(doc);
   await expect(viewerLeft(page)).toBeVisible();
+}
+async function readyEditor(page: Page, s: Scenario) {
+  await expect(page.locator('.case-version-controls')).toBeVisible();
+  await expect(page.locator('.case-version-controls').getByLabel('Text version', { exact: true })).toHaveValue(s.documents.target);
+  await expect(page.locator('.status-badge')).toContainText('Saved');
+  await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
 }
 async function openComparison(page: Page, s: Scenario) {
   await page.getByRole('button', { name: 'Compare', exact: true }).click();
@@ -143,6 +168,7 @@ test('real wrapping aligns equal paragraphs in both directions without changing 
   expect(Math.abs(await left.evaluate(element => element.scrollTop) - stable)).toBeLessThanOrEqual(2);
   await exactText(left, s.texts.target); await exactText(right, s.texts.source);
   // A correction compares with the original English source, not its German predecessor.
+  await comparison(page).getByRole('button', { name: 'Close comparison', exact: true }).click();
   await openViewer(page, s, s.documents.corrected); await openComparison(page, s);
 });
 
@@ -167,6 +193,7 @@ test('unequal counts map proportionally, toggle off and below1100 suspend coupli
   await scrollParagraph(left, 4);
   expect(Math.abs(await right.evaluate(element => element.scrollTop) - uncoupled)).toBeLessThanOrEqual(1);
   await expect(pane.getByLabel('Couple scrolling', { exact: true })).toBeChecked();
+  await recordGeometry(page, 'below1100-stack');
   const boxes = await Promise.all([left.boundingBox(), right.boundingBox()]);
   expect(boxes[0]!.x).toBeCloseTo(boxes[1]!.x, 0); expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y + boxes[0]!.height);
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -183,6 +210,7 @@ test('open editor has two equal reading surfaces and reachable lower controls; c
   const original = await editorLeft(page).elementHandle();
   await page.getByRole('button', { name: 'Compare', exact: true }).click();
   await expect(rightText(page)).toHaveText(s.texts.source); await page.evaluate(() => document.fonts.ready);
+  await recordGeometry(page, 'wide-reading-pair');
   const left = await editorLeft(page).boundingBox(), right = await rightText(page).boundingBox();
   expect(left).not.toBeNull(); expect(right).not.toBeNull();
   expect(Math.abs(left!.width - right!.width)).toBeLessThanOrEqual(2);
@@ -208,11 +236,14 @@ test('open editor has two equal reading surfaces and reachable lower controls; c
 test('Unicode mouse and native keyboard selections and edge resize keep exact codepoint offsets through marker redraws', async ({ page }) => {
   const s = await scenario(page); await loginExisting(page, s.users.alice);
   await page.goto(`/#/tasks/${s.assignments.alice}`); await expect(editorLeft(page)).toHaveText(s.texts.target);
-  const text = s.texts.target, start16 = text.indexOf('😀'), start = Array.from(text.slice(0, start16)).length;
+  await readyEditor(page, s);
+  const text = s.texts.target, start16 = text.indexOf('Ã°Å¸Ëœâ‚¬'), start = Array.from(text.slice(0, start16)).length;
   const from = await characterPoint(editorLeft(page), start16);
-  const to = await characterPoint(editorLeft(page), start16 + '😀'.length, 'end');
+  const to = await characterPoint(editorLeft(page), start16 + 'Ã°Å¸Ëœâ‚¬'.length, 'end');
   await page.mouse.move(from.x, from.y); await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 8 }); await page.mouse.up();
+  await recordGeometry(page, 'native-unicode-selection');
+  await expect(page.getByLabel('New Annotation', { exact: true })).toBeVisible();
   await page.getByLabel(/Search ontology term/).fill('Hypotonia');
   await page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).click();
   await expect(mentionWithOffsets(page, `[${start}:${start + 2}]`)).toBeVisible();
@@ -244,7 +275,10 @@ test('Unicode mouse and native keyboard selections and edge resize keep exact co
 
 test('read-only comparison selection and keyboard leave the editable left draft unchanged and expose no resize', async ({ page }) => {
   const s = await scenario(page); await loginExisting(page, s.users.alice); await annotation(page, s);
-  await page.goto(`/#/tasks/${s.assignments.alice}`); await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  await page.goto(`/#/tasks/${s.assignments.alice}`); await readyEditor(page, s);
+  await page.locator('.sidebar [data-list-key^="annotation:"]').first().click();
+  await expect(mentionWithOffsets(page, '[0:9]')).toBeVisible();
+  await page.getByRole('button', { name: 'Compare', exact: true }).click();
   await expect(rightText(page)).toHaveText(s.texts.source);
   await expect(page.locator('.status-badge')).toHaveAttribute('title', 'Revision 1');
   const writes: string[] = []; page.on('request', request => { if (request.method() === 'POST' && /\/workspaces\/.+\/(commands|decisions|submit)/.test(request.url())) writes.push(request.url()); });
@@ -261,6 +295,7 @@ test('read-only comparison selection and keyboard leave the editable left draft 
   await expect(page.getByLabel('New Annotation', { exact: true })).toHaveCount(0);
   expect(writes).toEqual([]);
   await expect(page.locator('.status-badge')).toHaveAttribute('title', 'Revision 1');
+  await mentionWithOffsets(page, '[0:9]').scrollIntoViewIfNeeded();
   await expect(mentionWithOffsets(page, '[0:9]')).toBeVisible();
 });
 
@@ -279,13 +314,15 @@ test('manual right variant/ref/coupling survive real left retry, then current ex
   await page.unroute('**/api/v1/me/tasks');
   let release!: () => void; const paused = new Promise<void>(resolve => { release = resolve; });
   const pattern = `**/documents/${encodeURIComponent(s.documents.source)}/text`;
-  await page.route(pattern, async route => { await paused; await route.continue(); });
+  let entered!: () => void; const started = new Promise<void>(resolve => { entered = resolve; });
+  let continued!: () => void; const done = new Promise<void>(resolve => { continued = resolve; });
+  await page.route(pattern, async route => { entered(); await paused; try { await route.continue(); } finally { continued(); } });
   try {
-    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await page.getByRole('button', { name: 'Retry', exact: true }).click(); await started;
     await expect(pane.getByLabel('Text version', { exact: true })).toHaveValue(s.documents.target);
     await expect(pane.locator('.readonly-annotations')).toHaveCount(0);
     expect(await pane.evaluate((element, previous) => element === previous, owner)).toBe(true);
-  } finally { release(); await page.unroute(pattern); }
+  } finally { release(); await done; await page.unroute(pattern); }
   await expect(pane.locator('.readonly-annotations')).toContainText('HP:0001252');
   await expect(pane.getByLabel('Annotations', { exact: true })).toHaveValue(refToken(own));
   await expect(pane.getByLabel('Couple scrolling', { exact: true })).not.toBeChecked();
@@ -306,6 +343,9 @@ for (const width of [800, 600]) test(`comparison stacks with reachable independe
   const s = await scenario(page); await loginExisting(page, s.users.alice); await page.setViewportSize({ width, height: 800 });
   await openViewer(page, s); await openComparison(page, s);
   await rightText(page).scrollIntoViewIfNeeded(); await expect(rightText(page)).toBeInViewport({ ratio: 0.2 });
+  await expect(comparison(page).getByLabel('Text version', { exact: true })).toBeDisabled();
+  await comparison(page).getByLabel('Language', { exact: true }).selectOption('de');
+  await expect(comparison(page).getByLabel('Text version', { exact: true })).toBeEnabled();
   for (const name of ['Language', 'Text version', 'Annotations']) {
     const select = comparison(page).getByLabel(name, { exact: true }); await select.scrollIntoViewIfNeeded(); await select.focus(); await expect(select).toBeFocused();
     const rect = await select.boundingBox(); expect(rect!.x).toBeGreaterThanOrEqual(0); expect(rect!.x + rect!.width).toBeLessThanOrEqual(width + 1);
