@@ -272,7 +272,7 @@ test('open editor has two equal reading surfaces and reachable lower controls; c
   expect(tree!.x + tree!.width).toBeLessThanOrEqual(1281); expect(tree!.y + tree!.height).toBeLessThanOrEqual(721);
 });
 
-test('Unicode mouse and native keyboard selections and edge resize keep exact codepoint offsets through marker redraws', async ({ page }) => {
+test('Unicode pointer and native Shift-click selections with keyboard edge resize keep exact codepoint offsets through marker redraws', async ({ page }) => {
   const s = await scenario(page); await loginExisting(page, s.users.alice);
   await page.goto(`/#/tasks/${s.assignments.alice}`); await expect(editorLeft(page)).toHaveText(s.texts.target);
   await readyEditor(page, s);
@@ -305,18 +305,21 @@ test('Unicode mouse and native keyboard selections and edge resize keep exact co
   await dragEndTo(page, editorLeft(page), end16);
   await expect(mentionWithOffsets(page, `[${start}:${end}]`)).toBeVisible();
   await expect(editorLeft(page).locator('[data-paragraph]')).toHaveCount(13);
-  // Place the native caret in the first text run, then use real Shift+arrows.
-  await editorLeft(page).focus();
-  await editorLeft(page).evaluate(element => {
-    const node = element.querySelector('.run')!.firstChild!;
-    const range = document.createRange(); range.setStart(node, 0); range.collapse(true);
-    const selected = window.getSelection()!; selected.removeAllRanges(); selected.addRange(range);
-  });
-  await page.keyboard.down('Shift'); for (let index = 0; index < 9; index++) await page.keyboard.press('ArrowRight'); await page.keyboard.up('Shift');
+  // Chromium's non-editable text uses native Shift-click to extend a selection;
+  // a collapsed script caret does not enable browser caret-browsing arrows.
+  await expect(page.locator('.status-badge')).toHaveAttribute('title', 'Revision 4');
+  await expect(page.locator('.status-badge')).toContainText('Saved');
+  const anchor = await characterPoint(editorLeft(page), 0);
+  const endpoint = await characterPoint(editorLeft(page), 8, 'end');
+  await page.mouse.click(anchor.x, anchor.y);
+  await page.keyboard.down('Shift');
+  await page.mouse.click(endpoint.x, endpoint.y);
+  await page.keyboard.up('Shift');
   await expect(page.getByLabel('New Annotation', { exact: true })).toBeVisible();
   await page.getByLabel(/Search ontology term/).fill('Hypotonia');
   await page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).click();
   await expect(mentionWithOffsets(page, '[0:9]')).toBeVisible();
+  await expect(page.locator('.status-badge')).toHaveAttribute('title', 'Revision 5');
   await exactText(editorLeft(page), text);
   await expect(editorLeft(page).locator('[data-paragraph]')).toHaveCount(13);
 });
