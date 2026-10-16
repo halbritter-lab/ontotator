@@ -7141,6 +7141,17 @@
             ],
             "title": "Plan Sha256"
           },
+          "preview_job_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Job Id"
+          },
           "commit_job_id": {
             "anyOf": [
               {
