@@ -94,6 +94,8 @@ class ImportedSet:
     actors: list[dict[str, Any]]
     payload: dict[str, Any]
     proposals: ImportedProposals
+    origin: Literal["import", "reanchor"] = "import"
+    pending_items: list[dict[str, Any]] = field(default_factory=list)
 
 
 class ImportCounts(TypedDict):

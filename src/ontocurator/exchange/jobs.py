@@ -25,6 +25,7 @@ from ontocurator.authz.memberships import MembershipService
 from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
+from ontocurator.exchange.reanchor_job import reanchor
 from ontocurator.exchange.t1 import (
     ExportCounts,
     layers_for,
@@ -269,6 +270,7 @@ def edit_log_export(job: Job, ctx: JobContext) -> dict[str, Any]:
 
 
 HANDLERS: dict[str, Handler] = {
+    "reanchor": reanchor,
     "upload_preview": upload_preview,
     "upload_commit": upload_commit,
     "t1_import": t1_import,

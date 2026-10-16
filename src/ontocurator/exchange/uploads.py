@@ -337,8 +337,25 @@ def apply_plan(
         )
         for name in ("sets_added", "sets_skipped", "proposals"):
             counts[name] += result[name]
-    # Task7 will enqueue its real handler atomically here. The immutable
-    # variant.derived_from/document_id pair preserves its old/new job IDs.
+    from ontocurator.exchange.reanchor_job import CorrectionPair, enqueue_import_pairs
+
+    added = {
+        document.document_id for document in plan.documents if document.action == "add"
+    }
+    pairs = [
+        CorrectionPair(
+            old_document_id=variant.derived_from, new_document_id=variant.document_id
+        )
+        for variant in plan.variants
+        if variant.document_id in added
+        and variant.origin == "correction"
+        and variant.derived_from is not None
+    ]
+    if pairs:
+        with db.transaction() as conn:
+            project_id = Repository._project_id(conn, project)
+            assert project_id is not None
+            enqueue_import_pairs(db, project, project_id, job_id, actor, pairs)
     return counts
 
 
@@ -459,7 +476,12 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
         )
         counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
         _apply_overrides(conn, actor, project_id, plan, accepted)
-        summary = _summary(plan, sources, counts)
+        from ontocurator.exchange.reanchor_job import import_pair_result
+
+        summary = {
+            **_summary(plan, sources, counts),
+            **import_pair_result(conn, job.id),
+        }
         record_audit(
             conn,
             actor,
@@ -514,7 +536,12 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                 )
                 counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
                 _apply_overrides(conn, actor, project_id, plan, accepted)
-                result = _summary(plan, sources, counts)
+                from ontocurator.exchange.reanchor_job import import_pair_result
+
+                result = {
+                    **_summary(plan, sources, counts),
+                    **import_pair_result(conn, job.id),
+                }
                 values: dict[str, Any] = {"status": "committed"}
             else:
                 result = {"counts": plan.counts}

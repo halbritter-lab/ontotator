@@ -3,6 +3,9 @@ import { ApiError } from "../api/client";
 /** Coverage is checked against the committed backend administration catalog. */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   NOT_A_TRANSLATION: "This text is not in a translation chain.",
+  REANCHOR_LANGUAGE_MISMATCH: "Annotations can only be carried between text versions in the same language.",
+  REANCHOR_PRODUCER_INVALID: "The annotation carry-over job is not associated with this text correction.",
+  REANCHOR_SET_COLLISION: "An existing proposal set conflicts with the annotation carry-over result.",
   QUALIFICATION_REQUIRED: "Add your qualification before submitting a translation review.",
   REVIEW_INVALID: "Check the translation review issues before submitting.",
   VARIANT_REVIEW_STALE: "A newer text version exists. Review the current version before creating a correction.",
