@@ -264,3 +264,38 @@ def test_broken_stored_correction_ancestry_is_a_deterministic_refusal(tmp_path, 
     plan = planned(tmp_path / "next", [third], state)
     assert not plan.committable
     assert "VARIANT_VERSION_INVALID" in {i.code for i in plan.errors}
+
+
+def test_identical_reimport_with_omitted_optional_run_metadata_keeps_stored_provenance(
+    tmp_path,
+):
+    source = native_unit("case", "en", "Source")
+    translated = translation_unit("case", "de", "Translation", source=source)
+    state = state_of(planned(tmp_path / "first", [source, translated]))
+    incomplete = translated.model_copy(
+        update={
+            "document": translated.document.model_copy(update={"translation": None})
+        }
+    )
+    plan = planned(tmp_path / "again", [incomplete], state)
+    assert plan.committable
+    assert plan.variants[0].translation == state.variants["case~de~v1"].translation
+    assert plan.counts["documents_added"] == 0
+
+
+def test_repeated_logical_input_can_supply_optional_metadata_once(tmp_path):
+    source = native_unit("case", "en", "Source")
+    translated = translation_unit("case", "de", "Translation", source=source)
+    incomplete = translated.model_copy(
+        update={
+            "document": translated.document.model_copy(update={"translation": None}),
+            "annotation_set": translated.annotation_set.model_copy(
+                update={"annotation_set_id": "another-run"}
+            ),
+        }
+    )
+    plan = planned(tmp_path, [source, incomplete, translated])
+    assert plan.committable
+    assert next(
+        v for v in plan.variants if v.language == "de"
+    ).translation == translated.document.translation.model_dump(mode="json")

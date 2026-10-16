@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from ontocurator.domain.canonical import canonical_hash
@@ -117,12 +117,37 @@ def resolve_variants(
                 raise DomainError(
                     "DOCUMENT_CONFLICT", "Logical variant already has different text"
                 )
-            explicit = [metadata(u) for u in grouped[key]]
-            if len({canonical_hash(m) for m in explicit}) != 1:
-                raise DomainError(
-                    "VARIANT_CASE_MISMATCH",
-                    "Conflicting delivered metadata for one logical variant",
+            cases = {u.case_id for u in grouped[key] if u.case_id is not None}
+            runs = {
+                canonical_hash(u.translation): u.translation
+                for u in grouped[key]
+                if u.translation is not None
+            }
+            declared = {
+                canonical_hash(
+                    u.variant.model_dump(mode="json")
+                    if u.variant
+                    else {"version": 1, "origin": "native", "derived_from": None}
                 )
+                for u in grouped[key]
+            }
+            if len(cases) > 1:
+                raise DomainError(
+                    "VARIANT_CASE_MISMATCH", "Conflicting explicit case identities"
+                )
+            if len(runs) > 1 or len(declared) > 1:
+                raise DomainError(
+                    "VARIANT_VERSION_INVALID",
+                    "Conflicting explicit variant/run metadata",
+                )
+            unit = replace(
+                unit,
+                case_id=next(iter(cases), None),
+                variant=next(
+                    (u.variant for u in grouped[key] if u.variant is not None), None
+                ),
+                translation=next(iter(runs.values()), None),
+            )
             if old:
                 if unit.case_id is not None and unit.case_id != old.case_id:
                     raise DomainError(
@@ -137,7 +162,10 @@ def resolve_variants(
                     if (
                         unit.variant.origin != old.origin
                         or unit.variant.derived_from != source_hash
-                        or unit.translation != old.translation
+                        or (
+                            unit.translation is not None
+                            and unit.translation != old.translation
+                        )
                     ):
                         raise DomainError(
                             "VARIANT_VERSION_INVALID",
