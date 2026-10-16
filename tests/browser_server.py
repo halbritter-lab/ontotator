@@ -13,6 +13,7 @@ import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from time import monotonic, sleep
 from typing import Literal
 from uuid import uuid4
 
@@ -51,7 +52,7 @@ if str(ROOT) not in sys.path:
 from support.v2_import import PackageImportService  # noqa: E402
 
 from ontocurator.packages.models import PackageManifest, ValidatedPackage  # noqa: E402
-from ontocurator.storage.tables import ProjectRow  # noqa: E402
+from ontocurator.storage.tables import JobRow, ProjectRow  # noqa: E402
 from tests.layered_fixtures import HP_DIGEST, make_layered_package  # noqa: E402
 from tests.t1_fixtures import (  # noqa: E402
     bundle,
@@ -426,9 +427,69 @@ def register_variant_scenario_route(app: FastAPI) -> None:
                 db,
                 variant_bundle(Path(folder), [source, target, other, corrected]),
                 key,
+                actor=Actor.cli(),
             )
         if imported.status != "succeeded":
             raise HTTPException(500, imported.error)
+        expected_pairs = {
+            (pair["old_document_id"], pair["new_document_id"])
+            for pair in (imported.result or {}).get("reanchor_pairs", [])
+        }
+        if not expected_pairs:
+            raise HTTPException(
+                500, "The correction import did not record its child pair"
+            )
+        deadline = monotonic() + 20
+        while True:
+            # Read only this project's children of this exact import producer.
+            with db.transaction() as conn:
+                children = [
+                    {
+                        "id": row.id,
+                        "status": row.status,
+                        "error": row.error,
+                        "result": row.result,
+                        "old_document_id": row.payload["old_document_id"],
+                        "new_document_id": row.payload["new_document_id"],
+                    }
+                    for row in conn.execute(
+                        select(JobRow)
+                        .join(ProjectRow, JobRow.project_id == ProjectRow.id)
+                        .where(
+                            ProjectRow.project_key == key,
+                            JobRow.kind == "reanchor",
+                            JobRow.payload["project"].as_string() == key,
+                            JobRow.payload["producer"]["kind"].as_string() == "import",
+                            JobRow.payload["producer"]["job_id"].as_integer()
+                            == imported.id,
+                        )
+                        .order_by(JobRow.id)
+                    ).mappings()
+                ]
+            actual_pairs = {
+                (child["old_document_id"], child["new_document_id"])
+                for child in children
+            }
+            if any(child["status"] == "failed" for child in children):
+                raise HTTPException(
+                    500, {"import_job_id": imported.id, "children": children}
+                )
+            if (
+                actual_pairs == expected_pairs
+                and len(children) == len(expected_pairs)
+                and all(child["status"] == "succeeded" for child in children)
+            ):
+                break
+            if monotonic() >= deadline:
+                raise HTTPException(
+                    500,
+                    {
+                        "error": "Import children did not finish",
+                        "import_job_id": imported.id,
+                        "children": children,
+                    },
+                )
+            sleep(0.05)
         inventory = app.state.repo.list_variants(key, case_id=case_id)
 
         def identity(external_id: str, language: str, version: int) -> str:
@@ -503,6 +564,8 @@ def register_variant_scenario_route(app: FastAPI) -> None:
             ).id
         return {
             "project": key,
+            "import_job_id": imported.id,
+            "children": children,
             "case_id": case_id,
             "documents": documents,
             "texts": {

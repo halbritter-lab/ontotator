@@ -9,6 +9,8 @@ type VersionRef = components['schemas']['VersionRef'];
 type Workspace = components['schemas']['AssignmentOpenResponse'];
 type Scenario = {
   project: string; case_id: string;
+  import_job_id: number;
+  children: { id: number; status: string; error: string | null; result: { sets: number; carried: number; needs_review: number }; old_document_id: string; new_document_id: string }[];
   documents: Record<'source' | 'target' | 'other' | 'corrected', string>;
   texts: Record<'source' | 'target', string>;
   users: Record<'alice' | 'bob' | 'reader' | 'reviewer' | 'lead', string>;
@@ -23,7 +25,12 @@ const token = (ref: VersionRef) => JSON.stringify([ref.kind, ref.id]);
 async function scenario(page: Page): Promise<Scenario> {
   const response = await page.request.post('/__test_variants__', { timeout: 90_000 });
   expect(response.ok()).toBeTruthy();
-  return await response.json() as Scenario;
+  const value = await response.json() as Scenario;
+  const proof = { project: value.project, import_job_id: value.import_job_id, children: value.children };
+  await test.info().attach('fixture-import-children', { body: Buffer.from(JSON.stringify(proof, null, 2)), contentType: 'application/json' });
+  console.log('Fixture import-child proof:', JSON.stringify(proof));
+  for (const child of value.children) expect(child.status).toBe('succeeded');
+  return value;
 }
 async function offered(page: Page, s: Scenario, document = s.documents.target): Promise<VersionRef[]> {
   const response = await authenticatedRequest(page, documentPath(s, document, 'annotation-versions'));
@@ -119,11 +126,13 @@ test('own history is genuinely submitted, read-only and return-to-draft preserve
   const assertion = page.getByRole('group', { name: 'Assertion', exact: true }).getByRole('radio', { name: 'Present', exact: true });
   const temporality = page.getByRole('group', { name: 'Temporality', exact: true }).getByRole('radio', { name: 'Current', exact: true });
   const experiencer = page.getByLabel('Experiencer', { exact: true });
-  await assertion.check();
-  await experiencer.selectOption('patient');
-  await temporality.check();
+  await assertion.click();
   await expect(assertion).toBeChecked();
+  await expect(page.locator('.status-badge')).toContainText('Saved');
+  await experiencer.selectOption('patient');
   await expect(experiencer).toHaveValue('patient');
+  await expect(page.locator('.status-badge')).toContainText('Saved');
+  await temporality.click();
   await expect(temporality).toBeChecked();
   await expect(page.locator('.status-badge')).toContainText('Saved');
   await submitCase(page);
@@ -219,8 +228,10 @@ test('dirty failed-save snapshot cancellation preserves focus and real native Ba
   await expect(page.getByLabel('Annotations', { exact: true })).toHaveValue('draft');
   const failCommands = '**/api/v1/workspaces/*/commands';
   await page.route(failCommands, route => route.abort('failed'));
-  await page.getByRole('button', { name: 'Mark Phenotypes as verified', exact: true }).click();
-  await expect(page.locator('.status-badge')).toContainText('Offline');
+  await page.locator('.sidebar [data-list-key^="annotation:"]').first().click();
+  const absent = page.getByRole('group', { name: 'Assertion', exact: true }).getByRole('radio', { name: 'Absent', exact: true });
+  await absent.click();
+  await expect(page.locator('.status-badge')).toContainText('Offline – changes not saved');
   const annotations = page.getByLabel('Annotations', { exact: true });
   const own = (await offered(page, s)).find(ref => ref.kind === 'own')!;
   await annotations.focus();
