@@ -146,10 +146,13 @@ describe("TreeBrowser: one walk", () => {
     expect(start.getAttribute("aria-expanded")).toBe("true");
     expect(start.getAttribute("aria-current")).toBe("true");
     expect(item("Hearing impairment").getAttribute("aria-expanded")).toBe("false");
-    expect(document.activeElement).toBe(start);
-    expect(scrolled).toEqual(["HP:1/HP:707/HP:1250"]);
-    // Only as far as needed, never centred.
-    expect(scrollOptions).toEqual([{ block: "nearest" }]);
+    // Row rendering precedes the passive effect that reveals and focuses it.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(start);
+      expect(scrolled).toEqual(["HP:1/HP:707/HP:1250"]);
+      // Only as far as needed, never centred.
+      expect(scrollOptions).toEqual([{ block: "nearest" }]);
+    });
     expect(screen.queryByRole("status")).toBeNull();
   });
 
