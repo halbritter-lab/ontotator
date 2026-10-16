@@ -116,9 +116,15 @@ test('own history is genuinely submitted, read-only and return-to-draft preserve
   await selectText(page, 0, 9);
   await page.getByLabel(/Search ontology term/).fill('Hypotonia');
   await page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).click();
-  for (const [axis, value] of [['Assertion', 'present'], ['Experiencer', 'patient'], ['Temporality', 'current']]) {
-    await page.getByLabel(axis, { exact: true }).selectOption(value);
-  }
+  const assertion = page.getByRole('group', { name: 'Assertion', exact: true }).getByRole('radio', { name: 'Present', exact: true });
+  const temporality = page.getByRole('group', { name: 'Temporality', exact: true }).getByRole('radio', { name: 'Current', exact: true });
+  const experiencer = page.getByLabel('Experiencer', { exact: true });
+  await assertion.check();
+  await experiencer.selectOption('patient');
+  await temporality.check();
+  await expect(assertion).toBeChecked();
+  await expect(experiencer).toHaveValue('patient');
+  await expect(temporality).toBeChecked();
   await expect(page.locator('.status-badge')).toContainText('Saved');
   await submitCase(page);
   await page.reload();
