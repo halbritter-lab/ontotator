@@ -424,6 +424,7 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
     from sqlalchemy import insert
 
     import ontocurator.authz.scoped as scoped_module
+    import ontocurator.authz.versions as versions_module
     from ontocurator.api.routes import decode_workspace_id
     from ontocurator.domain.workspace import MutationEnvelope
     from ontocurator.packages.models import SearchEventRecord
@@ -517,6 +518,11 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
     calls = {
         "get_document": lambda: repo.get_document(PROJECT, "doc-alpha"),
         "get_variant": lambda: repo.get_variant(PROJECT, "doc-alpha"),
+        "get_variant_text": lambda: repo.get_variant_text(PROJECT, "doc-alpha"),
+        "get_annotation_version": lambda: repo.get_annotation_version(
+            PROJECT, "doc-alpha", "own", submission["submission_id"]
+        ),
+        "get_reanchor_items": lambda: repo.get_reanchor_items(PROJECT, "doc-alpha"),
         "list_annotations_for_document": lambda: repo.list_annotations_for_document(
             PROJECT, "doc-alpha"
         ),
@@ -569,19 +575,41 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
         )
     } - {"create_project", "list_workspace_keys"}
     assert expected <= set(calls), expected - set(calls)
-    original = scoped_module.require_document
     seen = []
 
-    def spy(*args):
-        seen.append(args[-1])
-        return original(*args)
+    def watch(module, name):
+        original = getattr(module, name)
 
-    monkeypatch.setattr(scoped_module, "require_document", spy)
+        def spy(*args, **kwargs):
+            seen.append((name, args[-1]))
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(module, name, spy)
+
+    watch(scoped_module, "require_document")
+    watch(scoped_module, "require_case_text")
+    watch(scoped_module, "visible_annotation_versions")
+    watch(versions_module, "require_case_text")
+    watch(versions_module, "may_read_proposals")
+    case_methods = {"get_variant", "get_variant_text", "get_reanchor_items"}
     for name, invoke in calls.items():
         seen.clear()
-        with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
+        code = (
+            "PROPOSAL_SET_NOT_FOUND"
+            if name == "get_proposal_set"
+            else "DOCUMENT_NOT_FOUND"
+        )
+        with pytest.raises(DomainError, match=code):
             invoke()
-        assert seen == ["doc-alpha"], name
+        if name in case_methods:
+            guards = ["require_case_text"]
+        elif name == "get_annotation_version":
+            guards = ["visible_annotation_versions", "require_case_text"]
+        elif name == "get_proposal_set":
+            guards = ["may_read_proposals"]
+        else:
+            guards = ["require_document"]
+        assert seen == [(guard, "doc-alpha") for guard in guards], name
     assert repo.list_documents(PROJECT) == []
     assert repo.list_variants(PROJECT) == []
     assert repo.find_variants_by_text_sha256(PROJECT, "0" * 64) == []

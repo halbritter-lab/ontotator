@@ -229,3 +229,80 @@ def test_management_cannot_list_versions_or_pending_items_for_a_missing_document
     for suffix in ("annotation-versions", "reanchor-items"):
         response = case_env.lead.get(path("missing/document #é", suffix))
         assert response.status_code == 404, response.text
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        "x/annotation-versions/own/y",
+        "x/text/variant #é%",
+        "literal%2F/annotation-versions/own/y",
+    ],
+)
+def test_encoded_opaque_document_routes_keep_exact_identity(
+    case_env, tmp_path, document
+):
+    env = case_env
+    unit = native_unit(document, "en", "Exact opaque text", case_id=document)
+    (tmp_path / "opaque").mkdir()
+    result = run_import(env.db, bundle(tmp_path / "opaque", [unit]))
+    assert result.status == "succeeded", result.error
+    AssignmentService(env.db).assign(
+        HARNESS, "proj", document, "alice", "annotate", confirm_language=True
+    )
+    for suffix in ("text", "variant"):
+        response = env.alice.get(path(document, suffix))
+        assert response.status_code == 200, response.text
+        assert response.json()["document_id"] == document
+    assert env.alice.get(path(document, "text")).json()["text"] == "Exact opaque text"
+    assert env.alice.get(path(document, "annotation-versions")).json() == []
+    detail = env.alice.get(f"{BASE}/cases/{quote(document, safe='')}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["case_id"] == document
+    from fastapi.testclient import TestClient
+
+    mounted = TestClient(env.app, root_path="/mount é")
+    mounted.cookies.update(env.alice.cookies)
+    try:
+        mounted_response = mounted.get(path(document, "text"))
+        assert mounted_response.status_code == 200, mounted_response.text
+        assert mounted_response.json()["document_id"] == document
+    finally:
+        mounted.close()
+    anonymous = TestClient(env.app)
+    try:
+        assert anonymous.get(path(document, "text")).status_code == 401
+    finally:
+        anonymous.close()
+    assert env.reviewer.get(path(document, "text")).status_code == 404
+    assert env.alice.get(path(document + "/missing", "variant")).status_code == 404
+
+
+@pytest.mark.parametrize("with_raw_path", [False, True])
+def test_encoded_route_without_optional_raw_path_retains_normal_stack_behavior(
+    with_raw_path,
+):
+    from fastapi import FastAPI
+    from starlette.routing import Match
+
+    from ontocurator.api.encoded_routes import EncodedParameterRoute
+
+    def endpoint(doc: str):
+        return doc
+
+    route = EncodedParameterRoute("/documents/{doc:path}/text", endpoint)
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/mount/documents/literal%2F/id/text",
+        "root_path": "/mount",
+        "app": FastAPI(),
+    }
+    scope["path_params"] = {"mounted": "literal%2F"}
+    if with_raw_path:
+        scope["raw_path"] = b"/mount/documents/literal%252F%2Fid/text"
+    before = dict(scope)
+    match, child = route.matches(scope)
+    assert match == Match.FULL
+    assert child["path_params"] == {"mounted": "literal%2F", "doc": "literal%2F/id"}
+    assert scope == before

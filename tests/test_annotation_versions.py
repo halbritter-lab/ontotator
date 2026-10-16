@@ -298,3 +298,23 @@ def test_internal_assisted_metadata_stays_exact_while_public_annotate_refs_are_b
     assert refs(env.alice, SOURCE) == []
     with pytest.raises(DomainError):
         scoped.proposal_metadata("proj", TARGET)
+
+
+@pytest.mark.parametrize(
+    "ident",
+    [
+        "own/annotation-versions/own/y/text",
+        "own/annotation-versions/own/y/variant",
+        "own /#é%2F/text",
+    ],
+)
+def test_encoded_opaque_version_ids_keep_exact_identity(case_env, ident):
+    env = case_env
+    seed_submission(env, "alice", ident)
+    url = path(SOURCE, f"annotation-versions/own/{quote(ident, safe='')}")
+    response = env.alice.get(url)
+    assert response.status_code == 200, response.text
+    assert response.json()["ref"]["id"] == ident
+    assert [row["id"] for row in refs(env.alice, SOURCE)] == [ident]
+    assert env.lead.get(url).status_code == 404
+    assert env.alice.get(url + "%2Fmissing").status_code == 404

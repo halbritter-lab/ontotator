@@ -14,6 +14,7 @@ from pydantic import (
 )
 from sqlalchemy import select
 
+from ontocurator.api.encoded_routes import EncodedParameterRoute
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.routes import get_access
 from ontocurator.authz.scoped import ScopedRepository
@@ -25,7 +26,11 @@ from ontocurator.domain.errors import DomainError
 from ontocurator.domain.variants import TranslationStatus, VariantOrigin
 from ontocurator.storage.tables import AssignmentRow
 
-router = APIRouter(prefix="/api/v1/projects/{key}", tags=["variants"])
+router = APIRouter(
+    prefix="/api/v1/projects/{key}",
+    tags=["variants"],
+    route_class=EncodedParameterRoute,
+)
 
 
 class TranslationCheckView(BaseModel):
