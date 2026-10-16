@@ -55,7 +55,6 @@ export type CodeResponse = components["schemas"]["CodeResponse"];
 export type AdminUserPatch = Partial<components["schemas"]["PatchUserRequest"]>;
 export type TaskProfile = components["schemas"]["TaskProfile"];
 export type TemplateInfo = components["schemas"]["TemplateInfo"];
-export type ProjectSettings = components["schemas"]["ProjectSettings"];
 export type ProjectSettingsPatch = Partial<components["schemas"]["ProjectSettingsChange"]>;
 export type CreateProjectRequest = components["schemas"]["CreateProjectRequest"];
 export type ProjectPin = components["schemas"]["ProjectPin"];
