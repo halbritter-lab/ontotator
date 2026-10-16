@@ -16,6 +16,7 @@ from ontocurator.authz.visibility import (
     visible_documents,
 )
 from ontocurator.domain.errors import AccessDenied, DomainError
+from ontocurator.domain.variants import TranslationStatus, VariantOrigin
 from ontocurator.domain.workspace import WorkspaceKey, WorkspaceMode
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import (
@@ -53,6 +54,12 @@ class ProjectDocumentSummary(BaseModel):
     language: str
     text_length: int
     position: int | None
+    case_id: str
+    external_id: str
+    version: int
+    origin: VariantOrigin
+    translation_status: TranslationStatus | None
+    status_reason: str | None
     status: DocumentStatus = "not_started"
     has_review_inputs: bool | None = None
     assignees: list[Assignee] | None = None
@@ -190,6 +197,8 @@ def project_documents(
     language: str | None,
     status: AssignmentFilter | None,
     q: str | None,
+    origin: VariantOrigin | None = None,
+    translation_status: TranslationStatus | None = None,
 ) -> list[ProjectDocumentSummary]:
     db = repo.db
     with db.transaction() as conn:
@@ -210,12 +219,22 @@ def project_documents(
             DocumentRow.document_id,
             DocumentRow.language,
             DocumentRow.position,
+            DocumentRow.case_id,
+            DocumentRow.external_id,
+            DocumentRow.version,
+            DocumentRow.origin,
+            DocumentRow.translation_status,
+            DocumentRow.status_reason,
             func.length(DocumentRow.text).label("text_length"),
         ).where(DocumentRow.project_id == project_id)
         if not visibility.all:
             query = query.where(DocumentRow.document_id.in_(visibility.document_ids))
         if language is not None:
             query = query.where(DocumentRow.language == language)
+        if origin is not None:
+            query = query.where(DocumentRow.origin == origin)
+        if translation_status is not None:
+            query = query.where(DocumentRow.translation_status == translation_status)
         if q is not None:
             query = query.where(DocumentRow.document_id.startswith(q, autoescape=True))
         if status is not None:
@@ -276,6 +295,12 @@ def project_documents(
                 document_id=row.document_id,
                 language=row.language,
                 position=row.position,
+                case_id=row.case_id,
+                external_id=row.external_id,
+                version=row.version,
+                origin=row.origin,
+                translation_status=row.translation_status,
+                status_reason=row.status_reason,
                 text_length=row.text_length,
                 status=statuses.get(row.document_id, "not_started"),
                 has_review_inputs=row.document_id in review_ids

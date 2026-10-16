@@ -125,6 +125,11 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     "get_project_rules": lambda r: r.get_project_rules("B"),
     "get_document": lambda r: r.get_document("B", "doc-beta"),
     "get_variant": lambda r: r.get_variant("B", "doc-beta"),
+    "get_variant_text": lambda r: r.get_variant_text("B", "doc-beta"),
+    "get_annotation_version": lambda r: r.get_annotation_version(
+        "B", "doc-beta", "own", "missing"
+    ),
+    "get_reanchor_items": lambda r: r.get_reanchor_items("B", "doc-beta"),
     "list_variants": lambda r: r.list_variants("B"),
     "find_variants_by_text_sha256": lambda r: r.find_variants_by_text_sha256(
         "B", "0" * 64

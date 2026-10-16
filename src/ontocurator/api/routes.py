@@ -304,6 +304,16 @@ def list_package_documents(
     language: str | None = None,
     status: AssignmentFilter | None = None,
     q: str | None = None,
+    origin: Literal["native", "machine_translation", "human_translation", "correction"]
+    | None = None,
+    translation_status: Literal[
+        "translated",
+        "automatic_check_failed",
+        "ready_for_review",
+        "reviewed",
+        "accepted",
+    ]
+    | None = None,
 ) -> list[ProjectDocumentSummary]:
     """List documents showing metadata only, without proposal counts.
 
@@ -326,6 +336,8 @@ def list_package_documents(
         language=language,
         status=status,
         q=q,
+        origin=origin,
+        translation_status=translation_status,
     )
 
 

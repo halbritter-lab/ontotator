@@ -7,7 +7,10 @@ import type { components } from "./generated";
 import { attachmentFilename, type DownloadPayload } from "./download";
 export type { DownloadPayload } from "./download";
 
-export type DocumentSummary = components["schemas"]["ProjectDocumentSummary"];
+export type ProjectDocumentSummary = components["schemas"]["ProjectDocumentSummary"];
+type VariantMetadataKeys = "case_id" | "external_id" | "version" | "origin" | "translation_status" | "status_reason";
+/** Legacy editor navigation also composes reduced WorkspaceService summaries. */
+export type DocumentSummary = Omit<ProjectDocumentSummary, VariantMetadataKeys> & Partial<Pick<ProjectDocumentSummary, VariantMetadataKeys>>;
 export type ProjectSettings = components["schemas"]["ProjectSettings"];
 export type UploadView = components["schemas"]["UploadView"];
 export type UploadCreated = components["schemas"]["UploadCreated"];
@@ -209,10 +212,10 @@ export class ApiClient {
   async updateProjectProfile(key: string, profile: TaskProfile): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/profile`, { method: "PUT", body: JSON.stringify(profile) }); }
   async listMembers(key: string): Promise<Member[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members`, { method: "GET" }); }
   async setMemberRoles(key: string, username: string, roles: string[], revoke = false): Promise<Member> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members/${encodeURIComponent(username)}`, { method: "PUT", body: JSON.stringify({ roles, revoke_assignments: revoke }) }); }
-  async listProjectDocuments(key: string, filters: ProjectDocumentFilters = {}): Promise<DocumentSummary[]> {
+  async listProjectDocuments(key: string, filters: ProjectDocumentFilters = {}): Promise<ProjectDocumentSummary[]> {
     const query = new URLSearchParams();
     for (const [name, value] of Object.entries(filters)) if (value) query.set(name, value);
-    return this.request<DocumentSummary[]>(`/api/v1/projects/${encodeURIComponent(key)}/documents${query.size ? `?${query}` : ""}`, { method: "GET" });
+    return this.request<ProjectDocumentSummary[]>(`/api/v1/projects/${encodeURIComponent(key)}/documents${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
 
 

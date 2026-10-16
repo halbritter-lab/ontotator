@@ -20,6 +20,7 @@ PATHS = (
     "api/job_routes.py",
     "api/assignment_routes.py",
     "api/document_projection.py",
+    "api/variant_routes.py",
     "api/security.py",
     "auth/accounts.py",
     "auth/authority.py",

@@ -124,6 +124,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cases */
+        get: operations["list_cases_api_v1_projects__key__cases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/cases/{case_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Case */
+        get: operations["get_case_api_v1_projects__key__cases__case_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/documents/{doc}/annotation-versions/{kind}/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Version */
+        get: operations["get_version_api_v1_projects__key__documents__doc__annotation_versions__kind___version_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/documents/{doc}/annotation-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Versions */
+        get: operations["list_versions_api_v1_projects__key__documents__doc__annotation_versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/documents/{doc}/reanchor-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reanchor Items */
+        get: operations["reanchor_items_api_v1_projects__key__documents__doc__reanchor_items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/documents/{doc}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Variant Text */
+        get: operations["variant_text_api_v1_projects__key__documents__doc__text_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/documents/{doc}/variant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Variant Metadata
+         * @description Resolve a deep-linked document's case without loading the project catalog.
+         */
+        get: operations["variant_metadata_api_v1_projects__key__documents__doc__variant_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/": {
         parameters: {
             query?: never;
@@ -1060,6 +1182,14 @@ export interface components {
              */
             evidence_policy: "optional" | "required_on_complete";
         };
+        /** AnnotationVersion */
+        AnnotationVersion: {
+            ref: components["schemas"]["VersionRef"];
+            /** Annotations */
+            annotations: components["schemas"]["AnnotationSnapshot"][];
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceSnapshot"][];
+        };
         /** AssignRequest */
         AssignRequest: {
             /** Rows */
@@ -1207,6 +1337,20 @@ export interface components {
         Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post: {
             /** Files[] */
             "files[]": string[];
+        };
+        /** CaseDetail */
+        CaseDetail: {
+            /** Case Id */
+            case_id: string;
+            /** Variants */
+            variants: components["schemas"]["VariantSummary"][];
+        };
+        /** CaseSummary */
+        CaseSummary: {
+            /** Case Id */
+            case_id: string;
+            /** Variants */
+            variants: components["schemas"]["VariantSummary"][];
         };
         /** CodeResponse */
         CodeResponse: {
@@ -1696,6 +1840,14 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** OldMentionView */
+        OldMentionView: {
+            source_ref: components["schemas"]["EvidenceRef"];
+            /** Segments */
+            segments: components["schemas"]["TextWindowView"][];
+            /** Cue Segments */
+            cue_segments: components["schemas"]["TextWindowView"][];
+        };
         /**
          * OntologyDefinition
          * @description Definition of an ontology artifact bound to a task profile.
@@ -2077,6 +2229,21 @@ export interface components {
             text_length: number;
             /** Position */
             position: number | null;
+            /** Case Id */
+            case_id: string;
+            /** External Id */
+            external_id: string;
+            /** Version */
+            version: number;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "native" | "machine_translation" | "human_translation" | "correction";
+            /** Translation Status */
+            translation_status: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
+            /** Status Reason */
+            status_reason: string | null;
             /**
              * Status
              * @default not_started
@@ -2283,6 +2450,15 @@ export interface components {
             imported_at: string;
             /** Imported By Pseudonym */
             imported_by_pseudonym: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "import" | "reanchor";
+            /** Source Document Id */
+            source_document_id: string | null;
+            /** Source Version */
+            source_version: number | null;
         };
         /**
          * Provenance
@@ -2296,6 +2472,29 @@ export interface components {
             source_refs?: string[];
             /** Assessment */
             assessment?: string | null;
+        };
+        /** ReanchorItem */
+        ReanchorItem: {
+            /** Proposal Set Id */
+            proposal_set_id: number;
+            source_ref: components["schemas"]["AnnotationRef"];
+            /** Term Id */
+            term_id: string;
+            /** Layer Id */
+            layer_id: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "source_text_mismatch" | "missing_evidence" | "evidence_version_mismatch" | "ambiguous_evidence" | "evidence_source_mismatch" | "invalid_bounds" | "changed_segment" | "changed_cue";
+            /** Old Mentions */
+            old_mentions: components["schemas"]["OldMentionView"][];
+            old_context: components["schemas"]["TextWindowView"];
+            new_context: components["schemas"]["TextWindowView"];
+            /** Diff */
+            diff: components["schemas"]["WindowOpcodeView"][];
+            /** Old Segments */
+            readonly old_segments: components["schemas"]["TextWindowView"][];
         };
         /** ReasonRequest */
         ReasonRequest: {
@@ -2718,6 +2917,37 @@ export interface components {
             /** Term Id */
             term_id: string;
         };
+        /** TextWindowView */
+        TextWindowView: {
+            /** Start */
+            start: number;
+            /** End */
+            end: number;
+            /** Text */
+            text: string;
+        };
+        /** TranslationCheckView */
+        TranslationCheckView: {
+            /** Code */
+            code: string;
+            /** Passed */
+            passed: boolean;
+            /** Detail */
+            detail?: string | null;
+        };
+        /** TranslationRunView */
+        TranslationRunView: {
+            /** Provider */
+            provider: string;
+            /** Model */
+            model?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Recipe */
+            recipe?: string | null;
+            /** Checks */
+            checks?: components["schemas"]["TranslationCheckView"][];
+        };
         /**
          * TreeLevel
          * @description An expanded node and the children shown under it.
@@ -2906,6 +3136,81 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VariantSummary */
+        VariantSummary: {
+            /** Document Id */
+            document_id: string;
+            /** Case Id */
+            case_id: string;
+            /** External Id */
+            external_id: string;
+            /** Language */
+            language: string;
+            /** Version */
+            version: number;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "native" | "machine_translation" | "human_translation" | "correction";
+            /** Derived From */
+            derived_from: string | null;
+            translation: components["schemas"]["TranslationRunView"] | null;
+            /** Translation Status */
+            translation_status: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
+            /** Status Reason */
+            status_reason: string | null;
+            /** Text Sha256 */
+            text_sha256: string;
+            /** Assigned To Me */
+            assigned_to_me: boolean;
+        };
+        /** VariantText */
+        VariantText: {
+            /** Document Id */
+            document_id: string;
+            /** Text */
+            text: string;
+            /** Text Sha256 */
+            text_sha256: string;
+        };
+        /** VersionRef */
+        VersionRef: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "own" | "proposals" | "stage_result" | "release";
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** WindowOpcodeView */
+        WindowOpcodeView: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "equal" | "replace" | "insert" | "delete";
+            /** Old Start */
+            old_start: number;
+            /** Old End */
+            old_end: number;
+            /** New Start */
+            new_start: number;
+            /** New End */
+            new_end: number;
+            /** Old Text */
+            old_text: string;
+            /** New Text */
+            new_text: string;
         };
         /**
          * WorkspaceKey
@@ -3229,6 +3534,237 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cases_api_v1_projects__key__cases_get: {
+        parameters: {
+            query?: {
+                language?: string | null;
+                origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
+                status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_case_api_v1_projects__key__cases__case_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_api_v1_projects__key__documents__doc__annotation_versions__kind___version_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                doc: string;
+                kind: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnotationVersion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_versions_api_v1_projects__key__documents__doc__annotation_versions_get: {
+        parameters: {
+            query?: {
+                assignment?: number | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionRef"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reanchor_items_api_v1_projects__key__documents__doc__reanchor_items_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReanchorItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    variant_text_api_v1_projects__key__documents__doc__text_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VariantText"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    variant_metadata_api_v1_projects__key__documents__doc__variant_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VariantSummary"];
                 };
             };
             /** @description Validation Error */
@@ -4296,6 +4832,8 @@ export interface operations {
                 language?: string | null;
                 status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened") | null;
                 q?: string | null;
+                origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
+                translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
             };
             header?: never;
             path: {

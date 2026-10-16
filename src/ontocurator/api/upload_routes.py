@@ -41,6 +41,9 @@ class ProposalSetView(BaseModel):
     actors: list[dict[str, Any]]
     imported_at: datetime
     imported_by_pseudonym: str | None
+    origin: Literal["import", "reanchor"]
+    source_document_id: str | None
+    source_version: int | None
 
 
 def _service(request: Request, principal: Any) -> UploadService:
@@ -139,4 +142,5 @@ def get_proposal_set(
         get_access(request),
         Actor.user(principal.user_id, principal.username),
     )
-    return ProposalSetView(**repo.get_proposal_set(key, set_id))
+    with repo.db.snapshot():
+        return ProposalSetView(**repo.get_proposal_set(key, set_id))

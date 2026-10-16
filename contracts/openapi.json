@@ -435,6 +435,462 @@
         }
       }
     },
+    "/api/v1/projects/{key}/cases": {
+      "get": {
+        "tags": [
+          "variants"
+        ],
+        "summary": "List Cases",
+        "operationId": "list_cases_api_v1_projects__key__cases_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "native",
+                    "machine_translation",
+                    "human_translation",
+                    "correction"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "translated",
+                    "automatic_check_failed",
+                    "ready_for_review",
+                    "reviewed",
+                    "accepted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaseSummary"
+                  },
+                  "title": "Response List Cases Api V1 Projects  Key  Cases Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/cases/{case_id}": {
+      "get": {
+        "tags": [
+          "variants"
+        ],
+        "summary": "Get Case",
+        "operationId": "get_case_api_v1_projects__key__cases__case_id__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/{doc}/annotation-versions/{kind}/{version_id}": {
+      "get": {
+        "tags": [
+          "variants"
+        ],
+        "summary": "Get Version",
+        "operationId": "get_version_api_v1_projects__key__documents__doc__annotation_versions__kind___version_id__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationVersion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/{doc}/annotation-versions": {
+      "get": {
+        "tags": [
+          "variants"
+        ],
+        "summary": "List Versions",
+        "operationId": "list_versions_api_v1_projects__key__documents__doc__annotation_versions_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "assignment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assignment"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VersionRef"
+                  },
+                  "title": "Response List Versions Api V1 Projects  Key  Documents  Doc  Annotation Versions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/{doc}/reanchor-items": {
+      "get": {
+        "tags": [
+          "variants"
+        ],
+        "summary": "Reanchor Items",
+        "operationId": "reanchor_items_api_v1_projects__key__documents__doc__reanchor_items_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReanchorItem"
+                  },
+                  "title": "Response Reanchor Items Api V1 Projects  Key  Documents  Doc  Reanchor Items Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/{doc}/text": {
+      "get": {
+        "tags": [
+          "variants"
+        ],
+        "summary": "Variant Text",
+        "operationId": "variant_text_api_v1_projects__key__documents__doc__text_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantText"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/{doc}/variant": {
+      "get": {
+        "tags": [
+          "variants"
+        ],
+        "summary": "Variant Metadata",
+        "description": "Resolve a deep-linked document's case without loading the project catalog.",
+        "operationId": "variant_metadata_api_v1_projects__key__documents__doc__variant_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/users/": {
       "get": {
         "tags": [
@@ -1960,6 +2416,51 @@
               ],
               "title": "Q"
             }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "native",
+                    "machine_translation",
+                    "human_translation",
+                    "correction"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "translation_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "translated",
+                    "automatic_check_failed",
+                    "ready_for_review",
+                    "reviewed",
+                    "accepted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Translation Status"
+            }
           }
         ],
         "responses": {
@@ -2828,6 +3329,34 @@
         "title": "AnnotationTypeDefinition",
         "description": "Definition of an annotation type available in a layer."
       },
+      "AnnotationVersion": {
+        "properties": {
+          "ref": {
+            "$ref": "#/components/schemas/VersionRef"
+          },
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationSnapshot"
+            },
+            "type": "array",
+            "title": "Annotations"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSnapshot"
+            },
+            "type": "array",
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "annotations",
+          "evidence"
+        ],
+        "title": "AnnotationVersion"
+      },
       "AssignRequest": {
         "properties": {
           "rows": {
@@ -3214,6 +3743,48 @@
           "files[]"
         ],
         "title": "Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post"
+      },
+      "CaseDetail": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantSummary"
+            },
+            "type": "array",
+            "title": "Variants"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "variants"
+        ],
+        "title": "CaseDetail"
+      },
+      "CaseSummary": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantSummary"
+            },
+            "type": "array",
+            "title": "Variants"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "variants"
+        ],
+        "title": "CaseSummary"
       },
       "CodeResponse": {
         "properties": {
@@ -4293,6 +4864,35 @@
         "title": "MutationEnvelope",
         "description": "Request envelope identifying a write attempt across retries."
       },
+      "OldMentionView": {
+        "properties": {
+          "source_ref": {
+            "$ref": "#/components/schemas/EvidenceRef"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/TextWindowView"
+            },
+            "type": "array",
+            "title": "Segments"
+          },
+          "cue_segments": {
+            "items": {
+              "$ref": "#/components/schemas/TextWindowView"
+            },
+            "type": "array",
+            "title": "Cue Segments"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_ref",
+          "segments",
+          "cue_segments"
+        ],
+        "title": "OldMentionView"
+      },
       "OntologyDefinition": {
         "properties": {
           "ontology_id": {
@@ -5236,6 +5836,57 @@
             ],
             "title": "Position"
           },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "native",
+              "machine_translation",
+              "human_translation",
+              "correction"
+            ],
+            "title": "Origin"
+          },
+          "translation_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translated",
+                  "automatic_check_failed",
+                  "ready_for_review",
+                  "reviewed",
+                  "accepted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Status"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -5278,7 +5929,13 @@
           "document_id",
           "language",
           "text_length",
-          "position"
+          "position",
+          "case_id",
+          "external_id",
+          "version",
+          "origin",
+          "translation_status",
+          "status_reason"
         ],
         "title": "ProjectDocumentSummary"
       },
@@ -5775,6 +6432,36 @@
               }
             ],
             "title": "Imported By Pseudonym"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "import",
+              "reanchor"
+            ],
+            "title": "Origin"
+          },
+          "source_document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Id"
+          },
+          "source_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Version"
           }
         },
         "type": "object",
@@ -5786,7 +6473,10 @@
           "set_kind",
           "actors",
           "imported_at",
-          "imported_by_pseudonym"
+          "imported_by_pseudonym",
+          "origin",
+          "source_document_id",
+          "source_version"
         ],
         "title": "ProposalSetView"
       },
@@ -5826,6 +6516,82 @@
         ],
         "title": "Provenance",
         "description": "Origin and extraction details for an annotation or statement."
+      },
+      "ReanchorItem": {
+        "properties": {
+          "proposal_set_id": {
+            "type": "integer",
+            "title": "Proposal Set Id"
+          },
+          "source_ref": {
+            "$ref": "#/components/schemas/AnnotationRef"
+          },
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "source_text_mismatch",
+              "missing_evidence",
+              "evidence_version_mismatch",
+              "ambiguous_evidence",
+              "evidence_source_mismatch",
+              "invalid_bounds",
+              "changed_segment",
+              "changed_cue"
+            ],
+            "title": "Reason"
+          },
+          "old_mentions": {
+            "items": {
+              "$ref": "#/components/schemas/OldMentionView"
+            },
+            "type": "array",
+            "title": "Old Mentions"
+          },
+          "old_context": {
+            "$ref": "#/components/schemas/TextWindowView"
+          },
+          "new_context": {
+            "$ref": "#/components/schemas/TextWindowView"
+          },
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/WindowOpcodeView"
+            },
+            "type": "array",
+            "title": "Diff"
+          },
+          "old_segments": {
+            "items": {
+              "$ref": "#/components/schemas/TextWindowView"
+            },
+            "type": "array",
+            "title": "Old Segments",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "proposal_set_id",
+          "source_ref",
+          "term_id",
+          "layer_id",
+          "reason",
+          "old_mentions",
+          "old_context",
+          "new_context",
+          "diff",
+          "old_segments"
+        ],
+        "title": "ReanchorItem"
       },
       "ReasonRequest": {
         "properties": {
@@ -6874,6 +7640,114 @@
         ],
         "title": "TermLookup"
       },
+      "TextWindowView": {
+        "properties": {
+          "start": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "End"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "text"
+        ],
+        "title": "TextWindowView"
+      },
+      "TranslationCheckView": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "passed"
+        ],
+        "title": "TranslationCheckView"
+      },
+      "TranslationRunView": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/TranslationCheckView"
+            },
+            "type": "array",
+            "title": "Checks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider"
+        ],
+        "title": "TranslationRunView"
+      },
       "TreeLevel": {
         "properties": {
           "term_id": {
@@ -7404,6 +8278,228 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VariantSummary": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "native",
+              "machine_translation",
+              "human_translation",
+              "correction"
+            ],
+            "title": "Origin"
+          },
+          "derived_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived From"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranslationRunView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "translation_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translated",
+                  "automatic_check_failed",
+                  "ready_for_review",
+                  "reviewed",
+                  "accepted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Status"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "text_sha256": {
+            "type": "string",
+            "title": "Text Sha256"
+          },
+          "assigned_to_me": {
+            "type": "boolean",
+            "title": "Assigned To Me"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "case_id",
+          "external_id",
+          "language",
+          "version",
+          "origin",
+          "derived_from",
+          "translation",
+          "translation_status",
+          "status_reason",
+          "text_sha256",
+          "assigned_to_me"
+        ],
+        "title": "VariantSummary"
+      },
+      "VariantText": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "text_sha256": {
+            "type": "string",
+            "title": "Text Sha256"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "text",
+          "text_sha256"
+        ],
+        "title": "VariantText"
+      },
+      "VersionRef": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "own",
+              "proposals",
+              "stage_result",
+              "release"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "label",
+          "created_at"
+        ],
+        "title": "VersionRef"
+      },
+      "WindowOpcodeView": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "equal",
+              "replace",
+              "insert",
+              "delete"
+            ],
+            "title": "Op"
+          },
+          "old_start": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Old Start"
+          },
+          "old_end": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Old End"
+          },
+          "new_start": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "New Start"
+          },
+          "new_end": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "New End"
+          },
+          "old_text": {
+            "type": "string",
+            "title": "Old Text"
+          },
+          "new_text": {
+            "type": "string",
+            "title": "New Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "op",
+          "old_start",
+          "old_end",
+          "new_start",
+          "new_end",
+          "old_text",
+          "new_text"
+        ],
+        "title": "WindowOpcodeView"
       },
       "WorkspaceKey": {
         "properties": {

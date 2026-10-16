@@ -60,6 +60,8 @@ logger = logging.getLogger(__name__)
 # Answered with 404, so a non-member cannot tell "missing" from "not yours".
 NOT_FOUND_CODES = frozenset(
     {
+        "CASE_NOT_FOUND",
+        "VERSION_NOT_FOUND",
         "DOCUMENT_NOT_FOUND",
         "ASSIGNMENT_NOT_FOUND",
         "PROJECT_NOT_FOUND",
@@ -401,8 +403,10 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
         )
 
     from ontocurator.api.assignment_routes import router as assignment_router
+    from ontocurator.api.variant_routes import router as variant_router
 
     app.include_router(assignment_router)
+    app.include_router(variant_router)
     app.include_router(admin_router)
     app.include_router(ontology_router)
     app.include_router(project_router)

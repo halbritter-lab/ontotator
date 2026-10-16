@@ -1,7 +1,7 @@
-import type { AssignmentView, DocumentSummary, Member, ProposalResponse } from "../src/api/client";
-export const documents: DocumentSummary[] = [
-  { document_id: "z/doc", language: "en", position: 4, text_length: 10, status: "not_started", assignees: [] },
-  { document_id: "a", language: "de", position: 9, text_length: 10, status: "not_started", assignees: [] },
+import type { AssignmentView, ProjectDocumentSummary, Member, ProposalResponse } from "../src/api/client";
+export const documents: ProjectDocumentSummary[] = [
+  { document_id: "z/doc", case_id: "z/doc", external_id: "z/doc", version: 1, origin: "native", translation_status: null, status_reason: null, language: "en", position: 4, text_length: 10, status: "not_started", assignees: [] },
+  { document_id: "a", case_id: "a", external_id: "a", version: 1, origin: "native", translation_status: null, status_reason: null, language: "de", position: 9, text_length: 10, status: "not_started", assignees: [] },
 ];
 export const members: Member[] = [
   { username: "alice", display_name: "Alice", pseudonym: "A", roles: ["annotator"], languages: ["en"] },

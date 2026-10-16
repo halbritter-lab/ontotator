@@ -22,10 +22,13 @@ from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.auth.authority import lock_user_authority
 from ontocurator.authz.memberships import grant_roles
 from ontocurator.authz.policy import ROLES, Access, Action, can, may_take
+from ontocurator.authz.versions import require_proposals, visible_annotation_versions
 from ontocurator.authz.visibility import (
     DocumentFilter,
     current_access,
     project_document_filters,
+    readable_case_documents,
+    require_case_text,
     require_document,
     visible_documents,
 )
@@ -403,18 +406,61 @@ class ScopedRepository(Repository):
     # --- documents and proposals ------------------------------------------- #
 
     def get_variant(self, project_key: str, document_id: str) -> VariantInfo:
-        self._document(project_key, document_id)
-        return super().get_variant(project_key, document_id)
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            require_case_text(conn, self.access, project_id, project_key, document_id)
+            return super().get_variant(project_key, document_id)
 
     def list_variants(
         self, project_key: str, *, case_id: str | None = None
     ) -> list[VariantInfo]:
-        visibility = self._documents(project_key)
-        return self._variants(
-            project_key,
-            case_id=case_id,
-            document_ids=None if visibility.all else visibility.document_ids,
-        )
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            fresh = current_access(conn, self.access, project_id, project_key)
+            if not can(fresh, Action.VIEW_PROJECT, project_key):
+                raise project_not_found(project_key)
+            visibility = readable_case_documents(conn, fresh, project_id, project_key)
+            return self._variants(
+                project_key,
+                case_id=case_id,
+                document_ids=None if visibility.all else visibility.document_ids,
+            )
+
+    def get_variant_text(self, project_key: str, document_id: str) -> Document | None:
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            require_case_text(conn, self.access, project_id, project_key, document_id)
+            return super().get_variant_text(project_key, document_id)
+
+    def get_annotation_version(
+        self, project_key: str, document_id: str, kind: str, version_id: str
+    ) -> dict[str, Any]:
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            refs = visible_annotation_versions(
+                conn, self.access, project_id, project_key, document_id
+            )
+            ref = next(
+                (item for item in refs if item.kind == kind and item.id == version_id),
+                None,
+            )
+            if ref is None:
+                raise DomainError("VERSION_NOT_FOUND")
+            return {
+                "ref": ref,
+                **super().get_annotation_version(
+                    project_key, document_id, kind, version_id
+                ),
+            }
+
+    def get_reanchor_items(
+        self, project_key: str, document_id: str
+    ) -> list[dict[str, Any]]:
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            require_case_text(conn, self.access, project_id, project_key, document_id)
+            require_proposals(conn, self.access, project_id, project_key, document_id)
+            return super().get_reanchor_items(project_key, document_id)
 
     def find_variants_by_text_sha256(
         self, project_key: str, sha: str
@@ -497,8 +543,13 @@ class ScopedRepository(Repository):
                 )
             ).scalar_one_or_none()
             if owner is not None:
-                require_document(conn, self.access, project_id, project_key, owner)
-        return super().get_proposal_set(project_key, set_id)
+                from ontocurator.authz.versions import may_read_proposals
+
+                if not may_read_proposals(
+                    conn, self.access, project_id, project_key, owner
+                ):
+                    raise DomainError("PROPOSAL_SET_NOT_FOUND")
+            return super().get_proposal_set(project_key, set_id)
 
     def proposal_metadata(
         self, project_key: str, document_id: str

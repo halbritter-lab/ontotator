@@ -2,6 +2,8 @@ import { ApiError } from "../api/client";
 
 /** Coverage is checked against the committed backend administration catalog. */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
+  CASE_NOT_FOUND: "This case is not available to you.",
+  VERSION_NOT_FOUND: "This annotation version is not available to you.",
   OVERRIDE_NOT_APPLICABLE: "The override must name one translation variant in this import.",
   OVERRIDE_REASON_REQUIRED: "Accepting a translation requires a reason.",
   VARIANT_CASE_MISMATCH: "The variant and its source must belong to the same case.",

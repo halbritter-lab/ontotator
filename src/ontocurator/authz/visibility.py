@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from typing import cast
 
 from sqlalchemy import Connection, and_, exists, or_, select
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from ontocurator.authz.policy import TASK_ROLES, Access, Action, Role, can
 from ontocurator.domain.errors import DomainError
 from ontocurator.storage.tables import (
     AssignmentRow,
+    DocumentRow,
     ProjectMembershipRow,
     ProjectRow,
     UserRow,
@@ -104,6 +106,86 @@ def qualifying_assignment(user_id: int) -> ColumnElement[bool]:
             )
         ),
     )
+
+
+def readable_case_documents(
+    conn: Connection, access: Access, project_id: int, project_key: str
+) -> DocumentFilter:
+    """Immutable sibling text only; never replace exact annotation/work guards."""
+    fresh = current_access(conn, access, project_id, project_key)
+    if can(fresh, Action.VIEW_ALL_DOCUMENTS, project_key):
+        return DocumentFilter(True)
+    assigned_cases = (
+        select(DocumentRow.case_id)
+        .join(
+            AssignmentRow,
+            and_(
+                AssignmentRow.project_id == DocumentRow.project_id,
+                AssignmentRow.document_id == DocumentRow.document_id,
+            ),
+        )
+        .where(
+            DocumentRow.project_id == project_id, qualifying_assignment(fresh.user_id)
+        )
+    )
+    ids = conn.execute(
+        select(DocumentRow.document_id).where(
+            DocumentRow.project_id == project_id,
+            DocumentRow.case_id.in_(assigned_cases),
+        )
+    ).scalars()
+    return DocumentFilter(False, frozenset(ids))
+
+
+def require_case_text(
+    conn: Connection,
+    access: Access,
+    project_id: int,
+    project_key: str,
+    document_id: str,
+) -> None:
+    fresh = current_access(conn, access, project_id, project_key)
+    if not can(fresh, Action.VIEW_PROJECT, project_key):
+        raise DomainError("PROJECT_NOT_FOUND")
+    if can(fresh, Action.VIEW_ALL_DOCUMENTS, project_key):
+        if (
+            conn.execute(
+                select(DocumentRow.document_id).where(
+                    DocumentRow.project_id == project_id,
+                    DocumentRow.document_id == document_id,
+                )
+            ).first()
+            is None
+        ):
+            raise DomainError("DOCUMENT_NOT_FOUND")
+        return
+    target = aliased(DocumentRow)
+    sibling = aliased(DocumentRow)
+    assigned_case = (
+        select(AssignmentRow.id)
+        .join(
+            sibling,
+            and_(
+                sibling.project_id == AssignmentRow.project_id,
+                sibling.document_id == AssignmentRow.document_id,
+            ),
+        )
+        .where(
+            AssignmentRow.project_id == project_id,
+            sibling.case_id == target.case_id,
+            qualifying_assignment(fresh.user_id),
+        )
+        .exists()
+    )
+    found = conn.execute(
+        select(target.document_id).where(
+            target.project_id == project_id,
+            target.document_id == document_id,
+            assigned_case,
+        )
+    ).first()
+    if found is None:
+        raise DomainError("DOCUMENT_NOT_FOUND")
 
 
 def project_document_filters(

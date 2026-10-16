@@ -27,6 +27,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import aliased
 
 from ontocurator.auth.context import current_principal
 from ontocurator.domain.annotations import AnnotationSnapshot
@@ -1498,6 +1499,7 @@ class Repository:
         """Producer metadata, with its actual owning document association."""
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
+            previous = aliased(DocumentRow)
             row = (
                 conn.execute(
                     select(
@@ -1506,11 +1508,30 @@ class Repository:
                         ProposalSetRow.annotation_set_id,
                         ProposalSetRow.bundle_id,
                         ProposalSetRow.set_kind,
+                        ProposalSetRow.origin,
+                        previous.document_id.label("source_document_id"),
+                        previous.version.label("source_version"),
                         ProposalSetRow.actors,
                         ProposalSetRow.imported_at,
                         UserRow.pseudonym.label("imported_by_pseudonym"),
                     )
                     .outerjoin(UserRow, UserRow.id == ProposalSetRow.imported_by)
+                    .join(
+                        DocumentRow,
+                        and_(
+                            DocumentRow.project_id == ProposalSetRow.project_id,
+                            DocumentRow.document_id == ProposalSetRow.document_id,
+                        ),
+                    )
+                    .outerjoin(
+                        previous,
+                        and_(
+                            previous.project_id == DocumentRow.project_id,
+                            previous.document_id == DocumentRow.derived_from,
+                            previous.case_id == DocumentRow.case_id,
+                            previous.language == DocumentRow.language,
+                        ),
+                    )
                     .where(
                         ProposalSetRow.id == set_id,
                         ProposalSetRow.project_id == project_id,
@@ -1521,7 +1542,102 @@ class Repository:
             )
             if row is None or self.get_document(project_key, row.document_id) is None:
                 raise DomainError("PROPOSAL_SET_NOT_FOUND", "Proposal set not found.")
-            return dict(row)
+            result = dict(row)
+            if row.origin != "reanchor":
+                result.update(source_document_id=None, source_version=None)
+            elif row.source_version is None:
+                raise DomainError("PROPOSAL_SET_NOT_FOUND")
+            return result
+
+    def get_variant_text(self, project_key: str, document_id: str) -> Document | None:
+        """Immutable text, separately scoped from annotation/workspace reads."""
+        return Repository.get_document(self, project_key, document_id)
+
+    def get_annotation_version(
+        self, project_key: str, document_id: str, kind: str, version_id: str
+    ) -> dict[str, Any]:
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            if kind == "own":
+                payload = conn.execute(
+                    select(SubmissionRow.payload).where(
+                        SubmissionRow.project_id == project_id,
+                        SubmissionRow.document_id == document_id,
+                        SubmissionRow.submission_id == version_id,
+                    )
+                ).scalar_one_or_none()
+                if payload is None:
+                    raise DomainError("VERSION_NOT_FOUND")
+                annotations = Submission.model_validate(payload).snapshots
+            elif kind == "proposals" and version_id.isdecimal():
+                payloads = (
+                    conn.execute(
+                        select(AnnotationSnapshotRow.payload)
+                        .join(
+                            ProposalAnnotationRow,
+                            and_(
+                                ProposalAnnotationRow.project_id
+                                == AnnotationSnapshotRow.project_id,
+                                ProposalAnnotationRow.annotation_id
+                                == AnnotationSnapshotRow.annotation_id,
+                                ProposalAnnotationRow.version
+                                == AnnotationSnapshotRow.version,
+                            ),
+                        )
+                        .join(
+                            ProposalSetRow,
+                            and_(
+                                ProposalSetRow.id
+                                == ProposalAnnotationRow.proposal_set_id,
+                                ProposalSetRow.project_id
+                                == ProposalAnnotationRow.project_id,
+                            ),
+                        )
+                        .where(
+                            ProposalSetRow.project_id == project_id,
+                            ProposalSetRow.document_id == document_id,
+                            ProposalSetRow.id == int(version_id),
+                            AnnotationSnapshotRow.document_id == document_id,
+                        )
+                        .order_by(
+                            AnnotationSnapshotRow.annotation_id,
+                            AnnotationSnapshotRow.version,
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                annotations = [decode_snapshot(payload) for payload in payloads]
+            else:
+                raise DomainError("VERSION_NOT_FOUND")
+            evidence = {
+                (item.mention.evidence_id, item.version): item
+                for snap in annotations
+                for item in snap.evidence
+            }
+            return {"annotations": annotations, "evidence": list(evidence.values())}
+
+    def get_reanchor_items(
+        self, project_key: str, document_id: str
+    ) -> list[dict[str, Any]]:
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            rows = conn.execute(
+                select(ProposalSetRow.id, ProposalSetRow.pending_items)
+                .where(
+                    ProposalSetRow.project_id == project_id,
+                    ProposalSetRow.document_id == document_id,
+                    ProposalSetRow.origin == "reanchor",
+                )
+                .order_by(ProposalSetRow.id)
+            ).all()
+            result = []
+            for row in rows:
+                for item in row.pending_items:
+                    if not isinstance(item, dict):
+                        raise DomainError("VERSION_NOT_FOUND")
+                    result.append({**item, "proposal_set_id": row.id})
+            return result
 
     def proposal_metadata(
         self, project_key: str, document_id: str
