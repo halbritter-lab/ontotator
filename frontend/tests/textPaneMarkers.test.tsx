@@ -30,3 +30,16 @@ it("hands the same scrollport to a replacement callback and releases the previou
   expect(before).toHaveBeenLastCalledWith(null);
   expect(after).toHaveBeenLastCalledWith(scrollport);
 });
+
+it("keeps an invalid-mention warning before the text without polluting its codepoint content", () => {
+  const text = "A\u{1f600}e\u0301\n\nB";
+  const mounted = render(<TextPane {...base} text={text}
+    header={<nav aria-label="Case versions">Version controls</nav>}
+    mentions={[{ evidence_id: "invalid", segments: [{ start: 0, end: 99 }] }]} />);
+  const warning = mounted.getByRole("alert");
+  const scrollport = mounted.container.querySelector<HTMLDivElement>(".text-container")!;
+  expect(warning.textContent).toContain("1 mention(s) have offsets outside this text");
+  expect(warning.compareDocumentPosition(scrollport) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  expect(scrollport.contains(warning)).toBe(false);
+  expect(Array.from(scrollport.textContent ?? "")).toEqual(Array.from(text));
+});
