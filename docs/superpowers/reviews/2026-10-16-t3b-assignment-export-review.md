@@ -54,3 +54,23 @@ authorization was needed. Evidence is retained in the browser worktree's ignored
 T3b SDD reports/reviews. This four-test pass does not claim a new complete
 43-browser/backend/frontend/container execution. P9 latency remains open; T7 is
 parked. No main merge, push or deployment occurred.
+
+## Full-suite findings and reviewed corrections
+
+The first complete gate at `191e67d` exited 1 after static/contract/wheel checks
+passed: 826/828 frontend tests passed; backend/browser/container stages were not
+reached. It exposed a real Task 10 regression missed by the original review:
+an upstream tool source incorrectly gave a human-curated annotation an AI badge.
+Task 10 acceptance was reopened for correction. Fix `07f331b` uses the current
+annotation's own provenance for badge eligibility and preserves upstream Source
+metadata. The new actual-composition regression failed before the fix; all 32
+affected tests passed afterward, including nine unchanged historical sidebar
+tests. Fresh scoped specification/quality review passed; its independent actual
+composition test passed. Task 10 acceptance is restored with this correction.
+
+The other failure was an existing tree test observing focus before the passive
+reveal effect. Test-only `13db6f9` awaits the same focus/single-scroll/nearest
+assertions with the existing default waitFor; all 17 tree tests and independent
+scoped source review passed. No runtime tree behavior or timeout changed.
+Embedded assets are rebuilt after the badge correction. The original failed gate
+remains recorded; a fresh matching image and complete gate retry are required.
