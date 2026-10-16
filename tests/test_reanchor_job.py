@@ -1,6 +1,8 @@
 """Actual runtime/producer PostgreSQL regressions; COLLECT ONLY until root token."""
 
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
 
@@ -18,7 +20,7 @@ from test_uploads_api import BASE, _ready, _run
 from ontocurator.api.variant_routes import ReanchorItem
 from ontocurator.auth.audit import Actor
 from ontocurator.exchange.jobs import HANDLERS
-from ontocurator.exchange.t1 import document_to_t1
+from ontocurator.exchange.t1 import ImportedProposals, ImportedSet, document_to_t1
 from ontocurator.jobs.queue import JobQueue
 from ontocurator.storage.tables import (
     AnnotationSnapshotRow,
@@ -52,7 +54,10 @@ def runtime(tmp_path):
 
 
 def imported(env, units, actor=None):
-    result = run_import(env.db, bundle(env.tmp_path, units), actor=actor or Actor.cli())
+    with TemporaryDirectory(dir=env.tmp_path) as directory:
+        result = run_import(
+            env.db, bundle(Path(directory), units), actor=actor or Actor.cli()
+        )
     assert result.status == "succeeded", result.error
     return result
 
@@ -211,9 +216,36 @@ def test_same_actor_labels_are_distinct_sources_and_empty_set_creates_no_output(
     original = env.source
     second = unit("case", set_id="another-set")
     empty = unit("case", set_id="empty-set", annotations=[])
-    imported(
+    parent = imported(
         env, [original, second, empty, correction_unit(original, "Prefix " + TEXT)]
     )
+    source_rows = rows(env, ProposalSetRow, ProposalSetRow.document_id == "case")
+    # The importer treats an empty delivered set as document-only. Materialize
+    # that delivered set through the common writer to test empty-source
+    # exclusion without changing importer semantics.
+    aset = empty.annotation_set
+    inserted = env.app.state.repo.add_documents_and_proposals(
+        "proj",
+        [],
+        [
+            ImportedSet(
+                "case",
+                "b-1",
+                source_rows[0]["manifest_sha256"],
+                aset.annotation_set_id,
+                aset.set_kind,
+                [
+                    actor.model_dump(mode="json", exclude_none=True)
+                    for actor in aset.actors
+                ],
+                aset.model_dump(mode="json"),
+                ImportedProposals([], [], {}, 0),
+            )
+        ],
+        source_sha256=source_rows[0]["source_sha256"],
+        job_id=parent.id,
+    )
+    assert inserted["sets_added"] == 1 and inserted["proposals"] == 0
     source_rows = rows(env, ProposalSetRow, ProposalSetRow.document_id == "case")
     assert len(source_rows) == 3
     before = [(row["id"], row["payload"], row["actors"]) for row in source_rows]
@@ -302,10 +334,16 @@ def test_all_needs_review_persists_typed_windows_without_partial_carry(runtime):
     )
     assert response.status_code == 200, response.text
     assert len(response.json()) == 2
-    assert all(
-        ReanchorItem.model_validate(raw).proposal_set_id == output["id"]
-        for raw in response.json()
-    )
+    for raw in response.json():
+        item = ReanchorItem.model_validate(
+            {key: value for key, value in raw.items() if key != "old_segments"}
+        )
+        assert item.proposal_set_id == output["id"]
+        assert raw["old_segments"] == [
+            segment.model_dump(mode="json")
+            for mention in item.old_mentions
+            for segment in [*mention.segments, *mention.cue_segments]
+        ]
     assert (
         len(
             rows(
