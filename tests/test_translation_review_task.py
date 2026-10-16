@@ -803,14 +803,14 @@ def unrelated_documents(env, count=7):
 
 
 def observe_eligibility_metadata(env, monkeypatch):
-    import ontocurator.assignments.eligibility as eligibility
+    from ontocurator.domain.variants import VariantInfo
 
     consumed, query_rows = [], []
-    original = eligibility.VariantInfo
+    original = VariantInfo.__init__
 
-    def materialize(**kwargs):
-        consumed.append(kwargs["document_id"])
-        return original(**kwargs)
+    def materialize(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        consumed.append(self.document_id)
 
     def capture(_conn, cursor, statement, _params, _context, _many):
         if (
@@ -820,7 +820,7 @@ def observe_eligibility_metadata(env, monkeypatch):
         ):
             query_rows.append(cursor.rowcount)
 
-    monkeypatch.setattr(eligibility, "VariantInfo", materialize)
+    monkeypatch.setattr(VariantInfo, "__init__", materialize)
     event.listen(env.db.engine, "after_cursor_execute", capture)
     return consumed, query_rows, capture
 
@@ -982,3 +982,29 @@ def test_bounded_ancestry_still_refuses_corrupt_links_without_unrelated_inventor
         consumed,
     )
     assert set(consumed) == allowed
+
+
+def test_coalesced_snapshot_preserves_selected_stored_and_null_position_order(
+    case_env, monkeypatch
+):
+    env = case_env
+    unrelated_documents(env)
+    env.app.state.accounts.set_languages(HARNESS, "alice", ["en"])
+    consumed, query_rows, capture = observe_eligibility_metadata(env, monkeypatch)
+    try:
+        proposal = proposed(env, ["unrelated-2", SOURCE, "unrelated-1"], "annotate")
+    finally:
+        event.remove(env.db.engine, "after_cursor_execute", capture)
+    assert proposal["context"]["document_ids"] == [SOURCE, "unrelated-1", "unrelated-2"]
+    assert [row["document_id"] for row in proposal["rows"]] == [
+        "unrelated-1",
+        "unrelated-2",
+    ]
+    assert proposal["unassignable"][0]["document_id"] == SOURCE
+    assert query_rows == [10] and len(consumed) == 10
+    assert set(consumed) == {
+        SOURCE,
+        TARGET,
+        CORRECTED,
+        *(f"unrelated-{i}" for i in range(7)),
+    }

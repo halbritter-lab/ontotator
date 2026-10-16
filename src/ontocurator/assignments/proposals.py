@@ -24,9 +24,9 @@ from ontocurator.assignments.distribution import (
     propose_distribution,
 )
 from ontocurator.assignments.eligibility import (
+    VARIANT_COLUMNS,
     check_variant_assignable,
     conflicting_tasks,
-    load_variants,
 )
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import (
@@ -268,18 +268,10 @@ class DistributionService:
         require_project_management(
             conn, actor, key, project_id, Action.MANAGE_ASSIGNMENTS
         )
-        documents = (
+        inventory = (
             conn.execute(
-                select(
-                    DocumentRow.document_id,
-                    DocumentRow.position,
-                    DocumentRow.language,
-                    DocumentRow.text_sha256,
-                )
-                .where(
-                    DocumentRow.project_id == project_id,
-                    DocumentRow.document_id.in_(document_ids),
-                )
+                select(*VARIANT_COLUMNS, DocumentRow.position)
+                .where(DocumentRow.project_id == project_id)
                 .order_by(
                     DocumentRow.position.asc().nulls_last(), DocumentRow.document_id
                 )
@@ -287,10 +279,24 @@ class DistributionService:
             .mappings()
             .all()
         )
+        variants = {
+            row["document_id"]: VariantInfo(
+                **{name: row[name] for name in VariantInfo.__dataclass_fields__}
+            )
+            for row in inventory
+        }
+        selected = set(document_ids)
+        documents = [
+            {
+                name: row[name]
+                for name in ("document_id", "position", "language", "text_sha256")
+            }
+            for row in inventory
+            if row["document_id"] in selected
+        ]
         if len(documents) != len(document_ids):
             # Never look up a missing ID in another project, or echo metadata.
             raise DomainError("DOCUMENT_NOT_FOUND")
-        variants = load_variants(conn, project_id)
         eligibility: dict[str, tuple[tuple[str, ...], str | None]] = {}
         for d in documents:
             try:
