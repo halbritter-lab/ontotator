@@ -1707,3 +1707,6 @@
 .reanchor-context { white-space: pre-wrap; overflow-wrap: anywhere; }
 .reanchor-panel ol { padding-left: var(--space-4); }
 .reanchor-panel .translation-diff { max-height: 16rem; min-height: 0; }
+
+.reanchor-context mark { background: var(--warning-light); color: inherit; }
+.reanchor-context mark[data-old-kind~="cue"] { text-decoration: underline dotted; }
