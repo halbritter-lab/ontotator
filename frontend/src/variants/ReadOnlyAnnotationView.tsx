@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
-import type { AnnotationSnapshot, AnnotationVersion } from '../api/client';
+import { PendingReanchorPanel, useReanchorContext } from './ReanchorPanel';
+import { ProposalMetadataProvider, ProposalSource } from '../editor/ProposalSource';
+import { useCallback, useMemo, useState } from 'react';
+import type { AnnotationSnapshot, AnnotationVersion, EditorProposal } from '../api/client';
 import { TextPane } from '../editor/TextPane';
 import { TermName } from '../editor/TermName';
 import { AiBadge } from '../editor/AiBadge';
@@ -9,14 +11,21 @@ import type { MentionDisplay } from '../spans/adapter';
 import { Button } from '../ui';
 
 export interface ReadOnlyAnnotationViewProps {
+  proposalContext?: {projectKey:string;documentId:string;scope:string;setId:string};
   onTextElement?: (element: HTMLDivElement | null) => void;
   text: string;
   annotations: AnnotationSnapshot[];
   evidence: AnnotationVersion['evidence'];
   labelFor: (layerId: string | undefined, termId: string) => string | null;
 }
-export function ReadOnlyAnnotationView({ text, annotations, evidence, labelFor, onTextElement }: ReadOnlyAnnotationViewProps): JSX.Element {
+export function ReadOnlyAnnotationView({ text, annotations, evidence, labelFor, onTextElement, proposalContext }: ReadOnlyAnnotationViewProps): JSX.Element {
   const [selected, setSelected] = useState<string | null>(null);
+  const [element,setElement] = useState<HTMLDivElement|null>(null);
+  const attachElement=useCallback((value:HTMLDivElement|null)=>{setElement(value);onTextElement?.(value);},[onTextElement]);
+  const context=useReanchorContext(text,element,proposalContext?.scope ?? 'text-only');
+  // The actual proposals VersionRef ID is the server's decimal proposal-set identity.
+  const setId=proposalContext && /^[1-9]\d*$/.test(proposalContext.setId) && Number.isSafeInteger(Number(proposalContext.setId)) ? Number(proposalContext.setId) : null;
+  const sources=useMemo<EditorProposal[]>(()=>setId===null ? [] : annotations.map(snapshot=>({...snapshot,proposal_set_id:setId,notes:[]})),[annotations,setId]);
   const mentions = useMemo(() => {
     const result: MentionDisplay[] = [];
     annotations.forEach((snapshot, index) => {
@@ -35,12 +44,15 @@ export function ReadOnlyAnnotationView({ text, annotations, evidence, labelFor, 
     });
     return result;
   }, [annotations, evidence]);
-  return <div className="readonly-annotation-view">
-    {annotations.length > 0 && <aside className="readonly-annotations density-compact" aria-label="Read-only annotations">
+  const content = <div className="readonly-annotation-view">
+    {(annotations.length > 0 || setId !== null) && <aside className="readonly-annotations density-compact" aria-label="Read-only annotations">
+      {proposalContext && setId !== null && <PendingReanchorPanel projectKey={proposalContext.projectKey} documentId={proposalContext.documentId}
+        scope={proposalContext.scope} enabled={true} proposalSetId={proposalContext.setId} onContext={context.reveal} />}
       <ul className="doc-list">{annotations.map((snapshot, index) => <li className="doc-item" key={JSON.stringify([snapshot.annotation.annotation_id, snapshot.version])}>
         <Button variant="quiet" onClick={() => setSelected(mentions.find(mention => mention.evidence_id.startsWith(`${index}:`))?.evidence_id ?? null)}>
           <TermName termId={snapshot.annotation.term_id} label={labelFor(snapshot.annotation.layer_id, snapshot.annotation.term_id)} />
-        </Button>{' '}<AiBadge provenance={snapshot.annotation.provenance} />
+        </Button>{' '}<AiBadge provenance={snapshot.annotation.provenance} source={sources[index]} />
+        <ProposalSource source={sources[index]}/>
         <p>{snapshot.annotation.layer_id} · {snapshot.annotation.type_id}</p>
         <p>{snapshot.annotation.provenance.actor.actor_id} · {snapshot.annotation.provenance.method}</p>
         <p>Version: {snapshot.version}</p>
@@ -53,7 +65,8 @@ export function ReadOnlyAnnotationView({ text, annotations, evidence, labelFor, 
         </p>)}
       </li>)}</ul>
     </aside>}
-    <TextPane onTextElement={onTextElement} text={text} mentions={mentions} selectedEvidenceId={selected} selectionIntent="new_mention"
+    <TextPane onTextElement={attachElement} contextSegments={context.contextSegments} text={text} mentions={mentions} selectedEvidenceId={selected} selectionIntent="new_mention"
       readOnly isAttachingMention={false} resizableEvidenceIds={[]} onPick={setSelected} onSelection={() => {}} onChangeIntent={() => {}} />
   </div>;
+  return proposalContext && setId !== null ? <ProposalMetadataProvider scope={proposalContext.scope} projectKey={proposalContext.projectKey} proposals={sources}>{content}</ProposalMetadataProvider> : content;
 }

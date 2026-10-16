@@ -12,7 +12,7 @@ export const proposal = (set = 1, kind: "tool" | "human" = "tool"): EditorPropos
 });
 export const metadata = (id = 1): ProposalSetView => ({id, origin: "import", source_document_id: null, source_version: null, document_id: "doc", annotation_set_id: `set-${id}`, bundle_id: "bundle-1", set_kind: "tool", imported_at: "2026-10-14T12:30:00Z", imported_by_pseudonym: "ann-importer", actors: [{actor_id: "unrelated", kind: "tool", name: "Wrong tool"}, {actor_id: "tool-1", kind: "tool", name: "Phentrieve", version: "1.4", model: "bge-m3", run_id: `run-${id}`} ]});
 const show = (items = [proposal()], scope = "workspace-1") => <ProposalMetadataProvider scope={scope} projectKey="project" proposals={items}>{items.map(p => <div key={p.version}><AiBadge provenance={p.annotation.provenance} source={p}/><ProposalSource source={p}/></div>)}</ProposalMetadataProvider>;
-beforeEach(() => vi.restoreAllMocks());
+beforeEach(() => {vi.restoreAllMocks();vi.spyOn(api,"getReanchorItems").mockResolvedValue([]);});
 
 it("shows the matching tool, version, model, run, import, set, bundle and notes", async () => {
   vi.spyOn(api, "getProposalSet").mockResolvedValue(metadata());
@@ -88,7 +88,7 @@ const workspace = (): WorkspaceView => {
   const target = proposal(1), reference = proposal(2), human = proposal(3, "human");
   const derived = {...proposal(9, "human"), annotation: {...proposal(9, "human").annotation, annotation_id: "derived", provenance: {actor: {actor_id: "reviewer", kind: "human" as const}, method: "manual", source_refs: ["a1:v1"]}}};
   const targets = {target_set_id: "targets", targets: [{annotation_id: "a1", version: "v1"}]};
-  return {key, document: {document_id: "doc", text: "Clinical text.", text_sha256: "text", language: "en"}, scope: {scope_id: "scope", mode: "review", editable_layer_ids: ["hpo"], reference_layer_ids: []}, layers: [{layer_id: "hpo", label: "Findings", ontology_id: "hp", access: "editable", default_visible: true, default_type_id: "finding", annotation_types: [{type_id: "finding", label: "Finding", axes: [], evidence_policy: "optional"}]}], ontologies: [], targets, available_inputs: [target, reference, human], draft: {key, targets, revision: 0, annotations: [derived], evidence: [], decisions: [], checked_layer_ids: []}, checked_layer_ids: [], submissions: [], term_statuses: {}, axes_definition: "axes", axes_config_sha256: "axes-sha"};
+  return {key, document: {document_id: "doc", text: "Clinical text.", text_sha256: "text", language: "en"}, scope: {scope_id: "scope", mode: "review", editable_layer_ids: ["hpo"], reference_layer_ids: []}, layers: [{layer_id: "hpo", label: "Findings", ontology_id: "hp", access: "editable", default_visible: true, default_type_id: "finding", annotation_types: [{type_id: "finding", label: "Finding", axes: [], evidence_policy: "optional"}]}], ontologies: [], targets, available_inputs: [target, reference, human], proposal_sets: [metadata(1),metadata(2),metadata(3)], draft: {key, targets, revision: 0, annotations: [derived], evidence: [], decisions: [], checked_layer_ids: []}, checked_layer_ids: [], submissions: [], term_statuses: {}, axes_definition: "axes", axes_config_sha256: "axes-sha"};
 };
 
 it("actual CaseScreen wires target, source, derived and human provenance without mutations", async () => {
@@ -116,7 +116,7 @@ it("actual CaseScreen wires target, source, derived and human provenance without
   expect(within(container.querySelector<HTMLElement>(".inspector-pane")!).queryByText("AI")).toBeNull();
   expect(within(screen.getByLabelText("Proposal source")).getByText("Phentrieve 1.4")).toBeTruthy();
   expect(within(screen.getByLabelText("Proposal source")).getByText("run-1")).toBeTruthy();
-  expect(get).toHaveBeenCalledTimes(3);
+  expect(get).not.toHaveBeenCalled();
   expect(mutate).not.toHaveBeenCalled();
 });
 

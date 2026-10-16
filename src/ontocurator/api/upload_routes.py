@@ -1,6 +1,5 @@
 """Document upload staging and document-scoped producer metadata."""
 
-from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
@@ -14,6 +13,7 @@ from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Action
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import PayloadTooLarge
+from ontocurator.domain.proposals import ProposalSetView
 from ontocurator.exchange.jobs import store_file
 from ontocurator.exchange.uploads import UploadFileInfo, UploadService, UploadView
 from ontocurator.exchange.variant_overrides import StatusOverride
@@ -30,20 +30,6 @@ class CommitUpload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     plan_sha256: str
     status_overrides: list[StatusOverride] = Field(default_factory=list)
-
-
-class ProposalSetView(BaseModel):
-    id: int
-    document_id: str
-    annotation_set_id: str
-    bundle_id: str | None
-    set_kind: str
-    actors: list[dict[str, Any]]
-    imported_at: datetime
-    imported_by_pseudonym: str | None
-    origin: Literal["import", "reanchor"]
-    source_document_id: str | None
-    source_version: int | None
 
 
 def _service(request: Request, principal: Any) -> UploadService:

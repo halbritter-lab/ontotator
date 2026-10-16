@@ -1,3 +1,4 @@
+import { PendingReanchorPanel, useReanchorContext } from "../variants/ReanchorPanel";
 import { ComparePane } from "../variants/ComparePane";
 import { Toolbar } from "../ui/Toolbar";
 import { VariantSelectors } from "../variants/VariantSelectors";
@@ -147,6 +148,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [comparisonIdentity, setComparisonIdentity] = useState<string | null>(null);
   const compareOpen = comparisonIdentity === versionIdentity;
   const [leftTextElement, setLeftTextElement] = useState<HTMLDivElement | null>(null);
+  const reanchorContext = useReanchorContext(view.document.text, leftTextElement, JSON.stringify([versionIdentity,display?.selection ?? "draft"]));
   const compareButton = useRef<HTMLButtonElement | null>(null);
   const closeComparison = () => { setComparisonIdentity(null); compareButton.current?.focus(); };
   const comparison = compareOpen && versions && versionContext ? <ComparePane
@@ -1496,7 +1498,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const cancelAttach = useMemo(() => () => setIsAttachingMention(false), []);
 
   return (
-    <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []}>
+    <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []} metadata={view.proposal_sets ?? []} allowPublicFetch={false}>
     <div ref={rootRef} className={compareOpen ? "case-comparing" : undefined} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
@@ -1644,7 +1646,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       <div className="case-reading-layout">
       {display ? <div className="comparison-reading">
         <ReadOnlyAnnotationView text={view.document.text} annotations={display.value?.annotations ?? []}
-          evidence={display.value?.evidence ?? []} labelFor={termLabel} onTextElement={setLeftTextElement} />
+          evidence={display.value?.evidence ?? []} labelFor={termLabel} onTextElement={setLeftTextElement}
+          proposalContext={display.value && versions && refForKey(display.selection,versions.refs)?.kind === "proposals"
+            ? {projectKey:view.key.project_key,documentId:view.document.document_id,scope:JSON.stringify([versionIdentity,display.selection]),setId:refForKey(display.selection,versions.refs)!.id} : undefined} />
       </div> : <>
       <nav className="mobile-pane-tabs" aria-label="Select view">
         {([ ["list", "List"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
@@ -1673,6 +1677,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           />
 
           <div className="sidebar-scroll" ref={sidebarScrollRef}>
+            <PendingReanchorPanel projectKey={view.key.project_key} documentId={view.document.document_id} scope={versionIdentity}
+              enabled={view.key.mode === "review" && !display} onContext={reanchorContext.reveal} />
             {view.key.mode === "review" && (
               <div className="sidebar-section">
                 <div className="sidebar-header">
@@ -1879,6 +1885,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         {/* Center: Text View */}
         <TextPane
           onTextElement={setLeftTextElement}
+          contextSegments={reanchorContext.contextSegments}
           text={view.document.text}
           mentions={textMentions}
           isAttachingMention={isAttachingMention}

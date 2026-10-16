@@ -8,11 +8,17 @@ class MetadataCache {
   listeners = new Set<() => void>();
   revision = 0;
   owners = 0;
-  constructor(readonly project: string) {}
+  constructor(readonly project: string, readonly allowPublicFetch = true, metadata: readonly ProposalSetView[] = [], proposals: readonly EditorProposal[] = []) {
+    for (const source of proposals) {
+      if (source.proposal_set_id == null) continue;
+      const value = metadata.find(item => item.id === source.proposal_set_id && item.document_id === source.document_id);
+      if (value || !allowPublicFetch) this.entries.set(source.proposal_set_id, value ?? null);
+    }
+  }
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   snapshot = () => this.revision;
   load(id: number) {
-    if (this.entries.has(id) || this.pending.has(id)) return;
+    if (!this.allowPublicFetch || this.entries.has(id) || this.pending.has(id)) return;
     const controller = new AbortController();
     this.pending.set(id, controller);
     void api.getProposalSet(this.project, id, controller.signal).then(
@@ -43,8 +49,11 @@ class MetadataCache {
 }
 const Metadata = createContext<{cache: MetadataCache; proposals: readonly EditorProposal[]; revision: number} | null>(null);
 
-export function ProposalMetadataProvider({scope, projectKey, proposals, children}: {scope: string; projectKey: string; proposals: readonly EditorProposal[]; children: ReactNode}) {
-  const cache = useMemo(() => new MetadataCache(projectKey), [scope, projectKey]);
+export function ProposalMetadataProvider({scope, projectKey, proposals, metadata = [], allowPublicFetch = true, children}: {scope: string; projectKey: string; proposals: readonly EditorProposal[]; metadata?: readonly ProposalSetView[]; allowPublicFetch?: boolean; children: ReactNode}) {
+  const metadataKey = JSON.stringify(metadata);
+  // Public reads retain their original per-scope deduplication; inline data follows current offered sets.
+  const offeredKey = allowPublicFetch ? "" : JSON.stringify([...new Set(proposals.map(source => JSON.stringify([source.proposal_set_id,source.document_id])))].sort());
+  const cache = useMemo(() => new MetadataCache(projectKey, allowPublicFetch, metadata, proposals), [scope, projectKey, metadataKey, offeredKey, allowPublicFetch]);
   const revision = useSyncExternalStore(cache.subscribe, cache.snapshot, cache.snapshot);
   const ids = [...new Set(proposals.map(p => p.proposal_set_id).filter((id): id is number => id != null))].sort((a,b) => a-b).join(",");
   useEffect(() => {
@@ -68,7 +77,10 @@ export function matchingTool(source: EditorProposal, metadata: ProposalSetView |
 const toolLabel = (actor: Record<string, unknown> | undefined) => actor && [text(actor.name), text(actor.version)].filter(Boolean).join(" ");
 export function useProposalMetadata(source?: EditorProposal) {
   const context = useContext(Metadata);
-  const metadata = source?.proposal_set_id != null ? context?.cache.entries.get(source.proposal_set_id) : undefined;
+  const candidate = source?.proposal_set_id != null ? context?.cache.entries.get(source.proposal_set_id) : undefined;
+  const offered = source && context?.proposals.some(value => value.proposal_set_id === source.proposal_set_id
+    && value.document_id === source.document_id && value.annotation.annotation_id === source.annotation.annotation_id && value.version === source.version);
+  const metadata = offered && candidate?.document_id === source?.document_id ? candidate : undefined;
   const tool = source ? matchingTool(source, metadata) : undefined;
   const label = toolLabel(tool);
   const duplicate = !!label && context?.proposals.some(other => other.proposal_set_id != null && other.proposal_set_id !== source?.proposal_set_id && other.document_id === source?.document_id && toolLabel(matchingTool(other, context.cache.entries.get(other.proposal_set_id))) === label);
@@ -81,6 +93,7 @@ export function ProposalSource({source}: {source?: EditorProposal | null}) {
   const name = toolLabel(tool);
   return <section className="detail-section" aria-label="Proposal source">
     <h3>Source</h3>
+    {metadata.origin === "reanchor" && metadata.source_version !== null && <p>Carried over from version {metadata.source_version}</p>}
     <dl className="axis-list">
       {name && <><dt>Tool</dt><dd>{name}</dd></>}
       {text(tool?.model) && <><dt>Model</dt><dd>{text(tool?.model)}</dd></>}

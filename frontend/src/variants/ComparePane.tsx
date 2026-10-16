@@ -100,7 +100,7 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
     {ref && !snapshot && !payloadError && <InlineMessage tone="info">Loading comparison annotations...</InlineMessage>}
     </div>
     {current?.text ? <ReadOnlyAnnotationView key={JSON.stringify([username, projectKey, caseDetail.case_id, selectedId, selection, retry, leftContext])}
-      text={current.text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} onTextElement={setRightElement} />
+      text={current.text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} onTextElement={setRightElement} proposalContext={ref?.kind === "proposals" && snapshot ? {projectKey,documentId:selectedId!,scope:JSON.stringify([username,projectKey,caseDetail.case_id,selectedId,selection,retry,leftContext]),setId:ref.id} : undefined} />
       : available && !suspended && !current?.textError ? <InlineMessage tone="info">Loading comparison text...</InlineMessage> : null}
   </section>;
 }
