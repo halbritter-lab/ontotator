@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { authenticatedRequest, loginExisting, selectText } from './helpers';
+import { authenticatedRequest, loginExisting, selectText, TEST_PASSWORD } from './helpers';
 
 test.setTimeout(120_000);
 type RecordView = components['schemas']['TranslationReviewRecord'];
@@ -80,7 +80,7 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   await expect(page.getByRole('heading', { name: 'No documents', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Upload documents', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Upload documents', exact: true });
-  await dialog.getByLabel('Files', { exact: true }).setInputFiles({ name: s.filename, mimeType: 'application/zip', buffer: bytes });
+  await dialog.getByLabel('Files (required)', { exact: true }).setInputFiles({ name: s.filename, mimeType: 'application/zip', buffer: bytes });
   const checking = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`${root(s)}/uploads`));
   await dialog.getByRole('button', { name: 'Check', exact: true }).click();
   const checked = await checking; expect(checked.ok()).toBeTruthy();
@@ -96,7 +96,7 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   const checkbox = dialog.getByRole('checkbox', { name: `Accept without review: ${s.external_id} · de · v1`, exact: true });
   await checkbox.check(); await expect(dialog.getByRole('button', { name: 'Import', exact: true })).toBeDisabled();
   const reason = 'Independent lead accepts this generic example after checking its units.';
-  await dialog.getByRole('textbox', { name: `Reason: ${s.external_id} · de · v1`, exact: true }).fill(reason);
+  await dialog.getByRole('textbox', { name: `Reason: ${s.external_id} · de · v1 (required)`, exact: true }).fill(reason);
   const committing = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/uploads/${created.upload_id}/commit`));
   await dialog.getByRole('button', { name: 'Import', exact: true }).click();
   const committed = await committing; expect(committed.ok(), await committed.text()).toBeTruthy();
@@ -198,6 +198,19 @@ test('ordinary lead downloads real review JSONL bytes and a later current-role r
     expect((await authenticatedRequest(other.page, documentPath(s, s.documents.target, 'translation-reviews'))).status()).toBe(404);
     await page.reload(); await expect(card.getByRole('button', { name: 'Download', exact: true })).toBeVisible();
     const roles = await authenticatedRequest(manager.page, `${root(s)}/members/${encodeURIComponent(s.users.lead)}`, 'PUT', { roles: ['annotator'], revoke_assignments: false }); expect(roles.ok(), await roles.text()).toBeTruthy();
+    // Role changes deliberately revoke sessions. Renew through normal login in
+    // this page's cookie jar before testing the current export permission.
+    expect((await page.request.get('/api/v1/auth/me')).status()).toBe(401);
+    const renewed = await page.request.post('/api/v1/auth/login', {
+      data: { username: s.users.lead, password: TEST_PASSWORD },
+      headers: { Origin: new URL(page.url()).origin },
+    });
+    expect(renewed.ok()).toBeTruthy();
+    const identity = await renewed.json() as components['schemas']['CurrentUser'];
+    expect(identity.username).toBe(s.users.lead); expect(identity.is_system_admin).toBe(false);
+    const currentProjects = await (await authenticatedRequest(page, '/api/v1/projects')).json() as components['schemas']['ProjectSummary'][];
+    expect(currentProjects.find(project => project.project_key === s.project)?.roles).toEqual(['annotator']);
+    await expect(card.getByRole('button', { name: 'Download', exact: true })).toBeVisible();
     expect((await finishedJob(page, jobId)).status).toBe('succeeded');
     const refusing = page.waitForResponse(r => r.request().method() === 'GET' && r.url().endsWith(`/jobs/${jobId}/download`));
     await card.getByRole('button', { name: 'Download', exact: true }).click(); const denied = await refusing; expect(denied.status()).toBe(403);
