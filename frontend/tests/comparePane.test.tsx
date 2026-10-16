@@ -129,3 +129,22 @@ it('preserves explicit right choices across left annotation/context and case met
   await act(async () => finishPayload(historical));
   await screen.findByText('HP:old');
 });
+
+it('retains an explicit removed variant without fallback reads and recovers in a single-language case', async () => {
+  const detail = { ...caseDetail, variants: caseDetail.variants.map(row => ({ ...row, language: 'de' })) };
+  const mounted = render(<ComparePane {...props} caseDetail={detail} />);
+  await screen.findByText('Immutable source');
+  fireEvent.change(screen.getByLabelText('Text version'), { target: { value: 'other-run' } });
+  await screen.findByText('Immutable other-run');
+  fireEvent.change(screen.getByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
+  await screen.findByText('HP:old');
+  vi.mocked(api.getVariantText).mockClear(); vi.mocked(api.listAnnotationVersions).mockClear(); vi.mocked(api.getAnnotationVersion).mockClear();
+  mounted.rerender(<ComparePane {...props} caseDetail={{ ...detail, variants: detail.variants.filter(row => row.document_id !== 'other-run') }} />);
+  expect(screen.getByLabelText<HTMLSelectElement>('Text version').value).toBe('other-run');
+  await screen.findByText('This comparison text is not available to you.');
+  expect(screen.queryByText('Immutable other-run')).toBeNull(); expect(screen.queryByText('HP:old')).toBeNull();
+  expect(api.getVariantText).not.toHaveBeenCalled(); expect(api.listAnnotationVersions).not.toHaveBeenCalled(); expect(api.getAnnotationVersion).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Compare current text' }));
+  await screen.findByText('Immutable target');
+  expect(screen.getByLabelText<HTMLSelectElement>('Text version').value).toBe('target');
+});

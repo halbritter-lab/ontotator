@@ -54,9 +54,10 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
   const [leftElement, setLeftElement] = useState<HTMLDivElement | null>(null);
   const compareButton = useRef<HTMLButtonElement | null>(null);
   const closeComparison = () => { setCompareIdentity(null); compareButton.current?.focus(); };
-  const [detailState, setDetail] = useState<{ identity: object; value: CaseDetail } | null>(null);
+  const [detailState, setDetail] = useState<{ identity: object; retry: number; value: CaseDetail } | null>(null);
   const [caseError, setCaseError] = useState<{ identity: object; error: unknown } | null>(null);
   const detail = detailState?.identity === identity ? detailState.value : null;
+  const detailFresh = detailState?.identity === identity && detailState.retry === retry;
   const selectedId = variant !== undefined ? variant : detail ? pickVariant(detail, languagesOf(detail)[0] ?? '') : null;
   const current = detail?.variants.find(row => row.document_id === selectedId);
   const selection = annotations ?? 'text';
@@ -77,7 +78,7 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
   useEffect(() => {
     let active = true;
     setCaseError(null); setTaskError(null); setTasks(null);
-    api.getCase(projectKey, caseId).then(value => { if (active) setDetail({ identity, value }); }, error => { if (active) setCaseError({ identity, error }); });
+    api.getCase(projectKey, caseId).then(value => { if (active) setDetail({ identity, retry, value }); }, error => { if (active) setCaseError({ identity, error }); });
     api.listMyTasks().then(value => { if (active) setTasks({ identity, value }); }, error => { if (active) setTaskError({ identity, error }); });
     return () => { active = false; };
   }, [identity, retry]);
@@ -119,12 +120,13 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
     {refsError?.identity === contentIdentity && <><ErrorNotice error={refsError.error} />{retryButton}</>}
     {refs && selection !== 'text' && !ref && <InlineMessage tone="info">This annotation version is not available to you.</InlineMessage>}
     {payloadFailed && <><ErrorNotice error={payloadError.error} />{retryButton}</>}
+    <div className="comparison-reading">
     {textError?.identity === contentIdentity ? <><ErrorNotice error={textError.error} />{retryButton}</> : text ? <>
       {selection !== 'text' && ref && !snapshot && !payloadFailed && <InlineMessage tone="info">Loading annotation version...</InlineMessage>}
-      <div className="comparison-reading"><ReadOnlyAnnotationView onTextElement={setLeftElement} key={JSON.stringify([username, projectKey, caseId, selectedId, selection, retry])} text={text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} />
-      {compareOpen && <ComparePane projectKey={projectKey} username={username} caseDetail={detail} leftDocumentId={current.document_id}
-        leftText={text.text} leftElement={leftElement} leftContext={JSON.stringify([selectedId, selection, retry])} onClose={closeComparison} />}
-      </div>
+      <ReadOnlyAnnotationView onTextElement={setLeftElement} key={JSON.stringify([username, projectKey, caseId, selectedId, selection, retry])} text={text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} />
     </> : <InlineMessage tone="info">Loading text...</InlineMessage>}
+      {compareOpen && <ComparePane projectKey={projectKey} username={username} caseDetail={detail} leftDocumentId={current.document_id}
+        leftText={text?.text ?? ""} leftElement={text ? leftElement : null} suspended={!text || !detailFresh} leftContext={JSON.stringify([selectedId, selection, retry])} onClose={closeComparison} />}
+      </div>
   </section>;
 }

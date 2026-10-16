@@ -12,7 +12,7 @@ import { ReadOnlyAnnotationView } from './ReadOnlyAnnotationView';
 
 export interface ComparePaneProps {
   projectKey: string; username: string; caseDetail: CaseDetail; leftDocumentId: string;
-  leftText: string; leftElement: HTMLElement | null; leftContext: string; onClose: () => void;
+  leftText: string; leftElement: HTMLElement | null; leftContext: string; suspended?: boolean; onClose: () => void;
 }
 
 /** Only traverse explicitly readable, same-case lineage. No ID or status inference. */
@@ -32,19 +32,20 @@ function defaultComparison(detail: CaseDetail, documentId: string) {
   return { id: row ? documentId : null, source: !row };
 }
 
-export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, onClose }: ComparePaneProps): JSX.Element {
+export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, suspended = false, onClose }: ComparePaneProps): JSX.Element {
   // User choices outlive left annotation changes; requests must still reauthorize in each context.
   const choiceIdentity = useMemo(() => ({}), [projectKey, username, caseDetail.case_id, leftDocumentId]);
   const identity = useMemo(() => ({}), [choiceIdentity, caseDetail, leftContext]);
   const initial = defaultComparison(caseDetail, leftDocumentId);
   const [chosen, setChosen] = useState<{ identity: object; id: string } | null>(null);
-  const manual = chosen?.identity === choiceIdentity && caseDetail.variants.some(row => row.document_id === chosen.id);
+  const manual = chosen?.identity === choiceIdentity;
   const selectedId = manual ? chosen.id : initial.id;
+  const available = selectedId !== null && caseDetail.variants.some(row => row.document_id === selectedId);
   const selectionIdentity = useMemo(() => ({}), [choiceIdentity, selectedId]);
   const [retry, setRetry] = useState(0);
-  const contentIdentity = useMemo(() => ({}), [identity, selectedId, retry]);
+  const contentIdentity = useMemo(() => ({}), [identity, selectedId, retry, suspended]);
   const [content, setContent] = useState<{ identity: object; text: VariantText | null; refs: VersionRef[] | null; textError?: unknown; refsError?: unknown } | null>(null);
-  const current = content?.identity === contentIdentity ? content : null;
+  const current = !suspended && available && content?.identity === contentIdentity ? content : null;
   const [choice, setChoice] = useState<{ identity: object; key: string } | null>(null);
   const refs = current?.refs;
   const newest = refs?.reduce<VersionRef | null>((best, ref) => !best || Date.parse(ref.created_at) > Date.parse(best.created_at) ? ref : best, null);
@@ -63,7 +64,7 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
   useCoupledScroll(leftElement, current?.text ? rightElement : null, { leftStarts, rightStarts, enabled: coupled });
 
   useEffect(() => {
-    if (!selectedId || !caseDetail.variants.some(row => row.document_id === selectedId)) return;
+    if (suspended || !available || !selectedId) return;
     let active = true;
     setContent({ identity: contentIdentity, text: null, refs: null });
     const update = (patch: Partial<NonNullable<typeof content>>) => {
@@ -88,7 +89,8 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
       <IconButton label="Close comparison" icon={<IconClose />} onClick={onClose} />
     </div>
     {!initial.id && <InlineMessage tone="info">Original source is not available; choose a comparison text.</InlineMessage>}
-    {!selectedId && caseDetail.variants.some(row => row.document_id === leftDocumentId) && <Button onClick={() => select(leftDocumentId)}>Compare current text</Button>}
+    {selectedId && !available && <InlineMessage tone="info">This comparison text is not available to you.</InlineMessage>}
+    {!available && caseDetail.variants.some(row => row.document_id === leftDocumentId) && <Button onClick={() => select(leftDocumentId)}>Compare current text</Button>}
     <VariantSelectors caseDetail={caseDetail} currentDocumentId={selectedId ?? ''} annotationOptions={annotationOptions(refs ?? [], false)} selectedAnnotation={selection}
       onLanguage={language => { const id = pickVariant(caseDetail, language); if (id) select(id); }} onVersion={select}
       onAnnotation={key => { if (key === 'text' || refForKey(key, refs ?? [])) setChoice({ identity: selectionIdentity, key }); }} />
@@ -96,7 +98,7 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
     {(current?.textError || current?.refsError || payloadError) ? <><ErrorNotice error={current?.textError || current?.refsError || payloadError} /><Button onClick={() => setRetry(value => value + 1)}>Retry comparison</Button></> : null}
     {current?.text ? <ReadOnlyAnnotationView key={JSON.stringify([username, projectKey, caseDetail.case_id, selectedId, selection, retry, leftContext])}
       text={current.text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} onTextElement={setRightElement} />
-      : selectedId && !current?.textError ? <InlineMessage tone="info">Loading comparison text...</InlineMessage> : null}
+      : available && !suspended && !current?.textError ? <InlineMessage tone="info">Loading comparison text...</InlineMessage> : null}
     {ref && !snapshot && !payloadError && <InlineMessage tone="info">Loading comparison annotations...</InlineMessage>}
   </section>;
 }
