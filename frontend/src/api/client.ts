@@ -3,7 +3,7 @@
  * writes carry the session's CSRF token.
  */
 
-import type { components } from "./generated";
+import type { components, operations } from "./generated";
 import { attachmentFilename, type DownloadPayload } from "./download";
 export type { DownloadPayload } from "./download";
 
@@ -52,6 +52,19 @@ export type ProjectSummary = components["schemas"]["ProjectSummary"];
 export type TaskSummary = components["schemas"]["TaskSummary"];
 export type AssignmentWorkspace = components["schemas"]["AssignmentOpenResponse"];
 export type AssignmentOpenRequest = components["schemas"]["AssignmentOpenRequest"];
+export type CaseSummary = components["schemas"]["CaseSummary"];
+export type CaseDetail = components["schemas"]["CaseDetail"];
+export type VariantSummary = components["schemas"]["VariantSummary"];
+export type VariantText = components["schemas"]["VariantText"];
+export type VersionRef = components["schemas"]["VersionRef"];
+export type AnnotationVersion = components["schemas"]["AnnotationVersion"];
+export type ReviewWorkspace = components["schemas"]["ReviewWorkspace"];
+export type TranslationReviewRecord = components["schemas"]["TranslationReviewRecord"];
+export type ReanchorItem = components["schemas"]["ReanchorItem"];
+export type TranslationReviewDraftRequest = components["schemas"]["DraftRequest"];
+export type TranslationReviewDraftResponse = components["schemas"]["DraftResponse"];
+export type TranslationReviewSubmitRequest = components["schemas"]["SubmitRequest"];
+export type CaseFilters = NonNullable<operations["list_cases_api_v1_projects__key__cases_get"]["parameters"]["query"]>;
 /** The logged-in user; `csrf_token` goes back in `X-CSRF-Token` with every write. */
 export type CurrentUser = components["schemas"]["CurrentUser"];
 export type Profile = components["schemas"]["Profile"];
@@ -293,6 +306,65 @@ export class ApiClient {
     return this.request<AssignmentWorkspace>(`/api/v1/assignments/${id}/open`, {
       method: "POST", ...(request === undefined ? {} : { body: JSON.stringify(request) }),
     });
+  }
+
+  async listCases(projectKey: string, filters: CaseFilters = {}): Promise<CaseSummary[]> {
+    const query = new URLSearchParams();
+    for (const name of ["language", "origin", "status"] as const) {
+      const value = filters[name];
+      if (value !== undefined && value !== null) query.set(name, value);
+    }
+    return this.request<CaseSummary[]>(`/api/v1/projects/${encodeURIComponent(projectKey)}/cases${query.size ? `?${query}` : ""}`, { method: "GET" });
+  }
+
+  async getCase(projectKey: string, caseId: string): Promise<CaseDetail> {
+    return this.request<CaseDetail>(`/api/v1/projects/${encodeURIComponent(projectKey)}/cases/${encodeURIComponent(caseId)}`, { method: "GET" });
+  }
+
+  async getVariantMetadata(projectKey: string, documentId: string): Promise<VariantSummary> {
+    return this.request<VariantSummary>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/variant`, { method: "GET" });
+  }
+
+  async getVariantText(projectKey: string, documentId: string): Promise<VariantText> {
+    return this.request<VariantText>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/text`, { method: "GET" });
+  }
+
+  async listAnnotationVersions(projectKey: string, documentId: string, assignmentId?: number): Promise<VersionRef[]> {
+    const query = new URLSearchParams();
+    if (assignmentId !== undefined) query.set("assignment", String(assignmentId));
+    return this.request<VersionRef[]>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/annotation-versions${query.size ? `?${query}` : ""}`, { method: "GET" });
+  }
+
+  async getAnnotationVersion(projectKey: string, documentId: string, kind: VersionRef["kind"], id: string): Promise<AnnotationVersion> {
+    return this.request<AnnotationVersion>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/annotation-versions/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, { method: "GET" });
+  }
+
+  async getReanchorItems(projectKey: string, documentId: string): Promise<ReanchorItem[]> {
+    return this.request<ReanchorItem[]>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/reanchor-items`, { method: "GET" });
+  }
+
+  async getAssignmentMetadata(assignmentId: number): Promise<AssignmentView> {
+    return this.request<AssignmentView>(`/api/v1/assignments/${assignmentId}`, { method: "GET" });
+  }
+
+  async openTranslationReview(assignmentId: number): Promise<ReviewWorkspace> {
+    return this.request<ReviewWorkspace>(`/api/v1/translation-reviews/${assignmentId}`, { method: "GET" });
+  }
+
+  async saveTranslationReviewDraft(assignmentId: number, body: TranslationReviewDraftRequest): Promise<TranslationReviewDraftResponse> {
+    return this.request<TranslationReviewDraftResponse>(`/api/v1/translation-reviews/${assignmentId}/draft`, { method: "PUT", body: JSON.stringify(body) });
+  }
+
+  async submitTranslationReview(assignmentId: number, expectedRevision: TranslationReviewSubmitRequest["expected_revision"]): Promise<TranslationReviewRecord> {
+    return this.request<TranslationReviewRecord>(`/api/v1/translation-reviews/${assignmentId}/submit`, { method: "POST", body: JSON.stringify({ expected_revision: expectedRevision } satisfies TranslationReviewSubmitRequest) });
+  }
+
+  async listTranslationReviews(projectKey: string, documentId: string): Promise<TranslationReviewRecord[]> {
+    return this.request<TranslationReviewRecord[]>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/translation-reviews`, { method: "GET" });
+  }
+
+  async exportTranslationReviews(projectKey: string): Promise<ExportCreated> {
+    return this.request<ExportCreated>(`/api/v1/projects/${encodeURIComponent(projectKey)}/exports/translation-reviews`, { method: "POST" });
   }
 
   setCsrfToken(token: string | null): void {
