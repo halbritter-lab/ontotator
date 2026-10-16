@@ -41,6 +41,11 @@ export type Profile = components["schemas"]["Profile"];
 /** PATCH distinguishes omitted defaults from explicit null/false values. */
 export type OwnProfilePatch = Partial<components["schemas"]["ProfilePatch"]>;
 export type PasswordChange = components["schemas"]["PasswordChange"];
+export type AdminUser = components["schemas"]["AdminUser"];
+export type CreateUserRequest = components["schemas"]["CreateUserRequest"];
+export type CreatedUser = components["schemas"]["CreatedUser"];
+export type CodeResponse = components["schemas"]["CodeResponse"];
+export type AdminUserPatch = Partial<components["schemas"]["PatchUserRequest"]>;
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
@@ -156,6 +161,22 @@ export class ApiClient {
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? "";
+  }
+
+  async adminListUsers(): Promise<AdminUser[]> {
+    return this.request<AdminUser[]>("/api/v1/admin/users/", { method: "GET" });
+  }
+
+  async adminCreateUser(body: CreateUserRequest): Promise<CreatedUser> {
+    return this.request<CreatedUser>("/api/v1/admin/users/", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async adminIssueResetCode(username: string): Promise<CodeResponse> {
+    return this.request<CodeResponse>(`/api/v1/admin/users/${encodeURIComponent(username)}/reset-code`, { method: "POST" });
+  }
+
+  async adminUpdateUser(username: string, change: AdminUserPatch): Promise<AdminUser> {
+    return this.request<AdminUser>(`/api/v1/admin/users/${encodeURIComponent(username)}`, { method: "PATCH", body: JSON.stringify(change) });
   }
 
   async listMyTasks(): Promise<TaskSummary[]> {
