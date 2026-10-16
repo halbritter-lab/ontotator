@@ -1669,3 +1669,9 @@
   .case-comparing .app-layout > .inspector-pane { grid-column: 1; grid-row: 4; }
   .case-comparing .app-layout > .tree-host { grid-column: 1; grid-row: 5; }
 }
+
+/* Display-only reanchor context preserves the annotation's existing fill and selection. */
+.run--context { outline: 1px dotted var(--focus-ring); outline-offset: 1px; }
+.reanchor-context { white-space: pre-wrap; overflow-wrap: anywhere; }
+.reanchor-panel ol { padding-left: var(--space-4); }
+.reanchor-panel .translation-diff { max-height: 16rem; min-height: 0; }

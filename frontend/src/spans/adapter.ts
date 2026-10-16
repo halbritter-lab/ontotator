@@ -20,7 +20,7 @@ export interface MentionDisplay {
   label?: string;
   segments: CodepointSegment[];
   is_suggestion?: boolean;
-  kind?: "own" | "target" | "source";
+  kind?: "own" | "target" | "source" | "context";
   colorIndex?: number;
   /** The annotation's assertion is "absent": its runs get a hatch. */
   negated?: boolean;
@@ -56,7 +56,7 @@ interface VendorSpan {
 interface VendorMention {
   mention_id: string;
   spans: VendorSpan[];
-  kind?: "own" | "target" | "source";
+  kind?: "own" | "target" | "source" | "context";
   colorIndex?: number;
   negated?: boolean;
 }

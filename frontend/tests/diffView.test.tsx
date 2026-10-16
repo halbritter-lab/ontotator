@@ -1,3 +1,5 @@
+import { vi } from "vitest";
+import * as wordDiff from "../src/translation/textDiff";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { DiffView } from "../src/translation/DiffView";
@@ -26,4 +28,13 @@ it("keeps a real zero marker for an empty proposed text", () => {
   const { container } = render(<DiffView before="Deleted" after="" />);
   expect(container.querySelectorAll("[data-paragraph]")).toHaveLength(1);
   expect(container.querySelector<HTMLElement>("[data-paragraph]")?.dataset.paragraphOffset).toBe("0");
+});
+
+it("renders supplied server parts without invoking word diff and keeps proposed paragraph coordinates", () => {
+  const diff = vi.spyOn(wordDiff, 'diffText');
+  const { container } = render(<DiffView before="old" after={"😀\n\nnext"} parts={[{ op:'delete', text:'old' }, { op:'insert', text:'😀\n\nnext' }]} />);
+  expect(diff).not.toHaveBeenCalled();
+  expect(container.querySelector('del')?.textContent).toBe('old');
+  expect([...container.querySelectorAll<HTMLElement>('[data-paragraph]')].map(node => Number(node.dataset.paragraphOffset))).toEqual([0,3]);
+  diff.mockRestore();
 });

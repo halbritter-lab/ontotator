@@ -1,15 +1,15 @@
 import { forwardRef, useMemo, type ReactNode } from "react";
 import { paragraphStarts } from "../variants/paragraphs";
-import { diffText } from "./textDiff";
+import { diffText, type TextDiffPart } from "./textDiff";
 import "./translation.css";
 
 /** Markers address the proposed text: deleted words never advance its coordinates. */
-export const DiffView = forwardRef<HTMLDivElement, { before: string; after: string }>(function DiffView({ before, after }, ref) {
+export const DiffView = forwardRef<HTMLDivElement, { before: string; after: string; parts?: readonly TextDiffPart[] }>(function DiffView({ before, after, parts }, ref) {
   const content = useMemo(() => {
     const starts = paragraphStarts(after), nodes: ReactNode[] = [];
     let position = 0, paragraph = 0, key = 0;
     const marker = () => nodes.push(<span key={`p${paragraph}`} aria-hidden="true" data-paragraph={paragraph} data-paragraph-offset={starts[paragraph++]} />);
-    for (const part of diffText(before, after)) {
+    for (const part of parts ?? diffText(before, after)) {
       const chunk = (text: string) => {
         if (!text) return;
         const id = `t${key++}`;
@@ -26,6 +26,6 @@ export const DiffView = forwardRef<HTMLDivElement, { before: string; after: stri
     }
     while (paragraph < starts.length) marker();
     return nodes;
-  }, [before, after]);
+  }, [before, after, parts]);
   return <div ref={ref} className="translation-diff" role="region" aria-label="Text changes" tabIndex={0}>{content}</div>;
 });
