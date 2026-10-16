@@ -1,0 +1,200 @@
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { components } from '../src/api/generated';
+import { authenticatedRequest, loginExisting, openCase } from './helpers';
+
+test.setTimeout(90_000);
+type Item = components['schemas']['ReanchorItem'];
+type Opened = components['schemas']['AssignmentOpenResponse'];
+type Metadata = components['schemas']['ProposalSetView'];
+type Scenario = {
+  project: string; document_id: string; old_document_id: string; text: string; old_text: string;
+  users: Record<'annotator'|'adjudicator'|'lead', string>; pseudonyms: Record<'annotator'|'adjudicator'|'lead', string>; assignment_id: number; task: 'annotate'|'review';
+  import_job_id: number; children: {id:number;status:string;result:{carried:number;needs_review:number};payload:{old_document_id:string;new_document_id:string;producer:{kind:string;job_id:number}}}[];
+  pending: Item[]; metadata: Metadata;
+};
+const left = (page:Page) => page.locator('.app-layout > .center-pane .text-container');
+const panel = (page:Page) => page.getByRole('region',{name:'Needs review after the text change',exact:true});
+const documentPath = (s:Scenario, suffix:string) => `/api/v1/projects/${encodeURIComponent(s.project)}/documents/${encodeURIComponent(s.document_id)}/${suffix}`;
+async function scenario(page:Page,assisted=false):Promise<Scenario> {
+  const response=await page.request.post(`/__test_reanchor__?assisted=${assisted}`,{timeout:90_000});
+  expect(response.ok()).toBeTruthy();const s=await response.json() as Scenario;
+  expect(s.children).toHaveLength(1);const child=s.children[0];
+  expect(child.status).toBe('succeeded');expect(child.payload.producer).toEqual({kind:'import',job_id:s.import_job_id});
+  expect(child.payload.old_document_id).toBe(s.old_document_id);expect(child.payload.new_document_id).toBe(s.document_id);
+  expect(child.result.carried).toBeGreaterThanOrEqual(1);expect(child.result.needs_review).toBeGreaterThanOrEqual(1);
+  expect(s.pending).toHaveLength(child.result.needs_review);
+  expect(s.pending.every(item=>item.proposal_set_id===s.metadata.id)).toBe(true);
+  expect(s.metadata.source_document_id).toBe(s.old_document_id);expect(s.metadata.source_version).toBe(1);
+  await test.info().attach('actual-reanchor-producer',{body:Buffer.from(JSON.stringify({project:s.project,import:s.import_job_id,children:s.children,pending:s.pending,metadata:s.metadata})),contentType:'application/json'});
+  return s;
+}
+async function workspace(page:Page,s:Scenario):Promise<Opened> {
+  const response=await authenticatedRequest(page,`/api/v1/assignments/${s.assignment_id}/open`,'POST');
+  expect(response.ok()).toBeTruthy();return await response.json() as Opened;
+}
+async function ready(page:Page,s:Scenario) {
+  await loginExisting(page,s.users[s.task==='annotate'?'annotator':'adjudicator']);
+  const roles=await (await authenticatedRequest(page,'/api/v1/projects')).json() as {project_key:string;roles:string[]}[];
+  expect(roles.find(row=>row.project_key===s.project)?.roles).toEqual([s.task==='annotate'?'annotator':'adjudicator']);
+  await openCase(page,{projectKey:s.project,documentId:s.document_id,task:s.task});
+  await expect(left(page)).toHaveText(s.text);await expect(page.locator('.status-badge')).toContainText('Saved');
+  await page.evaluate(()=>document.fonts.ready);
+}
+const writesSince = (page:Page) => {
+  const writes:string[]=[];
+  page.on('request',request=>{if(request.method()!=='GET' && /\/workspaces\/.+\/(commands|decisions|submit)/.test(request.url()))writes.push(request.url());});
+  return writes;
+};
+async function nativeSelection(surface:Locator) {
+  return surface.evaluate(element=>{
+    const selection=window.getSelection()!;
+    const offset=(node:Node|null,local:number)=>{
+      const run=(node?.nodeType===Node.ELEMENT_NODE?node as Element:node?.parentElement)?.closest<HTMLElement>('.run');
+      return run && element.contains(run)?Number(run.dataset.start)+local:null;
+    };
+    return {anchor:offset(selection.anchorNode,selection.anchorOffset),focus:offset(selection.focusNode,selection.focusOffset),text:selection.toString()};
+  });
+}
+/** UTF16 DOM points only; server windows below remain absolute codepoints. */
+async function point(surface:Locator,offset:number,edge:'start'|'end') {
+  return surface.evaluate((element,{offset,edge})=>{
+    for(const run of element.querySelectorAll<HTMLElement>('.run')) {
+      const start=Number(run.dataset.start),node=run.firstChild;
+      if(node && start<=offset && offset<start+(node.textContent?.length??0)) {
+        const local=offset-start,value=node.textContent??'';
+        const units=(value.codePointAt(local)??0)>0xffff?2:1;
+        const range=document.createRange();range.setStart(node,local);range.setEnd(node,local+units);
+        const rect=range.getBoundingClientRect();
+        return {x:edge==='start'?rect.left+0.25:rect.right-0.25,y:rect.top+rect.height/2};
+      }
+    }
+    throw new Error(`Missing literal character at UTF16 ${offset}`);
+  },{offset,edge});
+}
+async function nativeAcrossExpiry(page:Page,s:Scenario,button:Locator,method:'pointer'|'Shift',writes:string[]) {
+  await button.click();await left(page).scrollIntoViewIfNeeded();
+  const marker=left(page).locator('.run--context');await expect(marker).not.toHaveCount(0);
+  const start=s.text.indexOf('😀new'),end=start+'😀new'.length;
+  const a=await point(left(page),start,'start'),b=await point(left(page),end-1,'end');
+  // Native drag or held-Shift pointer extension establishes the unfinished range.
+  // No synthetic JS caret/range or unsupported caret-arrow assumption.
+  if(method==='Shift') {
+    await page.mouse.click(b.x,b.y);
+    await page.keyboard.down('Shift');
+    await page.mouse.move(a.x,a.y);await page.mouse.down();
+  } else {
+    await page.mouse.move(a.x,a.y);await page.mouse.down();
+    await page.mouse.move(b.x,b.y,{steps:6});
+  }
+  const before=await nativeSelection(left(page));
+  expect(before.text).toContain('😀new');expect(before.anchor).not.toBeNull();expect(before.focus).not.toBeNull();
+  if(method==='Shift')expect(before.anchor!).toBeGreaterThan(before.focus!);
+  else {expect(before.anchor).toBe(start);expect(before.focus).toBe(end);}
+  expect(writes).toEqual([]);
+  // Wait for the actual 2000ms display timer while selection is unfinished.
+  await expect(marker).toHaveCount(0,{timeout:3500});
+  expect(await nativeSelection(left(page))).toEqual(before);expect(writes).toEqual([]);
+  await page.mouse.up();
+  if(method==='Shift')await page.keyboard.up('Shift');
+  await expect(page.getByRole('heading',{name:'Select term for highlighted text',exact:true})).toBeVisible();
+  // Completion may prepare ordinary pending UI, but saving still needs a term.
+  expect(writes).toEqual([]);
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+}
+
+for(const width of [1280,1024,600])test(`real pending contexts preserve producer data, owned scroll and transient native selection at ${width}`,async({page})=>{
+  await page.setViewportSize({width,height:900});const s=await scenario(page);await ready(page,s);
+  const before=await workspace(page,s),writes=writesSince(page);
+  expect(before.view.key.mode).toBe('review');
+  const response=await authenticatedRequest(page,documentPath(s,'reanchor-items'));expect(response.ok()).toBeTruthy();
+  const items=await response.json() as Item[];expect(items).toEqual(s.pending);
+  await page.getByRole('button',{name:'Compare',exact:true}).click();
+  const comparison=page.getByRole('region',{name:'Comparison',exact:true});
+  await expect(comparison.locator('.text-container')).toHaveText(s.old_text);
+  await expect(comparison.getByRole('region',{name:'Needs review after the text change',exact:true})).toHaveCount(0);
+  await comparison.getByLabel('Couple scrolling',{exact:true}).uncheck();
+  await expect(panel(page).getByRole('heading')).toHaveText(`Needs review after the text change (${items.length})`);
+  const rows=panel(page).locator('ol > li');await expect(rows).toHaveCount(items.length);
+  for(let i=0;i<items.length;i++) {
+    const row=rows.nth(i),item=items[i];
+    expect(item.reason).toBe('changed_segment');
+    await expect(row.getByRole('button')).toContainText(`${item.term_id}`);await expect(row.getByRole('button')).toContainText(item.layer_id);
+    await expect(row.getByRole('button')).toContainText('Seizure');
+    await expect(row.getByText('The evidence text changed.',{exact:true})).toBeVisible();
+    expect(await row.locator('[data-old-context]').textContent()).toBe(item.old_context.text);
+    await expect(row.locator('literal')).toHaveCount(0);
+    expect(await row.locator('.reanchor-context').nth(1).textContent()).toBe(item.new_context.text);
+    const old=Array.from(s.old_text),next=Array.from(s.text);
+    expect(old.slice(item.old_context.start,item.old_context.end).join('')).toBe(item.old_context.text);
+    expect(next.slice(item.new_context.start,item.new_context.end).join('')).toBe(item.new_context.text);
+    const diff=row.locator('[data-old-start]');await expect(diff).toHaveAttribute('data-old-start',String(item.old_context.start));
+    await expect(diff).toHaveAttribute('data-new-start',String(item.new_context.start));
+    expect(item.diff.filter(op=>op.op!=='insert').map(op=>op.old_text).join('')).toBe(item.old_context.text);
+    expect(item.diff.filter(op=>op.op!=='delete').map(op=>op.new_text).join('')).toBe(item.new_context.text);
+    await expect(row.locator('.translation-diff del')).not.toHaveCount(0);await expect(row.locator('.translation-diff ins')).not.toHaveCount(0);
+  }
+  await panel(page).locator('summary').click();await expect(rows.first()).toBeHidden();
+  await panel(page).locator('summary').click();await expect(rows.first()).toBeVisible();
+  const button=rows.last().getByRole('button');await button.scrollIntoViewIfNeeded();
+  const otherBefore=await comparison.locator('.text-container').evaluate(el=>el.scrollTop);
+  const windowBefore=await page.evaluate(()=>({x:scrollX,y:scrollY}));
+  await left(page).evaluate(el=>{el.scrollTop=0;});await button.click();
+  expect(await page.evaluate(()=>({x:scrollX,y:scrollY}))).toEqual(windowBefore);
+  expect(await comparison.locator('.text-container').evaluate(el=>el.scrollTop)).toBe(otherBefore);
+  expect(await left(page).evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+  const item=items.at(-1)!;
+  expect(await left(page).locator('.run--context').allTextContents()).not.toHaveLength(0);
+  expect((await left(page).locator('.run--context').allTextContents()).join('')).toBe(item.new_context.text);
+  const first=left(page).locator('.run--context').first();
+  expect(await first.getAttribute('data-start')).toBe(String(Array.from(s.text).slice(0,item.new_context.start).join('').length));
+  await left(page).scrollIntoViewIfNeeded();await expect(first).toBeInViewport();
+  const geometry=await first.evaluate(mark=>{const pane=mark.closest('.text-container')!;const a=mark.getBoundingClientRect(),b=pane.getBoundingClientRect();return {top:a.top,bottom:a.bottom,paneTop:b.top,paneBottom:b.bottom};});
+  expect(geometry.top).toBeGreaterThanOrEqual(geometry.paneTop-2);expect(geometry.bottom).toBeLessThanOrEqual(geometry.paneBottom+2);
+  await expect(left(page).locator('.run--context')).toHaveCount(0,{timeout:3500});
+  expect(writes).toEqual([]);expect((await workspace(page,s)).view.draft).toEqual(before.view.draft);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if(width===1280) {
+    await nativeAcrossExpiry(page,s,button,'pointer',writes);
+    await nativeAcrossExpiry(page,s,button,'Shift',writes);
+    // Actual human adoption must retain source ancestry without an AI badge.
+    const offered=(before.view.available_inputs??[]).find(value=>value.proposal_set_id===s.metadata.id)!;
+    await page.locator('.sidebar [data-list-key^="target:"]').filter({hasText:'HP:0001252'}).click();
+    await page.getByRole('button',{name:/Edit & Replace/}).click();
+    await expect(page.locator('.sidebar [data-list-key^="annotation:"]')).toHaveCount(1);
+    await expect(page.locator('.status-badge')).toContainText('Saved');
+    const adopted=((await workspace(page,s)).view.draft.annotations??[]).find(value=>value.annotation.provenance.actor.kind==='human')!;
+    expect(adopted).toBeDefined();expect(adopted.annotation.provenance.actor.actor_id).toBe(s.pseudonyms.adjudicator);
+    expect(adopted.annotation.provenance.source_refs).toContain(`${offered.annotation.annotation_id}:${offered.version}`);
+    await expect(page.locator('.sidebar [data-list-key^="annotation:"] .badge-ai')).toHaveCount(0);
+  }
+});
+
+test('ordinary assisted offered provenance is inline, public inventory stays denied and current revocation removes the payload',async({page,browser})=>{
+  const s=await scenario(page,true),inventoryReads:string[]=[];
+  page.on('request',request=>{if(request.method()==='GET' && /\/(proposal-sets|reanchor-items)(\/|\?|$)/.test(new URL(request.url()).pathname))inventoryReads.push(request.url());});
+  await ready(page,s);const opened=await workspace(page,s);
+  expect(opened.view.key.mode).toBe('assisted');expect((opened.view.proposal_sets??[])).toHaveLength(1);
+  expect(opened.view.proposal_sets![0].id).toBe(s.metadata.id);
+  const offered=(opened.view.available_inputs??[]).filter(value=>value.proposal_set_id===s.metadata.id);expect(offered).toHaveLength(s.children[0].result.carried);
+  await page.getByRole('region',{name:'Reference annotations',exact:true}).getByRole('button',{name:/HP:0001252/}).click();
+  const source=page.getByRole('region',{name:'Proposal source',exact:true});
+  await expect(source).toContainText(`Carried over from version ${s.metadata.source_version}`);
+  const actor=s.metadata.actors.find(value=>value.actor_id===offered[0].annotation.provenance.actor.actor_id)!;
+  expect(actor).toBeDefined();
+  expect(actor.actor_id).toBe('ontocurator-reanchor');
+  for(const value of [actor.name??actor.actor_id,actor.version,actor.model,actor.run_id]) {
+    if(typeof value==='string' && value)await expect(source).toContainText(value);
+  }
+  await expect(source).toContainText('score 0.91');await expect(source).toContainText(s.metadata.annotation_set_id);
+  expect(inventoryReads).toEqual([]);await expect(panel(page)).toHaveCount(0);
+  const denied=await authenticatedRequest(page,`/api/v1/projects/${encodeURIComponent(s.project)}/proposal-sets/${s.metadata.id}`);
+  expect([403,404]).toContain(denied.status());
+  const pendingDenied=await authenticatedRequest(page,documentPath(s,'reanchor-items'));expect([403,404]).toContain(pendingDenied.status());
+  const management=await browser.newContext({baseURL:test.info().project.use.baseURL});
+  try {
+    const lead=await management.newPage();await loginExisting(lead,s.users.lead);
+    const revoked=await authenticatedRequest(lead,`/api/v1/assignments/${s.assignment_id}/revoke`,'POST',{reason:'Current exact provenance authority removed'});expect(revoked.ok()).toBeTruthy();
+  } finally {await management.close();}
+  const stale=await authenticatedRequest(page,`/api/v1/assignments/${s.assignment_id}/open`,'POST');expect([403,404]).toContain(stale.status());
+  await page.reload();await expect(page.getByRole('heading',{name:'This task is no longer assigned to you.',exact:true})).toBeVisible();await expect(page.locator('.reference-item')).toHaveCount(0);await expect(source).toHaveCount(0);await expect(panel(page)).toHaveCount(0);
+});

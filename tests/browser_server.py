@@ -774,6 +774,200 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
     app.router.routes.insert(0, app.router.routes.pop())
 
 
+def register_reanchor_scenario_route(app: FastAPI) -> None:
+    """Fresh real import/reanchor results; never registered in the shipped app."""
+
+    @app.post("/__test_reanchor__")
+    def reanchor_scenario(assisted: bool = False) -> dict[str, object]:
+        from t1_builders import bundle as variant_bundle
+        from t1_builders import correction_unit, native_unit
+        from t1_fixtures import PIN, annotation, hpo_profile
+
+        from ontocurator.api.variant_routes import ReanchorItem
+        from ontocurator.assignments.service import AssignmentService
+        from ontocurator.projects.service import ProjectService
+
+        db = app.state.repo.db
+        key = f"reanchor-{uuid4().hex[:12]}"
+        profile = hpo_profile()
+        if assisted:
+            original = profile.layers[0]
+            profile = profile.model_copy(
+                update={
+                    "default_layer_id": "target",
+                    "layers": [
+                        original.model_copy(update={"access": "reference"}),
+                        original.model_copy(
+                            update={
+                                "layer_id": "target",
+                                "label": "Target",
+                                "access": "editable",
+                            }
+                        ),
+                    ],
+                }
+            )
+        ProjectService(db, app.state.ontology_store).create(
+            Actor.cli(),
+            key=key,
+            name="Pending context browser",
+            description=None,
+            profile=profile,
+            pins={"hp": PIN},
+            languages=["en"],
+        )
+        external = "Pending /1 %é"
+        paragraphs = [
+            f"Paragraph {i}. " + "Clinical context remains unchanged. " * 20
+            for i in range(14)
+        ]
+        paragraphs[0] = "Hypotonia. " + paragraphs[0]
+        paragraphs[8] = "Seizure 😀old <literal>. " + paragraphs[8]
+        old_text = "\n\n".join(paragraphs)
+        start = old_text.index("Seizure")
+        source = native_unit(
+            external,
+            "en",
+            old_text,
+            case_id="Pending case /1 %é",
+            annotations=[
+                annotation("carried", (0, 9), text=old_text, term_id="HP:0001252"),
+                annotation(
+                    "refused", (start, start + len("Seizure 😀old")), text=old_text
+                ),
+            ],
+        )
+        corrected = correction_unit(
+            source, old_text.replace("Seizure 😀old", "Ataxia 😀new")
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            imported = run_fixture_import(
+                app, variant_bundle(Path(folder), [source, corrected]), key
+            )
+        pairs = (imported.result or {}).get("reanchor_pairs", [])
+        if len(pairs) != 1:
+            raise HTTPException(
+                500, {"error": "Expected one exact correction pair", "pairs": pairs}
+            )
+        pair = pairs[0]
+        deadline = monotonic() + 30
+        while True:
+            with db.transaction() as conn:
+                children = [
+                    dict(row)
+                    for row in conn.execute(
+                        select(
+                            JobRow.id,
+                            JobRow.status,
+                            JobRow.error,
+                            JobRow.result,
+                            JobRow.payload,
+                        )
+                        .join(ProjectRow, ProjectRow.id == JobRow.project_id)
+                        .where(
+                            ProjectRow.project_key == key,
+                            JobRow.kind == "reanchor",
+                            JobRow.payload["project"].as_string() == key,
+                            JobRow.payload["producer"]["kind"].as_string() == "import",
+                            JobRow.payload["producer"]["job_id"].as_integer()
+                            == imported.id,
+                        )
+                        .order_by(JobRow.id)
+                    ).mappings()
+                ]
+            if any(child["status"] == "failed" for child in children):
+                raise HTTPException(500, {"import": imported.id, "children": children})
+            if len(children) == 1 and children[0]["status"] == "succeeded":
+                child = children[0]
+                if any(
+                    child["payload"].get(name) != pair[name]
+                    for name in ("old_document_id", "new_document_id")
+                ):
+                    raise HTTPException(
+                        500, "Correction child identity differs from producer"
+                    )
+                result = child["result"] or {}
+                if result.get("carried", 0) < 1 or result.get("needs_review", 0) < 1:
+                    raise HTTPException(
+                        500,
+                        {
+                            "error": "Missing real carried/refused outcomes",
+                            "child": child,
+                        },
+                    )
+                break
+            if monotonic() >= deadline:
+                raise HTTPException(
+                    500,
+                    {"error": "Exact reanchor child timed out", "children": children},
+                )
+            sleep(0.05)
+        document = app.state.repo.get_document(key, pair["new_document_id"])
+        predecessor = app.state.repo.get_document(key, pair["old_document_id"])
+        if (
+            document is None
+            or predecessor is None
+            or document.text != corrected.document.text
+        ):
+            raise HTTPException(
+                500, "Imported canonical text does not match the actual builder"
+            )
+        pending = [
+            ReanchorItem.model_validate(item).model_dump(mode="json")
+            for item in app.state.repo.get_reanchor_items(key, document.document_id)
+        ]
+        sets = sorted({item["proposal_set_id"] for item in pending})
+        if not pending or len(sets) != 1:
+            raise HTTPException(500, "Missing exact reanchor proposal-set association")
+        metadata = app.state.repo.get_proposal_set(key, sets[0])
+        if (
+            metadata["source_document_id"] != predecessor.document_id
+            or metadata["source_version"] != 1
+        ):
+            raise HTTPException(
+                500, "Reanchor provenance does not match the actual predecessor"
+            )
+        accounts = app.state.accounts
+        users = {}
+        pseudonyms = {}
+        for name, role in [
+            ("annotator", "annotator"),
+            ("adjudicator", "adjudicator"),
+            ("lead", "lead"),
+        ]:
+            username = f"{key}-{name}"
+            issued = accounts.create_user(Actor.cli(), username, username)
+            accounts.redeem_code(username, issued.code, TEST_PASSWORD)
+            app.state.memberships.add(Actor.cli(), key, username, [role])
+            accounts.set_languages(Actor.cli(), username, ["en"])
+            users[name] = username
+            pseudonyms[name] = issued.user.pseudonym
+        service = AssignmentService(db)
+        owner = "annotator" if assisted else "adjudicator"
+        task = "annotate" if assisted else "review"
+        assignment = service.assign(
+            Actor.cli(), key, document.document_id, users[owner], task
+        )
+        return {
+            "project": key,
+            "document_id": document.document_id,
+            "old_document_id": predecessor.document_id,
+            "text": document.text,
+            "old_text": predecessor.text,
+            "case_id": source.document.case_id,
+            "users": users,
+            "pseudonyms": pseudonyms,
+            "assignment_id": assignment.id,
+            "task": task,
+            "import_job_id": imported.id,
+            "children": children,
+            "pending": pending,
+            "metadata": metadata,
+        }
+
+    app.router.routes.insert(0, app.router.routes.pop())
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(
         prefix="hpo-browser-", ignore_cleanup_errors=True
@@ -816,6 +1010,7 @@ if __name__ == "__main__":
         register_test_user_route(app, grant_all)
         register_variant_scenario_route(app)
         register_translation_review_scenario_route(app)
+        register_reanchor_scenario_route(app)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:
