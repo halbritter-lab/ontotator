@@ -11,6 +11,7 @@ import type { MentionDisplay } from '../spans/adapter';
 import { Button } from '../ui';
 
 export interface ReadOnlyAnnotationViewProps {
+  header?: import('react').ReactNode;
   proposalContext?: {projectKey:string;documentId:string;scope:string;setId:string};
   onTextElement?: (element: HTMLDivElement | null) => void;
   text: string;
@@ -18,7 +19,7 @@ export interface ReadOnlyAnnotationViewProps {
   evidence: AnnotationVersion['evidence'];
   labelFor: (layerId: string | undefined, termId: string) => string | null;
 }
-export function ReadOnlyAnnotationView({ text, annotations, evidence, labelFor, onTextElement, proposalContext }: ReadOnlyAnnotationViewProps): JSX.Element {
+export function ReadOnlyAnnotationView({ header, text, annotations, evidence, labelFor, onTextElement, proposalContext }: ReadOnlyAnnotationViewProps): JSX.Element {
   const [selected, setSelected] = useState<string | null>(null);
   const [element,setElement] = useState<HTMLDivElement|null>(null);
   const attachElement=useCallback((value:HTMLDivElement|null)=>{setElement(value);onTextElement?.(value);},[onTextElement]);
@@ -65,7 +66,7 @@ export function ReadOnlyAnnotationView({ text, annotations, evidence, labelFor, 
         </p>)}
       </li>)}</ul>
     </aside>}
-    <TextPane onTextElement={attachElement} contextSegments={context.contextSegments} text={text} mentions={mentions} selectedEvidenceId={selected} selectionIntent="new_mention"
+    <TextPane header={header} onTextElement={attachElement} contextSegments={context.contextSegments} text={text} mentions={mentions} selectedEvidenceId={selected} selectionIntent="new_mention"
       readOnly isAttachingMention={false} resizableEvidenceIds={[]} onPick={setSelected} onSelection={() => {}} onChangeIntent={() => {}} />
   </div>;
   return proposalContext && setId !== null ? <ProposalMetadataProvider scope={proposalContext.scope} projectKey={proposalContext.projectKey} proposals={sources}>{content}</ProposalMetadataProvider> : content;

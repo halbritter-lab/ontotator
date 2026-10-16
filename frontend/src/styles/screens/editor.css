@@ -1625,6 +1625,19 @@
 .readonly-annotation-view .center-pane { min-width: 0; flex: 1 1 auto; }
 .readonly-annotations { width: 240px; flex: 0 0 auto; overflow-y: auto; border-right: 1px solid var(--border); }
 .readonly-annotations p { margin: var(--space-1) 0; overflow-wrap: anywhere; }
+/* Case controls use the reading pane's chrome, so asynchronous version lists
+   cannot shrink the sidebar or the docked inspector/tree column. */
+.center-pane:where(:has(> .case-version-controls)) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-height: 0;
+}
+.center-pane:where(:has(> .case-version-controls)) > .case-version-controls { grid-column: 1; grid-row: 1; }
+.center-pane:where(:has(> .case-version-controls)) > .pane-toolbar { grid-column: 1; grid-row: 2; }
+.center-pane:where(:has(> .case-version-controls)) > .attach-mention-banner { position: relative; grid-column: 1; grid-row: 2; }
+.center-pane:where(:has(> .case-version-controls)) > [role="alert"] { grid-column: 1; grid-row: 3; }
+.center-pane:where(:has(> .case-version-controls)) > .text-container { grid-column: 1; grid-row: 4; min-height: 0; }
 @media (max-width: 800px) {
   .readonly-annotation-view { flex-direction: column; }
   .readonly-annotations { width: auto; max-height: 25%; border-right: 0; border-bottom: 1px solid var(--border); }
@@ -1697,6 +1710,10 @@
   .case-comparing .center-pane > .pane-toolbar,
   .case-comparing .center-pane > .attach-mention-banner { grid-row: 1; }
   .case-comparing .center-pane > .text-container { grid-row: 2; }
+  .case-comparing .center-pane:has(> .case-version-controls) { grid-template-rows: auto auto 500px; }
+  .case-comparing .center-pane:has(> .case-version-controls) > .pane-toolbar,
+  .case-comparing .center-pane:has(> .case-version-controls) > .attach-mention-banner { grid-row: 2; }
+  .case-comparing .center-pane:has(> .case-version-controls) > .text-container { grid-row: 3; }
   .case-comparing .text-container { height: 500px; flex: 0 0 auto; }
   .case-comparing .app-layout > .center-pane, .case-comparing .comparison-reading > .readonly-annotation-view { grid-column: 1; grid-row: 1; }
   .case-comparing .compare-pane { grid-column: 1; grid-row: 2; }

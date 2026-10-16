@@ -1497,6 +1497,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const cancelAttach = useMemo(() => () => setIsAttachingMention(false), []);
 
+  const versionControls = versions ? <div className="case-version-controls">
+    <VariantSelectors caseDetail={versions.detail} currentDocumentId={view.document.document_id}
+      annotationOptions={annotationOptions(versions.refs, true)} selectedAnnotation={display?.selection ?? "draft"}
+      disabled={versionBusy && display !== null} onLanguage={language => { const id = pickVariant(versions.detail, language); if (id) navigateVariant(id); }}
+      onVersion={navigateVariant} onAnnotation={selection => { void chooseAnnotationVersion(selection); }} />
+    {versions.detail.variants.find(row => row.document_id === view.document.document_id) && <span className="badge">{variantDescription(versions.detail.variants.find(row => row.document_id === view.document.document_id)!)}</span>}
+    <Button ref={compareButton} aria-expanded={compareOpen} onClick={() => { if (compareOpen) closeComparison(); else setComparisonIdentity(versionIdentity); }}>Compare</Button>
+    <VariantDetails detail={versions.detail} documentId={view.document.document_id} />
+  </div> : null;
+
   return (
     <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []} metadata={view.proposal_sets ?? []} allowPublicFetch={false}>
     <div ref={rootRef} className={compareOpen ? "case-comparing" : undefined} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -1605,15 +1615,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         </div>
       </Toolbar>
 
-      {versions && <div className="case-version-controls">
-        <VariantSelectors caseDetail={versions.detail} currentDocumentId={view.document.document_id}
-          annotationOptions={annotationOptions(versions.refs, true)} selectedAnnotation={display?.selection ?? "draft"}
-          disabled={versionBusy && display !== null} onLanguage={language => { const id = pickVariant(versions.detail, language); if (id) navigateVariant(id); }}
-          onVersion={navigateVariant} onAnnotation={selection => { void chooseAnnotationVersion(selection); }} />
-        {versions.detail.variants.find(row => row.document_id === view.document.document_id) && <span className="badge">{variantDescription(versions.detail.variants.find(row => row.document_id === view.document.document_id)!)}</span>}
-        <Button ref={compareButton} aria-expanded={compareOpen} onClick={() => { if (compareOpen) closeComparison(); else setComparisonIdentity(versionIdentity); }}>Compare</Button>
-        <VariantDetails detail={versions.detail} documentId={view.document.document_id} />
-      </div>}
       {!!versionError && <><ErrorNotice error={versionError} /><Button onClick={retryVersions}>Retry version list</Button></>}
       {display && <InlineMessage tone="info"><span>Viewing {display.label} (read-only)</span>
         <Button disabled={versionBusy} onClick={() => { void chooseAnnotationVersion("draft"); }}>Back to my draft</Button>
@@ -1645,7 +1646,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       )}
       <div className="case-reading-layout">
       {display ? <div className="comparison-reading">
-        <ReadOnlyAnnotationView text={view.document.text} annotations={display.value?.annotations ?? []}
+        <ReadOnlyAnnotationView header={versionControls} text={view.document.text} annotations={display.value?.annotations ?? []}
           evidence={display.value?.evidence ?? []} labelFor={termLabel} onTextElement={setLeftTextElement}
           proposalContext={display.value && versions && refForKey(display.selection,versions.refs)?.kind === "proposals"
             ? {projectKey:view.key.project_key,documentId:view.document.document_id,scope:JSON.stringify([versionIdentity,display.selection]),setId:refForKey(display.selection,versions.refs)!.id} : undefined} />
@@ -1884,6 +1885,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
         {/* Center: Text View */}
         <TextPane
+          header={versionControls}
           onTextElement={setLeftTextElement}
           contextSegments={reanchorContext.contextSegments}
           text={view.document.text}
