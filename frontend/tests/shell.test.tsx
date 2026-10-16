@@ -18,6 +18,26 @@ beforeEach(() => { window.history.replaceState(null, "", "#/tasks/42"); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, "", "/"); });
 
 describe("role-based shell", () => {
+  it("keeps reading navigation in a keyboard-accessible disclosure without a permanent sidebar", async () => {
+    const state = props({ user: { ...user, is_system_admin: true }, projects: [project("managed", true)], route: { name: "task", assignmentId: 42 } });
+    render(<Shell {...state} />);
+    expect(document.querySelector<HTMLDetailsElement>(".shell-reading-navigation")?.open).toBe(false);
+    expect(screen.getByRole("main").parentElement?.querySelector(":scope > .app-nav")).toBeNull();
+    const summary = screen.getByText("Sections");
+    expect(summary.tagName).toBe("SUMMARY");
+    const input = userEvent.setup();
+    await input.click(summary);
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    expect(nav.closest("details")?.open).toBe(true);
+    expect(within(nav).getByRole("link", { name: "Export" })).toBeDefined();
+    await input.click(within(nav).getByRole("link", { name: "Profile" }));
+    expect(state.onNavigate).toHaveBeenCalledWith({ name: "me" });
+    expect(window.location.hash).toBe("#/tasks/42");
+    expect(screen.getAllByRole("banner")).toHaveLength(1);
+    fireEvent.keyDown(summary, { key: "Escape" });
+    expect(nav.closest("details")?.open).toBe(false);
+    expect(document.activeElement).toBe(summary);
+  });
   it("shows an annotator only My tasks and Profile, using the real AppShell once", () => {
     render(<Shell {...props({ projects: [project("assigned", false)] })} />);
     const nav = screen.getByRole("navigation", { name: "Sections" });

@@ -620,18 +620,18 @@ test.describe("ontology tree", () => {
         await expect(panel).toHaveCount(0);
       });
     }
-    // Direction C with the shared shell (54 px) and case toolbar (52 px).
-    // Measured after integration: the shell reduces the available column height;
-    // adjacency, proportional allocation, containment, focus and text geometry above remain pinned.
+    // Direction C with the compact reading shell (48 px) and case toolbar (52 px).
+    // The disclosure restores full editor width and frees six vertical pixels;
+    // all floors, ratios, docking, containment and focus checks above remain pinned.
     expect(heights).toEqual([
-      "1025x720: 246/368",
-      "1100x700: 238/356",
-      "1280x720: 246/368",
-      "1440x900: 394/400",
-      "1599x900: 394/400",
-      "1600x900: 394/400",
-      "1920x1080: 480/494",
-      "2560x1440: 534/800",
+      "1025x720: 248/372",
+      "1100x700: 240/360",
+      "1280x720: 248/372",
+      "1440x900: 400/400",
+      "1599x900: 400/400",
+      "1600x900: 400/400",
+      "1920x1080: 480/500",
+      "2560x1440: 536/804",
     ]);
   });
 
@@ -655,6 +655,8 @@ test.describe("ontology tree", () => {
     // A reload ends the page session. Choose this test's package explicitly:
     // other specs import newer packages into the shared synthetic server.
     await page.goto("/#/?project=browser-fixture");
+    await expect(page.locator("#project-select")).toHaveValue("browser-fixture");
+    await page.reload();
     await expect(page.locator("#project-select")).toHaveValue("browser-fixture");
     // The session cookie survives the reload: still logged in, no login form.
     await expect(page.getByTestId("current-user")).toBeVisible();

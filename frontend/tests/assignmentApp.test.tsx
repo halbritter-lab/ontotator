@@ -7,6 +7,11 @@ import userEvent from "@testing-library/user-event";
 import { assigned, taskOf, workspaceFixture } from "./assignments";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, "", "#/"); });
+function clickSection(name: string): void {
+  const disclosure = document.querySelector<HTMLDetailsElement>(".shell-reading-navigation");
+  if (disclosure && !disclosure.open) fireEvent.click(disclosure.querySelector("summary")!);
+  fireEvent.click(screen.getByRole("link", { name }));
+}
 
 it("uses the assigned task list, cleans old identity preferences and routes through the real shell", async () => {
   window.history.replaceState(null, "", "#/");
@@ -21,7 +26,7 @@ it("uses the assigned task list, cleans old identity preferences and routes thro
   expect(localStorage.getItem("ontocurator.annotatorId")).toBeNull();
   expect(localStorage.getItem("ontocurator.mode.pkg")).toBeNull();
   expect(preferences).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("link", { name: "Users" }));
+  clickSection("Users");
   await waitFor(() => expect(window.location.hash).toBe("#/admin/users"));
   expect(screen.getAllByRole("banner")).toHaveLength(1);
   expect(screen.getByText(/not available yet/i)).toBeDefined();
@@ -46,8 +51,8 @@ it("holds shell navigation during a save and honors only the latest destination"
   fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
   await waitFor(() => expect(api.applyCommand).toHaveBeenCalledOnce());
   const editor = document.querySelector(".text-container");
-  fireEvent.click(screen.getByRole("link", { name: "My tasks" }));
-  fireEvent.click(screen.getByRole("link", { name: "Profile" }));
+  clickSection("My tasks");
+  clickSection("Profile");
   expect(window.location.hash).toBe("#/tasks/17");
   expect(document.querySelector(".text-container")).toBe(editor);
   await act(async () => save({ ...first.view.draft, revision: 1 }));
@@ -65,14 +70,14 @@ it("cancels a raw-hash leave without losing the editor or duplicating its unsave
   const editor = document.querySelector(".text-container");
   act(() => { window.location.hash = "#/me"; });
   const dialog = await screen.findByRole("dialog", { name: "Changes not saved" });
-  fireEvent.click(screen.getByRole("link", { name: "My tasks" }));
+  clickSection("My tasks");
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
   expect(window.location.hash).toBe("#/tasks/17");
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/17"));
   expect(document.querySelector(".text-container")).toBe(editor);
-  fireEvent.click(screen.getByRole("link", { name: "My tasks" }));
+  clickSection("My tasks");
   fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard edits and leave" }));
   await screen.findByRole("heading", { name: "My tasks" });
   expect(window.location.hash).toBe("#/");
@@ -84,14 +89,14 @@ it("does not leave when a refused save emptied the pending queue", async () => {
   render(<App user={testUser("alice")} />);
   fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
   await screen.findByText("Invalid change");
-  fireEvent.click(screen.getByRole("link", { name: "My tasks" }));
+  clickSection("My tasks");
   await screen.findByText("A change could not be saved. Reload the case before leaving.");
   expect(window.location.hash).toBe("#/tasks/17");
   expect(screen.getByTestId("annotator-identity")).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "Reload case" }));
   await waitFor(() => expect(api.openAssignment).toHaveBeenCalledTimes(2));
   await screen.findByTestId("annotator-identity");
-  fireEvent.click(screen.getByRole("link", { name: "My tasks" }));
+  clickSection("My tasks");
   await screen.findByRole("heading", { name: "My tasks" });
 });
 
@@ -107,8 +112,7 @@ it("restores the accepted history entry after cancelling several raw-hash destin
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/17"));
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/17"));
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
-  expect(window.history.state.ontocuratorRouteIndex).toBe(0);
+  await waitFor(() => expect(window.history.state.ontocuratorRouteIndex).toBe(0));
   expect(screen.getByTestId("annotator-identity")).toBeDefined();
 });
 
@@ -119,7 +123,7 @@ it("does not commit a pending route after the authenticated App unmounts", async
   const mounted = render(<App user={testUser("alice")} />);
   fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
   await waitFor(() => expect(api.applyCommand).toHaveBeenCalledOnce());
-  fireEvent.click(screen.getByRole("link", { name: "Profile" }));
+  clickSection("Profile");
   mounted.unmount();
   await act(async () => finish({ ...first.view.draft, revision: 1 }));
   expect(window.location.hash).toBe("#/tasks/17");
@@ -167,7 +171,7 @@ it("ignores an open response after navigating away while it was loading", async 
   vi.mocked(api.openAssignment).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   render(<App user={testUser("alice")} />);
   await screen.findByText("Opening task...");
-  fireEvent.click(screen.getByRole("link", { name: "My tasks" }));
+  clickSection("My tasks");
   await screen.findByRole("heading", { name: "My tasks" });
   await act(async () => finish(assigned(workspaceFixture(), 17)));
   expect(screen.queryByTestId("annotator-identity")).toBeNull();
@@ -189,7 +193,7 @@ it("refreshes displayed identity from the saved Profile response and keeps the s
   await user.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(screen.getByTestId("current-user").textContent).toBe("Alice Smith · alice"));
   expect(logout).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("link", { name: "My tasks" }));
+  clickSection("My tasks");
   const table = await screen.findByRole("table", { name: "My tasks" });
   fireEvent.click(within(table).getAllByRole("button", { name: "Open" })[0]);
   await waitFor(() => expect(screen.getByTestId("annotator-identity").textContent).toContain("Alice Smith (alice)"));
@@ -242,4 +246,65 @@ it("restores browser history after cancelling Back, then lets Back and Forward n
   act(() => window.history.forward());
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/4"));
   await waitFor(() => expect(open).toHaveBeenLastCalledWith(4));
+});
+
+async function threeTaskHistory() {
+  const { first, second, tasks, open } = editorServer();
+  const third = workspaceFixture("third");
+  vi.mocked(api.listMyTasks).mockResolvedValue([tasks[0], { ...tasks[1], status: "open" }, taskOf(third.view, 8)]);
+  open.mockImplementation(async id => assigned(id === 17 ? first : id === 4 ? second : third, id));
+  vi.spyOn(api, "applyCommand").mockRejectedValue(new TypeError("Offline"));
+  vi.spyOn(api, "getProfile").mockReturnValue(new Promise(() => {}));
+  render(<App user={testUser("alice")} />);
+  for (const id of [4, 8]) {
+    fireEvent.click(await screen.findByRole("button", { name: "Next Case" }));
+    await waitFor(() => expect(window.location.hash).toBe(`#/tasks/${id}`));
+    await waitFor(() => expect(open).toHaveBeenLastCalledWith(id));
+  }
+  fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
+  await screen.findByText("Offline – changes not saved");
+  act(() => window.history.back());
+  const dialog = await screen.findByRole("dialog", { name: "Changes not saved" });
+  await waitFor(() => expect(window.history.state.ontocuratorRouteIndex).toBe(1));
+  act(() => window.history.back());
+  await waitFor(() => expect(window.history.state.ontocuratorRouteIndex).toBe(0));
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  expect(window.location.hash).toBe("#/tasks/8");
+  return { dialog, open };
+}
+
+it("preserves the intermediate task after two pending Back traversals are cancelled", async () => {
+  const { dialog, open } = await threeTaskHistory();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(window.history.state.ontocuratorRouteIndex).toBe(2));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  act(() => window.history.back());
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Changes not saved" })).getByRole("button", { name: "Discard edits and leave" }));
+  await waitFor(() => expect(open).toHaveBeenLastCalledWith(4));
+  expect(window.location.hash).toBe("#/tasks/4");
+  act(() => window.history.forward());
+  await waitFor(() => expect(open).toHaveBeenLastCalledWith(8));
+});
+
+it("preserves intermediate Forward entries after discarding through two pending Back traversals", async () => {
+  const { dialog, open } = await threeTaskHistory();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Discard edits and leave" }));
+  await waitFor(() => expect(open).toHaveBeenLastCalledWith(17));
+  for (const id of [4, 8]) {
+    act(() => window.history.forward());
+    await waitFor(() => expect(window.location.hash).toBe(`#/tasks/${id}`));
+    await waitFor(() => expect(open).toHaveBeenLastCalledWith(id));
+  }
+});
+
+it("keeps historical task entries when a shell link supersedes two pending Back traversals", async () => {
+  const { dialog, open } = await threeTaskHistory();
+  clickSection("Profile");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Discard edits and leave" }));
+  await waitFor(() => expect(window.location.hash).toBe("#/me"));
+  for (const id of [8, 4]) {
+    act(() => window.history.back());
+    await waitFor(() => expect(window.location.hash).toBe(`#/tasks/${id}`));
+    await waitFor(() => expect(open).toHaveBeenLastCalledWith(id));
+  }
 });

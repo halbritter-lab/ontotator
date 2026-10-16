@@ -17,13 +17,24 @@ export interface AppShellProps {
 
 export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = "Sections", density = "compact", children }: AppShellProps): JSX.Element {
   const mainRef = useRef<HTMLElement>(null);
-  return <div className="shell">
+  const hasNav = nav != null && nav !== false;
+  const navigation = hasNav ? <nav className="app-nav" aria-label={navLabel}>{nav}</nav> : null;
+  return <div className={`shell${density === "reading" ? " shell-reading" : ""}`}>
     <a className="skip-link" href="#main" onClick={(event) => {
       event.preventDefault();
       mainRef.current?.focus();
     }}>Skip to content</a>
     <header className="app-header shell-header">
       <div className="shell-heading">
+        {density === "reading" && hasNav && <details className="shell-reading-navigation" onKeyDown={event => {
+          if (event.key !== "Escape" || !event.currentTarget.open) return;
+          event.preventDefault();
+          event.currentTarget.open = false;
+          event.currentTarget.querySelector("summary")?.focus();
+        }}>
+          <summary>{navLabel}</summary>
+          {navigation}
+        </details>}
         <span className="shell-product">Ontocurator</span>
         <span className="shell-subtitle">Clinical Curation Workbench</span>
         {!!breadcrumb?.length && <nav aria-label="Breadcrumb"><ol className="shell-breadcrumb">
@@ -41,7 +52,7 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
       </div>
     </header>
     <div className="shell-body">
-      {nav != null && nav !== false && <nav className="app-nav" aria-label={navLabel}>{nav}</nav>}
+      {density !== "reading" && navigation}
       <main ref={mainRef} id="main" tabIndex={-1} className={`shell-main density-${density}`}>{children}</main>
     </div>
     <ShortcutHelpHost />

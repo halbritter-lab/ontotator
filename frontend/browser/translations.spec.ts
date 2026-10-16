@@ -16,7 +16,7 @@ test("translations: add a file, search in German, switch the language off, selec
   const added = await page.request.post("/__test_translation__?name=hp-de.babelon.tsv");
   expect(added.ok()).toBeTruthy();
   await importPackage(page, "?scenario=translations", "translation-fixture", ANNOTATOR);
-  await expect(page.locator(".app-header")).toContainText("HP 2026-06-23 · de 4 terms");
+  await expect(page.getByRole("heading", { name: "My tasks", exact: true })).toBeVisible();
 
   await openCase(page);
   await startSearch(page, "Krampfanfall");
@@ -25,6 +25,7 @@ test("translations: add a file, search in German, switch the language off, selec
 
   // The flag button sits in the row of the search box.
   const button = page.getByRole("button", { name: "Search languages: EN, DE" });
+  await expect(button).toBeVisible();
   const box = await button.boundingBox();
   const input = await page.getByLabel(/Search ontology term/i).boundingBox();
   expect(box && input && box.x > input.x + input.width && Math.abs(box.y - input.y) < 4).toBeTruthy();
@@ -51,4 +52,5 @@ test("translations: add a file, search in German, switch the language off, selec
   await page.getByRole("button", { name: "Search languages: EN", exact: true }).click();
   await page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" }).check();
   await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
+  await expect(page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" })).toBeChecked();
 });

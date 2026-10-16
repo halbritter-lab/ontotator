@@ -32,12 +32,15 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
   const acceptedHash = useRef(window.location.hash || "#/");
   const acceptedIndex = useRef(typeof window.history.state?.ontocuratorRouteIndex === "number" ? window.history.state.ontocuratorRouteIndex as number : 0);
-  const traversal = useRef<{ hash: string; index: number; state: Record<string, unknown> } | null>(null);
+  type HistoryEntry = { hash: string; index: number; state: Record<string, unknown> };
+  const historyCursor = useRef(acceptedIndex.current);
+  const replacedEntries = useRef(new Map<number, HistoryEntry>());
+  const historyTarget = useRef<number | null>(null);
   const restoringHistory = useRef(false);
   const historyRestored = useRef<(() => void) | null>(null);
   const routeLeaveRef = useRef<RouteLeaveGuard | null>(null);
   const logoutGuardRef = useRef<((proceed: () => void) => void) | null>(null);
-  const destination = useRef<{ route: Route; replace: boolean } | null>(null);
+  const destination = useRef<{ route: Route; nativeIndex?: number } | null>(null);
   const leaving = useRef(false);
   const alive = useRef(true);
 
@@ -63,71 +66,91 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     return () => { active = false; };
   }, [baseUser?.username, retry]);
 
-  const restoreTraversal = async (): Promise<void> => {
-    const travelled = traversal.current;
-    if (!travelled) return;
-    traversal.current = null;
-    const distance = acceptedIndex.current - travelled.index;
-    if (distance === 0) {
-      window.history.replaceState(travelled.state, "", acceptedHash.current);
-      return;
-    }
-    window.history.replaceState(travelled.state, "", travelled.hash);
-    restoringHistory.current = true;
+  const travelTo = async (index: number): Promise<void> => {
+    if (!alive.current || historyCursor.current === index) return;
     await new Promise<void>(resolve => {
+      historyTarget.current = index;
       historyRestored.current = resolve;
-      window.history.go(distance);
+      window.history.go(index - historyCursor.current);
     });
   };
 
-  // Share a single editor save/leave flow. Keep the accepted URL and editor until
-  // it resolves, then navigate to the most recent requested destination.
-  const requestRoute = async (next: Route, replace = false): Promise<void> => {
-    destination.current = { route: next, replace };
+  const restoreEntries = async (): Promise<void> => {
+    // More than one native traversal may occur while a single dialog is open.
+    // Restore every temporary URL, including intermediate Back/Forward entries.
+    for (const [index, entry] of [...replacedEntries.current].sort(([a], [b]) => a - b)) {
+      await travelTo(index);
+      if (!alive.current) return;
+      window.history.replaceState(entry.state, "", entry.hash);
+    }
+    replacedEntries.current.clear();
+  };
+
+  // Share a single editor save/leave flow. Keep the accepted editor until it
+  // resolves, then honor the latest native destination or ordinary link.
+  const requestRoute = async (next: Route, nativeIndex?: number): Promise<void> => {
+    destination.current = { route: next, nativeIndex };
     if (leaving.current) return;
     leaving.current = true;
     try {
       const allowed = await (routeLeaveRef.current?.() ?? Promise.resolve(true));
       if (!alive.current) return;
-      if (!allowed) {
-        await restoreTraversal();
-        return;
+      restoringHistory.current = true;
+      await restoreEntries();
+      if (!allowed) { await travelTo(acceptedIndex.current); return; }
+      let target = destination.current;
+      // A link can supersede the native request while its entries are restored.
+      while (target) {
+        await travelTo(target.nativeIndex ?? acceptedIndex.current);
+        if (!alive.current) return;
+        if (target === destination.current) break;
+        target = destination.current;
       }
-      const target = destination.current;
       if (!target) return;
       const hash = routeHref(target.route);
-      if (hash !== acceptedHash.current) {
-        const travelled = traversal.current;
-        const index = travelled?.index ?? acceptedIndex.current + 1;
-        window.history[travelled || target.replace ? "replaceState" : "pushState"](
-          { ...window.history.state, ontocuratorRouteIndex: index }, "", hash,
-        );
-        traversal.current = null;
-        acceptedIndex.current = index;
-        acceptedHash.current = hash;
-        setRoute(target.route);
-      } else await restoreTraversal();
-    } finally { leaving.current = false; destination.current = null; }
+      if (target.nativeIndex === undefined) {
+        if (hash === acceptedHash.current) return;
+        acceptedIndex.current++;
+        window.history.pushState({ ...window.history.state, ontocuratorRouteIndex: acceptedIndex.current }, "", hash);
+        historyCursor.current = acceptedIndex.current;
+      } else acceptedIndex.current = target.nativeIndex;
+      acceptedHash.current = hash;
+      setRoute(target.route);
+    } finally {
+      restoringHistory.current = false;
+      historyTarget.current = null;
+      historyRestored.current = null;
+      leaving.current = false;
+      destination.current = null;
+    }
   };
   const requestRef = useRef(requestRoute);
   requestRef.current = requestRoute;
   useEffect(() => {
-    const changed = () => {
+    const changed = (event: Event) => {
+      // Native traversal dispatches popstate followed by hashchange. A paired
+      // hashchange can describe the URL we already temporarily replaced.
+      if (event instanceof HashChangeEvent && event.newURL !== window.location.href) return;
       const hash = window.location.hash;
-      if (restoringHistory.current && hash === acceptedHash.current) {
-        restoringHistory.current = false;
-        historyRestored.current?.(); historyRestored.current = null;
+      const state = window.history.state ?? {};
+      const index = typeof state.ontocuratorRouteIndex === "number" ? state.ontocuratorRouteIndex : historyCursor.current + 1;
+      historyCursor.current = index;
+      if (restoringHistory.current) {
+        if (index === historyTarget.current) historyRestored.current?.();
         return;
       }
-      if (hash === acceptedHash.current && !leaving.current && !traversal.current) return;
-      const state = window.history.state ?? {};
-      const index = typeof state.ontocuratorRouteIndex === "number" ? state.ontocuratorRouteIndex : (traversal.current?.index ?? acceptedIndex.current) + 1;
-      traversal.current = { hash, index, state: { ...state, ontocuratorRouteIndex: index } };
-      window.history.replaceState(traversal.current.state, "", acceptedHash.current);
-      void requestRef.current(parseRoute(hash), true);
+      if (hash === acceptedHash.current && index === acceptedIndex.current && !leaving.current) return;
+      const original = replacedEntries.current.get(index) ?? { hash, index, state: { ...state, ontocuratorRouteIndex: index } };
+      replacedEntries.current.set(index, original);
+      window.history.replaceState(original.state, "", acceptedHash.current);
+      void requestRef.current(parseRoute(original.hash), index);
     };
+    window.addEventListener("popstate", changed);
     window.addEventListener("hashchange", changed);
-    return () => window.removeEventListener("hashchange", changed);
+    return () => {
+      window.removeEventListener("popstate", changed);
+      window.removeEventListener("hashchange", changed);
+    };
   }, []);
 
   if (!user) return projectError ? <ErrorNotice error={projectError} /> : <InlineMessage tone="info">Checking your session...</InlineMessage>;

@@ -46,14 +46,24 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.getByLabel(/Document verified|Dokument vollständig geprüft/i)).toHaveCount(0);
     await submitCase(page);
 
-    // Dismiss submission modal to return to workspace
-    await page.getByRole("button", { name: /Stay in case|Im Fall bleiben/i }).click();
+    // The saved current task is now read-only. Its pre-submit next task remains
+    // available in the dialog even though the server moves submitted tasks last.
+    await expect(page.getByText("Submitted. The project lead can reopen it for changes.")).toBeVisible();
+    await page.getByRole("dialog", { name: "Case submitted" }).getByRole("button", { name: "Next task" }).click();
+    await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2:.*doc-alpha/i);
+    await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001252");
+    await expect(page.getByRole("button", { name: "Previous Case" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Next Case" })).toBeEnabled();
 
-    // 5. Navigate to next case in document order
-    await page.locator(".case-navigation").getByRole("button", { name: /Next Case|Nächster Fall/i }).click();
-    await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2/i);
-    await expect(page.locator(".case-navigation").getByRole("button", { name: /Next Case|Nächster Fall/i })).toBeDisabled();
-    await expect(page.locator(".case-navigation").getByRole("button", { name: /Previous Case|Vorheriger Fall/i })).toBeEnabled();
+    // Submitted neighbors remain navigable in actual server order, with their
+    // saved findings intact and every editing entry point disabled.
+    await page.getByRole("button", { name: "Next Case" }).click();
+    await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2:.*doc-beta/i);
+    await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001250");
+    await expect(page.getByRole("button", { name: "+ New Annotation" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Finish & Submit Case/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Next Case" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Previous Case" })).toBeEnabled();
   });
 
   test("Scenario B: Assigned review with reference layer (cannot activate reference, visibility toggle)", async ({ page }) => {
