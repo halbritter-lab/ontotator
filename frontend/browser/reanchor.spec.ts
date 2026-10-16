@@ -164,6 +164,15 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
     // Actual human adoption must retain source ancestry without an AI badge.
     const offered=(before.view.available_inputs??[]).find(value=>value.proposal_set_id===s.metadata.id)!;
     await page.locator('.sidebar [data-list-key^="target:"]').filter({hasText:'HP:0001252'}).click();
+    const source=page.getByRole('region',{name:'Proposal source',exact:true});
+    await expect(source).toContainText(`Carried over from version ${s.metadata.source_version}`);
+    const actor=s.metadata.actors.find(value=>value.actor_id===offered.annotation.provenance.actor.actor_id)!;
+    expect(actor).toBeDefined();
+    expect(actor.actor_id).toBe('ontocurator-reanchor');
+    for(const value of [actor.name??actor.actor_id,actor.version,actor.model,actor.run_id]) {
+      if(typeof value==='string' && value)await expect(source).toContainText(value);
+    }
+    await expect(source).toContainText('score 0.91');await expect(source).toContainText(s.metadata.annotation_set_id);
     await page.getByRole('button',{name:/Edit & Replace/}).click();
     await expect(page.locator('.sidebar [data-list-key^="annotation:"]')).toHaveCount(1);
     await expect(page.locator('.status-badge')).toContainText('Saved');
@@ -174,24 +183,33 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
   }
 });
 
-test('ordinary assisted offered provenance is inline, public inventory stays denied and current revocation removes the payload',async({page,browser})=>{
+test('ordinary mounted annotate stays blind; same-assignment assisted API carrier and current revocation enforce provenance privacy',async({page,browser})=>{
   const s=await scenario(page,true),inventoryReads:string[]=[];
   page.on('request',request=>{if(request.method()==='GET' && /\/(proposal-sets|reanchor-items)(\/|\?|$)/.test(new URL(request.url()).pathname))inventoryReads.push(request.url());});
   await ready(page,s);const opened=await workspace(page,s);
-  expect(opened.view.key.mode).toBe('assisted');expect((opened.view.proposal_sets??[])).toHaveLength(1);
-  expect(opened.view.proposal_sets![0].id).toBe(s.metadata.id);
-  const offered=(opened.view.available_inputs??[]).filter(value=>value.proposal_set_id===s.metadata.id);expect(offered).toHaveLength(s.children[0].result.carried);
-  await page.getByRole('region',{name:'Reference annotations',exact:true}).getByRole('button',{name:/HP:0001252/}).click();
+  // Actual App annotation assignments deliberately open blind/independent.
+  expect(opened.view.key.mode).toBe('independent');
+  expect(opened.view.available_inputs??[]).toEqual([]);expect(opened.view.proposal_sets??[]).toEqual([]);
+  await expect(page.getByRole('region',{name:'Reference annotations',exact:true})).toHaveCount(0);
   const source=page.getByRole('region',{name:'Proposal source',exact:true});
-  await expect(source).toContainText(`Carried over from version ${s.metadata.source_version}`);
-  const actor=s.metadata.actors.find(value=>value.actor_id===offered[0].annotation.provenance.actor.actor_id)!;
-  expect(actor).toBeDefined();
-  expect(actor.actor_id).toBe('ontocurator-reanchor');
-  for(const value of [actor.name??actor.actor_id,actor.version,actor.model,actor.run_id]) {
-    if(typeof value==='string' && value)await expect(source).toContainText(value);
-  }
-  await expect(source).toContainText('score 0.91');await expect(source).toContainText(s.metadata.annotation_set_id);
-  expect(inventoryReads).toEqual([]);await expect(panel(page)).toHaveCount(0);
+  await expect(source).toHaveCount(0);await expect(panel(page)).toHaveCount(0);expect(inventoryReads).toEqual([]);
+  // Real API evidence under the SAME current cookie/annotate assignment. This
+  // existing endpoint supports assisted; it does not mount an alternate App.
+  const body:components['schemas']['OpenWorkspaceRequest']={project_key:s.project,document_id:s.document_id,mode:'assisted'};
+  const assisted=await authenticatedRequest(page,'/api/v1/workspaces/open','POST',body);expect(assisted.ok()).toBeTruthy();
+  const current=await assisted.json() as components['schemas']['OpenWorkspaceResponse'];
+  expect(current.view.key).toMatchObject({project_key:s.project,document_id:s.document_id,annotator_id:s.pseudonyms.annotator,mode:'assisted'});
+  expect(current.view.proposal_sets??[]).toHaveLength(1);
+  const metadata=current.view.proposal_sets![0];
+  expect(metadata).toMatchObject({id:s.metadata.id,document_id:s.document_id,annotation_set_id:s.metadata.annotation_set_id,origin:'reanchor',source_document_id:s.old_document_id,source_version:s.metadata.source_version,actors:s.metadata.actors});
+  const offered=(current.view.available_inputs??[]).filter(value=>value.proposal_set_id===metadata.id);
+  expect(offered).toHaveLength(s.children[0].result.carried);
+  expect(offered.every(value=>value.document_id===s.document_id && value.annotation.document_id===s.document_id)).toBe(true);
+  const actor=metadata.actors.find(value=>value.actor_id===offered[0].annotation.provenance.actor.actor_id)!;
+  expect(actor).toBeDefined();expect(actor.actor_id).toBe('ontocurator-reanchor');
+  expect(offered[0].notes).toContain('score 0.91');
+  expect(inventoryReads).toEqual([]);await expect(source).toHaveCount(0);await expect(panel(page)).toHaveCount(0);
+  await test.info().attach('actual-assisted-api-carrier',{body:Buffer.from(JSON.stringify({key:current.view.key,proposal_sets:current.view.proposal_sets,offered})),contentType:'application/json'});
   const denied=await authenticatedRequest(page,`/api/v1/projects/${encodeURIComponent(s.project)}/proposal-sets/${s.metadata.id}`);
   expect([403,404]).toContain(denied.status());
   const pendingDenied=await authenticatedRequest(page,documentPath(s,'reanchor-items'));expect([403,404]).toContain(pendingDenied.status());
@@ -200,6 +218,7 @@ test('ordinary assisted offered provenance is inline, public inventory stays den
     const lead=await management.newPage();await loginExisting(lead,s.users.lead);
     const revoked=await authenticatedRequest(lead,`/api/v1/assignments/${s.assignment_id}/revoke`,'POST',{reason:'Current exact provenance authority removed'});expect(revoked.ok()).toBeTruthy();
   } finally {await management.close();}
-  const stale=await authenticatedRequest(page,`/api/v1/assignments/${s.assignment_id}/open`,'POST');expect([403,404]).toContain(stale.status());
+  const stale=await authenticatedRequest(page,'/api/v1/workspaces/open','POST',body);expect([403,404]).toContain(stale.status());
+  const taskStale=await authenticatedRequest(page,`/api/v1/assignments/${s.assignment_id}/open`,'POST');expect([403,404]).toContain(taskStale.status());
   await page.reload();await expect(page.getByRole('heading',{name:'This task is no longer assigned to you.',exact:true})).toBeVisible();await expect(page.locator('.reference-item')).toHaveCount(0);await expect(source).toHaveCount(0);await expect(panel(page)).toHaveCount(0);
 });
