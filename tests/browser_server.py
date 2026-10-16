@@ -707,11 +707,10 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
             run_id="review failed run /2",
         )
         with tempfile.TemporaryDirectory() as folder:
-            imported = run_import(
-                db,
+            imported = run_fixture_import(
+                app,
                 variant_bundle(Path(folder), [source, target, failed]),
                 key,
-                actor=Actor.cli(),
             )
         if imported.status != "succeeded":
             raise HTTPException(500, imported.error)
