@@ -54,12 +54,13 @@ export function UploadPanel({ projectKey, languages, onImported }: UploadPanelPr
     handled.current = identity;
     const epoch = lifetime.current;
     if (job.status === "failed") {
+      let active = true;
       setStale(operation.stage === "commit" && /\bUPLOAD_STALE\b/.test(job.error ?? ""));
       void api.getUpload(projectKey, operation.uploadId).then(current => {
-        if (lifetime.current === epoch) setView(current);
-      }, err => { if (lifetime.current === epoch) setError(err); });
+        if (active && lifetime.current === epoch) setView(current);
+      }, err => { if (active && lifetime.current === epoch) setError(err); });
       void refreshList(epoch);
-      return;
+      return () => { active = false; };
     }
     setWorking(true); mutation.current = true;
     void (async () => {
@@ -114,6 +115,7 @@ export function UploadPanel({ projectKey, languages, onImported }: UploadPanelPr
       // A restored preview cannot recover the original File objects. Never
       // reuse a different selection for its stale-plan Check again action.
       setFiles([]);
+      if (current.status === "previewing" && current.preview_job_id != null) setOperation({ projectKey, uploadId: id, jobId: current.preview_job_id, stage: "preview" });
       if ((current.status === "committing" || current.status === "committed") && current.commit_job_id !== null) setOperation({ projectKey, uploadId: id, jobId: current.commit_job_id, stage: "commit" });
     } catch (err: unknown) { if (lifetime.current === epoch) setError(err); }
     finally { if (lifetime.current === epoch) { mutation.current = false; setWorking(false); } }
@@ -146,7 +148,7 @@ export function UploadPanel({ projectKey, languages, onImported }: UploadPanelPr
     {operation?.stage === "commit" && busy && <InlineMessage tone="info">Importing …</InlineMessage>}
     {imported && <InlineMessage tone="success">{imported}</InlineMessage>}
     {view && <><p>Upload {view.id} · {view.status}</p>{view.preview && <UploadPreview plan={view.preview} />}
-      {view.status === "previewing" && <><InlineMessage tone="info">Checking …</InlineMessage><Button disabled={busy} onClick={() => { void resume(view.id); }}>Refresh status</Button></>}
+      {view.status === "previewing" && <><InlineMessage tone="info">Checking …</InlineMessage>{view.preview_job_id == null && <Button disabled={busy} onClick={() => { void resume(view.id); }}>Refresh status</Button>}</>}
       {["ready", "invalid"].includes(view.status) && <Toolbar label="Preview actions"><Button variant="primary" disabled={busy || stale || view.status !== "ready" || !view.preview?.committable || !view.plan_sha256} onClick={() => { void commit(); }}>Import</Button><Button disabled={busy} onClick={() => { void discard(); }}>Discard</Button></Toolbar>}
     </>}
     <section className="detail-section"><h3>Recent uploads</h3>{listError !== undefined && <ErrorNotice error={listError} />}<Button disabled={busy} onClick={() => { void refreshList(lifetime.current); }}>Refresh uploads</Button>

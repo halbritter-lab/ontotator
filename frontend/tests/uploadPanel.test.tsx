@@ -19,7 +19,7 @@ beforeEach(() => {
   vi.spyOn(api, "commitUpload").mockResolvedValue({ upload_id: 7, job_id: 12 });
   vi.spyOn(api, "discardUpload").mockResolvedValue({ ...view, status: "discarded" });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 async function check() {
   fireEvent.change(screen.getByLabelText("Format"), { target: { value: "text" } });
   fireEvent.change(screen.getByLabelText(/^Upload language/), { target: { value: "en" } });
@@ -113,6 +113,66 @@ it("resumes committed imports using persisted commit job result", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
   await screen.findByText("Imported 2 documents and 0 proposals.");
   expect(api.getJob).toHaveBeenCalledWith(12); expect(api.commitUpload).not.toHaveBeenCalled();
+});
+it("restores a previewing upload using its persisted job ID and then reads the ready preview", async () => {
+  const previewing: UploadView = { ...view, status: "previewing", preview: null, plan_sha256: null, preview_job_id: 31 };
+  vi.mocked(api.listUploads).mockResolvedValue([previewing]);
+  vi.mocked(api.getUpload).mockResolvedValueOnce(previewing).mockResolvedValueOnce(view);
+  vi.mocked(api.getJob).mockResolvedValue(job(31));
+  render(<UploadPanel projectKey="p" languages={[]} onImported={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
+  await screen.findByRole("button", { name: "Import" });
+  expect(api.getJob).toHaveBeenCalledWith(31);
+  expect(api.getUpload).toHaveBeenCalledTimes(2);
+  expect(api.createUpload).not.toHaveBeenCalled();
+});
+it("surfaces a failed restored preview job without offering import", async () => {
+  const previewing: UploadView = { ...view, status: "previewing", preview: null, plan_sha256: null, preview_job_id: 31 };
+  vi.mocked(api.listUploads).mockResolvedValue([previewing]);
+  vi.mocked(api.getUpload).mockResolvedValueOnce(previewing).mockResolvedValueOnce({ ...previewing, status: "failed" });
+  vi.mocked(api.getJob).mockResolvedValue(job(31, "failed", null, "T1_INVALID: invalid source"));
+  render(<UploadPanel projectKey="p" languages={[]} onImported={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
+  await screen.findByText("Job failed: T1_INVALID: invalid source");
+  expect(screen.queryByRole("button", { name: "Import" })).toBeNull();
+});
+it("keeps a safe manual refresh for legacy previewing uploads without a job ID", async () => {
+  const legacy: UploadView = { ...view, status: "previewing", preview: null, plan_sha256: null, preview_job_id: null };
+  vi.mocked(api.listUploads).mockResolvedValue([legacy]);
+  vi.mocked(api.getUpload).mockResolvedValueOnce(legacy).mockResolvedValueOnce(view);
+  render(<UploadPanel projectKey="p" languages={[]} onImported={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Refresh status" }));
+  await screen.findByRole("button", { name: "Import" });
+  expect(api.getJob).not.toHaveBeenCalled();
+});
+it("reloads a persisted running preview through a fresh hook and ignores its unmounted request", async () => {
+  const previewing: UploadView = { ...view, status: "previewing", preview: null, plan_sha256: null, preview_job_id: 31 };
+  let resolve!: (value: ReturnType<typeof job>) => void;
+  vi.mocked(api.listUploads).mockResolvedValue([previewing]);
+  vi.mocked(api.getUpload).mockResolvedValue(previewing);
+  vi.mocked(api.getJob).mockImplementationOnce(() => new Promise(r => { resolve = r; })).mockResolvedValue(job(31));
+  const first = render(<UploadPanel projectKey="p" languages={[]} onImported={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
+  await waitFor(() => expect(api.getJob).toHaveBeenCalledWith(31)); first.unmount();
+  vi.mocked(api.getUpload).mockResolvedValueOnce(previewing).mockResolvedValue(view);
+  render(<UploadPanel projectKey="p" languages={[]} onImported={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Resume upload 7" }));
+  await screen.findByRole("button", { name: "Import" });
+  await act(async () => { resolve(job(31, "failed", null, "old reply")); });
+  expect(screen.queryByText(/old reply/)).toBeNull();
+});
+it("ignores a failed job's persisted-view reply after a new source selection", async () => {
+  render(<UploadPanel projectKey="p" languages={["en"]} onImported={vi.fn()} />);
+  await check();
+  let resolve!: (value: UploadView) => void;
+  vi.mocked(api.getUpload).mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+  vi.mocked(api.getJob).mockResolvedValue(job(12, "failed", null, "T1_INVALID: failed"));
+  fireEvent.click(screen.getByRole("button", { name: "Import" }));
+  await screen.findByText("Job failed: T1_INVALID: failed");
+  fireEvent.change(screen.getByLabelText("Format"), { target: { value: "t1" } });
+  await act(async () => { resolve(view); });
+  expect(screen.queryByRole("button", { name: "Import" })).toBeNull();
 });
 it("does not start polling for a create response from a previous project", async () => {
   let resolve!: (value: { upload_id: number; job_id: number }) => void;
