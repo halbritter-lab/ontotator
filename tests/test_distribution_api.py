@@ -15,6 +15,78 @@ from ontocurator.auth.audit import Actor
 from ontocurator.domain.errors import DomainError
 
 
+def test_distribution_snapshot_is_json_native_without_changing_canonical_hash():
+    import hashlib
+    import json
+    from copy import deepcopy
+    from dataclasses import asdict
+
+    from ontocurator.assignments.proposals import (
+        DistributionSnapshot,
+        SnapshotDocument,
+        SnapshotMember,
+    )
+    from ontocurator.domain.variants import VariantInfo
+
+    variant = VariantInfo(
+        "target",
+        "case",
+        "external",
+        "de",
+        1,
+        "machine_translation",
+        "source",
+        {
+            "provider": "Übersetzer",
+            "checks": [{"code": "units_added", "passed": False}],
+        },
+        "ready_for_review",
+        None,
+        "a" * 64,
+    )
+    snapshot = DistributionSnapshot(
+        "p",
+        False,
+        (
+            SnapshotDocument(
+                "target", 1, "de", "a" * 64, (3, 1, 3), variant, ("de", "en")
+            ),
+        ),
+        (
+            SnapshotMember(
+                1, "reader", "Reader", "R", True, False, ("annotator",), ("en", "de"), 0
+            ),
+        ),
+        variants=(variant,),
+    )
+    original = deepcopy(snapshot)
+    serialized = snapshot.as_dict()
+    persisted = json.loads(json.dumps(serialized, ensure_ascii=False))
+    # Reconstruct the previous canonical hash inputs independently of as_dict:
+    # only these existing unordered member/exclusion fields were normalized.
+    legacy_inputs = asdict(snapshot)
+    legacy_inputs["documents"][0]["excluded_user_ids"] = [1, 3]
+    legacy_inputs["members"][0]["roles"] = ["annotator"]
+    legacy_inputs["members"][0]["languages"] = ["de", "en"]
+    legacy_bytes = json.dumps(
+        legacy_inputs, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    # PostgreSQL JSON audit inputs must compare exactly with the advertised
+    # representation, including complete lineage and nested language inputs.
+    assert serialized == persisted
+    assert serialized["documents"][0]["required_languages"] == ["de", "en"]
+    assert serialized["documents"][0]["excluded_user_ids"] == [1, 3]
+    assert serialized["variants"][0]["translation"] == variant.translation
+    assert (
+        json.dumps(
+            serialized, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        == legacy_bytes
+    )
+    assert snapshot.state_sha256 == hashlib.sha256(legacy_bytes).hexdigest()
+    assert snapshot == original
+
+
 @pytest.fixture
 def api(tmp_path):
     from pathlib import Path
