@@ -155,6 +155,43 @@ describe("project settings sections", () => {
     expect(api.updatePins).not.toHaveBeenCalled();
   });
 
+  it("preserves dirty pin selections across a compatible profile save and submits them afterward", async () => {
+    const pending = deferred<typeof settings>();
+    vi.mocked(api.updateProjectProfile).mockReturnValue(pending.promise);
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    fireEvent.change(await screen.findByLabelText(/^Ontology file for HP/), { target: { value: "b".repeat(64) } });
+    fireEvent.change(screen.getByLabelText("Allowed roots for HP"), { target: { value: "HP:2, HP:3" } });
+    fireEvent.change(screen.getByLabelText("T1 profile for HP"), { target: { value: "generic" } });
+    fireEvent.change(screen.getByLabelText("Profile JSON"), { target: { files: [new File([JSON.stringify(profile)], "compatible.json")] } });
+    await waitFor(() => expect((screen.getByRole("button", { name: "Save profile" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    await act(async () => { pending.resolve({ ...settings, axis_defaults: {} }); });
+    await screen.findByText("Profile saved.");
+    expect((screen.getByLabelText(/^Ontology file for HP/) as HTMLSelectElement).value).toBe("b".repeat(64));
+    expect((screen.getByLabelText("Allowed roots for HP") as HTMLInputElement).value).toBe("HP:2, HP:3");
+    expect((screen.getByLabelText("T1 profile for HP") as HTMLSelectElement).value).toBe("generic");
+    expect((screen.getByRole("checkbox", { name: "present" }) as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Save profile" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Save pins" }));
+    await screen.findByText("Pins saved.");
+    expect(api.updatePins).toHaveBeenCalledWith(settings.project_key, [{ ontology_id: "HP", sha256: "b".repeat(64), allowed_roots: ["HP:2", "HP:3"], t1_profile: "generic" }]);
+    expect((screen.getByLabelText(/^Ontology file for HP/) as HTMLSelectElement).value).toBe(settings.pins[0].sha256);
+  });
+
+  it("does not overwrite a newer pin draft when a pin save response arrives", async () => {
+    const pending = deferred<typeof settings>();
+    vi.mocked(api.updatePins).mockReturnValue(pending.promise);
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    fireEvent.change(await screen.findByLabelText("Allowed roots for HP"), { target: { value: "HP:2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save pins" }));
+    // A late draft event must survive even while normal UI controls are disabled.
+    fireEvent.change(screen.getByLabelText("Allowed roots for HP"), { target: { value: "HP:3" } });
+    await act(async () => { pending.resolve(settings); });
+    await screen.findByText("Pins saved.");
+    expect((screen.getByLabelText("Allowed roots for HP") as HTMLInputElement).value).toBe("HP:3");
+    expect(api.updatePins).toHaveBeenCalledWith(settings.project_key, [{ ontology_id: "HP", sha256: settings.pins[0].sha256, allowed_roots: ["HP:2"], t1_profile: settings.pins[0].t1_profile }]);
+  });
+
   it("lets unsaved rules be explicitly discarded after pin metadata introduces a protected default", async () => {
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, axis_defaults: {}, pins: [{ ...settings.pins[0], t1_profile: "generic" }] });
     vi.mocked(api.updatePins).mockResolvedValue(settings);

@@ -57,7 +57,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved 
       if (section === "General") setGeneral(generalOf(response));
       if (section === "Guideline") setGuideline(guidelineOf(response));
       if (section === "Rules") setRules(rulesOf(response));
-      if (section === "Pins" || section === "Profile") setPins(draftPins(response.pins));
+      if (section === "Pins") setPins(current => current === pins ? draftPins(response.pins) : current);
       if (section === "Profile") { setUploaded(null); setProfileGeneration(value => value + 1); }
       setSaved(section); onSaved?.(response);
     } catch (failure: unknown) { if (active.current) setError({ section, error: failure }); }
