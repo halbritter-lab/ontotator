@@ -30,8 +30,8 @@ def administration(tmp_path: Path) -> tuple[Database, int, int]:
         ).scalar_one()
         conn.execute(
             text(
-                f"INSERT INTO {SCHEMA}.documents (project_id, document_id, language, text, text_sha256)"
-                " VALUES (:project, 'd', 'en', 'A document', 'sha')"
+                f"INSERT INTO {SCHEMA}.documents (project_id, document_id, case_id, external_id, language, text, text_sha256)"
+                " VALUES (:project, 'd', 'd', 'd', 'en', 'A document', 'sha')"
             ),
             {"project": project_id},
         )

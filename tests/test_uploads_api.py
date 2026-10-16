@@ -563,7 +563,7 @@ def test_commit_rechecks_after_a_real_import_lock_wait(staged, change):
                 else:
                     holder.execute(
                         text(
-                            "INSERT INTO ontocurator.documents (project_id, document_id, position, language, text, text_sha256) SELECT id, 'unrelated', 0, 'de', 'Else', :sha FROM ontocurator.projects WHERE project_key = 'proj'"
+                            "INSERT INTO ontocurator.documents (project_id, document_id, case_id, external_id, position, language, text, text_sha256) SELECT id, 'unrelated', 'unrelated', 'unrelated', 0, 'de', 'Else', :sha FROM ontocurator.projects WHERE project_key = 'proj'"
                         ),
                         {"sha": hashlib.sha256(b"Else").hexdigest()},
                     )
