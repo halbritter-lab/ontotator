@@ -819,9 +819,11 @@ def register_variant_admin_scenario_routes(app: FastAPI) -> None:
 
     @app.get("/__test_review_child__")
     def review_child(project: str, review_id: int) -> dict[str, object]:
+        from ontocurator.exchange.reanchor_job import ReviewProducer
         from ontocurator.storage.tables import TranslationReviewRow
 
         db = app.state.repo.db
+        producer = ReviewProducer(review_id=review_id)
         with db.transaction() as conn:
             record = conn.execute(
                 select(
@@ -854,7 +856,8 @@ def register_variant_admin_scenario_routes(app: FastAPI) -> None:
                             ProjectRow.project_key == project,
                             JobRow.kind == "reanchor",
                             JobRow.payload["project"].as_string() == project,
-                            JobRow.payload["producer"]["kind"].as_string() == "review",
+                            JobRow.payload["producer"]["kind"].as_string()
+                            == producer.kind,
                             JobRow.payload["producer"]["review_id"].as_integer()
                             == review_id,
                         )
