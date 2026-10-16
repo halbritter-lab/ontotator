@@ -4,6 +4,8 @@
  */
 
 import type { components } from "./generated";
+import { attachmentFilename, type DownloadPayload } from "./download";
+export type { DownloadPayload } from "./download";
 
 export type DocumentSummary = components["schemas"]["ProjectDocumentSummary"];
 export type ProjectSettings = components["schemas"]["ProjectSettings"];
@@ -11,8 +13,13 @@ export type UploadView = components["schemas"]["UploadView"];
 export type UploadCreated = components["schemas"]["UploadCreated"];
 export type ImportPlan = components["schemas"]["ImportPlan"];
 export type JobView = components["schemas"]["JobView"];
+export type ProjectProgress = components["schemas"]["ProjectProgress"];
+export type ExportKind = components["schemas"]["ExportRequest"]["kind"];
+export type ExportCreated = components["schemas"]["ExportCreated"];
 export interface ProjectDocumentFilters { language?: string; status?: string; q?: string }
 export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
+export type EditorProposal = components["schemas"]["EditorProposal"];
+export type ProposalSetView = components["schemas"]["ProposalSetView"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
 export type OpenWorkspaceRequest = components["schemas"]["OpenWorkspaceRequest"];
 export type OpenWorkspaceResponse = components["schemas"]["OpenWorkspaceResponse"];
@@ -59,6 +66,13 @@ export type ProjectSettingsPatch = Partial<components["schemas"]["ProjectSetting
 export type CreateProjectRequest = components["schemas"]["CreateProjectRequest"];
 export type ProjectPin = components["schemas"]["ProjectPin"];
 export type Member = components["schemas"]["Member"];
+export type AssignmentView = components["schemas"]["AssignmentView"];
+export type AssignmentRow = components["schemas"]["AssignmentRowRequest"];
+export type AssignRequest = components["schemas"]["AssignRequest"];
+export type AssignResponse = components["schemas"]["AssignResponse"];
+export type ProposalRequest = components["schemas"]["ProposalRequest"];
+export type ProposalResponse = components["schemas"]["ProposalResponse"];
+export type ReassignRequest = components["schemas"]["ReassignRequest"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
@@ -180,6 +194,13 @@ export class ApiClient {
     this.baseUrl = options.baseUrl ?? "";
   }
 
+  async listAssignments(key: string): Promise<AssignmentView[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments`, { method: "GET" }); }
+  async createAssignments(key: string, body: AssignRequest): Promise<AssignResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments`, { method: "POST", body: JSON.stringify(body) }); }
+  async proposeDistribution(key: string, body: ProposalRequest): Promise<ProposalResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/proposal`, { method: "POST", body: JSON.stringify(body) }); }
+  async reassign(id: number, body: ReassignRequest): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reassign`, { method: "POST", body: JSON.stringify(body) }); }
+  async reopenAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }); }
+  async revokeAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/revoke`, { method: "POST", body: JSON.stringify({ reason }) }); }
+
   async listTemplates(): Promise<TemplateInfo[]> { return this.request("/api/v1/projects/templates", { method: "GET" }); }
   async createProject(body: CreateProjectRequest): Promise<ProjectSettings> { return this.request("/api/v1/projects/", { method: "POST", body: JSON.stringify(body) }); }
   async getProjectSettings(key: string): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/settings`, { method: "GET" }); }
@@ -193,6 +214,7 @@ export class ApiClient {
     for (const [name, value] of Object.entries(filters)) if (value) query.set(name, value);
     return this.request<DocumentSummary[]>(`/api/v1/projects/${encodeURIComponent(key)}/documents${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
+
 
   async createUpload(key: string, kind: "t1" | "text", files: readonly File[], language?: string): Promise<UploadCreated> {
     const body = new FormData(); body.append("kind", kind);
@@ -219,6 +241,19 @@ export class ApiClient {
 
   async getJob(id: number): Promise<JobView> {
     return this.request<JobView>(`/api/v1/jobs/${id}`, { method: "GET" });
+  }
+
+  async getProgress(key: string): Promise<ProjectProgress> {
+    return this.request<ProjectProgress>(`/api/v1/projects/${encodeURIComponent(key)}/progress`, { method: "GET" });
+  }
+
+  async startExport(key: string, kind: ExportKind): Promise<ExportCreated> {
+    return this.request<ExportCreated>(`/api/v1/projects/${encodeURIComponent(key)}/exports`, { method: "POST", body: JSON.stringify({ kind }) });
+  }
+
+  async downloadJob(id: number): Promise<DownloadPayload> {
+    const response = await this.requestResponse(`/api/v1/jobs/${id}/download`, { method: "GET" });
+    return { blob: await response.blob(), filename: attachmentFilename(response.headers.get("Content-Disposition")) };
   }
 
   async adminListUsers(): Promise<AdminUser[]> {
@@ -269,6 +304,13 @@ export class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    const response = await this.requestResponse(endpoint, options);
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  }
+
+  /** JSON and binary endpoints share authentication and error decoding. */
+  private async requestResponse(endpoint: string, options: RequestInit = {}): Promise<Response> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = new Headers(options.headers ?? {});
 
@@ -327,8 +369,7 @@ export class ApiClient {
       throw new ApiError(response.status, message, code, details);
     }
 
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
+    return response;
   }
 
   /** The logged-in user of this browser's session; 401 without one. Stores the CSRF token. */
@@ -336,6 +377,11 @@ export class ApiClient {
     const user = await this.request<CurrentUser>("/api/v1/auth/me", { method: "GET" });
     this.setCsrfToken(user.csrf_token);
     return user;
+  }
+
+  /** Raw transport; metadata lifetime and deduplication belong to the workspace. */
+  async getProposalSet(projectKey: string, setId: number, signal?: AbortSignal): Promise<ProposalSetView> {
+    return this.request<ProposalSetView>(`/api/v1/projects/${encodeURIComponent(projectKey)}/proposal-sets/${setId}`, { method: "GET", signal });
   }
 
   async getProfile(): Promise<Profile> {

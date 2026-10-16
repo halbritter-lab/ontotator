@@ -16,6 +16,7 @@ import {
   type Submission,
 } from "../api/client";
 import type { components } from "../api/generated";
+import { ProposalMetadataProvider, ProposalSource, proposalFor } from "../editor/ProposalSource";
 import { AiBadge } from "../editor/AiBadge";
 import { AnnotationPanel, quoteSegments, type EvidenceSnapshot } from "../editor/AnnotationPanel";
 import {
@@ -294,6 +295,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       ) ?? null
     );
   }, [draft.annotations, selectedAnnotationId]);
+
+  const sourceForTarget = (target: {annotation_id: string; version: string}) =>
+    (view.available_inputs ?? []).find(p => p.annotation.annotation_id === target.annotation_id && p.version === target.version);
 
   // Review mode targets
   const reviewTargets: TargetProposal[] = useMemo(() => {
@@ -1428,6 +1432,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const cancelAttach = useMemo(() => () => setIsAttachingMention(false), []);
 
   return (
+    <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []}>
     <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
@@ -1664,21 +1669,21 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                   >
                                     Replaced by: <strong>{displayText}</strong>
                                   </Button>
-                                  {" "}<AiBadge provenance={t.provenance} />
+                                  {" "}<AiBadge provenance={t.provenance} source={sourceForTarget(t)} />
                                 </div>
                               );
                             })()
                           ) : dec?.outcome === "rejected" ? (
                             <>
                               <span className="doc-meta__note">Proposal rejected</span>
-                              {" "}<AiBadge provenance={t.provenance} />
+                              {" "}<AiBadge provenance={t.provenance} source={sourceForTarget(t)} />
                             </>
                           ) : (
                             <>
                               {t.evidence_count === 0 ? "Spanless" : `“${t.quote ?? ""}”`}
                               {t.evidence_count > 1 && ` +${t.evidence_count - 1} more`}
                               {t.provenance?.actor.kind === "tool"
-                                ? <>{" "}<AiBadge provenance={t.provenance} /></>
+                                ? <>{" "}<AiBadge provenance={t.provenance} source={sourceForTarget(t)} /></>
                                 : ` • ${t.provenance?.actor.kind ?? "origin unknown"}`}
                             </>
                           )}
@@ -1698,7 +1703,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 <TermName termId={s.annotation.term_id} label={termLabel(s.annotation.layer_id, s.annotation.term_id)} />
                 <span className="doc-meta">
                   {view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Read-only{" "}
-                  <AiBadge provenance={s.annotation.provenance} />
+                  <AiBadge provenance={s.annotation.provenance} source={s} />
                 </span>
               </button>)}
             </section>}
@@ -1753,6 +1758,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       <div className="doc-meta">
                         {evCount === 0 ? "Spanless" : `${evCount} mention(s)`}
                         {firstAxisVal && ` • ${firstAxisVal}`}
+                        {" "}<AiBadge provenance={annSnap.annotation.provenance} source={proposalFor(annSnap, view.available_inputs ?? [])} />
                       </div>
                     </li>
                   );
@@ -1809,11 +1815,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <div className="inspector-pane density-compact" ref={inspectorRef}>
           {selectedSource ? (
             <section className="detail-pane" aria-label="Reference details">
+              <ProposalSource source={selectedSource} />
               <div className="detail-section">
                 <h2><TermName termId={selectedSource.annotation.term_id} label={termLabel(selectedSource.annotation.layer_id, selectedSource.annotation.term_id)} /></h2>
                 <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label} · Read-only</p>
                 <p>
-                  <AiBadge provenance={selectedSource.annotation.provenance} />{" "}
+                  <AiBadge provenance={selectedSource.annotation.provenance} source={selectedSource} />{" "}
                   {selectedSource.annotation.provenance.actor.actor_id} · {selectedSource.annotation.provenance.method}
                 </p>
                 {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Not specified"}</p>)}
@@ -1845,6 +1852,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </section>
           ) : view.key.mode === "review" && selectedTarget ? (
             <ReviewActions
+              source={targetSnapshot}
               readOnly={readOnly}
               key={refKey(selectedTarget)}
               target={selectedTarget}
@@ -1874,6 +1882,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             />
           ) : (
             <AnnotationPanel
+              source={proposalFor(selectedAnnotation, view.available_inputs ?? [])}
               readOnly={readOnly}
               key={selectedAnnotationId ?? "empty"}
               annotation={selectedAnnotation}
@@ -2068,5 +2077,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         confirmLabel={confirmRequest.confirmLabel} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}
       {!assignmentNavigation && <ShortcutHelpHost />}
     </div>
+    </ProposalMetadataProvider>
   );
 };

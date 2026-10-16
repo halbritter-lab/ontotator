@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type DocumentSummary, type ProjectSettings } from "../api/client";
+import { api, type AssignmentView, type DocumentSummary, type Member, type ProjectSettings } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import { Button, Checkbox, DataTable, Dialog, EmptyState, Select, TextInput, Toolbar, type Column } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { UploadPanel } from "./UploadPanel";
+import { AssignDialog } from "./AssignDialog";
+import { DistributionDialog } from "./DistributionDialog";
+import { AssignmentActions } from "./AssignmentActions";
 
 export interface DocumentsPageProps { projectKey: string; query: ProjectDocumentsQuery; onNavigate: (route: Route) => void }
 const statuses = ["unassigned", "open", "in_progress", "submitted", "reopened"];
 
-export function DocumentsPage({ projectKey, query, onNavigate }: DocumentsPageProps): JSX.Element {
+export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
+  return <DocumentEditor key={props.projectKey} {...props} />;
+}
+function DocumentEditor({ projectKey, query, onNavigate }: DocumentsPageProps): JSX.Element {
   const [rows, setRows] = useState<DocumentSummary[]>([]);
   const [settings, setSettings] = useState<ProjectSettings | null>(null);
   const [error, setError] = useState<unknown>();
@@ -17,11 +23,29 @@ export function DocumentsPage({ projectKey, query, onNavigate }: DocumentsPagePr
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [uploadOpen, setUploadOpen] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [assignments, setAssignments] = useState<AssignmentView[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [assignmentError, setAssignmentError] = useState<unknown>();
+  const [assignmentDialog, setAssignmentDialog] = useState<{ kind: "manual" | "distribution"; documents: DocumentSummary[]; identity: string } | null>(null);
+  const selectionIdentity = JSON.stringify([query.language, query.status, query.q, query.select]);
+  // Invalidate selection dialogs without remounting the focused filter controls.
+  const currentSelection = useRef(selectionIdentity);
+  currentSelection.current = selectionIdentity;
+  const visibleDialog = assignmentDialog?.identity === selectionIdentity ? assignmentDialog : null;
+  useEffect(() => { setAssignmentDialog(null); }, [selectionIdentity]);
   const request = useRef(0);
   const language = query.language || undefined;
   const status = statuses.includes(query.status ?? "") ? query.status : undefined;
   const q = query.q || undefined;
   const preselect = query.select;
+  useEffect(() => {
+    let active = true;
+    setAssignmentError(undefined); setAssignments([]);
+    void Promise.all([api.listAssignments(projectKey), api.listMembers(projectKey)]).then(([inventory, people]) => {
+      if (active) { setAssignments(inventory); setMembers(people); }
+    }).catch((failure: unknown) => { if (active) setAssignmentError(failure); });
+    return () => { active = false; };
+  }, [projectKey, revision]);
   useEffect(() => {
     let active = true;
     setSettings(null); setSettingsError(undefined); setUploadOpen(false);
@@ -41,11 +65,15 @@ export function DocumentsPage({ projectKey, query, onNavigate }: DocumentsPagePr
   }, [projectKey, language, status, q, preselect, revision]);
   const navigate = (patch: ProjectDocumentsQuery) => onNavigate({ name: "projectDocuments", key: projectKey, language: query.language, status: query.status, q: query.q, select: undefined, ...patch });
   const toggle = (id: string) => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const assignmentsChanged = (identity: string) => { if (currentSelection.current === identity) setRevision(value => value + 1); };
   const columns: Column<DocumentSummary>[] = [
     { id: "select", header: <Checkbox id="documents-all" label="Select all visible" disabled={!rows.length || loading} checked={rows.length > 0 && rows.every(doc => selected.has(doc.document_id))} onChange={event => setSelected(new Set(event.target.checked ? rows.map(doc => doc.document_id) : []))} />, cell: doc => <Checkbox id={`document-select-${encodeURIComponent(doc.document_id)}`} label={`Select ${doc.document_id}`} checked={selected.has(doc.document_id)} onChange={() => toggle(doc.document_id)} /> },
     { id: "id", header: "Document ID", cell: doc => doc.document_id },
     { id: "language", header: "Language", cell: doc => doc.language },
-    { id: "assignees", header: "Assignees", cell: doc => doc.assignees?.length ? <ul>{doc.assignees.map(assignee => <li key={assignee.assignment_id}>{assignee.pseudonym}: {assignee.task} {assignee.status}</li>)}</ul> : "Unassigned" },
+    { id: "assignees", header: "Assignees", cell: doc => doc.assignees?.length ? <ul>{doc.assignees.map(assignee => {
+      const actual = assignments.find(item => item.id === assignee.assignment_id && item.document_id === doc.document_id && item.project_key === projectKey && !item.revoked_at);
+      return <li key={assignee.assignment_id}><span>{assignee.pseudonym}: {assignee.task} {assignee.status}</span>{actual && <AssignmentActions assignment={actual} members={members} onChanged={() => assignmentsChanged(selectionIdentity)} />}</li>;
+    })}</ul> : "Unassigned" },
   ];
   return <section className="detail-section">
     <h1>Documents</h1>
@@ -54,11 +82,17 @@ export function DocumentsPage({ projectKey, query, onNavigate }: DocumentsPagePr
       <Select id="documents-status" label="Status" value={status ?? ""} onChange={event => navigate({ status: event.target.value || undefined })}><option value="">All statuses</option>{statuses.map(value => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</Select>
       <TextInput id="documents-prefix" label="ID prefix" value={query.q ?? ""} onChange={event => navigate({ q: event.target.value || undefined })} />
     </Toolbar>
-    <Toolbar label="Document actions"><span aria-live="polite">{selected.size} selected</span><Button disabled={!settings} onClick={() => setUploadOpen(true)}>Upload documents</Button><Button disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh documents</Button></Toolbar>
+    <Toolbar label="Document actions"><span aria-live="polite">{selected.size} selected</span><Button disabled={!settings} onClick={() => setUploadOpen(true)}>Upload documents</Button><Button disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh documents</Button>
+      <Button disabled={loading || !selected.size} onClick={() => setAssignmentDialog({ kind: "manual", documents: rows.filter(doc => selected.has(doc.document_id)), identity: selectionIdentity })}>Assign …</Button>
+      <Button disabled={loading || !selected.size} onClick={() => setAssignmentDialog({ kind: "distribution", documents: rows.filter(doc => selected.has(doc.document_id)), identity: selectionIdentity })}>Propose distribution …</Button>
+    </Toolbar>
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}
     {error !== undefined && <ErrorNotice error={error} />}
+    {assignmentError !== undefined && <ErrorNotice error={assignmentError} />}
     {loading && <p role="status">Loading documents …</p>}
     <DataTable label="Documents" columns={columns} rows={rows} rowKey={doc => doc.document_id} rowProps={doc => ({ "data-testid": "document-row", selected: selected.has(doc.document_id) })} empty={<EmptyState title="No documents">Try another filter or upload documents to this project.</EmptyState>} />
     <Dialog open={uploadOpen} title="Upload documents" size="lg" onClose={() => setUploadOpen(false)}>{uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} onImported={() => setRevision(value => value + 1)} />}</Dialog>
+    {visibleDialog?.kind === "manual" && <AssignDialog projectKey={projectKey} documents={visibleDialog.documents} onClose={() => setAssignmentDialog(null)} onChanged={() => assignmentsChanged(visibleDialog.identity)} />}
+    {visibleDialog?.kind === "distribution" && <DistributionDialog projectKey={projectKey} documents={visibleDialog.documents} onClose={() => setAssignmentDialog(null)} onChanged={() => assignmentsChanged(visibleDialog.identity)} />}
   </section>;
 }
