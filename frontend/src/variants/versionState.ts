@@ -47,9 +47,13 @@ export function versionsOf(detail: CaseVariants, language: string): VariantOptio
   const labels = baseLabels.map((label, index) =>
     baseCounts.get(label)! > 1 ? `${label} · ${variants[index].external_id}` : label);
   const labelCounts = counts(labels);
+  const finalLabels = labels.map((label, index) =>
+    labelCounts.get(label)! > 1 ? `${label} (${variants[index].document_id})` : label);
+  const finalCounts = counts(finalLabels);
   return variants.map((row, index) => ({
     documentId: row.document_id, version: row.version, origin: row.origin, status: row.translation_status,
-    label: labelCounts.get(labels[index])! > 1 ? `${labels[index]} (${row.document_id})` : labels[index],
+    // Ordinary labels start with v; global numeric prefixes cannot collide with them or each other.
+    label: finalCounts.get(finalLabels[index])! > 1 ? `${index + 1}. ${finalLabels[index]}` : finalLabels[index],
   }));
 }
 

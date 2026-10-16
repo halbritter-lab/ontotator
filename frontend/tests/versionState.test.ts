@@ -57,6 +57,19 @@ describe('language and immutable variant identity', () => {
     expect(options.find(row => row.documentId === 'third')?.label).toContain('other engine');
   });
 
+  it('keeps labels distinct when an opaque external ID imitates an internal-ID suffix', () => {
+    const data = detail(...[
+      ['one', 'engine'], ['two', 'engine'], ['three', 'engine (one)'],
+    ].map(([id, external_id]) => variant(id, 'de', 1, {
+      external_id, origin: 'machine_translation', translation_status: 'accepted',
+    })));
+    const options = versionsOf(data, 'de');
+    expect(new Set(options.map(row => row.label)).size).toBe(3);
+    expect(options.map(row => row.documentId)).toEqual(['one', 'two', 'three']);
+    expect(options[0].label).toContain('engine (one)');
+    expect(options[2].label).toContain('engine (one)');
+  });
+
   it('prefers newest accepted only for a default, retaining an explicitly requested version', () => {
     const data = detail(variant('v1', 'de', 1, { translation_status: 'accepted' }), variant('v10', 'de', 10), variant('v2', 'de', 2, { translation_status: 'accepted' }));
     expect(pickVariant(data, 'de')).toBe('v2');
