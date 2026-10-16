@@ -56,6 +56,7 @@ class UploadView(BaseModel):
     status: str
     preview: ImportPlan | None
     plan_sha256: str | None
+    preview_job_id: int | None = None
     commit_job_id: int | None
     created_at: datetime
 

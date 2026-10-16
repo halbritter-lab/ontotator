@@ -6,6 +6,12 @@
 import type { components } from "./generated";
 
 export type DocumentSummary = components["schemas"]["ProjectDocumentSummary"];
+export type ProjectSettings = components["schemas"]["ProjectSettings"];
+export type UploadView = components["schemas"]["UploadView"];
+export type UploadCreated = components["schemas"]["UploadCreated"];
+export type ImportPlan = components["schemas"]["ImportPlan"];
+export type JobView = components["schemas"]["JobView"];
+export interface ProjectDocumentFilters { language?: string; status?: string; q?: string }
 export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
 export type OpenWorkspaceRequest = components["schemas"]["OpenWorkspaceRequest"];
@@ -48,7 +54,6 @@ export type CodeResponse = components["schemas"]["CodeResponse"];
 export type AdminUserPatch = Partial<components["schemas"]["PatchUserRequest"]>;
 export type TaskProfile = components["schemas"]["TaskProfile"];
 export type TemplateInfo = components["schemas"]["TemplateInfo"];
-export type ProjectSettings = components["schemas"]["ProjectSettings"];
 export type ProjectSettingsPatch = Partial<components["schemas"]["ProjectSettingsChange"]>;
 export type CreateProjectRequest = components["schemas"]["CreateProjectRequest"];
 export type ProjectPin = components["schemas"]["ProjectPin"];
@@ -182,6 +187,39 @@ export class ApiClient {
   async updateProjectProfile(key: string, profile: TaskProfile): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/profile`, { method: "PUT", body: JSON.stringify(profile) }); }
   async listMembers(key: string): Promise<Member[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members`, { method: "GET" }); }
   async setMemberRoles(key: string, username: string, roles: string[], revoke = false): Promise<Member> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members/${encodeURIComponent(username)}`, { method: "PUT", body: JSON.stringify({ roles, revoke_assignments: revoke }) }); }
+  async listProjectDocuments(key: string, filters: ProjectDocumentFilters = {}): Promise<DocumentSummary[]> {
+    const query = new URLSearchParams();
+    for (const [name, value] of Object.entries(filters)) if (value) query.set(name, value);
+    return this.request<DocumentSummary[]>(`/api/v1/projects/${encodeURIComponent(key)}/documents${query.size ? `?${query}` : ""}`, { method: "GET" });
+  }
+
+
+  async createUpload(key: string, kind: "t1" | "text", files: readonly File[], language?: string): Promise<UploadCreated> {
+    const body = new FormData(); body.append("kind", kind);
+    for (const file of files) body.append("files[]", file);
+    if (language) body.append("language", language);
+    return this.request<UploadCreated>(`/api/v1/projects/${encodeURIComponent(key)}/uploads`, { method: "POST", body });
+  }
+
+  async listUploads(key: string): Promise<UploadView[]> {
+    return this.request<UploadView[]>(`/api/v1/projects/${encodeURIComponent(key)}/uploads`, { method: "GET" });
+  }
+
+  async getUpload(key: string, id: number): Promise<UploadView> {
+    return this.request<UploadView>(`/api/v1/projects/${encodeURIComponent(key)}/uploads/${id}`, { method: "GET" });
+  }
+
+  async commitUpload(key: string, id: number, planSha256: string): Promise<UploadCreated> {
+    return this.request<UploadCreated>(`/api/v1/projects/${encodeURIComponent(key)}/uploads/${id}/commit`, { method: "POST", body: JSON.stringify({ plan_sha256: planSha256 }) });
+  }
+
+  async discardUpload(key: string, id: number): Promise<UploadView> {
+    return this.request<UploadView>(`/api/v1/projects/${encodeURIComponent(key)}/uploads/${id}/discard`, { method: "POST" });
+  }
+
+  async getJob(id: number): Promise<JobView> {
+    return this.request<JobView>(`/api/v1/jobs/${id}`, { method: "GET" });
+  }
 
   async adminListUsers(): Promise<AdminUser[]> {
     return this.request<AdminUser[]>("/api/v1/admin/users/", { method: "GET" });
