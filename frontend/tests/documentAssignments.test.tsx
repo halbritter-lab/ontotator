@@ -9,6 +9,7 @@ import { assignment, deferred, documents, members } from "./assignmentFixtures";
 beforeEach(() => {
   vi.spyOn(api, "getProjectSettings").mockResolvedValue({ languages: ["en", "de"] } as never);
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue(documents);
+  vi.spyOn(api, "listCases").mockResolvedValue([]);
   vi.spyOn(api, "listAssignments").mockResolvedValue([assignment]);
   vi.spyOn(api, "listMembers").mockResolvedValue(members);
   vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [assignment], refused: [] });
@@ -21,7 +22,7 @@ it("keeps the same focused prefix input while a controlled parent applies every 
     return <DocumentsPage projectKey="p/key" query={query} onNavigate={route => { if (route.name === "projectDocuments") setQuery(route); }} />;
   }
   const user = userEvent.setup(); render(<ControlledDocuments />);
-  await screen.findByText("z/doc");
+  await screen.findByRole("link", { name: "View case for z/doc" });
   const input = screen.getByLabelText("ID prefix");
   await user.type(input, "abc");
   expect(screen.getByLabelText("ID prefix")).toBe(input);
@@ -32,7 +33,7 @@ it("keeps the same focused prefix input while a controlled parent applies every 
 });
 it("sends only visible selected documents to assignment tools and refreshes both inventories after success", async () => {
   render(<DocumentsPage projectKey="p/key" query={{ language: "en" }} onNavigate={vi.fn()} />);
-  await screen.findByText("z/doc"); expect(screen.getByRole("button", { name: "Assign …" })).toHaveProperty("disabled", true);
+  await screen.findByRole("link", { name: "View case for z/doc" }); expect(screen.getByRole("button", { name: "Assign …" })).toHaveProperty("disabled", true);
   fireEvent.click(screen.getByLabelText("Select z/doc")); fireEvent.click(screen.getByRole("button", { name: "Assign …" }));
   fireEvent.click(await screen.findByLabelText(/Alice \(alice\)/)); fireEvent.click(screen.getByRole("button", { name: "Assign" }));
   await waitFor(() => expect(api.listProjectDocuments).toHaveBeenCalledTimes(2));
@@ -51,8 +52,8 @@ it("wires actual assignment IDs through a row's actions and refreshes after remo
 it.each(["project", "filter"] as const)("closes an old selection dialog on %s change and ignores its pending mutation", async change => {
   const pending = deferred<Awaited<ReturnType<typeof api.createAssignments>>>(); vi.mocked(api.createAssignments).mockReturnValue(pending.promise);
   const view = render(<DocumentsPage projectKey="p/key" query={{ select: "z/doc" }} onNavigate={vi.fn()} />);
-  await screen.findByText("z/doc"); fireEvent.click(screen.getByRole("button", { name: "Assign …" })); fireEvent.click(await screen.findByLabelText(/Alice \(alice\)/)); fireEvent.click(screen.getByRole("button", { name: "Assign" }));
-  view.rerender(<DocumentsPage projectKey={change === "project" ? "other" : "p/key"} query={change === "filter" ? { q: "changed" } : {}} onNavigate={vi.fn()} />); await screen.findByText("z/doc");
+  await screen.findByRole("link", { name: "View case for z/doc" }); fireEvent.click(screen.getByRole("button", { name: "Assign …" })); fireEvent.click(await screen.findByLabelText(/Alice \(alice\)/)); fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+  view.rerender(<DocumentsPage projectKey={change === "project" ? "other" : "p/key"} query={change === "filter" ? { q: "changed" } : {}} onNavigate={vi.fn()} />); await screen.findByRole("link", { name: "View case for z/doc" });
   await act(async () => { pending.resolve({ created: [assignment], refused: [] }); });
   expect(screen.queryByRole("dialog", { name: "Assign documents" })).toBeNull(); expect(api.listProjectDocuments).toHaveBeenCalledTimes(2);
 });
