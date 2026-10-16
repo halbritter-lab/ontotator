@@ -9561,6 +9561,13 @@
             "type": "array",
             "title": "Available Inputs"
           },
+          "proposal_sets": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalSetView"
+            },
+            "type": "array",
+            "title": "Proposal Sets"
+          },
           "submissions": {
             "items": {
               "$ref": "#/components/schemas/Submission"
