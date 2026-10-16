@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { ComparePane } from './ComparePane';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, type AnnotationVersion, type CaseDetail, type TaskSummary, type VariantText, type VersionRef } from '../api/client';
 import { ErrorNotice } from '../admin/ErrorNotice';
 import { routeHref, type Route } from '../app/router';
@@ -48,6 +49,11 @@ export function VariantDetails({ detail, documentId }: { detail: CaseDetail; doc
 export function CaseViewer({ projectKey, caseId, variant, annotations, username, onNavigate }: CaseViewerProps): JSX.Element {
   const identity = useMemo(() => ({ username, projectKey, caseId }), [username, projectKey, caseId]);
   const [retry, setRetry] = useState(0);
+  const [compareIdentity, setCompareIdentity] = useState<object | null>(null);
+  const compareOpen = compareIdentity === identity;
+  const [leftElement, setLeftElement] = useState<HTMLDivElement | null>(null);
+  const compareButton = useRef<HTMLButtonElement | null>(null);
+  const closeComparison = () => { setCompareIdentity(null); compareButton.current?.focus(); };
   const [detailState, setDetail] = useState<{ identity: object; value: CaseDetail } | null>(null);
   const [caseError, setCaseError] = useState<{ identity: object; error: unknown } | null>(null);
   const detail = detailState?.identity === identity ? detailState.value : null;
@@ -98,7 +104,7 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
   const text = textState?.identity === contentIdentity ? textState.value : null;
   const supported = tasks?.identity === identity ? tasks.value.filter(row => row.project_key === projectKey && row.document_id === current.document_id && (row.task === 'annotate' || row.task === 'review')) : [];
   const payloadFailed = payloadError?.identity === payloadIdentity;
-  return <section className="case-viewer" aria-label="Case viewer">
+  return <section className={`case-viewer${compareOpen ? " case-comparing" : ""}`} aria-label="Case viewer">
     <div className="case-toolbar" role="group" aria-label="Case"><h1>Case: {detail.case_id}</h1><span className="badge">{variantDescription(current)}</span>
       {supported.map((task, index) => <a key={task.assignment_id} href={routeHref({ name: 'task', assignmentId: task.assignment_id })} className="btn btn-secondary"
         onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); onNavigate({ name: 'task', assignmentId: task.assignment_id }); }}>
@@ -107,6 +113,7 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
     </div>
     <VariantSelectors caseDetail={detail} currentDocumentId={current.document_id} annotationOptions={annotationOptions(refs ?? [], false)} selectedAnnotation={selection}
       onLanguage={language => { const id = pickVariant(detail, language); if (id) move(id); }} onVersion={id => move(id)} onAnnotation={value => move(current.document_id, value)} />
+    <Button ref={compareButton} aria-expanded={compareOpen} onClick={() => { if (compareOpen) closeComparison(); else setCompareIdentity(identity); }}>Compare</Button>
     <VariantDetails detail={detail} documentId={current.document_id} />
     {taskError?.identity === identity && <><ErrorNotice error={taskError.error} />{retryButton}</>}
     {refsError?.identity === contentIdentity && <><ErrorNotice error={refsError.error} />{retryButton}</>}
@@ -114,7 +121,10 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
     {payloadFailed && <><ErrorNotice error={payloadError.error} />{retryButton}</>}
     {textError?.identity === contentIdentity ? <><ErrorNotice error={textError.error} />{retryButton}</> : text ? <>
       {selection !== 'text' && ref && !snapshot && !payloadFailed && <InlineMessage tone="info">Loading annotation version...</InlineMessage>}
-      <ReadOnlyAnnotationView key={JSON.stringify([username, projectKey, caseId, selectedId, selection, retry])} text={text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} />
+      <div className="comparison-reading"><ReadOnlyAnnotationView onTextElement={setLeftElement} key={JSON.stringify([username, projectKey, caseId, selectedId, selection, retry])} text={text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} />
+      {compareOpen && <ComparePane projectKey={projectKey} username={username} caseDetail={detail} leftDocumentId={current.document_id}
+        leftText={text.text} leftElement={leftElement} leftContext={JSON.stringify([selectedId, selection, retry])} onClose={closeComparison} />}
+      </div>
     </> : <InlineMessage tone="info">Loading text...</InlineMessage>}
   </section>;
 }

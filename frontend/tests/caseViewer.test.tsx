@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.spyOn(api, 'listMyTasks').mockResolvedValue([]);
   vi.spyOn(api, 'resolveTermLabels').mockResolvedValue([]);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const props = { projectKey: 'pkg', caseId: caseDetail.case_id, variant: 'target', username: 'alice', onNavigate: vi.fn() };
 
 it('reads immutable text without opening work and keeps Text only useful when refs are denied', async () => {
@@ -106,4 +106,23 @@ it('clears task-list failure after a successful explicit retry', async () => {
   await screen.findByRole('link', { name: 'Open my task' });
   expect(screen.queryByText('Task list offline')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+});
+
+it('opens independent comparison alongside the actual viewer without replacing left content or opening a task', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  const open = vi.spyOn(api, 'openAssignment');
+  const { CaseViewer } = await import('../src/variants/CaseViewer');
+  const mounted = render(<CaseViewer {...props} annotations={refKey(ownRef)} />);
+  await screen.findByText('HP:old');
+  const left = mounted.container.querySelector('.text-container');
+  const compare = screen.getByRole('button', { name: 'Compare' });
+  fireEvent.click(compare);
+  await screen.findByText('Immutable source 😃');
+  expect(mounted.container.querySelector('.text-container')).toBe(left);
+  expect(screen.getByText('HP:old')).toBeTruthy();
+  expect(open).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Close comparison' }));
+  expect(mounted.container.querySelector('.text-container')).toBe(left);
+  expect(document.activeElement).toBe(compare);
+  vi.unstubAllGlobals();
 });
