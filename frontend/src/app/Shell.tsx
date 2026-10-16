@@ -60,5 +60,5 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
     })}
   </>;
   return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav}
-    density={route.name === "task" ? "reading" : "compact"}>{children}</AppShell>;
+    density={(route.name === "task" || route.name === "projectCase") ? "reading" : "compact"}>{children}</AppShell>;
 }

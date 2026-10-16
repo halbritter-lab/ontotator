@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type AssignmentView, type DocumentSummary, type Member, type ProjectSettings } from "../api/client";
-import type { ProjectDocumentsQuery, Route } from "../app/router";
+import { api, type AssignmentView, type ProjectDocumentSummary, type Member, type ProjectSettings } from "../api/client";
+import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Button, Checkbox, DataTable, Dialog, EmptyState, Select, TextInput, Toolbar, type Column } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { UploadPanel } from "./UploadPanel";
@@ -15,7 +15,7 @@ export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
   return <DocumentEditor key={props.projectKey} {...props} />;
 }
 function DocumentEditor({ projectKey, query, onNavigate }: DocumentsPageProps): JSX.Element {
-  const [rows, setRows] = useState<DocumentSummary[]>([]);
+  const [rows, setRows] = useState<ProjectDocumentSummary[]>([]);
   const [settings, setSettings] = useState<ProjectSettings | null>(null);
   const [error, setError] = useState<unknown>();
   const [settingsError, setSettingsError] = useState<unknown>();
@@ -26,7 +26,7 @@ function DocumentEditor({ projectKey, query, onNavigate }: DocumentsPageProps): 
   const [assignments, setAssignments] = useState<AssignmentView[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [assignmentError, setAssignmentError] = useState<unknown>();
-  const [assignmentDialog, setAssignmentDialog] = useState<{ kind: "manual" | "distribution"; documents: DocumentSummary[]; identity: string } | null>(null);
+  const [assignmentDialog, setAssignmentDialog] = useState<{ kind: "manual" | "distribution"; documents: ProjectDocumentSummary[]; identity: string } | null>(null);
   const selectionIdentity = JSON.stringify([query.language, query.status, query.q, query.select]);
   // Invalidate selection dialogs without remounting the focused filter controls.
   const currentSelection = useRef(selectionIdentity);
@@ -66,9 +66,17 @@ function DocumentEditor({ projectKey, query, onNavigate }: DocumentsPageProps): 
   const navigate = (patch: ProjectDocumentsQuery) => onNavigate({ name: "projectDocuments", key: projectKey, language: query.language, status: query.status, q: query.q, select: undefined, ...patch });
   const toggle = (id: string) => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const assignmentsChanged = (identity: string) => { if (currentSelection.current === identity) setRevision(value => value + 1); };
-  const columns: Column<DocumentSummary>[] = [
+  const columns: Column<ProjectDocumentSummary>[] = [
     { id: "select", header: <Checkbox id="documents-all" label="Select all visible" disabled={!rows.length || loading} checked={rows.length > 0 && rows.every(doc => selected.has(doc.document_id))} onChange={event => setSelected(new Set(event.target.checked ? rows.map(doc => doc.document_id) : []))} />, cell: doc => <Checkbox id={`document-select-${encodeURIComponent(doc.document_id)}`} label={`Select ${doc.document_id}`} checked={selected.has(doc.document_id)} onChange={() => toggle(doc.document_id)} /> },
     { id: "id", header: "Document ID", cell: doc => doc.document_id },
+    { id: "case", header: "Case", cell: doc => {
+      if (typeof doc.case_id !== "string") return null;
+      const destination: Route = { name: "projectCase", key: projectKey, caseId: doc.case_id, variant: doc.document_id };
+      return <a href={routeHref(destination)} aria-label={`View case for ${doc.document_id}`} onClick={event => {
+        if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        event.preventDefault(); onNavigate(destination);
+      }}>View case</a>;
+    } },
     { id: "language", header: "Language", cell: doc => doc.language },
     { id: "assignees", header: "Assignees", cell: doc => doc.assignees?.length ? <ul>{doc.assignees.map(assignee => {
       const actual = assignments.find(item => item.id === assignee.assignment_id && item.document_id === doc.document_id && item.project_key === projectKey && !item.revoked_at);

@@ -1,0 +1,113 @@
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { api, ApiError } from '../src/api/client';
+import { CaseScreen } from '../src/app/CaseScreen';
+import { workspaceFixture } from './assignments';
+import { caseDetail, historical, ownRef } from './variantFixtures';
+import { refKey } from '../src/variants/versionState';
+
+beforeEach(() => {
+  vi.spyOn(api, 'getVariantMetadata').mockResolvedValue(caseDetail.variants[1]);
+  vi.spyOn(api, 'getCase').mockResolvedValue(caseDetail);
+  vi.spyOn(api, 'listAnnotationVersions').mockResolvedValue([ownRef]);
+  vi.spyOn(api, 'getAnnotationVersion').mockResolvedValue(historical);
+  vi.spyOn(api, 'resolveTermLabels').mockResolvedValue([]);
+});
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+const context = { username: 'alice', assignmentId: 1, onNavigate: vi.fn() };
+
+it('resolves real case metadata and displays history separately from the unchanged draft', async () => {
+  const view = workspaceFixture('target').view;
+  const command = vi.spyOn(api, 'applyCommand'), submit = vi.spyOn(api, 'submitWorkspace');
+  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
+  const select = await screen.findByLabelText('Annotations');
+  fireEvent.change(select, { target: { value: refKey(ownRef) } });
+  await screen.findByText('Viewing My submitted version (read-only)');
+  await screen.findByText('HP:old');
+  expect(api.getVariantMetadata).toHaveBeenCalledWith('pkg', 'target');
+  expect(api.getCase).toHaveBeenCalledWith('pkg', caseDetail.case_id);
+  expect(api.listAnnotationVersions).toHaveBeenCalledWith('pkg', 'target', 1);
+  expect((screen.getByRole('button', { name: /Finish & Submit/ }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
+  await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
+  expect(screen.queryByText('HP:old')).toBeNull();
+  expect(view.draft.annotations).toEqual([]);
+  expect(command).not.toHaveBeenCalled(); expect(submit).not.toHaveBeenCalled();
+});
+it('returning from history never unlocks a submitted server task', async () => {
+  render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} readOnly versionContext={context} />);
+  fireEvent.change(await screen.findByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
+  await screen.findByText('HP:old');
+  fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
+  await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
+  expect((screen.getByRole('button', { name: /Finish & Submit/ }) as HTMLButtonElement).disabled).toBe(true);
+});
+it('preserves draft display, selection and focus when an unsaved snapshot transition is cancelled', async () => {
+  vi.spyOn(api, 'applyCommand').mockRejectedValue(new TypeError('Offline'));
+  render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await screen.findByText('Offline – changes not saved');
+  const select = await screen.findByLabelText('Annotations');
+  select.focus();
+  const editor = document.querySelector('.text-container');
+  fireEvent.change(select, { target: { value: refKey(ownRef) } });
+  const dialog = await screen.findByRole('dialog', { name: 'Changes not saved' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect((select as HTMLSelectElement).value).toBe('draft');
+  expect(document.querySelector('.text-container')).toBe(editor);
+  expect(document.activeElement).toBe(select);
+  expect(api.getAnnotationVersion).not.toHaveBeenCalled();
+});
+it('navigates exact sibling identities through the existing outer route guard callback', async () => {
+  const onNavigate = vi.fn();
+  render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} versionContext={{ ...context, onNavigate }} />);
+  fireEvent.change(await screen.findByLabelText('Text version'), { target: { value: 'other-run' } });
+  expect(onNavigate).toHaveBeenCalledWith({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'other-run' });
+});
+it('refuses history display after a rejected save even when the command queue became empty', async () => {
+  vi.spyOn(api, 'applyCommand').mockRejectedValue(new ApiError(422, 'Invalid change', 'INVALID_COMMAND'));
+  render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await screen.findByText('Invalid change');
+  fireEvent.change(await screen.findByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
+  await screen.findByText('A change could not be saved. Reload the case before leaving.');
+  expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft');
+  expect(api.getAnnotationVersion).not.toHaveBeenCalled();
+});
+it('does not open a second leave dialog when an outer navigation arrives during a local version guard', async () => {
+  vi.spyOn(api, 'applyCommand').mockRejectedValue(new TypeError('Offline'));
+  const routeLeaveRef = { current: null as null | (() => Promise<boolean>) };
+  render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} versionContext={context} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await screen.findByText('Offline – changes not saved');
+  fireEvent.change(await screen.findByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
+  const dialog = await screen.findByRole('dialog', { name: 'Changes not saved' });
+  let additionalLeave!: Promise<boolean>;
+  await act(async () => { additionalLeave = routeLeaveRef.current!(); });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(await additionalLeave).toBe(false);
+  await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).disabled).toBe(false));
+  // A subsequent ordinary transition remains usable, rather than an orphaned local promise.
+  fireEvent.change(screen.getByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
+  await screen.findByRole('dialog', { name: 'Changes not saved' });
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+it('waits for the actual pending draft command before fetching and displaying history', async () => {
+  const response = workspaceFixture('target');
+  let save!: (draft: typeof response.view.draft) => void;
+  vi.spyOn(api, 'applyCommand').mockImplementation(() => new Promise(resolve => { save = resolve; }));
+  render(<CaseScreen view={response.view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await waitFor(() => expect(api.applyCommand).toHaveBeenCalledOnce());
+  fireEvent.change(await screen.findByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
+  expect(api.getAnnotationVersion).not.toHaveBeenCalled();
+  expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft');
+  await act(async () => save({ ...response.view.draft, revision: 1, checked_layer_ids: ['phenotype'] }));
+  await screen.findByText('HP:old');
+  fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
+  await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
+  expect(screen.getByRole('button', { name: /Mark Phenotype as verified/ }).textContent).toContain('Phenotype verified (Reset)');
+});
