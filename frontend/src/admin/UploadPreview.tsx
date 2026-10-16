@@ -16,7 +16,7 @@ export function UploadPreview({ plan }: { plan: ImportPlan }): JSX.Element {
     {!!plan.documents?.some(item => item.normalised) && <section><h4>Text normalization</h4><ul>{plan.documents.filter(item => item.normalised).map((item, index) => <li key={index}>{item.document_id} · {item.label}: normalized to NFC.</li>)}</ul></section>}
     {(plan.proposal_sets ?? []).map((set, index) => <section className="detail-section" key={index}>
       <h4>{set.document_id} · {set.annotation_set_id}</h4>
-      <p>{set.set_kind} · {set.action === "already_imported" ? "Already imported" : "New set"} · {set.proposals.annotations.length} proposed · {set.refused.length} refused</p>
+      <p>{set.set_kind} · {set.action === "already_imported" ? "Already imported" : "New set"} · {set.proposals.annotations.length} proposed · {new Set(set.refused.map(item => item.annotation_id)).size} refused</p>
       {set.actors.map((actor, actorIndex) => <p key={actorIndex}>{actor.kind === "tool" ? "Tool" : "Actor"}: {[actor.name, actor.version, actor.model, actor.run_id].filter(value => typeof value === "string" && value.length).join(" · ") || "No label supplied"}</p>)}
       {set.bundle_id && <p>Bundle: {set.bundle_id}</p>}
       {set.manifest_sha256 && <p>Manifest: <code title={set.manifest_sha256}>{set.manifest_sha256.slice(0, 12)}</code></p>}

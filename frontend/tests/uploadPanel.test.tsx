@@ -200,5 +200,21 @@ it("renders blocking issues, collisions, duplicates, normalization, tool provena
   expect(screen.getByRole("alert").textContent).toContain("T1_TOOL_PROVENANCE");
   for (const text of ["x.json", "ann", "aaaaaaaaaaaa", "bbbbbbbbbbbb", "other", "1 normalised", "Recognizer", "Already imported", "hidden_axis_value", "certainty", "Imported note", "Ontospan warning"]) expect(screen.getAllByText(new RegExp(text)).length).toBeGreaterThan(0);
 });
-
-
+it("counts distinct refused proposals per set while retaining every violated rule", () => {
+  const proposalSet: NonNullable<ImportPlan["proposal_sets"]>[number] = {
+    document_id: "doc", annotation_set_id: "set", bundle_id: null, manifest_sha256: null,
+    set_kind: "tool", action: "add" as const, actors: [], payload: {},
+    proposals: { annotations: [], evidence: [], defaulted_axes: 0 },
+    refused: [
+      { annotation_id: "first", rule: "discontinuous_mention" as const, detail: { reason: "Multiple spans" } },
+      { annotation_id: "first", rule: "hidden_axis_value" as const, detail: { axis: "certainty" } },
+      { annotation_id: "second", rule: "axis_not_chosen" as const, detail: { axis: "temporality" } },
+    ],
+  };
+  render(<UploadPreview plan={{ ...plan, proposal_sets: [proposalSet] }} />);
+  expect(screen.getByText(/0 proposed · 2 refused/)).toBeTruthy();
+  expect(screen.getByText("Refusal rules (3)")).toBeTruthy();
+  expect(screen.getByText("first: discontinuous_mention · reason: Multiple spans")).toBeTruthy();
+  expect(screen.getByText("first: hidden_axis_value · axis: certainty")).toBeTruthy();
+  expect(screen.getByText("second: axis_not_chosen · axis: temporality")).toBeTruthy();
+});
