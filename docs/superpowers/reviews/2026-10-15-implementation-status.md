@@ -1,8 +1,8 @@
 # Implementation status
 
-Status after final T3a acceptance and T3b Tasks 1–10 acceptance at `f034b37` on
+Status after final T3a and all 11 T3b tasks passed at `ba02ebd` on
 2026-10-16. The administration backend is complete on `feat/t3a-admin-backend`;
-UI integration continues on `feat/t3b-admin-ui`. No main merge, push or deployment
+the administration UI is complete on `feat/t3b-admin-ui`. No main merge, push or deployment
 has occurred.
 
 - [x] Ontospan format 1.1: variant/translation/release schemas available; dependency pinned to `4105ec1`.
@@ -14,8 +14,8 @@ has occurred.
 - [x] T6a: all ten design-foundation tasks, final review, bundled assets/fonts and integrated acceptance.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
 - [x] T3a: all 10 administration-backend tasks, independent reviews and final backend/frontend/browser/container acceptance; see the [final record](2026-10-16-t3a-final-review.md).
-- [ ] T3b: 10/11 tasks accepted; all features pass independent reviews and the four actual administration journeys pass. Final embedded-assets/image/full-suite/container acceptance remains; see the [navigation record](2026-10-16-t3b-navigation-review.md), [administration record](2026-10-16-t3b-administration-review.md) and [assignment/export/provenance record](2026-10-16-t3b-assignment-export-review.md).
-- [ ] T5: variants and translation-review application workflows; the format-1.1 prerequisite is already complete.
+- [x] T3b: all11 administration-UI tasks, independent reviews, 828 frontend/1594 backend tests, all43 browser cases, matching image/assets and complete container/real-stack gate passed; see the [final record](2026-10-16-t3b-final-review.md).
+- [ ] T5: variants and translation-review application workflows; reviewed storage/pure-rule/reanchoring source preparation and import preparation are under way. Actual database/integration acceptance remains pending; format1.1 is already complete.
 - [ ] T4a: workflows and stage tasks.
 - [ ] T4b: adjudication, releases and comments.
 - [ ] T6b: subsequent UX simplification and screen decomposition.
