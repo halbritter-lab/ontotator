@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 import pytest
 from auth_harness import HARNESS, grant, logged_in
-from sqlalchemy import delete, event, func, select, update
+from sqlalchemy import delete, event, func, insert, select, update
 from t1_builders import bundle, correction_unit, native_unit, translation_unit
 from t1_fixtures import create_project, run_import
 from test_auth_api import _app
@@ -778,3 +778,207 @@ def test_task_list_and_assignment_metadata_return_actual_external_identity(case_
             ).scalar_one()
             == 0
         )
+
+
+def unrelated_documents(env, count=7):
+    with env.db.transaction() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == "proj")
+        ).scalar_one()
+        conn.execute(
+            insert(DocumentRow),
+            [
+                {
+                    "project_id": project_id,
+                    "document_id": f"unrelated-{i}",
+                    "case_id": f"unrelated-case-{i}",
+                    "external_id": f"unrelated-{i}",
+                    "language": "en",
+                    "text": "Unrelated text",
+                    "text_sha256": "unrelated-hash",
+                }
+                for i in range(count)
+            ],
+        )
+
+
+def observe_eligibility_metadata(env, monkeypatch):
+    import ontocurator.assignments.eligibility as eligibility
+
+    consumed, query_rows = [], []
+    original = eligibility.VariantInfo
+
+    def materialize(**kwargs):
+        consumed.append(kwargs["document_id"])
+        return original(**kwargs)
+
+    def capture(_conn, cursor, statement, _params, _context, _many):
+        if (
+            "documents.case_id" in statement
+            and "documents.translation_status" in statement
+            and "documents.text," not in statement
+        ):
+            query_rows.append(cursor.rowcount)
+
+    monkeypatch.setattr(eligibility, "VariantInfo", materialize)
+    event.listen(env.db.engine, "after_cursor_execute", capture)
+    return consumed, query_rows, capture
+
+
+def test_native_open_and_command_fetch_only_target_metadata(case_env, monkeypatch):
+    env = case_env
+    unrelated_documents(env)
+    consumed, query_rows, capture = observe_eligibility_metadata(env, monkeypatch)
+    try:
+        opened = env.alice.post(
+            "/api/v1/workspaces/open",
+            json={"project_key": "proj", "document_id": SOURCE, "mode": "independent"},
+        )
+        assert opened.status_code == 200, opened.text
+        response = env.alice.post(
+            f"/api/v1/workspaces/{opened.json()['workspace_id']}/commands",
+            json=command(),
+        )
+        assert response.status_code == 200 and response.json()["revision"] == 1
+    finally:
+        event.remove(env.db.engine, "after_cursor_execute", capture)
+    assert consumed == [SOURCE, SOURCE], consumed
+    assert query_rows == [1, 1], query_rows
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_context_confirmation_materializes_inventory_once_for_all_new_rows(
+    case_env, monkeypatch, count
+):
+    env = case_env
+    unrelated_documents(env)
+    status(env)
+    status(env, document=CORRECTED)
+    env.app.state.accounts.set_languages(HARNESS, "alice", ["en", "de"])
+    selected = [TARGET, CORRECTED][:count]
+    proposal = proposed(env, [SOURCE, *selected], "annotate")
+    consumed, query_rows, capture = observe_eligibility_metadata(env, monkeypatch)
+    try:
+        response = env.lead.post(
+            f"{BASE}/assignments",
+            json={
+                "task": "annotate",
+                "context": proposal["context"],
+                "rows": [{"document_id": doc, "username": "alice"} for doc in selected]
+                + [{"document_id": SOURCE, "username": "unknown"}],
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert [row["document_id"] for row in response.json()["created"]] == selected
+        assert response.json()["refused"] == [
+            {"document_id": SOURCE, "username": "unknown", "code": "USER_NOT_FOUND"}
+        ]
+    finally:
+        event.remove(env.db.engine, "after_cursor_execute", capture)
+    expected = {SOURCE, TARGET, CORRECTED, *(f"unrelated-{i}" for i in range(7))}
+    assert len(query_rows) == 1, query_rows
+    assert query_rows == [len(expected)], query_rows
+    assert len(consumed) == len(expected) and set(consumed) == expected, consumed
+    with env.db.transaction() as conn:
+        audit = conn.execute(
+            select(AuditEventRow.details).where(
+                AuditEventRow.action == "assignment.distribute"
+            )
+        ).scalar_one()
+    assert audit["input_snapshot"]["variants"]
+    assert len(audit["outcomes"]) == count + 1
+
+
+@pytest.mark.parametrize(
+    "document,expected",
+    [(TARGET, {TARGET, SOURCE}), (CORRECTED, {CORRECTED, TARGET, SOURCE})],
+)
+def test_target_ancestry_loads_exact_translation_source_for_assign_and_editable_open(
+    case_env, monkeypatch, document, expected
+):
+    env = case_env
+    unrelated_documents(env)
+    env.app.state.accounts.set_languages(HARNESS, "alice", ["en", "de"])
+    consumed, query_rows, capture = observe_eligibility_metadata(env, monkeypatch)
+    try:
+        review = assigned(env, document, confirm_language=False)
+        assert review["task"] == "translation_review"
+        status(env, document=document)
+        assigned(env, document, task="annotate", confirm_language=False)
+        opened = env.alice.post(
+            "/api/v1/workspaces/open",
+            json={
+                "project_key": "proj",
+                "document_id": document,
+                "mode": "independent",
+            },
+        )
+        assert opened.status_code == 200, opened.text
+        assert opened.json()["view"]["document"]["document_id"] == document
+    finally:
+        event.remove(env.db.engine, "after_cursor_execute", capture)
+    assert query_rows == [len(expected)] * 3, query_rows
+    assert set(consumed) == expected and len(consumed) == len(expected) * 3, consumed
+    # Exact original source is English even for the German correction predecessor.
+    with env.db.transaction() as conn:
+        assert (
+            conn.execute(
+                select(func.count())
+                .select_from(AuditEventRow)
+                .where(
+                    AuditEventRow.action == "assignment.language_override",
+                    AuditEventRow.target_id == str(review["id"]),
+                )
+            ).scalar_one()
+            == 0
+        )
+
+
+@pytest.mark.parametrize("broken", ["cycle", "missing", "foreign_case"])
+def test_bounded_ancestry_still_refuses_corrupt_links_without_unrelated_inventory(
+    case_env, monkeypatch, broken
+):
+    env = case_env
+    unrelated_documents(env)
+    with env.db.transaction() as conn:
+        if broken == "cycle":
+            conn.execute(
+                update(DocumentRow)
+                .where(DocumentRow.document_id == CORRECTED)
+                .values(derived_from=CORRECTED)
+            )
+        else:
+            conn.execute(
+                update(DocumentRow)
+                .where(DocumentRow.document_id == TARGET)
+                .values(derived_from=None if broken == "missing" else "unrelated-0")
+            )
+    consumed, query_rows, capture = observe_eligibility_metadata(env, monkeypatch)
+    try:
+        response = env.lead.post(
+            f"{BASE}/assignments",
+            json={
+                "rows": [{"document_id": CORRECTED, "username": "alice"}],
+                "task": "translation_review",
+                "confirm_language": True,
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert (
+            response.json()["created"] == []
+            and response.json()["refused"][0]["code"] == "VARIANT_SOURCE_UNKNOWN"
+        )
+    finally:
+        event.remove(env.db.engine, "after_cursor_execute", capture)
+    allowed = (
+        {CORRECTED}
+        if broken == "cycle"
+        else {CORRECTED, TARGET}
+        if broken == "missing"
+        else {CORRECTED, TARGET, "unrelated-0"}
+    )
+    assert query_rows == [len(allowed)] and len(consumed) == len(allowed), (
+        query_rows,
+        consumed,
+    )
+    assert set(consumed) == allowed

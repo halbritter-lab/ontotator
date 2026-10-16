@@ -3,11 +3,16 @@
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, literal, select
+from sqlalchemy.orm import aliased
 
 from ontocurator.authz.policy import Task
 from ontocurator.domain.errors import DomainError
-from ontocurator.domain.variants import VariantInfo, resolve_translation_lineage
+from ontocurator.domain.variants import (
+    TRANSLATION_ORIGINS,
+    VariantInfo,
+    resolve_translation_lineage,
+)
 from ontocurator.storage.tables import DocumentRow, ProjectRow
 
 # These are immutable metadata inputs, never document text or annotation payload.
@@ -16,12 +21,49 @@ VARIANT_COLUMNS = tuple(
 )
 
 
-def load_variants(conn: Connection, project_id: int) -> dict[str, VariantInfo]:
+def load_variants(
+    conn: Connection, project_id: int, document_id: str | None = None
+) -> dict[str, VariantInfo]:
+    """Inventory for locked snapshots, or only one target's required ancestry.
+
+    The recursive relation carries IDs, not text/JSON. UNION terminates cycles;
+    the shared resolver still refuses corrupt/missing/cross-identity ancestry.
+    Stop after the translation ancestor's exact original source: that source's
+    own ancestors are irrelevant to this review's original-source identity.
+    """
+    query = select(*VARIANT_COLUMNS).where(DocumentRow.project_id == project_id)
+    if document_id is not None:
+        lineage = (
+            select(
+                DocumentRow.document_id,
+                DocumentRow.derived_from,
+                DocumentRow.origin,
+                literal(False).label("original_source"),
+            )
+            .where(
+                DocumentRow.project_id == project_id,
+                DocumentRow.document_id == document_id,
+            )
+            .cte("assignment_lineage", recursive=True)
+        )
+        previous = aliased(DocumentRow)
+        lineage = lineage.union(
+            select(
+                previous.document_id,
+                previous.derived_from,
+                previous.origin,
+                lineage.c.origin.in_(TRANSLATION_ORIGINS).label("original_source"),
+            )
+            .join(lineage, previous.document_id == lineage.c.derived_from)
+            .where(
+                previous.project_id == project_id,
+                lineage.c.original_source.is_(False),
+                lineage.c.origin.in_((*TRANSLATION_ORIGINS, "correction")),
+            )
+        )
+        query = query.where(DocumentRow.document_id.in_(select(lineage.c.document_id)))
     return {
-        row["document_id"]: VariantInfo(**row)
-        for row in conn.execute(
-            select(*VARIANT_COLUMNS).where(DocumentRow.project_id == project_id)
-        ).mappings()
+        row["document_id"]: VariantInfo(**row) for row in conn.execute(query).mappings()
     }
 
 
@@ -96,7 +138,7 @@ def require_annotation_gate(
     )
     if not project["annotate_accepted_translations_only"]:
         return
-    variants = load_variants(conn, project_id)
+    variants = load_variants(conn, project_id, document_id)
     variant = variants.get(document_id)
     if variant is None:
         raise DomainError("DOCUMENT_NOT_FOUND")

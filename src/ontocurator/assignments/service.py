@@ -10,7 +10,7 @@ draft/assignment rows; they need not serialize on this administrative mutex.
 from __future__ import annotations
 
 from builtins import list as List
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
@@ -44,6 +44,7 @@ from ontocurator.authz.policy import (
 )
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import WorkspaceMode
 from ontocurator.projects.assignments import revoke_assignments
 from ontocurator.storage.database import Database
@@ -284,9 +285,11 @@ class AssignmentService:
         confirm_language: bool,
         *,
         excluding: int | None = None,
+        variants: Mapping[str, VariantInfo] | None = None,
     ) -> tuple[str, list[str], bool, list[str]]:
         AssignmentService._require_target(conn, project, target, task)
-        variants = load_variants(conn, project["id"])
+        if variants is None:
+            variants = load_variants(conn, project["id"], document_id)
         variant = variants.get(document_id)
         if variant is None:
             raise DomainError("DOCUMENT_NOT_FOUND")
@@ -402,12 +405,16 @@ class AssignmentService:
         target: int,
         task: Task,
         confirm_language: bool,
+        *,
+        variants: Mapping[str, VariantInfo] | None = None,
     ) -> Assignment:
         """Assign on caller's connection under preheld authority/target locks.
 
         Bulk callers acquire the complete sorted target union before this seam.
         No joined Database scope: a caller can isolate routine row refusals with
-        conn.begin_nested without poisoning its outer transaction.
+        conn.begin_nested without poisoning its outer transaction. An optional
+        lookup must be server-owned, freshly revalidated under project EX; only
+        metadata is reused, never current target authority/languages/conflicts.
         """
         if task not in ADMINISTRATION_TASKS:
             raise DomainError("TASK_INVALID")
@@ -416,7 +423,13 @@ class AssignmentService:
             self._require_target(conn, project, target, task)
             return existing
         eligibility = self.check_assignable(
-            conn, project, document_id, target, task, confirm_language
+            conn,
+            project,
+            document_id,
+            target,
+            task,
+            confirm_language,
+            variants=variants,
         )
         return self._create(
             conn, actor, project, document_id, target, task, eligibility, self._now()
@@ -595,7 +608,6 @@ class AssignmentService:
             }
             # One metadata query across all task projects, never one per task/doc.
             from ontocurator.assignments.eligibility import VARIANT_COLUMNS
-            from ontocurator.domain.variants import VariantInfo
 
             variants: dict[str, dict[str, VariantInfo]] = {}
             for row in conn.execute(
