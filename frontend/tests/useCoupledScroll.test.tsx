@@ -173,6 +173,34 @@ describe("paragraph-coupled scroll", () => {
     expect(left.element.scrollTop).toBe(225);
   });
 
+  it("preserves the original echo deadline after a repeated clamped no-op", () => {
+    const left = pane(100, [0, 100, 200]), right = pane(400, [0, 300, 600]);
+    let position = 0;
+    Object.defineProperty(right.element, "scrollTop", {
+      get: () => position,
+      set: (value: number) => { position = Math.max(0, Math.min(250, value)); },
+    });
+    renderHook(() => useCoupledScroll(left.element, right.element, { leftStarts: starts, rightStarts: starts, enabled: true }));
+    scroll(left.element, 225);
+    expect(right.element.scrollTop).toBe(250);
+    act(() => vi.advanceTimersByTime(100));
+    scroll(left.element, 230);
+    fireEvent.scroll(right.element);
+    expect(left.element.scrollTop).toBe(230);
+    act(() => vi.advanceTimersByTime(49));
+    fireEvent.scroll(right.element);
+    expect(left.element.scrollTop).toBe(230);
+    act(() => vi.advanceTimersByTime(1));
+    fireEvent.scroll(right.element);
+    expect(left.element.scrollTop).toBe(0);
+    act(() => vi.advanceTimersByTime(150));
+    // A first clamped no-op must not suppress a later genuine reverse scroll.
+    scroll(left.element, 230);
+    expect(vi.getTimerCount()).toBe(0);
+    scroll(right.element, 100);
+    expect(left.element.scrollTop).toBe(0);
+  });
+
   it("owns passive listeners without duplication under StrictMode", () => {
     const left = pane(100, [0, 100, 200]), right = pane(400, [0, 300, 600]);
     const add = vi.spyOn(left.element, "addEventListener"), remove = vi.spyOn(left.element, "removeEventListener");

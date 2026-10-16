@@ -46,11 +46,16 @@ export function useCoupledScroll(
         const offset = before + marker.getBoundingClientRect().top
           - (to.getBoundingClientRect().top + to.clientTop);
         if (!Number.isFinite(offset) || offset === before) return;
-        clearEcho(to);
+        const previous = echoes.get(to);
         // Install before writing: a programmatic target event must never echo back.
-        echoes.set(to, setTimeout(() => echoes.delete(to), 150));
+        const timer = setTimeout(() => echoes.delete(to), 150);
+        echoes.set(to, timer);
         to.scrollTop = offset; // The browser retains its native scroll-range clamping.
-        if (to.scrollTop === before) clearEcho(to);
+        if (to.scrollTop === before) {
+          clearEcho(to);
+          // A clamped no-op must neither cancel nor extend an earlier movement's guard.
+          if (previous !== undefined) echoes.set(to, previous);
+        } else if (previous !== undefined) clearTimeout(previous);
       };
       const onLeft = () => sync(left, right, leftStarts.length, rightStarts.length);
       const onRight = () => sync(right, left, rightStarts.length, leftStarts.length);
