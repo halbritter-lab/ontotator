@@ -44,6 +44,8 @@ from ontocurator.domain.profiles import (
     TaskProfile,
     profile_hash,
 )
+from ontocurator.exchange.jobs import store_file
+from ontocurator.jobs.queue import Job
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -374,6 +376,50 @@ def register_test_user_route(
     app.router.routes.insert(0, app.router.routes.pop())
 
 
+def run_fixture_import(
+    app: FastAPI, path: Path, project: str, *, timeout: float = 30
+) -> Job:
+    """Import through this server's real worker; never compete for its job claim."""
+    db = app.state.repo.db
+    digest = store_file(db, path.read_bytes())
+    with db.transaction() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == project)
+        ).scalar_one()
+    payload = {"project": project, "blob_sha256": digest, "filename": path.name}
+    job_id = app.state.jobs.enqueue(
+        "t1_import", payload, project_id=project_id, actor=Actor.cli()
+    )
+    deadline = monotonic() + timeout
+    while True:
+        # JobQueue.get closes its read transaction before returning, so the
+        # worker can commit and no DB connection is retained during sleep.
+        job = app.state.jobs.get(job_id)
+        if (
+            job is None
+            or job.kind != "t1_import"
+            or job.project_id != project_id
+            or job.payload != payload
+        ):
+            raise HTTPException(
+                500, {"error": "Import job identity changed", "job_id": job_id}
+            )
+        if job.status == "failed":
+            raise HTTPException(500, {"job_id": job.id, "error": job.error})
+        if job.status == "succeeded":
+            return job
+        if monotonic() >= deadline:
+            raise HTTPException(
+                500,
+                {
+                    "error": "Import job did not finish",
+                    "job_id": job.id,
+                    "status": job.status,
+                },
+            )
+        sleep(0.05)
+
+
 def register_variant_scenario_route(app: FastAPI) -> None:
     """Fresh ordinary-role Task10 data; never installed in the shipped app."""
 
@@ -441,11 +487,10 @@ def register_variant_scenario_route(app: FastAPI) -> None:
         )
         corrected = correction_unit(target, target_text + "\n\nCorrected conclusion.")
         with tempfile.TemporaryDirectory() as folder:
-            imported = run_import(
-                db,
+            imported = run_fixture_import(
+                app,
                 variant_bundle(Path(folder), [source, target, other, corrected]),
                 key,
-                actor=Actor.cli(),
             )
         if imported.status != "succeeded":
             raise HTTPException(500, imported.error)
