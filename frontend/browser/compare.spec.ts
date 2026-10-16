@@ -292,8 +292,13 @@ test('Unicode mouse and native keyboard selections and edge resize keep exact co
   await expect(mentionWithOffsets(page, `[${start}:${start + 2}]`)).toBeVisible();
   await expect(editorLeft(page).locator('[data-paragraph]')).toHaveCount(13);
   await editorLeft(page).locator('.resize-handle--end').focus();
+  // Stay on visible characters: the existing resize contract skips outward whitespace.
+  await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Enter');
+  await expect(mentionWithOffsets(page, `[${start}:${start + 1}]`)).toBeVisible();
+  await expect(editorLeft(page).locator('[data-paragraph]')).toHaveCount(13);
+  await expect(editorLeft(page).locator('.resize-handle--end')).toBeFocused();
   await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter');
-  await expect(mentionWithOffsets(page, `[${start}:${start + 3}]`)).toBeVisible();
+  await expect(mentionWithOffsets(page, `[${start}:${start + 2}]`)).toBeVisible();
   await expect(editorLeft(page).locator('[data-paragraph]')).toHaveCount(13);
   // Cross a real paragraph marker by pointer; offsets remain source codepoints.
   const end16 = text.indexOf('\n\n') + 2 + 5, end = Array.from(text.slice(0, end16)).length;
