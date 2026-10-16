@@ -66,6 +66,13 @@ export type ProjectSettingsPatch = Partial<components["schemas"]["ProjectSetting
 export type CreateProjectRequest = components["schemas"]["CreateProjectRequest"];
 export type ProjectPin = components["schemas"]["ProjectPin"];
 export type Member = components["schemas"]["Member"];
+export type AssignmentView = components["schemas"]["AssignmentView"];
+export type AssignmentRow = components["schemas"]["AssignmentRowRequest"];
+export type AssignRequest = components["schemas"]["AssignRequest"];
+export type AssignResponse = components["schemas"]["AssignResponse"];
+export type ProposalRequest = components["schemas"]["ProposalRequest"];
+export type ProposalResponse = components["schemas"]["ProposalResponse"];
+export type ReassignRequest = components["schemas"]["ReassignRequest"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
@@ -186,6 +193,13 @@ export class ApiClient {
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? "";
   }
+
+  async listAssignments(key: string): Promise<AssignmentView[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments`, { method: "GET" }); }
+  async createAssignments(key: string, body: AssignRequest): Promise<AssignResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments`, { method: "POST", body: JSON.stringify(body) }); }
+  async proposeDistribution(key: string, body: ProposalRequest): Promise<ProposalResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/proposal`, { method: "POST", body: JSON.stringify(body) }); }
+  async reassign(id: number, body: ReassignRequest): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reassign`, { method: "POST", body: JSON.stringify(body) }); }
+  async reopenAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }); }
+  async revokeAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/revoke`, { method: "POST", body: JSON.stringify({ reason }) }); }
 
   async listTemplates(): Promise<TemplateInfo[]> { return this.request("/api/v1/projects/templates", { method: "GET" }); }
   async createProject(body: CreateProjectRequest): Promise<ProjectSettings> { return this.request("/api/v1/projects/", { method: "POST", body: JSON.stringify(body) }); }
