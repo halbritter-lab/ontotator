@@ -217,6 +217,45 @@ test('open editor has two equal reading surfaces and reachable lower controls; c
   expect(left!.width).toBeGreaterThanOrEqual(500); expect(right!.width).toBeGreaterThanOrEqual(500);
   expect(left!.height).toBeGreaterThanOrEqual(500); expect(right!.height).toBeGreaterThanOrEqual(500);
   expect(Math.abs(left!.y - right!.y)).toBeLessThanOrEqual(50);
+  // Exercise the existing attach banner in both layouts without replacing the text owner.
+  for (const width of [1280, 1024]) {
+    await page.setViewportSize({ width, height: 720 });
+    const before = (await editorLeft(page).boundingBox())!;
+    await page.getByRole('button', { name: '+ Add Mention', exact: true }).click();
+    const banner = page.locator('.app-layout > .center-pane > .attach-mention-banner');
+    await expect(banner).toBeVisible();
+    const during = (await editorLeft(page).boundingBox())!;
+    const bar = (await page.locator('.app-layout > .center-pane > .pane-toolbar').boundingBox())!;
+    const notice = (await banner.boundingBox())!;
+    expect(Math.abs(during.width - before.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(during.height - before.height)).toBeLessThanOrEqual(1);
+    expect(Math.abs(notice.x - bar.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(notice.y - bar.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(notice.width - bar.width)).toBeLessThanOrEqual(1);
+    expect(notice.y + notice.height).toBeLessThanOrEqual(during.y + 1);
+    expect(await editorLeft(page).evaluate((element, previous) => element === previous, original)).toBe(true);
+    await recordGeometry(page, `attach-banner-${width}`);
+    if (width === 1280) {
+      await banner.getByRole('button', { name: 'Cancel (Esc)', exact: true }).click();
+      await expect(banner).toHaveCount(0);
+      await expect(page.locator('.status-badge')).toHaveAttribute('title', 'Revision 1');
+    } else {
+      // Real native pointer selection adds a second mention to the existing annotation.
+      await editorLeft(page).scrollIntoViewIfNeeded();
+      const from = await characterPoint(editorLeft(page), 10);
+      const to = await characterPoint(editorLeft(page), 12, 'end');
+      await page.mouse.move(from.x, from.y); await page.mouse.down();
+      await page.mouse.move(to.x, to.y, { steps: 8 }); await page.mouse.up();
+      await expect(banner).toHaveCount(0);
+      await mentionWithOffsets(page, '[10:13]').scrollIntoViewIfNeeded();
+      await expect(mentionWithOffsets(page, '[10:13]')).toHaveText(/und/);
+      await expect(mentionWithOffsets(page, '[0:9]')).toBeVisible();
+      await expect(page.locator('.status-badge')).toHaveAttribute('title', 'Revision 2');
+      await expect(editorLeft(page).locator('[data-paragraph]')).toHaveCount(13);
+      expect(await editorLeft(page).evaluate((element, previous) => element === previous, original)).toBe(true);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
   for (const selector of ['.app-layout > .sidebar', '.inspector-pane', '.tree-host']) {
     const control = page.locator(selector); await control.scrollIntoViewIfNeeded(); await expect(control).toBeInViewport({ ratio: 0.2 });
     const rect = await control.boundingBox(); expect(rect!.width).toBeGreaterThanOrEqual(300);
@@ -237,9 +276,13 @@ test('Unicode mouse and native keyboard selections and edge resize keep exact co
   const s = await scenario(page); await loginExisting(page, s.users.alice);
   await page.goto(`/#/tasks/${s.assignments.alice}`); await expect(editorLeft(page)).toHaveText(s.texts.target);
   await readyEditor(page, s);
-  const text = s.texts.target, start16 = text.indexOf('Ã°Å¸Ëœâ‚¬'), start = Array.from(text.slice(0, start16)).length;
+  const text = s.texts.target, astral = '\u{1F600}';
+  const start16 = text.indexOf(astral);
+  expect(start16).toBeGreaterThanOrEqual(0);
+  expect(text.slice(start16, start16 + astral.length + 1)).toBe(`${astral}\u00e9`);
+  const start = Array.from(text.slice(0, start16)).length;
   const from = await characterPoint(editorLeft(page), start16);
-  const to = await characterPoint(editorLeft(page), start16 + 'Ã°Å¸Ëœâ‚¬'.length, 'end');
+  const to = await characterPoint(editorLeft(page), start16 + astral.length, 'end');
   await page.mouse.move(from.x, from.y); await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 8 }); await page.mouse.up();
   await recordGeometry(page, 'native-unicode-selection');
