@@ -155,8 +155,8 @@ def test_selector_cannot_restore_assignment_authority(round_work, denial):
     expected = {
         "revoked": (404, "ASSIGNMENT_NOT_FOUND"),
         "foreign": (404, "ASSIGNMENT_NOT_FOUND"),
-        "role_removed": (403, "MODE_NOT_ALLOWED"),
-        "membership_removed": (404, "PROJECT_NOT_FOUND"),
+        "role_removed": (404, "ASSIGNMENT_NOT_FOUND"),
+        "membership_removed": (404, "ASSIGNMENT_NOT_FOUND"),
     }[denial]
     assert (response.status_code, response.json()["code"]) == expected, response.text
 

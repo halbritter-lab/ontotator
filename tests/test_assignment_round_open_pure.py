@@ -20,7 +20,9 @@ def client(monkeypatch):
     app = FastAPI()
     owner = SimpleNamespace(user_id=7)
     conn = SimpleNamespace(
-        execute=lambda _stmt: SimpleNamespace(one_or_none=lambda: owner)
+        execute=lambda _stmt: SimpleNamespace(
+            first=lambda: owner if owner.user_id == 7 else None
+        )
     )
     app.state.repo = SimpleNamespace(
         db=SimpleNamespace(transaction=lambda: nullcontext(conn))

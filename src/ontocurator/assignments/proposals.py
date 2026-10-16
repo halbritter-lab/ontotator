@@ -104,7 +104,9 @@ class DistributionSnapshot:
             }
             for m in sorted(self.members, key=lambda m: m.user_id)
         ]
-        return result
+        # Nested dataclass tuples must match their persisted JSON array form;
+        # json.dumps already used that same representation for the state hash.
+        return cast(dict[str, Any], json.loads(json.dumps(result, ensure_ascii=False)))
 
     @property
     def state_sha256(self) -> str:
