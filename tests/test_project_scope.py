@@ -135,6 +135,7 @@ CALLS: dict[str, Callable[[Repository], object]] = {
         "B", "0" * 64
     ),
     "get_proposal_set": lambda r: r.get_proposal_set("B", 1),
+    "workspace_proposal_sets": lambda r: r.workspace_proposal_sets(_key("B"), []),
     "proposal_metadata": lambda r: r.proposal_metadata("B", "doc-beta"),
     "list_documents": lambda r: r.list_documents("B"),
     "get_annotation_snapshot": lambda r: r.get_annotation_snapshot("a", "v", "B"),

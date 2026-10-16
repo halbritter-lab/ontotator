@@ -17,6 +17,7 @@ from urllib.parse import quote
 from sqlalchemy import (
     Connection,
     Row,
+    Select,
     and_,
     delete,
     exists,
@@ -24,6 +25,7 @@ from sqlalchemy import (
     insert,
     or_,
     select,
+    tuple_,
     update,
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -1497,46 +1499,59 @@ class Repository:
             )
         return [decode_snapshot(p) for p in stored]
 
+    def _proposal_set_metadata_query(self, project_id: int) -> Select[Any]:
+        previous = aliased(DocumentRow)
+        return (
+            select(
+                ProposalSetRow.id,
+                ProposalSetRow.document_id,
+                ProposalSetRow.annotation_set_id,
+                ProposalSetRow.bundle_id,
+                ProposalSetRow.set_kind,
+                ProposalSetRow.origin,
+                previous.document_id.label("source_document_id"),
+                previous.version.label("source_version"),
+                ProposalSetRow.actors,
+                ProposalSetRow.imported_at,
+                UserRow.pseudonym.label("imported_by_pseudonym"),
+            )
+            .outerjoin(UserRow, UserRow.id == ProposalSetRow.imported_by)
+            .join(
+                DocumentRow,
+                and_(
+                    DocumentRow.project_id == ProposalSetRow.project_id,
+                    DocumentRow.document_id == ProposalSetRow.document_id,
+                ),
+            )
+            .outerjoin(
+                previous,
+                and_(
+                    previous.project_id == DocumentRow.project_id,
+                    previous.document_id == DocumentRow.derived_from,
+                    previous.case_id == DocumentRow.case_id,
+                    previous.language == DocumentRow.language,
+                ),
+            )
+            .where(ProposalSetRow.project_id == project_id)
+        )
+
+    @staticmethod
+    def _proposal_set_metadata(row: Mapping[str, Any]) -> dict[str, Any]:
+        result = dict(row)
+        if row["origin"] != "reanchor":
+            result.update(source_document_id=None, source_version=None)
+        elif row["source_version"] is None:
+            raise DomainError("PROPOSAL_SET_NOT_FOUND")
+        return result
+
     def get_proposal_set(self, project_key: str, set_id: int) -> dict[str, Any]:
         """Producer metadata, with its actual owning document association."""
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
-            previous = aliased(DocumentRow)
             row = (
                 conn.execute(
-                    select(
-                        ProposalSetRow.id,
-                        ProposalSetRow.document_id,
-                        ProposalSetRow.annotation_set_id,
-                        ProposalSetRow.bundle_id,
-                        ProposalSetRow.set_kind,
-                        ProposalSetRow.origin,
-                        previous.document_id.label("source_document_id"),
-                        previous.version.label("source_version"),
-                        ProposalSetRow.actors,
-                        ProposalSetRow.imported_at,
-                        UserRow.pseudonym.label("imported_by_pseudonym"),
-                    )
-                    .outerjoin(UserRow, UserRow.id == ProposalSetRow.imported_by)
-                    .join(
-                        DocumentRow,
-                        and_(
-                            DocumentRow.project_id == ProposalSetRow.project_id,
-                            DocumentRow.document_id == ProposalSetRow.document_id,
-                        ),
-                    )
-                    .outerjoin(
-                        previous,
-                        and_(
-                            previous.project_id == DocumentRow.project_id,
-                            previous.document_id == DocumentRow.derived_from,
-                            previous.case_id == DocumentRow.case_id,
-                            previous.language == DocumentRow.language,
-                        ),
-                    )
-                    .where(
-                        ProposalSetRow.id == set_id,
-                        ProposalSetRow.project_id == project_id,
+                    self._proposal_set_metadata_query(project_id).where(
+                        ProposalSetRow.id == set_id
                     )
                 )
                 .mappings()
@@ -1544,12 +1559,58 @@ class Repository:
             )
             if row is None or self.get_document(project_key, row.document_id) is None:
                 raise DomainError("PROPOSAL_SET_NOT_FOUND", "Proposal set not found.")
-            result = dict(row)
-            if row.origin != "reanchor":
-                result.update(source_document_id=None, source_version=None)
-            elif row.source_version is None:
-                raise DomainError("PROPOSAL_SET_NOT_FOUND")
-            return result
+            return self._proposal_set_metadata(dict(row))
+
+    def workspace_proposal_sets(
+        self, key: WorkspaceKey, offered: Sequence[tuple[str, str, int]]
+    ) -> list[dict[str, Any]]:
+        """Unique metadata behind server-offered immutable refs, never arbitrary sets."""
+        if key.mode == "independent" or not offered:
+            return []
+        scope = build_scope(self.get_task_profile(key.project_key), key.mode)
+        if key.scope_id and key.scope_id != scope.scope_id:
+            raise DomainError("INVALID_SCOPE")
+        layers = scope.reference_layer_ids + (
+            scope.editable_layer_ids if key.mode == "review" else []
+        )
+        if not layers:
+            return []
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, key.project_key)
+            offered_sets = (
+                select(ProposalAnnotationRow.proposal_set_id)
+                .join(
+                    AnnotationSnapshotRow,
+                    and_(
+                        AnnotationSnapshotRow.project_id
+                        == ProposalAnnotationRow.project_id,
+                        AnnotationSnapshotRow.annotation_id
+                        == ProposalAnnotationRow.annotation_id,
+                        AnnotationSnapshotRow.version == ProposalAnnotationRow.version,
+                    ),
+                )
+                .where(
+                    ProposalAnnotationRow.project_id == project_id,
+                    AnnotationSnapshotRow.document_id == key.document_id,
+                    AnnotationSnapshotRow.payload["annotation"]["layer_id"].astext.in_(
+                        layers
+                    ),
+                    tuple_(
+                        ProposalAnnotationRow.annotation_id,
+                        ProposalAnnotationRow.version,
+                        ProposalAnnotationRow.proposal_set_id,
+                    ).in_(offered),
+                )
+            )
+            rows = conn.execute(
+                self._proposal_set_metadata_query(project_id)
+                .where(
+                    ProposalSetRow.document_id == key.document_id,
+                    ProposalSetRow.id.in_(offered_sets),
+                )
+                .order_by(ProposalSetRow.id)
+            ).mappings()
+            return [self._proposal_set_metadata(dict(row)) for row in rows]
 
     def get_variant_text(self, project_key: str, document_id: str) -> Document | None:
         """Immutable text, separately scoped from annotation/workspace reads."""

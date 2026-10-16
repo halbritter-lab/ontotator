@@ -3577,6 +3577,8 @@ export interface components {
             checked_layer_ids?: string[];
             /** Available Inputs */
             available_inputs?: components["schemas"]["EditorProposal"][];
+            /** Proposal Sets */
+            proposal_sets?: components["schemas"]["ProposalSetView"][];
             /** Submissions */
             submissions?: components["schemas"]["Submission"][];
             /** Term Statuses */

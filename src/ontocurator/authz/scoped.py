@@ -568,6 +568,14 @@ class ScopedRepository(Repository):
                     raise DomainError("PROPOSAL_SET_NOT_FOUND")
             return super().get_proposal_set(project_key, set_id)
 
+    def workspace_proposal_sets(
+        self, key: WorkspaceKey, offered: Sequence[tuple[str, str, int]]
+    ) -> list[dict[str, Any]]:
+        self._visible(key.project_key)
+        with self.db.transaction() as conn:
+            self.require_workable(conn, key)
+            return super().workspace_proposal_sets(key, offered)
+
     def proposal_metadata(
         self, project_key: str, document_id: str
     ) -> dict[tuple[str, str], dict[str, Any]]:

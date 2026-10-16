@@ -17,6 +17,7 @@ from ontocurator.domain.profiles import (
     resolve_layer,
     resolve_ontology,
 )
+from ontocurator.domain.proposals import ProposalSetView
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, Submission, WorkspaceKey
@@ -61,6 +62,7 @@ class WorkspaceView(BaseModel):
     ontologies: list[OntologyDefinition] = Field(default_factory=list)
     checked_layer_ids: list[str] = Field(default_factory=list)
     available_inputs: list[EditorProposal] = Field(default_factory=list)
+    proposal_sets: list[ProposalSetView] = Field(default_factory=list)
     submissions: list[Submission] = Field(default_factory=list)
     term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = Field(
         default_factory=dict
@@ -344,6 +346,18 @@ class WorkspaceService:
         submissions = self.repo.get_submissions_for_workspace(key)
         axes_profile = legacy_axes_config(visible_profile)
 
+        editor_inputs = self._editor_proposals(
+            key.project_key, key.document_id, available_inputs
+        )
+        offered = [
+            (snap.annotation.annotation_id, snap.version, snap.proposal_set_id)
+            for snap in editor_inputs
+            if snap.proposal_set_id is not None
+        ]
+        proposal_sets = [
+            ProposalSetView.model_validate(row)
+            for row in self.repo.workspace_proposal_sets(key, offered)
+        ]
         return WorkspaceView(
             key=key,
             document=doc,
@@ -353,9 +367,8 @@ class WorkspaceService:
             layers=layers,
             ontologies=ontologies,
             checked_layer_ids=draft.checked_layer_ids,
-            available_inputs=self._editor_proposals(
-                key.project_key, key.document_id, available_inputs
-            ),
+            available_inputs=editor_inputs,
+            proposal_sets=proposal_sets,
             submissions=submissions,
             term_statuses=term_statuses,
             axes_definition=axes_profile.definition_name,
