@@ -2825,6 +2825,8 @@ export interface components {
             preview: components["schemas"]["ImportPlan"] | null;
             /** Plan Sha256 */
             plan_sha256: string | null;
+            /** Preview Job Id */
+            preview_job_id?: number | null;
             /** Commit Job Id */
             commit_job_id: number | null;
             /**
