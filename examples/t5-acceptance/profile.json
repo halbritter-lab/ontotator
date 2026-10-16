@@ -49,8 +49,7 @@
               "label": "Temporality",
               "options": [
                 "current",
-                "historical",
-                "future"
+                "historical"
               ],
               "allow_empty": true
             }
