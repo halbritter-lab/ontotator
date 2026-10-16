@@ -1,8 +1,8 @@
 # Implementation status
 
-Status after the reviewed T3a progress/export slice at `efba2df` on 2026-10-15.
-Administration continues on `feat/t3a-admin-backend` from that integrated source;
-no main merge, push or deployment has occurred.
+Status after final T3a acceptance at `6458b34` on 2026-10-16.
+The administration backend is complete on `feat/t3a-admin-backend`; UI integration
+continues separately. No main merge, push or deployment has occurred.
 
 - [x] Ontospan format 1.1: variant/translation/release schemas available; dependency pinned to `4105ec1`.
 - [x] T2a: PostgreSQL persistence and migrations.
@@ -12,8 +12,8 @@ no main merge, push or deployment has occurred.
 - [x] T2e: reviewed Docker/Compose/health/operations implementation and functional container acceptance.
 - [x] T6a: all ten design-foundation tasks, final review, bundled assets/fonts and integrated acceptance.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
-- [ ] T3a: administration backend in progress (9/10 tasks accepted: project-key rename, schema/policy, users/profile API, projects/settings/members, project rules, upload preview/commit, assignments/visibility, reproducible distribution, progress/exports/jobs); final combined/container acceptance follows.
-- [ ] T3b: administration UI.
+- [x] T3a: all 10 administration-backend tasks, independent reviews and final backend/frontend/browser/container acceptance; see the [final record](2026-10-16-t3a-final-review.md).
+- [ ] T3b: administration UI in progress; reviewed components are being integrated into assignment-based navigation and the editor.
 - [ ] T5: variants and translation-review application workflows; the format-1.1 prerequisite is already complete.
 - [ ] T4a: workflows and stage tasks.
 - [ ] T4b: adjudication, releases and comments.
@@ -22,7 +22,7 @@ no main merge, push or deployment has occurred.
 T7 consumer integrations and its remaining helper work are explicitly parked.
 Format 1.1 completion does not imply the later application workflows exist.
 
-Fresh combined verification: 1,050 backend tests passed, one POSIX skip; 436
+Earlier T6a combined verification: 1,050 backend tests passed, one POSIX skip; 436
 frontend tests; 39 browser scenarios; one real-stack browser smoke; all nine
 container checks; lint/types/contracts/wheel passed. See the
 [T6a final record](2026-10-15-t6a-final-review.md#final-integrated-gate) and the
@@ -55,4 +55,10 @@ The [distribution slice](2026-10-15-t3a-distribution-review.md) then passed
 independent review and 117 actual new/affected cases. The
 [progress/export slice](2026-10-15-t3a-progress-review.md) then passed independent
 review, all 50 new API cases, 90 affected cases and its static/contract checks.
-The final combined/browser/container gate remains open.
+Final T3a coverage passed at unchanged source `6458b34`: 1,539 backend tests with
+one expected POSIX skip, 444 frontend tests, all 39 browser scenarios, all nine
+container checks and one real-stack browser smoke. The browser/container stages
+completed through a guarded same-source continuation after Windows worker-start
+failures interrupted the original runner. The
+[final acceptance record](2026-10-16-t3a-final-review.md) distinguishes that
+recovery from a successful single invocation and records the exact image/source.
