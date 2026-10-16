@@ -25,6 +25,7 @@ vi.mock("../src/editor/TreeBrowser", () => ({ TreeBrowser: (props: any) => { cal
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it.each(["submitted", "snapshot"] as const)("rejects every retained edit callback after the mounted assignment becomes read-only: %s", async mode => {
+  vi.spyOn(api,"getReanchorItems").mockResolvedValue([]);
   const response = workspaceFixture("doc", "review");
   const snapshot = (id: string, term: string): any => ({
     annotation: { annotation_id: id, document_id: "doc", layer_id: "phenotype", type_id: "default", term_id: term,

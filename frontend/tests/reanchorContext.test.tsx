@@ -11,6 +11,7 @@ function Harness({text='A😀B\n\nC',identity='alice:doc'}:{text?:string;identit
   const context=useReanchorContext(text,element,identity); retained=context.reveal;
   return <><button onClick={()=>context.reveal({start:1,end:2,text:'😀'})}>First context</button><button onClick={()=>context.reveal({start:5,end:6,text:'C'})}>Second context</button>
     <button onClick={()=>context.reveal({start:6,end:6,text:''})}>Caret</button>
+    <button onClick={()=>context.reveal({start:1,end:2,text:'wrong'})}>Invalid context</button>
     <TextPane text={text} mentions={[]} selectedEvidenceId={null} selectionIntent="new_mention" onSelection={select} onPick={pick} onChangeIntent={()=>{}} onResizeMention={resize} contextSegments={context.contextSegments} onTextElement={setElement}/>
   </>;
 }
@@ -40,4 +41,19 @@ it('replaces timers, permits caret scroll without zero-length marks, and clears 
   mounted.rerender(<StrictMode><Harness text="replacement" identity="bob:next"/></StrictMode>);
   act(()=>stale({start:1,end:2,text:'😀'}));expect(mounted.container.querySelector('.run--context')).toBeNull();expect(vi.getTimerCount()).toBe(0);
   mounted.unmount();expect(vi.getTimerCount()).toBe(0);
+});
+
+it('rejects literal mismatches and preserves ordinary selection codepoints after context rendering',()=>{
+  const mounted=render(<Harness/>);
+  fireEvent.click(screen.getByText('First context'));
+  const pane=mounted.container.querySelector<HTMLElement>('.text-container')!;
+  const node=pane.querySelector('.run--context')!.firstChild!;
+  const range=document.createRange();range.setStart(node,0);range.setEnd(node,2);
+  window.getSelection()!.removeAllRanges();window.getSelection()!.addRange(range);
+  fireEvent.mouseUp(pane);
+  expect(select).toHaveBeenCalledWith(expect.objectContaining({segments:[{start:1,end:2}]}));
+  // jsdom queues selectionchange dispatches at zero delay, independently of the owned context timer.
+  act(()=>vi.advanceTimersByTime(0));
+  fireEvent.click(screen.getByText('Invalid context'));
+  expect(pane.querySelector('.run--context')).toBeNull();expect(vi.getTimerCount()).toBe(0);
 });

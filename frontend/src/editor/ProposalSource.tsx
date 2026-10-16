@@ -51,7 +51,8 @@ const Metadata = createContext<{cache: MetadataCache; proposals: readonly Editor
 
 export function ProposalMetadataProvider({scope, projectKey, proposals, metadata = [], allowPublicFetch = true, children}: {scope: string; projectKey: string; proposals: readonly EditorProposal[]; metadata?: readonly ProposalSetView[]; allowPublicFetch?: boolean; children: ReactNode}) {
   const metadataKey = JSON.stringify(metadata);
-  const offeredKey = JSON.stringify(proposals.map(source => [source.proposal_set_id,source.document_id]));
+  // Public reads retain their original per-scope deduplication; inline data follows current offered sets.
+  const offeredKey = allowPublicFetch ? "" : JSON.stringify([...new Set(proposals.map(source => JSON.stringify([source.proposal_set_id,source.document_id])))].sort());
   const cache = useMemo(() => new MetadataCache(projectKey, allowPublicFetch, metadata, proposals), [scope, projectKey, metadataKey, offeredKey, allowPublicFetch]);
   const revision = useSyncExternalStore(cache.subscribe, cache.snapshot, cache.snapshot);
   const ids = [...new Set(proposals.map(p => p.proposal_set_id).filter((id): id is number => id != null))].sort((a,b) => a-b).join(",");
@@ -77,7 +78,9 @@ const toolLabel = (actor: Record<string, unknown> | undefined) => actor && [text
 export function useProposalMetadata(source?: EditorProposal) {
   const context = useContext(Metadata);
   const candidate = source?.proposal_set_id != null ? context?.cache.entries.get(source.proposal_set_id) : undefined;
-  const metadata = candidate?.document_id === source?.document_id ? candidate : undefined;
+  const offered = source && context?.proposals.some(value => value.proposal_set_id === source.proposal_set_id
+    && value.document_id === source.document_id && value.annotation.annotation_id === source.annotation.annotation_id && value.version === source.version);
+  const metadata = offered && candidate?.document_id === source?.document_id ? candidate : undefined;
   const tool = source ? matchingTool(source, metadata) : undefined;
   const label = toolLabel(tool);
   const duplicate = !!label && context?.proposals.some(other => other.proposal_set_id != null && other.proposal_set_id !== source?.proposal_set_id && other.document_id === source?.document_id && toolLabel(matchingTool(other, context.cache.entries.get(other.proposal_set_id))) === label);

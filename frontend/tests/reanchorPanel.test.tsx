@@ -1,16 +1,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { ReanchorItem } from '../src/api/client';
+import { item } from './reanchorFixtures';
 import { ReanchorPanel, pendingDiffParts } from '../src/variants/ReanchorPanel';
 
 afterEach(cleanup);
-export function item(changes: Partial<ReanchorItem> = {}): ReanchorItem {
-  const old = '😀old <b>x</b>', next = '😀new <b>x</b>';
-  return { proposal_set_id: 4, source_ref: { annotation_id: 'source/1', version: 'v1' }, term_id: 'HP:1', layer_id: 'hpo', reason: 'changed_segment',
-    old_context: { start: 100, end: 100 + Array.from(old).length, text: old }, new_context: { start: 20, end: 20 + Array.from(next).length, text: next },
-    old_mentions: [{ source_ref: { evidence_id: 'ev', version: 'e1' }, segments: [{ start: 100, end: 101, text: '😀' }], cue_segments: [{ start: 102, end: 104, text: 'ld' }] }],
-    old_segments: [], diff: [{ op: 'replace', old_start: 100, old_end: 100 + Array.from(old).length, new_start: 20, new_end: 20 + Array.from(next).length, old_text: old, new_text: next }], ...changes };
-}
 it('hides empty items and preserves server order, layer identity and literal codepoint mention/cue contexts', () => {
   const reveal = vi.fn();
   const mounted = render(<ReanchorPanel items={[]} labelFor={() => null} onContext={reveal} />);
@@ -40,4 +33,24 @@ it('keeps malformed contexts unavailable instead of manufacturing a highlight or
   const reveal = vi.fn(); render(<ReanchorPanel items={[item({ old_context: { start: 100, end: 101, text: 'corrupt' } })]} labelFor={() => null} onContext={reveal} />);
   expect(screen.getByText('Old context is unavailable.')).toBeTruthy();
   expect(screen.getByText('Text changes are unavailable.')).toBeTruthy();
+});
+
+it('keeps overlapping cues and discontiguous mentions at nonzero absolute context bases',()=>{
+  const value=item({old_context:{start:50,end:57,text:'A😀BCDEF'},old_mentions:[
+    {source_ref:{evidence_id:'one',version:'v'},segments:[{start:51,end:54,text:'😀BC'},{start:55,end:57,text:'EF'}],cue_segments:[{start:52,end:55,text:'BCD'}]},
+    {source_ref:{evidence_id:'two',version:'v'},segments:[],cue_segments:[{start:50,end:51,text:'A'}]},
+  ]});
+  const mounted=render(<ReanchorPanel items={[value]} labelFor={()=>null} onContext={()=>{}}/>);
+  expect(mounted.container.querySelector('[data-old-context]')?.textContent).toBe('A😀BCDEF');
+  expect(mounted.container.querySelector('[data-old-kind="mention cue"]')?.textContent).toBe('BC');
+  expect([...mounted.container.querySelectorAll('[data-old-kind="mention"]')].map(node=>node.textContent)).toEqual(['😀','EF']);
+});
+
+it('keeps the term ID beside the resolved label and provides a native collapsible pending section',()=>{
+  const mounted=render(<ReanchorPanel items={[item()]} labelFor={()=> 'Finding'} onContext={()=>{}}/>);
+  expect(screen.getByRole('button',{name:'Finding (HP:1) · hpo'})).toBeTruthy();
+  const details=mounted.container.querySelector('details')!;
+  expect(details.open).toBe(true);
+  fireEvent.click(mounted.container.querySelector('summary')!);
+  expect(details.open).toBe(false);
 });
