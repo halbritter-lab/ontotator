@@ -19,6 +19,7 @@ from uuid import uuid4
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
+from ontospan import AnnotatedDocument
 from pg_harness import database_url_for
 from sqlalchemy import select
 
@@ -44,6 +45,8 @@ from ontocurator.domain.profiles import (
     TaskProfile,
     profile_hash,
 )
+from ontocurator.exchange.jobs import store_file
+from ontocurator.jobs.queue import Job
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -374,6 +377,50 @@ def register_test_user_route(
     app.router.routes.insert(0, app.router.routes.pop())
 
 
+def run_fixture_import(
+    app: FastAPI, path: Path, project: str, *, timeout: float = 30
+) -> Job:
+    """Import through this server's real worker; never compete for its job claim."""
+    db = app.state.repo.db
+    digest = store_file(db, path.read_bytes())
+    with db.transaction() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == project)
+        ).scalar_one()
+    payload = {"project": project, "blob_sha256": digest, "filename": path.name}
+    job_id = app.state.jobs.enqueue(
+        "t1_import", payload, project_id=project_id, actor=Actor.cli()
+    )
+    deadline = monotonic() + timeout
+    while True:
+        # JobQueue.get closes its read transaction before returning, so the
+        # worker can commit and no DB connection is retained during sleep.
+        job = app.state.jobs.get(job_id)
+        if (
+            job is None
+            or job.kind != "t1_import"
+            or job.project_id != project_id
+            or job.payload != payload
+        ):
+            raise HTTPException(
+                500, {"error": "Import job identity changed", "job_id": job_id}
+            )
+        if job.status == "failed":
+            raise HTTPException(500, {"job_id": job.id, "error": job.error})
+        if job.status == "succeeded":
+            return job
+        if monotonic() >= deadline:
+            raise HTTPException(
+                500,
+                {
+                    "error": "Import job did not finish",
+                    "job_id": job.id,
+                    "status": job.status,
+                },
+            )
+        sleep(0.05)
+
+
 def register_variant_scenario_route(app: FastAPI) -> None:
     """Fresh ordinary-role Task10 data; never installed in the shipped app."""
 
@@ -441,11 +488,10 @@ def register_variant_scenario_route(app: FastAPI) -> None:
         )
         corrected = correction_unit(target, target_text + "\n\nCorrected conclusion.")
         with tempfile.TemporaryDirectory() as folder:
-            imported = run_import(
-                db,
+            imported = run_fixture_import(
+                app,
                 variant_bundle(Path(folder), [source, target, other, corrected]),
                 key,
-                actor=Actor.cli(),
             )
         if imported.status != "succeeded":
             raise HTTPException(500, imported.error)
@@ -597,6 +643,137 @@ def register_variant_scenario_route(app: FastAPI) -> None:
     app.router.routes.insert(0, app.router.routes.pop())
 
 
+def translation_review_fixture_texts(
+    source: AnnotatedDocument, target: AnnotatedDocument, failed: AnnotatedDocument
+) -> dict[str, str]:
+    """Export the actual builder/import carrier, including canonical Unicode."""
+    return {
+        "source": source.document.text,
+        "target": target.document.text,
+        "failed": failed.document.text,
+    }
+
+
+def register_translation_review_scenario_route(app: FastAPI) -> None:
+    """Fresh pending translations for ordinary-role review journeys only."""
+
+    @app.post("/__test_translation_review__")
+    def translation_review_scenario(
+        assignment: Literal["none", "target", "failed"] = "none",
+        unequal: bool = False,
+    ) -> dict[str, object]:
+        from t1_builders import bundle as variant_bundle
+        from t1_builders import native_unit, translation_unit
+
+        from ontocurator.assignments.service import AssignmentService
+
+        db = app.state.repo.db
+        key = f"review-{uuid4().hex[:12]}"
+        create_project(db, key)
+        case_id = "Review EN /7 #é"
+        external_id = "Dose /5 %é"
+        source_text = "\n\n".join(
+            f"Paragraph {index + 1}. Dose 5 mg. A😀e\u0301 "
+            + "The patient describes symptoms and the clinician checks each detail. "
+            * 18
+            for index in range(14)
+        )
+        target_text = "\n\n".join(
+            f"Absatz {index + 1}. Dosis 5 mg. A😀e\u0301 "
+            + "Die Patientin beschreibt Symptome und die Ärztin prüft jede Angabe. "
+            * 18
+            for index in range(14)
+        )
+        source = native_unit(external_id, "en", source_text, case_id=case_id)
+        target = translation_unit(
+            external_id,
+            "de",
+            target_text,
+            source=source,
+            provider="Review fixture MT",
+            model="clinical-example-1",
+            run_id="review run /1 %é",
+        )
+        comparison_text = target_text.replace("Absatz", "Vergleich")
+        if unequal:
+            comparison_text += "\n\nZusätzlicher Absatz.\n\nWeiterer Absatz."
+        failed = translation_unit(
+            "Alternative /run %é",
+            "de",
+            comparison_text,
+            source=source,
+            checks=(("units_added", False), ("numbers_changed", True)),
+            provider="Review fixture alternative",
+            run_id="review failed run /2",
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            imported = run_fixture_import(
+                app,
+                variant_bundle(Path(folder), [source, target, failed]),
+                key,
+            )
+        if imported.status != "succeeded":
+            raise HTTPException(500, imported.error)
+        inventory = app.state.repo.list_variants(key, case_id=case_id)
+        documents = {
+            name: next(
+                row.document_id
+                for row in inventory
+                if (row.external_id, row.language)
+                == (unit.document.document_id, unit.document.language)
+            )
+            for name, unit in [
+                ("source", source),
+                ("target", target),
+                ("failed", failed),
+            ]
+        }
+        accounts = app.state.accounts
+        users = {}
+        for name, role in [
+            ("lead", "lead"),
+            ("reviewer", "annotator"),
+            ("other", "annotator"),
+        ]:
+            username = f"{key}-{name}"
+            issued = accounts.create_user(Actor.cli(), username, username)
+            accounts.redeem_code(username, issued.code, TEST_PASSWORD)
+            app.state.memberships.add(Actor.cli(), key, username, [role])
+            accounts.set_languages(Actor.cli(), username, ["en", "de"])
+            users[name] = username
+        accounts.update_profile(
+            Actor.cli(), users["reviewer"], qualification="Physician"
+        )
+        assigned_id = None
+        if assignment != "none":
+            assigned_id = (
+                AssignmentService(db)
+                .assign(
+                    Actor.cli(),
+                    key,
+                    documents[assignment],
+                    users["reviewer"],
+                    "translation_review",
+                )
+                .id
+            )
+        return {
+            "project": key,
+            "case_id": case_id,
+            "external_id": external_id,
+            "documents": documents,
+            "texts": translation_review_fixture_texts(source, target, failed),
+            "users": users,
+            "assignment_id": assigned_id,
+            "import_job_id": imported.id,
+            "initial_statuses": {
+                row.document_id: row.translation_status for row in inventory
+            },
+        }
+
+    app.router.routes.insert(0, app.router.routes.pop())
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(
         prefix="hpo-browser-", ignore_cleanup_errors=True
@@ -638,6 +815,7 @@ if __name__ == "__main__":
 
         register_test_user_route(app, grant_all)
         register_variant_scenario_route(app)
+        register_translation_review_scenario_route(app)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:
