@@ -16,7 +16,7 @@ or deployment has occurred.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
 - [x] T3a: all 10 administration-backend tasks, independent reviews and final backend/frontend/browser/container acceptance; see the [final record](2026-10-16-t3a-final-review.md).
 - [x] T3b: all11 administration-UI tasks, independent reviews, 828 frontend/1594 backend tests, all43 browser cases, matching image/assets and complete container/real-stack gate passed; see the [final record](2026-10-16-t3b-final-review.md).
-- [ ] T5: Tasks1–8 and the complete Part1 normal gate are accepted: 828 frontend, 2003 backend with one POSIX skip, and all43 existing browser cases pass. Actual UI Tasks9–15 and final packaged acceptance remain pending. See the [review-export and gate record](2026-10-16-t5-review-export-review.md).
+- [ ] T5: Tasks1–9 and the complete Part1 normal gate are accepted: 828 frontend, 2003 backend with one POSIX skip, and all43 existing browser cases pass. The typed variant/review client is accepted; actual UI Tasks10–15 and final packaged acceptance remain pending. See the [review-export and gate record](2026-10-16-t5-review-export-review.md).
 - [ ] T4a: workflows and stage tasks.
 - [ ] T4b: adjudication, releases and comments.
 - [ ] T6b: subsequent UX simplification and screen decomposition.
