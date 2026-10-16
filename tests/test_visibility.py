@@ -527,6 +527,7 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
             PROJECT, "doc-alpha"
         ),
         "proposal_metadata": lambda: repo.proposal_metadata(PROJECT, "doc-alpha"),
+        "workspace_proposal_sets": lambda: repo.workspace_proposal_sets(key, []),
         "get_proposal_set": lambda: repo.get_proposal_set(PROJECT, set_id),
         "get_annotation_snapshot": lambda: repo.get_annotation_snapshot(
             snap.annotation.annotation_id, snap.version, PROJECT
