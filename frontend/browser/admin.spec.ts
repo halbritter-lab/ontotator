@@ -60,7 +60,7 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   const issued = await bootstrap.json() as { code: string };
   await redeemCode(page, { username, code: issued.code });
   await page.getByRole("link", { name: "Ontologies", exact: true }).click();
-  await page.getByLabel("Ontology files", { exact: true }).setInputFiles(
+  await page.getByLabel("Ontology files", { exact: true }).and(page.locator('input[type="file"]')).setInputFiles(
     fileURLToPath(new URL("../../tests/fixtures/hp.json", import.meta.url)),
   );
   await page.getByRole("button", { name: "Upload files", exact: true }).click();
