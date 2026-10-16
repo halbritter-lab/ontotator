@@ -55,7 +55,9 @@ def rows(client):
 
 
 def accept_without_review(env, client):
-    path = bundle(env.tmp_path, [env.source, env.target])
+    override_dir = env.tmp_path / "override"
+    override_dir.mkdir()
+    path = bundle(override_dir, [env.source, env.target])
     commit(
         env.app,
         client,
