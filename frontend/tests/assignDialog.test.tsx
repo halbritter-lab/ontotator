@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api } from "../src/api/client";
 import { AssignDialog } from "../src/admin/AssignDialog";
 import { assignment, deferred, documents, members } from "./assignmentFixtures";
-beforeEach(() => { vi.spyOn(api, "listMembers").mockResolvedValue(members); vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [assignment], refused: [] }); });
+beforeEach(() => { vi.spyOn(api, "listCases").mockResolvedValue([]); vi.spyOn(api, "listMembers").mockResolvedValue(members); vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [assignment], refused: [] }); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const props = () => ({ projectKey: "p/key", documents, onClose: vi.fn(), onChanged: vi.fn() });
 it("assigns visible selected documents to role holders and shows their language warnings", async () => {

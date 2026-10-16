@@ -89,7 +89,7 @@ describe("project settings sections", () => {
     await screen.findByText("Guideline saved.");
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
     await screen.findByText("Rules saved.");
-    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, hidden_axis_values: {} });
+    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, annotate_accepted_translations_only: true, hidden_axis_values: {} });
   });
 
   it("uses the real server defaults and every annotation type without guessing", async () => {
