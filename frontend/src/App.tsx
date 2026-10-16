@@ -34,9 +34,11 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const baseUser = givenUser === undefined ? loadedUser : givenUser;
   const user = baseUser && savedIdentity?.username === baseUser.username
     ? { ...baseUser, display_name: savedIdentity.display_name } : baseUser;
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [projectContext, setProjectContext] = useState<{ identity: string; projects: ProjectSummary[] } | null>(null);
   const [projectError, setProjectError] = useState<unknown>(null);
   const [retry, setRetry] = useState(0);
+  const projectIdentity = JSON.stringify([baseUser?.username, baseUser?.is_system_admin, retry]);
+  const projects = baseUser && projectContext?.identity === projectIdentity ? projectContext.projects : [];
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
   const acceptedHash = useRef(window.location.hash || "#/");
   const acceptedIndex = useRef(typeof window.history.state?.ontocuratorRouteIndex === "number" ? window.history.state.ontocuratorRouteIndex as number : 0);
@@ -67,12 +69,13 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     return () => { active = false; };
   }, [givenUser]);
   useEffect(() => {
+    setProjectContext(null);
     if (!baseUser) return;
     let active = true;
     setProjectError(null);
-    api.listProjects().then(next => { if (active) setProjects(next); }, error => { if (active) setProjectError(error); });
+    api.listProjects().then(next => { if (active) setProjectContext({ identity: projectIdentity, projects: next }); }, error => { if (active) setProjectError(error); });
     return () => { active = false; };
-  }, [baseUser?.username, retry]);
+  }, [projectIdentity]);
 
   const travelTo = async (index: number): Promise<void> => {
     if (!alive.current || historyCursor.current === index) return;
@@ -180,7 +183,13 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "projectNew": content = <ProjectNewPage onNavigate={next => { setRetry(value => value + 1); go(next); }} />; break;
     case "projectSettings": content = <ProjectSettingsPage projectKey={route.key} currentUser={user}
       onSaved={() => setRetry(value => value + 1)} />; break;
-    case "projectDocuments": content = <DocumentsPage projectKey={route.key} query={route} onNavigate={go} />; break;
+    case "projectDocuments": {
+      const currentProject = projects.find(project => project.project_key === route.key);
+      // Display capability only; the import endpoint rechecks current authority.
+      const canOverrideTranslationStatus = !!currentProject?.can_manage && (user.is_system_admin || currentProject.roles.includes("lead"));
+      content = <DocumentsPage projectKey={route.key} currentUser={user} canOverrideTranslationStatus={canOverrideTranslationStatus} query={route} onNavigate={go} />;
+      break;
+    }
     case "projectCase": content = <CaseViewer projectKey={route.key} caseId={route.caseId} variant={route.variant} annotations={route.annotations} username={user.username} onNavigate={go} />; break;
     case "projectProgress": content = <ProgressPage projectKey={route.key} onNavigate={go} />; break;
     case "projectExport": content = <ExportPage projectKey={route.key} currentUser={user} />; break;
