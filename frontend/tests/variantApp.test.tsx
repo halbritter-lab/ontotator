@@ -32,6 +32,7 @@ it('keeps the real task, URL and text after cancelling a failed-save sibling tra
   const response = workspaceFixture('target');
   window.history.replaceState(null, '', '#/tasks/17');
   vi.spyOn(api, 'openAssignment').mockResolvedValue(assigned(response, 17));
+  vi.spyOn(api, 'getAssignmentMetadata').mockResolvedValue(assigned(response, 17).assignment);
   vi.mocked(api.listMyTasks).mockResolvedValue([taskOf(response.view, 17)]);
   vi.spyOn(api, 'applyCommand').mockRejectedValue(new TypeError('Offline'));
   render(<App user={testUser('alice')} />);
@@ -69,6 +70,7 @@ it('opens only the actual supported assignment from the viewer through the real 
   window.history.replaceState(null, '', routeHref({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'target' }));
   vi.mocked(api.listMyTasks).mockResolvedValue([taskOf(response.view, 7)]);
   vi.spyOn(api, 'openAssignment').mockResolvedValue(assigned(response, 7));
+  vi.spyOn(api, 'getAssignmentMetadata').mockResolvedValue(assigned(response, 7).assignment);
   render(<App user={testUser('alice')} />);
   fireEvent.click(await screen.findByRole('link', { name: 'Open my task' }));
   await screen.findByTestId('annotator-identity');

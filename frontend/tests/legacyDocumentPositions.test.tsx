@@ -30,6 +30,13 @@ function server(mode: WorkspaceMode = "independent") {
     status: "open" as const, updated_at: "2026-10-14T12:00:00Z" }));
   Object.freeze(tasks);
   vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
+  vi.spyOn(api, "getAssignmentMetadata").mockImplementation(async assignmentId => {
+    const task = tasks.find(row => row.assignment_id === assignmentId);
+    if (!task) throw new Error("Unassigned fixture ID");
+    return { id: task.assignment_id, project_key: task.project_key, document_id: task.document_id, task: task.task,
+      user_id: 1, username: "ann-0007", pseudonym: "ann-0007", display_name: "Test user", status: task.status,
+      created_at: task.updated_at, updated_at: task.updated_at, revoked_at: null, last_submission_id: null };
+  });
   const open = vi.spyOn(api, "openAssignment").mockImplementation(async (assignmentId) => {
     const request = { document_id: ids[assignmentId - 100] };
     const key = { project_key: "pkg", document_id: request.document_id, annotator_id: "ann-0007", mode, scope_id: "scope", target_set_id: "empty" };
@@ -65,7 +72,7 @@ describe("assignment App presentation positions", () => {
     render(<App user={testUser("ann-0007")} />);
     await screen.findByRole("table", { name: "My tasks" });
     const user = userEvent.setup();
-    await user.click(screen.getAllByRole("button", { name: "Open" })[0]);
+    await user.click(screen.getAllByRole("link", { name: "Open" })[0]);
     const select = await screen.findByRole("combobox", { name: "Select case" }) as HTMLSelectElement;
     expect(Array.from(select.options).map((option) => option.textContent)).toEqual(ids.map((id, index) => `Case ${index + 1} of 4: ${id} (Open)`));
     expect((screen.getByRole("button", { name: "Previous Case" }) as HTMLButtonElement).disabled).toBe(true);

@@ -211,7 +211,10 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     <div className="translation-decision density-compact">
       {!readOnly && !decision(rawForm.decision) && <p>Select a decision before submitting.</p>}
       {!readOnly && decision(rawForm.decision) && !form && <InlineMessage tone="error">The review form contains unsupported values. Update the affected fields before submitting.</InlineMessage>}
-      <ReviewForm value={visualForm(rawForm)} issues={issues} readOnly={readOnly || busy} onChange={next => edit({ ...draftRef.current, form: { ...draftRef.current.form, ...next } })} />
+      <ReviewForm value={visualForm(rawForm)} issues={issues} readOnly={readOnly || busy} onChange={next => {
+        const current = draftRef.current;
+        edit({ ...current, form: { ...(!has(current.form, "clinical_change") ? { clinical_change: false } : {}), ...current.form, ...next } });
+      }} />
       {!nonblank(qualification) && !readOnly && <p>{navigateLink({ name: "me" }, "Add your qualification in your profile")}</p>}
       {(error ?? saver.current?.error) != null && <ErrorNotice error={error ?? saver.current?.error} />}
       {serverIssues.length > 0 && <ol aria-label="Server review issues">{serverIssues.map((code, index) => <li key={index}>{has(issueMessages, code) ? issueMessages[code as IssueCode] : `Review issue: ${code}`}</li>)}</ol>}

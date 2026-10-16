@@ -42,13 +42,29 @@ it("opens the exact source, inherited run and correction baseline with no defaul
   vi.useFakeTimers(); await clock(1600);
   expect(save).not.toHaveBeenCalled();
 });
+it.each(["accepted_unchanged", "accepted_corrected"] as const)("sends a server-valid fresh nonclinical %s form over the actual draft transport", async selected => {
+  const { save } = setup(); save.mockRestore();
+  const wire: { form: Record<string, unknown>; text: string; expected_revision: number }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+    expect(url).toBe("/api/v1/translation-reviews/17/draft");
+    wire.push(JSON.parse(init.body as string));
+    return { ok: true, status: 200, json: async () => ({ revision: 41 }) };
+  }));
+  await screen.findByRole("textbox", { name: "Translation (de)" }); vi.useFakeTimers();
+  await clock(1600); expect(wire).toEqual([]);
+  fireEvent.click(screen.getByRole("radio", { name: decisionLabels[selected] }));
+  if (selected === "accepted_corrected") fireEvent.change(screen.getByRole("textbox", { name: "Translation (de)" }), { target: { value: "Nonclinical correction" } });
+  await clock();
+  expect(wire).toEqual([{ expected_revision: 6, text: selected === "accepted_corrected" ? "Nonclinical correction" : "Übersetzt.",
+    form: { decision: selected, clinical_change: false } }]);
+});
 it("autosaves exact raw data once in StrictMode and submits with the actual confirmed revision", async () => {
   const { save, submit } = setup(undefined, true);
   await edited(); await clock(799);
   expect(save).not.toHaveBeenCalled();
   await clock(1);
   expect(save).toHaveBeenCalledTimes(1);
-  expect(save).toHaveBeenLastCalledWith(17, { expected_revision: 6, text: "Changed 😀\nraw", form: { decision: "accepted_corrected" } });
+  expect(save).toHaveBeenLastCalledWith(17, { expected_revision: 6, text: "Changed 😀\nraw", form: { decision: "accepted_corrected", clinical_change: false } });
   const button = screen.getByRole("button", { name: "Submit review" });
   await act(async () => { fireEvent.click(button); fireEvent.click(button); });
   expect(submit).toHaveBeenCalledTimes(1);
@@ -82,12 +98,12 @@ it.each<ReviewDecisionCode>(["accepted_unchanged", "accepted_corrected", "query"
   expect((screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement).readOnly).toBe(true);
 });
 it("retains invalid raw form values while changing a visual field and blocks unknown decisions", async () => {
-  const workspace = reviewWorkspace({ draft: { revision: 6, text: "Übersetzt.", form: { decision: "invented", categories: ["unknown"], rationale: { invalid: true }, extra: "keep" } } });
+  const workspace = reviewWorkspace({ draft: { revision: 6, text: "Übersetzt.", form: { decision: "invented", clinical_change: "stored-invalid", categories: ["unknown"], rationale: { invalid: true }, extra: "keep" } } });
   const { save } = setup(workspace);
   await screen.findByRole("textbox", { name: "Translation (de)" }); vi.useFakeTimers();
   expect(screen.getAllByRole("radio").every(n => !(n as HTMLInputElement).checked)).toBe(true);
   fireEvent.click(screen.getByRole("radio", { name: "Accepted unchanged" })); await clock();
-  expect(save.mock.calls[0][1].form).toEqual({ decision: "accepted_unchanged", categories: ["unknown"], rationale: { invalid: true }, extra: "keep" });
+  expect(save.mock.calls[0][1].form).toEqual({ decision: "accepted_unchanged", clinical_change: "stored-invalid", categories: ["unknown"], rationale: { invalid: true }, extra: "keep" });
   expect((screen.getByRole("button", { name: "Submit review" }) as HTMLButtonElement).disabled).toBe(true);
 });
 it("retains latest edits after an ordinary save error and retries explicitly", async () => {

@@ -12,7 +12,7 @@ test("stack smoke: log in, open the project, annotate, submit", async ({ page })
   await projects.selectOption("smoke");
   const firstCase = page.getByTestId("task-row").filter({ has: page.getByRole("cell", { name: "Annotate", exact: true }) }).filter({ hasText: "smoke-001" });
   await expect(firstCase).toContainText("Open");
-  await firstCase.getByRole("button", { name: "Open", exact: true }).click();
+  await firstCase.getByRole("link", { name: "Open", exact: true }).click();
   await expect(page.locator(".text-container")).toContainText("Hypotonia and seizure");
   await page.getByRole("button", { name: /\+ New Annotation/i }).click();
   await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
