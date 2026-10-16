@@ -1,6 +1,6 @@
 # Implementation status
 
-Status after final T3a/T3b acceptance and T5 case/version API acceptance at `c627535` on
+Status after final T3a/T3b acceptance and T5 review-service acceptance at `16539aa` on
 2026-10-16. The administration backend is complete on `feat/t3a-admin-backend`;
 the administration UI is complete on `feat/t3b-admin-ui`. No main merge, push or deployment
 has occurred.
@@ -15,7 +15,7 @@ has occurred.
 - [ ] T2e P9: latency acceptance; latest run has zero client failures but misses all four p95 targets.
 - [x] T3a: all 10 administration-backend tasks, independent reviews and final backend/frontend/browser/container acceptance; see the [final record](2026-10-16-t3a-final-review.md).
 - [x] T3b: all11 administration-UI tasks, independent reviews, 828 frontend/1594 backend tests, all43 browser cases, matching image/assets and complete container/real-stack gate passed; see the [final record](2026-10-16-t3b-final-review.md).
-- [ ] T5: format1.1, variant storage/migration, variant import/export with persisted overrides and the case/text/version API are accepted. The correction-trigger checks remain explicitly scheduled with the real reanchor handler at Task7. Review services are in progress; task integration, UI and final gates remain. See the [import record](2026-10-16-t5-variant-import-review.md) and [case API record](2026-10-16-t5-case-api-review.md).
+- [ ] T5: format1.1, variant storage/migration, variant import/export with persisted overrides, the case/text/version API and assigned translation-review service are accepted. The correction-trigger checks remain explicitly scheduled with the real reanchor handler at Task7. Full task eligibility/distribution/HTTP dispatch is next; UI and final gates remain. See the [import record](2026-10-16-t5-variant-import-review.md), [case API record](2026-10-16-t5-case-api-review.md) and [review-service record](2026-10-16-t5-review-service-review.md).
 - [ ] T4a: workflows and stage tasks.
 - [ ] T4b: adjudication, releases and comments.
 - [ ] T6b: subsequent UX simplification and screen decomposition.
