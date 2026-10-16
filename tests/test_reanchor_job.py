@@ -158,6 +158,99 @@ def test_parent_running_before_queue_finish_still_proves_its_created_pair(runtim
     assert outcome.status == "succeeded", outcome.error
 
 
+@pytest.mark.parametrize("entrypoint", ["t1_import", "upload_commit"])
+def test_import_success_outcome_failure_preserves_durable_child_proof(
+    runtime, monkeypatch, entrypoint
+):
+    env = runtime
+    client = logged_in(env.app, "importer", projects={"proj": ["lead"]}, assignments=[])
+    user = env.app.state.accounts.get_by_username("importer")
+    path = bundle(
+        env.tmp_path, [env.source, correction_unit(env.source, "Prefix " + TEXT)]
+    )
+    if entrypoint == "upload_commit":
+        upload = _ready(
+            env.app,
+            client,
+            data=path.read_bytes(),
+            name=path.name,
+            kind="t1",
+            language="",
+        )
+        queued = client.post(
+            f"{BASE}/{upload['id']}/commit",
+            json={"plan_sha256": upload["plan_sha256"]},
+        )
+        assert queued.status_code == 200, queued.text
+    finish = JobQueue._finish
+    failed_successes = []
+    finish_statuses = []
+
+    def fail_first_success(self, job_id, worker, *, status, result=None, error=None):
+        finish_statuses.append(status)
+        if status == "succeeded" and not failed_successes:
+            failed_successes.append(job_id)
+            raise RuntimeError("first success outcome write failed")
+        # In particular, a subsequent failure-outcome write is allowed to work.
+        return finish(self, job_id, worker, status=status, result=result, error=error)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(JobQueue, "_finish", fail_first_success)
+        with pytest.raises(RuntimeError, match=r"^first success outcome write failed$"):
+            if entrypoint == "t1_import":
+                run_import(env.db, path, actor=Actor.user(user.id, user.username))
+            else:
+                _run(env.app, queued.json()["job_id"])
+    assert len(failed_successes) == 1
+    assert finish_statuses == ["succeeded"]
+    parent = rows(env, JobRow, JobRow.id == failed_successes[0])[0]
+    assert parent["kind"] == entrypoint
+    assert parent["status"] == "running" and parent["error"] is None
+    assert len(rows(env, DocumentRow)) == 2
+    assert len(children(env)) == 1
+    child = rows(env, JobRow, JobRow.id == children(env)[0])[0]
+    assert child["status"] == "queued"
+    assert child["payload"]["producer"] == {"kind": "import", "job_id": parent["id"]}
+    pair = {
+        key: child["payload"][key] for key in ["old_document_id", "new_document_id"]
+    }
+    assert pair in (parent["result"] or {}).get("reanchor_pairs", [])
+
+    # A new queue instance consumes only the actual persisted job/proof.
+    restarted = JobQueue(env.db, HANDLERS)
+    outcome = execute(env, child["id"], queue=restarted)
+    assert outcome.status == "succeeded", outcome.error
+    assert outcome.result == {"sets": 1, "carried": 2, "needs_review": 0}
+    replay_id = restarted.enqueue(
+        "reanchor",
+        child["payload"],
+        project_id=env.pid,
+        actor=Actor.user(user.id, user.username),
+    )
+    replayed = execute(env, replay_id, queue=restarted)
+    assert replayed.status == "succeeded", replayed.error
+    assert replayed.result == {"sets": 0, "carried": 0, "needs_review": 0}
+    assert (
+        len(rows(env, AuditEventRow, AuditEventRow.action == "variant.reanchor")) == 1
+    )
+    with env.db.transaction() as conn:
+        conn.execute(
+            delete(ProjectMembershipRow).where(
+                ProjectMembershipRow.project_id == env.pid,
+                ProjectMembershipRow.user_id == user.id,
+            )
+        )
+    retry = restarted.enqueue(
+        "reanchor",
+        child["payload"],
+        project_id=env.pid,
+        actor=Actor.user(user.id, user.username),
+    )
+    refused = execute(env, retry, queue=restarted)
+    assert refused.status == "failed" and "PROJECT_NOT_FOUND" in refused.error
+    assert len(generated(env)) == 1
+
+
 def test_unchanged_reimport_enqueues_no_second_correction_job(runtime):
     env = runtime
     _parent, child = corrected(env)
