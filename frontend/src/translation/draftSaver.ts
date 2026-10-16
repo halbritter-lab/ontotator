@@ -46,8 +46,7 @@ export function createDraftSaver<T>({
 
   function run(): Promise<void> {
     if (worker) return worker;
-    // Defer execution so the shared promise is installed before save can settle.
-    worker = Promise.resolve().then(async () => {
+    async function drain() {
       while (pending && (ready || flushing) && !disposed) {
         const current = pending;
         pending = undefined;
@@ -55,6 +54,7 @@ export function createDraftSaver<T>({
         inFlight = true;
         transition("saving");
         try {
+          if (disposed) throw disposedError;
           const confirmed = await save(current.draft, revision);
           if (disposed) throw disposedError;
           revision = confirmed;
@@ -75,9 +75,24 @@ export function createDraftSaver<T>({
       }
       if (disposed) throw disposedError;
       transition(pending ? "dirty" : "saved");
-    }).finally(() => {
+    }
+
+    function complete(): Promise<void> | void {
+      // Completion owns the same worker until observer-produced work is drained.
+      // This continuation follows microtasks queued by the terminal notification.
+      if (pending && (ready || flushing) && !disposed) {
+        return Promise.resolve().then(drain).then(complete);
+      }
       worker = undefined;
       flushing = false;
+      if (disposed) throw disposedError;
+    }
+
+    // Install shared ownership before execution; release only at quiescence/error.
+    worker = Promise.resolve().then(drain).then(complete).catch(failure => {
+      worker = undefined;
+      flushing = false;
+      throw failure;
     });
     return worker;
   }

@@ -12,6 +12,49 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe("translation review draft saver", () => {
+  it.each(["synchronous", "microtask"])("drains a %s completion observer update before concurrent flush callers settle", async mode => {
+    const save = vi.fn(async (_draft: string, revision: number) => revision + 1);
+    let updated = false;
+    const saver = createDraftSaver<string>({
+      save,
+      onStateChange(state) {
+        if (state !== "saved" || updated) return;
+        updated = true;
+        if (mode === "microtask") queueMicrotask(() => saver.update("second"));
+        else saver.update("second");
+      },
+    });
+    saver.update("first");
+    const observed: unknown[] = [];
+    await Promise.all([
+      saver.flush().then(() => observed.push([save.mock.calls.slice(), saver.hasUnsavedChanges])),
+      saver.flush().then(() => observed.push([save.mock.calls.slice(), saver.hasUnsavedChanges])),
+    ]);
+    expect(observed).toEqual([
+      [[["first", 0], ["second", 1]], false],
+      [[["first", 0], ["second", 1]], false],
+    ]);
+    expect([saver.state, saver.revision, saver.hasUnsavedChanges, vi.getTimerCount()]).toEqual(["saved", 2, false, 0]);
+  });
+
+  it("never starts a write after disposal from the saving observer", async () => {
+    const save = vi.fn(async () => 1);
+    const notices: string[] = [];
+    const saver = createDraftSaver<string>({
+      save,
+      onStateChange(state) {
+        notices.push(state);
+        if (state === "saving") saver.dispose();
+      },
+    });
+    saver.update("draft");
+    await expect(saver.flush()).rejects.toThrow("disposed");
+    await vi.runAllTimersAsync();
+    expect(save).not.toHaveBeenCalled();
+    expect(notices).toEqual(["dirty", "saving"]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("notifies observers with consistent unsaved state and confirmed revision", async () => {
     const observed: unknown[] = [];
     const saver = createDraftSaver<string>({
