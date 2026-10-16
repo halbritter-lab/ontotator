@@ -381,7 +381,9 @@ def test_existing_foreign_project_sets_cannot_be_projected_or_publicly_read(
         case_id="foreign-case",
         annotations=[annotation("foreign", (6, 19))],
     )
-    result = run_import(env.db, bundle(tmp_path, [foreign]), project="foreign")
+    foreign_directory = tmp_path / "foreign-import"
+    foreign_directory.mkdir()
+    result = run_import(env.db, bundle(foreign_directory, [foreign]), project="foreign")
     assert result.status == "succeeded", result.error
     foreign_refs = env.app.state.repo.proposal_metadata("foreign", "foreign-doc")
     provided = [
