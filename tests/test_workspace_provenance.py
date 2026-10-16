@@ -30,6 +30,7 @@ def reference_profile(db, *, reference=True):
     original = profile.layers[0]
     profile = profile.model_copy(
         update={
+            "default_layer_id": "target",
             "layers": [
                 original.model_copy(
                     update={"access": "reference" if reference else "editable"}
