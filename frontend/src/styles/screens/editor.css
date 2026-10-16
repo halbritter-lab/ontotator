@@ -1630,14 +1630,15 @@
 .center-pane:where(:has(> .case-version-controls)) {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 0;
 }
 .center-pane:where(:has(> .case-version-controls)) > .case-version-controls { grid-column: 1; grid-row: 1; }
 .center-pane:where(:has(> .case-version-controls)) > .pane-toolbar { grid-column: 1; grid-row: 2; }
 .center-pane:where(:has(> .case-version-controls)) > .attach-mention-banner { position: relative; grid-column: 1; grid-row: 2; }
-.center-pane:where(:has(> .case-version-controls)) > [role="alert"] { grid-column: 1; grid-row: 3; }
-.center-pane:where(:has(> .case-version-controls)) > .text-container { grid-column: 1; grid-row: 4; min-height: 0; }
+.center-pane:where(:has(> .case-version-controls)) > .text-container { grid-column: 1; grid-row: 3; min-height: 0; }
+.pane-toolbar:has(> [role="alert"]) { flex-wrap: wrap; }
+.pane-toolbar > [role="alert"] { flex: 0 0 100%; }
 @media (max-width: 800px) {
   .readonly-annotation-view { flex-direction: column; }
   .readonly-annotations { width: auto; max-height: 25%; border-right: 0; border-bottom: 1px solid var(--border); }
