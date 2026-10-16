@@ -11,6 +11,8 @@ export interface ProjectDocumentsQuery {
   status?: string;
   q?: string;
   select?: string;
+  origin?: string;
+  translation_status?: string;
 }
 
 export type Route =
@@ -73,7 +75,7 @@ export function parseRoute(hash: string): Route {
       case "export": return { name: "projectExport", key };
       case "documents": {
         const filters: ProjectDocumentsQuery = {};
-        for (const field of ["language", "status", "q", "select"] as const) {
+        for (const field of ["language", "status", "q", "select", "origin", "translation_status"] as const) {
           const value = params.get(field);
           if (value !== null) filters[field] = value;
         }
@@ -110,7 +112,7 @@ export function routeHref(route: Route): string {
     case "projectSettings": return `#/projects/${encodeURIComponent(route.key)}/settings`;
     case "projectDocuments":
       return `#/projects/${encodeURIComponent(route.key)}/documents${querySuffix({
-        language: route.language, status: route.status, q: route.q, select: route.select,
+        language: route.language, status: route.status, q: route.q, select: route.select, origin: route.origin, translation_status: route.translation_status,
       })}`;
     case "projectCase": return `#/projects/${encodeURIComponent(route.key)}/cases/${encodeURIComponent(route.caseId)}${querySuffix({ variant: route.variant, annotations: route.annotations })}`;
     case "projectProgress": return `#/projects/${encodeURIComponent(route.key)}/progress`;

@@ -7,6 +7,7 @@ const documents = [
   { document_id: "a-second", language: "de", status: "in_progress", position: 23, text_length: 6, assignees: [] },
 ];
 beforeEach(() => {
+  vi.spyOn(api, "listCases").mockResolvedValue([]);
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue(documents as never);
   vi.spyOn(api, "getProjectSettings").mockResolvedValue({ languages: ["en", "de"] } as never);
   vi.spyOn(api, "listUploads").mockResolvedValue([]);

@@ -1,18 +1,40 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type AssignRequest, type AssignResponse, type Member } from "../api/client";
+import { api, ApiError, type AssignRequest, type AssignResponse, type Member, type CaseSummary, type VariantSummary, type DocumentSummary } from "../api/client";
 import { Button, InlineMessage, Select } from "../ui";
 import { errorMessage } from "./errors";
 import { ErrorNotice } from "./ErrorNotice";
+import { reviewLanguages } from "./variantMetadata";
 
 export type Task = AssignRequest["task"];
-export const eligibleMembers = (members: Member[], task: Task) => members.filter(member => member.roles.includes(task === "annotate" ? "annotator" : "adjudicator"));
+export const eligibleMembers = (members: Member[], task: Task) => members.filter(member => member.roles.includes(task === "review" ? "adjudicator" : "annotator"));
+export function useCaseVariants(key: string, supplied?: readonly CaseSummary[] | null) {
+  const [loaded, setLoaded] = useState<CaseSummary[] | null>(null);
+  const [error, setError] = useState<unknown>();
+  useEffect(() => {
+    if (supplied !== undefined) return;
+    let active = true; setLoaded(null); setError(undefined);
+    void api.listCases(key).then(value => { if (active) setLoaded(value); }, failure => { if (active) setError(failure); });
+    return () => { active = false; };
+  }, [key, supplied]);
+  const cases = supplied === undefined ? loaded : supplied;
+  const variants = new Map<string, VariantSummary>();
+  for (const item of cases ?? []) for (const variant of item.variants) variants.set(variant.document_id, variant);
+  return { variants, notice: error !== undefined ? <ErrorNotice error={error} /> : cases === null ? <p>Translation metadata unavailable or loading.</p> : null };
+}
+export function taskLanguages(document: DocumentSummary, task: Task, variants: ReadonlyMap<string, VariantSummary>): readonly string[] | null {
+  return task === "translation_review" ? reviewLanguages(document.document_id, variants) : [document.language];
+}
+export const canReviewSelection = (documents: readonly DocumentSummary[], variants: ReadonlyMap<string, VariantSummary>) => documents.length > 0 && documents.every(doc => {
+  const actual = variants.get(doc.document_id);
+  return doc.translation_status != null && doc.translation_status !== "accepted" && actual && actual.translation_status !== null && actual.translation_status !== "accepted" && reviewLanguages(doc.document_id, variants) !== null;
+});
 export function useAlive() {
   const alive = useRef(false);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   return alive;
 }
-export function TaskSelect({ value, onChange, disabled }: { value: Task; onChange: (task: Task) => void; disabled?: boolean }) {
-  return <Select id="assignment-task" label="Task" value={value} disabled={disabled} onChange={event => onChange(event.target.value as Task)}><option value="annotate">Annotate</option><option value="review">Review</option></Select>;
+export function TaskSelect({ value, onChange, disabled, translationReviewAllowed = false }: { value: Task; onChange: (task: Task) => void; disabled?: boolean; translationReviewAllowed?: boolean }) {
+  return <Select id="assignment-task" label="Task" value={value} disabled={disabled} onChange={event => { if (event.target.value !== "translation_review" || translationReviewAllowed) onChange(event.target.value as Task); }}><option value="annotate">Annotate</option><option value="review">Review</option><option value="translation_review" disabled={!translationReviewAllowed}>Translation review</option></Select>;
 }
 export function useMembers(key: string) {
   const [members, setMembers] = useState<Member[] | null>(null);
@@ -52,11 +74,11 @@ export function useAssignmentBatch(projectKey: string, onChanged: () => void) {
   const languageRows = refused.filter(row => row.code === "LANGUAGE_CONFIRMATION_REQUIRED").map(({ document_id, username }) => ({ document_id, username }));
   return { busy, attempted, accepted, refused, error, submit, reset, languageRows };
 }
-export function BatchFeedback({ batch, onConfirmLanguage, disabled }: { batch: ReturnType<typeof useAssignmentBatch>; onConfirmLanguage: () => void; disabled?: boolean }) {
+export function BatchFeedback({ batch, onConfirmLanguage, disabled, languages }: { batch: ReturnType<typeof useAssignmentBatch>; onConfirmLanguage: () => void; disabled?: boolean; languages?: ReadonlyMap<string, readonly string[] | null> }) {
   return <>
     {batch.error !== undefined && <ErrorNotice error={batch.error} />}
     {batch.attempted && <InlineMessage tone="info">Assignment request complete: {batch.accepted} accepted; {batch.refused.length} refused.</InlineMessage>}
     {batch.refused.length > 0 && <ul aria-label="Refused assignments">{batch.refused.map(row => <li key={rowKey(row)}>{row.document_id} — {row.username}: <span>{errorMessage(new ApiError(422, row.code, row.code))}</span></li>)}</ul>}
-    {batch.languageRows.length > 0 && <section aria-label="Confirm document languages"><p>These people's profiles do not list the document language. Assign anyway?</p><Button disabled={disabled} loading={batch.busy} onClick={onConfirmLanguage}>Assign anyway</Button></section>}
+    {batch.languageRows.length > 0 && <section aria-label="Confirm document languages"><p>These people's profiles do not list the required document languages. Assign anyway?</p><ul>{batch.languageRows.map(row => <li key={rowKey(row)}>{row.document_id} — {row.username}: {languages?.get(row.document_id)?.join(", ") || "Required languages unavailable"}</li>)}</ul><Button disabled={disabled} loading={batch.busy} onClick={onConfirmLanguage}>Assign anyway</Button></section>}
   </>;
 }

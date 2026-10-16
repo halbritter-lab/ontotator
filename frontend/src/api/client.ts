@@ -8,7 +8,7 @@ import { attachmentFilename, type DownloadPayload } from "./download";
 export type { DownloadPayload } from "./download";
 
 export type ProjectDocumentSummary = components["schemas"]["ProjectDocumentSummary"];
-type VariantMetadataKeys = "case_id" | "external_id" | "version" | "origin" | "translation_status" | "status_reason";
+type VariantMetadataKeys = "case_id" | "external_id" | "version" | "origin" | "translation_status" | "status_reason" | "accepted_without_review";
 /** Legacy editor navigation also composes reduced WorkspaceService summaries. */
 export type DocumentSummary = Omit<ProjectDocumentSummary, VariantMetadataKeys> & Partial<Pick<ProjectDocumentSummary, VariantMetadataKeys>>;
 export type ProjectSettings = components["schemas"]["ProjectSettings"];
@@ -19,7 +19,8 @@ export type JobView = components["schemas"]["JobView"];
 export type ProjectProgress = components["schemas"]["ProjectProgress"];
 export type ExportKind = components["schemas"]["ExportRequest"]["kind"];
 export type ExportCreated = components["schemas"]["ExportCreated"];
-export interface ProjectDocumentFilters { language?: string; status?: string; q?: string }
+export interface ProjectDocumentFilters { language?: string; status?: string; q?: string; origin?: string; translation_status?: string }
+export type StatusOverride = components["schemas"]["StatusOverride"];
 export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
 export type EditorProposal = components["schemas"]["EditorProposal"];
 export type ProposalSetView = components["schemas"]["ProposalSetView"];
@@ -247,8 +248,8 @@ export class ApiClient {
     return this.request<UploadView>(`/api/v1/projects/${encodeURIComponent(key)}/uploads/${id}`, { method: "GET" });
   }
 
-  async commitUpload(key: string, id: number, planSha256: string): Promise<UploadCreated> {
-    return this.request<UploadCreated>(`/api/v1/projects/${encodeURIComponent(key)}/uploads/${id}/commit`, { method: "POST", body: JSON.stringify({ plan_sha256: planSha256 }) });
+  async commitUpload(key: string, id: number, planSha256: string, overrides?: readonly StatusOverride[]): Promise<UploadCreated> {
+    return this.request<UploadCreated>(`/api/v1/projects/${encodeURIComponent(key)}/uploads/${id}/commit`, { method: "POST", body: JSON.stringify({ plan_sha256: planSha256, ...(overrides === undefined ? {} : { status_overrides: overrides }) }) });
   }
 
   async discardUpload(key: string, id: number): Promise<UploadView> {

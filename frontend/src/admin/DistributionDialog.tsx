@@ -2,11 +2,11 @@ import { useRef, useState } from "react";
 import { api, ApiError, type AssignmentRow, type AssignmentView, type ProposalResponse } from "../api/client";
 import { Button, Dialog, InlineMessage, Select, TextInput } from "../ui";
 import type { AssignDialogProps } from "./AssignDialog";
-import { BatchFeedback, eligibleMembers, TaskSelect, useAlive, useAssignmentBatch, useMembers, type Task } from "./assignmentUI";
+import { BatchFeedback, eligibleMembers, TaskSelect, useAlive, useAssignmentBatch, useMembers, type Task, useCaseVariants, canReviewSelection, taskLanguages } from "./assignmentUI";
 import { ErrorNotice } from "./ErrorNotice";
 type Slot = { document_id: string; language: string; username: string; place: number };
 export function DistributionDialog(props: AssignDialogProps): JSX.Element { return <DistributionEditor key={JSON.stringify([props.projectKey, props.documents.map(doc => [doc.document_id, doc.language])])} {...props} />; }
-function DistributionEditor({ projectKey, documents, onClose, onChanged }: AssignDialogProps): JSX.Element {
+function DistributionEditor({ projectKey, documents, cases, onClose, onChanged }: AssignDialogProps): JSX.Element {
   const [task, setTask] = useState<Task>("annotate");
   const [count, setCount] = useState("1");
   const [proposal, setProposal] = useState<ProposalResponse | null>(null);
@@ -18,9 +18,12 @@ function DistributionEditor({ projectKey, documents, onClose, onChanged }: Assig
   const alive = useAlive();
   const { members, notice } = useMembers(projectKey);
   const batch = useAssignmentBatch(projectKey, onChanged);
+  const context = useCaseVariants(projectKey, cases);
+  const reviewAllowed = canReviewSelection(documents, context.variants);
+  const languages = new Map(documents.map(doc => [doc.document_id, taskLanguages(doc, task, context.variants)]));
   const clear = () => { setProposal(null); setSlots([]); batch.reset(); setError(undefined); };
   const propose = async () => {
-    if (writing.current || batch.busy || !members || !documents.length) return;
+    if (writing.current || batch.busy || !members || !documents.length || (task === "translation_review" && !reviewAllowed)) return;
     writing.current = true; setBusy(true); clear();
     try {
       // Seed is deliberately omitted: every new proposal gets its actual server seed.
@@ -53,23 +56,35 @@ function DistributionEditor({ projectKey, documents, onClose, onChanged }: Assig
   for (const row of proposal?.rows ?? []) loadBefore.set(row.username, row.load_before);
   return <Dialog open title="Propose distribution" size="lg" onClose={busy || batch.busy ? undefined : onClose} footer={<Button disabled={busy || batch.busy} onClick={onClose}>Close</Button>}>
     <form onSubmit={event => { event.preventDefault(); if (event.currentTarget.reportValidity()) void propose(); }}>
-      <TaskSelect value={task} disabled={busy || batch.busy} onChange={value => { setTask(value); clear(); }} />
+      <TaskSelect value={task} disabled={busy || batch.busy} translationReviewAllowed={reviewAllowed} onChange={value => { setTask(value); clear(); }} />
+      {context.notice}
       <TextInput id="distribution-count" label="People per document" type="number" min={1} step={1} required value={count} disabled={busy || batch.busy} onChange={event => { setCount(event.target.value); clear(); }} />
-      {notice}<Button type="submit" disabled={!members || !documents.length || batch.busy} loading={busy}>{proposal || stale ? "Propose again" : "Propose"}</Button>
+      {notice}<Button type="submit" disabled={!members || !documents.length || batch.busy || (task === "translation_review" && !reviewAllowed)} loading={busy}>{proposal || stale ? "Propose again" : "Propose"}</Button>
     </form>
     {error !== undefined && <ErrorNotice error={error} />}
     {proposal && <>
       <h3>Proposal #{proposal.seed}</h3>
-      <table><caption>Proposed assignments</caption><thead><tr><th>Document</th><th>Language</th><th>Person</th></tr></thead><tbody>{slots.map((slot, index) => <tr key={JSON.stringify([slot.document_id, slot.place])}><td>{slot.document_id}</td><td>{slot.language}</td><td>
+      <table><caption>Proposed assignments</caption><thead><tr><th>Document</th><th>Languages</th><th>Person</th></tr></thead><tbody>{slots.map((slot, index) => <tr key={JSON.stringify([slot.document_id, slot.place])}><td>{slot.document_id}</td><td>{languages.get(slot.document_id)?.join(", ") || "Required languages unavailable"}</td><td>
         <Select id={`distribution-slot-${index}`} label={`${slot.document_id}, slot ${slot.place + 1}`} value={slot.username} disabled={batch.busy || batch.attempted || stale || busy} onChange={event => setSlots(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, username: event.target.value } : item))}>
           <option value="">Nobody</option>{slot.username && !eligible.some(member => member.username === slot.username) && <option value={slot.username}>{slot.username}</option>}
           {eligible.map(member => <option key={member.username} value={member.username} disabled={slots.some((other, otherIndex) => index !== otherIndex && other.document_id === slot.document_id && other.username === member.username)}>{member.display_name} ({member.username}) — {member.languages.join(", ") || "No languages listed"}</option>)}
         </Select></td></tr>)}</tbody></table>
       {duplicate && <InlineMessage tone="warning">Choose each person only once per document.</InlineMessage>}
-      <section aria-label="Unassignable documents"><h3>Unassignable documents</h3>{proposal.unassignable.length ? <ul>{proposal.unassignable.map(row => <li key={row.document_id}>{row.document_id} ({row.language}): {row.reason === "NO_READER" ? `No member reads ${row.language}` : `Only ${row.eligible_count} reader${row.eligible_count === 1 ? "" : "s"} for ${proposal.per_document} places`}</li>)}</ul> : <p>Every document has a proposal.</p>}</section>
+      <section aria-label="Unassignable documents"><h3>Unassignable documents</h3>{proposal.unassignable.length ? <ul>{proposal.unassignable.map(row => <li key={row.document_id}>{row.document_id} ({row.language}): {unassignableLabel(row, proposal.per_document, languages.get(row.document_id))}</li>)}</ul> : <p>Every document has a proposal.</p>}</section>
       <section aria-label="Resulting load"><h3>Resulting load</h3><p>Open, in progress and reopened work across this project, before and after the selected rows.</p><ul>{eligible.map(member => <li key={member.username}>{member.display_name} ({member.username}): {loadBefore.has(member.username) || inventory !== null ? `${loadBefore.get(member.username) ?? 0} → ${(loadBefore.get(member.username) ?? 0) + newRows.filter(row => row.username === member.username).length}` : "Load unavailable"}</li>)}</ul></section>
       <Button variant="primary" disabled={busy || batch.busy || batch.attempted || stale || duplicate} onClick={() => confirm(false)}>Confirm</Button>
     </>}
-    <BatchFeedback batch={batch} disabled={stale || busy} onConfirmLanguage={() => confirm(true)} />
+    <BatchFeedback batch={batch} languages={languages} disabled={stale || busy} onConfirmLanguage={() => confirm(true)} />
   </Dialog>;
+}
+
+function unassignableLabel(row: ProposalResponse["unassignable"][number], places: number, languages?: readonly string[] | null): string {
+  switch (row.reason) {
+    case "NO_READER": return languages?.length ? `No member reads ${languages.join(" and ")}` : "No eligible reader; required languages unavailable";
+    case "TOO_FEW_READERS": return `Only ${row.eligible_count} reader${row.eligible_count === 1 ? "" : "s"} for ${places} places`;
+    case "translation_not_accepted": return "Translation not accepted yet";
+    case "not_a_translation": return "Only translations can be reviewed";
+    case "translation_already_accepted": return "Translation already accepted";
+    case "variant_source_unknown": return "Translation source unavailable";
+  }
 }

@@ -9,7 +9,11 @@ export interface ExportPageProps { projectKey: string; currentUser: CurrentUser 
 const definitions = [
   { kind: "t1", title: "Annotation results (T1 bundle)", description: "The latest submission of each annotator and task per document, with pseudonyms." },
   { kind: "edit_log", title: "Edit log (JSONL)", description: "Every editing step with pseudonyms, for method analyses." },
+  { kind: "translation_reviews", title: "Translation reviews (JSONL)", description: "Immutable translation review decisions with reviewer snapshots and source provenance." },
 ] as const;
+type CardKind = ExportKind | "translation_reviews";
+const jobKinds: Record<CardKind, string> = { t1: "t1_export", edit_log: "edit_log_export", translation_reviews: "translation_review_export" };
+const exportNames: Record<CardKind, string> = { t1: "an annotation results", edit_log: "an edit log", translation_reviews: "a translation review" };
 const denied = (error: unknown) => error instanceof ApiError && [401, 403, 404].includes(error.status);
 const positiveJobId = (value: string | null) => value !== null && /^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null;
 
@@ -25,7 +29,7 @@ export function ExportPage({ projectKey, currentUser }: ExportPageProps): JSX.El
   })}</section>;
 }
 
-function ExportCard({ projectKey, storageKey, kind, title, description }: { projectKey: string; storageKey: string; kind: ExportKind; title: string; description: string }): JSX.Element {
+function ExportCard({ projectKey, storageKey, kind, title, description }: { projectKey: string; storageKey: string; kind: CardKind; title: string; description: string }): JSX.Element {
   const [remembered] = useState(() => readRemembered(storageKey));
   const [jobId, setJobId] = useState<number | null>(remembered.id);
   const [storageError, setStorageError] = useState(remembered.storageError);
@@ -36,7 +40,7 @@ function ExportCard({ projectKey, storageKey, kind, title, description }: { proj
   const mutation = useRef(false);
   const downloadRequest = useRef(false);
   const { job, error: pollError } = useJob(jobId);
-  const expectedKind = kind === "t1" ? "t1_export" : "edit_log_export";
+  const expectedKind = jobKinds[kind];
   const correctKind = job?.kind === expectedKind;
   const polling = jobId !== null && !pollError && (!job || (job.status !== "failed" && job.status !== "succeeded"));
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -49,7 +53,7 @@ function ExportCard({ projectKey, storageKey, kind, title, description }: { proj
       setError(pollError);
       if (denied(pollError)) { remember(null); setJobId(null); }
     } else if (job && !correctKind) {
-      setError(new Error(`This job is not ${kind === "t1" ? "an annotation results" : "an edit log"} export.`));
+      setError(new Error(`This job is not ${exportNames[kind]} export.`));
       remember(null); setJobId(null);
     }
   }, [pollError, job, correctKind]);
@@ -57,7 +61,7 @@ function ExportCard({ projectKey, storageKey, kind, title, description }: { proj
     if (mutation.current || downloadRequest.current || creating || polling) return;
     mutation.current = true; setCreating(true); setError(undefined); setJobId(null); remember(null);
     try {
-      const created = await api.startExport(projectKey, kind);
+      const created = await (kind === "translation_reviews" ? api.exportTranslationReviews(projectKey) : api.startExport(projectKey, kind));
       if (!alive.current) return;
       if (!Number.isSafeInteger(created.job_id) || created.job_id <= 0) throw new Error("The server returned an invalid export job ID.");
       setJobId(created.job_id); remember(created.job_id);

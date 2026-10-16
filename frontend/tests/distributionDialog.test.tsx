@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError } from "../src/api/client";
 import { DistributionDialog } from "../src/admin/DistributionDialog";
 import { assignment, deferred, documents, members, proposal } from "./assignmentFixtures";
-beforeEach(() => { vi.spyOn(api, "listMembers").mockResolvedValue(members); vi.spyOn(api, "listAssignments").mockResolvedValue([]); vi.spyOn(api, "proposeDistribution").mockResolvedValue(proposal); vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [assignment], refused: [] }); });
+beforeEach(() => { vi.spyOn(api, "listCases").mockResolvedValue([]); vi.spyOn(api, "listMembers").mockResolvedValue(members); vi.spyOn(api, "listAssignments").mockResolvedValue([]); vi.spyOn(api, "proposeDistribution").mockResolvedValue(proposal); vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [assignment], refused: [] }); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const props = () => ({ projectKey: "p/key", documents, onClose: vi.fn(), onChanged: vi.fn() });
 async function propose() { fireEvent.change(await screen.findByLabelText(/^People per document/), { target: { value: "2" } }); await waitFor(() => expect(screen.getByRole("button", { name: "Propose" })).toHaveProperty("disabled", false)); fireEvent.click(screen.getByRole("button", { name: "Propose" })); await screen.findByText("Proposal #123"); }

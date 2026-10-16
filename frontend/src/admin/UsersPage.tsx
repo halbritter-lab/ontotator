@@ -116,6 +116,8 @@ export function UsersPage({ currentUser, routeLeaveRef }: UsersPageProps): JSX.E
     if (draft.display_name !== baseline.display_name) change.display_name = draft.display_name;
     const email = draft.email?.trim() || null;
     if (email !== baseline.email) change.email = email;
+    const qualification = draft.qualification?.trim() || null;
+    if (qualification !== baseline.qualification) change.qualification = qualification;
     if (JSON.stringify([...draft.languages].sort()) !== JSON.stringify([...baseline.languages].sort())) change.languages = draft.languages;
     if (draft.is_system_admin !== baseline.is_system_admin) change.is_system_admin = draft.is_system_admin;
     if (!Object.keys(change).length) { setEditing(null); return; }
@@ -168,6 +170,7 @@ export function UsersPage({ currentUser, routeLeaveRef }: UsersPageProps): JSX.E
       <form aria-label="Edit user" onSubmit={event => { event.preventDefault(); saveEdit(); }}>
         <TextInput id="edit-name" label="Display name" required maxLength={120} value={editing.draft.display_name} disabled={busy || !!confirmation} onChange={event => edit({ display_name: event.target.value })} />
         <TextInput id="edit-email" label="E-mail" type="email" value={editing.draft.email ?? ""} disabled={busy || !!confirmation} onChange={event => edit({ email: event.target.value })} />
+        <TextInput id="edit-qualification" label="Qualification" maxLength={200} hint="e.g. physician, native German speaker" value={editing.draft.qualification ?? ""} disabled={busy || !!confirmation} onChange={event => edit({ qualification: event.target.value })} />
         <LanguagesField id="edit-languages" label="Languages" value={editing.draft.languages} disabled={busy || !!confirmation} onChange={languages => edit({ languages })} />
         <Checkbox id="edit-admin" label="System administrator" checked={editing.draft.is_system_admin} disabled={busy || !!confirmation || editing.baseline.username === currentUser.username} title={editing.baseline.username === currentUser.username ? "You cannot remove your own administrator role." : undefined} onChange={event => edit({ is_system_admin: event.target.checked })} />
         {editError !== undefined && <ErrorNotice error={editError} />}
