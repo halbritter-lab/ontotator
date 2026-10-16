@@ -27,6 +27,7 @@ from ontocurator.storage.repository import (
 )
 from ontocurator.storage.tables import (
     AssignmentRow,
+    AuditEventRow,
     DocumentRow,
     DraftAnnotationRow,
     DraftRow,
@@ -60,6 +61,7 @@ class ProjectDocumentSummary(BaseModel):
     origin: VariantOrigin
     translation_status: TranslationStatus | None
     status_reason: str | None
+    accepted_without_review: bool
     status: DocumentStatus = "not_started"
     has_review_inputs: bool | None = None
     assignees: list[Assignee] | None = None
@@ -256,6 +258,32 @@ def project_documents(
         if not rows:
             return []
         ids = [row.document_id for row in rows]
+        accepted_ids = [
+            row.document_id for row in rows if row.translation_status == "accepted"
+        ]
+        # Status writers serialize under the project lock already held above.
+        # Read only the latest writer's metadata for visible accepted documents;
+        # free-text reasons and review absence cannot establish manual acceptance.
+        latest_status_writers = (
+            {
+                writer.target_id: writer.action
+                for writer in conn.execute(
+                    select(AuditEventRow.target_id, AuditEventRow.action)
+                    .where(
+                        AuditEventRow.project_id == project_id,
+                        AuditEventRow.target_type == "document",
+                        AuditEventRow.target_id.in_(accepted_ids),
+                        AuditEventRow.action.in_(
+                            ["variant.status_override", "translation.review"]
+                        ),
+                    )
+                    .distinct(AuditEventRow.target_id)
+                    .order_by(AuditEventRow.target_id, AuditEventRow.id.desc())
+                )
+            }
+            if accepted_ids
+            else {}
+        )
         assignees: dict[str, list[Assignee]] = defaultdict(list)
         if all_documents:
             for row in conn.execute(
@@ -301,6 +329,11 @@ def project_documents(
                 origin=row.origin,
                 translation_status=row.translation_status,
                 status_reason=row.status_reason,
+                accepted_without_review=(
+                    row.translation_status == "accepted"
+                    and latest_status_writers.get(row.document_id)
+                    == "variant.status_override"
+                ),
                 text_length=row.text_length,
                 status=statuses.get(row.document_id, "not_started"),
                 has_review_inputs=row.document_id in review_ids
