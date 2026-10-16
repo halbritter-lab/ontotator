@@ -1630,15 +1630,14 @@
 .center-pane:where(:has(> .case-version-controls)) {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   min-height: 0;
 }
 .center-pane:where(:has(> .case-version-controls)) > .case-version-controls { grid-column: 1; grid-row: 1; }
 .center-pane:where(:has(> .case-version-controls)) > .pane-toolbar { grid-column: 1; grid-row: 2; }
 .center-pane:where(:has(> .case-version-controls)) > .attach-mention-banner { position: relative; grid-column: 1; grid-row: 2; }
-.center-pane:where(:has(> .case-version-controls)) > .text-container { grid-column: 1; grid-row: 3; min-height: 0; }
-.pane-toolbar:has(> [role="alert"]) { flex-wrap: wrap; }
-.pane-toolbar > [role="alert"] { flex: 0 0 100%; }
+.center-pane:where(:has(> .case-version-controls)) > [role="alert"] { grid-column: 1; grid-row: 3; }
+.center-pane:where(:has(> .case-version-controls)) > .text-container { grid-column: 1; grid-row: 4; min-height: 0; }
 @media (max-width: 800px) {
   .readonly-annotation-view { flex-direction: column; }
   .readonly-annotations { width: auto; max-height: 25%; border-right: 0; border-bottom: 1px solid var(--border); }
@@ -1657,44 +1656,46 @@
 .case-comparing .case-reading-layout,
 .case-viewer.case-comparing > .comparison-reading {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  /* Controls, native pane toolbars, reading sheets, immutable annotations,
+  /* Controls, native pane toolbars, warnings, reading sheets, immutable annotations,
      existing editor controls, then the existing ontology tree. */
-  grid-template-rows: auto auto minmax(500px, 1fr) auto auto auto;
+  grid-template-rows: auto auto auto minmax(500px, 1fr) auto auto auto;
   flex: 1 1 auto; min-height: 0; overflow: auto; align-items: stretch;
 }
 .case-comparing .app-layout { display: contents; }
 .case-comparing .center-pane {
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: subgrid; min-width: 0; min-height: 0; overflow: visible;
 }
-.case-comparing .app-layout > .center-pane { grid-column: 1; grid-row: 1 / 5; }
+.case-comparing .app-layout > .center-pane { grid-column: 1; grid-row: 1 / 6; }
 .case-comparing .center-pane > .pane-toolbar { grid-column: 1; grid-row: 2; }
 .case-comparing .center-pane > .attach-mention-banner { position: relative; grid-column: 1; grid-row: 2; }
-.case-comparing .center-pane > .text-container { grid-column: 1; grid-row: 3; min-height: 500px; }
+.case-comparing .center-pane > [role="alert"] { grid-column: 1; grid-row: 3; }
+.case-comparing .center-pane > .text-container { grid-column: 1; grid-row: 4; min-height: 500px; }
 .case-comparing .compare-pane {
-  display: grid; grid-template-rows: subgrid; grid-column: 2; grid-row: 1 / 5;
+  display: grid; grid-template-rows: subgrid; grid-column: 2; grid-row: 1 / 6;
 }
 .case-comparing .compare-controls { grid-row: 1; min-width: 0; }
 .case-comparing .readonly-annotation-view {
   display: grid; grid-template-rows: subgrid; overflow: visible; min-height: 0;
 }
-.case-comparing .comparison-reading > .readonly-annotation-view { grid-column: 1; grid-row: 1 / 5; }
-.case-comparing .readonly-annotation-view > .center-pane { grid-row: 1 / 4; }
+.case-comparing .comparison-reading > .readonly-annotation-view { grid-column: 1; grid-row: 1 / 6; }
+.case-comparing .readonly-annotation-view > .center-pane { grid-row: 1 / 5; }
 .case-comparing .readonly-annotations {
-  order: 2; grid-row: 4; width: auto; max-height: 300px; overflow-y: auto;
+  order: 2; grid-row: 5; width: auto; max-height: 300px; overflow-y: auto;
 }
-.case-comparing .compare-pane > .readonly-annotation-view { grid-row: 2 / 5; }
-.case-comparing .compare-pane .center-pane { grid-row: 1 / 3; }
+.case-comparing .compare-pane > .readonly-annotation-view { grid-row: 2 / 6; }
+.case-comparing .compare-pane .center-pane { grid-row: 1 / 4; }
 .case-comparing .compare-pane .pane-toolbar { grid-row: 1; }
-.case-comparing .compare-pane .text-container { grid-row: 2; }
-.case-comparing .compare-pane .readonly-annotations { grid-row: 3; }
+.case-comparing .compare-pane .center-pane > [role="alert"] { grid-row: 2; }
+.case-comparing .compare-pane .text-container { grid-row: 3; }
+.case-comparing .compare-pane .readonly-annotations { grid-row: 4; }
 .case-comparing .app-layout > .sidebar {
-  display: flex; flex-direction: column; grid-column: 1; grid-row: 5;
+  display: flex; flex-direction: column; grid-column: 1; grid-row: 6;
   width: auto; max-height: 500px; min-height: 300px; overflow-y: auto;
 }
 .case-comparing .app-layout > .inspector-pane {
-  display: flex; grid-column: 2; grid-row: 5; width: auto; min-height: 300px; max-height: 500px;
+  display: flex; grid-column: 2; grid-row: 6; width: auto; min-height: 300px; max-height: 500px;
 }
-.case-comparing .app-layout > .tree-host { display: flex; grid-column: 1 / 3; grid-row: 6; min-width: 300px; min-height: 400px; }
+.case-comparing .app-layout > .tree-host { display: flex; grid-column: 1 / 3; grid-row: 7; min-width: 300px; min-height: 400px; }
 @media (max-width: 1099px) {
   .case-comparing .case-reading-layout, .case-viewer.case-comparing > .comparison-reading {
     /* Auto tracks can shrink below these panes' intrinsic height. Size every
@@ -1707,14 +1708,16 @@
   .case-comparing .center-pane, .case-comparing .readonly-annotation-view, .case-comparing .compare-pane {
     display: flex; flex-direction: column; flex: 0 0 auto; min-height: min-content;
   }
-  .case-comparing .center-pane { display: grid; grid-template-rows: auto 500px; }
+  .case-comparing .center-pane { display: grid; grid-template-rows: auto auto 500px; }
   .case-comparing .center-pane > .pane-toolbar,
   .case-comparing .center-pane > .attach-mention-banner { grid-row: 1; }
-  .case-comparing .center-pane > .text-container { grid-row: 2; }
-  .case-comparing .center-pane:has(> .case-version-controls) { grid-template-rows: auto auto 500px; }
+  .case-comparing .center-pane > [role="alert"] { grid-row: 2; }
+  .case-comparing .center-pane > .text-container { grid-row: 3; }
+  .case-comparing .center-pane:has(> .case-version-controls) { grid-template-rows: auto auto auto 500px; }
   .case-comparing .center-pane:has(> .case-version-controls) > .pane-toolbar,
   .case-comparing .center-pane:has(> .case-version-controls) > .attach-mention-banner { grid-row: 2; }
-  .case-comparing .center-pane:has(> .case-version-controls) > .text-container { grid-row: 3; }
+  .case-comparing .center-pane:has(> .case-version-controls) > [role="alert"] { grid-row: 3; }
+  .case-comparing .center-pane:has(> .case-version-controls) > .text-container { grid-row: 4; }
   .case-comparing .text-container { height: 500px; flex: 0 0 auto; }
   .case-comparing .app-layout > .center-pane, .case-comparing .comparison-reading > .readonly-annotation-view { grid-column: 1; grid-row: 1; }
   .case-comparing .compare-pane { grid-column: 1; grid-row: 2; }
