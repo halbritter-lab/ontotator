@@ -8,7 +8,7 @@ import { attachmentFilename, type DownloadPayload } from "./download";
 export type { DownloadPayload } from "./download";
 
 export type ProjectDocumentSummary = components["schemas"]["ProjectDocumentSummary"];
-type VariantMetadataKeys = "case_id" | "external_id" | "version" | "origin" | "translation_status" | "status_reason";
+type VariantMetadataKeys = "case_id" | "external_id" | "version" | "origin" | "translation_status" | "status_reason" | "accepted_without_review";
 /** Legacy editor navigation also composes reduced WorkspaceService summaries. */
 export type DocumentSummary = Omit<ProjectDocumentSummary, VariantMetadataKeys> & Partial<Pick<ProjectDocumentSummary, VariantMetadataKeys>>;
 export type ProjectSettings = components["schemas"]["ProjectSettings"];

@@ -6381,6 +6381,10 @@
             ],
             "title": "Status Reason"
           },
+          "accepted_without_review": {
+            "type": "boolean",
+            "title": "Accepted Without Review"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -6429,7 +6433,8 @@
           "version",
           "origin",
           "translation_status",
-          "status_reason"
+          "status_reason",
+          "accepted_without_review"
         ],
         "title": "ProjectDocumentSummary"
       },

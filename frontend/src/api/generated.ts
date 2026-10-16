@@ -2413,6 +2413,8 @@ export interface components {
             translation_status: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
             /** Status Reason */
             status_reason: string | null;
+            /** Accepted Without Review */
+            accepted_without_review: boolean;
             /**
              * Status
              * @default not_started
