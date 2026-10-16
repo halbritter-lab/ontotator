@@ -24,6 +24,7 @@ TABLE: dict[Action, str] = {
     Action.MANAGE_ASSIGNMENTS: "YY---",
     Action.VIEW_ALL_DOCUMENTS: "YY---",
     Action.VIEW_PROGRESS: "YY---",
+    Action.OVERRIDE_TRANSLATION_STATUS: "YY---",
     Action.CREATE_PROJECT: "Y----",
     Action.MANAGE_USERS: "Y----",
     Action.MANAGE_ONTOLOGIES: "Y----",
@@ -47,6 +48,16 @@ def access(
 
 def test_the_table_names_every_action() -> None:
     assert set(TABLE) == set(Action)
+
+
+def test_translation_override_is_a_project_action_for_leads_and_admins() -> None:
+    action = Action("override_translation_status")
+    assert can(access(admin=True), action, PROJECT)
+    assert can(access({PROJECT: frozenset({"lead"})}), action, PROJECT)
+    assert not can(
+        access({PROJECT: frozenset({"annotator", "adjudicator"})}), action, PROJECT
+    )
+    assert not can(access({PROJECT: frozenset({"lead"})}), action, "B")
 
 
 @pytest.mark.parametrize("action", list(Action))

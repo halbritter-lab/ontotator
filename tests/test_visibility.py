@@ -516,6 +516,7 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
     )
     calls = {
         "get_document": lambda: repo.get_document(PROJECT, "doc-alpha"),
+        "get_variant": lambda: repo.get_variant(PROJECT, "doc-alpha"),
         "list_annotations_for_document": lambda: repo.list_annotations_for_document(
             PROJECT, "doc-alpha"
         ),
@@ -582,6 +583,8 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
             invoke()
         assert seen == ["doc-alpha"], name
     assert repo.list_documents(PROJECT) == []
+    assert repo.list_variants(PROJECT) == []
+    assert repo.find_variants_by_text_sha256(PROJECT, "0" * 64) == []
     assert repo.list_workspace_keys(PROJECT, "alice") == []
     assert repo.get_document_statuses(PROJECT, "alice", "independent") == {}
     assert repo.review_input_document_ids(PROJECT) == set()

@@ -26,6 +26,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy import text as sql_text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -41,6 +42,7 @@ APPEND_ONLY_TABLES = (
     "audit_events",
     "edit_events",
     "proposal_sets",
+    "translation_reviews",
 )
 
 NAMING_CONVENTION = {
@@ -90,6 +92,9 @@ class ProjectRow(Base):
     hidden_axis_values: Mapped[dict[str, Any]] = mapped_column(
         server_default=text("'{}'::jsonb")
     )
+    annotate_accepted_translations_only: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("true")
+    )
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
@@ -131,6 +136,33 @@ class DocumentRow(Base):
     """A canonical text; ``position`` is its place in the project's order."""
 
     __tablename__ = "documents"
+    __table_args__ = (
+        CheckConstraint("version >= 1", name="version"),
+        CheckConstraint(
+            "origin IN ('native', 'machine_translation', 'human_translation', 'correction')",
+            name="origin",
+        ),
+        CheckConstraint(
+            "translation_status IN ('translated', 'automatic_check_failed', 'ready_for_review', 'reviewed', 'accepted')",
+            name="translation_status",
+        ),
+        CheckConstraint(
+            "origin NOT IN ('machine_translation', 'human_translation') OR translation_status IS NOT NULL",
+            name="translation_status_required",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "derived_from"],
+            [f"{SCHEMA}.documents.project_id", f"{SCHEMA}.documents.document_id"],
+        ),
+        UniqueConstraint(
+            "project_id",
+            "external_id",
+            "language",
+            "version",
+            name="uq_documents_variant",
+        ),
+        Index("ix_documents_project_id_case_id", "project_id", "case_id"),
+    )
 
     project_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey(ProjectRow.id), primary_key=True
@@ -141,6 +173,14 @@ class DocumentRow(Base):
     text: Mapped[str]
     text_sha256: Mapped[str]
     source_text_sha256: Mapped[str | None]
+    case_id: Mapped[str]
+    external_id: Mapped[str]
+    version: Mapped[int] = mapped_column(server_default=sql_text("1"))
+    origin: Mapped[str] = mapped_column(server_default=sql_text("'native'"))
+    derived_from: Mapped[str | None]
+    translation: Mapped[dict[str, Any] | None]
+    translation_status: Mapped[str | None]
+    status_reason: Mapped[str | None]
 
 
 class AnnotationSnapshotRow(Base):
@@ -378,6 +418,7 @@ class UserRow(Base):
     """An account; ``pseudonym`` (``ann-0001``, ...) is the same in every project."""
 
     __tablename__ = "users"
+    qualification: Mapped[str | None]
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     username: Mapped[str] = mapped_column(unique=True)
@@ -636,6 +677,7 @@ class ProposalSetRow(Base):
 
     __tablename__ = "proposal_sets"
     __table_args__ = (
+        CheckConstraint("origin IN ('import', 'reanchor')", name="origin"),
         UniqueConstraint(
             "project_id",
             "bundle_id",
@@ -659,7 +701,9 @@ class ProposalSetRow(Base):
     set_kind: Mapped[str]
     actors: Mapped[list[Any]]
     payload: Mapped[dict[str, Any]]
-    source_sha256: Mapped[str] = mapped_column(ForeignKey(StoredFileRow.sha256))
+    source_sha256: Mapped[str | None] = mapped_column(ForeignKey(StoredFileRow.sha256))
+    origin: Mapped[str] = mapped_column(server_default=text("'import'"))
+    pending_items: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
     imported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
     imported_at: Mapped[datetime] = mapped_column(server_default=func.now())
     job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(JobRow.id))
@@ -689,7 +733,9 @@ class AssignmentRow(Base):
             ["project_id", "document_id"],
             [f"{SCHEMA}.documents.project_id", f"{SCHEMA}.documents.document_id"],
         ),
-        CheckConstraint("task IN ('annotate', 'review')", name="task"),
+        CheckConstraint(
+            "task IN ('annotate', 'review', 'translation_review')", name="task"
+        ),
         CheckConstraint(
             "status IN ('open', 'in_progress', 'submitted', 'reopened')", name="status"
         ),
@@ -718,6 +764,62 @@ class AssignmentRow(Base):
     revoked_at: Mapped[datetime | None]
     revoked_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
     last_submission_id: Mapped[str | None]
+
+
+class TranslationReviewRow(Base):
+    """Immutable submitted translation review and its reviewer snapshot."""
+
+    __tablename__ = "translation_reviews"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_id", "document_id"],
+            [f"{SCHEMA}.documents.project_id", f"{SCHEMA}.documents.document_id"],
+        ),
+        CheckConstraint(
+            "decision IN ('accepted_unchanged', 'accepted_corrected', 'query', 'rejected')",
+            name="decision",
+        ),
+        Index(
+            "ix_translation_reviews_project_id_document_id_id",
+            "project_id",
+            "document_id",
+            "id",
+        ),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
+    document_id: Mapped[str]
+    assignment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(AssignmentRow.id))
+    reviewer_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(UserRow.id))
+    reviewer_pseudonym: Mapped[str]
+    reviewer_qualification: Mapped[str]
+    reviewer_languages: Mapped[list[Any]]
+    decision: Mapped[str]
+    clinical_change: Mapped[bool]
+    categories: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
+    rationale: Mapped[str | None]
+    machine_text_sha256: Mapped[str]
+    proposed_text: Mapped[str]
+    proposed_text_sha256: Mapped[str]
+    status_before: Mapped[str]
+    status_after: Mapped[str]
+    created_variant_id: Mapped[str | None]
+    review_policy: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class TranslationReviewDraftRow(Base):
+    """Mutable autosaved translation text/form, keyed by assignment."""
+
+    __tablename__ = "translation_review_drafts"
+    assignment_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(AssignmentRow.id), primary_key=True
+    )
+    text: Mapped[str]
+    form: Mapped[dict[str, Any]] = mapped_column(server_default=sql_text("'{}'::jsonb"))
+    revision: Mapped[int] = mapped_column(server_default=sql_text("0"))
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
 
 
 class UploadRow(Base):

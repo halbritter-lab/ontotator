@@ -141,6 +141,8 @@ def test_removing_a_member_with_open_work_needs_confirmation(app):
             insert(DocumentRow).values(
                 project_id=pid,
                 document_id="d1",
+                case_id="d1",
+                external_id="d1",
                 text="Test",
                 text_sha256=hashlib.sha256(b"Test").hexdigest(),
                 language="en",
@@ -340,6 +342,8 @@ def test_membership_revocation_failure_rolls_back_work_roles_audit_and_sessions(
             insert(DocumentRow).values(
                 project_id=pid,
                 document_id="d1",
+                case_id="d1",
+                external_id="d1",
                 text="Test",
                 text_sha256=hashlib.sha256(b"Test").hexdigest(),
                 language="en",
@@ -493,6 +497,8 @@ def test_authenticated_edit_rejects_stale_prepared_profile(
             insert(DocumentRow).values(
                 project_id=pid,
                 document_id="d1",
+                case_id="d1",
+                external_id="d1",
                 text="Test",
                 text_sha256=hashlib.sha256(b"Test").hexdigest(),
                 language="en",

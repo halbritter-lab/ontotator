@@ -124,6 +124,11 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     "get_axes_config": lambda r: r.get_axes_config("B"),
     "get_project_rules": lambda r: r.get_project_rules("B"),
     "get_document": lambda r: r.get_document("B", "doc-beta"),
+    "get_variant": lambda r: r.get_variant("B", "doc-beta"),
+    "list_variants": lambda r: r.list_variants("B"),
+    "find_variants_by_text_sha256": lambda r: r.find_variants_by_text_sha256(
+        "B", "0" * 64
+    ),
     "get_proposal_set": lambda r: r.get_proposal_set("B", 1),
     "proposal_metadata": lambda r: r.proposal_metadata("B", "doc-beta"),
     "list_documents": lambda r: r.list_documents("B"),

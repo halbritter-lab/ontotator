@@ -463,6 +463,8 @@ def test_reciprocal_admin_confirmations_in_separate_projects_finish_without_dead
             insert(DocumentRow).values(
                 project_id=other,
                 document_id="first",
+                case_id="first",
+                external_id="first",
                 position=0,
                 language="en",
                 text="text",

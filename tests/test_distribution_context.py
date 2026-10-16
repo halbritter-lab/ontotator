@@ -191,6 +191,8 @@ def stored(tmp_path):
                 insert(DocumentRow).values(
                     project_id=project,
                     document_id=document,
+                    case_id=document,
+                    external_id=document,
                     position=position,
                     language="en",
                     text="text",
@@ -274,6 +276,8 @@ def test_project_load_counts_all_tasks_and_reopened_but_not_submitted_revoked_or
             insert(DocumentRow).values(
                 project_id=other,
                 document_id="foreign",
+                case_id="foreign",
+                external_id="foreign",
                 position=0,
                 language="en",
                 text="text",
@@ -483,6 +487,8 @@ def test_actual_foreign_document_is_missing_without_metadata(stored):
             insert(DocumentRow).values(
                 project_id=other,
                 document_id="secret",
+                case_id="secret",
+                external_id="secret",
                 position=0,
                 language="de",
                 text="secret text",

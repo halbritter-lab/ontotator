@@ -36,6 +36,7 @@ from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.profiles import TaskProfile
 from ontocurator.domain.project_rules import ProjectRules
 from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import (
     Draft,
     MutationEnvelope,
@@ -400,6 +401,30 @@ class ScopedRepository(Repository):
         return super().get_project_rules(project_key)
 
     # --- documents and proposals ------------------------------------------- #
+
+    def get_variant(self, project_key: str, document_id: str) -> VariantInfo:
+        self._document(project_key, document_id)
+        return super().get_variant(project_key, document_id)
+
+    def list_variants(
+        self, project_key: str, *, case_id: str | None = None
+    ) -> list[VariantInfo]:
+        visibility = self._documents(project_key)
+        return self._variants(
+            project_key,
+            case_id=case_id,
+            document_ids=None if visibility.all else visibility.document_ids,
+        )
+
+    def find_variants_by_text_sha256(
+        self, project_key: str, sha: str
+    ) -> list[VariantInfo]:
+        visibility = self._documents(project_key)
+        return self._variants(
+            project_key,
+            sha=sha,
+            document_ids=None if visibility.all else visibility.document_ids,
+        )
 
     def get_document(self, project_key: str, document_id: str) -> Document | None:
         self._document(project_key, document_id)

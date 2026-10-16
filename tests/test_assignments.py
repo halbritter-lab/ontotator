@@ -79,6 +79,8 @@ def core(tmp_path: Path) -> tuple[Database, AssignmentService, int, dict[str, in
                 insert(DocumentRow).values(
                     project_id=project,
                     document_id=document,
+                    case_id=document,
+                    external_id=document,
                     position=position,
                     language="en",
                     text="text",
@@ -315,6 +317,8 @@ def test_my_tasks_status_priority_before_actual_position(core) -> None:
                 insert(DocumentRow).values(
                     project_id=project,
                     document_id=document,
+                    case_id=document,
+                    external_id=document,
                     position=position,
                     language="en",
                     text="text",
@@ -491,6 +495,8 @@ def test_my_tasks_across_projects_respects_each_task_role(core) -> None:
             insert(DocumentRow).values(
                 project_id=other,
                 document_id="review",
+                case_id="review",
+                external_id="review",
                 position=0,
                 language="en",
                 text="text",

@@ -41,6 +41,7 @@ from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
+from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import (
     Draft,
     MutationEnvelope,
@@ -402,6 +403,8 @@ class Repository:
             {
                 "project_id": project_id,
                 "document_id": doc.document_id,
+                "case_id": doc.document_id,
+                "external_id": doc.document_id,
                 "position": order.get(doc.document_id),
                 "language": doc.language,
                 "text": doc.text,
@@ -931,6 +934,8 @@ class Repository:
                     {
                         "project_id": project_id,
                         "document_id": doc_id,
+                        "case_id": doc_id,
+                        "external_id": doc_id,
                         "position": position,
                         "language": entry.document.language,
                         "text": entry.document.text,
@@ -1261,6 +1266,63 @@ class Repository:
         )
 
     # --- documents and proposals ------------------------------------------- #
+
+    def _variants(
+        self,
+        project_key: str,
+        *,
+        case_id: str | None = None,
+        sha: str | None = None,
+        document_id: str | None = None,
+        document_ids: frozenset[str] | None = None,
+    ) -> list[VariantInfo]:
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            query = select(
+                DocumentRow.document_id,
+                DocumentRow.case_id,
+                DocumentRow.external_id,
+                DocumentRow.language,
+                DocumentRow.version,
+                DocumentRow.origin,
+                DocumentRow.derived_from,
+                DocumentRow.translation,
+                DocumentRow.translation_status,
+                DocumentRow.status_reason,
+                DocumentRow.text_sha256,
+            ).where(DocumentRow.project_id == project_id)
+            if case_id is not None:
+                query = query.where(DocumentRow.case_id == case_id)
+            if sha is not None:
+                query = query.where(DocumentRow.text_sha256 == sha)
+            if document_id is not None:
+                query = query.where(DocumentRow.document_id == document_id)
+            if document_ids is not None:
+                query = query.where(DocumentRow.document_id.in_(document_ids))
+            return [
+                VariantInfo(**row)
+                for row in conn.execute(
+                    query.order_by(
+                        DocumentRow.position.asc().nulls_last(), DocumentRow.document_id
+                    )
+                ).mappings()
+            ]
+
+    def get_variant(self, project_key: str, document_id: str) -> VariantInfo:
+        rows = self._variants(project_key, document_id=document_id)
+        if not rows:
+            raise DomainError("DOCUMENT_NOT_FOUND")
+        return rows[0]
+
+    def list_variants(
+        self, project_key: str, *, case_id: str | None = None
+    ) -> list[VariantInfo]:
+        return self._variants(project_key, case_id=case_id)
+
+    def find_variants_by_text_sha256(
+        self, project_key: str, sha: str
+    ) -> list[VariantInfo]:
+        return self._variants(project_key, sha=sha)
 
     def get_document(self, project_key: str, document_id: str) -> Document | None:
         with self.db.transaction() as conn:

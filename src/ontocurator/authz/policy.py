@@ -41,6 +41,7 @@ class Action(StrEnum):
     MANAGE_ASSIGNMENTS = "manage_assignments"
     VIEW_ALL_DOCUMENTS = "view_all_documents"
     VIEW_PROGRESS = "view_progress"
+    OVERRIDE_TRANSLATION_STATUS = "override_translation_status"
     CREATE_PROJECT = "create_project"
     MANAGE_USERS = "manage_users"
     MANAGE_ONTOLOGIES = "manage_ontologies"
@@ -76,6 +77,7 @@ ADMIN_PROJECT_ACTIONS = frozenset(
         Action.MANAGE_ASSIGNMENTS,
         Action.VIEW_ALL_DOCUMENTS,
         Action.VIEW_PROGRESS,
+        Action.OVERRIDE_TRANSLATION_STATUS,
     }
 )
 # Project actions per role (Q2: working modes need the matching role).
@@ -92,6 +94,7 @@ ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
             Action.MANAGE_ASSIGNMENTS,
             Action.VIEW_ALL_DOCUMENTS,
             Action.VIEW_PROGRESS,
+            Action.OVERRIDE_TRANSLATION_STATUS,
         }
     ),
     "annotator": frozenset(

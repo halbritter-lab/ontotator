@@ -758,6 +758,8 @@ def test_document_list_queries_are_bounded_and_metadata_only(project, count):
                 {
                     "project_id": pid,
                     "document_id": f"extra-{i}",
+                    "case_id": f"extra-{i}",
+                    "external_id": f"extra-{i}",
                     "language": "de",
                     "position": 30 + i,
                     "text": "Text.",
