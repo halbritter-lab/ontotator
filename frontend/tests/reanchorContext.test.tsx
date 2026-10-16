@@ -57,3 +57,45 @@ it('rejects literal mismatches and preserves ordinary selection codepoints after
   fireEvent.click(screen.getByText('Invalid context'));
   expect(pane.querySelector('.run--context')).toBeNull();expect(vi.getTimerCount()).toBe(0);
 });
+
+function selectedOffset(pane: HTMLElement, node: Node | null, offset: number) {
+  const run=(node?.nodeType===Node.ELEMENT_NODE ? node as Element : node?.parentElement)?.closest<HTMLElement>('.run');
+  return run && pane.contains(run) ? Number(run.dataset.start)+offset : null;
+}
+it.each(['mouse','Shift'] as const)('preserves an unfinished %s selection across context expiry, including astral UTF16 offsets and backward direction', method=>{
+  const mounted=render(<Harness/>);
+  fireEvent.click(screen.getByText('First context'));
+  const pane=mounted.container.querySelector<HTMLElement>('.text-container')!;
+  const emoji=pane.querySelector('.run--context')!.firstChild!;
+  const last=pane.querySelector<HTMLElement>('.run[data-start="6"]')!.firstChild!;
+  const selection=window.getSelection()!;
+  selection.setBaseAndExtent(method==='Shift'?last:emoji,method==='Shift'?1:0,method==='Shift'?emoji:last,method==='Shift'?0:1);
+  if(method==='Shift') fireEvent.keyDown(pane,{key:'ArrowLeft',shiftKey:true});
+  act(()=>vi.advanceTimersByTime(2000));
+  expect(pane.querySelector('.run--context')).toBeNull();
+  expect(selectedOffset(pane,selection.anchorNode,selection.anchorOffset)).toBe(method==='Shift'?7:1);
+  expect(selectedOffset(pane,selection.focusNode,selection.focusOffset)).toBe(method==='Shift'?1:7);
+  expect(selection.toString()).toBe('😀B\n\nC');
+  expect(select).not.toHaveBeenCalled();expect(resize).not.toHaveBeenCalled();expect(pick).not.toHaveBeenCalled();
+  if(method==='Shift') fireEvent.keyUp(pane,{key:'Shift'});else fireEvent.mouseUp(pane);
+  expect(select).toHaveBeenCalledTimes(1);
+  expect(select).toHaveBeenCalledWith(expect.objectContaining({segments:[{start:1,end:6}]}));
+});
+it('preserves an owned caret across context expiry without committing work',()=>{
+  const mounted=render(<Harness/>);fireEvent.click(screen.getByText('First context'));
+  const pane=mounted.container.querySelector<HTMLElement>('.text-container')!;
+  const selection=window.getSelection()!;selection.collapse(pane.querySelector('.run--context')!.firstChild!,2);
+  act(()=>vi.advanceTimersByTime(2000));
+  expect(selection.isCollapsed).toBe(true);
+  expect(selectedOffset(pane,selection.anchorNode,selection.anchorOffset)).toBe(3);
+  fireEvent.mouseUp(pane);expect(select).not.toHaveBeenCalled();expect(resize).not.toHaveBeenCalled();
+});
+it('leaves a foreign pane native range untouched during context expiry',()=>{
+  render(<Harness/>);fireEvent.click(screen.getByText('First context'));
+  const foreign=document.createElement('div');foreign.textContent='Other 😀 pane';document.body.append(foreign);
+  const selection=window.getSelection()!;selection.setBaseAndExtent(foreign.firstChild!,8,foreign.firstChild!,6);
+  act(()=>vi.advanceTimersByTime(2000));
+  expect(selection.anchorNode).toBe(foreign.firstChild);expect(selection.anchorOffset).toBe(8);
+  expect(selection.focusNode).toBe(foreign.firstChild);expect(selection.focusOffset).toBe(6);
+  expect(select).not.toHaveBeenCalled();expect(resize).not.toHaveBeenCalled();foreign.remove();
+});

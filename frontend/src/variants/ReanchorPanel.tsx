@@ -80,7 +80,7 @@ export function ReanchorPanel({ items, labelFor, onContext }: { items: readonly 
       const label = labelFor(item.layer_id,item.term_id);
       return <li key={JSON.stringify([item.proposal_set_id,item.source_ref.annotation_id,item.source_ref.version,index])}>
         <Button variant="quiet" onClick={() => onContext(item.new_context)}>{label && label !== item.term_id ? `${label} (${item.term_id})` : item.term_id} · {item.layer_id}</Button>
-        <p>{reasons[item.reason]}</p>
+        <p>{Object.prototype.hasOwnProperty.call(reasons, item.reason) ? reasons[item.reason] : `Unknown reason: ${item.reason}`}</p>
         <p>Old context</p><div className="reanchor-context" data-old-context data-context-start={item.old_context.start}>{oldContext(item)}</div>
         <p>New context</p><div className="reanchor-context">{validWindow(item.new_context) ? item.new_context.text : 'New context is unavailable.'}</div>
         {parts ? <div data-old-start={item.old_context.start} data-new-start={item.new_context.start}><DiffView before={item.old_context.text} after={item.new_context.text} parts={parts} /></div> : <p>Text changes are unavailable.</p>}

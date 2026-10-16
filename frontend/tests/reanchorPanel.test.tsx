@@ -54,3 +54,15 @@ it('keeps the term ID beside the resolved label and provides a native collapsibl
   fireEvent.click(mounted.container.querySelector('summary')!);
   expect(details.open).toBe(false);
 });
+
+it('shows unknown reason codes literally and never resolves inherited object keys',()=>{
+  const unknown=(reason:string)=>item({reason:reason as ReturnType<typeof item>['reason']});
+  const mounted=render(<ReanchorPanel items={[item(),unknown('<img src=x onerror=alert(1)>'),unknown('toString'),unknown('__proto__')]} labelFor={()=>null} onContext={()=>{}}/>);
+  expect(screen.getByRole('heading',{name:'Needs review after the text change (4)'})).toBeTruthy();
+  expect(screen.getByText('The evidence text changed.')).toBeTruthy();
+  expect(screen.getByText('Unknown reason: <img src=x onerror=alert(1)>')).toBeTruthy();
+  expect(screen.getByText('Unknown reason: toString')).toBeTruthy();
+  expect(screen.getByText('Unknown reason: __proto__')).toBeTruthy();
+  expect(mounted.container.querySelector('img')).toBeNull();
+  expect(screen.getAllByRole('button')).toHaveLength(4);
+});
