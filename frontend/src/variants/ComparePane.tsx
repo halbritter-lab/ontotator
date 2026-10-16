@@ -84,6 +84,7 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
   }, [payloadIdentity, ref?.kind, ref?.id]);
   const select = (id: string) => { if (caseDetail.variants.some(row => row.document_id === id)) setChosen({ identity: choiceIdentity, id }); };
   return <section className="compare-pane" aria-label="Comparison">
+    <div className="compare-controls">
     <div className="compare-toolbar density-compact"><h2>Compare</h2>
       <label><input type="checkbox" checked={coupled} onChange={event => setCoupled(event.target.checked)} /> Couple scrolling</label>
       <IconButton label="Close comparison" icon={<IconClose />} onClick={onClose} />
@@ -96,9 +97,10 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
       onAnnotation={key => { if (key === 'text' || refForKey(key, refs ?? [])) setChoice({ identity: selectionIdentity, key }); }} />
     {current?.text && leftStarts.length !== rightStarts.length && <InlineMessage tone="info">Paragraphs differ ({leftStarts.length} / {rightStarts.length}); scrolling is approximate.</InlineMessage>}
     {(current?.textError || current?.refsError || payloadError) ? <><ErrorNotice error={current?.textError || current?.refsError || payloadError} /><Button onClick={() => setRetry(value => value + 1)}>Retry comparison</Button></> : null}
+    {ref && !snapshot && !payloadError && <InlineMessage tone="info">Loading comparison annotations...</InlineMessage>}
+    </div>
     {current?.text ? <ReadOnlyAnnotationView key={JSON.stringify([username, projectKey, caseDetail.case_id, selectedId, selection, retry, leftContext])}
       text={current.text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} onTextElement={setRightElement} />
       : available && !suspended && !current?.textError ? <InlineMessage tone="info">Loading comparison text...</InlineMessage> : null}
-    {ref && !snapshot && !payloadError && <InlineMessage tone="info">Loading comparison annotations...</InlineMessage>}
   </section>;
 }

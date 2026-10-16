@@ -379,7 +379,7 @@ def register_variant_scenario_route(app: FastAPI) -> None:
     """Fresh ordinary-role Task10 data; never installed in the shipped app."""
 
     @app.post("/__test_variants__")
-    def variants_scenario() -> dict[str, object]:
+    def variants_scenario(comparison: bool = Query(False)) -> dict[str, object]:
         from t1_builders import bundle as variant_bundle
         from t1_builders import correction_unit, native_unit, translation_unit
         from t1_fixtures import annotation
@@ -395,6 +395,24 @@ def register_variant_scenario_route(app: FastAPI) -> None:
         source_id = "source/annotation-versions/own/y %2F #é"
         source_text = "Hypotonia and seizure. A😀e\u0301\n\n" + DESIGN_TEXT
         target_text = "Hypotonia und Anfälle. A😀e\u0301\n\n" + DESIGN_TEXT
+        other_text = target_text + "\n\nAlternative translation run."
+        if comparison:
+            # Real wrapping/scroll range, not test-only DOM padding. Keep enough
+            # paragraphs after the measured ones to avoid native EOF clamping.
+            source_text = "Hypotonia and seizure. A😀e\u0301\n\n" + "\n\n".join(
+                f"Source paragraph {number}. " + DESIGN_TEXT.split("\n\n")[1]
+                for number in range(1, 13)
+            )
+            target_text = "Hypotonia und Anfälle. A😀e\u0301\n\n" + "\n\n".join(
+                f"Translation paragraph {number}. "
+                + DESIGN_TEXT.split("\n\n")[1]
+                + " Additional synthetic clinical explanation." * 5
+                for number in range(1, 13)
+            )
+            other_text = "Alternative translation. A😀e\u0301\n\n" + "\n\n".join(
+                f"Alternative paragraph {number}. " + DESIGN_TEXT.split("\n\n")[1]
+                for number in range(1, 9)
+            )
         source = native_unit(
             source_id,
             "en",
@@ -417,7 +435,7 @@ def register_variant_scenario_route(app: FastAPI) -> None:
         other = translation_unit(
             "translation/variant %2F #é",
             "de",
-            target_text + "\n\nAlternative translation run.",
+            other_text,
             source=source,
             provider="Browser translation B",
             run_id="run B/1",
