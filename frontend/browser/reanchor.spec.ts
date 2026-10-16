@@ -110,6 +110,11 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
   const items=await response.json() as Item[];expect(items).toEqual(s.pending);
   await page.getByRole('button',{name:'Compare',exact:true}).click();
   const comparison=page.getByRole('region',{name:'Comparison',exact:true});
+  const version=comparison.getByLabel('Text version',{exact:true});
+  await version.selectOption(s.old_document_id);await expect(version).toHaveValue(s.old_document_id);
+  const annotations=comparison.getByLabel('Annotations',{exact:true});
+  await annotations.selectOption('text');await expect(annotations).toHaveValue('text');
+  await expect(annotations.locator('option:checked')).toHaveText('Text only');
   await expect(comparison.locator('.text-container')).toHaveText(s.old_text);
   await expect(comparison.getByRole('region',{name:'Needs review after the text change',exact:true})).toHaveCount(0);
   await comparison.getByLabel('Couple scrolling',{exact:true}).uncheck();
