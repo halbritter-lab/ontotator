@@ -27,7 +27,7 @@ Open `http://127.0.0.1:8000` and log in as **`admin` / `development-only-passwor
 
 An administrator loads pinned OBO Graph JSON ontology releases and optional Babelon translations, creates a project with its task profile, gives people project roles, and imports documents and tool proposals in T1 (ontospan) bundles. The browser supports independent annotation, review with visible source provenance, layer-specific completion checks and revision conflict detection. Exported submissions and pseudonymised edit logs support downstream analysis.
 
-See the [scientific workflow](docs/scientific-workflow.md) for a small two-annotator pilot, and the [operations CLI examples](docs/operations.md#users-ontologies-and-projects) for server administration. Historical [V2 work-package documentation](docs/work-package-v2.md) describes the earlier interchange boundary; current server imports and exports use T1 bundles. The running server uses PostgreSQL.
+See the [scientific workflow](docs/scientific-workflow.md) for a small two-annotator pilot, and the [operations CLI examples](docs/operations.md#users-ontologies-and-projects) for server administration. Historical [V2 work-package documentation](docs/work-package-v2.md) describes the earlier interchange boundary; current server imports and exports use T1 bundles. The running server uses PostgreSQL. The [translation review JSONL contract](docs/translation-review-export.md) describes review artifacts and their ancestry metadata.
 
 ## Development checks
 

@@ -19,7 +19,20 @@ from ontocurator.storage.tables import JobRow, ProjectRow
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 
-EXPORT_ACTIONS = {"t1": Action.EXPORT_ALL_WORK, "edit_log": Action.EXPORT_EDIT_LOG}
+EXPORT_ACTIONS = {
+    "t1": Action.EXPORT_ALL_WORK,
+    "edit_log": Action.EXPORT_EDIT_LOG,
+    "translation-reviews": Action.EXPORT_ALL_WORK,
+}
+EXPORT_KINDS = {
+    "t1_export": ("t1", "zip", "application/zip"),
+    "edit_log_export": ("edit_log", "jsonl", "application/x-ndjson"),
+    "translation_review_export": (
+        "translation-reviews",
+        "jsonl",
+        "application/x-ndjson",
+    ),
+}
 
 
 class JobView(BaseModel):
@@ -120,11 +133,11 @@ def download_job(
                 JobRow.payload["project"].astext.label("payload_project"),
             ).where(JobRow.id == job_id, JobRow.project_id == project_id)
         ).one_or_none()
-        if row is None or row.kind not in {"t1_export", "edit_log_export"}:
+        if row is None or row.kind not in EXPORT_KINDS:
             raise _not_found()
         if row.payload_project != key:
             raise _not_found()
-        kind = "t1" if row.kind == "t1_export" else "edit_log"
+        kind, suffix, media_type = EXPORT_KINDS[row.kind]
         # Export privilege is required even for the original requester.
         require_project_management(conn, actor, key, project_id, EXPORT_ACTIONS[kind])
         if (
@@ -141,6 +154,12 @@ def download_job(
             stat = path.stat()
             if not path.is_file():
                 raise _not_found()
+            if row.kind == "translation_review_export":
+                count = row.result.get("reviews")
+                if type(count) is not int or count < 0:
+                    raise _not_found()
+                # New review artifacts are verified; preserve legacy two-kind behavior.
+                db.blobs.get(sha)
         except (ValueError, OSError):
             raise _not_found() from None
         # The key is stored server-side, but still restrict attachment names to
@@ -149,11 +168,6 @@ def download_job(
             c if c.isascii() and (c.isalnum() or c in "-_") else "_" for c in key
         )
         stamp = row.finished_at.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
-        suffix, media_type = (
-            ("zip", "application/zip")
-            if kind == "t1"
-            else ("jsonl", "application/x-ndjson")
-        )
         response = FileResponse(
             path,
             media_type=media_type,

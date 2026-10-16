@@ -993,6 +993,8 @@ def _export(
             f"{counts['rejected']} rejected and {counts['uncertain']} uncertain "
             f"decisions left out, {counts['defaulted_axes']} axes defaulted."
         )
+    elif kind == "translation_review_export":
+        typer.echo(f"Wrote {out}: {_plural(result['reviews'], 'review')}.")
     else:
         typer.echo(f"Wrote {out}: {_plural(result['events'], 'event')}.")
 
@@ -1027,6 +1029,17 @@ def export_edit_log_command(
 ) -> None:
     """Export the project's edit log as pseudonymised JSONL."""
     _export(ctx, "edit_log_export", project, out, wait=not no_wait)
+
+
+@admin_app.command("export-translation-reviews")
+def export_translation_reviews_command(
+    ctx: typer.Context,
+    project: ProjectArgument,
+    out: OutOption,
+    no_wait: NoWaitOption = False,
+) -> None:
+    """Export immutable translation reviews as generic pseudonymised JSONL."""
+    _export(ctx, "translation_review_export", project, out, wait=not no_wait)
 
 
 def _ontology_store(db: Database) -> OntologyStore:

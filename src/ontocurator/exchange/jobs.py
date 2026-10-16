@@ -25,6 +25,7 @@ from ontocurator.authz.memberships import MembershipService
 from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
+from ontocurator.exchange.review_export import translation_review_export
 from ontocurator.exchange.t1 import (
     ExportCounts,
     layers_for,
@@ -274,4 +275,5 @@ HANDLERS: dict[str, Handler] = {
     "t1_import": t1_import,
     "t1_export": t1_export,
     "edit_log_export": edit_log_export,
+    "translation_review_export": translation_review_export,
 }

@@ -199,6 +199,22 @@ def request_export(
         return ExportCreated(job_id=job_id)
 
 
+@router.post("/{key}/exports/translation-reviews")
+def request_translation_review_export(
+    key: str, principal: PrincipalDep, request: Request
+) -> ExportCreated:
+    actor = Actor.user(principal.user_id, principal.username)
+    with request.app.state.repo.db.transaction() as conn:
+        project_id = authorized_project(conn, key, actor, Action.EXPORT_ALL_WORK)
+        job_id = request.app.state.jobs.enqueue(
+            "translation_review_export",
+            {"project": key},
+            project_id=project_id,
+            actor=actor,
+        )
+        return ExportCreated(job_id=job_id)
+
+
 def _service(request: Request) -> ProjectService:
     return ProjectService(request.app.state.repo.db, request.app.state.ontology_store)
 
