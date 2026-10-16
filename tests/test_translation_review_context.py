@@ -92,9 +92,8 @@ def test_translation_review_role_is_central_and_has_no_admin_work_bypass(
     )
 
 
-def test_unfinished_translation_review_distribution_remains_deliberately_unavailable():
-    with pytest.raises(DomainError, match="TASK_INVALID"):
-        validate_selection(["translation"], "translation_review", 1, 42)
+def test_translation_review_distribution_is_registered_after_task6_activation():
+    validate_selection(["translation"], "translation_review", 1, 42)
 
 
 def test_internal_ids_match_actual_import_allocation_and_refuse_collision():

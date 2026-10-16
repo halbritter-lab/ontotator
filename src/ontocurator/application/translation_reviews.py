@@ -519,7 +519,18 @@ class TranslationReviewService:
                 },
                 at=now,
             )
-            # Task7 wires real registered reanchor enqueue here, in this transaction.
+            if child:
+                from ontocurator.exchange.reanchor_job import enqueue_review_pair
+
+                enqueue_review_pair(
+                    self.jobs,
+                    assignment.project_key,
+                    pid,
+                    variant.document_id,
+                    child.document_id,
+                    record_id,
+                    Actor.user(access.user_id, user["username"]),
+                )
             return TranslationReviewRecord(id=record_id, **values)
 
     def records(

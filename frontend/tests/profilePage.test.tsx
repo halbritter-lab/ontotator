@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, type Profile } from "../src/api/client";
 import { ProfilePage } from "../src/me/ProfilePage";
 
-const profile: Profile = { username: "long-username-123", pseudonym: "ann-0042", display_name: "Alex", email: "alex@example.org", orcid: "0000-0002-1825-0097", orcid_consent: true, languages: ["en"] };
+const profile: Profile = { qualification: null, username: "long-username-123", pseudonym: "ann-0042", display_name: "Alex", email: "alex@example.org", orcid: "0000-0002-1825-0097", orcid_consent: true, languages: ["en"] };
 beforeEach(() => { vi.spyOn(api, "getProfile").mockResolvedValue(profile); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const loaded = async () => { await screen.findByDisplayValue("ann-0042"); };

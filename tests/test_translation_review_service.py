@@ -688,12 +688,15 @@ def test_assigned_system_admin_without_current_task_role_has_no_work_bypass(revi
     assert count(env, TranslationReviewDraftRow) == 0
 
 
-def test_annotation_only_http_readiness_holds_all_new_admin_paths(review_env):
+def test_translation_review_admin_activation_keeps_annotation_open_separate(review_env):
     env = review_env
     lead = logged_in(env.app, "leader", assignments=[])
     body = {"document_ids": ["target"], "task": "translation_review"}
     proposed = lead.post("/api/v1/projects/proj/assignments/proposal", json=body)
-    assert proposed.status_code == 422 and proposed.json()["code"] == "TASK_INVALID"
+    assert (
+        proposed.status_code == 200
+        and proposed.json()["context"]["task"] == "translation_review"
+    )
     assigned = lead.post(
         "/api/v1/projects/proj/assignments",
         json={
@@ -704,7 +707,7 @@ def test_annotation_only_http_readiness_holds_all_new_admin_paths(review_env):
     assert assigned.status_code == 200
     assert (
         assigned.json()["created"] == []
-        and assigned.json()["refused"][0]["code"] == "TASK_INVALID"
+        and assigned.json()["refused"][0]["code"] == "LANGUAGE_CONFIRMATION_REQUIRED"
     )
     alice = logged_in(env.app, "alice", assignments=[])
     opened = alice.post(f"/api/v1/assignments/{env.ids['alice']}/open")

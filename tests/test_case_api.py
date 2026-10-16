@@ -18,6 +18,7 @@ from ontocurator.storage.tables import (
     AssignmentRow,
     DraftRow,
     ProjectMembershipRow,
+    ProjectRow,
     UserRow,
 )
 
@@ -37,6 +38,13 @@ def case_env(tmp_path):
     app = _app(tmp_path)
     db = app.state.repo.db
     create_project(db)
+    # This fixture isolates read authority; Task6 covers the default-on work gate.
+    with db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == "proj")
+            .values(annotate_accepted_translations_only=False)
+        )
     source = native_unit(
         SOURCE, "en", TEXT, case_id=CASE, annotations=[annotation("s1", (6, 19))]
     )

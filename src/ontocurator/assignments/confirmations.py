@@ -127,6 +127,7 @@ class DistributionConfirmationService:
             )
             # Everything above is read-only. The server-derived original snapshot
             # and proposal are fixed before the first row can change the load.
+            variants = {v.document_id: v for v in original.snapshot.variants}
             assignments = AssignmentService(self.db)
             created: list[Assignment] = []
             refused: list[RefusedRow] = []
@@ -149,6 +150,7 @@ class DistributionConfirmationService:
                             target,
                             task,
                             confirm_language,
+                            variants=variants,
                         )
                 except DomainError as error:
                     refusal = RefusedRow(row.document_id, row.username, error.code)

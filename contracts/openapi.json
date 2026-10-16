@@ -220,6 +220,48 @@
         }
       }
     },
+    "/api/v1/assignments/{assignment_id}": {
+      "get": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Assignment Metadata",
+        "operationId": "assignment_metadata_api_v1_assignments__assignment_id__get",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assignments/{assignment_id}/open": {
       "post": {
         "tags": [
@@ -418,6 +460,207 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AssignmentView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/translation-reviews/{assignment_id}": {
+      "get": {
+        "tags": [
+          "translation-reviews"
+        ],
+        "summary": "Open Review",
+        "operationId": "open_review_api_v1_translation_reviews__assignment_id__get",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewWorkspace"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/translation-reviews/{assignment_id}/draft": {
+      "put": {
+        "tags": [
+          "translation-reviews"
+        ],
+        "summary": "Save Review",
+        "operationId": "save_review_api_v1_translation_reviews__assignment_id__draft_put",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/translation-reviews/{assignment_id}/submit": {
+      "post": {
+        "tags": [
+          "translation-reviews"
+        ],
+        "summary": "Submit Review",
+        "operationId": "submit_review_api_v1_translation_reviews__assignment_id__submit_post",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranslationReviewRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/{doc}/translation-reviews": {
+      "get": {
+        "tags": [
+          "translation-reviews"
+        ],
+        "summary": "Review Records",
+        "operationId": "review_records_api_v1_projects__key__documents__doc__translation_reviews_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TranslationReviewRecord"
+                  },
+                  "title": "Response Review Records Api V1 Projects  Key  Documents  Doc  Translation Reviews Get"
                 }
               }
             }
@@ -3138,6 +3381,17 @@
             },
             "type": "array",
             "title": "Projects"
+          },
+          "qualification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification"
           }
         },
         "type": "object",
@@ -3149,7 +3403,8 @@
           "is_system_admin",
           "active",
           "languages",
-          "projects"
+          "projects",
+          "qualification"
         ],
         "title": "AdminUser"
       },
@@ -3478,6 +3733,113 @@
         ],
         "title": "Assignee"
       },
+      "Assignment": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "pseudonym": {
+            "type": "string",
+            "title": "Pseudonym"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review",
+              "translation_review"
+            ],
+            "title": "Task"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "in_progress",
+              "submitted",
+              "reopened"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "last_submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Submission Id"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_key",
+          "document_id",
+          "user_id",
+          "username",
+          "pseudonym",
+          "task",
+          "status",
+          "created_at",
+          "updated_at",
+          "revoked_at",
+          "last_submission_id"
+        ],
+        "title": "Assignment"
+      },
       "AssignmentOpenRequest": {
         "properties": {
           "review_round_target_set_id": {
@@ -3623,6 +3985,17 @@
           "display_name": {
             "type": "string",
             "title": "Display Name"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
           }
         },
         "type": "object",
@@ -4143,6 +4516,45 @@
         ],
         "title": "Draft",
         "description": "Mutable, revisioned working state of a workspace."
+      },
+      "DraftRequest": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "form": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Form"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "text",
+          "form"
+        ],
+        "title": "DraftRequest"
+      },
+      "DraftResponse": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "title": "DraftResponse"
       },
       "Duplicate": {
         "properties": {
@@ -5204,6 +5616,18 @@
             },
             "type": "array",
             "title": "Languages"
+          },
+          "qualification": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification"
           }
         },
         "additionalProperties": false,
@@ -5639,6 +6063,17 @@
             },
             "type": "array",
             "title": "Languages"
+          },
+          "qualification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification"
           }
         },
         "type": "object",
@@ -5649,7 +6084,8 @@
           "pseudonym",
           "orcid",
           "orcid_consent",
-          "languages"
+          "languages",
+          "qualification"
         ],
         "title": "Profile"
       },
@@ -5693,6 +6129,18 @@
             },
             "type": "array",
             "title": "Languages"
+          },
+          "qualification": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification"
           }
         },
         "additionalProperties": false,
@@ -6068,6 +6516,11 @@
             "title": "Contiguous Mentions Only",
             "default": false
           },
+          "annotate_accepted_translations_only": {
+            "type": "boolean",
+            "title": "Annotate Accepted Translations Only",
+            "default": true
+          },
           "hidden_axis_values": {
             "additionalProperties": {
               "additionalProperties": {
@@ -6182,6 +6635,11 @@
             "type": "boolean",
             "title": "Contiguous Mentions Only",
             "default": false
+          },
+          "annotate_accepted_translations_only": {
+            "type": "boolean",
+            "title": "Annotate Accepted Translations Only",
+            "default": true
           },
           "hidden_axis_values": {
             "additionalProperties": {
@@ -6747,6 +7205,30 @@
         "title": "ReviewDecision",
         "description": "Review decision record for a targeted annotation snapshot."
       },
+      "ReviewDraft": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "form": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Form"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "form",
+          "revision"
+        ],
+        "title": "ReviewDraft"
+      },
       "ReviewInputsRequest": {
         "properties": {
           "project_key": {
@@ -6806,6 +7288,108 @@
         ],
         "title": "ReviewTargetSet",
         "description": "Immutable, sorted set of targeted annotation references for a review round."
+      },
+      "ReviewText": {
+        "properties": {
+          "variant": {
+            "$ref": "#/components/schemas/VariantInfo"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "variant",
+          "text"
+        ],
+        "title": "ReviewText"
+      },
+      "ReviewWorkspace": {
+        "properties": {
+          "assignment": {
+            "$ref": "#/components/schemas/Assignment"
+          },
+          "variant": {
+            "$ref": "#/components/schemas/VariantInfo"
+          },
+          "translation_ancestor": {
+            "$ref": "#/components/schemas/VariantInfo"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ReviewText"
+          },
+          "comparisons": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewText"
+            },
+            "type": "array",
+            "title": "Comparisons"
+          },
+          "failed_checks": {
+            "items": {
+              "$ref": "#/components/schemas/TranslationCheck"
+            },
+            "type": "array",
+            "title": "Failed Checks"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/ReviewDraft"
+          },
+          "qualification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification"
+          },
+          "previous_reviews": {
+            "items": {
+              "$ref": "#/components/schemas/TranslationReviewRecord"
+            },
+            "type": "array",
+            "title": "Previous Reviews"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only"
+          },
+          "submitted_record": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranslationReviewRecord"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignment",
+          "variant",
+          "translation_ancestor",
+          "text",
+          "source",
+          "comparisons",
+          "failed_checks",
+          "draft",
+          "qualification",
+          "previous_reviews",
+          "read_only",
+          "submitted_record"
+        ],
+        "title": "ReviewWorkspace"
       },
       "RuleViolation": {
         "properties": {
@@ -7344,6 +7928,21 @@
         "title": "Submission",
         "description": "Immutable local submission record."
       },
+      "SubmitRequest": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision"
+        ],
+        "title": "SubmitRequest"
+      },
       "TaskProfile": {
         "properties": {
           "schema": {
@@ -7488,6 +8087,39 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "source_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Language"
+          },
+          "target_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Language"
           }
         },
         "type": "object",
@@ -7672,6 +8304,38 @@
         ],
         "title": "TextWindowView"
       },
+      "TranslationCheck": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Code"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "code",
+          "passed"
+        ],
+        "title": "TranslationCheck",
+        "description": "One automatic check of a translation run."
+      },
       "TranslationCheckView": {
         "properties": {
           "code": {
@@ -7700,6 +8364,150 @@
           "passed"
         ],
         "title": "TranslationCheckView"
+      },
+      "TranslationReviewRecord": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "reviewer_user_id": {
+            "type": "integer",
+            "title": "Reviewer User Id"
+          },
+          "reviewer_pseudonym": {
+            "type": "string",
+            "title": "Reviewer Pseudonym"
+          },
+          "reviewer_qualification": {
+            "type": "string",
+            "title": "Reviewer Qualification"
+          },
+          "reviewer_languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reviewer Languages"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "accepted_unchanged",
+              "accepted_corrected",
+              "query",
+              "rejected"
+            ],
+            "title": "Decision"
+          },
+          "clinical_change": {
+            "type": "boolean",
+            "title": "Clinical Change"
+          },
+          "categories": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "omission",
+                "addition",
+                "assertion",
+                "value",
+                "anatomy",
+                "terminology",
+                "source"
+              ]
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "machine_text_sha256": {
+            "type": "string",
+            "title": "Machine Text Sha256"
+          },
+          "proposed_text": {
+            "type": "string",
+            "title": "Proposed Text"
+          },
+          "proposed_text_sha256": {
+            "type": "string",
+            "title": "Proposed Text Sha256"
+          },
+          "status_before": {
+            "type": "string",
+            "title": "Status Before"
+          },
+          "status_after": {
+            "type": "string",
+            "title": "Status After"
+          },
+          "created_variant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created Variant Id"
+          },
+          "review_policy": {
+            "type": "string",
+            "title": "Review Policy"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "document_id",
+          "assignment_id",
+          "reviewer_user_id",
+          "reviewer_pseudonym",
+          "reviewer_qualification",
+          "reviewer_languages",
+          "decision",
+          "clinical_change",
+          "categories",
+          "rationale",
+          "machine_text_sha256",
+          "proposed_text",
+          "proposed_text_sha256",
+          "status_before",
+          "status_after",
+          "created_variant_id",
+          "review_policy",
+          "created_at"
+        ],
+        "title": "TranslationReviewRecord"
       },
       "TranslationRunView": {
         "properties": {
@@ -8066,7 +8874,11 @@
             "type": "string",
             "enum": [
               "NO_READER",
-              "TOO_FEW_READERS"
+              "TOO_FEW_READERS",
+              "translation_not_accepted",
+              "not_a_translation",
+              "translation_already_accepted",
+              "variant_source_unknown"
             ],
             "title": "Reason"
           },
@@ -8284,6 +9096,111 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VariantInfo": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "native",
+              "machine_translation",
+              "human_translation",
+              "correction"
+            ],
+            "title": "Origin"
+          },
+          "derived_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived From"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation"
+          },
+          "translation_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translated",
+                  "automatic_check_failed",
+                  "ready_for_review",
+                  "reviewed",
+                  "accepted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Status"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "text_sha256": {
+            "type": "string",
+            "title": "Text Sha256"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "case_id",
+          "external_id",
+          "language",
+          "version",
+          "origin",
+          "derived_from",
+          "translation",
+          "translation_status",
+          "status_reason",
+          "text_sha256"
+        ],
+        "title": "VariantInfo"
       },
       "VariantSummary": {
         "properties": {

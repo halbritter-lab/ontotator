@@ -183,7 +183,7 @@ it("refreshes displayed identity from the saved Profile response and keeps the s
   const { first, open } = editorServer();
   window.history.replaceState(null, "", "#/me");
   const identity = testUser("alice", { display_name: "Alice" });
-  const profile = { username: identity.username, pseudonym: "alice", display_name: "Alice", email: null, orcid: null, orcid_consent: false, languages: [] };
+  const profile = { qualification: null, username: identity.username, pseudonym: "alice", display_name: "Alice", email: null, orcid: null, orcid_consent: false, languages: [] };
   vi.spyOn(api, "getProfile").mockResolvedValue(profile);
   vi.spyOn(api, "updateOwnProfile").mockResolvedValue({ ...profile, display_name: "Alice Smith" });
   const logout = vi.fn();

@@ -94,7 +94,7 @@ def _job(row: Row[Any]) -> Job:
 
 
 class JobQueue:
-    """Enqueues, claims and runs jobs; a handler's exception never propagates."""
+    """Records handler failures; outcome-persistence errors propagate to the worker."""
 
     def __init__(
         self,
@@ -161,12 +161,13 @@ class JobQueue:
             if handler is None:
                 raise LookupError(f"no handler for job kind '{job.kind}'")
             result = handler(job, self.context)
-            self._finish(job.id, worker, status="succeeded", result=result)
         except Exception as exc:
             logger.warning("Job %s (%s) failed: %s", job.id, job.kind, exc)
             self._finish(
                 job.id, worker, status="failed", error=f"{type(exc).__name__}: {exc}"
             )
+        else:
+            self._finish(job.id, worker, status="succeeded", result=result)
         finished = self.get(job.id)
         assert finished is not None
         return finished

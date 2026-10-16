@@ -8,7 +8,7 @@ export const profile: TaskProfile = {
     { type_id: "later", label: "Later type", evidence_policy: "optional", axes: [{ id: "certainty", label: "Certainty", options: ["certain", "uncertain"], allow_empty: true }] },
   ] }],
 };
-export const settings: ProjectSettings = { project_key: "p/key", name: "Research", description: "Original", languages: ["de"], guideline_url: null, guideline_version: null, require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, hidden_axis_values: {}, profile, locked: false, axis_defaults: { findings: { assertion: "present" } }, pins: [{ ontology_id: "HP", sha256: "a".repeat(64), allowed_roots: ["HP:1"], t1_profile: "hpo-phenotype", release: "2026" }] };
+export const settings: ProjectSettings = { annotate_accepted_translations_only: true, project_key: "p/key", name: "Research", description: "Original", languages: ["de"], guideline_url: null, guideline_version: null, require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, hidden_axis_values: {}, profile, locked: false, axis_defaults: { findings: { assertion: "present" } }, pins: [{ ontology_id: "HP", sha256: "a".repeat(64), allowed_roots: ["HP:1"], t1_profile: "hpo-phenotype", release: "2026" }] };
 export const ontologies: OntologyInfo[] = [
   { ontology_id: "hp", release: "2026", sha256: "a".repeat(64), term_count: 3 },
   { ontology_id: "hp", release: "2027", sha256: "b".repeat(64), term_count: 4 },
