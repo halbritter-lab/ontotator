@@ -319,13 +319,16 @@ def register_test_user_route(
         display_name: str | None = Query(None),
         projects: str | None = Query(None),
         assign: Literal["all", "none"] = Query("all"),
+        system_admin: bool = Query(False),
     ) -> dict[str, str]:
-        """Create the user ``username`` with ``pseudonym`` (no system admin).
+        """Create a fixture user; system administrator requires explicit opt-in.
 
         The display name is ``display_name``, by default the pseudonym.
         ``projects`` (comma-separated keys) gives the user every role there,
         also when the user exists already. ``assign=all`` (the default) also
         provisions assignments; ``assign=none`` skips only that provisioning.
+        ``system_admin=true`` bootstraps a new administrator for administration
+        UI tests. It never promotes an existing ordinary fixture user.
 
         With ``setup`` the user keeps a fresh setup (or, if it exists, reset)
         code, which is returned for the login screen to redeem. Otherwise the
@@ -334,12 +337,15 @@ def register_test_user_route(
         """
         accounts: AccountService = request.app.state.accounts
         existing = accounts.get_by_username(username)
+        if system_admin and existing is not None and not existing.is_system_admin:
+            raise HTTPException(409, "The fixture user is not an administrator.")
         if existing is None:
             issued = accounts.create_user(
                 Actor.cli(),
                 username,
                 display_name or pseudonym,
                 pseudonym=pseudonym,
+                system_admin=system_admin,
             )
             if not setup:
                 accounts.redeem_code(username, issued.code, TEST_PASSWORD)
