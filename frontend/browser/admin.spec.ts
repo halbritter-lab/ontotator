@@ -25,6 +25,7 @@ async function logout(page: Page) {
 }
 
 async function loginExisting(page: Page, actor: Actor) {
+  await page.goto("/");
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username", { exact: true }).fill(actor.username);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
