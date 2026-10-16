@@ -47,6 +47,13 @@ export type CreateUserRequest = components["schemas"]["CreateUserRequest"];
 export type CreatedUser = components["schemas"]["CreatedUser"];
 export type CodeResponse = components["schemas"]["CodeResponse"];
 export type AdminUserPatch = Partial<components["schemas"]["PatchUserRequest"]>;
+export type TaskProfile = components["schemas"]["TaskProfile"];
+export type TemplateInfo = components["schemas"]["TemplateInfo"];
+export type ProjectSettings = components["schemas"]["ProjectSettings"];
+export type ProjectSettingsPatch = Partial<components["schemas"]["ProjectSettingsChange"]>;
+export type CreateProjectRequest = components["schemas"]["CreateProjectRequest"];
+export type ProjectPin = components["schemas"]["ProjectPin"];
+export type Member = components["schemas"]["Member"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
@@ -60,6 +67,8 @@ export interface OntologyInfo {
   sha256: string;
   term_count: number;
   path?: string | null;
+  status?: "loaded" | "failed";
+  error?: string | null;
   /** The languages the ontology can be searched in besides English. */
   translations?: OntologyTranslation[];
 }
@@ -165,6 +174,15 @@ export class ApiClient {
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? "";
   }
+
+  async listTemplates(): Promise<TemplateInfo[]> { return this.request("/api/v1/projects/templates", { method: "GET" }); }
+  async createProject(body: CreateProjectRequest): Promise<ProjectSettings> { return this.request("/api/v1/projects/", { method: "POST", body: JSON.stringify(body) }); }
+  async getProjectSettings(key: string): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/settings`, { method: "GET" }); }
+  async updateProjectSettings(key: string, change: ProjectSettingsPatch): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/settings`, { method: "PATCH", body: JSON.stringify(change) }); }
+  async updatePins(key: string, pins: ProjectPin[]): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins`, { method: "PUT", body: JSON.stringify(pins) }); }
+  async updateProjectProfile(key: string, profile: TaskProfile): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/profile`, { method: "PUT", body: JSON.stringify(profile) }); }
+  async listMembers(key: string): Promise<Member[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members`, { method: "GET" }); }
+  async setMemberRoles(key: string, username: string, roles: string[], revoke = false): Promise<Member> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members/${encodeURIComponent(username)}`, { method: "PUT", body: JSON.stringify({ roles, revoke_assignments: revoke }) }); }
 
   async adminListUsers(): Promise<AdminUser[]> {
     return this.request<AdminUser[]>("/api/v1/admin/users/", { method: "GET" });
