@@ -17,6 +17,7 @@ export type EvidenceSnapshot = components["schemas"]["EvidenceSnapshot"];
 export type AxisDefinition = components["schemas"]["AxisDefinition"];
 
 export interface AnnotationPanelProps {
+  readOnly?: boolean;
   annotation: AnnotationSnapshot | null;
   allEvidence: Record<string, EvidenceSnapshot>;
   workspaceKey: WorkspaceKey;
@@ -62,6 +63,7 @@ export function quoteSegments(text: string, segments: { start: number; end: numb
 
 export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   annotation,
+  readOnly = false,
   allEvidence,
   workspaceKey,
   searchManager,
@@ -95,7 +97,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           <h3>No annotation selected</h3>
           <p>
             Select an existing annotation or mention in the text,
-            or highlight text to create a new annotation.
+            {readOnly ? "to inspect its details." : "or highlight text to create a new annotation."}
           </p>
         </div>
       </div>
@@ -112,6 +114,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
     .filter(Boolean);
 
   const handleSelectCandidate = (candidate: SearchCandidate, searchId?: string) => {
+    if (readOnly) return;
     onUpdateTerm(candidate.term_id, searchId);
     setShowSearch(false);
   };
@@ -175,7 +178,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               variant="secondary" size="sm"
               onClick={() => setShowSearch(!showSearch)}
             >
-              {showSearch ? "Close search" : "Change term"}
+              {showSearch ? "Close search" : readOnly ? "Search ontology" : "Change term"}
             </Button>
             {onDeselect && (
               <IconButton label="Clear selection" icon={<IconClose />} variant="quiet" size="sm" onClick={onDeselect} />
@@ -186,6 +189,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         {showSearch && (
           <div style={{ marginTop: 12 }}>
             <SearchPanel
+              canAssign={!readOnly}
               searchManager={searchManager}
               annotationId={ann.annotation_id}
               layerId={layerId ?? ann.layer_id}
@@ -232,7 +236,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                       <label key={option.value} className="axis-option">
                         <input type="radio" name={`axis-${ann.annotation_id}-${axis.id}`}
                           value={option.value} checked={val === option.value}
-                          disabled={unavailable && option.value === val}
+                          disabled={readOnly || (unavailable && option.value === val)}
                           onChange={() => updateAxis(option.value)} />
                         <span>{option.label}</span>
                       </label>
@@ -240,7 +244,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                   </div>
                 ) : (
                   <Select label={null} id={`axis-select-${axis.id}`} aria-label={axis.label}
-                    value={val} onChange={(e) => updateAxis(e.target.value)}>
+                    disabled={readOnly} value={val} onChange={(e) => updateAxis(e.target.value)}>
                     {axis.allow_empty && <option value="">Not specified</option>}
                     {!axis.allow_empty && <option value="" disabled>Please select</option>}
                     {unavailable && <option value={val} disabled>{unavailableLabel}</option>}
@@ -252,7 +256,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     <p className="form-hint">Default value; confirm it or choose a value.</p>
                     {onConfirmAxis && !unavailable && (
                       <Button type="button" variant="secondary" size="sm"
-                        onClick={() => onConfirmAxis(axis.id)}>
+                        disabled={readOnly} onClick={() => onConfirmAxis(axis.id)}>
                         Confirm {axis.label} value
                       </Button>
                     )}
@@ -271,7 +275,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           <Button
             type="button"
             variant="secondary" size="sm"
-            onClick={() => onSetIntent("new_mention")}
+            disabled={readOnly} onClick={() => onSetIntent("new_mention")}
             aria-pressed={isAttachingMention}
             title="Highlight text to add an additional mention for this term"
           >
@@ -334,7 +338,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                       <Button
                         type="button"
                         variant="danger" size="sm"
-                        onClick={() => { setConfirmDetachId(null); onDetachMention(ev.mention.evidence_id); }}
+                        disabled={readOnly} onClick={() => { if (readOnly) return; setConfirmDetachId(null); onDetachMention(ev.mention.evidence_id); }}
                       >
                         Yes, remove
                       </Button>
@@ -347,7 +351,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     <Button
                       type="button"
                       variant="secondary" size="sm"
-                      onClick={() => {
+                      disabled={readOnly} onClick={() => {
+                        if (readOnly) return;
                         onSelectEvidence(ev.mention.evidence_id);
                         onSetIntent("extend_mention");
                       }}
@@ -358,7 +363,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     <Button
                       type="button"
                       variant="danger" size="sm"
-                      onClick={() => setConfirmDetachId(ev.mention.evidence_id)}
+                      disabled={readOnly} onClick={() => setConfirmDetachId(ev.mention.evidence_id)}
                       title="Detach mention from this annotation"
                     >
                       Remove
@@ -382,7 +387,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                 type="button"
                 variant="danger"
                 style={{ flex: 1 }}
-                onClick={() => { setConfirmDelete(false); onDeleteAnnotation(ann.annotation_id); }}
+                disabled={readOnly} onClick={() => { if (readOnly) return; setConfirmDelete(false); onDeleteAnnotation(ann.annotation_id); }}
               >
                 Yes, delete
               </Button>
@@ -396,7 +401,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             type="button"
             variant="danger"
             style={{ width: "100%" }}
-            onClick={() => setConfirmDelete(true)}
+            disabled={readOnly} onClick={() => setConfirmDelete(true)}
           >
             <IconTrash />
             Delete Annotation

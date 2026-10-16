@@ -35,8 +35,7 @@ async function dragHandle(page: Page, handle: Locator, toOffset: number, release
 /** Create an annotation "Hypotonia" on 0..9 in an independent case; it stays selected. */
 async function createHypotonia(page: Page, annotator: string) {
   await importFixture(page, annotator);
-  await page.locator("#mode-select").selectOption("independent");
-  await openCase(page);
+  await openCase(page, { task: "annotate" });
   await selectText(page, 0, 9);
   await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
@@ -102,8 +101,7 @@ test.describe("resizing mention spans", () => {
 
   test("review: resizing an adopted copy marks the proposal as replaced", async ({ page }) => {
     await importFixture(page, "resize-review");
-    await page.locator("#mode-select").selectOption("review");
-    await openCase(page);
+    await openCase(page, { task: "review" });
     await page.locator(".doc-item").filter({ hasText: "HP:0001250" }).click();
     // A proposal has no handles ...
     await expect(page.locator(".text-container .resize-handle")).toHaveCount(0);

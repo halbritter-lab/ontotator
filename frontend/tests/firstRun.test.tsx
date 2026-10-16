@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -6,11 +6,7 @@ import { api } from "../src/api/client";
 import { App } from "../src/App";
 import { CaseScreen } from "../src/app/CaseScreen";
 import { loggedInAs } from "./session";
-
-const docs = [
-  { document_id: "doc-1", text_length: 10, language: "en", position: 1, status: "completed" as const },
-  { document_id: "doc-2", text_length: 10, language: "en", position: 2, status: "in_progress" as const },
-];
+import { assigned, assignedList } from "./assignments";
 
 const view = () => ({
   document: { document_id: "doc-2", text: "Patient has seizures.", language: "en", text_sha256: "x" },
@@ -26,76 +22,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("dashboard: guided first run", () => {
-  it("tells a user without projects to ask an administrator", async () => {
-    loggedInAs("annotator-1");
-    vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    vi.spyOn(api, "listProjects").mockResolvedValue([]);
-    render(<App />);
-    const guide = await screen.findByRole("region", { name: /Get started/i });
-    expect(guide.textContent).toContain(
-      "No projects are available to you yet. Ask an administrator to add you to a project.",
-    );
-    // Nothing is uploaded or exported in the browser any more (T2d).
-    expect(document.querySelector('input[type="file"]')).toBeNull();
-    expect(screen.queryByRole("button", { name: /Import work package|Add ontology|Export package/i })).toBeNull();
-  });
-
-  it("uses plain mode labels with one-sentence explanations", async () => {
-    loggedInAs("annotator-1");
-    vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
-    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    render(<App />);
-    await screen.findByRole("table");
-    const select = screen.getByLabelText(/Working mode/i) as HTMLSelectElement;
-    expect(within(select).getByText("Annotate from scratch")).toBeDefined();
-    expect(within(select).getByText("Review proposals")).toBeDefined();
-    expect(screen.getByText("You won't see any proposals.")).toBeDefined();
-    fireEvent.change(select, { target: { value: "review" } });
-    expect(screen.getByText("Check suggested terms one by one: confirm, reject or change.")).toBeDefined();
-    expect(document.body.textContent).not.toMatch(/origin-neutral|Independent Mode|Review Mode|Workspace/);
-  });
-
-  it("offers a single primary 'Open case' action", async () => {
-    loggedInAs("JPL");
-    vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: "JPL", mode_by_package: {} });
-    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
-    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    render(<App />);
-    await screen.findByRole("table");
-    expect(screen.getAllByRole("button", { name: /Open case/i })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /Continue|Open Workspace|Open Case →/ })).toBeNull();
-  });
-});
-
-describe("annotator identity", () => {
-  it("stores the working mode per package in the workspace", async () => {
-    loggedInAs("annotator-1");
-    vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: { pkg: "review" } });
-    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
-    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    render(<App />);
-    await screen.findByRole("table");
-    fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });
-    expect(save).toHaveBeenCalledWith({ mode_by_package: { pkg: "review" } });
-    expect(window.localStorage.getItem("ontocurator.mode.pkg")).toBeNull();
-  });
-
-});
-
 describe("editor and page polish", () => {
   it("editor_shell_routes_logout_through_the_leave_guard", async () => {
     loggedInAs("JPL");
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
     vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
-    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
+    assignedList(view());
     vi.spyOn(api, "listOntologies").mockResolvedValue([]);
-    vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view: view() } as any);
+    vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: view() }));
     const onLogout = vi.fn();
     render(<App onLogout={onLogout} />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/i }));
     await screen.findByRole("group", { name: "Case" });
     fireEvent.click(screen.getByRole("button", { name: "Log out" }));
     expect(onLogout).toHaveBeenCalledOnce();

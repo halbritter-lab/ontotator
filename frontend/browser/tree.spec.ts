@@ -38,8 +38,7 @@ async function annotate(page: Page, start: number, end: number, query: string, t
 async function openWithSeizure(page: Page, annotator: string, size = { width: 1280, height: 720 }) {
   await page.setViewportSize(size);
   await importPackage(page, "", "browser-fixture", annotator);
-  await page.locator("#mode-select").selectOption("independent");
-  await openCase(page);
+  await openCase(page, { task: "annotate" });
   await expect(revision(page)).toHaveAttribute("title", "Revision 0");
   await annotate(page, 14, 21, "Seizure", SEIZURE, 1);
   await expect(page.locator(".inspector-pane h2")).toContainText(SEIZURE);
@@ -655,13 +654,11 @@ test.describe("ontology tree", () => {
 
     // A reload ends the page session. Choose this test's package explicitly:
     // other specs import newer packages into the shared synthetic server.
-    await page.reload();
-    await page.locator("#project-select").selectOption("browser-fixture");
+    await page.goto("/#/?project=browser-fixture");
     await expect(page.locator("#project-select")).toHaveValue("browser-fixture");
     // The session cookie survives the reload: still logged in, no login form.
     await expect(page.getByTestId("current-user")).toBeVisible();
-    await page.locator("#mode-select").selectOption("independent");
-    await openCase(page);
+    await openCase(page, { task: "annotate" });
     await expect(revision(page)).toHaveAttribute("title", "Revision 1");
     // Nothing is open until it is asked for.
     await expect(treePanel(page)).toHaveCount(0);

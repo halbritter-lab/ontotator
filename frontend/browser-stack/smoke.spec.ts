@@ -10,11 +10,9 @@ test("stack smoke: log in, open the project, annotate, submit", async ({ page })
   const projects = page.locator("#project-select");
   await expect(projects.locator("option[value='smoke']")).toHaveText(/smoke/i);
   await projects.selectOption("smoke");
-  await page.locator("#mode-select").selectOption("independent");
-  const firstCase = page.getByRole("row").filter({ hasText: "smoke-001" });
+  const firstCase = page.getByTestId("task-row").filter({ has: page.getByRole("cell", { name: "Annotate", exact: true }) }).filter({ hasText: "smoke-001" });
   await expect(firstCase).toContainText("Open");
-  await firstCase.click();
-  await page.getByRole("button", { name: "Open case", exact: true }).click();
+  await firstCase.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.locator(".text-container")).toContainText("Hypotonia and seizure");
   await page.getByRole("button", { name: /\+ New Annotation/i }).click();
   await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
@@ -27,10 +25,9 @@ test("stack smoke: log in, open the project, annotate, submit", async ({ page })
   await submit.getByRole("button", { name: "Submit case", exact: true }).click();
   const completed = page.getByRole("dialog", { name: "Case submitted", exact: true });
   await expect(completed).toContainText("Case successfully submitted");
-  await completed.getByRole("button", { name: "Back to dashboard" }).click();
-  await expect(page.getByRole("row").filter({ hasText: "smoke-001" })).toContainText("Completed");
+  await completed.getByRole("button", { name: "Back to my tasks" }).click();
+  await expect(firstCase).toContainText("Submitted");
   await page.reload();
   await projects.selectOption("smoke");
-  await page.locator("#mode-select").selectOption("independent");
-  await expect(page.getByRole("row").filter({ hasText: "smoke-001" })).toContainText("Completed");
+  await expect(firstCase).toContainText("Submitted");
 });

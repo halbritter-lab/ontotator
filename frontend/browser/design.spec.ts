@@ -64,8 +64,7 @@ async function checkContrastAndTextSize(page: Page) {
 
 async function openReview(page: Page, query: string, projectKey: string, annotator: string) {
   await importPackage(page, query, projectKey, annotator);
-  await page.locator("#mode-select").selectOption("review");
-  await openCase(page);
+  await openCase(page, { task: "review" });
 }
 
 const proposal = (page: Page, termId: string) =>
@@ -118,7 +117,7 @@ test.describe("Design direction C", () => {
     await shoot(page, "login");
     await checkContrastAndTextSize(page);
     await importPackage(page, "", "browser-fixture", "design-dashboard");
-    await expect(page.getByRole("table", { name: "Clinical Cases" })).toBeVisible();
+    await expect(page.getByRole("table", { name: "My tasks" })).toBeVisible();
     await shoot(page, "dashboard-compact-table");
     await checkContrastAndTextSize(page);
   });

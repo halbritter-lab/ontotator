@@ -7,6 +7,8 @@ import {
   isSessionProblem,
   onSessionRestored,
   ValidationError,
+  ApiError,
+  type TaskSummary,
   type AnnotationSnapshot,
   type AxesValues,
   type DocumentSummary,
@@ -58,7 +60,8 @@ import { IconButton } from "../ui/IconButton";
 import { openShortcutHelp, ShortcutHelpHost } from "../ui/ShortcutHelp";
 import { useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { CaseNavigation } from "./CaseNavigation";
-import { adjacentCase } from "./caseOrder";
+import { adjacentCase, orderTasks } from "./caseOrder";
+import type { RouteLeaveGuard } from "./router";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
@@ -96,6 +99,10 @@ interface ConfirmRequest {
 export type WorkspaceView = components["schemas"]["WorkspaceView"];
 
 export interface CaseScreenProps {
+  readOnly?: boolean;
+  routeLeaveRef?: React.MutableRefObject<RouteLeaveGuard | null>;
+  assignmentNavigation?: { tasks: TaskSummary[]; current: TaskSummary; onNavigate: (assignmentId: number) => void };
+  onReadonlyRequired?: () => void;
   view: WorkspaceView;
   workspaceId: string;
   onClose: () => void;
@@ -120,7 +127,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onSubmitted,
   annotatorName,
   leaveGuardRef,
+  readOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired,
 }) => {
+  // A ref also protects callbacks retained before this task became read-only.
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
+  const assertWritable = () => {
+    if (readOnlyRef.current) throw new DiscardedChangesError("This submitted task is read-only.");
+  };
   const [pendingAnnotation, setPendingAnnotation] = useState<{
     annotationId: string;
     evidenceId?: string;
@@ -167,6 +181,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Modals
   const [completedSubmission, setCompletedSubmission] = useState<Submission | null>(null);
+  const completedNextAssignment = useRef<number | undefined>(undefined);
   const [historySubmission, setHistorySubmission] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"list" | "text" | "details">("text");
@@ -193,6 +208,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const termLabel = useTermLabels(view.key.project_key, displayedTerms);
 
   const searchManager = useMemo(() => new SearchManager(api), []);
+  useEffect(() => {
+    if (!readOnly) return;
+    setPendingAnnotation(null);
+    setIsAttachingMention(false);
+    setSelectionIntent("new_mention");
+    setSubmitDialogOpen(false);
+    searchManager.clear();
+  }, [readOnly, searchManager]);
 
   useEffect(() => {
     searchManager.setLayer(layerSelection.activeLayerId);
@@ -398,6 +421,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     cancelPending();
   };
 
+  const assignmentFailure = (error: unknown): never => {
+    if (error instanceof ApiError && error.code === "ASSIGNMENT_SUBMITTED" && !readOnlyRef.current) {
+      readOnlyRef.current = true;
+      onReadonlyRequired?.();
+    }
+    throw error;
+  };
   const reportError = (error: unknown) => {
     if (error instanceof DiscardedChangesError) return; // user explicitly discarded these edits
     setActionError(error instanceof Error ? error.message : String(error));
@@ -447,11 +477,20 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
    * Flush pending edits before leaving the case. If they cannot be saved (conflict or
    * server unreachable) the user may explicitly discard them and leave anyway.
    */
-  const leaveCase = async (action: () => void | Promise<void>): Promise<void> => {
+  const leaveCase = async (action: () => void | Promise<void>): Promise<boolean> => {
+    const rejectedBefore = queueRef.current.rejectedCount();
+    if (rejectedBefore > 0) {
+      setActionError("A change could not be saved. Reload the case before leaving.");
+      return false;
+    }
     try {
       await queueRef.current.flush();
+      if (queueRef.current.rejectedCount() !== rejectedBefore) {
+        setActionError("A change could not be saved. Reload the case before leaving.");
+        return false;
+      }
     } catch (error) {
-      if (!(error instanceof UnsavedChangesError)) { reportError(error); return; }
+      if (!(error instanceof UnsavedChangesError)) { reportError(error); return false; }
       const pending = queueRef.current.pendingCount();
       const ok = await askConfirm(
         error.state === "conflict" ? "Case was changed elsewhere" : "Changes not saved",
@@ -462,15 +501,25 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           : `${pending} edit(s) could not be saved because the server is unreachable. Leaving discards them.`,
         "Discard edits and leave",
       );
-      if (!ok) return;
+      if (!ok) return false;
       queueRef.current.discardPending();
     }
     try {
       await action();
+      return true;
     } catch (error) {
       reportError(error);
+      return false;
     }
   };
+  const latestLeave = useRef(leaveCase);
+  latestLeave.current = leaveCase;
+  useEffect(() => {
+    if (!routeLeaveRef) return;
+    const guard = () => latestLeave.current(() => {});
+    routeLeaveRef.current = guard;
+    return () => { if (routeLeaveRef.current === guard) routeLeaveRef.current = null; };
+  }, [routeLeaveRef]);
 
   /** Resolve a revision conflict by reloading the case from the server. */
   const reloadCase = async () => {
@@ -505,7 +554,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     window.addEventListener("online", goOnline);
     // Logged in again as the same user: save what waited for the session.
     const unsubscribe = onSessionRestored(() => {
-      if (queueRef.current.getState() === "error") void queueRef.current.retry();
+      void queueRef.current.retry();
     });
     return () => {
       window.removeEventListener("offline", goOffline);
@@ -539,12 +588,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Execute mutation through the queue
   const enqueueMutation = async (payload: Record<string, unknown> | ((current: Draft) => Record<string, unknown>)): Promise<Draft> => {
+    assertWritable();
     setActionError(null);
     const mutationId = crypto.randomUUID();
     let envelope: Parameters<typeof api.applyCommand>[1] | undefined;
     return queueRef.current.enqueue(async (expectedRevision) => {
+      assertWritable();
       envelope ??= { mutation_id: mutationId, expected_revision: expectedRevision, payload: typeof payload === "function" ? payload(latestDraft.current) : payload };
-      const updatedDraft = await api.applyCommand(workspaceId, envelope);
+      const updatedDraft = await api.applyCommand(workspaceId, envelope).catch(assignmentFailure);
       latestDraft.current = updatedDraft;
       setDraft(updatedDraft);
       return updatedDraft;
@@ -597,9 +648,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     replacementId?: string,
     note?: string,
   ): Promise<Draft> => {
+    if (readOnlyRef.current) return Promise.reject(new DiscardedChangesError());
     const mutationId = crypto.randomUUID();
     let envelope: Parameters<typeof api.recordDecision>[1] | undefined;
     return queueRef.current.enqueue(async (expectedRevision) => {
+      assertWritable();
       if (!envelope) {
         const replacement = replacementId
           ? (latestDraft.current.annotations ?? []).find((a) => a.annotation.annotation_id === replacementId)
@@ -617,7 +670,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           },
         };
       }
-      const nextDraft = await api.recordDecision(workspaceId, envelope);
+      const nextDraft = await api.recordDecision(workspaceId, envelope).catch(assignmentFailure);
       latestDraft.current = nextDraft;
       setDraft(nextDraft);
       return nextDraft;
@@ -661,6 +714,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Text selection handler
   const handleSelection = async (payload: SelectionPayload) => {
+    if (readOnlyRef.current) return;
     if (!payload.segments || payload.segments.length === 0) return;
     setMobilePane("details");
 
@@ -733,6 +787,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const cancelPending = () => { setPendingAnnotation(null); searchManager.clear(); };
 
   const createPendingAnnotation = async (termId: string, searchId?: string) => {
+    if (readOnlyRef.current) return;
     if (!pendingAnnotation || creatingPending.current) return;
     creatingPending.current = true;
     const pending = pendingAnnotation;
@@ -798,6 +853,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const handleStartSpanless = () => {
+    if (readOnlyRef.current) return;
     if (!layerSelection.activeLayerId) {
       setActionError("No active editable layer selected. Please activate a layer.");
       return;
@@ -830,6 +886,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     );
 
   const handleUpdateTerm = async (termId: string, searchId?: string) => {
+    if (readOnlyRef.current) return;
     if (!selectedAnnotationId) return;
     await setTermOf(selectedAnnotationId, termId, searchId);
   };
@@ -869,6 +926,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // "Use this term": the same set_term as a search selection, bound to the walk's event.
   // A failure is thrown to the tree, which shows it where the term was chosen. The tree stays open.
   const handleUseTreeTerm = async (termId: string, browseId: string) => {
+    if (readOnlyRef.current) return;
     if (!treeWalk) return;
     await setTermOf(treeWalk.annotationId, termId, browseId);
   };
@@ -895,6 +953,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, [followAnnotationId]);
 
   const handleUpdateAxes = async (axesValues: Partial<AxesValues>, confirmedAxisId?: string) => {
+    if (readOnlyRef.current) return;
     if (!selectedAnnotationId || !selectedAnnotation) return;
     const annotationId = selectedAnnotationId;
     await mutateAnnotationAndSyncDecision(annotationId, () =>
@@ -910,6 +969,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const handleDetachMention = async (evidenceId: string) => {
+    if (readOnlyRef.current) return;
     if (!selectedAnnotationId) return;
     const annId = selectedAnnotationId;
     await mutateAnnotationAndSyncDecision(annId, () =>
@@ -926,6 +986,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // A mention edge was dragged (or moved by keyboard) in the text.
   const handleResizeMention = async (evidenceId: string, segments: Array<{ start: number; end: number }>) => {
+    if (readOnlyRef.current) return;
     // A keyboard resize is reported after a pause, so the selection may have moved on:
     // save to the annotation the mention belongs to, preferring the selected one.
     const owners = (latestDraft.current.annotations ?? [])
@@ -959,6 +1020,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const handleDeleteAnnotation = async (annotationId: string) => {
+    if (readOnlyRef.current) return;
     await enqueueMutation({
       command: "delete_draft_annotation",
       annotation_id: annotationId,
@@ -971,6 +1033,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Review Decision Handler: always carries the current reviewer note.
   const handleReviewDecision = async (payload: DecisionPayload, forTarget?: TargetProposal | null) => {
+    if (readOnlyRef.current) return;
     const target = forTarget ?? selectedTarget;
     if (!target) return;
     setActionError(null);
@@ -1012,6 +1075,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Adopt a review target as an editable draft copy and switch to editing it.
   // The "changed" decision is recorded only once the copy actually differs.
   const handleAdoptAndEditTarget = async (target: TargetProposal) => {
+    if (readOnlyRef.current) return;
     setActionError(null);
     const key = targetKeyOf(target);
     const existingDecision = (latestDraft.current.decisions ?? []).find((d) => refKey(d.target) === key);
@@ -1153,7 +1217,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const editableLayerIds = view.scope?.editable_layer_ids ?? (view.layers ? view.layers.map(l => l.layer_id) : []);
   // Only the selected curated annotation's mentions can be resized, and not while
   // another text interaction (attaching a mention, choosing a term) is in progress.
-  const resizableEvidenceIds = selectedAnnotation && !isAttachingMention && !pendingAnnotation
+  const resizableEvidenceIds = !readOnly && selectedAnnotation && !isAttachingMention && !pendingAnnotation
     && editableLayerIds.includes(selectedAnnotation.annotation.layer_id)
     ? (selectedAnnotation.annotation.evidence_refs ?? []).map((r) => r.evidence_id)
     : [];
@@ -1166,6 +1230,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Step 1: save pending edits, validate the saved draft and open the confirmation dialog.
   const handleSubmitWorkspace = async () => {
+    if (readOnlyRef.current) return;
     setSubmitError(null);
 
     // Validate only after pending saves (e.g. "Mark ... as verified") have finished;
@@ -1198,6 +1263,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Step 2: submit after the explicit "entire text checked" confirmation.
   const confirmSubmit = async () => {
+    if (readOnlyRef.current) return;
     if (!textCheckedConfirmed) return;
     if (view.key.mode === "review") {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
@@ -1213,6 +1279,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const mutationId = crypto.randomUUID();
       let envelope: Parameters<typeof api.submitWorkspace>[1] | undefined;
       const submission = await queueRef.current.enqueue(async (expectedRevision) => {
+        assertWritable();
         envelope ??= {
           mutation_id: mutationId,
           expected_revision: expectedRevision,
@@ -1223,8 +1290,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             checked_layer_ids: isSingleLayer ? editableLayerIds : latestDraft.current.checked_layer_ids ?? [],
           },
         };
-        return api.submitWorkspace(workspaceId, envelope);
+        return api.submitWorkspace(workspaceId, envelope).catch(assignmentFailure);
       });
+      completedNextAssignment.current = adjacentTask.next;
       setCompletedSubmission(submission);
       try {
         await onSubmitted?.();
@@ -1234,6 +1302,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     } catch (err: unknown) {
       if (err instanceof DiscardedChangesError) return;
       const msg = err instanceof Error ? err.message : String(err);
+      reportError(err);
       setSubmitError(`Submission failed: ${msg}`);
     }
   };
@@ -1285,7 +1354,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
   }, [selectedAnnotation, view.key.mode, draft.decisions, reviewTargets, termLabel]);
 
-  // Review includes every document in package order.
+  const assignmentTasks = assignmentNavigation?.tasks.filter(task => task.project_key === assignmentNavigation.current.project_key && task.task === assignmentNavigation.current.task);
+  const adjacentTask = assignmentNavigation ? orderTasks(assignmentNavigation.tasks, assignmentNavigation.current) : {};
+  const navigateAssignment = (id: number) => assignmentNavigation?.onNavigate(id);
+  // Legacy direct component callers retain their document navigation contract.
   const prevDoc = documentList ? adjacentCase(documentList, view.document.document_id, -1) : null;
   const nextDoc = documentList ? adjacentCase(documentList, view.document.document_id, 1) : null;
 
@@ -1296,6 +1368,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const shortcutOptions = { scope: "screen" as const, root: rootRef };
   useShortcut(["Alt+ArrowLeft", "Alt+ArrowRight"], (event) => {
+    if (assignmentNavigation) {
+      const id = event.key === "ArrowLeft" ? adjacentTask.previous : adjacentTask.next;
+      if (id === undefined || queueState === "saving") return false;
+      navigateAssignment(id);
+      return;
+    }
     const document = event.key === "ArrowLeft" ? prevDoc : nextDoc;
     if (!document || !onNavigateCase || queueState === "saving") return false;
     navigateTo(document.document_id);
@@ -1315,7 +1393,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setSelectedSourceId(null);
   }, { ...shortcutOptions, enabled: view.key.mode === "review" && reviewTargets.length > 0,
     group: "Review", description: "Next / previous review proposal" });
-  const reviewShortcutOptions = { ...shortcutOptions, enabled: view.key.mode === "review" && !!selectedTarget, group: "Review" };
+  const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && view.key.mode === "review" && !!selectedTarget, group: "Review" };
   useShortcut("1", () => {
     if (!selectedTarget || selectedTarget.is_obsolete || selectedTarget.is_unknown) return false;
     const current = decisionsMap[refKey(selectedTarget)];
@@ -1357,16 +1435,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <Button
             type="button"
             variant="quiet" size="sm"
-            onClick={() => { void leaveCase(onClose); }}
-            title="Back to dashboard"
+            onClick={() => { if (assignmentNavigation) onClose(); else void leaveCase(onClose); }}
+            title={assignmentNavigation ? "Back to my tasks" : "Back to dashboard"}
           >
-            ← Dashboard
+            {assignmentNavigation ? "← My tasks" : "← Dashboard"}
           </Button>
-          {documentList && documentList.length > 0 && onNavigateCase ? (
+          {assignmentNavigation && assignmentTasks?.length ? (
+            <CaseNavigation documents={assignmentTasks.map((task, index) => ({ document_id: task.document_id,
+              position: index + 1, language: task.language, text_length: 0, status: task.status === "submitted" ? "completed" : task.status === "in_progress" ? "in_progress" : "not_started" }))}
+              currentDocumentId={view.document.document_id}
+              navigationIds={assignmentTasks.map(task => String(task.assignment_id))}
+              currentNavigationId={String(assignmentNavigation.current.assignment_id)}
+              onNavigate={async id => navigateAssignment(Number(id))} disabled={queueState === "saving"} />
+          ) : documentList && documentList.length > 0 && onNavigateCase ? (
             <CaseNavigation
               documents={documentList}
               currentDocumentId={view.document.document_id}
-              onNavigate={(docId) => leaveCase(() => onNavigateCase(docId))}
+              onNavigate={async (docId) => { await leaveCase(() => onNavigateCase(docId)); }}
               disabled={queueState === "saving"}
             />
           ) : (
@@ -1439,7 +1524,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             type="button"
             variant="primary" size="sm"
             onClick={handleSubmitWorkspace}
-            disabled={submitPending}
+            disabled={readOnly || submitPending}
             aria-busy={submitPending}
             title={submitPending ? "Saving changes before submitting" : "Finish and submit case"}
           >
@@ -1449,6 +1534,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         </div>
       </Toolbar>
 
+      {readOnly && <InlineMessage tone="info">Submitted. The project lead can reopen it for changes.</InlineMessage>}
       {queueState === "conflict" && (
         <InlineMessage tone="error" aria-label="Revision conflict">
           <span>
@@ -1460,15 +1546,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               {isReloading ? "Reloading..." : "Reload case"}
             </Button>
           ) : (
-            <Button type="button" variant="secondary" size="sm" onClick={() => { void leaveCase(onClose); }}>
-              Back to dashboard
+            <Button type="button" variant="secondary" size="sm" onClick={() => { if (assignmentNavigation) onClose(); else void leaveCase(onClose); }}>
+              {assignmentNavigation ? "Back to my tasks" : "Back to dashboard"}
             </Button>
           )}
         </InlineMessage>
       )}
 
       {(actionError || submitError) && (
-        <InlineMessage tone="error">{actionError ?? submitError}</InlineMessage>
+        <InlineMessage tone="error">{actionError ?? submitError}
+          {queueRef.current.rejectedCount() > 0 && onReload && <Button type="button" variant="secondary" size="sm"
+            disabled={isReloading} onClick={() => { void reloadCase(); }}>Reload case</Button>}
+        </InlineMessage>
       )}
       <nav className="mobile-pane-tabs" aria-label="Select view">
         {([ ["list", "List"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
@@ -1482,6 +1571,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <aside className="sidebar density-compact">
           {/* Multi-layer controls (rendered only if >1 layer) */}
           <LayerControls
+            readOnly={readOnly}
             layers={view.layers ?? []}
             scope={view.scope ?? { scope_id: "default", mode: view.key.mode, editable_layer_ids: [], reference_layer_ids: [] }}
             selection={layerSelection}
@@ -1619,7 +1709,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 <Button
                   type="button"
                   variant="secondary" size="sm"
-                  onClick={handleStartSpanless}
+                  disabled={readOnly} onClick={handleStartSpanless}
                   title="Create new annotation via ontology search"
                 >
                   + New Annotation
@@ -1708,7 +1798,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           selectionIntent={selectionIntent}
           onSelection={handleSelection}
           onPick={handlePickMention}
-          onChangeIntent={setSelectionIntent}
+          onChangeIntent={intent => { if (!readOnlyRef.current) setSelectionIntent(intent); }}
+          readOnly={readOnly}
           resizableEvidenceIds={resizableEvidenceIds}
           onResizeMention={(evidenceId, segments) => { void handleResizeMention(evidenceId, segments); }}
           resyncToken={textResyncToken}
@@ -1754,6 +1845,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </section>
           ) : view.key.mode === "review" && selectedTarget ? (
             <ReviewActions
+              readOnly={readOnly}
               key={refKey(selectedTarget)}
               target={selectedTarget}
               termLabel={termLabel(selectedTarget.layer_id, selectedTarget.term_id ?? selectedTarget.annotation_id)}
@@ -1765,6 +1857,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onDecide={(payload) => { void handleReviewDecision(payload, selectedTarget); }}
               note={noteDrafts[refKey(selectedTarget)] ?? decisionsMap[refKey(selectedTarget)]?.note ?? ""}
               onNoteChange={(value) => {
+                if (readOnlyRef.current) return;
                 const k = refKey(selectedTarget);
                 noteDraftsRef.current = { ...noteDraftsRef.current, [k]: value };
                 setNoteDrafts((prev) => ({ ...prev, [k]: value }));
@@ -1781,6 +1874,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             />
           ) : (
             <AnnotationPanel
+              readOnly={readOnly}
               key={selectedAnnotationId ?? "empty"}
               annotation={selectedAnnotation}
               allEvidence={allEvidenceMap}
@@ -1817,6 +1911,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onDetachMention={(id) => { void handleDetachMention(id).catch(reportError); }}
               onDeleteAnnotation={(id) => { void handleDeleteAnnotation(id).catch(reportError); }}
               onSetIntent={(intent) => {
+                if (readOnlyRef.current) return;
                 if (intent === "new_mention") {
                   setIsAttachingMention(true);
                   setMobilePane("text");
@@ -1839,7 +1934,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             layerId={treeWalk.layerId}
             startTermId={treeWalk.termId}
             currentTermId={treeWalkAnnotation?.annotation.term_id ?? null}
-            canAssign={!!treeAnnotation && treeAnnotation.annotation.annotation_id === treeWalk.annotationId}
+            canAssign={!readOnly && !!treeAnnotation && treeAnnotation.annotation.annotation_id === treeWalk.annotationId}
             focusOnOpen={treeWalk.focus}
             onClose={handleCloseTree}
             onUseTerm={handleUseTreeTerm}
@@ -1885,6 +1980,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>
         <p>Timestamp: {completedSubmission.created_at}</p>
         <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+          {assignmentNavigation && completedNextAssignment.current !== undefined && <Button type="button" variant="primary"
+            onClick={() => navigateAssignment(completedNextAssignment.current!)}>Next task</Button>}
           {nextDoc && onNavigateCase && (
             <Button
               type="button"
@@ -1907,9 +2004,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <Button
             type="button"
             variant="secondary"
-            onClick={() => { setCompletedSubmission(null); void leaveCase(onClose); }}
+            onClick={() => { if (assignmentNavigation) onClose(); else { setCompletedSubmission(null); void leaveCase(onClose); } }}
           >
-            Back to dashboard
+            {assignmentNavigation ? "Back to my tasks" : "Back to dashboard"}
           </Button>
         </div>
       </Dialog>}
@@ -1953,7 +2050,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <Button
             type="button"
             variant="primary"
-            disabled={!textCheckedConfirmed || (view.key.mode === "review" && openReviewTargets.length > 0)}
+            disabled={readOnly || !textCheckedConfirmed || (view.key.mode === "review" && openReviewTargets.length > 0)}
             onClick={() => { void confirmSubmit(); }}
           >
             Submit case
@@ -1969,7 +2066,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         busy={logoutSaving} onConfirm={() => { void saveAndLogout(); }} onCancel={() => setLogoutProceed(null)} />
       {confirmRequest && <ConfirmDialog open title={confirmRequest.title} message={<p>{confirmRequest.message}</p>}
         confirmLabel={confirmRequest.confirmLabel} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}
-      <ShortcutHelpHost />
+      {!assignmentNavigation && <ShortcutHelpHost />}
     </div>
   );
 };

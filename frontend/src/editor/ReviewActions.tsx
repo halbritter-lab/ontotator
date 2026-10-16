@@ -38,6 +38,7 @@ export interface DecisionPayload {
 }
 
 export interface ReviewActionsProps {
+  readOnly?: boolean;
   target: TargetProposal;
   termLabel?: string | null;
   resolveTermLabel?: (layerId: string, termId: string) => string | null;
@@ -58,6 +59,7 @@ export interface ReviewActionsProps {
 
 export const ReviewActions: React.FC<ReviewActionsProps> = ({
   target,
+  readOnly = false,
   termLabel,
   resolveTermLabel,
   currentDecision,
@@ -83,11 +85,12 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
     currentDecision?.outcome === "changed"
   );
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = useRef({ note, currentDecision, onDecide });
-  latest.current = { note, currentDecision, onDecide };
+  const latest = useRef({ note, currentDecision, onDecide, readOnly });
+  latest.current = { note, currentDecision, onDecide, readOnly };
 
   /** Save the note onto the existing decision (no-op if there is no decision or nothing changed). */
   const commitNote = () => {
+    if (latest.current.readOnly) return;
     if (noteTimer.current) clearTimeout(noteTimer.current);
     noteTimer.current = null;
     const { note: current, currentDecision: decision, onDecide: decide } = latest.current;
@@ -104,6 +107,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   useEffect(() => () => { if (noteTimer.current) commitNote(); }, []);
 
   const handleNoteChange = (value: string) => {
+    if (readOnly) return;
     setNote(value);
     if (noteTimer.current) clearTimeout(noteTimer.current);
     noteTimer.current = null;
@@ -113,6 +117,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   };
 
   const handleOutcomeClick = (outcome: ReviewDecisionOutcome) => {
+    if (readOnly) return;
     if (noteTimer.current) clearTimeout(noteTimer.current);
     noteTimer.current = null;
     if (currentDecision?.outcome === outcome) {
@@ -147,6 +152,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   };
 
   const handleClearDecision = () => {
+    if (readOnly) return;
     if (noteTimer.current) clearTimeout(noteTimer.current);
     noteTimer.current = null;
     setShowReplacementSelect(false);
@@ -158,6 +164,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   };
 
   const handleConfirmChanged = () => {
+    if (readOnly) return;
     const replSnap = draftAnnotations.find(
       (a) => a.annotation.annotation_id === selectedReplacementId
     );
@@ -254,7 +261,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           variant="secondary" className="decision-btn decision-btn--confirmed"
           aria-pressed={pressed("confirmed")}
           onClick={() => handleOutcomeClick("confirmed")}
-          disabled={target.is_obsolete || target.is_unknown}
+          disabled={readOnly || target.is_obsolete || target.is_unknown}
           title={pressed("confirmed") ? "Click to clear confirmation (Key: 1)" : "Accept proposal as-is (Key: 1)"}
         >
           <span className="decision-btn__label"><IconCheck />Confirm</span>
@@ -265,7 +272,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           type="button"
           variant="secondary" className="decision-btn decision-btn--rejected"
           aria-pressed={pressed("rejected")}
-          onClick={() => handleOutcomeClick("rejected")}
+          disabled={readOnly} onClick={() => handleOutcomeClick("rejected")}
           title={pressed("rejected") ? "Click to clear rejection (Key: 2)" : "Reject proposal (Key: 2)"}
         >
           <span className="decision-btn__label"><IconClose />Reject</span>
@@ -275,6 +282,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <Button
           type="button"
           variant="secondary" className="decision-btn decision-btn--changed"
+          disabled={readOnly}
           aria-pressed={pressed("changed")}
           onClick={() => {
             if (currentDecision?.outcome === "changed" && currentDecision.replacement?.annotation_id && onEditReplacement) {
@@ -299,7 +307,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           type="button"
           variant="secondary" className="decision-btn decision-btn--uncertain"
           aria-pressed={pressed("uncertain")}
-          onClick={() => handleOutcomeClick("uncertain")}
+          disabled={readOnly} onClick={() => handleOutcomeClick("uncertain")}
           title={pressed("uncertain") ? "Click to clear uncertain status (Key: 4)" : "Clinically or textually undecidable (Key: 4)"}
         >
           <span className="decision-btn__label"><IconQuestion />Uncertain</span>
@@ -313,7 +321,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           <Button
             type="button"
             variant="quiet" size="sm"
-            onClick={handleClearDecision}
+            disabled={readOnly} onClick={handleClearDecision}
             title="Reset decision for this proposal (back to open)"
           >
             <IconUndo />
@@ -363,7 +371,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             <Button
               type="button"
               className="link-button"
+              disabled={readOnly}
               onClick={() => {
+                if (readOnly) return;
                 setShowReplacementSelect(true);
                 const repl = draftAnnotations.find(
                   (a) => a.annotation.annotation_id !== target.annotation_id
@@ -394,6 +404,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
                 id="replacement-select"
                 aria-label="Select replacement annotation"
                 className="form-select"
+                disabled={readOnly}
                 value={selectedReplacementId}
                 onChange={(e) => setSelectedReplacementId(e.target.value)}
               >
@@ -418,7 +429,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
                 type="button"
                 variant="primary" size="sm"
                 onClick={handleConfirmChanged}
-                disabled={!selectedReplacementId}
+                disabled={readOnly || !selectedReplacementId}
               >
                 Confirm replacement
               </Button>
@@ -433,6 +444,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           type="text"
           className="form-control"
           aria-label="Reviewer note"
+          readOnly={readOnly}
           placeholder="Optional reviewer note / justification..."
           value={note}
           onChange={(e) => handleNoteChange(e.target.value)}

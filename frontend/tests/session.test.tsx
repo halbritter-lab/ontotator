@@ -1,3 +1,4 @@
+import { assigned, assignedList } from "./assignments";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ApiClient, AuthError, isSessionExpired, onSessionExpired, type CurrentUser } from "../src/api/client";
@@ -13,6 +14,7 @@ const jsonResponse = (status: number, body: unknown) => ({
 const notLoggedIn = () => new AuthError("Log in to continue.", undefined, "NOT_AUTHENTICATED", 401);
 
 const oneCaseServer = () => {
+  assignedList(caseView());
   vi.spyOn(api, "getPreferences").mockResolvedValue({ mode_by_package: {} } as any);
   vi.spyOn(api, "listOntologies").mockResolvedValue([]);
   vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
@@ -79,7 +81,8 @@ const caseWithEndedSession = (relogin: CurrentUser, view = caseView()) => {
   const alice = testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" });
   sessionsOf(alice);
   oneCaseServer();
-  vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view });
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 1, project_key: "pkg", project_name: "pkg", document_id: view.document.document_id, language: "en", task: view.key.mode === "review" ? "review" : "annotate", status: "open", updated_at: "2026-10-14T12:00:00Z" }]);
+  vi.spyOn(api, "openAssignment").mockResolvedValueOnce(assigned({ read_only: false, workspace_id: "ws", view })).mockRejectedValue(new AuthError("This task is no longer assigned to you.", undefined, "ASSIGNMENT_NOT_FOUND", 403));
   let sessionOpen = false;
   const fetchMock = fakeServer({
     "POST /api/v1/workspaces/ws/commands": () => sessionOpen
@@ -298,7 +301,7 @@ describe("the login gate", () => {
   it("keeps the case open when the session ends and saves the queued edit after logging in again", async () => {
     const fetchMock = caseWithEndedSession(testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-2" }));
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
 
     const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
@@ -322,7 +325,7 @@ describe("the login gate", () => {
   it("starts afresh when someone else logs in after the session ended", async () => {
     const fetchMock = caseWithEndedSession(testUser("ann-0009", { display_name: "Bob", csrf_token: "csrf-b" }));
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
 
     logInThrough(await screen.findByRole("dialog", { name: "Log in to Ontocurator" }), "bob");
@@ -337,47 +340,41 @@ describe("the login gate", () => {
     const alice = testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" });
     const me = sessionsOf(alice, { ...alice, csrf_token: "csrf-2" });
     oneCaseServer();
+    vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: caseView() }));
     let refused = false;
     const fetchMock = fakeServer({
-      "PUT /api/v1/preferences": () => {
-        if (refused) return jsonResponse(200, { mode_by_package: {} });
+      "POST /api/v1/workspaces/ws/commands": () => {
+        if (refused) return jsonResponse(200, { ...caseView().draft, revision: 1 });
         refused = true;
         return jsonResponse(403, { code: "CSRF_FAILED", details: "The page is out of date; reload it." });
       },
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<AuthGate />);
-    await screen.findByRole("table");
-
-    fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
     await waitFor(() => expect(me).toHaveBeenCalledTimes(2));
-    expect(csrfOf(callsTo(fetchMock, "/api/v1/preferences")[0][1])).toBe("csrf-1");
-
-    // Same user: the page stays as it is and the next write carries the new token.
-    expect((screen.getByLabelText(/Working mode/i) as HTMLSelectElement).value).toBe("review");
+    await waitFor(() => expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(2));
+    expect(csrfOf(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")[0][1])).toBe("csrf-1");
+    expect(csrfOf(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")[1][1])).toBe("csrf-2");
+    expect(screen.getByTestId("annotator-identity").textContent).toContain("ann-0007");
+    expect(api.openAssignment).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/from another tab/)).toBeNull();
-    fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "independent" } });
-    await waitFor(() => expect(callsTo(fetchMock, "/api/v1/preferences")).toHaveLength(2));
-    expect(csrfOf(callsTo(fetchMock, "/api/v1/preferences")[1][1])).toBe("csrf-2");
   });
 
   it("switches to the user another tab logged in after a CSRF failure", async () => {
-    sessionsOf(
-      testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" }),
-      testUser("ann-0009", { display_name: "Bob", csrf_token: "csrf-b" }),
-    );
+    sessionsOf(testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" }), testUser("ann-0009", { display_name: "Bob", csrf_token: "csrf-b" }));
     oneCaseServer();
-    vi.stubGlobal("fetch", fakeServer({
-      "PUT /api/v1/preferences": () => jsonResponse(403, { code: "CSRF_FAILED", details: "The page is out of date; reload it." }),
-    }));
+    vi.spyOn(api, "openAssignment").mockResolvedValueOnce(assigned({ read_only: false, workspace_id: "ws", view: caseView() }))
+      .mockRejectedValue(new AuthError("Not assigned", undefined, "ASSIGNMENT_NOT_FOUND", 403));
+    vi.stubGlobal("fetch", fakeServer({ "POST /api/v1/workspaces/ws/commands": () => jsonResponse(403, { code: "CSRF_FAILED", details: "The page is out of date; reload it." }) }));
     render(<AuthGate />);
-    await screen.findByRole("table");
-
-    fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });
-
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
     expect(await screen.findByText("You are now logged in as Bob (from another tab).")).toBeDefined();
     expect(screen.getByTestId("current-user").textContent).toBe("Bob · ann-0009");
-    await waitFor(() => expect((screen.getByLabelText(/Working mode/i) as HTMLSelectElement).value).toBe("independent"));
+    await screen.findByText("This task is no longer assigned to you.");
+    expect(screen.queryByTestId("annotator-identity")).toBeNull();
   });
 
   it("keeps the case out of reach of keys pressed in the login dialog", async () => {
@@ -388,7 +385,7 @@ describe("the login gate", () => {
     ]);
     const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...reviewCaseView().draft, revision: 2 });
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
     const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
 
@@ -400,7 +397,7 @@ describe("the login gate", () => {
     fireEvent.keyDown(button, { key: "1" });
     fireEvent.keyDown(button, { key: "ArrowLeft", altKey: true });
     expect(screen.queryByText(/Changes not saved/)).toBeNull();
-    expect(api.openWorkspace).toHaveBeenCalledTimes(1);
+    expect(api.openAssignment).toHaveBeenCalledTimes(1);
 
     logInThrough(dialog, "alice");
     await waitFor(() => expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(2));
@@ -413,14 +410,14 @@ describe("the login gate", () => {
     const alice = testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-1" });
     const me = sessionsOf(alice, alice, alice);
     oneCaseServer();
-    vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view: caseView() });
+    vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: caseView() }));
     const fetchMock = fakeServer({
       "POST /api/v1/workspaces/ws/commands": () =>
         jsonResponse(403, { code: "CSRF_FAILED", details: "The page is out of date; reload it." }),
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
 
     expect(await screen.findByText("The page is out of date; reload it.")).toBeDefined();

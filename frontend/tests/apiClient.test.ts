@@ -47,6 +47,17 @@ describe("ApiClient and session management", () => {
     } finally { stop(); }
   });
 
+  it("posts an explicit review round only when requested for the owned assignment", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ workspace_id: "ws" }) });
+    globalThis.fetch = fetchSpy;
+    const client = new ApiClient();
+    client.setCsrfToken("csrf-round");
+    await client.openAssignment(17, { review_round_target_set_id: "round-b" });
+    expect(fetchSpy.mock.calls[0][0]).toBe("/api/v1/assignments/17/open");
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({ review_round_target_set_id: "round-b" });
+    expect(new Headers(fetchSpy.mock.calls[0][1].headers).get("X-CSRF-Token")).toBe("csrf-round");
+  });
+
   it("posts tree requests to the tree endpoints", async () => {
     const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
     globalThis.fetch = fetchSpy;

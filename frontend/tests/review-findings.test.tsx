@@ -1,3 +1,4 @@
+import { assigned, assignedList } from "./assignments";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -121,11 +122,12 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     const view = reviewView();
     view.targets = { target_set_id: "empty", targets: [] };
     view.available_inputs = [];
-    const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view });
+    assignedList(view);
+    const open = vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view }));
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/i }));
     await confirmIdentity();
-    await waitFor(() => expect(open).toHaveBeenCalledWith(expect.objectContaining({ mode: "review", targets: null })));
+    await waitFor(() => expect(open).toHaveBeenCalledWith(1));
     expect(inputs).not.toHaveBeenCalled();
     expect(await screen.findByRole("button", { name: /Finish & Submit Case/i })).toBeDefined();
   });
@@ -134,44 +136,31 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     asAnnotator("dr-a");
     vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", allowed_modes: ["review"] }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    const open = vi.spyOn(api, "openWorkspace")
+    assignedList(reviewView());
+    const open = vi.spyOn(api, "openAssignment")
       .mockRejectedValueOnce(new ApiError(422, "Select the review round to resume", "AMBIGUOUS_REVIEW_ROUND", { rounds: ["round-a", "round-b"] } as any))
-      .mockResolvedValue({ read_only: false, workspace_id: "ws", view: reviewView() });
+      .mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: reviewView() }));
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /^Open case$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/i }));
     await confirmIdentity();
     const dialog = await screen.findByRole("dialog", { name: /Select review round/i });
     fireEvent.change(within(dialog).getByLabelText("Review round"), { target: { value: "round-b" } });
     fireEvent.click(within(dialog).getByRole("button", { name: /Resume round/i }));
-    await waitFor(() => expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ review_round_target_set_id: "round-b", targets: null })));
+    await waitFor(() => expect(open).toHaveBeenLastCalledWith(1, { review_round_target_set_id: "round-b" }));
   });
 
-  it("dedupes ontology badges, keeps hero and selection consistent and disables open while loading", async () => {
+  it("opens an assignment once while its workspace is loading", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
-    vi.spyOn(api, "listOntologies").mockResolvedValue([
-      { ontology_id: "hp", release: "a", sha256: "1", term_count: 1 },
-      { ontology_id: "hp", release: "b", sha256: "2", term_count: 1 },
-    ]);
-    vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    let finishOpen!: (v: any) => void;
-    const open = vi.spyOn(api, "openWorkspace").mockImplementation(() => new Promise((resolve) => { finishOpen = resolve; }));
+    vi.spyOn(api, "listProjects").mockResolvedValue([]);
+    assignedList(baseView());
+    let finishOpen!: (value: any) => void;
+    const open = vi.spyOn(api, "openAssignment").mockImplementation(() => new Promise(resolve => { finishOpen = resolve; }));
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Ontologies: HP")).toBeDefined());
-    // Selection defaults to the in-progress case and the hero shows that case.
-    const hero = document.querySelector(".dashboard-hero") as HTMLElement;
-    await waitFor(() => expect(within(hero).getByText("doc-2")).toBeDefined());
-    fireEvent.click(within(screen.getByRole("table")).getByText("doc-1"));
-    await waitFor(() => expect(within(document.querySelector(".dashboard-hero") as HTMLElement).getByText("doc-1")).toBeDefined());
-    const openBtn = screen.getByRole("button", { name: /Open case/i });
-    fireEvent.click(openBtn);
-    await confirmIdentity();
-    await waitFor(() => expect(screen.getAllByRole("button", { name: /Opening/i }).length).toBeGreaterThan(0));
-    for (const b of screen.getAllByRole("button", { name: /Opening/i })) expect((b as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getAllByRole("button", { name: /Opening/i })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: /^Open$/ }));
+    await screen.findByText("Opening task...");
     expect(open).toHaveBeenCalledTimes(1);
-    expect(open.mock.calls[0][0].document_id).toBe("doc-1");
-    await act(async () => finishOpen({ read_only: false, workspace_id: "ws", view: baseView() }));
+    await act(async () => finishOpen(assigned({ read_only: false, workspace_id: "ws", view: baseView() })));
+    await screen.findByTestId("annotator-identity");
   });
 
   it("shows the annotator identity in the case header", () => {
@@ -639,15 +628,16 @@ describe("Shortcuts and error handling", () => {
     err.mockRestore();
   });
 
-  it("shows navigation errors from the dashboard open flow", async () => {
+  it("shows errors from the assignment open flow", async () => {
     asAnnotator("dr-a");
     vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
-    vi.spyOn(api, "openWorkspace").mockRejectedValue(new Error("boom"));
+    assignedList(baseView());
+    vi.spyOn(api, "openAssignment").mockRejectedValue(new Error("boom"));
     render(<App />);
     await waitFor(() => expect(screen.getByRole("table")).toBeDefined());
-    fireEvent.click(screen.getByRole("button", { name: /Open case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
     await confirmIdentity();
-    await waitFor(() => expect(screen.getByText(/Error opening case: boom/)).toBeDefined());
+    await waitFor(() => expect(screen.getByText(/boom/)).toBeDefined());
   });
 });

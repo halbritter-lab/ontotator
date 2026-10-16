@@ -4,8 +4,7 @@ import { importPackage, openCase } from "./helpers";
 test("sidebar scrolls proposals and curated annotations as one list", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await importPackage(page, "?scenario=many_proposals", "pkg-many-proposals", "sidebar-reviewer");
-  await page.locator("#mode-select").selectOption("review");
-  await openCase(page);
+  await openCase(page, { task: "review" });
 
   const scroller = page.locator(".sidebar .sidebar-scroll");
   const proposalsHeader = scroller.locator(".sidebar-header").filter({ hasText: "Review Proposals (30)" });

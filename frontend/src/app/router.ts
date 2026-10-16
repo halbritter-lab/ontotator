@@ -1,5 +1,8 @@
 import { useSyncExternalStore } from "react";
 
+/** Returning false preserves the mounted page and its accepted route. */
+export type RouteLeaveGuard = () => Promise<boolean>;
+
 /** URL state shared by the documents filters and progress-page assign links.
  * Status stays a transport string; the documents page validates supported filters.
  */

@@ -1,3 +1,4 @@
+import { assigned, assignedList } from "./assignments";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ValidationError } from "../src/api/client";
@@ -630,16 +631,17 @@ describe("the tree in the App", () => {
     vi.spyOn(api, "listDocuments").mockResolvedValue([
       { document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" },
     ]);
-    vi.spyOn(api, "openWorkspace").mockResolvedValue({
+    assignedList(baseView());
+    vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({
       read_only: false, workspace_id: "ws",
       view: baseView([snapshot("a1", "HP:A")]),
-    });
+    }));
     mockTree();
     const { container } = render(<App />);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Open case/i }).hasAttribute("disabled")).toBe(false),
+      expect(screen.getByRole("button", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false),
     );
-    fireEvent.click(screen.getByRole("button", { name: /Open case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
     await waitFor(() => expect(entry(container, "a1")).not.toBeNull());
 
     const panel = await openPanel(container, "a1");

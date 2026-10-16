@@ -4,6 +4,7 @@ export interface CaseErrorBoundaryProps {
   children: React.ReactNode;
   onBackToDashboard: () => void;
   onReload?: () => void;
+  backLabel?: string;
 }
 
 interface State {
@@ -42,7 +43,7 @@ export class CaseErrorBoundary extends React.Component<CaseErrorBoundaryProps, S
             </button>
           )}
           <button type="button" className="btn btn-secondary" onClick={() => this.reset(this.props.onBackToDashboard)}>
-            Back to dashboard
+            {this.props.backLabel ?? "Back to dashboard"}
           </button>
         </div>
       </div>

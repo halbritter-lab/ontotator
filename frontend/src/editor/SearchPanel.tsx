@@ -7,6 +7,7 @@ import type { SearchLanguageControl } from "./searchLanguages";
 import { SearchManager, type SearchState, type WorkspaceKey } from "./searchState";
 
 export interface SearchPanelProps {
+  canAssign?: boolean;
   searchManager: SearchManager;
   annotationId: string;
   workspaceKey: WorkspaceKey;
@@ -23,6 +24,7 @@ export const SEARCH_DEBOUNCE_MS = 250;
 
 export const SearchPanel: React.FC<SearchPanelProps> = ({
   searchManager,
+  canAssign = true,
   annotationId,
   workspaceKey,
   layerId,
@@ -161,9 +163,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 key={`${candidateTermId}-${cand.rank}`}
                 role="button"
                 tabIndex={obsolete ? -1 : 0}
-                aria-disabled={obsolete}
+                aria-disabled={obsolete || !canAssign}
                 onKeyDown={(event) => {
-                  if (!obsolete && (event.key === "Enter" || event.key === " ")) {
+                  if (canAssign && !obsolete && (event.key === "Enter" || event.key === " ")) {
                     event.preventDefault();
                     onSelectCandidate(cand, state.searchId ?? undefined);
                   }
@@ -175,7 +177,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                     : undefined
                 }
                 onClick={() => {
-                  if (!obsolete) {
+                  if (!obsolete && canAssign) {
                     onSelectCandidate(cand, state.searchId ?? undefined);
                   }
                 }}

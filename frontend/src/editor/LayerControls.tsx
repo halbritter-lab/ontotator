@@ -15,6 +15,7 @@ export interface LayerControlsProps {
   onSetActiveType: (typeId: string) => void;
   onCheckLayer?: (layerId: string, checked: boolean) => void;
   disabled?: boolean;
+  readOnly?: boolean;
 }
 
 export const LayerControls: React.FC<LayerControlsProps> = ({
@@ -27,6 +28,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
   onSetActiveType,
   onCheckLayer,
   disabled = false,
+  readOnly = false,
 }) => {
   // Requirement: Zero extra controls for single-layer packages
   if (layers.length <= 1) {
@@ -140,8 +142,8 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
               <Button
                 type="button"
                 className={`btn btn-sm btn-secondary layer-controls__verify${isChecked ? " is-checked" : ""}`}
-                onClick={() => onCheckLayer(activeLayer.layer_id, !isChecked)}
-                disabled={disabled}
+                onClick={() => { if (!readOnly) onCheckLayer(activeLayer.layer_id, !isChecked); }}
+                disabled={disabled || readOnly}
                 aria-label={`Mark ${activeName} as verified`}
               >
                 {isChecked ? <><IconCheck />{activeName} verified (Reset)</> : `Mark ${activeName} as verified`}

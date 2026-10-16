@@ -35,6 +35,7 @@ export type PreferencesUpdate = components["schemas"]["PreferencesUpdate"];
 export type ProjectSummary = components["schemas"]["ProjectSummary"];
 export type TaskSummary = components["schemas"]["TaskSummary"];
 export type AssignmentWorkspace = components["schemas"]["AssignmentOpenResponse"];
+export type AssignmentOpenRequest = components["schemas"]["AssignmentOpenRequest"];
 /** The logged-in user; `csrf_token` goes back in `X-CSRF-Token` with every write. */
 export type CurrentUser = components["schemas"]["CurrentUser"];
 export type Profile = components["schemas"]["Profile"];
@@ -162,8 +163,10 @@ export class ApiClient {
     return this.request<TaskSummary[]>("/api/v1/me/tasks", { method: "GET" });
   }
 
-  async openAssignment(id: number): Promise<AssignmentWorkspace> {
-    return this.request<AssignmentWorkspace>(`/api/v1/assignments/${id}/open`, { method: "POST" });
+  async openAssignment(id: number, request?: AssignmentOpenRequest): Promise<AssignmentWorkspace> {
+    return this.request<AssignmentWorkspace>(`/api/v1/assignments/${id}/open`, {
+      method: "POST", ...(request === undefined ? {} : { body: JSON.stringify(request) }),
+    });
   }
 
   setCsrfToken(token: string | null): void {

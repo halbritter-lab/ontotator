@@ -13,13 +13,10 @@ import {
 const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
 
 test("first run: log in without projects, get a T1 import, open a case without typing initials", async ({ page }) => {
-  // A user without memberships sees the guide, and nothing to upload.
+  // A user without assignments sees the empty list, and nothing to upload.
   await loginAs(page, "first-run");
-  const guide = page.getByRole("region", { name: "Get started" });
+  const guide = page.getByRole("heading", { name: "No documents are assigned to you yet." });
   await expect(guide).toBeVisible();
-  await expect(guide).toContainText(
-    "No projects are available to you yet. Ask an administrator to add you to a project.",
-  );
   await expect(guide).not.toContainText(/initials/i);
   await expect(page.locator("#mode-select")).toHaveCount(0);
   await expect(page.locator('input[type="file"]')).toHaveCount(0);
@@ -28,6 +25,7 @@ test("first run: log in without projects, get a T1 import, open a case without t
   const imported = await page.request.post("/__test_import__?username=first-run");
   expect(imported.ok()).toBeTruthy();
   expect(((await imported.json()) as { proposals: number }).proposals).toBeGreaterThan(0);
+  await page.goto(`${LAUNCH_URL}#/?project=t1-browser`);
   await page.reload();
   await expect(guide).toHaveCount(0);
   await expect(page.locator("#project-select")).toHaveValue("t1-browser");
@@ -69,8 +67,7 @@ test("login: a wrong password is refused; a setup code sets the password and log
 
 test("real backend: review, resume, reload and submit", async ({ page }) => {
   await importFixture(page, "browser-reviewer");
-  await page.locator("#mode-select").selectOption("review");
-  await openCase(page);
+  await openCase(page, { task: "review" });
   await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
   await page.locator(".doc-item").filter({ hasText: "HP:0001252" }).click();
   await expect(page.getByLabel(/Proposal details/i)).toContainText("present");
@@ -78,10 +75,10 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
   await page.getByRole("button", { name: /Confirm/i }).first().click();
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
 
-  // Back on the dashboard the case is in progress; reopening resumes it without asking again.
-  await page.getByRole("button", { name: "← Dashboard" }).click();
-  await expect(page.getByText("Continue where you left off")).toBeVisible();
-  await openCase(page);
+  // Back in My tasks the assignment is in progress; reopening resumes it without asking again.
+  await page.getByRole("button", { name: "← My tasks" }).click();
+  await expect(page.getByTestId("task-row").filter({ hasText: "In progress" })).not.toHaveCount(0);
+  await openCase(page, { task: "review" });
   await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
   await expect(page.locator(".doc-item").filter({ hasText: "HP:0001252" })).toContainText(/confirmed/i);
   await page.locator(".doc-item").filter({ hasText: "HP:0001250" }).click();
@@ -91,15 +88,16 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
 
   await expect(page.getByRole("button", { name: /Download export/i })).toHaveCount(0);
   await page.reload();
-  await page.locator("#project-select").selectOption("browser-fixture");
+  await expect(page.getByText("Submitted. The project lead can reopen it for changes.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Finish & Submit Case/i })).toBeDisabled();
+  await page.goto(`${LAUNCH_URL}#/?project=browser-fixture`);
   await expect(page.locator("#project-select")).toHaveValue("browser-fixture");
   await expect(page.getByText(/Forbidden|Unauthorized|Error loading/)).toHaveCount(0);
 });
 
 test("real backend: invalid input does not block correction", async ({ page }) => {
   await importFixture(page, "browser-independent");
-  await page.locator("#mode-select").selectOption("independent");
-  await openCase(page);
+  await openCase(page, { task: "annotate" });
   await expect(page.getByText(/Review Proposals/i)).toHaveCount(0);
   await page.getByRole("button", { name: /\+ New Annotation/i }).click();
   await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
@@ -112,8 +110,7 @@ test("real backend: invalid input does not block correction", async ({ page }) =
 
 test("real backend: repeated and discontinuous evidence preserves Unicode offsets", async ({ page }) => {
   await importFixture(page, "browser-spans");
-  await page.locator("#mode-select").selectOption("independent");
-  await openCase(page);
+  await openCase(page, { task: "annotate" });
   await selectText(page, 0, 9);
   await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();

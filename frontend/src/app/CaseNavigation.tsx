@@ -10,6 +10,8 @@ export interface CaseNavigationProps {
   currentDocumentId: string;
   onNavigate: (documentId: string) => Promise<void>;
   disabled?: boolean;
+  navigationIds?: string[];
+  currentNavigationId?: string;
 }
 
 const statusLabels: Record<string, string> = {
@@ -23,15 +25,17 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
   currentDocumentId,
   onNavigate,
   disabled = false,
+  navigationIds, currentNavigationId,
 }) => {
-  const currentIndex = documents.findIndex((d) => d.document_id === currentDocumentId);
+  const currentIndex = navigationIds ? navigationIds.indexOf(currentNavigationId ?? "") : documents.findIndex((d) => d.document_id === currentDocumentId);
+  const idAt = (index: number) => navigationIds?.[index] ?? documents[index]?.document_id;
   const total = documents.length;
   const currentDoc = currentIndex >= 0 ? documents[currentIndex] : null;
   const position = currentDoc?.position ?? (currentIndex >= 0 ? currentIndex + 1 : 1);
 
   // Review includes every document in package order.
-  const prevDoc = adjacentCase(documents, currentDocumentId, -1);
-  const nextDoc = adjacentCase(documents, currentDocumentId, 1);
+  const prevDoc = navigationIds ? documents[currentIndex - 1] ?? null : adjacentCase(documents, currentDocumentId, -1);
+  const nextDoc = navigationIds ? documents[currentIndex + 1] ?? null : adjacentCase(documents, currentDocumentId, 1);
   const hasPrev = prevDoc !== null;
   const hasNext = nextDoc !== null;
   // Long IDs often share a prefix (source, release); only the rest tells cases apart.
@@ -39,17 +43,17 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
 
   const handlePrev = async () => {
     if (!prevDoc || disabled) return;
-    await onNavigate(prevDoc.document_id);
+    await onNavigate(idAt(documents.indexOf(prevDoc)));
   };
 
   const handleNext = async () => {
     if (!nextDoc || disabled) return;
-    await onNavigate(nextDoc.document_id);
+    await onNavigate(idAt(documents.indexOf(nextDoc)));
   };
 
   const handleSelect = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const nextId = e.target.value;
-    if (nextId !== currentDocumentId && !disabled) {
+    if (nextId !== (currentNavigationId ?? currentDocumentId) && !disabled) {
       await onNavigate(nextId);
     }
   };
@@ -80,7 +84,7 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         <Select id="case-navigation-select" label={null}
           aria-label="Select case"
           className="form-select-sm"
-          value={currentDocumentId}
+          value={currentNavigationId ?? currentDocumentId}
           onChange={handleSelect}
           disabled={disabled}
           title={currentDocumentId}
@@ -98,12 +102,12 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
             maxWidth: 280,
           }}
         >
-          {documents.map((doc) => {
+          {documents.map((doc, index) => {
             const statusLabel = statusLabels[doc.status] ?? doc.status;
             const shownId = idPrefix ? `…${doc.document_id.slice(idPrefix.length)}` : doc.document_id;
             const openable = canOpenCase(doc);
             return (
-              <option key={doc.document_id} value={doc.document_id} disabled={!openable}>
+              <option key={idAt(index)} value={idAt(index)} disabled={!openable}>
                 Case {doc.position} of {total}: {shownId} ({statusLabel}){!openable && " – no proposals"}
               </option>
             );

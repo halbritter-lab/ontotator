@@ -25,21 +25,24 @@ export async function loginAs(page: Page, pseudonym: string, projects: string[] 
   await expect(page.getByTestId("current-user")).toContainText(pseudonym);
 }
 
-/** Click the single "Open case" action; the identity comes from the session, so nothing asks. */
-export async function openCase(page: Page) {
-  await page.getByRole("button", { name: /^Open case$/i }).click();
+/** Open an actual assigned task, retaining the server's row order. */
+export async function openCase(page: Page, options: { task?: "annotate" | "review"; documentId?: string } = {}) {
+  const task = options.task ?? "annotate";
+  let rows = page.getByTestId("task-row").filter({ has: page.getByRole("cell", { name: task === "review" ? "Review" : "Annotate", exact: true }) });
+  if (options.documentId) rows = rows.filter({ has: page.getByRole("cell", { name: options.documentId, exact: true }) });
+  await rows.first().getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.locator(".status-badge")).toBeVisible();
 }
 
 /**
  * Log in as ``annotator`` with every role in the seeded project ``projectKey``
- * and select it on the dashboard. The browser server seeds every scenario at
+ * and filter My tasks. The browser server seeds every scenario at
  * start-up (``_scenario`` names the one the spec relies on).
  */
 export async function importPackage(page: Page, _scenario: string, projectKey: string, annotator: string) {
   await loginAs(page, annotator, [projectKey]);
+  await page.goto(`${LAUNCH_URL}#/?project=${encodeURIComponent(projectKey)}`);
   await expect(page.locator("#project-select")).toBeVisible();
-  await page.locator("#project-select").selectOption(projectKey);
   await expect(page.locator("#project-select")).toHaveValue(projectKey);
 }
 

@@ -1,3 +1,4 @@
+import { assigned, assignedList } from "./assignments";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ValidationError } from "../src/api/client";
@@ -305,30 +306,30 @@ it("strictly separates selection between review targets and own annotations in s
  expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
 });
 
-it("lets the server resolve review targets only after opening explicitly chosen review mode (blinding)", async () => {
+it("lets the server resolve review targets only after opening explicitly opened assigned review task (blinding)", async () => {
  window.localStorage.clear();
  asAnnotator("dr-a");
  vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", ontology: { release: "test" } }] as any);
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([proposal("v1", "HP:1"), proposal("v2", "HP:2")]);
- const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view: baseView() });
+ const view = baseView(); view.key.mode = "review"; view.scope.mode = "review";
+ assignedList(view);
+ const open = vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view }));
  render(<App/>);
- await waitFor(() => expect(screen.getByRole("button", { name: /Open case/i }).hasAttribute("disabled")).toBe(false));
+ await waitFor(() => expect(screen.getByRole("button", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false));
  // No auto mode detection and no proposal prefetch on package selection.
- expect((screen.getByLabelText(/Working mode/i) as HTMLSelectElement).value).toBe("independent");
+ expect(screen.queryByLabelText(/Working mode/i)).toBeNull();
  expect(inputs).not.toHaveBeenCalled();
- fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });
  // The dashboard never lists proposal contents.
  await new Promise((resolve) => setTimeout(resolve, 0));
  expect(inputs).not.toHaveBeenCalled();
  expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
  expect(screen.queryByText("HP:1")).toBeNull();
- fireEvent.click(screen.getByRole("button", { name: /Open case/i }));
+ fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
  await confirmIdentity();
  await waitFor(() => expect(open).toHaveBeenCalled());
  expect(inputs).not.toHaveBeenCalled();
- expect(open.mock.calls[0][0].targets).toBeNull();
- expect(open.mock.calls[0][0].mode).toBe("review");
+ expect(open).toHaveBeenCalledWith(1);
 });
 
 it("opens a review workspace without any review targets", async () => {
@@ -337,14 +338,15 @@ it("opens a review workspace without any review targets", async () => {
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
  asAnnotator("dr-a");
- const open = vi.spyOn(api, "openWorkspace").mockResolvedValue({ read_only: false, workspace_id: "ws", view: baseView() });
+ const view = baseView(); view.key.mode = "review"; view.scope.mode = "review";
+ assignedList(view);
+ const open = vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view }));
  render(<App/>);
- await waitFor(() => expect(screen.getByRole("button", { name: /Open case/i }).hasAttribute("disabled")).toBe(false));
- fireEvent.change(screen.getByLabelText(/Working mode/i), { target: { value: "review" } });
- fireEvent.click(screen.getByRole("button", { name: /Open case/i }));
+ await waitFor(() => expect(screen.getByRole("button", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false));
+ fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
  await confirmIdentity();
  await waitFor(() => expect(open).toHaveBeenCalled());
- expect(open.mock.calls[0][0]).toEqual(expect.objectContaining({ mode: "review", targets: null }));
+ expect(open).toHaveBeenCalledWith(1);
 });
 
 it("binds a changed decision to the replacement version after queued edits", async () => {
