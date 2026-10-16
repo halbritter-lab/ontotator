@@ -13,6 +13,7 @@ beforeEach(() => {
   vi.spyOn(api, "listProjects").mockResolvedValue([project]);
   vi.spyOn(api, "getProjectSettings").mockResolvedValue(settings);
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue(documents);
+  vi.spyOn(api, "listCases").mockResolvedValue([]);
   vi.spyOn(api, "listAssignments").mockResolvedValue([]);
   vi.spyOn(api, "listMembers").mockResolvedValue(members);
 });
@@ -21,7 +22,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(n
 it("keeps the SAME focused prefix input while actual App navigation controls every typed query", async () => {
   const user = userEvent.setup();
   render(<App user={testUser("lead", { is_system_admin: false })} />);
-  await screen.findByText("z/doc");
+  await screen.findByRole("link", { name: "View case for z/doc" });
   const input = screen.getByLabelText("ID prefix");
   await user.type(input, "abc");
   await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?q=abc"));
@@ -40,7 +41,7 @@ it("assigns only the selected document through real role-filtered controls and r
   vi.mocked(api.listAssignments).mockResolvedValueOnce([]).mockResolvedValue([assignment]);
   vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [assignment], refused: [] });
   render(<App user={testUser("lead", { is_system_admin: false })} />);
-  await screen.findByText("z/doc");
+  await screen.findByRole("link", { name: "View case for z/doc" });
   fireEvent.click(screen.getByLabelText("Select z/doc"));
   fireEvent.click(screen.getByRole("button", { name: "Assign …" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign documents" });
