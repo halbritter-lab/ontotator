@@ -120,6 +120,8 @@ def test_commit_rereads_fresh_complete_project_context(staged, change):
                 DocumentRow.__table__.insert().values(
                     project_id=project_id,
                     document_id="unrelated",
+                    case_id="unrelated",
+                    external_id="unrelated",
                     language="de",
                     text="Else",
                     text_sha256=hashlib.sha256(b"Else").hexdigest(),
