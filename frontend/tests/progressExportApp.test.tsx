@@ -17,6 +17,8 @@ beforeEach(() => {
   vi.spyOn(api, "listProjects").mockResolvedValue([project]);
   vi.spyOn(api, "getProgress").mockResolvedValue(progress);
   vi.spyOn(api, "getProjectSettings").mockResolvedValue(settings);
+  vi.spyOn(api, "listMembers").mockResolvedValue([]);
+  vi.spyOn(api, "listAssignments").mockResolvedValue([]);
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue([{ ...document, status: "not_started", text_length: 4 }] as never);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); window.history.replaceState(null, "", "#/"); });

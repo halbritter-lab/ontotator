@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.spyOn(api, "listOntologies").mockResolvedValue(ontologies);
   vi.spyOn(api, "getProjectSettings").mockResolvedValue(settings);
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
+  vi.spyOn(api, "listAssignments").mockResolvedValue([]);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); api.setCsrfToken(null); window.history.replaceState(null, "", "#/"); });
 const link = (name: string) => fireEvent.click(screen.getByRole("link", { name }));
