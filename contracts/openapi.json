@@ -1499,6 +1499,48 @@
         }
       }
     },
+    "/api/v1/projects/{key}/exports/translation-reviews": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Request Translation Review Export",
+        "operationId": "request_translation_review_export_api_v1_projects__key__exports_translation_reviews_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/templates": {
       "get": {
         "tags": [

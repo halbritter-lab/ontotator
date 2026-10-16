@@ -315,7 +315,7 @@ class ScopedRepository(Repository):
         documents: Sequence[ImportedDocument],
         proposal_sets: Sequence[ImportedSet],
         *,
-        source_sha256: str,
+        source_sha256: str | None,
         imported_by: int | None = None,
         job_id: int | None = None,
         on_done: Callable[[Connection, int, ImportCounts], None] | None = None,
