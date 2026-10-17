@@ -352,8 +352,13 @@ test('restricted annotator completes exact assigned work and retains pending own
   const own = await ownSubmission(page, s.assignments.bob);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Previous Submissions' })).toBeVisible();
-  await page.getByRole('button', { name: new RegExp(own.submission_id) }).click();
-  await expect(page.getByRole('dialog', { name: 'Historical submission' })).toContainText(own.submission_id);
+  const historyLabel = await page.evaluate(createdAt => `Submission 1 · ${new Intl.DateTimeFormat('en-GB', {
+    dateStyle: 'medium', timeStyle: 'short',
+  }).format(new Date(createdAt))}`, own.created_at);
+  await page.getByRole('button', { name: historyLabel, exact: true }).click();
+  const history = page.getByRole('dialog', { name: 'Historical submission' });
+  await history.getByText('Technical details', { exact: true }).click();
+  await expect(history.getByText(own.submission_id, { exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('restricted-own-history.png'), fullPage: true });
   for (const suffix of ['variant', 'text']) {
     const denied = await authenticatedRequest(page, documentPath(s, s.documents.source, suffix));

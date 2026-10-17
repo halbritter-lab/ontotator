@@ -108,6 +108,8 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
   expect(before.view.key.mode).toBe('review');
   const response=await authenticatedRequest(page,documentPath(s,'reanchor-items'));expect(response.ok()).toBeTruthy();
   const items=await response.json() as Item[];expect(items).toEqual(s.pending);
+  await page.locator('.case-version-controls > summary').click();
+  await expect(page.getByRole('button',{name:'Compare',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Compare',exact:true}).click();
   const comparison=page.getByRole('region',{name:'Comparison',exact:true});
   const version=comparison.getByLabel('Text version',{exact:true});
@@ -117,7 +119,8 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
   await expect(annotations.locator('option:checked')).toHaveText('Text only');
   await expect(comparison.locator('.text-container')).toHaveText(s.old_text);
   await expect(comparison.getByRole('region',{name:'Needs review after the text change',exact:true})).toHaveCount(0);
-  await comparison.getByLabel('Couple scrolling',{exact:true}).uncheck();
+  await expect(comparison.getByLabel('Couple scrolling',{exact:true})).not.toBeChecked();
+  await expect(comparison.getByLabel('Couple scrolling',{exact:true})).toBeDisabled();
   await expect(panel(page).getByRole('heading')).toHaveText(`Needs review after the text change (${items.length})`);
   const rows=panel(page).locator('ol > li');await expect(rows).toHaveCount(items.length);
   for(let i=0;i<items.length;i++) {
