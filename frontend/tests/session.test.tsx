@@ -1,7 +1,7 @@
 import { assigned, assignedList } from "./assignments";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiClient, AuthError, isSessionExpired, onSessionExpired, type CurrentUser } from "../src/api/client";
+import { api, ApiClient, AuthError, isSessionExpired, onSessionExpired, type CurrentUser, type ProjectSummary } from "../src/api/client";
 import { AuthGate } from "../src/app/AuthGate";
 import { testUser } from "./session";
 
@@ -19,7 +19,13 @@ const oneCaseServer = (view = caseView()) => {
     .mockRejectedValue(new AuthError("This task is no longer assigned to you.", undefined, "ASSIGNMENT_NOT_FOUND", 404));
   vi.spyOn(api, "getPreferences").mockResolvedValue({ mode_by_package: {} } as any);
   vi.spyOn(api, "listOntologies").mockResolvedValue([]);
-  vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
+  const project: ProjectSummary = {
+    project_key: "pkg", name: "Session test project", description: null,
+    roles: view.key.mode === "review" ? ["adjudicator"] : ["annotator"],
+    allowed_modes: view.key.mode === "review" ? ["review"] : ["independent", "assisted"],
+    document_count: 1, can_manage: false,
+  };
+  vi.spyOn(api, "listProjects").mockResolvedValue([project]);
   vi.spyOn(api, "listDocuments").mockResolvedValue([
     { document_id: "doc-1", text_length: 10, language: "en", position: 1, status: "not_started" as const },
   ]);
