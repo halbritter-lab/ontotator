@@ -161,3 +161,21 @@ it('clears coupling when editing, even with equal paragraph counts', async () =>
   expect(box.disabled).toBe(true); expect(box.checked).toBe(false);
   mounted.rerender(<ComparePane {...props} leftText="one" />); expect(box.checked).toBe(false);
 });
+
+it('restores coupling numbers after a late annotation payload replaces vendor marker nodes',async()=>{
+  let finish!:(value:typeof historical)=>void;
+  vi.mocked(api.getAnnotationVersion).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+  const mounted=render(<ComparePane {...props} />);await screen.findByText('Immutable source');
+  fireEvent.change(screen.getByLabelText('Annotations'),{target:{value:refKey(ownRef)}});
+  await waitFor(()=>expect(api.getAnnotationVersion).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Couple scrolling'}));
+  const marker=mounted.container.querySelector('[data-paragraph]')!;
+  expect(marker.getAttribute('data-paragraph-number')).toBe('1');
+  const payload=structuredClone(historical);
+  payload.annotations[0].annotation.evidence_refs=[{evidence_id:'late',version:'ev1'}];
+  payload.annotations[0].evidence=[{document_id:'source',text_sha256:'text',version:'ev1',mention:{evidence_id:'late',segments:[{start:0,end:9}],cue_segments:[]}}];
+  await act(async()=>{finish(payload);});await screen.findByText('HP:old');
+  const refreshed=mounted.container.querySelector('[data-paragraph]')!;
+  expect(refreshed).not.toBe(marker);expect(refreshed.getAttribute('data-paragraph-number')).toBe('1');
+  expect(mounted.container.querySelector('.text-container')!.textContent).toBe('Immutable source');
+});

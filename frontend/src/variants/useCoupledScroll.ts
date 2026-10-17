@@ -20,6 +20,9 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], { enabled 
       const participants = panes.filter((pane): pane is CoupledScrollPane & { element: HTMLElement } => pane.element !== null);
       let leaderId: string | null = null;
       const decorated = new Set<HTMLElement>();
+      // An input event may precede a queued programmatic scroll event. Keep its
+      // written position until real movement occurs, even after ownership changes.
+      const programmaticPositions = new Map<HTMLElement, number>();
       const markers = (pane: CoupledScrollPane & { element: HTMLElement }) => {
         const edge = pane.element.getBoundingClientRect().top + pane.element.clientTop;
         return [...pane.element.querySelectorAll<HTMLElement>('[data-paragraph]')].flatMap(marker => {
@@ -50,7 +53,10 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], { enabled 
           const partnerHeight = partnerEnd-partner.top;
           if (!Number.isFinite(partnerHeight) || partnerHeight <= 0) continue;
           const target = partner.top+fraction*partnerHeight;
-          if (Number.isFinite(target)) pane.element.scrollTop = Math.max(0, Math.min(Math.max(0,pane.element.scrollHeight-pane.element.clientHeight),target));
+          if (Number.isFinite(target)) {
+            pane.element.scrollTop = Math.max(0, Math.min(Math.max(0,pane.element.scrollHeight-pane.element.clientHeight),target));
+            programmaticPositions.set(pane.element, pane.element.scrollTop);
+          }
         }
         setState(previous => previous.leaderId === leaderId && previous.pairs.length === pairs.length && pairs.every((pair,i) => pair.paneId === previous.pairs[i].paneId && pair.paragraph === previous.pairs[i].paragraph) ? previous : { leaderId, pairs });
       };
@@ -58,14 +64,36 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], { enabled 
       participants.forEach(pane => {
         const input = () => { leaderId = pane.id; };
         const key = (event: KeyboardEvent) => { if (navigationKeys.has(event.key)) input(); };
-        const scroll = () => { if (leaderId === null) leaderId = pane.id; if (leaderId === pane.id) sync(pane); };
+        const scroll = () => {
+          if (programmaticPositions.get(pane.element) === pane.element.scrollTop) return;
+          programmaticPositions.delete(pane.element);
+          if (leaderId === null) leaderId = pane.id;
+          if (leaderId === pane.id) sync(pane);
+        };
         for (const type of ['wheel','touchstart','pointerdown']) {
           pane.element.addEventListener(type,input,{passive:true}); removals.push(()=>pane.element.removeEventListener(type,input));
         }
         pane.element.addEventListener('keydown',key); pane.element.addEventListener('scroll',scroll,{passive:true});
         removals.push(()=>{ pane.element.removeEventListener('keydown',key); pane.element.removeEventListener('scroll',scroll); });
       });
-      if (participants[0]) sync(participants[0],false);
+      const refreshMarkers = () => {
+        // Vendor annotation redraws replace marker nodes without replacing the
+        // scrollport. Observe child lists only: our attribute writes cannot loop.
+        for (const marker of decorated) {
+          if (!participants.some(pane => pane.element.contains(marker))) {
+            delete marker.dataset.paragraphNumber;
+            delete marker.dataset.coupledActive;
+            decorated.delete(marker);
+          }
+        }
+        participants.forEach(markers);
+        const source = participants.find(pane => pane.id === leaderId) ?? participants[0];
+        if (source) sync(source, false);
+      };
+      const observer = new MutationObserver(refreshMarkers);
+      participants.forEach(pane => observer.observe(pane.element, { childList: true, subtree: true }));
+      removals.push(() => observer.disconnect());
+      refreshMarkers();
       detach = () => { removals.forEach(remove=>remove()); decorated.forEach(marker=>{ delete marker.dataset.paragraphNumber; delete marker.dataset.coupledActive; }); leaderId=null; };
     };
     bind(); wide.addEventListener('change',bind);

@@ -80,3 +80,30 @@ it('clamped followers retain ownership protection indefinitely and finite geomet
  a.element!.querySelectorAll<HTMLElement>('[data-paragraph]').forEach(marker=>{marker.getBoundingClientRect=()=>({top:NaN} as DOMRect);});
  scroll(a,1970);expect(b.element!.scrollTop).toBe(600);
 });
+
+it('ignores an unchanged queued follower echo after explicit input transfers ownership with unequal counts',()=>{
+  const source=pane('source',[0,200,400,600,800,1000,1200]);
+  const follower=pane('follower',[0,200,400,600]);const panes=[source,follower];
+  const {result}=renderHook(()=>useCoupledScroll(panes,{enabled:true}));
+  scroll(source,250);expect(follower.element!.scrollTop).toBe(250);
+  fireEvent.pointerDown(follower.element!);fireEvent.scroll(follower.element!);
+  expect(source.element!.scrollTop).toBe(250);
+  fireEvent.scroll(follower.element!);expect(source.element!.scrollTop).toBe(250);
+  scroll(follower,275);expect(source.element!.scrollTop).toBe(475);expect(result.current.leaderId).toBe('follower');
+});
+it('decorates replacement markers before any scroll without rewriting clinical text or selection',async()=>{
+  const source=pane('source',[0,200,400]),follower=pane('follower',[0,300,600]);const panes=[source,follower];
+  document.body.append(source.element!);
+  const text=document.createTextNode('µ ± α 😀');source.element!.append(text);
+  const selection=window.getSelection()!,range=document.createRange();range.selectNodeContents(text);selection.removeAllRanges();selection.addRange(range);
+  const mounted=renderHook(()=>useCoupledScroll(panes,{enabled:true}));scroll(source,250);
+  const old=source.element!.querySelector<HTMLElement>('[data-paragraph="1"]')!;
+  const replacement=document.createElement('span');replacement.dataset.paragraph='1';replacement.setAttribute('aria-hidden','true');
+  replacement.getBoundingClientRect=()=>({top:100+200-source.element!.scrollTop} as DOMRect);
+  const previous=follower.element!.scrollTop;
+  await act(async()=>{old.replaceWith(replacement);});
+  expect(replacement.getAttribute('data-paragraph-number')).toBe('2');expect(replacement.getAttribute('data-coupled-active')).toBe('true');
+  expect(source.element!.textContent).toBe('µ ± α 😀');expect(selection.toString()).toBe('µ ± α 😀');
+  expect(source.element!.scrollTop).toBe(250);expect(follower.element!.scrollTop).toBe(previous);
+  mounted.unmount();expect(replacement.hasAttribute('data-paragraph-number')).toBe(false);source.element!.remove();
+});
