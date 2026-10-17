@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
 import { api, ConflictError, ValidationError, type Draft } from "../src/api/client";
@@ -587,6 +587,29 @@ describe("CaseScreen integration", () => {
     });
   });
 
+  it("labels existing own history by displayed ordinal and opens the exact submission details", () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const first = view.draft.annotations![0]; const second = structuredClone(first);
+    second.annotation.annotation_id = "second-history-finding"; second.annotation.term_id = "HP:0001250";
+    view.draft.annotations = [];
+    const base = { format_version: "ontocurator-submission/v2", origin_key: view.key,
+      targets: view.targets!, draft_revision: 1, snapshots: [first], decisions: [], document_checked: true,
+      created_at: new Date(2026, 9, 17, 9, 5).toISOString() };
+    view.submissions = [{ ...base, submission_id: "sub-exact-first" },
+      { ...base, submission_id: "sub-exact-second", snapshots: [second] }];
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Submission 1 · 17 Oct 2026, 09:05" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /sub-exact-second/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Submission 2 · 17 Oct 2026, 09:05" }));
+    const dialog = screen.getByRole("dialog", { name: "Historical submission" });
+    expect(within(dialog).getByRole("heading", { name: "Submission 2 · 17 Oct 2026, 09:05" })).toBeDefined();
+    fireEvent.click(within(dialog).getByText("Technical details"));
+    expect(within(dialog).getByText("sub-exact-second")).toBeDefined();
+    expect(within(dialog).queryByText("sub-exact-first")).toBeNull();
+    expect(within(dialog).getByText("HP:0001250")).toBeDefined();
+    expect(within(dialog).queryByText("HP:0001252")).toBeNull();
+  });
+
   it("escape_cancels_the_submit_dialog", async () => {
     render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
@@ -629,7 +652,7 @@ describe("CaseScreen integration", () => {
     expect(screen.getByText("Confirm selected proposal")).toBeDefined();
     expect(screen.getByText("Reject selected proposal")).toBeDefined();
     expect(screen.getByText("Adopt proposal as editable copy")).toBeDefined();
-    expect(screen.getByText("Mark selected proposal as uncertain")).toBeDefined();
+    expect(screen.getByText("Mark selected proposal as unresolved (note required)")).toBeDefined();
   });
 
   it("counts hidden defaulted annotations and jumps to their axes without confirming them", async () => {
@@ -673,6 +696,7 @@ describe("CaseScreen integration", () => {
     });
     render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
     fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    fireEvent.change(screen.getByRole("textbox", { name: /Reviewer note/ }), { target: { value: "Review required" } });
     for (const [key, outcome] of [["1", "confirmed"], ["2", "rejected"], ["4", "uncertain"]]) {
       for (let repeat = 0; repeat < 2; repeat++) {
         fireEvent.keyDown(window, { key });
@@ -692,6 +716,98 @@ describe("CaseScreen integration", () => {
     const beforeModal = record.mock.calls.length;
     fireEvent.keyDown(window, { key: "1" });
     expect(record).toHaveBeenCalledTimes(beforeModal);
+  });
+
+  it("key four requires a note before changing the reviewer decision", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const proposal = view.draft.annotations![0]; view.draft.annotations = [];
+    view.available_inputs = [proposal]; view.key.mode = "review"; view.draft.key.mode = "review";
+    view.targets!.targets = [{ annotation_id: proposal.annotation.annotation_id, version: proposal.version }];
+    view.draft.targets = view.targets!;
+    const record = vi.spyOn(api, "recordDecision").mockResolvedValue(view.draft);
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    fireEvent.keyDown(window, { key: "4" });
+    const note = screen.getByRole("textbox", { name: "Reviewer note" });
+    expect(record).not.toHaveBeenCalled(); expect(document.activeElement).toBe(note);
+    expect(note.getAttribute("aria-invalid")).toBe("true");
+    fireEvent.change(note, { target: { value: "Needs specialist input" } });
+    fireEvent.keyDown(window, { key: "4" });
+    await waitFor(() => expect(record).toHaveBeenCalledWith("ws-test", expect.objectContaining({
+      payload: expect.objectContaining({ outcome: "uncertain", note: "Needs specialist input" }),
+    })));
+  });
+
+  it("keeps the editable reviewer note when the server refuses a decision save", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const proposal = view.draft.annotations![0]; view.draft.annotations = [];
+    view.available_inputs = [proposal]; view.key.mode = "review"; view.draft.key.mode = "review";
+    view.targets!.targets = [{ annotation_id: proposal.annotation.annotation_id, version: proposal.version }];
+    view.draft.targets = view.targets!;
+    vi.spyOn(api, "recordDecision").mockRejectedValue(new ValidationError("Reviewer note could not be saved"));
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    const note = screen.getByRole("textbox", { name: "Reviewer note" });
+    fireEvent.change(note, { target: { value: "  Keep this attempted note  " } });
+    fireEvent.click(screen.getByRole("button", { name: /Unresolved/ }));
+    expect(await screen.findByText("Reviewer note could not be saved")).toBeDefined();
+    expect((note as HTMLInputElement).value).toBe("  Keep this attempted note  ");
+  });
+
+  it("blocks submit for a blank local unresolved note after selecting another target", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const first = view.draft.annotations![0]; const second = structuredClone(first);
+    second.annotation.annotation_id = "second-proposal"; second.version = "second-v";
+    view.draft.annotations = []; view.available_inputs = [first, second];
+    view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: first.annotation.annotation_id, version: first.version };
+    const other = { annotation_id: second.annotation.annotation_id, version: second.version };
+    view.targets!.targets = [target, other]; view.draft.targets = view.targets!;
+    view.draft.decisions = [{ decision_id: "first", target, outcome: "uncertain", note: "Stored reason", reviewer_id: "r" },
+      { decision_id: "second", target: other, outcome: "confirmed", reviewer_id: "r" }];
+    const record = vi.spyOn(api, "recordDecision").mockImplementation(async (_id, envelope) => {
+      const next = structuredClone(view.draft); next.revision++;
+      next.decisions![0].note = envelope.payload.note as string;
+      return next;
+    });
+    const submit = vi.spyOn(api, "submitWorkspace");
+    const logout = vi.fn();
+    const leaveGuardRef = { current: null as ((proceed: () => void) => void) | null };
+    const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} leaveGuardRef={leaveGuardRef} routeLeaveRef={routeLeaveRef} />);
+    const targets = document.querySelectorAll('[data-list-key^="target:"]');
+    fireEvent.click(targets[0]);
+    fireEvent.change(screen.getByRole("textbox", { name: "Reviewer note" }), { target: { value: "  " } });
+    fireEvent.click(targets[1]);
+    expect(screen.getByText("Reviewer note required – changes not saved")).toBeDefined();
+    act(() => leaveGuardRef.current?.(logout));
+    expect(logout).not.toHaveBeenCalled();
+    let departure!: Promise<boolean>;
+    act(() => { departure = routeLeaveRef.current!(); });
+    await screen.findByRole("dialog", { name: "Changes not saved" });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await act(async () => { expect(await departure).toBe(false); });
+    const unloading = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unloading); expect(unloading.defaultPrevented).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Submit case/ })).toBeNull());
+    expect((await screen.findAllByText(/unresolved proposals require a reviewer note before submitting/)).length).toBeGreaterThan(0);
+    const note = screen.getByRole("textbox", { name: "Reviewer note" });
+    expect((note as HTMLInputElement).value).toBe("  "); expect(document.activeElement).toBe(note);
+    expect(record).not.toHaveBeenCalled(); expect(submit).not.toHaveBeenCalled();
+    fireEvent.change(note, { target: { value: "Corrected reviewer note" } }); fireEvent.blur(note);
+    await waitFor(() => expect(record).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    expect(await screen.findByRole("dialog", { name: /Submit case/ })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Reviewer note" }), { target: { value: "" } });
+    act(() => { departure = routeLeaveRef.current!(); });
+    await screen.findByRole("dialog", { name: "Changes not saved" });
+    fireEvent.click(screen.getByRole("button", { name: "Discard edits and leave" }));
+    await act(async () => { expect(await departure).toBe(true); });
+    expect((screen.getByRole("textbox", { name: "Reviewer note" }) as HTMLInputElement).value).toBe("Corrected reviewer note");
+    expect(record).toHaveBeenCalledOnce();
+
   });
 
   it("key three resumes the exact saved replacement without adopting another copy", () => {

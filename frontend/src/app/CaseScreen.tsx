@@ -39,6 +39,7 @@ import {
   type QueueState,
 } from "../editor/autosave";
 import { newEvidenceId } from "../editor/ids";
+import { submissionHistoryLabel } from "../editor/submissionHistoryLabel";
 import { StatusBadge } from "../ui/StatusBadge";
 import { defaultedResults, resultSnapshots } from "../editor/decisionSemantics";
 import { LayerControls } from "../editor/LayerControls";
@@ -208,6 +209,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [isReloading, setIsReloading] = useState(false);
   // Reviewer notes typed in the UI, keyed by target; kept even when a decision is reset.
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const invalidReviewNoteGuard = useRef<() => boolean>(() => false);
+  const hasInvalidReviewNoteRef = useRef(false);
+  const [requiredNoteKey, setRequiredNoteKey] = useState<string | null>(null);
   const noteDraftsRef = useRef(noteDrafts);
   noteDraftsRef.current = noteDrafts;
 
@@ -443,6 +447,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // position of what it showed before -- next to a docked tree the pane is short, so a new
   // annotation would appear scrolled to where its candidate was, its term name out of sight.
   const inspectorRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (requiredNoteKey !== null && selectedTargetId !== requiredNoteKey) setRequiredNoteKey(null);
+    else if (requiredNoteKey !== null) inspectorRef.current?.querySelector<HTMLInputElement>('[aria-label="Reviewer note"]')?.focus();
+  }, [selectedTargetId, requiredNoteKey]);
   const inspectorKey = pendingAnnotation ? `pending:${pendingAnnotation.annotationId}` : selectedListKey;
   useLayoutEffect(() => {
     if (inspectorRef.current) inspectorRef.current.scrollTop = 0;
@@ -489,6 +497,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   useEffect(() => {
     if (!leaveGuardRef) return;
     leaveGuardRef.current = (proceed) => {
+      if (invalidReviewNoteGuard.current()) return;
       const queue = queueRef.current;
       if (queue.pendingCount() === 0 && queue.getState() !== "saving") proceed();
       else {
@@ -501,6 +510,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const saveAndLogout = async () => {
     if (!logoutProceed || logoutSaving) return;
+    if (invalidReviewNoteGuard.current()) { setLogoutProceed(null); return; }
     setLogoutSaving(true);
     try {
       await queueRef.current.flush();
@@ -528,6 +538,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (leaveInProgress.current) return false;
     leaveInProgress.current = true;
     try {
+      const invalidLocalNotes = !readOnlyRef.current ? (latestDraft.current.decisions ?? []).filter(d => {
+        const local = noteDraftsRef.current[refKey(d.target)];
+        return d.outcome === "uncertain" && local !== undefined && !local.trim() && local !== (d.note ?? "");
+      }) : [];
+      if (invalidLocalNotes.length > 0) {
+        const discard = await askConfirm("Changes not saved",
+          "An unresolved reviewer note is empty and cannot be saved. Leaving discards the local note edit; the saved review decision is kept.",
+          "Discard edits and leave");
+        if (!discard) { invalidReviewNoteGuard.current(); return false; }
+        const kept = { ...noteDraftsRef.current };
+        for (const decision of invalidLocalNotes) delete kept[refKey(decision.target)];
+        noteDraftsRef.current = kept; setNoteDrafts(kept);
+      }
       const rejectedBefore = queueRef.current.rejectedCount();
       if (rejectedBefore > 0) {
         setActionError("A change could not be saved. Reload the case before leaving.");
@@ -643,6 +666,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
   }, []);
 
+  const hasInvalidReviewNote = !readOnly && view.key.mode === "review" && (draft.decisions ?? []).some(d =>
+    d.outcome === "uncertain" && !(noteDrafts[refKey(d.target)] ?? d.note ?? "").trim());
+  hasInvalidReviewNoteRef.current = hasInvalidReviewNote;
   const statusText =
     queueState === "conflict" ? "Changed elsewhere – reload required"
     : queueState === "error" ? (
@@ -650,15 +676,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       : isNetworkError(queueError) || isOffline ? "Offline – changes not saved"
       : "Save error – changes not saved"
     )
+    : hasInvalidReviewNote ? "Reviewer note required – changes not saved"
     : queueState === "saving" ? "Saving..."
     : queueState === "dirty" ? "Unsaved changes"
     : isOffline ? "Offline"
     : "Saved";
-  const statusIsError = queueState === "conflict" || queueState === "error" || isOffline;
+  const statusIsError = queueState === "conflict" || queueState === "error" || isOffline || hasInvalidReviewNote;
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (["saving", "dirty", "error"].includes(queueRef.current.getState())) {
+      if (hasInvalidReviewNoteRef.current || ["saving", "dirty", "error"].includes(queueRef.current.getState())) {
         event.preventDefault(); event.returnValue = "";
       }
     };
@@ -1111,6 +1138,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
 
+  const requestReviewerNote = (target: TargetProposal) => {
+    const key = targetKeyOf(target);
+    setRequiredNoteKey(key); setSelectedTargetId(key);
+    setSelectedAnnotationId(null); setSelectedSourceId(null); setSelectedEvidenceId(null);
+    cancelPending(); setMobilePane("details");
+    if (selectedTargetId === key) inspectorRef.current?.querySelector<HTMLInputElement>('[aria-label="Reviewer note"]')?.focus();
+  };
+
   // Review Decision Handler: always carries the current reviewer note.
   const handleReviewDecision = async (payload: DecisionPayload, forTarget?: TargetProposal | null) => {
     if (readOnlyRef.current) return;
@@ -1118,6 +1153,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (!target) return;
     setActionError(null);
     const key = targetKeyOf(target);
+    if (payload.outcome === "uncertain" && !(payload.note !== undefined ? payload.note.trim() : currentNoteFor(key))) {
+      requestReviewerNote(target);
+      return;
+    }
+    setRequiredNoteKey(null); setSubmitError(null);
     const abandonedCopies = (latestDraft.current.annotations ?? []).filter((a) =>
       a.annotation.provenance.source_refs?.includes(`${target.annotation_id}:${target.version}`)
       && a.annotation.annotation_id !== payload.replacement?.annotation_id);
@@ -1334,10 +1374,25 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setMobilePane("details"); setSubmitDialogOpen(false); setFocusDefaultedAxes(true);
   };
 
+  const blockInvalidUnresolvedNotes = (action: "submitting" | "leaving" = "submitting") => {
+    if (readOnlyRef.current || view.key.mode !== "review") return false;
+    const invalid = (latestDraft.current.decisions ?? []).filter(d =>
+      d.outcome === "uncertain" && !currentNoteFor(refKey(d.target)));
+    if (invalid.length === 0) return false;
+    setSubmitError(`${invalid.length} unresolved proposals require a reviewer note before ${action}.`);
+    const target = reviewTargets.find(t => refKey(t) === refKey(invalid[0].target));
+    if (target) requestReviewerNote(target);
+    setSubmitDialogOpen(false);
+    return true;
+  };
+
+  invalidReviewNoteGuard.current = () => blockInvalidUnresolvedNotes("leaving");
+
   // Step 1: save pending edits, validate the saved draft and open the confirmation dialog.
   const handleSubmitWorkspace = async () => {
     if (readOnlyRef.current) return;
     setSubmitError(null);
+    if (blockInvalidUnresolvedNotes()) return;
 
     // Validate only after pending saves have finished;
     // the draft from before them would give a stale validation result.
@@ -1353,6 +1408,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       return;
     }
 
+    if (blockInvalidUnresolvedNotes()) return;
     setTextCheckedConfirmed(false);
     setSubmitDialogOpen(true);
   };
@@ -1360,7 +1416,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Step 2: submit after the explicit "entire text checked" confirmation.
   const confirmSubmit = async () => {
     if (readOnlyRef.current) return;
-    if (!textCheckedConfirmed) return;
+    if (!textCheckedConfirmed || blockInvalidUnresolvedNotes()) return;
     if (view.key.mode === "review") {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
       if (missingTargets.length > 0) {
@@ -1504,7 +1560,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   useShortcut("4", () => {
     if (!selectedTarget) return false;
     void handleReviewDecision({ outcome: "uncertain" });
-  }, { ...reviewShortcutOptions, description: "Mark selected proposal as uncertain" });
+  }, { ...reviewShortcutOptions, description: "Mark selected proposal as unresolved (note required)" });
   useShortcut("0", () => { void handleReviewDecision({ outcome: null }); }, { ...reviewShortcutOptions, description: "Reset selected review decision to open" });
   useShortcutHint(["Shift + arrows, then release Shift"], "Select text with the keyboard to create a mention");
   useShortcutHint(["←", "→", "Ctrl + ← / →"], "Move the focused mention edge (Tab to an edge handle of the selected annotation)");
@@ -1744,7 +1800,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                               {dec.outcome === "confirmed" ? <><IconCheck />Confirmed</>
                                : dec.outcome === "rejected" ? <><IconClose />Rejected</>
                                : dec.outcome === "changed" ? <><IconPencil />Replaced</>
-                               : <><IconQuestion />Uncertain</>}
+                               : <><IconQuestion />Unresolved</>}
                             </span>
                           ) : (
                             <span className="decision-tag decision-tag--open">open</span>
@@ -1879,9 +1935,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
           {(view.submissions ?? []).length > 0 && <div className="detail-section">
             <h3>Previous Submissions</h3>
-            {view.submissions!.map(submission => <Button type="button" variant="secondary" size="sm"
+            {view.submissions!.map((submission, index) => <Button type="button" variant="secondary" size="sm"
               key={submission.submission_id} onClick={() => setHistorySubmission(submission)}>
-              {submission.created_at} · {submission.submission_id}
+              {submissionHistoryLabel(submission.created_at, index + 1)}
             </Button>)}
           </div>}
 
@@ -1967,6 +2023,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               currentDecision={decisionsMap[refKey(selectedTarget)] ?? null}
               draftAnnotations={draft.annotations ?? []}
               onDecide={(payload) => { void handleReviewDecision(payload, selectedTarget); }}
+              requireNote={requiredNoteKey === refKey(selectedTarget)}
               note={noteDrafts[refKey(selectedTarget)] ?? decisionsMap[refKey(selectedTarget)]?.note ?? ""}
               onNoteChange={(value) => {
                 if (readOnlyRef.current) return;
@@ -2058,8 +2115,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       </>}
       {comparison}
       </div>
-      {historySubmission && <Dialog open title="Historical submission" heading={<>Submission {historySubmission.submission_id}</>} onClose={() => setHistorySubmission(null)}>
-        <p>{historySubmission.created_at}</p>
+      {historySubmission && <Dialog open title="Historical submission" heading={submissionHistoryLabel(historySubmission.created_at, (view.submissions ?? []).findIndex(s => s.submission_id === historySubmission.submission_id) + 1)} onClose={() => setHistorySubmission(null)}>
+        <details className="technical-details"><summary>Technical details</summary>
+          <p>Submission ID: <code>{historySubmission.submission_id}</code></p>
+          <p>Timestamp: {historySubmission.created_at}</p>
+        </details>
         <p>
           Verified layers:{" "}
           {historySubmission.checked_layer_ids && historySubmission.checked_layer_ids.length > 0
@@ -2085,7 +2145,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           );
         })}
         {historySubmission.decisions.map(decision => <p key={refKey(decision.target)}>
-          {decision.target.annotation_id} ({decision.target.version}): {decision.outcome} {decision.note}
+          {decision.target.annotation_id} ({decision.target.version}): {decision.outcome === "uncertain" ? "Unresolved" : decision.outcome} {decision.note}
         </p>)}
         <Button type="button" variant="secondary" onClick={() => setHistorySubmission(null)}>
           Close
