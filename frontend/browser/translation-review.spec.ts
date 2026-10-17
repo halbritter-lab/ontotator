@@ -18,6 +18,14 @@ const documentsUrl = (s: Scenario) => `/#/projects/${encodeURIComponent(s.projec
 const variantPath = (s: Scenario, id: string, suffix: string) => `/api/v1/projects/${encodeURIComponent(s.project)}/documents/${encodeURIComponent(id)}/${suffix}`;
 const target = (page: Page) => page.getByRole('textbox', { name: 'Translation (de)', exact: true });
 const review = (page: Page) => page.getByRole('region', { name: 'Translation review', exact: true });
+const submitButton = (page: Page) => page.getByRole('button', { name: 'Submit review…', exact: true });
+/** Submitting is immutable and always confirmed in a dialog. */
+async function confirmSubmit(page: Page) {
+  await submitButton(page).click();
+  const dialog = page.getByRole('dialog', { name: 'Submit this review?', exact: true });
+  await expect(dialog).toContainText('A submitted review cannot be changed later.');
+  await dialog.getByRole('button', { name: 'Submit review', exact: true }).click();
+}
 async function scenario(page: Page, assignment: 'none' | 'target' | 'failed' = 'none', unequal = false): Promise<Scenario> {
   const response = await page.request.post(`/__test_translation_review__?${new URLSearchParams({ assignment, unequal: String(unequal) })}`);
   expect(response.ok()).toBeTruthy();
@@ -106,20 +114,32 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   expect(requests.some(r => r.endsWith('/open'))).toBe(false);
   const source = page.getByRole('region', { name: 'Source (en)', exact: true });
   await expect(source.locator('textarea,[contenteditable="true"]')).toHaveCount(0);
-  await expect(source.locator('.text-container')).toHaveText(s.texts.source);
-  await expect(page.getByText('en → de · Review fixture MT · clinical-example-1', { exact: true })).toBeVisible();
+  await expect(source).toHaveText(s.texts.source);
+  await expect(review(page)).not.toContainText('Selection intent');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(opened.variant.external_id);
+  await expect(review(page)).toContainText('Translation review · English → to German');
+  const details = page.locator('.translation-details');
+  await expect(details.getByText('Review fixture MT', { exact: true })).toBeHidden();
+  await details.getByText('Translation details', { exact: true }).click();
+  await expect(details.getByText('Review fixture MT', { exact: true })).toBeVisible();
+  await expect(details.getByText('clinical-example-1', { exact: true })).toBeVisible();
   const corrected = s.texts.target.replace('5 mg', '7 mg');
   await target(page).fill(corrected);
   await page.getByRole('radio', { name: 'Accepted with corrections', exact: true }).check();
   await page.getByRole('checkbox', { name: 'Clinically relevant change', exact: true }).check();
   await page.getByRole('checkbox', { name: 'Number or unit', exact: true }).check();
-  await expect(page.getByRole('button', { name: 'Submit review', exact: true })).toBeDisabled();
+  await expect(submitButton(page)).toBeDisabled();
+  await expect(page.getByRole('list', { name: 'Review issues', exact: true })).toHaveText('A clinical change needs a rationale.');
   await page.getByRole('textbox', { name: 'Rationale', exact: true }).fill('The source states the corrected dose.');
+  await expect(page.locator('.translation-editor-mirror ins')).toContainText('7');
+  await page.getByRole('checkbox', { name: 'Show changes', exact: true }).check();
+  await expect(target(page)).toHaveCount(0);
   await expect(page.locator('.translation-diff del')).toContainText('5');
   await expect(page.locator('.translation-diff ins')).toContainText('7');
+  await page.getByRole('checkbox', { name: 'Show changes', exact: true }).uncheck();
   const confirmed = await saved(page, assignmentId, corrected, 'accepted_corrected');
   const resultPromise = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/translation-reviews/${assignmentId}/submit`));
-  await page.getByRole('button', { name: 'Submit review', exact: true }).click();
+  await confirmSubmit(page);
   const result = await resultPromise; expect(result.ok()).toBeTruthy();
   expect(result.request().postDataJSON()).toEqual({ expected_revision: confirmed.draft.revision });
   const record = await result.json() as ReviewRecord;
@@ -128,9 +148,17 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   expect(createdResponse.ok()).toBeTruthy(); const created = await createdResponse.json() as Variant;
   expect(created.translation_status).toBe('accepted'); expect(created.version).toBeGreaterThan(opened.variant.version);
   await expect(page.getByText(`A corrected version v${created.version} was created.`, { exact: true })).toBeVisible();
+  await expect(page.getByText('Your corrected text was saved as a new version, which is accepted for annotation.', { exact: true })).toBeVisible();
+  await expect(review(page)).not.toContainText(record.status_after === 'reviewed' ? 'status_after' : 'reviewed');
   const writes: string[] = []; page.on('request', r => { if (r.url().includes('/translation-reviews/') && ['POST', 'PUT'].includes(r.method())) writes.push(r.url()); });
   await page.reload(); await expect(target(page)).toHaveValue(corrected); await expect(target(page)).toHaveAttribute('readonly', '');
-  await expect(page.getByRole('radio', { name: 'Accepted with corrections', exact: true })).toBeDisabled();
+  await expect(page.getByRole('radio')).toHaveCount(0); await expect(submitButton(page)).toHaveCount(0);
+  const summary = page.getByRole('region', { name: 'Submitted review', exact: true });
+  await expect(summary).toContainText('Accepted with corrections');
+  await expect(summary).toContainText('Number or unit');
+  await expect(summary).toContainText('The source states the corrected dose.');
+  await expect(summary).toContainText(record.reviewer_pseudonym);
+  await expect(summary.locator('time')).toHaveText(/^\d{1,2} [A-Z][a-z]+ \d{4} at \d{2}:\d{2}$/);
   expect((await workspace(page, assignmentId)).submitted_record).toEqual(record); expect(writes).toEqual([]);
   await page.getByRole('link', { name: 'Back to my tasks', exact: true }).click();
   const submittedTask = page.getByTestId('task-row').filter({ has: page.locator(`a[href="#/tasks/${assignmentId}"]`) });
@@ -159,9 +187,12 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
 test('fresh failed checks remain visible and an independent edited Accepted unchanged task is refused without losing text', async ({ page, browser }) => {
   const failed = await scenario(page, 'failed'); await loginExisting(page, failed.users.reviewer);
   await page.locator(`a[href="#/tasks/${failed.assignment_id}"]`).click(); await expect(target(page)).toHaveValue(failed.texts.failed);
-  await expect(page.getByRole('region', { name: 'Translation checks', exact: true })).toContainText('units_added — Failed');
-  await page.getByRole('checkbox', { name: 'Show all checks', exact: true }).check();
-  await expect(page.getByRole('region', { name: 'Translation checks', exact: true })).toContainText('numbers_changed — Passed');
+  const checks = page.getByRole('region', { name: 'Automatic translation checks', exact: true });
+  await expect(checks).toContainText('1 automatic check failed');
+  await expect(checks.locator('.notice')).toContainText('Units added in translation');
+  await expect(checks.locator('.notice')).not.toContainText('units_added');
+  await checks.getByText('Show all checks', { exact: true }).click();
+  await expect(checks.locator('.translation-checks-all li').filter({ hasText: 'Numbers changed in translation' })).toContainText('Passed');
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
   try {
     const independent = await context.newPage(), s = await scenario(independent, 'target');
@@ -170,7 +201,7 @@ test('fresh failed checks remain visible and an independent edited Accepted unch
     const text = `${s.texts.target}\nRetained correction.`;
     await target(independent).fill(text); await independent.getByRole('radio', { name: 'Accepted unchanged', exact: true }).check();
     await expect(independent.getByRole('list', { name: 'Review issues', exact: true })).toContainText('Accepted unchanged needs text equal to the reviewed text.');
-    await expect(independent.getByRole('button', { name: 'Submit review', exact: true })).toBeDisabled();
+    await expect(submitButton(independent)).toBeDisabled();
     await saved(independent, s.assignment_id!, text, 'accepted_unchanged');
     // Independent current-actor oracle: the disabled UI never dispatches submit.
     const refused = await authenticatedRequest(independent, `/api/v1/translation-reviews/${s.assignment_id}/submit`, 'POST', { expected_revision: (await workspace(independent, s.assignment_id!)).draft.revision });
@@ -185,7 +216,7 @@ test('live qualification refusal retains inputs and the guarded profile link flu
   const response = await authenticatedRequest(page, '/api/v1/me/profile', 'PATCH', { qualification: null }); expect(response.ok()).toBeTruthy();
   const text = s.texts.target.replace('5 mg', '8 mg'); await target(page).fill(text);
   await page.getByRole('radio', { name: 'Accepted with corrections', exact: true }).check(); await saved(page, s.assignment_id!, text, 'accepted_corrected');
-  await page.getByRole('button', { name: 'Submit review', exact: true }).click();
+  await confirmSubmit(page);
   await expect(page.getByRole('alert')).toContainText('Add your qualification before submitting a translation review.'); await expect(target(page)).toHaveValue(text);
   const latest = `${text}\nLatest unsaved sentence.`; await target(page).fill(latest);
   await page.getByRole('link', { name: 'Add your qualification in your profile', exact: true }).click();
@@ -254,36 +285,61 @@ for (const actor of ['reviewer', 'other'] as const) test(`expired review session
   }
 });
 
-for (const width of [1280, 1024, 600]) test(`review source, proposed diff and comparison retain codepoint text and reachable controls at ${width}px`, async ({ page }) => {
+for (const width of [1280, 1024, 600]) test(`review source, the one editable translation, its change view and comparison retain codepoint text and reachable controls at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 }); const s = await scenario(page, 'target', width === 1280); await openReview(page, s);
   await page.evaluate(() => document.fonts.ready);
-  const source = page.getByRole('region', { name: 'Source (en)', exact: true }).locator('.text-container');
+  const source = page.getByRole('region', { name: 'Source (en)', exact: true });
+  const editor = page.locator('.translation-editor');
   const diff = page.getByRole('region', { name: 'Text changes', exact: true });
-  const comparison = page.getByRole('region', { name: 'Comparison', exact: true }).locator('.text-container');
-  await expect(source).toHaveText(s.texts.source); await expect(diff).toHaveText(s.texts.target); await expect(comparison).toHaveText(s.texts.failed);
+  const comparison = page.getByRole('region', { name: 'Comparison', exact: true });
+  const showChanges = page.getByRole('checkbox', { name: 'Show changes', exact: true });
+  await expect(source).toHaveText(s.texts.source); await expect(target(page)).toHaveValue(s.texts.target); await expect(comparison).toHaveText(s.texts.failed);
+  // The translation appears once: an editor by default, the change view only in its place.
+  await expect(diff).toHaveCount(0);
   await expect(target(page).locator('[data-paragraph]')).toHaveCount(0);
-  for (const surface of [source, diff, comparison]) await expect(surface.locator('[data-paragraph="2"]')).toHaveAttribute('aria-hidden', 'true');
+  await expect(editor.locator('.translation-editor-mirror')).toHaveAttribute('aria-hidden', 'true');
+  for (const surface of [source, editor, comparison]) await expect(surface.locator('[data-paragraph="2"]')).toHaveAttribute('aria-hidden', 'true');
   const sourcePrefix = await source.evaluate(el => {
     const range = document.createRange(); range.setStart(el, 0); range.setEndBefore(el.querySelector('[data-paragraph="2"]')!);
     return Array.from(range.toString()).length;
   });
   expect(sourcePrefix).toBe(Array.from(s.texts.source.split('\n\n').slice(0, 2).join('\n\n') + '\n\n').length);
-  await expect(diff.locator('[data-paragraph="2"]')).toHaveAttribute('data-paragraph-offset', String(Array.from(s.texts.target.split('\n\n').slice(0, 2).join('\n\n') + '\n\n').length));
+  await expect(editor.locator('[data-paragraph="2"]')).toHaveAttribute('data-paragraph-offset', String(Array.from(s.texts.target.split('\n\n').slice(0, 2).join('\n\n') + '\n\n').length));
+  // The mirror lays out the textarea's exact text: equal height and no hidden inner scrolling.
+  expect(await editor.evaluate(el => {
+    const mirror = el.querySelector('.translation-editor-mirror')!, input = el.querySelector('textarea')!;
+    return Math.abs(mirror.getBoundingClientRect().height - input.getBoundingClientRect().height) <= 1 && input.scrollHeight <= input.clientHeight + 1;
+  })).toBe(true);
   if (width >= 1100) {
     await expect(page.getByText('Paragraphs differ (14 / 16); scrolling is approximate.', { exact: true })).toBeVisible();
-    await alignAt(source, 2); await expect.poll(() => markerDistance(diff, 2)).toBeLessThanOrEqual(20);
+    await alignAt(source, 2); await expect.poll(() => markerDistance(editor, 2)).toBeLessThanOrEqual(20);
     await page.getByRole('checkbox', { name: 'Couple scrolling', exact: true }).uncheck();
-    const retained = await diff.evaluate(el => el.scrollTop); await alignAt(source, 5);
-    await expect.poll(() => diff.evaluate(el => el.scrollTop)).toBe(retained);
+    const retained = await editor.evaluate(el => el.scrollTop); await alignAt(source, 5);
+    await expect.poll(() => editor.evaluate(el => el.scrollTop)).toBe(retained);
     await page.getByRole('checkbox', { name: 'Couple scrolling', exact: true }).check();
-    await alignAt(diff, 8); await expect.poll(() => markerDistance(comparison, 9)).toBeLessThanOrEqual(20);
+    await alignAt(editor, 8); await expect.poll(() => markerDistance(comparison, 9)).toBeLessThanOrEqual(20);
+    await showChanges.check(); await expect(target(page)).toHaveCount(0); await expect(diff).toHaveText(s.texts.target);
+    await alignAt(source, 2); await expect.poll(() => markerDistance(diff, 2)).toBeLessThanOrEqual(20);
   } else {
-    const initial = await diff.evaluate(el => el.scrollTop); await alignAt(source, 2); expect(await diff.evaluate(el => el.scrollTop)).toBe(initial);
-    const sourceBox = await source.boundingBox(), diffBox = await diff.boundingBox(); expect(sourceBox && diffBox && diffBox.y > sourceBox.y).toBeTruthy();
+    const initial = await editor.evaluate(el => el.scrollTop); await alignAt(source, 2); expect(await editor.evaluate(el => el.scrollTop)).toBe(initial);
+    const sourceBox = await source.boundingBox(), editorBox = await editor.boundingBox(); expect(sourceBox && editorBox && editorBox.y > sourceBox.y).toBeTruthy();
+    await showChanges.check(); await expect(target(page)).toHaveCount(0); await expect(diff).toHaveText(s.texts.target);
   }
-  await page.getByRole('checkbox', { name: 'Show changes', exact: true }).uncheck(); await expect(diff).toHaveCount(0);
-  await target(page).fill('Native editing 😀é remains exact.'); await expect(target(page)).toHaveValue('Native editing 😀é remains exact.');
-  await page.getByRole('checkbox', { name: 'Show changes', exact: true }).check(); await expect(diff).toBeVisible();
+  await showChanges.uncheck(); await expect(diff).toHaveCount(0);
+  await target(page).fill('Native editing 😀é remains exact.'); await expect(target(page)).toHaveValue('Native editing 😀é remains exact.');
+  await expect(editor.locator('.translation-editor-mirror ins').first()).toHaveText('Native');
+  await showChanges.check(); await expect(diff).toBeVisible(); await expect(target(page)).toHaveCount(0);
+  await showChanges.uncheck();
+  if (width >= 1280) {
+    // The decision rail is in view without scrolling the page.
+    await expect(page.getByRole('radio', { name: 'Query', exact: true })).toBeInViewport();
+    await expect(submitButton(page)).toBeInViewport();
+  }
+  await page.getByRole('button', { name: 'Skip to decision', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Your review', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('radio', { name: 'Accepted unchanged', exact: true })).toBeFocused();
   await page.getByRole('radio', { name: 'Query', exact: true }).scrollIntoViewIfNeeded(); await expect(page.getByRole('radio', { name: 'Query', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath(`review-${width}.png`), fullPage: true });

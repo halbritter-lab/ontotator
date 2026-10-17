@@ -5,7 +5,8 @@ import { api, ApiError } from "../src/api/client";
 import type { RouteLeaveGuard } from "../src/app/router";
 import { TranslationReviewScreen } from "../src/translation/TranslationReviewScreen";
 import { reviewRecord, reviewWorkspace } from "./translationFixtures";
-import { decisionLabels } from "../src/translation/labels";
+import { decisionConsequences, decisionLabels, decisionOutcomes, issueMessages } from "../src/translation/labels";
+import { ShortcutHelpHost, openShortcutHelp } from "../src/ui/ShortcutHelp";
 import type { ReviewDecisionCode } from "../src/translation/reviewRules";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -22,6 +23,13 @@ function setup(workspace = reviewWorkspace(), strict = false) {
   const rendered = render(strict ? <StrictMode>{element}</StrictMode> : element);
   return { ...rendered, open, save, submit, routeLeaveRef, leaveGuardRef, navigate };
 }
+const submitButton = () => screen.getByRole("button", { name: "Submit review…" }) as HTMLButtonElement;
+/** Opens the confirmation and confirms; submitting is immutable, so it is never one click. */
+async function confirmSubmit() {
+  await act(async () => { fireEvent.click(submitButton()); });
+  const dialog = screen.getByRole("dialog", { name: "Submit this review?" });
+  await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Submit review" })); });
+}
 async function clock(ms = 800) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
 async function edited() {
   await screen.findByRole("textbox", { name: "Translation (de)" });
@@ -35,10 +43,14 @@ it("opens the exact source, inherited run and correction baseline with no defaul
   expect((await screen.findByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement).value).toBe("Übersetzt.");
   expect(screen.getByRole("region", { name: "Source (en)" }).textContent).toContain("Second paragraph.");
   expect(screen.getByText(/Example MT/)).toBeDefined();
-  expect(screen.getByText(/Inherited translation-run checks/)).toBeDefined();
-  expect(screen.getByText(/A unit changed/)).toBeDefined();
+  expect(screen.getByRole("heading", { name: "Automatic translation checks" })).toBeDefined();
+  expect(screen.getByText("1 automatic check failed")).toBeDefined();
+  expect(within(screen.getByText("1 automatic check failed").closest(".notice") as HTMLElement).getByText("Units added in translation")).toBeDefined();
+  expect(screen.getAllByText(/A unit changed/)).toHaveLength(2);
   expect(screen.getAllByRole("radio").every(n => !(n as HTMLInputElement).checked)).toBe(true);
-  expect((screen.getByRole("button", { name: "Submit review" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(submitButton().disabled).toBe(true);
+  expect(screen.getByText("Choose a decision to submit.")).toBeDefined();
+  expect(screen.queryByText(/Selection intent/)).toBeNull();
   vi.useFakeTimers(); await clock(1600);
   expect(save).not.toHaveBeenCalled();
 });
@@ -65,8 +77,10 @@ it("autosaves exact raw data once in StrictMode and submits with the actual conf
   await clock(1);
   expect(save).toHaveBeenCalledTimes(1);
   expect(save).toHaveBeenLastCalledWith(17, { expected_revision: 6, text: "Changed 😀\nraw", form: { decision: "accepted_corrected", clinical_change: false } });
-  const button = screen.getByRole("button", { name: "Submit review" });
-  await act(async () => { fireEvent.click(button); fireEvent.click(button); });
+  await act(async () => { fireEvent.click(submitButton()); });
+  expect(submit).not.toHaveBeenCalled();
+  const confirm = within(screen.getByRole("dialog", { name: "Submit this review?" })).getByRole("button", { name: "Submit review" });
+  await act(async () => { fireEvent.click(confirm); fireEvent.click(confirm); });
   expect(submit).toHaveBeenCalledTimes(1);
   expect(submit).toHaveBeenCalledWith(17, 41);
   expect(screen.getByText("Review submitted")).toBeDefined();
@@ -90,11 +104,14 @@ it.each<ReviewDecisionCode>(["accepted_unchanged", "accepted_corrected", "query"
   await clock();
   expect(save).toHaveBeenCalledTimes(1);
   expect(save).toHaveBeenCalledWith(17, expect.objectContaining({ text, form: expect.objectContaining({ decision }) }));
-  const button = screen.getByRole("button", { name: "Submit review" }) as HTMLButtonElement;
-  expect(button.disabled).toBe(false);
-  await act(async () => { fireEvent.click(button); });
+  expect(submitButton().disabled).toBe(false);
+  await confirmSubmit();
   expect(submit).toHaveBeenCalledWith(17, 41);
   expect(screen.getByText("Review submitted")).toBeDefined();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(within(screen.getByRole("region", { name: "Submitted review" })).getAllByText(decisionLabels[decision])[0]).toBeDefined();
+  expect(screen.queryByRole("radio")).toBeNull();
+  expect(screen.queryByText(/needs_review|status_after/)).toBeNull();
   expect((screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement).readOnly).toBe(true);
 });
 it("retains invalid raw form values while changing a visual field and blocks unknown decisions", async () => {
@@ -104,7 +121,7 @@ it("retains invalid raw form values while changing a visual field and blocks unk
   expect(screen.getAllByRole("radio").every(n => !(n as HTMLInputElement).checked)).toBe(true);
   fireEvent.click(screen.getByRole("radio", { name: "Accepted unchanged" })); await clock();
   expect(save.mock.calls[0][1].form).toEqual({ decision: "accepted_unchanged", clinical_change: "stored-invalid", categories: ["unknown"], rationale: { invalid: true }, extra: "keep" });
-  expect((screen.getByRole("button", { name: "Submit review" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(submitButton().disabled).toBe(true);
 });
 it("retains latest edits after an ordinary save error and retries explicitly", async () => {
   const { save } = setup(); save.mockRejectedValueOnce(new TypeError("Offline"));
@@ -130,7 +147,7 @@ it("reloads a conflicted review only after explicit discard and uses the fresh s
   const { save, open } = setup(); save.mockRejectedValueOnce(new ApiError(409, "Changed elsewhere", "REVISION_CONFLICT"));
   await edited(); await clock();
   open.mockResolvedValue(reviewWorkspace({ draft: { text: "Fresh baseline", form: {}, revision: 87 } }));
-  fireEvent.click(screen.getByRole("button", { name: "Reload review" }));
+  fireEvent.click(screen.getByRole("button", { name: "Reload from server" }));
   await act(async () => { await Promise.resolve(); });
   const dialog = screen.getByRole("dialog", { name: "Changes not saved" });
   expect(open).toHaveBeenCalledTimes(1);
@@ -143,7 +160,7 @@ it("reloads a conflicted review only after explicit discard and uses the fresh s
 it("preserves ordered server issues and entered data after submit refusal", async () => {
   const { submit } = setup(); submit.mockRejectedValue(new ApiError(422, "Invalid", "REVIEW_INVALID", { issues: ["RATIONALE_REQUIRED", "NEW_SERVER_RULE", "TEXT_EMPTY"] }));
   await edited(); await clock();
-  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Submit review" })); });
+  await confirmSubmit();
   const issues = screen.getByRole("list", { name: "Server review issues" });
   expect(within(issues).getAllByRole("listitem").map(n => n.textContent)).toEqual(["A clinical change needs a rationale.", "Review issue: NEW_SERVER_RULE", "The proposed text must not be empty."]);
   expect((screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement).value).toBe("Changed 😀\nraw");
@@ -153,7 +170,12 @@ it("uses the current immutable submitted record without a saver or write control
   const { save, submit, routeLeaveRef } = setup(reviewWorkspace({ read_only: true, submitted_record: record, previous_reviews: [reviewRecord({ id: 3, proposed_text: "Older review" })] }));
   const input = await screen.findByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement;
   expect(input.value).toBe(record.proposed_text); expect(input.readOnly).toBe(true);
-  expect(screen.getByRole("radio", { name: "Accepted with corrections" }).matches(":disabled")).toBe(true);
+  expect(screen.queryByRole("radio")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Submit review…" })).toBeNull();
+  const summary = within(screen.getByRole("region", { name: "Submitted review" }));
+  expect(summary.getByText("Accepted with corrections")).toBeDefined();
+  expect(summary.getByText("R, Reviewer")).toBeDefined();
+  expect(summary.getByText(/^\d{1,2} October 2026 at \d{2}:\d{2}$/)).toBeDefined();
   expect(screen.getByText("Older review")).toBeDefined();
   vi.useFakeTimers(); await clock(1600); expect(save).not.toHaveBeenCalled(); expect(submit).not.toHaveBeenCalled();
   expect(await routeLeaveRef.current!()).toBe(true);
@@ -207,10 +229,10 @@ it("refreshes current qualification after server refusal while preserving edited
   submit.mockRejectedValue(new ApiError(422, "Qualification required", "QUALIFICATION_REQUIRED"));
   const profile = vi.spyOn(api, "getProfile").mockResolvedValue({ username: "alice", display_name: "Alice", pseudonym: "R", email: null, orcid: null, orcid_consent: false, languages: ["en", "de"], qualification: null });
   await edited(); await clock();
-  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Submit review" })); });
+  await confirmSubmit();
   expect(profile).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("link", { name: "Add your qualification in your profile" }).getAttribute("href")).toBe("#/me");
-  expect((screen.getByRole("button", { name: "Submit review" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(submitButton().disabled).toBe(true);
   expect((screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement).value).toBe("Changed 😀\nraw");
 });
 it("clinical-off clears categories through the actual controlled form but retains rationale", async () => {
@@ -220,10 +242,16 @@ it("clinical-off clears categories through the actual controlled form but retain
   fireEvent.click(screen.getByRole("checkbox", { name: "Clinically relevant change" })); await clock();
   expect(save).toHaveBeenCalledWith(17, { expected_revision: 6, text: "Changed", form: { decision: "accepted_corrected", clinical_change: false, categories: [], rationale: "Keep rationale" } });
 });
-it("couples actual source and proposed diff scrollports and detaches the hidden diff", async () => {
+it("couples the source with the editor and with the change view that replaces it", async () => {
   const { container } = setup(reviewWorkspace({ text: "Deleted paragraph\n\n😀one\n\ntwo", draft: { text: "😀one\n\ntwo", revision: 6, form: {} } }));
-  await screen.findByRole("textbox", { name: "Translation (de)" });
-  const source = within(screen.getByRole("region", { name: "Source (en)" })).getByText("Second paragraph.").closest(".text-container") as HTMLElement;
+  const input = await screen.findByRole("textbox", { name: "Translation (de)" });
+  const source = screen.getByRole("region", { name: "Source (en)" });
+  const editor = input.closest(".translation-editor") as HTMLElement;
+  expect(editor.querySelectorAll("[data-paragraph]")).toHaveLength(2);
+  expect(container.querySelector(".translation-editor-mirror")?.getAttribute("aria-hidden")).toBe("true");
+  expect(screen.queryByRole("region", { name: "Text changes" })).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
+  expect(screen.queryByRole("textbox", { name: "Translation (de)" })).toBeNull();
   const target = screen.getByRole("region", { name: "Text changes" });
   function geometry(element: HTMLElement, step: number) {
     element.getBoundingClientRect = () => ({ top: 0 } as DOMRect);
@@ -238,7 +266,11 @@ it("couples actual source and proposed diff scrollports and detaches the hidden 
   fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
   expect(screen.queryByRole("region", { name: "Text changes" })).toBeNull();
   source.scrollTop = 0; fireEvent.scroll(source); expect(target.scrollTop).toBe(360);
-  expect((screen.getByRole("checkbox", { name: "Couple scrolling" }) as HTMLInputElement).disabled).toBe(true);
+  const restored = (screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLElement).closest(".translation-editor") as HTMLElement;
+  geometry(restored, 240); source.scrollTop = 130; fireEvent.scroll(source);
+  expect(restored.scrollTop).toBe(240);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Couple scrolling" }));
+  restored.scrollTop = 0; source.scrollTop = 250; fireEvent.scroll(source); expect(restored.scrollTop).toBe(0);
 });
 it("uses only the workspace's comparison choices and shows passed inherited checks on demand", async () => {
   const workspace = reviewWorkspace();
@@ -249,8 +281,9 @@ it("uses only the workspace's comparison choices and shows passed inherited chec
   const select = screen.getByRole("combobox", { name: "Comparison translation" });
   expect(Array.from((select as HTMLSelectElement).options).map(option => option.value)).toEqual(["comparison-1", "comparison-2"]);
   fireEvent.change(select, { target: { value: "comparison-2" } }); expect(screen.getByText("Second comparison")).toBeDefined();
-  expect(screen.queryByText("numbers — Passed")).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Show all checks" })); expect(screen.getByText("numbers — Passed")).toBeDefined();
+  const all = screen.getByText("Show all checks").closest("details") as HTMLDetailsElement;
+  expect(all.open).toBe(false);
+  expect(within(all).getAllByRole("listitem").map(item => item.textContent)).toEqual(["Failed Units added in translation: A unit changedunits_added", "Passed Numbersnumbers"]);
 });
 it("disposes an unmounted draft timer and ignores late workspace data after identity changes", async () => {
   const { unmount, save } = setup(); await edited(); unmount(); await clock(1600); expect(save).not.toHaveBeenCalled();
@@ -267,8 +300,66 @@ it("disposes an unmounted draft timer and ignores late workspace data after iden
 it("preserves raw input on stale-predecessor refusal and never rebases or creates a client version", async () => {
   const { submit } = setup(); submit.mockRejectedValue(new ApiError(409, "A newer text version exists. Reload the review.", "VARIANT_REVIEW_STALE"));
   await edited(); await clock();
-  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Submit review" })); });
+  await confirmSubmit();
   expect(screen.getByText(/A newer text version exists/)).toBeDefined();
   expect((screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement).value).toBe("Changed 😀\nraw");
   expect(api.getVariantMetadata).not.toHaveBeenCalled();
+});
+it("always lists Ctrl+Enter in help; it explains a blocked submit and otherwise only opens the confirmation", async () => {
+  const { submit } = setup();
+  render(<ShortcutHelpHost />);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  act(openShortcutHelp);
+  expect(screen.getByText("Submit review (asks for confirmation)")).toBeDefined();
+  fireEvent.keyDown(window, { key: "Escape" });
+  fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(document.activeElement?.textContent).toBe("Choose a decision to submit.");
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole("radio", { name: "Accepted unchanged" })); await clock();
+  expect(submitButton().disabled).toBe(false);
+  (document.activeElement as HTMLElement | null)?.blur();
+  fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+  const dialog = screen.getByRole("dialog", { name: "Submit this review?" });
+  expect(dialog.textContent).toContain(decisionConsequences.accepted_unchanged);
+  expect(dialog.textContent).toContain("A submitted review cannot be changed later.");
+  fireEvent.keyDown(dialog, { key: "Escape" });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(submitButton());
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Keep editing" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(submit).not.toHaveBeenCalled();
+});
+it("summarises decision, categories and a rationale excerpt before submitting, then reports the outcome in words", async () => {
+  const rationale = `The dose differs. ${"Long explanation ".repeat(20)}`;
+  const { submit } = setup(reviewWorkspace({ draft: { revision: 6, text: "Übersetzt.", form: { decision: "query", clinical_change: true, categories: ["value", "omission"], rationale } } }));
+  submit.mockResolvedValue(reviewRecord({ decision: "query", clinical_change: true, categories: ["omission", "value"], rationale, proposed_text: "Übersetzt.", created_variant_id: null, status_after: "reviewed" }));
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(submitButton());
+  const dialog = within(screen.getByRole("dialog", { name: "Submit this review?" }));
+  expect(dialog.getByText("Query")).toBeDefined();
+  expect(dialog.getByText("Yes: Number or unit, Omission")).toBeDefined();
+  const excerpt = dialog.getByText(/^The dose differs\./).textContent!;
+  expect(excerpt.endsWith("…")).toBe(true); expect(Array.from(excerpt).length).toBeLessThanOrEqual(161);
+  expect(dialog.getByText(decisionConsequences.query)).toBeDefined();
+  await act(async () => { fireEvent.click(dialog.getByRole("button", { name: "Submit review" })); });
+  expect(submit).toHaveBeenCalledWith(17, 6);
+  expect(screen.getByText(decisionOutcomes.query)).toBeDefined();
+  const summary = within(screen.getByRole("region", { name: "Submitted review" }));
+  expect(summary.getByText("Reviewed")).toBeDefined();
+  expect(screen.queryByText("reviewed")).toBeNull();
+});
+it("explains a blocked submit right at the button with the rules' own issues", async () => {
+  setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(document.getElementById(submitButton().getAttribute("aria-describedby")!)?.textContent).toBe("Choose a decision to submit.");
+  fireEvent.click(screen.getByRole("radio", { name: "Query" }));
+  const issues = screen.getByRole("list", { name: "Review issues" });
+  expect(within(issues).getAllByRole("listitem").map(item => item.textContent)).toEqual([issueMessages.CLINICAL_CHANGE_REQUIRED]);
+  expect(issues.closest(".translation-decision-footer")?.contains(submitButton())).toBe(true);
+  expect(screen.getAllByRole("list", { name: "Review issues" })).toHaveLength(1);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Clinically relevant change" }));
+  expect(within(screen.getByRole("list", { name: "Review issues" })).getAllByRole("listitem").map(item => item.textContent))
+    .toEqual([issueMessages.CATEGORY_REQUIRED, issueMessages.RATIONALE_REQUIRED]);
+  expect(submitButton().disabled).toBe(true);
 });

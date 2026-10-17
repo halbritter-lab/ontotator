@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReviewForm } from "../src/translation/ReviewForm";
 import type { ReviewForm as ReviewFormValue } from "../src/translation/reviewRules";
-import { issueMessages } from "../src/translation/labels";
+import { clinicalChangeHints, decisionDescriptions, issueMessages } from "../src/translation/labels";
 
 afterEach(cleanup);
 
@@ -15,9 +15,12 @@ describe("ReviewForm", () => {
     const radios = screen.getAllByRole("radio") as HTMLInputElement[];
     expect(radios).toHaveLength(4);
     expect(radios.every((radio) => !radio.checked)).toBe(true);
-    const categories = within(screen.getByRole("group", { name: "Clinical change categories" }));
-    expect(categories.getAllByRole("checkbox")).toHaveLength(7);
-    expect((screen.getByRole("textbox", { name: "Rationale" }) as HTMLTextAreaElement).value).toBe("");
+    expect(radios.map((radio) => radio.getAttribute("aria-describedby") && document.getElementById(radio.getAttribute("aria-describedby")!)?.textContent))
+      .toEqual(Object.values(decisionDescriptions));
+    // Follow-up fields only appear once a decision makes them relevant.
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Clinical change categories" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Rationale" })).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -40,17 +43,43 @@ describe("ReviewForm", () => {
     }
     render(<Controlled />);
     const user = userEvent.setup();
-    const category = screen.getByRole("checkbox", { name: "Omission" }) as HTMLInputElement;
-    await user.click(category);
-    expect(changes).not.toHaveBeenCalled();
+    expect(screen.queryByRole("checkbox", { name: "Omission" })).toBeNull();
+    expect(screen.getByText("Optional.")).toBeDefined();
     await user.click(screen.getByRole("checkbox", { name: "Clinically relevant change" }));
-    await user.click(category);
-    expect(category.checked).toBe(true);
+    expect(screen.getByText("Required for a clinically relevant change.")).toBeDefined();
+    await user.click(screen.getByRole("checkbox", { name: "Omission" }));
+    expect((screen.getByRole("checkbox", { name: "Omission" }) as HTMLInputElement).checked).toBe(true);
     await user.click(screen.getByRole("checkbox", { name: "Clinically relevant change" }));
     expect(changes).toHaveBeenLastCalledWith({ decision: "accepted_corrected", clinical_change: false, categories: [], rationale: "Keep this" });
-    expect(category.checked).toBe(false);
+    expect(screen.queryByRole("checkbox", { name: "Omission" })).toBeNull();
     await user.click(screen.getByRole("checkbox", { name: "Clinically relevant change" }));
     expect(changes).toHaveBeenLastCalledWith({ decision: "accepted_corrected", clinical_change: true, categories: [], rationale: "Keep this" });
+    expect((screen.getByRole("checkbox", { name: "Omission" }) as HTMLInputElement).checked).toBe(false);
+  });
+
+  it.each([
+    [{ decision: "accepted_unchanged" as const }, false, false, false],
+    [{ decision: "accepted_corrected" as const }, true, false, true],
+    [{ decision: "query" as const }, true, false, true],
+    [{ decision: "rejected" as const }, true, false, true],
+    [{ decision: "rejected" as const, clinical_change: true }, true, true, true],
+    // Values a rule still judges stay visible, so a blocking value can always be cleared.
+    [{ decision: "accepted_unchanged" as const, clinical_change: true }, true, true, true],
+    [{ decision: "accepted_unchanged" as const, categories: ["value" as const] }, false, true, false],
+    [{ decision: "accepted_unchanged" as const, rationale: "Kept note" }, false, false, true],
+  ])("reveals follow-up fields by the review rules for %j", (value, clinical, categories, rationale) => {
+    render(<ReviewForm value={value} issues={[]} onChange={vi.fn()} />);
+    expect(screen.queryByRole("checkbox", { name: "Clinically relevant change" }) !== null).toBe(clinical);
+    expect(screen.queryByRole("group", { name: "Clinical change categories" }) !== null).toBe(categories);
+    expect(screen.queryByRole("textbox", { name: "Rationale" }) !== null).toBe(rationale);
+  });
+
+  it("names the rule for a clinical change under each decision", () => {
+    const view = render(<ReviewForm value={{ decision: "query" }} issues={[]} onChange={vi.fn()} />);
+    expect(screen.getByRole("checkbox", { name: "Clinically relevant change" }).getAttribute("aria-describedby")).toBeTruthy();
+    expect(screen.getByText(clinicalChangeHints.query)).toBeDefined();
+    view.rerender(<ReviewForm value={{ decision: "accepted_corrected" }} issues={[]} onChange={vi.fn()} />);
+    expect(screen.getByText(clinicalChangeHints.accepted_corrected)).toBeDefined();
   });
 
   it("changes only the selected category and preserves other fields", () => {
