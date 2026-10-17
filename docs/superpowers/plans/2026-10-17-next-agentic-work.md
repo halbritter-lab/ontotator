@@ -91,6 +91,16 @@ Recommended option first.
 | D15 | Q15–Q32 defaults | confirm as a block, or review Q23, Q25, Q29 individually |
 | D16 | Version/compare access for annotators in independent mode | (a) leads and adjudicators only; (b) unchanged |
 
+### Decided on 2026-10-17
+
+- D1: (a) opt-in coupling, never while editing, visible paragraph pairing, no snap-back.
+- D2: (a) export "Uncertain" decisions flagged as uncertain, note required, renamed so it cannot be confused with the axis value.
+- D3: (b) spanless findings need a note, the button is renamed and demoted, and a project rule can disable them.
+- D4: (a) warning with count and jump in the submit dialog, badge in the list.
+- D5: (a) only the "Entire text checked" confirmation; per-layer "verified" is removed.
+- Re-anchor items: resolved by the reviewer in the case ("re-create here" or "dismiss with reason").
+- D16: (a) version selectors and compare only for leads and adjudicators; annotators see their task text (enforce in the backend too).
+
 ## 3. Batches
 
 ### Phase 0 — safety fixes on main (independent of T4, start now)
