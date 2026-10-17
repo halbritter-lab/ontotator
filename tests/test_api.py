@@ -203,7 +203,7 @@ def test_full_package_review_and_export_lifecycle(app_client):
         json={
             "mutation_id": "mut-3",
             "expected_revision": 2,
-            "payload": {"checked_layer_ids": ["hpo-layer"]},
+            "payload": {"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
         },
     )
     assert resp.status_code == 200
@@ -297,7 +297,7 @@ def test_document_list_with_position_and_status(app_client):
         json={
             "mutation_id": "m3",
             "expected_revision": 2,
-            "payload": {"checked_layer_ids": ["hpo-layer"]},
+            "payload": {"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
         },
     )
 
@@ -576,7 +576,7 @@ def test_revision_conflict_409_and_domain_error_422(app_client):
     assert resp.status_code == 409
     assert resp.json()["code"] == "REVISION_CONFLICT"
 
-    # 2. 422 DomainError when submitting without checking required layers
+    # 2. 422 DomainError without explicit document confirmation
     resp = client.post(
         f"/api/v1/workspaces/{ws_id}/submit",
         json={
@@ -586,7 +586,7 @@ def test_revision_conflict_409_and_domain_error_422(app_client):
         },
     )
     assert resp.status_code == 422
-    assert resp.json()["code"] == "LAYER_NOT_CHECKED"
+    assert resp.json()["code"] == "DOCUMENT_NOT_CHECKED"
 
 
 def test_api_create_term_with_term_id_and_alias_conflict(app_client):
@@ -994,3 +994,88 @@ def test_an_unmigrated_database_is_refused_at_start(
     assert exc_info.value.code == "DATABASE_NOT_MIGRATED"
     assert exc_info.value.details == {"current": None, "head": head_revision()}
     assert len(closed) == 1
+
+
+@pytest.mark.parametrize("confirmation", [None, False])
+def test_layer_checks_do_not_replace_document_confirmation(app_client, confirmation):
+    client, _ = app_client
+    uploaded = upload_package(
+        client,
+        files={
+            "file": ("package.zip", _create_sample_package_bytes(), "application/zip")
+        },
+    )
+    assert uploaded.status_code == 200
+    opened = client.post(
+        "/api/v1/workspaces/open",
+        json={
+            "project_key": "pkg-scenario-a",
+            "document_id": "doc-beta",
+            "annotator_id": "curator",
+            "mode": "independent",
+        },
+    )
+    ws_id = opened.json()["workspace_id"]
+    checked = client.post(
+        f"/api/v1/workspaces/{ws_id}/commands",
+        json={
+            "mutation_id": "check",
+            "expected_revision": 0,
+            "payload": {
+                "command": "check_layer",
+                "layer_id": "hpo-layer",
+                "checked": True,
+            },
+        },
+    )
+    assert checked.status_code == 200
+    payload = {"checked_layer_ids": ["hpo-layer"]}
+    if confirmation is not None:
+        payload["document_checked"] = confirmation
+    response = client.post(
+        f"/api/v1/workspaces/{ws_id}/submit",
+        json={
+            "mutation_id": "submit",
+            "expected_revision": 1,
+            "payload": payload,
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "DOCUMENT_NOT_CHECKED"
+
+
+@pytest.mark.parametrize("scenario", ["single", "multi_editable"])
+def test_api_document_confirmation_needs_no_layer_checks(app_client, scenario):
+    client, _ = app_client
+    uploaded = upload_package(
+        client,
+        files={
+            "file": (
+                "package.zip",
+                _create_sample_package_bytes(scenario),
+                "application/zip",
+            )
+        },
+    )
+    assert uploaded.status_code == 200
+    opened = client.post(
+        "/api/v1/workspaces/open",
+        json={
+            "project_key": uploaded.json()["project_key"],
+            "document_id": "doc-beta",
+            "annotator_id": "curator",
+            "mode": "independent",
+        },
+    )
+    ws_id = opened.json()["workspace_id"]
+    response = client.post(
+        f"/api/v1/workspaces/{ws_id}/submit",
+        json={
+            "mutation_id": "submit",
+            "expected_revision": 0,
+            "payload": {"document_checked": True},
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["checked_layer_ids"] == []
+    assert response.json()["document_checked"] is True

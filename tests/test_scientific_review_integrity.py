@@ -75,7 +75,10 @@ def changed_review(ctx):
 
 def submit(ctx, ws_key, revision):
     return ctx["sub_svc"].submit(
-        ws_key, mutation(revision, {"checked_layer_ids": ["hpo-layer"]})
+        ws_key,
+        mutation(
+            revision, {"document_checked": True, "checked_layer_ids": ["hpo-layer"]}
+        ),
     )
 
 
@@ -139,7 +142,10 @@ def test_review_round_continues_after_export_reimport(tmp_path):
 
     continued = SubmissionService(clean).submit(
         resumed.key,
-        mutation(resumed.draft.revision, {"checked_layer_ids": ["hpo-layer"]}),
+        mutation(
+            resumed.draft.revision,
+            {"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
+        ),
     )
     assert continued.origin_key == submitted.origin_key
     assert continued.draft_revision > submitted.draft_revision

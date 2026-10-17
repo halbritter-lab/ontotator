@@ -123,16 +123,6 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
     if (readOnly) return;
     if (noteTimer.current) clearTimeout(noteTimer.current);
     noteTimer.current = null;
-    if (currentDecision?.outcome === outcome) {
-      // Toggling off removes the decision; the note text stays in the editor.
-      setShowReplacementSelect(false);
-      onDecide({
-        outcome: null,
-        replacement: undefined,
-        note: undefined,
-      });
-      return;
-    }
 
     if (outcome === "changed") {
       setShowReplacementSelect(true);
@@ -266,7 +256,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           aria-pressed={pressed("confirmed")}
           onClick={() => handleOutcomeClick("confirmed")}
           disabled={readOnly || target.is_obsolete || target.is_unknown}
-          title={pressed("confirmed") ? "Click to clear confirmation (Key: 1)" : "Accept proposal as-is (Key: 1)"}
+          title="Confirm proposal as-is (Key: 1)"
         >
           <span className="decision-btn__label"><IconCheck />Confirm</span>
           <kbd className="kbd">1</kbd>
@@ -277,7 +267,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           variant="secondary" className="decision-btn decision-btn--rejected"
           aria-pressed={pressed("rejected")}
           disabled={readOnly} onClick={() => handleOutcomeClick("rejected")}
-          title={pressed("rejected") ? "Click to clear rejection (Key: 2)" : "Reject proposal (Key: 2)"}
+          title="Reject proposal (Key: 2)"
         >
           <span className="decision-btn__label"><IconClose />Reject</span>
           <kbd className="kbd">2</kbd>
@@ -312,7 +302,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           variant="secondary" className="decision-btn decision-btn--uncertain"
           aria-pressed={pressed("uncertain")}
           disabled={readOnly} onClick={() => handleOutcomeClick("uncertain")}
-          title={pressed("uncertain") ? "Click to clear uncertain status (Key: 4)" : "Clinically or textually undecidable (Key: 4)"}
+          title="Set reviewer uncertainty (Key: 4)"
         >
           <span className="decision-btn__label"><IconQuestion />Uncertain</span>
           <kbd className="kbd">4</kbd>
@@ -329,7 +319,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             title="Reset decision for this proposal (back to open)"
           >
             <IconUndo />
-            Reset decision (open)
+            Reset decision (open) <kbd className="kbd">0</kbd>
           </Button>
         </div>
       )}

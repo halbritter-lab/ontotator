@@ -79,7 +79,7 @@ def test_submission_is_refused_with_annotation_ids_and_draft_stays_editable(app_
         json={
             "mutation_id": "submit",
             "expected_revision": 1,
-            "payload": {"checked_layer_ids": ["hpo-layer"]},
+            "payload": {"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
         },
     )
     assert refused.status_code == 422, refused.text
@@ -159,7 +159,7 @@ def test_workspace_filters_nested_and_legacy_options_but_retains_current_hidden_
             MutationEnvelope(
                 mutation_id="submit",
                 expected_revision=1,
-                payload={"checked_layer_ids": ["hpo-layer"]},
+                payload={"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
             ),
         )
     assert exc.value.code == "PROJECT_RULE_VIOLATION"
@@ -261,7 +261,7 @@ def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass
             MutationEnvelope(
                 mutation_id="blocked",
                 expected_revision=4,
-                payload={"checked_layer_ids": ["hpo-layer"]},
+                payload={"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
             ),
         )
     assert exc.value.code == "PROJECT_RULE_VIOLATION"
@@ -298,7 +298,7 @@ def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass
         MutationEnvelope(
             mutation_id="submit",
             expected_revision=6,
-            payload={"checked_layer_ids": ["hpo-layer"]},
+            payload={"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
         ),
     )
     assert submitted.snapshots[0].annotation.axes_defaulted == []

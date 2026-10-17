@@ -16,7 +16,7 @@ from ontocurator.application.editing import CreateAnnotationCommand, EditorServi
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.workspaces import WorkspaceService
 from ontocurator.domain.annotations import AnnotationRef, snapshot
-from ontocurator.domain.errors import InvalidPackage
+from ontocurator.domain.errors import DomainError, InvalidPackage
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
@@ -69,7 +69,7 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
         MutationEnvelope(
             mutation_id="submit",
             expected_revision=revision,
-            payload={"checked_layer_ids": ["target-layer"]},
+            payload={"document_checked": True, "checked_layer_ids": ["target-layer"]},
         ),
     )
     projected = archive_roundtrip(ExportService(original).for_workspace(opened.key))
@@ -87,7 +87,7 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
         MutationEnvelope(
             mutation_id="continue",
             expected_revision=resumed.draft.revision,
-            payload={"checked_layer_ids": ["target-layer"]},
+            payload={"document_checked": True, "checked_layer_ids": ["target-layer"]},
         ),
     )
     second_export = archive_roundtrip(
@@ -246,3 +246,38 @@ def test_submission_scope_tampering_is_rejected(tmp_path, damage):
     stream.seek(0)
     with pytest.raises(InvalidPackage, match=r"scope|checked"):
         read_package(stream)
+
+
+@pytest.mark.parametrize("scenario", ["single", "multi_editable"])
+@pytest.mark.parametrize("confirmation", [None, False, True])
+def test_submission_needs_explicit_document_confirmation(
+    tmp_path, scenario, confirmation
+):
+    package = make_layered_package(scenario)
+    repo = Repository(database_for(tmp_path / "completion.db"))
+    repo.import_package(package)
+    opened = WorkspaceService(repo, registry()).open(
+        WorkspaceKey(
+            project_key=package.manifest.package_id,
+            document_id="doc-beta",
+            annotator_id="curator",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    )
+    payload = {} if confirmation is None else {"document_checked": confirmation}
+    envelope = MutationEnvelope(
+        mutation_id="submit", expected_revision=0, payload=payload
+    )
+    service = SubmissionService(repo)
+    if confirmation is not True:
+        with pytest.raises(DomainError) as error:
+            service.submit(opened.key, envelope)
+        assert error.value.code == "DOCUMENT_NOT_CHECKED"
+        assert repo.open_draft(opened.key).revision == 0
+        assert repo.get_submissions_for_workspace(opened.key) == []
+    else:
+        submission = service.submit(opened.key, envelope)
+        assert submission.document_checked is True
+        assert submission.checked_layer_ids == []
+        assert service.read(opened.key, submission.submission_id) == submission

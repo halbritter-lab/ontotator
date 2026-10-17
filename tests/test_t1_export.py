@@ -154,7 +154,7 @@ def _submit(
         MutationEnvelope(
             mutation_id=submission_id,
             expected_revision=draft.revision + 1,
-            payload={"command": "submit_workspace"},
+            payload={"document_checked": True, "command": "submit_workspace"},
         ),
         lambda _current: submission,
     )

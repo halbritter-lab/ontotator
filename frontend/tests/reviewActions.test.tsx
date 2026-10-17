@@ -103,7 +103,7 @@ describe("ReviewActions", () => {
     expect(screen.getByText(/Obsolete term|Veralteter Begriff/i)).toBeDefined();
   });
 
-  it("indicates active state with aria-pressed on chosen decision button and toggles off to null when clicked again", () => {
+  it("keeps the chosen outcome when its button is clicked again", () => {
     const onDecide = vi.fn();
     const confirmedDecision = {
       decision_id: "dec-1",
@@ -127,14 +127,38 @@ describe("ReviewActions", () => {
     expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
     expect(rejectBtn.getAttribute("aria-pressed")).toBe("false");
 
-    // Clicking already active confirm button toggles it off
+    // Repeating the explicit choice never resets it
     fireEvent.click(confirmBtn);
 
     expect(onDecide).toHaveBeenCalledWith({
-      outcome: null,
+      outcome: "confirmed",
       replacement: undefined,
       note: undefined,
     });
+  });
+
+  it.each([ ["confirmed", "Confirm"], ["rejected", "Reject"], ["uncertain", "Uncertain"] ])(
+    "repeated %s clicks preserve the chosen outcome and reviewer note", (outcome, label) => {
+      const onDecide = vi.fn();
+      render(<ReviewActions target={sampleTarget} draftAnnotations={[]} onDecide={onDecide}
+        currentDecision={{ decision_id: "decision", target: { annotation_id: "prop-1", version: "v-prop-1" },
+          outcome, reviewer_id: "reviewer", note: "Keep this note" } as any} />);
+      const button = screen.getByRole("button", { name: new RegExp(`^${label}`) });
+      fireEvent.click(button); fireEvent.click(button);
+      expect(onDecide.mock.calls.map(([payload]) => payload)).toEqual([
+        { outcome, replacement: undefined, note: "Keep this note" },
+        { outcome, replacement: undefined, note: "Keep this note" },
+      ]);
+    });
+
+  it("continues the recorded replacement when editing an already changed proposal", () => {
+    const edit = vi.fn(); const adopt = vi.fn();
+    render(<ReviewActions target={sampleTarget} draftAnnotations={[]} onDecide={vi.fn()}
+      onEditReplacement={edit} onAdoptAndEdit={adopt}
+      currentDecision={{ decision_id: "decision", target: { annotation_id: "prop-1", version: "v-prop-1" },
+        outcome: "changed", reviewer_id: "reviewer", replacement: { annotation_id: "exact-copy", version: "exact-version" } }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+    expect(edit).toHaveBeenCalledWith("exact-copy"); expect(adopt).not.toHaveBeenCalled();
   });
 
   it("renders 'Reset decision' button when a decision is present and clicking it calls onDecide with outcome null", () => {

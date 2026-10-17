@@ -129,9 +129,6 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await page.locator(".case-navigation").getByRole("button", { name: /Next Case/i }).click();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2/i);
     await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (0)" })).toBeVisible();
-    const verify = page.locator(".layer-controls").getByRole("button", { name: /Mark .* as verified/i });
-    await verify.click();
-    // Submitting right away waits for the save of the verification.
     await submitCase(page);
     await page.getByRole("button", { name: /Stay in case/i }).click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
@@ -147,34 +144,12 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
   });
 
-  test("Scenario C: Multi-editable layers require both layers checked before completion", async ({ page }) => {
+  test("Scenario C: Multi-editable layers use one document confirmation", async ({ page }) => {
     await importScenario(page, "multi_editable", "user-scenario-c");
     await openCase(page, { task: "annotate" });
-
-    // 1. Both layers are visible in layer controls
     await expect(page.locator(".layer-controls")).toBeVisible();
-    const layer1 = page.locator(".layer-item").filter({ hasText: "Editable Layer 1" });
-    const layer2 = page.locator(".layer-item").filter({ hasText: "Editable Layer 2" });
-    await expect(layer1).toBeVisible();
-    await expect(layer2).toBeVisible();
-
-    // 2. Try submitting without checking either layer
-    await page.getByRole("button", { name: /Finish & Submit Case|Submit Case|Fall abschließen/i }).first().click();
-    await expect(page.getByRole("alert")).toContainText(/Please mark all editable layers as verified|Bitte markieren Sie alle editierbaren Schichten als geprüft/i);
-
-    // 3. Check layer 1 only
-    const checkAction = page.locator(".layer-controls").getByRole("button", { name: /Mark .* as verified|als geprüft markieren/i });
-    await checkAction.click();
-
-    // Try submitting again at once -> waits for the save, then names only layer 2 as unchecked
-    await page.getByRole("button", { name: /Finish & Submit Case|Submit Case|Fall abschließen/i }).first().click();
-    await expect(page.getByRole("alert")).toHaveText(/(Please mark all editable layers as verified|Bitte markieren Sie alle editierbaren Schichten als geprüft).*: Editable Layer 2$/i);
-
-    // 4. Switch to layer 2 and check it
-    await layer2.locator('input[type="radio"]').check();
-    await checkAction.click();
-
-    // 5. Submitting at once waits for the save; both layers are checked -> submit succeeds
+    await expect(page.locator(".layer-item")).toHaveCount(2);
+    await expect(page.getByRole("button", { name: /verified/i })).toHaveCount(0);
     await submitCase(page);
   });
 });

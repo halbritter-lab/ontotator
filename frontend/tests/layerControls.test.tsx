@@ -245,27 +245,13 @@ describe("LayerControls Component", () => {
     expect(screen.queryByRole("combobox", { name: /Annotation type|Annotationstyp/i })).toBeNull();
   });
 
-  it("displays layer checked status badge and allows active layer check action", () => {
-    const onCheck = vi.fn();
-    render(
-      <LayerControls
-        layers={sampleLayers}
-        scope={sampleScope}
-        selection={sampleSelection} // active: phenotype
-        checkedLayerIds={["disease"]}
-        onToggleVisibility={vi.fn()}
-        onSetActiveLayer={vi.fn()}
-        onSetActiveType={vi.fn()}
-        onCheckLayer={onCheck}
-      />
-    );
-
-    // Shows checked badge for disease
-    expect(screen.getByTestId("badge-checked-disease")).toBeTruthy();
-
-    // Phenotype is not checked yet; check button/checkbox for active layer exists
-    const checkBtn = screen.getByRole("button", { name: /Mark Phänotyp as verified|Phänotyp als geprüft markieren/i });
-    fireEvent.click(checkBtn);
-    expect(onCheck).toHaveBeenCalledWith("phenotype", true);
+  it("keeps visibility and type selection without layer verification controls", () => {
+    render(<LayerControls layers={sampleLayers} scope={sampleScope} selection={sampleSelection}
+      checkedLayerIds={["disease"]} onCheckLayer={vi.fn()} onToggleVisibility={vi.fn()}
+      onSetActiveLayer={vi.fn()} onSetActiveType={vi.fn()} />);
+    expect(screen.queryByTestId("badge-checked-disease")).toBeNull();
+    expect(screen.queryByRole("button", { name: /verified/i })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i })).toBeDefined();
+    expect(screen.getByRole("combobox", { name: /Annotation type/i })).toBeDefined();
   });
 });

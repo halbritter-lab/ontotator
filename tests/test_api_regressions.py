@@ -76,8 +76,8 @@ def test_invalid_command_body_returns_validation_error_not_server_error(app_clie
             "mutation_id": "invalid-body",
             "expected_revision": 0,
             "payload": {
+                "document_checked": "invalid",
                 "command": "submit_workspace",
-                "checked_layer_ids": ["invalid"],
             },
         },
     )

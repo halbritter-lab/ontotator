@@ -794,7 +794,11 @@ def test_individual_submission_is_not_a_reanchor_source(runtime):
         json={
             "mutation_id": "manual-submit",
             "expected_revision": edited.json()["revision"],
-            "payload": {"command": "submit_workspace", "checked_layer_ids": ["hpo"]},
+            "payload": {
+                "document_checked": True,
+                "command": "submit_workspace",
+                "checked_layer_ids": ["hpo"],
+            },
         },
     )
     assert submitted.status_code == 200, submitted.text

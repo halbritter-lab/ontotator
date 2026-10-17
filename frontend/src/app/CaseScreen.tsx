@@ -39,6 +39,8 @@ import {
   type QueueState,
 } from "../editor/autosave";
 import { newEvidenceId } from "../editor/ids";
+import { StatusBadge } from "../ui/StatusBadge";
+import { defaultedResults, resultSnapshots } from "../editor/decisionSemantics";
 import { LayerControls } from "../editor/LayerControls";
 import {
   initLayerSelection,
@@ -1120,17 +1122,22 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       if (!ok) return;
     }
     let note: string | undefined;
+    let resetNote: string | undefined;
     if (payload.outcome === null) {
       // Removing a decision must not silently lose the note text: keep it in the editor.
-      const keep = noteDraftsRef.current[key] ?? decisionsMap[key]?.note ?? "";
-      if (keep) setNoteDrafts((prev) => ({ ...prev, [key]: keep }));
+      resetNote = noteDraftsRef.current[key] ?? decisionsMap[key]?.note ?? "";
+      if (resetNote) setNoteDrafts((prev) => ({ ...prev, [key]: resetNote! }));
       note = undefined;
     } else {
       note = payload.note !== undefined ? (payload.note.trim() || undefined) : currentNoteFor(key);
     }
     try {
       await enqueueDecision(target, payload.outcome, payload.replacement?.annotation_id, note);
-      if (payload.outcome !== null) {
+      if (payload.outcome === null) {
+        // An earlier queued note save may clear its draft while reset is waiting.
+        // Restore the captured text without overwriting newer typing.
+        setNoteDrafts(prev => key in prev ? prev : { ...prev, [key]: resetNote ?? "" });
+      } else {
         setNoteDrafts((prev) => {
           if (!(key in prev)) return prev;
           if ((prev[key].trim() || undefined) !== note) return prev;
@@ -1282,8 +1289,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setLayerSelection(setActiveType(layerSelection, view.layers ?? [], typeId));
   };
 
-  // Single-layer check logic vs multi-layer check logic
-  const isSingleLayer = (view.layers ?? []).length <= 1;
   const editableLayerIds = view.scope?.editable_layer_ids ?? (view.layers ? view.layers.map(l => l.layer_id) : []);
   // Only the selected curated annotation's mentions can be resized, and not while
   // another text interaction (attaching a mention, choosing a term) is in progress.
@@ -1298,12 +1303,35 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Confirmed proposals are submitted as they are, next to the draft's own annotations.
   const confirmedCount = (draft.decisions ?? []).filter((d) => d.outcome === "confirmed").length;
 
+  const completionResults = resultSnapshots(draft, view.available_inputs ?? []);
+  const defaulted = defaultedResults(completionResults);
+  const defaultedKeys = new Set(defaulted.map(s => refKey({ annotation_id: s.annotation.annotation_id, version: s.version })));
+  const [focusDefaultedAxes, setFocusDefaultedAxes] = useState(false);
+  useEffect(() => {
+    if (!focusDefaultedAxes || submitDialogOpen) return;
+    const panel = inspectorRef.current?.querySelector<HTMLElement>('[data-testid="axes-section"], .review-actions__proposal');
+    if (panel) { panel.tabIndex = -1; panel.focus(); setFocusDefaultedAxes(false); }
+  }, [focusDefaultedAxes, submitDialogOpen, selectedAnnotationId, selectedTargetId]);
+  const reviewDefaulted = () => {
+    const first = defaulted[0];
+    if (!first) return;
+    const layerId = first.annotation.layer_id;
+    setLayerSelection(previous => ({ ...previous, activeLayerId: layerId,
+      activeTypeId: first.annotation.type_id,
+      visibleLayerIds: previous.visibleLayerIds.includes(layerId) ? previous.visibleLayerIds : [...previous.visibleLayerIds, layerId] }));
+    const target = reviewTargets.find(t => refKey(t) === refKey({ annotation_id: first.annotation.annotation_id, version: first.version }));
+    setSelectedTargetId(target ? refKey(target) : null);
+    setSelectedAnnotationId(target ? null : first.annotation.annotation_id);
+    setSelectedSourceId(null); setSelectedEvidenceId(null); cancelPending();
+    setMobilePane("details"); setSubmitDialogOpen(false); setFocusDefaultedAxes(true);
+  };
+
   // Step 1: save pending edits, validate the saved draft and open the confirmation dialog.
   const handleSubmitWorkspace = async () => {
     if (readOnlyRef.current) return;
     setSubmitError(null);
 
-    // Validate only after pending saves (e.g. "Mark ... as verified") have finished;
+    // Validate only after pending saves have finished;
     // the draft from before them would give a stale validation result.
     const rejectedBefore = queueRef.current.rejectedCount();
     setSubmitPending(true);
@@ -1314,16 +1342,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // keep the reason why the case was not submitted.
     if (queueRef.current.rejectedCount() !== rejectedBefore) {
       setSubmitError("A change could not be saved; the case was not submitted.");
-      return;
-    }
-
-    const checkedIds = latestDraft.current.checked_layer_ids ?? [];
-    const unchecked = editableLayerIds.filter((id) => !checkedIds.includes(id));
-    if (!isSingleLayer && unchecked.length > 0) {
-      const uncheckedNames = unchecked
-        .map((id) => view.layers?.find((l) => l.layer_id === id)?.label ?? id)
-        .join(", ");
-      setSubmitError(`Please mark all editable layers as verified before submitting: ${uncheckedNames}`);
       return;
     }
 
@@ -1357,7 +1375,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             command: "submit_workspace",
             // Explicitly confirmed by the user in the submit dialog.
             document_checked: true,
-            checked_layer_ids: isSingleLayer ? editableLayerIds : latestDraft.current.checked_layer_ids ?? [],
           },
         };
         return api.submitWorkspace(workspaceId, envelope).catch(assignmentFailure);
@@ -1466,13 +1483,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && view.key.mode === "review" && !!selectedTarget, group: "Review" };
   useShortcut("1", () => {
     if (!selectedTarget || selectedTarget.is_obsolete || selectedTarget.is_unknown) return false;
-    const current = decisionsMap[refKey(selectedTarget)];
-    void handleReviewDecision({ outcome: current?.outcome === "confirmed" ? null : "confirmed" });
+    void handleReviewDecision({ outcome: "confirmed" });
   }, { ...reviewShortcutOptions, description: "Confirm selected proposal" });
   useShortcut("2", () => {
     if (!selectedTarget) return false;
-    const current = decisionsMap[refKey(selectedTarget)];
-    void handleReviewDecision({ outcome: current?.outcome === "rejected" ? null : "rejected" });
+    void handleReviewDecision({ outcome: "rejected" });
   }, { ...reviewShortcutOptions, description: "Reject selected proposal" });
   useShortcut("3", () => {
     if (!selectedTarget) return false;
@@ -1480,9 +1495,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, { ...reviewShortcutOptions, description: "Adopt proposal as editable copy" });
   useShortcut("4", () => {
     if (!selectedTarget) return false;
-    const current = decisionsMap[refKey(selectedTarget)];
-    void handleReviewDecision({ outcome: current?.outcome === "uncertain" ? null : "uncertain" });
+    void handleReviewDecision({ outcome: "uncertain" });
   }, { ...reviewShortcutOptions, description: "Mark selected proposal as uncertain" });
+  useShortcut("0", () => { void handleReviewDecision({ outcome: null }); }, { ...reviewShortcutOptions, description: "Reset selected review decision to open" });
   useShortcutHint(["Shift + arrows, then release Shift"], "Select text with the keyboard to create a mention");
   useShortcutHint(["←", "→", "Ctrl + ← / →"], "Move the focused mention edge (Tab to an edge handle of the selected annotation)");
 
@@ -1667,13 +1682,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             layers={view.layers ?? []}
             scope={view.scope ?? { scope_id: "default", mode: view.key.mode, editable_layer_ids: [], reference_layer_ids: [] }}
             selection={layerSelection}
-            checkedLayerIds={draft.checked_layer_ids ?? []}
             onToggleVisibility={handleToggleVisibility}
             onSetActiveLayer={handleSetActiveLayer}
             onSetActiveType={handleSetActiveType}
-            onCheckLayer={(layerId, checked) => {
-              void enqueueMutation({ command: "check_layer", layer_id: layerId, checked }).catch(reportError);
-            }}
             disabled={queueState === "saving"}
           />
 
@@ -1719,6 +1730,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       >
                         <div className="doc-id doc-row">
                           <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
+                          {defaultedKeys.has(refKey(t)) && <StatusBadge tone="warning">Defaulted axes</StatusBadge>}
                           {dec ? (
                             <span className={`decision-tag decision-tag--${dec.outcome}`}>
                               {dec.outcome === "confirmed" ? <><IconCheck />Confirmed</>
@@ -1840,6 +1852,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     >
                       <div className="doc-id doc-row">
                         <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
+                        {defaultedKeys.has(refKey({ annotation_id: annSnap.annotation.annotation_id, version: annSnap.version })) && <StatusBadge tone="warning">Defaulted axes</StatusBadge>}
                         {layerName && (view.layers ?? []).length > 1 && (
                           <span className="decision-tag decision-tag--open">{layerName}</span>
                         )}
@@ -1866,15 +1879,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
           {/* Submission Box at bottom of sidebar */}
           <div className="sidebar-footer">
-            {!isSingleLayer && (
-              <div className="sidebar-footer__progress">
-                {editableLayerIds.length > 0 && (
-                  <div>
-                    Verified: {(draft.checked_layer_ids ?? []).filter(id => editableLayerIds.includes(id)).length} of {editableLayerIds.length} layers
-                  </div>
-                )}
-              </div>
-            )}
             {submitError && (
               <div className="sidebar-footer__error">
                 {submitError}
@@ -2131,12 +2135,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               {openReviewTargets.length > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargets.length} still open</strong>}
             </li>
           )}
-          {!isSingleLayer && (
-            <li>
-              Verified layers: {(draft.checked_layer_ids ?? []).filter((id) => editableLayerIds.includes(id)).length} of {editableLayerIds.length}
-            </li>
-          )}
+
         </ul>
+        {defaulted.length > 0 && <InlineMessage tone="warning">
+          <p>{defaulted.length} annotations have defaulted axis values.</p>
+          <Button onClick={reviewDefaulted}>Review defaulted annotations</Button>
+        </InlineMessage>}
         <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
           <input
             type="checkbox"

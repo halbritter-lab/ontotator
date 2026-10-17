@@ -190,7 +190,7 @@ def test_review_never_shows_other_members_work(app: Any) -> None:
         json={
             "mutation_id": "m2",
             "expected_revision": 2,
-            "payload": {"checked_layer_ids": ["hpo-layer"]},
+            "payload": {"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
         },
     )
     assert submitted.status_code == 200, submitted.text

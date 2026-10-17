@@ -106,13 +106,24 @@ describe("CaseScreen integration", () => {
     axes_config_sha256: "sha-test-axes",
   };
 
+  const withEditableFinding = (view: WorkspaceView) => {
+    view.draft.annotations = [{ schema_version: "ontocurator-annotation/v3", version: "pending-v1",
+      document_id: view.document.document_id, text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
+      annotation: { annotation_id: "pending-finding", document_id: view.document.document_id, layer_id: "phenotype",
+        type_id: "default", term_id: "HP:0001252", axes_values: {}, evidence_refs: [],
+        provenance: { actor: { actor_id: "user-test", kind: "human" }, method: "manual", source_refs: [] } }, evidence: [] }];
+    return view;
+  };
+  const selectEditableFinding = () => fireEvent.click(document.querySelector('[data-list-key="annotation:pending-finding"]')!);
+  const editFinding = () => fireEvent.click(screen.getByRole("radio", { name: "Present" }));
+
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
   describe("editor logout guard", () => {
     const setup = (pending = false, transport = false) => {
-      const view = structuredClone(sampleView);
+      const view = withEditableFinding(structuredClone(sampleView));
       view.layers!.push({ ...view.layers![0], layer_id: "disease", label: "Disease", access: "reference" });
       const leaveGuardRef = { current: null as ((proceed: () => void) => void) | null };
       const onLogout = vi.fn();
@@ -120,10 +131,11 @@ describe("CaseScreen integration", () => {
       let reject!: (error: unknown) => void;
       const save = new Promise<Draft>((res, rej) => { resolve = res; reject = rej; });
       const command = transport
-        ? vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(await save), { status: 200, headers: { "Content-Type": "application/json" } }))
+        ? vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => new Response(JSON.stringify(String(url).endsWith("/commands") ? await save : []), { status: 200, headers: { "Content-Type": "application/json" } }))
         : vi.spyOn(api, "applyCommand").mockReturnValue(save);
       const rendered = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} leaveGuardRef={leaveGuardRef} />);
-      if (pending) fireEvent.click(screen.getByRole("button", { name: /Mark .* as verified/i }));
+      selectEditableFinding();
+      if (pending) editFinding();
       return { view, leaveGuardRef, onLogout, resolve, reject, command, rendered };
     };
 
@@ -620,9 +632,130 @@ describe("CaseScreen integration", () => {
     expect(screen.getByText("Mark selected proposal as uncertain")).toBeDefined();
   });
 
+  it("counts hidden defaulted annotations and jumps to their axes without confirming them", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    view.layers!.push({ ...view.layers![0], layer_id: "disease", label: "Disease", access: "reference" });
+    const annotation = view.draft.annotations![0].annotation;
+    annotation.axes_values = { assertion: "present", experiencer: "patient", temporality: "current" };
+    annotation.axes_defaulted = ["assertion", "experiencer", "temporality"];
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async () => {
+      const next = structuredClone(view.draft); next.revision = 1;
+      next.annotations![0].annotation.axes_defaulted = ["experiencer", "temporality"];
+      return next;
+    });
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    expect(await screen.findByText("1 annotations have defaulted axis values.")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Review defaulted annotations" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("axes-section")));
+    expect((screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText("Defaulted axes")).toBeDefined();
+    expect(apply).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Confirm Vorhandensein.* value/ }));
+    await waitFor(() => expect(apply).toHaveBeenCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({ chosen_axis_ids: ["assertion"] }) })));
+  });
+
+  it("outcome keys set decisions repeatedly and zero resets while inputs, IME and dialogs suppress them", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const proposal = view.draft.annotations![0];
+    view.draft.annotations = []; view.available_inputs = [proposal];
+    view.key.mode = "review"; view.draft.key.mode = "review";
+    view.targets!.targets = [{ annotation_id: proposal.annotation.annotation_id, version: proposal.version }];
+    view.draft.targets = view.targets!;
+    let saved = structuredClone(view.draft);
+    const record = vi.spyOn(api, "recordDecision").mockImplementation(async (_id, envelope) => {
+      const payload = envelope.payload as any;
+      saved = { ...saved, revision: saved.revision + 1, decisions: payload.outcome === null ? [] : [{
+        decision_id: "decision", target: payload.target, outcome: payload.outcome, note: payload.note, reviewer_id: "user-test",
+      }] };
+      return saved;
+    });
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    for (const [key, outcome] of [["1", "confirmed"], ["2", "rejected"], ["4", "uncertain"]]) {
+      for (let repeat = 0; repeat < 2; repeat++) {
+        fireEvent.keyDown(window, { key });
+        await waitFor(() => expect(record).toHaveBeenLastCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({ outcome }) })));
+      }
+    }
+    const note = screen.getByRole("textbox", { name: /Reviewer note/i });
+    fireEvent.change(note, { target: { value: "Keep this draft" } });
+    const calls = record.mock.calls.length;
+    fireEvent.keyDown(note, { key: "1" }); fireEvent.keyDown(window, { key: "2", isComposing: true });
+    expect(record).toHaveBeenCalledTimes(calls);
+    fireEvent.keyDown(window, { key: "0" });
+    await waitFor(() => expect(record).toHaveBeenLastCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({ outcome: null }) })));
+    expect((note as HTMLTextAreaElement).value).toBe("Keep this draft");
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    await screen.findByRole("dialog", { name: /Submit case/i });
+    const beforeModal = record.mock.calls.length;
+    fireEvent.keyDown(window, { key: "1" });
+    expect(record).toHaveBeenCalledTimes(beforeModal);
+  });
+
+  it("key three resumes the exact saved replacement without adopting another copy", () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const replacement = view.draft.annotations![0];
+    const proposal = structuredClone(replacement);
+    proposal.annotation.annotation_id = "source-proposal"; proposal.version = "source-version";
+    replacement.annotation.provenance.source_refs = ["source-proposal:source-version"];
+    view.available_inputs = [proposal]; view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: "source-proposal", version: "source-version" };
+    view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    view.draft.decisions = [{ decision_id: "d", reviewer_id: "reviewer", outcome: "changed", target,
+      replacement: { annotation_id: replacement.annotation.annotation_id, version: replacement.version } }];
+    const apply = vi.spyOn(api, "applyCommand"); const decide = vi.spyOn(api, "recordDecision");
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!); fireEvent.keyDown(window, { key: "3" });
+    expect(screen.getByTestId("axes-section")).toBeDefined();
+    expect(document.querySelector('[data-list-key="annotation:pending-finding"]')?.classList.contains("selected")).toBe(true);
+    expect(apply).not.toHaveBeenCalled(); expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("reset preserves note text when an earlier blurred note save finishes afterward", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const proposal = view.draft.annotations![0];
+    view.draft.annotations = []; view.available_inputs = [proposal];
+    view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: proposal.annotation.annotation_id, version: proposal.version };
+    view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    view.draft.decisions = [{ decision_id: "d", reviewer_id: "reviewer", outcome: "uncertain", target }];
+    let resolveNote!: (draft: Draft) => void;
+    const pendingNote = new Promise<Draft>(resolve => { resolveNote = resolve; });
+    const record = vi.spyOn(api, "recordDecision").mockReturnValueOnce(pendingNote)
+      .mockResolvedValueOnce({ ...view.draft, revision: 2, decisions: [] });
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    const note = screen.getByRole("textbox", { name: /Reviewer note/ });
+    fireEvent.change(note, { target: { value: "Keep this draft" } }); fireEvent.blur(note);
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    fireEvent.keyDown(window, { key: "0" });
+    resolveNote({ ...view.draft, revision: 1, decisions: [{ ...view.draft.decisions[0], note: "Keep this draft" }] });
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(document.querySelector('.decision-tag--open')).not.toBeNull());
+    expect((note as HTMLTextAreaElement).value).toBe("Keep this draft");
+  });
+
+  it("submits multiple layers through one fresh document confirmation", async () => {
+    const view = structuredClone(sampleView);
+    view.layers!.push({ ...view.layers![0], layer_id: "hidden", label: "Hidden", default_visible: false });
+    view.scope!.editable_layer_ids.push("hidden");
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
+    expect(dialog.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Entire text checked for further findings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    await screen.findByRole("dialog", { name: /Submit case/i });
+    expect((screen.getByRole("checkbox", { name: "Entire text checked for further findings" }) as HTMLInputElement).checked).toBe(false);
+    expect(screen.queryByText(/Verified layers:/)).toBeNull();
+  });
+
   describe("Finish & Submit while a save is pending", () => {
-    // Two layers, one editable: submitting requires the editable layer to be verified.
-    const twoLayerView = (): WorkspaceView => ({
+    // Pending clinical edits must finish before opening the completion dialog.
+    const twoLayerView = (): WorkspaceView => withEditableFinding({
       ...sampleView,
       scope: { ...sampleView.scope!, editable_layer_ids: ["phenotype"], reference_layer_ids: ["disease"] },
       layers: [
@@ -644,7 +777,8 @@ describe("CaseScreen integration", () => {
       const apply = vi.spyOn(api, "applyCommand").mockReturnValue(save.promise);
       render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
 
-      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      selectEditableFinding();
+      editFinding();
       await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
       fireEvent.click(finishButton());
 
@@ -669,7 +803,8 @@ describe("CaseScreen integration", () => {
       render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
 
       // Reset the verification; the server refuses this edit.
-      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      selectEditableFinding();
+      editFinding();
       fireEvent.click(finishButton());
       save.reject(new ValidationError("Layer cannot be changed"));
 
@@ -687,14 +822,15 @@ describe("CaseScreen integration", () => {
         .mockResolvedValueOnce({ ...view.draft, revision: 1, checked_layer_ids: [] });
       render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
 
-      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      selectEditableFinding();
+      editFinding();
       fireEvent.click(finishButton());
       save.reject(new ValidationError("Layer cannot be changed"));
       await screen.findByText("Layer cannot be changed");
       await waitFor(() => expect(finishButton().getAttribute("aria-busy")).not.toBe("true"));
 
-      // A new edit clears the error of the refused save; the stopped submit stays explained.
-      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      // A new clinical edit clears the save error; the stopped submit stays explained.
+      fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
       await waitFor(() =>
         expect(screen.getByRole("alert").textContent).toBe("A change could not be saved; the case was not submitted."),
       );
@@ -707,7 +843,8 @@ describe("CaseScreen integration", () => {
       vi.spyOn(api, "applyCommand").mockReturnValue(save.promise);
       render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
 
-      fireEvent.click(screen.getByRole("button", { name: /Mark Phänotyp as verified/i }));
+      selectEditableFinding();
+      editFinding();
       fireEvent.click(finishButton());
       save.reject(new TypeError("Failed to fetch"));
 

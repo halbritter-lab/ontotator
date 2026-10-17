@@ -77,6 +77,7 @@ def test_independent_trimmed_profile_roundtrip_restores_own_submission(tmp_path)
             "submit",
             1,
             {
+                "document_checked": True,
                 "checked_layer_ids": ["target-layer"],
             },
         ),
@@ -218,6 +219,7 @@ def test_submission_revalidates_confirmed_imported_content(tmp_path):
                 "submit",
                 1,
                 {
+                    "document_checked": True,
                     "checked_layer_ids": ["layer-1", "layer-2"],
                 },
             ),
@@ -241,6 +243,7 @@ def test_nonapproved_target_may_remain_incomplete(tmp_path, outcome):
             "submit",
             1,
             {
+                "document_checked": True,
                 "checked_layer_ids": ["layer-1", "layer-2"],
             },
         ),

@@ -33,7 +33,7 @@ class SubmitCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     command: str = "submit_workspace"
-    document_checked: bool = True
+    document_checked: bool = False
     checked_layer_ids: list[str] | None = None
 
 
@@ -110,14 +110,6 @@ def validate_completion(
     ontology: OntologyService | OntologyRegistry | None = None,
 ) -> None:
     """Validate that draft is completely ready for submission under task scope and profile."""
-    # 1. All editable layers in scope must be marked as checked
-    for layer_id in scope.editable_layer_ids:
-        if layer_id not in draft.checked_layer_ids:
-            raise DomainError(
-                "LAYER_NOT_CHECKED",
-                f"Editable layer '{layer_id}' has not been marked as checked",
-            )
-
     # 2. Check draft annotations for required axes and evidence policies
     for snap in draft.annotations:
         validate_annotation_completion(snap, profile)

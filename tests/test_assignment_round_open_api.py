@@ -117,6 +117,7 @@ def test_selected_submitted_round_remains_read_only(round_work):
             "mutation_id": "submit-selected",
             "expected_revision": 0,
             "payload": {
+                "document_checked": True,
                 "command": "submit_workspace",
                 "checked_layer_ids": ["hpo-layer"],
             },

@@ -299,7 +299,7 @@ def test_submission_fails_when_target_disappears(tmp_path):
             MutationEnvelope(
                 mutation_id="submit",
                 expected_revision=1,
-                payload={"checked_layer_ids": ["hpo-layer"]},
+                payload={"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
             ),
         )
 
@@ -320,7 +320,7 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
         MutationEnvelope(
             mutation_id="submit",
             expected_revision=1,
-            payload={"checked_layer_ids": ["hpo-layer"]},
+            payload={"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
         ),
     )
     pkg = ctx["exp_svc"].for_workspace(key)

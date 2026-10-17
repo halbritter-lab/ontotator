@@ -287,10 +287,42 @@ def scenario_package(scenario: str) -> ValidatedPackage:
     return pkg
 
 
+def decision_semantics_package() -> ValidatedPackage:
+    """A hidden defaulted proposal exercises warning navigation without patient data."""
+    pkg = fixture_package(project_key="pkg-defaulted-decisions")
+    profile = pkg.manifest.task_profile
+    profile.layers.append(
+        profile.layers[0].model_copy(
+            update={
+                "layer_id": "hidden-layer",
+                "label": "Hidden findings",
+                "default_visible": False,
+            },
+            deep=True,
+        )
+    )
+    pkg.manifest.task_profile_sha256 = profile_hash(profile)
+    proposals = {}
+    for number, original in enumerate(pkg.annotations.values()):
+        annotation = original.annotation.model_copy(
+            update={
+                "layer_id": "hidden-layer" if number == 0 else "hpo-layer",
+                "axes_defaulted": ["assertion"] if number == 0 else [],
+            }
+        )
+        updated = snapshot(
+            annotation, original.evidence, pkg.documents[original.document_id], profile
+        )
+        proposals[(annotation.annotation_id, updated.version)] = updated
+    pkg.annotations = proposals
+    return pkg
+
+
 def seed_packages() -> list[ValidatedPackage]:
     """Every project the specs use, oldest first."""
     return [
         fixture_package(),
+        decision_semantics_package(),
         fixture_package(project_key="pkg-many-proposals", proposals=MANY_PROPOSALS),
         fixture_package(project_key="translation-fixture"),
         design_package(),
@@ -461,7 +493,7 @@ def register_variant_scenario_route(app: FastAPI) -> None:
                 for number in range(1, 9)
             )
         if merge_split:
-            paragraphs = [f"Finding {i}. µ ± α 😀 " + "Synthetic clinical detail. " * 120 for i in range(1, 5)]
+            paragraphs = [f"Finding {i}. µ ± \u03b1 😀 " + "Synthetic clinical detail. " * 120 for i in range(1, 5)]
             source_text = "\n\n".join(paragraphs)
             target_text = "\n\n".join([paragraphs[0] + " " + paragraphs[1], paragraphs[2], paragraphs[3][:900], paragraphs[3][900:]])
         source = native_unit(
@@ -692,7 +724,7 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
             for index in range(14)
         )
         if merge_split:
-            paragraphs = [f"Finding {i}. Dose 5 mg. µ ± α 😀 " + "Synthetic clinical detail. " * 120 for i in range(1, 5)]
+            paragraphs = [f"Finding {i}. Dose 5 mg. µ ± \u03b1 😀 " + "Synthetic clinical detail. " * 120 for i in range(1, 5)]
             source_text = "\n\n".join(paragraphs)
             target_text = "\n\n".join([paragraphs[0] + " " + paragraphs[1], paragraphs[2], paragraphs[3][:900], paragraphs[3][900:]])
         source = native_unit(external_id, "en", source_text, case_id=case_id)

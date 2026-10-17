@@ -1,9 +1,7 @@
 import { Select } from "../ui/Select";
-import { Button } from "../ui/Button";
 import React from "react";
 import type { LayerDefinition, TaskScope } from "../api/client";
 import type { LayerSelection } from "./layerState";
-import { IconCheck } from "../ui/icons";
 
 export interface LayerControlsProps {
   layers: LayerDefinition[];
@@ -22,13 +20,10 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
   layers,
   scope,
   selection,
-  checkedLayerIds = [],
   onToggleVisibility,
   onSetActiveLayer,
   onSetActiveType,
-  onCheckLayer,
   disabled = false,
-  readOnly = false,
 }) => {
   // Requirement: Zero extra controls for single-layer packages
   if (layers.length <= 1) {
@@ -49,7 +44,6 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
           const isEdit = isEditableLayer(layer.layer_id);
           const isVisible = selection.visibleLayerIds.includes(layer.layer_id);
           const isActive = selection.activeLayerId === layer.layer_id;
-          const isChecked = checkedLayerIds.includes(layer.layer_id);
 
           const layerName = layer.label ?? (layer as any).name ?? layer.layer_id;
 
@@ -69,13 +63,6 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                 </label>
 
                 {isRef && <span className="badge layer-tag">Reference</span>}
-
-                {isChecked && (
-                  <span data-testid={`badge-checked-${layer.layer_id}`} className="badge layer-tag layer-tag--verified">
-                    <IconCheck />
-                    verified
-                  </span>
-                )}
               </div>
 
               {/* Right: Active Selection */}
@@ -108,7 +95,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         })}
       </div>
 
-      {/* Active Layer Details: Types & Check Action */}
+      {/* Active layer annotation type */}
       {activeLayer && (
         <div className="layer-controls__details">
           {/* Annotation type selector if active layer has multiple types */}
@@ -133,23 +120,6 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
               </Select>
             </div>
           )}
-
-          {/* Check active layer action if editable and onCheckLayer provided */}
-          {isEditableLayer(activeLayer.layer_id) && onCheckLayer && (() => {
-            const isChecked = checkedLayerIds.includes(activeLayer.layer_id);
-            const activeName = activeLayer.label ?? (activeLayer as any).name ?? activeLayer.layer_id;
-            return (
-              <Button
-                type="button"
-                className={`btn btn-sm btn-secondary layer-controls__verify${isChecked ? " is-checked" : ""}`}
-                onClick={() => { if (!readOnly) onCheckLayer(activeLayer.layer_id, !isChecked); }}
-                disabled={disabled || readOnly}
-                aria-label={`Mark ${activeName} as verified`}
-              >
-                {isChecked ? <><IconCheck />{activeName} verified (Reset)</> : `Mark ${activeName} as verified`}
-              </Button>
-            );
-          })()}
         </div>
       )}
     </div>

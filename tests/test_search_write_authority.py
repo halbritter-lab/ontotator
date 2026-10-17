@@ -163,7 +163,7 @@ def test_provenance_on_submitted_work_stays_read_only_without_status_events(assi
         json={
             "mutation_id": "submit",
             "expected_revision": 1,
-            "payload": {"command": "submit_workspace"},
+            "payload": {"document_checked": True, "command": "submit_workspace"},
         },
     )
     assert submitted.status_code == 200, submitted.text

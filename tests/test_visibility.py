@@ -128,7 +128,7 @@ def test_status_submission_retry_and_reopen_preserve_history(assigned):
     envelope = {
         "mutation_id": "submit",
         "expected_revision": 1,
-        "payload": {"command": "submit_workspace"},
+        "payload": {"document_checked": True, "command": "submit_workspace"},
     }
     submitted = client.post(f"/api/v1/workspaces/{token}/submit", json=envelope)
     assert submitted.status_code == 200, submitted.text
@@ -482,7 +482,7 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
         json={
             "mutation_id": "submit-for-visibility",
             "expected_revision": 2,
-            "payload": {"command": "submit_workspace"},
+            "payload": {"document_checked": True, "command": "submit_workspace"},
         },
     ).json()
     with app.state.repo.db.transaction() as conn:

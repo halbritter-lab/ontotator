@@ -175,7 +175,10 @@ def test_invalid_stored_axes_cannot_be_approved(tmp_path, axes_values, operation
                 MutationEnvelope(
                     mutation_id="submit",
                     expected_revision=revision,
-                    payload={"checked_layer_ids": ["hpo-layer"]},
+                    payload={
+                        "document_checked": True,
+                        "checked_layer_ids": ["hpo-layer"],
+                    },
                 ),
             )
     assert repo.open_draft(key).revision == revision

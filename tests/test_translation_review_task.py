@@ -481,7 +481,7 @@ def test_gate_after_receipt_replay_blocks_editable_open_new_commands_and_submit(
         json={
             "mutation_id": "submit",
             "expected_revision": 1,
-            "payload": {"command": "submit_workspace"},
+            "payload": {"document_checked": True, "command": "submit_workspace"},
         },
     )
     assert (
@@ -518,7 +518,7 @@ def test_submitted_annotation_history_survives_gate_drop_and_option_does_not_reo
     envelope = {
         "mutation_id": "submit",
         "expected_revision": 1,
-        "payload": {"command": "submit_workspace"},
+        "payload": {"document_checked": True, "command": "submit_workspace"},
     }
     submitted = env.alice.post(url + "/submit", json=envelope)
     assert submitted.status_code == 200, submitted.text

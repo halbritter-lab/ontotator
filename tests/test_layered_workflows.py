@@ -72,7 +72,7 @@ def test_null_finding_can_be_submitted_per_layer(
     env_sub = MutationEnvelope(
         mutation_id="mut-sub-1",
         expected_revision=1,
-        payload={"command": "submit_workspace"},
+        payload={"document_checked": True, "command": "submit_workspace"},
     )
     sub = sub_svc.submit(ws_key, env_sub)
     assert sub.submission_id.startswith("sub-")
@@ -81,7 +81,7 @@ def test_null_finding_can_be_submitted_per_layer(
     assert sub.scope.scope_id == ws_key.scope_id
 
 
-def test_two_editable_layers_require_both_checked_to_submit(
+def test_layer_checks_do_not_replace_document_confirmation(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
     db = database_for(tmp_path / "editor.db")
@@ -113,7 +113,7 @@ def test_two_editable_layers_require_both_checked_to_submit(
     )
     assert draft1.checked_layer_ids == ["layer-1"]
 
-    # Attempting to submit with layer-2 unchecked fails
+    # Legacy layer checks alone cannot confirm the entire document
     env_sub1 = MutationEnvelope(
         mutation_id="sub1",
         expected_revision=1,
@@ -121,7 +121,7 @@ def test_two_editable_layers_require_both_checked_to_submit(
     )
     with pytest.raises(DomainError) as exc_info:
         sub_svc.submit(ws_key, env_sub1)
-    assert exc_info.value.code in ("LAYER_NOT_CHECKED", "INCOMPLETE_SUBMISSION")
+    assert exc_info.value.code == "DOCUMENT_NOT_CHECKED"
 
     # Now check layer-2
     cmd2 = CheckLayerCommand(kind="check_layer", layer_id="layer-2", checked=True)
@@ -137,7 +137,7 @@ def test_two_editable_layers_require_both_checked_to_submit(
     env_sub2 = MutationEnvelope(
         mutation_id="sub2",
         expected_revision=2,
-        payload={"command": "submit_workspace"},
+        payload={"document_checked": True, "command": "submit_workspace"},
     )
     sub = sub_svc.submit(ws_key, env_sub2)
     assert set(sub.checked_layer_ids) == {"layer-1", "layer-2"}
@@ -178,7 +178,7 @@ def test_reference_layer_generates_no_checking_obligation(
     env_sub = MutationEnvelope(
         mutation_id="sub1",
         expected_revision=1,
-        payload={"command": "submit_workspace"},
+        payload={"document_checked": True, "command": "submit_workspace"},
     )
     sub = sub_svc.submit(ws_key, env_sub)
     assert sub.checked_layer_ids == ["target-layer"]
@@ -239,7 +239,7 @@ def test_assisted_mode_allows_any_number_of_source_and_target_annotations(
     env_sub = MutationEnvelope(
         mutation_id="sub1",
         expected_revision=2,
-        payload={"command": "submit_workspace"},
+        payload={"document_checked": True, "command": "submit_workspace"},
     )
     sub = sub_svc.submit(ws_key, env_sub)
     assert len(sub.snapshots) == 1
@@ -312,7 +312,7 @@ def test_required_axes_and_evidence_on_complete_enforced(
             MutationEnvelope(
                 mutation_id="sub1",
                 expected_revision=3,
-                payload={"command": "submit_workspace"},
+                payload={"document_checked": True, "command": "submit_workspace"},
             ),
         )
     assert exc_info.value.code == "MISSING_EVIDENCE"
@@ -529,7 +529,7 @@ def test_reopen_workspace_after_submission_creates_new_draft_preserving_submissi
         MutationEnvelope(
             mutation_id="sub1",
             expected_revision=1,
-            payload={"command": "submit_workspace"},
+            payload={"document_checked": True, "command": "submit_workspace"},
         ),
     )
     assert sub.draft_revision == 2
@@ -617,7 +617,7 @@ def test_independent_export_isolation_and_hash_stability(
         MutationEnvelope(
             mutation_id="sub1",
             expected_revision=2,
-            payload={"command": "submit_workspace"},
+            payload={"document_checked": True, "command": "submit_workspace"},
         ),
     )
 
