@@ -6,7 +6,7 @@ is the next checkpoint before T4. See the [verification record](../superpowers/r
 
 ## Accounts and prepared data
 
-In the main checkout `.worktrees/main-integration`, open the private file
+In the main checkout `C:\Users\jan-p\Development\ontocurator`, open the private file
 `build/t5-acceptance/demo-ready/credentials.json` for the generated passwords.
 It inherits Windows access limited to the local user, SYSTEM and Administrators.
 

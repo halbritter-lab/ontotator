@@ -1,5 +1,12 @@
 # Next agentic work after T5 and the UX critique (2026-10-17)
 
+Execution update: [the usability-first index](2026-10-17-phase0-priorities.md)
+and its five Phase 0 plans refine the batches below against `main` at `4de9aaa`.
+The user authorized finishing the plans and then implementing already decided
+functions autonomously. The new index controls execution order, shared-file
+ownership and narrow unresolved policy questions. Merge and push still require
+approval; the reserved port-18080 demo stays untouched.
+
 Basis: main at `2aee6a7` (T2, T3a/b, T5, T6a, UX critique fixes). Inputs: the
 UX critique (`../reviews/2026-10-17-ux-critique.md`), a feature audit and an
 analysis of the open plans, both run read-only on 2026-10-17. This plan orders
@@ -103,7 +110,7 @@ Recommended option first.
 
 ## 3. Batches
 
-### Phase 0 — safety fixes on main (independent of T4, start now)
+### Phase 0 — safety fixes for main (implement on local feature branches)
 
 - **B0.1 Coupled scrolling (D1):** off by default; never while editing; paragraph
   numbers in both panes with the paired paragraph highlighted; follower moves
@@ -119,15 +126,17 @@ Recommended option first.
   Note: overlaps T4a Part 2 files; land before the T4a revision so the plan
   revision can rebase onto it.
 - **B0.3 Re-anchor decisions:** each item resolves to "re-create here" or
-  "dismiss with reason", recorded with provenance. Needs D16-independent
-  answer on who resolves them (default: the reviewer in the case).
-- **B0.4 Small cleanups:** remove "Assign replacement from draft…", put
+  "dismiss with reason", recorded with provenance. The reviewer in the case
+  is already decided above; the new plan addresses per-reviewer persistence.
+- **B0.4 Access and small cleanups:** enforce D16 in the backend and UI first;
+  then remove "Assign replacement from draft…", put
   version selectors behind "Versions", language codes instead of flags, drop
   the Progress placeholder, readable Previous submissions, hidden-axis note for
   leads.
-- **B0.5 Demo refresh:** rebuild the acceptance image from main so T5
-  acceptance sees the current UI; update `docs/operations/t5-interim-acceptance.md`
-  (confirmation dialog in translation review).
+- **B0.5 Acceptance candidate:** build a separate candidate with fresh volumes
+  and its own port so T5 acceptance can see the current UI without changing
+  the reserved demo. See the detailed plan for source/image verification and
+  the separate approval needed to replace the original environment.
 
 ### Phase 1 — plan revision (one agent, docs only)
 
@@ -168,7 +177,9 @@ Recommended option first.
 
 ## 4. Order and parallelism
 
-1. Ask D1–D5 and D16 (they unblock Phase 0), then D6–D15 (they unblock Phase 1).
-2. Phase 0 batches B0.1 ∥ B0.4, then B0.2, B0.3; B0.5 after Phase 0.
+1. D1–D5 and D16 are decided; do not ask them again. Prepare D6–D15 for Phase 1.
+2. Follow the usability-first index: B0.1, B0.2 completion/controls, B0.4 access,
+   B0.2 notes/rules/export, B0.3, B0.4 remaining cleanups, then B0.5. Shared
+   CaseScreen and generated-contract edits are sequential.
 3. L1 can run beside Phase 0; L2 after B0.5.
 4. Phase 1 after Phase 0 merges; Phases 2–4 sequential.

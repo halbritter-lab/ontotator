@@ -1,0 +1,94 @@
+# Usability-first execution roadmap (2026-10-17)
+
+**Baseline:** Ontocurator `main` at `4de9aaa`. This is the execution index for the five Phase 0 plans. It refines the ordering in [the original roadmap](2026-10-17-next-agentic-work.md); original decisions remain the source of product intent.
+
+**User instruction:** Finish planning autonomously, then implement already decided functions with efficient agents. Do not merge or push without approval. Preserve the user's T5 acceptance demo on port 18080. English files/commits, German conversation, no co-author trailers or generated-by lines.
+
+## Priority and readiness
+
+Deliver a reliable everyday annotation/review loop before workflow builders, reporting pages or cosmetic expansion. A batch is complete only with focused tests, review and recorded acceptance evidence; a written plan is not implementation completion.
+
+| Priority | Deliverable | Plan / tasks | Dependency and readiness |
+| --- | --- | --- | --- |
+| P0.1 | Read source/translation without forced jumps or implied semantic alignment | [B0.1 scrolling](2026-10-17-phase0-coupled-scrolling.md) | D1 decided; ready |
+| P0.2 | Stable decision keys, visible defaulted values, one explicit completion confirmation | [B0.2 semantics](2026-10-17-phase0-decision-semantics.md), Task 1 | D4/D5 decided; ready; sequence CaseScreen edits after B0.1 |
+| P0.3 | Restrict independent version browsing without breaking assigned translation review | [B0.4 access](2026-10-17-phase0-access-and-cleanups.md), access tasks | D16 decided; P0-A clarifies own-history scope |
+| P0.4 | Justify findings without text evidence; project setting enforced by backend | B0.2 Task 2 | D3 decided; P0-S controls old open drafts; migration 0007 |
+| P0.5 | Distinguish unresolved review from clinical uncertainty; require note; export explicit flag | B0.2 Tasks 3–4 | D2 decided; ontospan 1.2 format/dependency work; P0-U for invalid targets |
+| P0.6 | Finish reviewing findings after text correction | [B0.3 re-anchor](2026-10-17-phase0-reanchor-decisions.md) | D3 storage and D16 policy landed locally; P0-R completion policy; migration 0008 |
+| P0.7 | Remove duplicate controls and opaque labels | B0.4 remaining tasks | Shared editor files stable; keep behind correctness tasks |
+| P0.8 | Verify and prepare isolated acceptance candidate | [B0.5 acceptance](2026-10-17-phase0-demo-refresh.md) | Combined local gate; reproducible dependency pin; old demo untouched |
+| P1 | Update T4a/T4b plans to current contracts, then minimum usable workflow | Original B1.1 and T4a batches | D6–D15 answers and Phase 0 contracts; do not execute stale T4 plans |
+| P2 | Review/adjudication, final export and agreement within approved scope | Revised T4b | T4a and D9–D12 |
+| P3 | Editor layout/refactoring, help and onboarding | T6b spec first | Preserve the working annotation loop; move a concrete usability blocker earlier only with evidence |
+
+Login/NAT hardening can run independently when capacity exists. Refresh P9's removed-endpoint workload before treating its old latency numbers as current evidence. D14 determines performance priority/deployment targets. Do not let either consume all test capacity while the annotation loop is unfinished.
+
+## Efficient execution protocol
+
+- Coordinator owns this index, technical integration, decisions and final verification. Use the current coordinator; a model change is not required just to maintain the plan.
+- `gpt-6.1-sol`, reasoning `medium`, implements each coherent 2–5-task batch. Supply fresh, bounded context: plan, relevant product/design constraints, exact workspace and file ownership, decisions, tests, expected output. Reuse that agent for its fixes instead of restarting the investigation.
+- `gpt-6-astra`, reasoning `high`, performs one content/architecture review of the complete plans and a final implementation review focused on clinical semantics, data compatibility and permissions. Routine focused code review may use `gpt-6.1-sol` high. Escalate only unresolved problems, not every file.
+- At most two implementation workers plus the coordinator; maximum two test-heavy processes overall. Use independent worktrees for implementation. Agents never change the shared checkout branch or merge their work.
+- Work that touches CaseScreen, generated API files, repository.py or migration chains is sequential unless ownership is explicitly split. B0.1 and B0.4 are not automatically conflict-free merely because the old roadmap marked them parallel.
+- Review/test a coherent deliverable once, fix findings, rerun affected checks. Run the full local gate on the integrated candidate before requesting merge. Do not repeat full suites for documentation-only changes.
+- Implementation authorization is already given for decided functions. Do not ask again for routine code edits, branches, local commits or tests. Clinical gates below stop only dependent tasks; continue the ready tasks.
+- Branches and commits remain local. Preserve `.impeccable/critique/` and all user changes. No write or automated acceptance journey against the reserved demo.
+
+## Immediate policy register
+
+These narrow questions resolve actual implementation gaps; they do not reopen D1–D5.
+
+| ID | Question | Recommendation | Status |
+| --- | --- | --- | --- |
+| P0-S | Apply spanless note/disable rules to existing open drafts? | Keep completed submissions immutable; require a note in future submissions and evidence/removal if the project disables spanless findings. Imported proposals remain readable; newly adopted/submitted results obey current rules. | Asked; awaiting answer |
+| P0-A | Can independent annotators still read their own previous submissions? | Yes, through own-history access; restrict general version browsing/comparison. Assigned translation reviewers retain source/target access. | Asked; awaiting answer |
+| P0-R | Must every frozen pending re-anchor item be resolved before submitting its review? | Yes; re-create or dismiss with a reason, with a count and jump from submit. | Asked; awaiting answer |
+| P0-U | May an unresolved proposal with unknown/obsolete term or incomplete required clinical content be submitted/exported as a finding? | Require correction or rejection for new submissions; preserve historical data and expose export failures explicitly. Do not silently discard or promote it. | Open; ask before enforcing new semantics |
+
+For D2, new unresolved decisions require a note as already approved. Historical decisions without notes remain readable; exports must not invent notes. The plan specifies an explicit legacy warning. Format field names and minor version are technical decisions, not an additional user approval gate.
+
+## D6–D15: compact questions for the next product step
+
+Recommendations are not decisions. Record each actual answer in this table before revising dependent implementation plans. They do not block ready Phase 0 tasks.
+
+| ID | User question | Recommended option and alternative | Unblocks |
+| --- | --- | --- | --- |
+| D6 | Which workflow setup is needed first? | Templates for single, sequential, parallel + adjudication, with reopen/reassign/skip/declare-final; alternative: free chain editor and all six interventions. | T4a scope |
+| D7 | How many blind-mode controls should users manage? | One stage policy plus the allowed show-others switch; alternative: also a personal preference. A switch must never override prohibited visibility. | T4a visibility |
+| D8 | Handle tool proposals arriving after work starts now? | Defer adoption/ignore notices to T7; alternative: add explicit notices and adoption now. Frozen active inputs remain stable either way. | T4a late-input work |
+| D9 | Where should agreement appear? | One explained number per document in Progress and Adjudication; alternative: a dedicated page. The measure and treatment of unresolved findings need a definition before implementation. | T4b agreement |
+| D10 | What release/export UI is needed first? | Minimal immutable export of final results; alternatives: full release builder, or defer releases. D2's ordinary flagged export is distinct from final release eligibility. | T4b releases |
+| D11 | How should comments work? | One annotation note visible to authorized lead/next stage; alternatives: threads, or no general comments. Required D2/D3 reasons remain mandatory regardless. | T4b comments |
+| D12 | Which contributor names should reviewers see? | Leads see display names, adjudicators see neutral A/B/C; alternative: pseudonyms everywhere. | Identity display |
+| D13 | Which primary noun should the UI use? | Document, with language/version attributes; alternative: retain distinct Case/Task/Document/Variant labels. Internal IDs/types remain explicit. | T4a UI labels |
+| D14 | When should performance hardening run? | In parallel with functional work after fixing the workload, using deployment-size targets; alternative: block T4 until completed. Supply expected simultaneous users and document/ontology size when setting targets. | P9 scheduling |
+| D15 | Which remaining provisional Q15–Q32 policies are accepted? | Review the conflicts below individually, then confirm unaffected defaults from the linked index as a block; alternative: review every Q separately. | T4 policy consistency |
+
+D15 must not silently reconfirm superseded defaults from [the old index](2026-10-14-t3-t5-t4-index.md):
+
+- Q23: may an ordinary export contain flagged unresolved findings while a final release requires all findings resolved? Recommendation: yes. This preserves D2 without declaring unresolved work final.
+- Q25: after release, may earlier annotators see the final result through a dedicated result view, despite D16's restriction during independent work? Recommendation: yes after release, never during active blind work.
+- Q28: unrestricted sibling text browsing conflicts with D16. Recommendation: D16 replaces it during independent annotation; translation-review source/target access remains task-scoped.
+- Q29: may both annotators and adjudicators perform a revise stage? Recommendation: yes, with a valid assignment and stage visibility policy.
+- Q22 versus Q25: seeing a released result and downloading a release are different rights. Recommendation: lead/admin download, eligible members read a released result; do not grant bundle download implicitly.
+- Q24/Q31/D11: sending notes back to earlier annotators can reveal later-stage work. Recommendation: apply the same final-result visibility boundary; do not silently send later notes into an active independent task.
+- Q32 overlaps D12: record the D12 answer once and apply it consistently.
+
+## Verification and execution record
+
+- Planning baseline checked: main SHA `4de9aaa`, one checkout, untracked critique artifacts, `build/t5-acceptance/demo-ready` present; stale worktree path corrected in operations docs.
+- Docker was reachable during planning. Locked dependencies were restored with `uv sync --frozen` and `npm --prefix frontend ci`; the initial environment lacked ontospan and the frontend `diff` package. No dependency manifests or lockfiles were changed.
+- Planning verification: inspect paths, links, task dependencies, decisions and `git diff --check`; no claim that product tests passed.
+- [x] Plans reviewed and prepared for the local docs commit on `docs/phase0-execution-plans`; see `../reviews/2026-10-17-phase0-plan-review.md`.
+- [ ] P0.1 completed and focused tests reviewed.
+- [ ] P0.2 completed and focused tests reviewed.
+- [ ] P0.3 completed and focused tests reviewed.
+- [ ] P0.4 completed and focused tests reviewed.
+- [ ] P0.5 completed including format compatibility and exact export assertions.
+- [ ] P0.6 completed including persistence, isolation and replay assertions.
+- [ ] P0.7 completed and focused tests reviewed.
+- [ ] Combined candidate reviewed and `scripts/check.sh` passed.
+- [ ] Candidate preparation status recorded; merge/push approval requested only for a concrete reviewed result.
+
+All execution statuses above remain open until backed by actual results. If an external dependency publication or unanswered product policy blocks a subtask, record it precisely and continue independent authorized work.
