@@ -42,7 +42,7 @@ it.each(["submitted", "snapshot"] as const)("rejects every retained edit callbac
   vi.spyOn(api, "getCase").mockResolvedValue({ ...caseDetail, variants: [{ ...caseDetail.variants[1], document_id: "doc" }] });
   vi.spyOn(api, "listAnnotationVersions").mockResolvedValue([ownRef]);
   vi.spyOn(api, "getAnnotationVersion").mockResolvedValue({ ...historical, annotations: [] });
-  const props = { versionContext: mode === "snapshot" ? { username: "alice", assignmentId: 1, onNavigate: vi.fn() } : undefined, view: response.view, workspaceId: "ws", onClose: vi.fn() };
+  const props = { versionContext: mode === "snapshot" ? { canBrowseVersions: true, username: "alice", assignmentId: 1, onNavigate: vi.fn() } : undefined, view: response.view, workspaceId: "ws", onClose: vi.fn() };
   const mounted = render(<CaseScreen {...props} />);
   const item = (term: string) => Array.from(document.querySelectorAll(".sidebar .doc-item")).find(node => node.textContent?.includes(term))!;
   fireEvent.click(item("HP:1"));
@@ -67,7 +67,7 @@ it.each(["submitted", "snapshot"] as const)("rejects every retained edit callbac
     text.onSelection({ segments: [{ start: 1, end: 3 }], intent: "extend_mention" });
     text.onResizeMention?.("ev", [{ start: 0, end: 11 }]); text.onChangeIntent("extend_mention");
     review.onDecide({ outcome: "confirmed" }); review.onAdoptAndEdit?.(); review.onNoteChange?.("stale note");
-    layer.onCheckLayer("phenotype", true); await tree.onUseTerm("HP:3", "browse");
+    expect(layer.onCheckLayer).toBeUndefined(); await tree.onUseTerm("HP:3", "browse");
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     fireEvent.keyDown(window, { key: "n" });
   });

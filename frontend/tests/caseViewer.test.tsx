@@ -5,6 +5,7 @@ import { caseDetail, historical, ownRef } from './variantFixtures';
 import { refKey } from '../src/variants/versionState';
 
 beforeEach(() => {
+  vi.spyOn(api, 'listProjects').mockResolvedValue([{ project_key: 'pkg', roles: ['lead'], can_manage: true } as any]);
   vi.spyOn(api, 'getCase').mockResolvedValue(caseDetail);
   vi.spyOn(api, 'getVariantText').mockImplementation(async (_project, doc) => ({ document_id: doc, text: `Immutable ${doc} 😃`, text_sha256: 'text' }));
   vi.spyOn(api, 'listAnnotationVersions').mockResolvedValue([ownRef]);
@@ -169,4 +170,27 @@ it('retains comparison owner, explicit choices and coupling-off through actual d
   await act(async () => mounted.rerender(<CaseViewer {...props} username="bob" />));
   expect(screen.queryByRole('region', { name: 'Comparison' })).toBeNull();
   expect(screen.queryByText('HP:old')).toBeNull();
+});
+
+
+it('restricts ordinary annotators to text without generic browsing or forbidden deep-link payloads', async () => {
+  const { CaseViewer } = await import('../src/variants/CaseViewer');
+  vi.mocked(api.listProjects).mockResolvedValue([{ project_key: 'pkg', roles: ['annotator'], can_manage: false } as any]);
+  const mounted = render(<CaseViewer {...props} />);
+  await screen.findByText(/Immutable target/);
+  expect(screen.queryByText('Versions')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull();
+  expect(api.listAnnotationVersions).not.toHaveBeenCalled();
+  mounted.rerender(<CaseViewer {...props} annotations={refKey(ownRef)} />);
+  await screen.findByText('This annotation version is not available to you.');
+  expect(screen.queryByText(/Immutable target/)).toBeNull();
+  expect(api.getAnnotationVersion).not.toHaveBeenCalled();
+});
+
+it('uses a collapsed native Versions disclosure for permitted browsing', async () => {
+  const { CaseViewer } = await import('../src/variants/CaseViewer');
+  render(<CaseViewer {...props} />);
+  await screen.findByText(/Immutable target/);
+  const disclosure = screen.getByText('Versions').closest('details')!;
+  expect(disclosure.open).toBe(false);
 });

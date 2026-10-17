@@ -80,7 +80,7 @@ def test_review_proposals_are_exact_and_annotate_sibling_metadata_is_not_a_bypas
     assert payload.status_code == 200 and len(payload.json()["annotations"]) == 1
     assert payload.json()["evidence"]
     assert refs(env.alice, SOURCE) == []
-    assert refs(env.alice, TARGET) == []
+    assert env.alice.get(path(TARGET, "annotation-versions")).status_code == 404
     assert env.alice.get(f"{BASE}/proposal-sets/{set_id}").status_code == 404
     assert (
         env.reviewer.get(
@@ -148,7 +148,7 @@ def test_payload_fetch_rechecks_current_authority_after_ref_listing(case_env):
     )
 
 
-def test_sibling_text_does_not_restore_own_history_after_exact_assignment_revocation(
+def test_revoking_exact_assignment_removes_text_and_own_history(
     case_env,
 ):
     env = case_env
@@ -159,8 +159,8 @@ def test_sibling_text_does_not_restore_own_history_after_exact_assignment_revoca
     seed_submission(env, "alice", "own-target", document=TARGET)
     assert refs(env.alice)[0]["id"] == "own-target"
     service.revoke(HARNESS, row.id)
-    assert env.alice.get(path(TARGET, "text")).status_code == 200
-    assert refs(env.alice) == []
+    assert env.alice.get(path(TARGET, "text")).status_code == 404
+    assert env.alice.get(path(TARGET, "annotation-versions")).status_code == 404
     response = env.alice.get(path(TARGET, "annotation-versions/own/own-target"))
     assert (
         response.status_code == 404 and response.json()["code"] == "VERSION_NOT_FOUND"

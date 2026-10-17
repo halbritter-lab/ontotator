@@ -455,10 +455,14 @@ def run_fixture_import(
 
 
 def register_variant_scenario_route(app: FastAPI) -> None:
-    """Fresh ordinary-role Task10 data; never installed in the shipped app."""
+    """Fresh synthetic variants with optional browser roles; never shipped."""
 
     @app.post("/__test_variants__")
-    def variants_scenario(comparison: bool = Query(False), merge_split: bool = Query(False)) -> dict[str, object]:
+    def variants_scenario(
+        comparison: bool = Query(False),
+        merge_split: bool = Query(False),
+        browse: bool = Query(False),
+    ) -> dict[str, object]:
         from t1_builders import bundle as variant_bundle
         from t1_builders import correction_unit, native_unit, translation_unit
         from t1_fixtures import annotation
@@ -493,9 +497,19 @@ def register_variant_scenario_route(app: FastAPI) -> None:
                 for number in range(1, 9)
             )
         if merge_split:
-            paragraphs = [f"Finding {i}. µ ± \u03b1 😀 " + "Synthetic clinical detail. " * 120 for i in range(1, 5)]
+            paragraphs = [
+                f"Finding {i}. µ ± \u03b1 😀 " + "Synthetic clinical detail. " * 120
+                for i in range(1, 5)
+            ]
             source_text = "\n\n".join(paragraphs)
-            target_text = "\n\n".join([paragraphs[0] + " " + paragraphs[1], paragraphs[2], paragraphs[3][:900], paragraphs[3][900:]])
+            target_text = "\n\n".join(
+                [
+                    paragraphs[0] + " " + paragraphs[1],
+                    paragraphs[2],
+                    paragraphs[3][:900],
+                    paragraphs[3][900:],
+                ]
+            )
         source = native_unit(
             source_id,
             "en",
@@ -619,7 +633,12 @@ def register_variant_scenario_route(app: FastAPI) -> None:
             username = f"{key}-{name}"
             issued = accounts.create_user(Actor.cli(), username, username)
             accounts.redeem_code(username, issued.code, TEST_PASSWORD)
-            app.state.memberships.add(Actor.cli(), key, username, [role])
+            roles = (
+                [role, "adjudicator"]
+                if name == "alice" and (browse or comparison)
+                else [role]
+            )
+            app.state.memberships.add(Actor.cli(), key, username, roles)
             accounts.set_languages(Actor.cli(), username, ["en", "de"])
             users[name] = accounts.get_by_username(username)
         accounts.update_profile(
@@ -724,9 +743,20 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
             for index in range(14)
         )
         if merge_split:
-            paragraphs = [f"Finding {i}. Dose 5 mg. µ ± \u03b1 😀 " + "Synthetic clinical detail. " * 120 for i in range(1, 5)]
+            paragraphs = [
+                f"Finding {i}. Dose 5 mg. µ ± \u03b1 😀 "
+                + "Synthetic clinical detail. " * 120
+                for i in range(1, 5)
+            ]
             source_text = "\n\n".join(paragraphs)
-            target_text = "\n\n".join([paragraphs[0] + " " + paragraphs[1], paragraphs[2], paragraphs[3][:900], paragraphs[3][900:]])
+            target_text = "\n\n".join(
+                [
+                    paragraphs[0] + " " + paragraphs[1],
+                    paragraphs[2],
+                    paragraphs[3][:900],
+                    paragraphs[3][900:],
+                ]
+            )
         source = native_unit(external_id, "en", source_text, case_id=case_id)
         target = translation_unit(
             external_id,

@@ -22,8 +22,16 @@ const viewerUrl = (s: Scenario, document: string, annotations = 'text') =>
   `/#/projects/${encodeURIComponent(s.project)}/cases/${encodeURIComponent(s.case_id)}?${new URLSearchParams({ variant: document, annotations })}`;
 const token = (ref: VersionRef) => JSON.stringify([ref.kind, ref.id]);
 
+async function openVersions(page: Page) {
+  const disclosure = page.locator('.case-version-controls').first();
+  await expect(disclosure).toBeVisible();
+  if (!await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) {
+    await disclosure.locator(':scope > summary').focus();
+    await page.keyboard.press('Enter');
+  }
+}
 async function scenario(page: Page): Promise<Scenario> {
-  const response = await page.request.post('/__test_variants__', { timeout: 90_000 });
+  const response = await page.request.post('/__test_variants__', { params: { browse: 'true' }, timeout: 90_000 });
   expect(response.ok()).toBeTruthy();
   const value = await response.json() as Scenario;
   const proof = { project: value.project, import_job_id: value.import_job_id, children: value.children };
@@ -76,33 +84,41 @@ async function expectExactText(page: Page, text: string) {
   await expect.poll(() => textSurface(page).textContent()).toBe(text);
 }
 async function options(page: Page) {
+  await openVersions(page);
   return page.getByLabel('Annotations', { exact: true }).locator('option').evaluateAll(nodes => nodes.map(node => ({ value: (node as HTMLOptionElement).value, label: node.textContent })));
 }
 
-test('ordinary task opens the real case, exact equal-version runs and opaque immutable text survive reload', async ({ page }) => {
+test('mixed-role assigned task opens the real case, exact equal-version runs and opaque immutable text survive reload', async ({ page }) => {
   const s = await scenario(page);
   await loginExisting(page, s.users.alice);
   const me = await (await authenticatedRequest(page, '/api/v1/auth/me')).json();
   expect(me.is_system_admin).toBe(false);
   const projects = await (await authenticatedRequest(page, '/api/v1/projects')).json() as { project_key: string; roles: string[] }[];
-  expect(projects.find(project => project.project_key === s.project)?.roles).toEqual(['annotator']);
+  expect(projects.find(project => project.project_key === s.project)?.roles).toEqual(['adjudicator', 'annotator']);
   await openCase(page, { documentId: s.documents.target });
   await expect(page).toHaveURL(new RegExp(`#/tasks/${s.assignments.alice}$`));
+  await openVersions(page);
   await expect(page.getByLabel('Text version', { exact: true })).toHaveValue(s.documents.target);
+  await openVersions(page);
   await page.getByLabel('Language', { exact: true }).selectOption('en');
   await expectExactText(page, s.texts.source);
   expect(decodeURIComponent(new URL(page.url()).hash)).toContain(s.case_id);
   await page.reload();
   await expectExactText(page, s.texts.source);
+  await openVersions(page);
   await page.getByLabel('Language', { exact: true }).selectOption('de');
+  await openVersions(page);
   await page.getByLabel('Text version', { exact: true }).selectOption(s.documents.target);
   await expectExactText(page, s.texts.target);
+  await openVersions(page);
   const versions = await page.getByLabel('Text version', { exact: true }).locator('option').allTextContents();
   expect(versions.filter(label => label.startsWith('v1'))).toHaveLength(2);
   expect(new Set(versions).size).toBe(versions.length);
+  await openVersions(page);
   await page.getByLabel('Text version', { exact: true }).selectOption(s.documents.other);
   const selectedUrl = page.url();
   await page.reload();
+  await openVersions(page);
   await expect(page.getByLabel('Text version', { exact: true })).toHaveValue(s.documents.other);
   await expect(page).toHaveURL(selectedUrl);
   await expect(page.getByRole('link', { name: 'Open my task', exact: true })).toHaveCount(0);
@@ -140,6 +156,7 @@ test('own history is genuinely submitted, read-only and return-to-draft preserve
   const refs = await offered(page, s);
   const own = refs.find(ref => ref.kind === 'own');
   expect(own).toBeTruthy();
+  await openVersions(page);
   await page.getByLabel('Annotations', { exact: true }).selectOption(token(own!));
   await expect(page.getByText(`Viewing ${own!.label} (read-only)`, { exact: true })).toBeVisible();
   await expect(page.locator('.readonly-annotations')).toContainText('HP:0001252');
@@ -158,6 +175,7 @@ test('own history is genuinely submitted, read-only and return-to-draft preserve
   await page.reload();
   await expect(page.getByRole('button', { name: /Finish & Submit Case/ })).toBeEnabled();
   await expect(page.locator('.sidebar')).toContainText('HP:0001252');
+  await openVersions(page);
   await page.getByLabel('Annotations', { exact: true }).selectOption(token(own!));
   await expect(page.locator('.readonly-annotations')).toContainText('HP:0001252');
   await page.getByRole('button', { name: 'Back to my draft', exact: true }).click();
@@ -188,6 +206,10 @@ test('current own refs, foreign submissions and sibling proposal sets are indepe
     const reader = await readerContext.newPage();
     try {
       await loginExisting(reader, s.users.reader);
+      const missing = await authenticatedRequest(reader, documentPath(s, 'unassigned-other-case', 'text'));
+      expect(missing.status()).toBe(404);
+      const sibling = await authenticatedRequest(reader, documentPath(s, s.documents.target, 'text'));
+      expect(sibling.ok()).toBeTruthy();
       const proposals = (await offered(reader, s, s.documents.source)).find(ref => ref.kind === 'proposals');
       expect(proposals).toBeTruthy();
       await reader.goto(viewerUrl(s, s.documents.source, token(proposals!)));
@@ -221,10 +243,12 @@ test('dirty failed-save snapshot cancellation preserves focus and real native Ba
   await page.goto('/');
   await openCase(page, { documentId: s.documents.target });
   const taskUrl = page.url();
+  await openVersions(page);
   await page.getByLabel('Language', { exact: true }).selectOption('en');
   await expectExactText(page, s.texts.source);
   await page.goBack();
   await expect(page).toHaveURL(taskUrl);
+  await openVersions(page);
   await expect(page.getByLabel('Annotations', { exact: true })).toHaveValue('draft');
   const failCommands = '**/api/v1/workspaces/*/commands';
   await page.route(failCommands, route => route.abort('failed'));
@@ -232,6 +256,7 @@ test('dirty failed-save snapshot cancellation preserves focus and real native Ba
   const absent = page.getByRole('group', { name: 'Assertion', exact: true }).getByRole('radio', { name: 'Absent', exact: true });
   await absent.click();
   await expect(page.locator('.status-badge')).toContainText('Offline – changes not saved');
+  await openVersions(page);
   const annotations = page.getByLabel('Annotations', { exact: true });
   const own = (await offered(page, s)).find(ref => ref.kind === 'own')!;
   await annotations.focus();
@@ -253,6 +278,7 @@ test('dirty failed-save snapshot cancellation preserves focus and real native Ba
   await page.unroute(failCommands);
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.locator('.status-badge')).toContainText('Saved');
+  await openVersions(page);
   await page.getByLabel('Language', { exact: true }).selectOption('en');
   await expectExactText(page, s.texts.source);
   await page.reload(); await expectExactText(page, s.texts.source);
@@ -282,18 +308,22 @@ test('wide editor keeps the real text and docked inspector/tree floors with visi
   expect(Math.abs(tree.x - inspector.x)).toBeLessThanOrEqual(1);
   expect(Math.abs(tree.y - inspector.y - inspector.height)).toBeLessThanOrEqual(1);
   expect(tree.x + tree.width).toBeLessThanOrEqual(1281); expect(tree.y + tree.height).toBeLessThanOrEqual(721);
+  await openVersions(page);
   await expect(page.getByLabel('Language', { exact: true })).toBeVisible();
+  await openVersions(page);
   await expect(page.getByLabel('Text version', { exact: true })).toBeVisible();
+  await openVersions(page);
   await expect(page.getByLabel('Annotations', { exact: true })).toBeVisible();
 });
 
-for (const width of [1024, 800, 600]) test(`viewer selectors and immutable text remain reachable at ${width}px`, async ({ page }) => {
+for (const width of [1024, 700, 600]) test(`viewer selectors and immutable text remain reachable at ${width}px`, async ({ page }) => {
   const s = await scenario(page);
   await loginExisting(page, s.users.alice);
   await page.setViewportSize({ width, height: 800 });
   await page.goto(viewerUrl(s, s.documents.target));
   await expectExactText(page, s.texts.target);
   await page.evaluate(() => document.fonts.ready);
+  await openVersions(page);
   for (const label of ['Language', 'Text version', 'Annotations']) {
     const select = page.getByLabel(label, { exact: true }); await expect(select).toBeVisible();
     await select.focus(); await expect(select).toBeFocused();
@@ -304,4 +334,39 @@ for (const width of [1024, 800, 600]) test(`viewer selectors and immutable text 
   expect(text!.height).toBeGreaterThanOrEqual(200); expect(text!.width).toBeGreaterThanOrEqual(280);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await page.screenshot({ path: test.info().outputPath(`variants-${width}.png`), fullPage: true });
+});
+
+
+test('restricted annotator completes exact assigned work and retains pending own history without general browsing', async ({ page }) => {
+  const s = await scenario(page);
+  await loginExisting(page, s.users.bob);
+  const projects = await (await authenticatedRequest(page, '/api/v1/projects')).json() as { project_key: string; roles: string[] }[];
+  expect(projects.find(row => row.project_key === s.project)?.roles).toEqual(['annotator']);
+  const generalReads: string[] = [];
+  page.on('request', request => { if (request.method() === 'GET' && /annotation-versions|\/cases\//.test(request.url())) generalReads.push(request.url()); });
+  await openCase(page, { documentId: s.documents.target });
+  await expect(page.locator('.text-container')).toHaveText(s.texts.target);
+  await expect(page.getByText('Versions', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Compare', exact: true })).toHaveCount(0);
+  expect(generalReads).toEqual([]);
+  const own = await ownSubmission(page, s.assignments.bob);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Previous Submissions' })).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(own.submission_id) }).click();
+  await expect(page.getByRole('dialog', { name: 'Historical submission' })).toContainText(own.submission_id);
+  await page.screenshot({ path: test.info().outputPath('restricted-own-history.png'), fullPage: true });
+  for (const suffix of ['variant', 'text']) {
+    const denied = await authenticatedRequest(page, documentPath(s, s.documents.source, suffix));
+    expect(denied.status()).toBe(404);
+    expect((await denied.json()).code).toBe('DOCUMENT_NOT_FOUND');
+  }
+  const forbidden = await authenticatedRequest(page, documentPath(s, s.documents.target, 'annotation-versions/proposals/1'));
+  expect(forbidden.status()).toBe(404);
+  expect((await forbidden.json()).code).toBe('VERSION_NOT_FOUND');
+  await page.goto(viewerUrl(s, s.documents.target, token({ kind: 'own', id: own.submission_id } as VersionRef)));
+  await expect(page.getByText('This annotation version is not available to you.', { exact: true })).toBeVisible();
+  await expect(textSurface(page)).toHaveCount(0);
+  await page.goto(viewerUrl(s, s.documents.source));
+  await expect(page.getByText('This text version is not available to you.', { exact: true })).toBeVisible();
+  await expect(textSurface(page)).toHaveCount(0);
 });

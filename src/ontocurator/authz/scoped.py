@@ -27,6 +27,7 @@ from ontocurator.authz.versions import require_proposals, visible_annotation_ver
 from ontocurator.authz.visibility import (
     DocumentFilter,
     current_access,
+    may_read_translation_review_output_metadata,
     project_document_filters,
     readable_case_documents,
     require_case_text,
@@ -425,7 +426,18 @@ class ScopedRepository(Repository):
     def get_variant(self, project_key: str, document_id: str) -> VariantInfo:
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
-            require_case_text(conn, self.access, project_id, project_key, document_id)
+            try:
+                require_case_text(
+                    conn, self.access, project_id, project_key, document_id
+                )
+            except DomainError as error:
+                if (
+                    error.code != "DOCUMENT_NOT_FOUND"
+                    or not may_read_translation_review_output_metadata(
+                        conn, self.access, project_id, document_id
+                    )
+                ):
+                    raise
             return super().get_variant(project_key, document_id)
 
     def list_variants(
@@ -454,9 +466,14 @@ class ScopedRepository(Repository):
     ) -> dict[str, Any]:
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
-            refs = visible_annotation_versions(
-                conn, self.access, project_id, project_key, document_id
-            )
+            try:
+                refs = visible_annotation_versions(
+                    conn, self.access, project_id, project_key, document_id
+                )
+            except DomainError as error:
+                if error.code == "DOCUMENT_NOT_FOUND":
+                    raise DomainError("VERSION_NOT_FOUND") from None
+                raise
             ref = next(
                 (item for item in refs if item.kind == kind and item.id == version_id),
                 None,

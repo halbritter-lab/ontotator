@@ -23,6 +23,7 @@ TABLE: dict[Action, str] = {
     Action.MANAGE_PROJECT_SETTINGS: "YY---",
     Action.MANAGE_ASSIGNMENTS: "YY---",
     Action.VIEW_ALL_DOCUMENTS: "YY---",
+    Action.BROWSE_VERSIONS: "YY-Y-",
     Action.VIEW_PROGRESS: "YY---",
     Action.OVERRIDE_TRANSLATION_STATUS: "YY---",
     Action.CREATE_PROJECT: "Y----",

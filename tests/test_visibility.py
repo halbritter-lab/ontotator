@@ -598,6 +598,8 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
         code = (
             "PROPOSAL_SET_NOT_FOUND"
             if name == "get_proposal_set"
+            else "VERSION_NOT_FOUND"
+            if name == "get_annotation_version"
             else "DOCUMENT_NOT_FOUND"
         )
         with pytest.raises(DomainError, match=code):

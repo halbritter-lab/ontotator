@@ -125,6 +125,7 @@ def visible_annotation_versions(
         if hint is None:
             raise DomainError("VERSION_NOT_FOUND")
     exact = visible_documents(conn, fresh, project_id, key)
+    # P0-A remains pending: retain the existing exact own-history branch.
     own = (
         conn.execute(
             select(
@@ -153,7 +154,9 @@ def visible_annotation_versions(
         )
         for row in own
     ]
-    if may_read_proposals(conn, fresh, project_id, key, document_id):
+    if can(fresh, Action.BROWSE_VERSIONS, key) and may_read_proposals(
+        conn, fresh, project_id, key, document_id
+    ):
         for row in proposal_rows(conn, project_id, document_id):
             if row["origin"] == "reanchor":
                 if row["source_version"] is None:

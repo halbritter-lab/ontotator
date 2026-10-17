@@ -10,6 +10,7 @@ from ontocurator.domain.errors import DomainError
 from ontocurator.domain.variants import (
     VariantInfo,
     resolve_translation_lineage,
+    translation_review_comparisons,
     variant_document_id,
 )
 
@@ -101,3 +102,18 @@ def test_internal_ids_match_actual_import_allocation_and_refuse_collision():
     assert variant_document_id("target", "de", 2, {"target"}) == "target~de~v2"
     with pytest.raises(DomainError, match="VARIANT_ID_COLLISION"):
         variant_document_id("target", "de", 2, {"target", "target~de~v2"})
+
+
+def test_review_comparisons_are_exact_translation_inputs():
+    comparison = replace(MT, document_id="human", origin="human_translation")
+    variants = [
+        SOURCE,
+        MT,
+        V2,
+        V3,
+        comparison,
+        replace(comparison, document_id="other-case", case_id="other"),
+        replace(comparison, document_id="other-source", derived_from="new-source"),
+        replace(comparison, document_id="other-language", language="fr"),
+    ]
+    assert translation_review_comparisons(V3, MT, variants) == [comparison]

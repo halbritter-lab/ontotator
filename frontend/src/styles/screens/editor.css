@@ -1615,6 +1615,11 @@
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
+details.case-version-controls { display: block; }
+details.case-version-controls > summary { cursor: pointer; padding: var(--space-1) 0; }
+details.case-version-controls[open] > summary { margin-bottom: var(--space-1); }
+details.case-version-controls > .variant-selectors { display: inline-flex; vertical-align: bottom; margin-right: var(--space-2); }
+details.case-version-controls > .btn { vertical-align: bottom; }
 .variant-selectors .form-group { margin: 0; min-width: 0; }
 .variant-selectors .form-select { max-width: 28ch; }
 .variant-selectors .form-label { margin-bottom: 0; font-size: var(--size-xs); }

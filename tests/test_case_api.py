@@ -89,21 +89,20 @@ def test_special_ids_case_metadata_and_typed_immutable_text(case_env):
     detail = env.alice.get(f"{BASE}/cases/{quote(CASE, safe='')}")
     assert detail.status_code == 200, detail.text
     variants = {item["document_id"]: item for item in detail.json()["variants"]}
-    assert set(variants) == {SOURCE, TARGET, CORRECTED}
+    assert set(variants) == {SOURCE}
     assert variants[SOURCE]["assigned_to_me"] is True
-    assert variants[TARGET]["assigned_to_me"] is False
-    metadata = env.alice.get(path(TARGET, "variant"))
-    assert metadata.status_code == 200, metadata.text
-    assert metadata.json() == variants[TARGET]
-    assert variants[TARGET]["translation"]["provider"] == "test-mt"
-    assert variants[TARGET]["translation"]["checks"][0]["code"] == "units_added"
-    assert not {"text", "payload", "annotations", "evidence"} & variants[TARGET].keys()
-    response = env.alice.get(path(TARGET, "text"))
+    assert not {"text", "payload", "annotations", "evidence"} & variants[SOURCE].keys()
+    for document in (TARGET, CORRECTED):
+        for suffix in ("variant", "text"):
+            denied = env.alice.get(path(document, suffix))
+            assert denied.status_code == 404
+            assert denied.json()["code"] == "DOCUMENT_NOT_FOUND"
+    response = env.alice.get(path(SOURCE, "text"))
     assert response.status_code == 200, response.text
     assert response.json() == {
-        "document_id": TARGET,
-        "text": TEXT + " translated",
-        "text_sha256": hashlib.sha256((TEXT + " translated").encode()).hexdigest(),
+        "document_id": SOURCE,
+        "text": TEXT,
+        "text_sha256": hashlib.sha256(TEXT.encode()).hexdigest(),
     }
     assert env.alice.get(path("other", "text")).status_code == 404
     assert env.alice.get(path("other", "variant")).status_code == 404
@@ -124,7 +123,7 @@ def test_special_ids_case_metadata_and_typed_immutable_text(case_env):
 
 
 @pytest.mark.parametrize("change", ["submitted", "revoked", "role", "inactive"])
-def test_current_authority_and_retained_submitted_sibling_text(case_env, change):
+def test_current_authority_and_retained_submitted_assigned_text(case_env, change):
     env = case_env
     user = env.app.state.accounts.get_by_username("alice")
     stale = ScopedRepository(
@@ -155,28 +154,32 @@ def test_current_authority_and_retained_submitted_sibling_text(case_env, change)
                 )
             )
     if change == "submitted":
-        assert stale.get_variant_text("proj", TARGET).text == TEXT + " translated"
-        assert env.alice.get(path(TARGET, "text")).status_code == 200
-        assert env.alice.get(path(TARGET, "variant")).status_code == 200
+        assert stale.get_variant_text("proj", SOURCE).text == TEXT
+        assert env.alice.get(path(SOURCE, "text")).status_code == 200
+        assert env.alice.get(path(SOURCE, "variant")).status_code == 200
     else:
         from ontocurator.domain.errors import DomainError
 
         with pytest.raises(DomainError):
-            stale.get_variant_text("proj", TARGET)
+            stale.get_variant_text("proj", SOURCE)
         assert env.alice.get(path(TARGET, "text")).status_code in (401, 404)
         assert env.alice.get(path(TARGET, "variant")).status_code in (401, 404)
 
 
-def test_another_qualifying_sibling_restores_only_text(case_env):
+def test_multiple_assignments_contribute_only_their_exact_texts(case_env):
     env = case_env
     service = AssignmentService(env.db)
     old = service.list("proj", user="alice")[0]
     service.assign(
         HARNESS, "proj", CORRECTED, "alice", "annotate", confirm_language=True
     )
+    detail = env.alice.get(f"{BASE}/cases/{quote(CASE, safe='')}").json()
+    assert {row["document_id"] for row in detail["variants"]} == {SOURCE, CORRECTED}
+    assert env.alice.get(path(CORRECTED, "text")).status_code == 200
     service.revoke(HARNESS, old.id)
-    assert env.alice.get(path(TARGET, "text")).status_code == 200
-    assert env.alice.get(path(TARGET, "annotation-versions")).json() == []
+    assert env.alice.get(path(SOURCE, "text")).status_code == 404
+    assert env.alice.get(path(TARGET, "text")).status_code == 404
+    assert env.alice.get(path(CORRECTED, "annotation-versions")).json() == []
 
 
 def test_document_list_composes_metadata_filters_without_sibling_expansion(case_env):
@@ -314,3 +317,41 @@ def test_encoded_route_without_optional_raw_path_retains_normal_stack_behavior(
     assert match == Match.FULL
     assert child["path_params"] == {"mounted": "literal%2F", "doc": "literal%2F/id"}
     assert scope == before
+
+
+@pytest.mark.parametrize("actor", ["lead", "admin", "reviewer"])
+def test_browsing_authority_preserves_existing_case_scope(case_env, actor):
+    env = case_env
+    client = getattr(env, actor)
+    detail = client.get(f"{BASE}/cases/{quote(CASE, safe='')}")
+    assert {row["document_id"] for row in detail.json()["variants"]} == {
+        SOURCE,
+        TARGET,
+        CORRECTED,
+    }
+    assert client.get(path(CORRECTED, "text")).status_code == 200
+    assert client.get(path("other", "text")).status_code == (
+        404 if actor == "reviewer" else 200
+    )
+
+
+def test_adjudicator_role_alone_has_no_document_grant_and_mixed_roles_are_current(
+    case_env,
+):
+    env = case_env
+    service = AssignmentService(env.db)
+    service.revoke(HARNESS, service.list("proj", user="reviewer")[0].id)
+    assert env.reviewer.get(f"{BASE}/cases").json() == []
+    assert env.reviewer.get(path(SOURCE, "text")).status_code == 404
+    env.app.state.memberships.set_roles(
+        HARNESS, "proj", "alice", ["annotator", "adjudicator"]
+    )
+    user = env.app.state.accounts.get_by_username("alice")
+    stale = ScopedRepository(env.db, Access(user.id, user.pseudonym, False))
+    assert stale.get_variant_text("proj", TARGET).text == TEXT + " translated"
+    assert env.alice.get(path("other", "text")).status_code == 401
+    env.app.state.memberships.set_roles(HARNESS, "proj", "alice", ["annotator"])
+    from ontocurator.domain.errors import DomainError
+
+    with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
+        stale.get_variant_text("proj", TARGET)

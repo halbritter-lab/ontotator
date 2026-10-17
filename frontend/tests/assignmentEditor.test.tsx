@@ -9,7 +9,7 @@ const view = (): any => ({
   document: { document_id: "doc", text: "Patient has seizures.", language: "en", text_sha256: "x" },
   key: { project_key: "pkg", document_id: "doc", annotator_id: "ann", mode: "independent", scope_id: "s", target_set_id: "t" },
   scope: { scope_id: "s", mode: "independent", editable_layer_ids: ["phenotype"], reference_layer_ids: [] },
-  draft: { revision: 0, annotations: [], evidence: [], decisions: [] },
+  draft: { key: { project_key: "pkg", document_id: "doc", annotator_id: "ann", mode: "independent", scope_id: "s", target_set_id: "t" }, revision: 0, annotations: [], evidence: [], decisions: [] },
   layers: [{ layer_id: "phenotype", label: "Phenotype", access: "editable", default_visible: true, default_type_id: "default", annotation_types: [] }],
 });
 

@@ -1,6 +1,6 @@
 """Project-local variant metadata and translation ancestry."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -85,6 +85,21 @@ def resolve_translation_lineage(
             "VARIANT_SOURCE_UNKNOWN", "Invalid original translation source"
         )
     return current, source
+
+
+def translation_review_comparisons(
+    target: VariantInfo, ancestor: VariantInfo, variants: Iterable[VariantInfo]
+) -> list[VariantInfo]:
+    """The exact comparison inputs shared by review and public text authorization."""
+    return [
+        candidate
+        for candidate in variants
+        if candidate.document_id not in {ancestor.document_id, target.document_id}
+        and candidate.origin in TRANSLATION_ORIGINS
+        and candidate.case_id == ancestor.case_id
+        and candidate.language == ancestor.language
+        and candidate.derived_from == ancestor.derived_from
+    ]
 
 
 def variant_document_id(

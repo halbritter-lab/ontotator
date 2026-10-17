@@ -6,6 +6,7 @@ import { CaseScreen } from "../app/CaseScreen";
 import { CaseErrorBoundary } from "../app/ErrorBoundary";
 import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
 import { NotFound } from "../app/NotFound";
+import { useVersionAccess } from "../variants/useVersionAccess";
 import { TranslationReviewScreen } from "../translation/TranslationReviewScreen";
 
 interface TaskEditorProps {
@@ -39,6 +40,7 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
 function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, leaveGuardRef }: TaskEditorProps): JSX.Element {
   const [workspace, setWorkspace] = useState<AssignmentWorkspace | null>(null);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
+  const versionAccess = useVersionAccess(workspace?.assignment.project_key ?? "", user.username);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
@@ -114,7 +116,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}
     <CaseErrorBoundary key={`${workspace.workspace_id}:${revision}`} onBackToDashboard={back} backLabel="Back to my tasks" onReload={() => { void load(); }}>
     <CaseScreen view={workspace.view} workspaceId={workspace.workspace_id} annotatorName={user.display_name}
-      versionContext={{ username: user.username, assignmentId, onNavigate }}
+      versionContext={{ username: user.username, assignmentId, onNavigate, canBrowseVersions: versionAccess.allowed }}
       readOnly={workspace.read_only} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef}
       assignmentNavigation={{ tasks, current, onNavigate: id => onNavigate({ name: "task", assignmentId: id }) }}
       onClose={back} onReload={() => load()} onReadonlyRequired={() => { if (active.current) { setSubmittedElsewhere(true); void load(); } }} onSubmitted={() => {

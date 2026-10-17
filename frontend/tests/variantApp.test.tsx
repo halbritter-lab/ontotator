@@ -26,7 +26,7 @@ async function editFinding() {
 
 
 beforeEach(() => {
-  vi.spyOn(api, 'listProjects').mockResolvedValue([]);
+  vi.spyOn(api, 'listProjects').mockResolvedValue([{ project_key: 'pkg', roles: ['lead', 'annotator'], can_manage: true } as any]);
   vi.spyOn(api, 'getCase').mockResolvedValue(caseDetail);
   vi.spyOn(api, 'getVariantMetadata').mockResolvedValue(caseDetail.variants[1]);
   vi.spyOn(api, 'getVariantText').mockResolvedValue({ document_id: 'target', text: 'Actual immutable text', text_sha256: 'text' });

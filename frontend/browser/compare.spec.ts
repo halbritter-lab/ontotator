@@ -41,6 +41,14 @@ const rightText = (page: Page) => comparison(page).locator('.text-container');
 const viewerLeft = (page: Page) => page.locator('.comparison-reading > .readonly-annotation-view .text-container');
 const editorLeft = (page: Page) => page.locator('.app-layout > .center-pane .text-container');
 
+async function openVersions(page: Page) {
+  const disclosure = page.locator('.case-version-controls').first();
+  await expect(disclosure).toBeVisible();
+  if (!await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) {
+    await disclosure.locator(':scope > summary').focus();
+    await page.keyboard.press('Enter');
+  }
+}
 async function scenario(page: Page): Promise<Scenario> {
   const response = await page.request.post('/__test_variants__', { params: { comparison: 'true' }, timeout: 90_000 });
   expect(response.ok()).toBeTruthy();
@@ -53,17 +61,19 @@ async function openViewer(page: Page, s: Scenario, doc = s.documents.target) {
   await page.goto(caseUrl(s, doc));
   const viewer = page.getByRole('region', { name: 'Case viewer' });
   await expect(viewer).toBeVisible();
-  await expect(viewer.locator(':scope > .variant-selectors').getByLabel('Text version', { exact: true })).toHaveValue(doc);
+  await openVersions(page);
+  await expect(viewer.locator('.variant-selectors').getByLabel('Text version', { exact: true })).toHaveValue(doc);
   await expect(viewerLeft(page)).toBeVisible();
 }
 async function readyEditor(page: Page, s: Scenario) {
+  await openVersions(page);
   await expect(page.locator('.case-version-controls')).toBeVisible();
   await expect(page.locator('.case-version-controls').getByLabel('Text version', { exact: true })).toHaveValue(s.documents.target);
   await expect(page.locator('.status-badge')).toContainText('Saved');
   await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
 }
 async function openComparison(page: Page, s: Scenario) {
-  await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  await openVersions(page); await page.getByRole('button', { name: 'Compare', exact: true }).click();
   await expect(comparison(page).getByLabel('Text version', { exact: true })).toHaveValue(s.documents.source);
   await expect(rightText(page)).toHaveText(s.texts.source);
   await page.evaluate(() => document.fonts.ready);
@@ -213,7 +223,7 @@ test('open editor has two equal reading surfaces and reachable lower controls; c
   await page.getByRole('button', { name: 'Show in tree', exact: true }).click();
   await expect(page.getByRole('tree', { name: 'Terms' })).toBeVisible();
   const original = await editorLeft(page).elementHandle();
-  await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  await openVersions(page); await page.getByRole('button', { name: 'Compare', exact: true }).click();
   await expect(rightText(page)).toHaveText(s.texts.source); await page.evaluate(() => document.fonts.ready);
   await recordGeometry(page, 'wide-reading-pair');
   const left = await editorLeft(page).boundingBox(), right = await rightText(page).boundingBox();
@@ -334,7 +344,7 @@ test('read-only comparison selection and keyboard leave the editable left draft 
   await page.goto(`/#/tasks/${s.assignments.alice}`); await readyEditor(page, s);
   await page.locator('.sidebar [data-list-key^="annotation:"]').first().click();
   await expect(mentionWithOffsets(page, '[0:9]')).toBeVisible();
-  await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  await openVersions(page); await page.getByRole('button', { name: 'Compare', exact: true }).click();
   await expect(rightText(page)).toHaveText(s.texts.source);
   await expect(page.locator('.status-badge')).toHaveAttribute('title', 'Revision 1');
   const writes: string[] = []; page.on('request', request => { if (request.method() === 'POST' && /\/workspaces\/.+\/(commands|decisions|submit)/.test(request.url())) writes.push(request.url()); });
@@ -359,7 +369,7 @@ test('manual right variant/ref/coupling survive real left retry, then current ex
   const s = await scenario(page); await loginExisting(page, s.users.alice); await annotation(page, s, true);
   const own = (await refs(page, s, s.documents.target)).find(ref => ref.kind === 'own')!;
   await page.route('**/api/v1/me/tasks', route => route.abort('failed'));
-  await openViewer(page, s, s.documents.source); await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  await openViewer(page, s, s.documents.source); await openVersions(page); await page.getByRole('button', { name: 'Compare', exact: true }).click();
   const pane = comparison(page);
   await pane.getByLabel('Language', { exact: true }).selectOption('de');
   await pane.getByLabel('Text version', { exact: true }).selectOption(s.documents.target);

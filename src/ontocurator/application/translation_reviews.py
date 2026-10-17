@@ -30,6 +30,7 @@ from ontocurator.domain.translation_review import (
 from ontocurator.domain.variants import (
     VariantInfo,
     resolve_translation_lineage,
+    translation_review_comparisons,
     variant_document_id,
 )
 from ontocurator.jobs.queue import JobQueue
@@ -299,15 +300,9 @@ class TranslationReviewService:
                 )
             else:
                 draft = self._draft(conn, assignment, pid, variant)
-            comparisons = [
-                v
-                for v in variants.values()
-                if v.document_id not in {ancestor.document_id, variant.document_id}
-                and v.origin in {"machine_translation", "human_translation"}
-                and v.case_id == ancestor.case_id
-                and v.language == ancestor.language
-                and v.derived_from == ancestor.derived_from
-            ]
+            comparisons = translation_review_comparisons(
+                variant, ancestor, variants.values()
+            )
             texts = conn.execute(
                 select(DocumentRow.document_id, DocumentRow.text).where(
                     DocumentRow.project_id == pid,

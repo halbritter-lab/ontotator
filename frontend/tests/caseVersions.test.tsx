@@ -32,7 +32,7 @@ beforeEach(() => {
   vi.spyOn(api, 'resolveTermLabels').mockResolvedValue([]);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-const context = { username: 'alice', assignmentId: 1, onNavigate: vi.fn() };
+const context = { canBrowseVersions: true, username: 'alice', assignmentId: 1, onNavigate: vi.fn() };
 
 it('resolves real case metadata and displays history separately from the unchanged draft', async () => {
   const view = emptyWorkspaceFixture('target').view;
@@ -123,7 +123,7 @@ it('waits for the actual pending draft command before fetching and displaying hi
   fireEvent.change(await screen.findByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
   expect(api.getAnnotationVersion).not.toHaveBeenCalled();
   expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft');
-  await act(async () => save({ ...response.view.draft, revision: 1, annotations: response.view.draft.annotations.map(snapshot => ({ ...snapshot, annotation: { ...snapshot.annotation, axes_values: { assertion: 'present' } } })) }));
+  await act(async () => save({ ...response.view.draft, revision: 1, annotations: response.view.draft.annotations!.map(snapshot => ({ ...snapshot, annotation: { ...snapshot.annotation, axes_values: { assertion: 'present' } } })) }));
   await screen.findByText('HP:old');
   fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
   await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
@@ -193,4 +193,28 @@ it('keeps a working annotation draft independently scrollable with comparison op
   const box=await screen.findByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
   expect(box.disabled).toBe(true); expect(box.checked).toBe(false);
   expect(screen.getByText('Coupled scrolling is available in read-only views.')).toBeDefined();
+});
+
+
+it('does not fetch general version metadata or controls for restricted task text', async () => {
+  render(<CaseScreen view={emptyWorkspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} versionContext={{ ...context, canBrowseVersions: false }} />);
+  await screen.findByRole('button', { name: /Finish & Submit/ });
+  expect(api.getVariantMetadata).not.toHaveBeenCalled();
+  expect(api.listAnnotationVersions).not.toHaveBeenCalled();
+  expect(screen.queryByText('Versions')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull();
+});
+
+
+it('clears historical selection and comparison when current browsing capability is lost', async () => {
+  const props = { view: emptyWorkspaceFixture('target').view, workspaceId: 'ws', onClose: vi.fn() };
+  const mounted = render(<CaseScreen {...props} versionContext={context} />);
+  fireEvent.change(await screen.findByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
+  await screen.findByText('HP:old');
+  mounted.rerender(<CaseScreen {...props} versionContext={{ ...context, canBrowseVersions: false }} />);
+  expect(screen.queryByText('HP:old')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull();
+  mounted.rerender(<CaseScreen {...props} versionContext={context} />);
+  await screen.findByLabelText('Annotations');
+  expect(screen.queryByText('HP:old')).toBeNull();
 });

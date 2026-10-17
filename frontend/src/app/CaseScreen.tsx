@@ -113,7 +113,7 @@ export type WorkspaceView = components["schemas"]["WorkspaceView"];
 
 export interface CaseScreenProps {
   readOnly?: boolean;
-  versionContext?: { username: string; assignmentId: number; onNavigate: (route: Route) => void };
+  versionContext?: { canBrowseVersions: boolean; username: string; assignmentId: number; onNavigate: (route: Route) => void };
   routeLeaveRef?: React.MutableRefObject<RouteLeaveGuard | null>;
   assignmentNavigation?: { tasks: TaskSummary[]; current: TaskSummary; onNavigate: (assignmentId: number) => void };
   onReadonlyRequired?: () => void;
@@ -143,12 +143,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   leaveGuardRef,
   readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext,
 }) => {
-  const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, workspaceId, view.key]);
+  const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, versionContext?.canBrowseVersions, workspaceId, view.key]);
   const { versions, versionError, setVersionError, retryVersions } = useCaseVersions(view.key.project_key, view.document.document_id, versionContext, versionIdentity);
   const [displayed, setDisplayed] = useState<{ identity: string; selection: string; label: string; value: AnnotationVersion | null } | null>(null);
   const display = displayed?.identity === versionIdentity ? displayed : null;
   const [comparisonIdentity, setComparisonIdentity] = useState<string | null>(null);
-  const compareOpen = comparisonIdentity === versionIdentity;
+  const compareOpen = !!versionContext?.canBrowseVersions && comparisonIdentity === versionIdentity;
   const [leftTextElement, setLeftTextElement] = useState<HTMLDivElement | null>(null);
   const reanchorContext = useReanchorContext(view.document.text, leftTextElement, JSON.stringify([versionIdentity,display?.selection ?? "draft"]));
   const compareButton = useRef<HTMLButtonElement | null>(null);
@@ -263,6 +263,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (versionContext?.canBrowseVersions) return;
+    if (comparisonIdentity !== null) {
+      setComparisonIdentity(null);
+      rootRef.current?.querySelector<HTMLElement>(".text-container")?.focus();
+    }
+    setDisplayed(null);
+  }, [versionContext?.canBrowseVersions]);
 
   // Dedicated mutation queue for this workspace
   const queueRef = useRef<MutationQueue>(null as unknown as MutationQueue);
@@ -1512,7 +1520,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const cancelAttach = useMemo(() => () => setIsAttachingMention(false), []);
 
-  const versionControls = versions ? <div className="case-version-controls">
+  const versionControls = versions && versionContext?.canBrowseVersions ? <details className="case-version-controls"><summary>Versions</summary>
     <VariantSelectors caseDetail={versions.detail} currentDocumentId={view.document.document_id}
       annotationOptions={annotationOptions(versions.refs, true)} selectedAnnotation={display?.selection ?? "draft"}
       disabled={versionBusy && display !== null} onLanguage={language => { const id = pickVariant(versions.detail, language); if (id) navigateVariant(id); }}
@@ -1520,7 +1528,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     {versions.detail.variants.find(row => row.document_id === view.document.document_id) && <span className="badge">{variantDescription(versions.detail.variants.find(row => row.document_id === view.document.document_id)!)}</span>}
     <Button ref={compareButton} aria-expanded={compareOpen} onClick={() => { if (compareOpen) closeComparison(); else setComparisonIdentity(versionIdentity); }}>Compare</Button>
     <VariantDetails detail={versions.detail} documentId={view.document.document_id} />
-  </div> : null;
+  </details> : null;
 
   return (
     <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []} metadata={view.proposal_sets ?? []} allowPublicFetch={false}>

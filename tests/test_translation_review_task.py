@@ -1008,3 +1008,116 @@ def test_coalesced_snapshot_preserves_selected_stored_and_null_position_order(
         CORRECTED,
         *(f"unrelated-{i}" for i in range(7)),
     }
+
+
+def test_review_public_inputs_are_exact_metadata_only_and_follow_current_assignment(
+    case_env, tmp_path
+):
+    env = case_env
+    source = native_unit("second-source", "en", "Other source", case_id="case")
+    unrelated = translation_unit("other-target", "de", "Other target", source=source)
+    original = native_unit(SOURCE, "en", "Source text", case_id="case")
+    comparison = translation_unit(
+        "comparison", "de", "Comparison text", source=original
+    )
+    (tmp_path / "extra").mkdir()
+    result = run_import(
+        env.db, bundle(tmp_path / "extra", [source, unrelated, comparison])
+    )
+    assert result.status == "succeeded", result.error
+    ordinary = AssignmentService(env.db).list("proj", user="alice")[0]
+    AssignmentService(env.db).revoke(HARNESS, ordinary.id)
+    row = assigned(env, document=CORRECTED)
+    before = []
+
+    def capture(_conn, _cursor, statement, _params, _context, _many):
+        before.append(statement.lower())
+
+    event.listen(env.db.engine, "before_cursor_execute", capture)
+    try:
+        response = env.alice.get(f"{BASE}/cases/case")
+    finally:
+        event.remove(env.db.engine, "before_cursor_execute", capture)
+    assert response.status_code == 200, response.text
+    assert {v["document_id"] for v in response.json()["variants"]} == {
+        SOURCE,
+        CORRECTED,
+        "comparison",
+    }
+    assert not any(
+        "documents.text," in statement or "insert into" in statement
+        for statement in before
+    )
+    for document in (SOURCE, CORRECTED, "comparison"):
+        response = env.alice.get(f"{BASE}/documents/{quote(document, safe='')}/text")
+        assert response.status_code == 200, response.text
+    for document in (TARGET, "second-source", "other-target"):
+        assert (
+            env.alice.get(
+                f"{BASE}/documents/{quote(document, safe='')}/text"
+            ).status_code
+            == 404
+        )
+    opened = env.alice.get(f"/api/v1/translation-reviews/{row['id']}")
+    assert opened.status_code == 200, opened.text
+    assert opened.json()["source"]["variant"]["document_id"] == SOURCE
+    assert [v["variant"]["document_id"] for v in opened.json()["comparisons"]] == [
+        "comparison"
+    ]
+    AssignmentService(env.db).revoke(HARNESS, row["id"])
+    assert (
+        env.alice.get(f"{BASE}/documents/{quote(SOURCE, safe='')}/text").status_code
+        == 404
+    )
+    assert env.alice.get(f"/api/v1/translation-reviews/{row['id']}").status_code == 404
+
+
+@pytest.mark.parametrize("change", ["none", "revoked", "role"])
+def test_own_review_output_grants_only_current_exact_metadata(case_env, change):
+    env = case_env
+    row = assigned(env, document=CORRECTED)
+    env.alice.patch("/api/v1/me/profile", json={"qualification": "Clinical reviewer"})
+    url = f"/api/v1/translation-reviews/{row['id']}"
+    opened = env.alice.get(url).json()
+    saved = env.alice.put(
+        url + "/draft",
+        json={
+            "expected_revision": 0,
+            "text": opened["text"] + " corrected",
+            "form": {"decision": "accepted_corrected", "clinical_change": False},
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    submitted = env.alice.post(url + "/submit", json={"expected_revision": 1})
+    assert submitted.status_code == 200, submitted.text
+    created_id = submitted.json()["created_variant_id"]
+    path = f"{BASE}/documents/{quote(created_id, safe='')}"
+    assert env.alice.get(path + "/variant").status_code == 200
+    assert env.alice.get(path + "/text").status_code == 404
+    assert env.alice.get(path + "/annotation-versions").status_code == 404
+    assert env.reviewer.get(path + "/variant").status_code == 404
+    assert created_id not in {
+        v["document_id"] for v in env.alice.get(f"{BASE}/cases/case").json()["variants"]
+    }
+    user = env.app.state.accounts.get_by_username("alice")
+    from ontocurator.authz.policy import Access
+    from ontocurator.authz.scoped import ScopedRepository
+
+    stale = ScopedRepository(
+        env.db,
+        Access(user.id, user.pseudonym, False, {"proj": frozenset({"annotator"})}),
+    )
+    if change == "revoked":
+        AssignmentService(env.db).revoke(HARNESS, row["id"])
+    elif change == "role":
+        with env.db.transaction() as conn:
+            conn.execute(
+                delete(ProjectMembershipRow).where(
+                    ProjectMembershipRow.user_id == user.id
+                )
+            )
+    if change != "none":
+        with pytest.raises(DomainError, match=r"DOCUMENT_NOT_FOUND|PROJECT_NOT_FOUND"):
+            stale.get_variant("proj", created_id)
+    else:
+        assert stale.get_variant("proj", created_id).document_id == created_id

@@ -43,6 +43,7 @@ class Action(StrEnum):
     MANAGE_PROJECT_SETTINGS = "manage_project_settings"
     MANAGE_ASSIGNMENTS = "manage_assignments"
     VIEW_ALL_DOCUMENTS = "view_all_documents"
+    BROWSE_VERSIONS = "browse_versions"
     VIEW_PROGRESS = "view_progress"
     OVERRIDE_TRANSLATION_STATUS = "override_translation_status"
     CREATE_PROJECT = "create_project"
@@ -79,6 +80,7 @@ ADMIN_PROJECT_ACTIONS = frozenset(
         Action.MANAGE_PROJECT_SETTINGS,
         Action.MANAGE_ASSIGNMENTS,
         Action.VIEW_ALL_DOCUMENTS,
+        Action.BROWSE_VERSIONS,
         Action.VIEW_PROGRESS,
         Action.OVERRIDE_TRANSLATION_STATUS,
     }
@@ -96,6 +98,7 @@ ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
             Action.MANAGE_PROJECT_SETTINGS,
             Action.MANAGE_ASSIGNMENTS,
             Action.VIEW_ALL_DOCUMENTS,
+            Action.BROWSE_VERSIONS,
             Action.VIEW_PROGRESS,
             Action.OVERRIDE_TRANSLATION_STATUS,
         }
@@ -109,7 +112,12 @@ ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
         }
     ),
     "adjudicator": frozenset(
-        {Action.VIEW_PROJECT, Action.OPEN_REVIEW, Action.EXPORT_OWN_WORK}
+        {
+            Action.VIEW_PROJECT,
+            Action.OPEN_REVIEW,
+            Action.EXPORT_OWN_WORK,
+            Action.BROWSE_VERSIONS,
+        }
     ),
 }
 MODE_ACTIONS: dict[WorkspaceMode, Action] = {

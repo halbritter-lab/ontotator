@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import cast
 
 from sqlalchemy import Connection, and_, exists, or_, select
-from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from ontocurator.authz.policy import TASK_ROLES, Access, Action, Role, can
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.variants import (
+    VariantInfo,
+    resolve_translation_lineage,
+    translation_review_comparisons,
+)
 from ontocurator.storage.tables import (
     AssignmentRow,
     DocumentRow,
     ProjectMembershipRow,
     ProjectRow,
+    TranslationReviewRow,
     UserRow,
 )
 
@@ -111,29 +116,62 @@ def qualifying_assignment(user_id: int) -> ColumnElement[bool]:
 def readable_case_documents(
     conn: Connection, access: Access, project_id: int, project_key: str
 ) -> DocumentFilter:
-    """Immutable sibling text only; never replace exact annotation/work guards."""
+    """Current exact task texts, with scoped review inputs for authorized tasks."""
     fresh = current_access(conn, access, project_id, project_key)
     if can(fresh, Action.VIEW_ALL_DOCUMENTS, project_key):
         return DocumentFilter(True)
-    assigned_cases = (
-        select(DocumentRow.case_id)
+    assignments = conn.execute(
+        select(AssignmentRow.document_id, AssignmentRow.task, DocumentRow.case_id)
         .join(
-            AssignmentRow,
+            DocumentRow,
             and_(
-                AssignmentRow.project_id == DocumentRow.project_id,
-                AssignmentRow.document_id == DocumentRow.document_id,
+                DocumentRow.project_id == AssignmentRow.project_id,
+                DocumentRow.document_id == AssignmentRow.document_id,
             ),
         )
         .where(
-            DocumentRow.project_id == project_id, qualifying_assignment(fresh.user_id)
+            AssignmentRow.project_id == project_id, qualifying_assignment(fresh.user_id)
         )
-    )
-    ids = conn.execute(
-        select(DocumentRow.document_id).where(
-            DocumentRow.project_id == project_id,
-            DocumentRow.case_id.in_(assigned_cases),
-        )
-    ).scalars()
+    ).all()
+    ids = {row.document_id for row in assignments}
+    if not ids:
+        return DocumentFilter(False)
+    if can(fresh, Action.BROWSE_VERSIONS, project_key):
+        siblings = conn.execute(
+            select(DocumentRow.document_id).where(
+                DocumentRow.project_id == project_id,
+                DocumentRow.case_id.in_({row.case_id for row in assignments}),
+            )
+        ).scalars()
+        return DocumentFilter(False, frozenset(siblings))
+    review_cases = {
+        row.case_id for row in assignments if row.task == "translation_review"
+    }
+    if review_cases:
+        # Only metadata: opening a review here would create a draft and fetch text.
+        variants = {
+            row["document_id"]: VariantInfo(**row)
+            for row in conn.execute(
+                select(
+                    *(getattr(DocumentRow, field.name) for field in fields(VariantInfo))
+                ).where(
+                    DocumentRow.project_id == project_id,
+                    DocumentRow.case_id.in_(review_cases),
+                )
+            ).mappings()
+        }
+        for row in assignments:
+            if row.task != "translation_review":
+                continue
+            target = variants[row.document_id]
+            ancestor, source = resolve_translation_lineage(target, variants.get)
+            ids.add(source.document_id)
+            ids.update(
+                v.document_id
+                for v in translation_review_comparisons(
+                    target, ancestor, variants.values()
+                )
+            )
     return DocumentFilter(False, frozenset(ids))
 
 
@@ -159,33 +197,38 @@ def require_case_text(
         ):
             raise DomainError("DOCUMENT_NOT_FOUND")
         return
-    target = aliased(DocumentRow)
-    sibling = aliased(DocumentRow)
-    assigned_case = (
-        select(AssignmentRow.id)
-        .join(
-            sibling,
-            and_(
-                sibling.project_id == AssignmentRow.project_id,
-                sibling.document_id == AssignmentRow.document_id,
-            ),
-        )
-        .where(
-            AssignmentRow.project_id == project_id,
-            sibling.case_id == target.case_id,
-            qualifying_assignment(fresh.user_id),
-        )
-        .exists()
-    )
-    found = conn.execute(
-        select(target.document_id).where(
-            target.project_id == project_id,
-            target.document_id == document_id,
-            assigned_case,
-        )
-    ).first()
-    if found is None:
+    visibility = readable_case_documents(conn, fresh, project_id, project_key)
+    if document_id not in visibility.document_ids:
         raise DomainError("DOCUMENT_NOT_FOUND")
+
+
+def may_read_translation_review_output_metadata(
+    conn: Connection, access: Access, project_id: int, document_id: str
+) -> bool:
+    """Exact own review output metadata; no text or general browsing authority."""
+    return (
+        conn.execute(
+            select(TranslationReviewRow.id)
+            .join(
+                AssignmentRow,
+                and_(
+                    AssignmentRow.id == TranslationReviewRow.assignment_id,
+                    AssignmentRow.project_id == TranslationReviewRow.project_id,
+                    AssignmentRow.document_id == TranslationReviewRow.document_id,
+                    AssignmentRow.user_id == TranslationReviewRow.reviewer_user_id,
+                ),
+            )
+            .where(
+                TranslationReviewRow.project_id == project_id,
+                TranslationReviewRow.created_variant_id == document_id,
+                TranslationReviewRow.reviewer_user_id == access.user_id,
+                AssignmentRow.task == "translation_review",
+                qualifying_assignment(access.user_id),
+            )
+            .limit(1)
+        ).first()
+        is not None
+    )
 
 
 def project_document_filters(
