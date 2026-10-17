@@ -59,7 +59,6 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
       <section className="detail-section"><h2>Documents</h2><Select id="progress-status" label="Document status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option><option value="unassigned">Unassigned</option>{statuses.map(value => <option key={value} value={value}>{label(value)}</option>)}</Select>
         <DataTable label="Progress documents" columns={documentColumns} rows={documents} rowKey={doc => doc.document_id} empty={<EmptyState title="No matching documents">Choose another status to see other documents.</EmptyState>} />
       </section>
-      <p>Agreement between annotators is not shown here yet.</p>
     </>}
   </section>;
 }

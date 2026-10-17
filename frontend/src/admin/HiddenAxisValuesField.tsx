@@ -32,6 +32,7 @@ export function HiddenAxisValuesField({ profile, axisDefaults, value, onChange, 
 
   return <fieldset disabled={disabled}>
     <legend>Hidden axis values</legend>
+    <p>Hiding a value removes it from new selections; it does not rewrite existing annotations. An annotation using a hidden value must be updated before it can be saved or submitted.</p>
     {groups.length === 0 ? <InlineMessage tone="info">This profile has no axis values to hide.</InlineMessage> : groups.map(({ layer, axes }, layerIndex) =>
       <fieldset key={layer.layer_id}>
         <legend>{groupLabel(layer.label, layer.layer_id)}</legend>

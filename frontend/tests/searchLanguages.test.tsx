@@ -132,7 +132,7 @@ describe("SearchLanguageButton", () => {
     active,
     onToggle,
   });
-  const flagsIn = (element: Element) =>
+  const codesIn = (element: Element) =>
     Array.from(element.querySelectorAll("[data-language]")).map((node) => node.getAttribute("data-language"));
 
   it("bundles a flag image for the five languages and none for others", () => {
@@ -143,41 +143,41 @@ describe("SearchLanguageButton", () => {
     expect(flagFor("pt")).toBeUndefined();
   });
 
-  it("shows the flags of the active languages, English first, and names them for screen readers", () => {
+  it("shows codes for the active languages, English first, and names them for screen readers", () => {
     render(<SearchLanguageButton control={control(["de"])} />);
 
     const button = screen.getByRole("button", { name: "Search languages: EN, DE" });
-    expect(flagsIn(button)).toEqual(["en", "de"]);
-    expect(button.querySelectorAll("img")).toHaveLength(2);
+    expect(codesIn(button)).toEqual(["en", "de"]);
+    expect(button.querySelectorAll("img")).toHaveLength(0);
     expect(button.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("group")).toBeNull();
   });
 
-  it("shows three flags and +n from four languages on", () => {
+  it("shows three codes and +n from four languages on", () => {
     render(<SearchLanguageButton control={control(["de", "es", "fr", "nl"], ["de", "es", "fr", "nl"])} />);
 
     const button = screen.getByRole("button", { name: "Search languages: EN, DE, ES, FR, NL" });
-    expect(flagsIn(button)).toEqual(["en", "de", "es"]);
-    expect(button.textContent).toBe("+2");
+    expect(codesIn(button)).toEqual(["en", "de", "es"]);
+    expect(button.textContent).toBe("ENDEES+2");
   });
 
-  it("shows exactly three flags without a counter for three languages", () => {
+  it("shows exactly three codes without a counter for three languages", () => {
     render(<SearchLanguageButton control={control(["de", "es"])} />);
 
     const button = screen.getByRole("button", { name: "Search languages: EN, DE, ES" });
-    expect(flagsIn(button)).toEqual(["en", "de", "es"]);
-    expect(button.textContent).toBe("");
+    expect(codesIn(button)).toEqual(["en", "de", "es"]);
+    expect(button.textContent).toBe("ENDEES");
   });
 
-  it("falls back to the language code when no flag is bundled", () => {
+  it("shows the same code treatment for languages without bundled flags", () => {
     render(<SearchLanguageButton control={control(["pt"], ["pt"])} />);
 
     const button = screen.getByRole("button", { name: "Search languages: EN, PT" });
-    expect(button.querySelectorAll("img")).toHaveLength(1);
-    expect(button.textContent).toBe("PT");
+    expect(button.querySelectorAll("img")).toHaveLength(0);
+    expect(button.textContent).toBe("ENPT");
   });
 
-  it("lists every loaded language with checkbox, flag and code; English is fixed", () => {
+  it("lists every loaded language once with a checkbox and code; English is fixed", () => {
     const onToggle = vi.fn();
     render(<SearchLanguageButton control={control(["es"], ["de", "es"], onToggle)} />);
     fireEvent.click(screen.getByRole("button", { name: /Search languages/ }));
@@ -185,14 +185,14 @@ describe("SearchLanguageButton", () => {
     const list = screen.getByRole("group", { name: "Search languages" });
     const boxes = Array.from(list.querySelectorAll("label")).map((label) => ({
       code: label.textContent,
-      flag: label.querySelector("img")?.getAttribute("data-language"),
+      language: label.querySelector("[data-language]")?.getAttribute("data-language"),
       checked: (label.querySelector("input") as HTMLInputElement).checked,
       disabled: (label.querySelector("input") as HTMLInputElement).disabled,
     }));
     expect(boxes).toEqual([
-      { code: "EN", flag: "en", checked: true, disabled: true },
-      { code: "DE", flag: "de", checked: false, disabled: false },
-      { code: "ES", flag: "es", checked: true, disabled: false },
+      { code: "EN", language: "en", checked: true, disabled: true },
+      { code: "DE", language: "de", checked: false, disabled: false },
+      { code: "ES", language: "es", checked: true, disabled: false },
     ]);
     expect(screen.getByRole("checkbox", { name: "DE" }).closest("label")!.title).toBe(
       "3,412 terms have a name in this language",

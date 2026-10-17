@@ -1,21 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
-import { flagFor } from "./flags";
+import { Button } from "../ui";
 import type { SearchLanguageControl } from "./searchLanguages";
 
-const MAX_FLAGS = 3;
+const MAX_CODES = 3;
 
-const Flag: React.FC<{ language: string }> = ({ language }) => {
-  const src = flagFor(language);
-  return src ? (
-    <img className="lang-flag" src={src} alt="" width={16} height={12} data-language={language} />
-  ) : (
-    <span className="lang-code" data-language={language}>
-      {language.toUpperCase()}
-    </span>
-  );
-};
+const LanguageCode: React.FC<{ language: string }> = ({ language }) => (
+  <span className="lang-code" data-language={language}>{language.toUpperCase()}</span>
+);
 
-/** The small flag button at the right edge of the search box, and its checkbox list. */
+/** The language button at the right edge of the search box, and its checkbox list. */
 export const SearchLanguageButton: React.FC<{ control: SearchLanguageControl }> = ({ control }) => {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -32,8 +25,8 @@ export const SearchLanguageButton: React.FC<{ control: SearchLanguageControl }> 
 
   // English is the ontology itself: always searched, always shown first.
   const shown = ["en", ...control.active];
-  const flags = shown.length > MAX_FLAGS ? shown.slice(0, MAX_FLAGS) : shown;
-  const more = shown.length - flags.length;
+  const codes = shown.slice(0, MAX_CODES);
+  const more = shown.length - codes.length;
   const name = `Search languages: ${shown.map((code) => code.toUpperCase()).join(", ")}`;
 
   return (
@@ -48,7 +41,9 @@ export const SearchLanguageButton: React.FC<{ control: SearchLanguageControl }> 
         }
       }}
     >
-      <button
+      <Button
+        variant="quiet"
+        size="sm"
         ref={buttonRef}
         type="button"
         className="search-language-button"
@@ -58,17 +53,16 @@ export const SearchLanguageButton: React.FC<{ control: SearchLanguageControl }> 
         title={name}
         onClick={() => setOpen((value) => !value)}
       >
-        {flags.map((code) => (
-          <Flag key={code} language={code} />
+        {codes.map((code) => (
+          <LanguageCode key={code} language={code} />
         ))}
         {more > 0 && <span className="lang-code">+{more}</span>}
-      </button>
+      </Button>
       {open && (
         <div className="search-language-menu" role="group" aria-label="Search languages">
           <label className="search-language-option" title="The names of the ontology itself are always searched">
             <input type="checkbox" checked disabled readOnly />
-            <Flag language="en" />
-            <span>EN</span>
+            <LanguageCode language="en" />
           </label>
           {control.options.map((option) => (
             <label
@@ -81,8 +75,7 @@ export const SearchLanguageButton: React.FC<{ control: SearchLanguageControl }> 
                 checked={control.active.includes(option.language)}
                 onChange={() => control.onToggle(option.language)}
               />
-              <Flag language={option.language} />
-              <span>{option.language.toUpperCase()}</span>
+              <LanguageCode language={option.language} />
             </label>
           ))}
         </div>
