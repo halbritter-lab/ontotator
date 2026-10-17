@@ -1,4 +1,4 @@
-import { PendingReanchorPanel, useReanchorContext } from "../variants/ReanchorPanel";
+import { ReanchorPanel, currentReanchorResolution, reanchorKey, reanchorRef, useReanchorContext } from "../variants/ReanchorPanel";
 import { ComparePane } from "../variants/ComparePane";
 import { Toolbar } from "../ui/Toolbar";
 import { VariantSelectors } from "../variants/VariantSelectors";
@@ -25,6 +25,7 @@ import {
   type DocumentSummary,
   type Draft,
   type Submission,
+  type ReanchorItem,
 } from "../api/client";
 import type { components } from "../api/generated";
 import { ProposalMetadataProvider, ProposalSource, proposalFor } from "../editor/ProposalSource";
@@ -176,7 +177,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     typeId: string;
     segments: SelectionPayload["segments"];
     isSpanless?: boolean;
+    reanchorItem?: ReanchorItem;
   } | null>(null);
+  const [activeReanchor, setActiveReanchor] = useState<ReanchorItem | null>(null);
+  const [resolutionItem, setResolutionItem] = useState<ReanchorItem | null>(null);
   const [spanlessReason, setSpanlessReason] = useState("");
   const [pendingEvidenceAdoption, setPendingEvidenceAdoption] = useState<TargetProposal | null>(null);
   const [pendingAdoption, setPendingAdoption] = useState<TargetProposal | null>(null);
@@ -201,6 +205,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [draft, setDraft] = useState<Draft>(view.draft);
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
+  const pendingReanchorItems = view.key.mode === "review" ? view.pending_reanchor_items ?? [] : [];
+  const unresolvedReanchorCount = pendingReanchorItems.filter(item =>
+    !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? [])).length;
 
   const [layerSelection, setLayerSelection] = useState<LayerSelection>(() =>
     initLayerSelection(view.layers ?? [], view.scope)
@@ -262,13 +269,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   ].map((snapshot) => ({
     layer_id: snapshot.annotation.layer_id,
     term_id: snapshot.annotation.term_id,
-  })), [draft.annotations, display?.value, view.available_inputs, view.submissions]);
+  })).concat(pendingReanchorItems.map(item=>({layer_id:item.layer_id,term_id:item.term_id}))), [draft.annotations, display?.value, view.available_inputs, view.submissions, view.pending_reanchor_items]);
   const termLabel = useTermLabels(view.key.project_key, displayedTerms);
 
   const searchManager = useMemo(() => new SearchManager(api), []);
   useEffect(() => {
     if (!readOnly) return;
     setPendingAnnotation(null);
+    setActiveReanchor(null);
     setIsAttachingMention(false);
     setSelectionIntent("new_mention");
     setSubmitDialogOpen(false);
@@ -360,6 +368,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       ) ?? null
     );
   }, [draft.annotations, selectedAnnotationId]);
+  const matchingReanchorItems = selectedAnnotation ? pendingReanchorItems.filter(item =>
+    item.layer_id === selectedAnnotation.annotation.layer_id && item.type_id === selectedAnnotation.annotation.type_id &&
+    selectedAnnotation.annotation.provenance.source_refs?.includes(`${item.source_ref.annotation_id}:${item.source_ref.version}`) &&
+    !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? [])) : [];
+  const selectedReanchorItem = matchingReanchorItems.find(item=>resolutionItem && reanchorKey(item)===reanchorKey(resolutionItem)) ??
+    (matchingReanchorItems.length===1 ? matchingReanchorItems[0] : undefined);
+  const savedPendingReanchor = pendingAnnotation?.reanchorItem ? draft.annotations?.find(snapshot=>snapshot.annotation.annotation_id===pendingAnnotation.annotationId) : undefined;
 
   const sourceForTarget = (target: {annotation_id: string; version: string}) =>
     (view.available_inputs ?? []).find(p => p.annotation.annotation_id === target.annotation_id && p.version === target.version);
@@ -747,6 +762,56 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     });
   };
 
+  const resolveReanchor = (item: ReanchorItem, outcome: "recreated" | "dismissed", value: string): Promise<Draft> => {
+    assertWritable();
+    setActionError(null);
+    const mutationId = crypto.randomUUID();
+    let envelope: Parameters<typeof api.resolveReanchor>[1] | undefined;
+    return queueRef.current.enqueue(async expectedRevision => {
+      assertWritable();
+      if (!envelope) {
+        const saved = outcome === "recreated" ? latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === value) : undefined;
+        if (outcome === "recreated" && !saved) throw new ValidationError("Save the replacement finding before resolving this item.");
+        envelope = {mutation_id:mutationId,expected_revision:expectedRevision,payload:{item:reanchorRef(item),outcome,
+          ...(saved ? {replacement:{annotation_id:saved.annotation.annotation_id,version:saved.version}} : {reason:value})}};
+      }
+      const updated = await api.resolveReanchor(workspaceId,envelope).catch(assignmentFailure);
+      latestDraft.current=updated;setDraft(updated);return updated;
+    });
+  };
+
+  const beginReanchor = async (item: ReanchorItem) => {
+    try {
+      assertWritable();
+      await flushAnnotationNotes();
+      if (unsavedAnnotationNotes().length) {
+        setActionError("Save the annotation note before re-creating another finding.");return;
+      }
+      assertWritable();
+      const layer=view.layers?.find(value=>value.layer_id===item.layer_id);
+      if (!item.type_id || !layer?.annotation_types.some(type=>type.type_id===item.type_id)) {
+        setActionError("The original finding type is unavailable for re-creation. You can still dismiss this finding with a reason.");return;
+      }
+      handleDeselectAll();
+      const copies=latestDraft.current.annotations?.filter(snapshot=>snapshot.annotation.layer_id===item.layer_id && snapshot.annotation.type_id===item.type_id &&
+        snapshot.annotation.provenance.source_refs?.includes(`${item.source_ref.annotation_id}:${item.source_ref.version}`)) ?? [];
+      const saved=copies.find(snapshot=>snapshot.annotation.annotation_id===selectedAnnotationId) ?? (copies.length===1 ? copies[0] : undefined);
+      if(saved) {
+        setResolutionItem(item);
+        setSelectedAnnotationId(saved.annotation.annotation_id);setSelectedEvidenceId(saved.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+        setMobilePane("details");return;
+      }
+      if(copies.length>1) {
+        setResolutionItem(item);setMobilePane("list");
+        setActionError("Select the replacement finding in the annotation list, then choose Resolve with this finding.");return;
+      }
+      setLayerSelection(previous => setActiveLayer(previous,view.layers ?? [],view.scope,item.layer_id));
+      setActiveReanchor(item);setSelectionIntent("new_mention");setMobilePane("text");
+      reanchorContext.reveal(item.new_context);
+      leftTextElement?.focus();
+    } catch(error) {reportError(error);}
+  };
+
   const handleDeselectAll = () => {
     setSelectedAnnotationId(null);
     setSelectedTargetId(null);
@@ -910,6 +975,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setMobilePane("details");
 
     setActionError(null);
+    if (activeReanchor) {
+      const item=activeReanchor;
+      const layer=view.layers?.find(value=>value.layer_id===item.layer_id);
+      const typeId=item.type_id;
+      if (!typeId || !layer?.annotation_types.some(type=>type.type_id===typeId) || !view.scope.editable_layer_ids.includes(item.layer_id)) {
+        setActionError("This finding's layer is no longer editable.");return;
+      }
+      handleDeselectAll();
+      setPendingAnnotation({annotationId:`ann-${crypto.randomUUID()}`,evidenceId:newEvidenceId(),layerId:item.layer_id,
+        typeId,segments:payload.segments,reanchorItem:item});
+      return;
+    }
     if (pendingEvidenceAdoption) {
       if (selectedTargetId !== refKey(pendingEvidenceAdoption) || creatingPending.current) return;
       creatingPending.current = true;
@@ -983,7 +1060,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     } catch (error) { reportError(error); }
   };
 
-  const cancelPending = () => { setPendingAnnotation(null); searchManager.clear(); };
+  const cancelPending = () => {
+    const item=activeReanchor ?? pendingAnnotation?.reanchorItem;
+    setPendingAnnotation(null); setActiveReanchor(null); searchManager.clear();
+    if(item) [...(sidebarScrollRef.current?.querySelectorAll<HTMLElement>('[data-reanchor-item]') ?? [])]
+      .find(row=>row.dataset.reanchorItem===reanchorKey(item))?.querySelector<HTMLButtonElement>('button')?.focus();
+  };
 
   const createPendingAnnotation = async (termId: string, searchId?: string) => {
     if (readOnlyRef.current) return;
@@ -994,21 +1076,24 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       return;
     }
     creatingPending.current = true;
+    setActionError(null);
     const pending = pendingAnnotation;
     try {
       const type = view.layers?.find(l => l.layer_id === pending.layerId)?.annotation_types.find(t => t.type_id === pending.typeId);
-      await enqueueMutation({
-        command: "create_annotation",
+      if (!pending.reanchorItem || !latestDraft.current.annotations?.some(snapshot=>snapshot.annotation.annotation_id===pending.annotationId)) await enqueueMutation({
+        command: pending.reanchorItem ? "recreate_reanchor" : "create_annotation",
+        ...(pending.reanchorItem ? {item:reanchorRef(pending.reanchorItem)} : {}),
         annotation_id: pending.annotationId,
         evidence_id: pending.evidenceId,
         layer_id: pending.layerId,
         type_id: pending.typeId,
         term_id: termId,
-        search_event_id: searchId,
+        ...(!pending.reanchorItem ? {search_event_id:searchId} : {}),
         ...(pending.isSpanless && spanlessReason.trim() ? { note: spanlessReason.trim() } : {}),
         segments: pending.segments,
         axes_values: initialAxisValues(type?.axes ?? [], termId),
       });
+      if (pending.reanchorItem) await resolveReanchor(pending.reanchorItem,"recreated",pending.annotationId);
       setPendingAnnotation(null);
       setSpanlessReason(""); setSpanlessReasonError(false);
       setSelectedTargetId(null);
@@ -1016,6 +1101,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       setSelectedAnnotationId(pending.annotationId);
       setSelectedEvidenceId(pending.evidenceId ?? null);
       searchManager.clear();
+      if(pending.reanchorItem) requestAnimationFrame(()=>inspectorRef.current?.querySelector<HTMLElement>('button, input, textarea, select')?.focus());
     } catch (error) { reportError(error); }
     finally { creatingPending.current = false; }
   };
@@ -1696,7 +1782,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       : []),
   ], [mentionsDisplay, targetMentions, sourceMentions, pendingAnnotation]);
 
-  const cancelAttach = useMemo(() => () => { setIsAttachingMention(false); setPendingEvidenceAdoption(null); }, []);
+  const cancelAttach = () => { setIsAttachingMention(false); setPendingEvidenceAdoption(null); cancelPending(); };
 
   const versionControls = versions && versionContext?.canBrowseVersions ? <details className="case-version-controls"><summary>Versions</summary>
     <VariantSelectors caseDetail={versions.detail} currentDocumentId={view.document.document_id}
@@ -1875,8 +1961,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           />
 
           <div className="sidebar-scroll" ref={sidebarScrollRef}>
-            <PendingReanchorPanel projectKey={view.key.project_key} documentId={view.document.document_id} scope={versionIdentity}
-              enabled={view.key.mode === "review" && !display} onContext={reanchorContext.reveal} />
+            <ReanchorPanel key={versionIdentity} items={pendingReanchorItems} labelFor={termLabel} onContext={reanchorContext.reveal}
+              resolutions={draft.reanchor_resolutions} annotations={draft.annotations} busy={queueState === "saving"}
+              recreateUnavailableReason={item=>!view.scope.editable_layer_ids.includes(item.layer_id) || !view.layers?.find(layer=>layer.layer_id===item.layer_id)?.annotation_types.some(type=>type.type_id===item.type_id)
+                ? "The original finding type is unavailable for re-creation. You can still dismiss this finding with a reason." : undefined}
+              onRecreate={readOnly ? undefined : item=>{void beginReanchor(item);}}
+              onDismiss={readOnly ? undefined : async(item,reason)=>{
+                await resolveReanchor(item,"dismissed",reason);
+                if ([activeReanchor,pendingAnnotation?.reanchorItem].some(value=>value && reanchorKey(value)===reanchorKey(item))) cancelPending();
+              }} />
             {view.key.mode === "review" && (
               <div className="sidebar-section">
                 <div className="sidebar-header">
@@ -2081,8 +2174,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           contextSegments={reanchorContext.contextSegments}
           text={view.document.text}
           mentions={textMentions}
-          isAttachingMention={isAttachingMention || (!!pendingEvidenceAdoption && !confirmRequest)}
-          attachMessage={pendingEvidenceAdoption ? "Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement." : undefined}
+          isAttachingMention={isAttachingMention || !!activeReanchor || (!!pendingEvidenceAdoption && !confirmRequest)}
+          attachMessage={activeReanchor ? `Select supporting text to re-create ${activeReanchor.term_id}. The finding remains pending until it is saved.` : pendingEvidenceAdoption ? "Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement." : undefined}
           onCancelAttach={cancelAttach}
           selectedEvidenceId={selectedEvidenceId}
           selectionIntent={selectionIntent}
@@ -2097,6 +2190,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
         {/* Right: Annotation & Search Panel + Review Actions */}
         <div className="inspector-pane density-compact" ref={inspectorRef}>
+          {!readOnly && !pendingAnnotation && selectedReanchorItem && selectedAnnotation && <InlineMessage tone="warning">
+            <p>This finding has changed or has not yet been linked to the text-correction review.</p>
+            <Button disabled={queueState === "saving"} onClick={()=>{void (async()=>{
+              await flushAnnotationNotes();
+              if(unsavedAnnotationNotes().length) return;
+              await resolveReanchor(selectedReanchorItem,"recreated",selectedAnnotation.annotation.annotation_id);
+            })().catch(reportError);}}>Resolve with this finding</Button>
+          </InlineMessage>}
           {selectedSource ? (
             <section className="detail-pane" aria-label="Reference details">
               <ProposalSource source={selectedSource} />
@@ -2118,7 +2219,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <section className="detail-pane" aria-label="New Annotation">
               <div className="detail-section">
                 <h2>
-                  {pendingAnnotation.isSpanless
+                  {pendingAnnotation.reanchorItem ? "Re-create finding on corrected text" : pendingAnnotation.isSpanless
                     ? "Select term for new annotation"
                     : "Select term for highlighted text"}
                 </h2>
@@ -2127,14 +2228,21 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     ? "Select a term from the ontology for the new annotation."
                     : "The annotation will be saved upon selecting a term."}
                 </p>
+                {pendingAnnotation.reanchorItem && <>
+                  <p><TermName termId={savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id} label={termLabel(pendingAnnotation.layerId,savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id)} /> · {pendingAnnotation.layerId}</p>
+                  <p>Finding type: {view.layers?.find(layer=>layer.layer_id===pendingAnnotation.layerId)?.annotation_types.find(type=>type.type_id===pendingAnnotation.typeId)?.label ?? pendingAnnotation.typeId}</p>
+                  {savedPendingReanchor && <p>The replacement is saved. Link its saved version to finish reviewing this item.</p>}
+                  <Button variant="primary" disabled={queueState === "saving"} onClick={()=>{void createPendingAnnotation(pendingAnnotation.reanchorItem!.term_id);}}>{savedPendingReanchor ? "Resolve saved finding" : "Save re-created finding"}</Button>
+                  {!savedPendingReanchor && <p>Or select a different term below.</p>}
+                </>}
                 {pendingAnnotation.isSpanless && <Textarea id="spanless-reason" label="Reason for no text span"
                   required={view.enforce_spanless_rules} value={spanlessReason}
                   error={spanlessReasonError && !spanlessReason.trim() ? "A reason is required before selecting a term." : undefined}
                   onChange={event => { setSpanlessReason(event.target.value); setSpanlessReasonError(false); }} />}
-                <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
+                {!savedPendingReanchor && <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
                   languages={searchLanguagesFor(pendingAnnotation.layerId)}
-                  onSelectCandidate={(candidate, searchId) => { void createPendingAnnotation(candidate.term_id, searchId); }} />
+                  onSelectCandidate={(candidate, searchId) => { void createPendingAnnotation(candidate.term_id, searchId); }} />}
                 <Button type="button" variant="secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</Button>
               </div>
             </section>
@@ -2282,6 +2390,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         {historySubmission.decisions.map(decision => <p key={refKey(decision.target)}>
           {decision.target.annotation_id} ({decision.target.version}): {decision.outcome === "uncertain" ? "Unresolved" : decision.outcome} {decision.note}
         </p>)}
+        {(historySubmission.reanchor_inputs ?? []).length > 0 && <section aria-label="Re-anchor review history">
+          <h3>Findings reviewed after text correction</h3>
+          {(historySubmission.reanchor_inputs ?? []).map(item=>{
+            const resolution=(historySubmission.reanchor_resolutions ?? []).find(value=>reanchorKey(value.item)===reanchorKey(item));
+            return <p key={reanchorKey(item)}>{item.source_ref.annotation_id} ({item.source_ref.version}): {resolution ?
+              `${resolution.outcome === "dismissed" ? "Dismissed" : "Re-created"} by ${resolution.reviewer_id}${resolution.reason ? `: ${resolution.reason}` : ""}${resolution.replacement ? ` · Replacement: ${resolution.replacement.annotation_id} (${resolution.replacement.version})` : ""}` : "Pending"}</p>;
+          })}
+        </section>}
         <Button type="button" variant="secondary" onClick={() => setHistorySubmission(null)}>
           Close
         </Button>
@@ -2338,6 +2454,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               {openReviewTargets.length > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargets.length} still open</strong>}
             </li>
           )}
+          {pendingReanchorItems.length > 0 && <li>{unresolvedReanchorCount} finding(s) after text correction still pending</li>}
 
         </ul>
         {defaulted.length > 0 && <InlineMessage tone="warning">

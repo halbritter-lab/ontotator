@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { authenticatedRequest, loginExisting, openCase } from './helpers';
+import { authenticatedRequest, loginExisting, openCase, selectText, submitCase } from './helpers';
 
 test.setTimeout(90_000);
 type Item = components['schemas']['ReanchorItem'];
@@ -8,7 +8,7 @@ type Opened = components['schemas']['AssignmentOpenResponse'];
 type Metadata = components['schemas']['ProposalSetView'];
 type Scenario = {
   project: string; document_id: string; old_document_id: string; text: string; old_text: string;
-  users: Record<'annotator'|'adjudicator'|'lead', string>; pseudonyms: Record<'annotator'|'adjudicator'|'lead', string>; assignment_id: number; task: 'annotate'|'review';
+  users: Record<'annotator'|'adjudicator'|'lead'|'second_reviewer', string>; pseudonyms: Record<'annotator'|'adjudicator'|'lead'|'second_reviewer', string>; assignment_id: number; second_assignment_id:number; task: 'annotate'|'review';
   import_job_id: number; children: {id:number;status:string;result:{carried:number;needs_review:number};payload:{old_document_id:string;new_document_id:string;producer:{kind:string;job_id:number}}}[];
   pending: Item[]; metadata: Metadata;
 };
@@ -42,9 +42,73 @@ async function ready(page:Page,s:Scenario) {
 }
 const writesSince = (page:Page) => {
   const writes:string[]=[];
-  page.on('request',request=>{if(request.method()!=='GET' && /\/workspaces\/.+\/(commands|decisions|submit)/.test(request.url()))writes.push(request.url());});
+  page.on('request',request=>{if(request.method()!=='GET' && /\/workspaces\/.+\/(commands|decisions|reanchor-resolutions|submit)/.test(request.url()))writes.push(request.url());});
   return writes;
 };
+
+test('re-creates a Unicode finding, dismisses with reason, reloads and submits with private durable resolutions',async({page,browser})=>{
+  await page.setViewportSize({width:1280,height:900});
+  const s=await scenario(page);await ready(page,s);
+  expect(s.pending).toHaveLength(2);
+  const opened=await workspace(page,s), rows=panel(page).locator('ol > li');
+  const first=opened.view.pending_reanchor_items![0];
+  expect(opened.view.draft.reanchor_inputs).toHaveLength(2);
+  await rows.first().getByRole('button',{name:'Re-create here',exact:true}).click();
+  const start=s.text.indexOf('Ataxia 😀new'),end=start+'Ataxia 😀new'.length;
+  await selectText(page,start,end);
+  const editor=page.getByRole('region',{name:'New Annotation',exact:true});
+  await expect(editor.getByRole('heading')).toHaveText('Re-create finding on corrected text');
+  await expect(editor).toContainText(first.term_id);
+  await page.screenshot({path:test.info().outputPath('reanchor-desktop.png')});
+  await page.setViewportSize({width:600,height:900});
+  await page.screenshot({path:test.info().outputPath('reanchor-narrow.png')});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.setViewportSize({width:1280,height:900});
+  await editor.getByRole('button',{name:'Save re-created finding',exact:true}).click();
+  await expect(rows.first()).toContainText('Re-created');
+  await rows.nth(1).getByRole('button',{name:'Dismiss with reason',exact:true}).click();
+  const reason=rows.nth(1).getByRole('textbox',{name:/Reason for dismissal/});
+  await expect(reason).toBeFocused();
+  await reason.fill('The corrected sentence no longer supports this finding.');
+  await rows.nth(1).getByRole('button',{name:'Save dismissal',exact:true}).click();
+  await expect(panel(page)).toContainText('0 pending · 2 resolved');
+  const saved=await workspace(page,s), resolution=saved.view.draft.reanchor_resolutions!;
+  expect(resolution).toHaveLength(2);
+  const recreated=resolution.find(item=>item.outcome==='recreated')!;
+  const snapshot=saved.view.draft.annotations!.find(value=>value.annotation.annotation_id===recreated.replacement!.annotation_id)!;
+  expect(recreated.replacement!.version).toBe(snapshot.version);
+  expect(recreated.item).toEqual({proposal_set_id:first.proposal_set_id,source_ref:first.source_ref});
+  expect(snapshot.annotation.term_id).toBe(first.term_id);
+  expect(snapshot.annotation.provenance.actor.actor_id).toBe(s.pseudonyms.adjudicator);
+  expect(snapshot.annotation.provenance.source_refs).toContain(`${first.source_ref.annotation_id}:${first.source_ref.version}`);
+  const cpStart=Array.from(s.text.slice(0,start)).length,cpEnd=Array.from(s.text.slice(0,end)).length;
+  expect(snapshot.evidence[0].mention.segments).toEqual([{start:cpStart,end:cpEnd}]);
+  expect(Array.from(s.text).slice(cpStart,cpEnd).join('')).toBe('Ataxia 😀new');
+  expect(resolution.find(item=>item.outcome==='dismissed')).toMatchObject({reviewer_id:s.pseudonyms.adjudicator,reason:'The corrected sentence no longer supports this finding.'});
+  expect(await (await authenticatedRequest(page,documentPath(s,'reanchor-items'))).json()).toEqual(s.pending);
+  await page.reload();await expect(panel(page)).toContainText('0 pending · 2 resolved');
+  const other=await browser.newContext({baseURL:test.info().project.use.baseURL});
+  try {
+    const second=await other.newPage();await loginExisting(second,s.users.second_reviewer);
+    await openCase(second,{projectKey:s.project,documentId:s.document_id,task:'review'});
+    await expect(panel(second)).toContainText('2 pending · 0 resolved');
+    const response=await authenticatedRequest(second,`/api/v1/assignments/${s.second_assignment_id}/open`,'POST');
+    expect(response.ok()).toBeTruthy();const own=await response.json() as Opened;
+    expect(own.view.draft.reanchor_resolutions??[]).toEqual([]);
+    expect(own.view.draft.reanchor_inputs).toEqual(saved.view.draft.reanchor_inputs);
+  } finally {await other.close();}
+  await page.locator('.sidebar [data-list-key^="target:"]').click();
+  await page.getByRole('button',{name:/^Confirm/}).click();
+  await submitCase(page);
+  const result=await workspace(page,s);
+  expect(result.read_only).toBe(true);
+  const submission=result.view.submissions!.at(-1)!;
+  expect(submission.reanchor_inputs).toEqual(saved.view.draft.reanchor_inputs);
+  expect(submission.reanchor_resolutions).toEqual(resolution);
+  await page.getByRole('button',{name:'Stay in case',exact:true}).click();
+  await expect(panel(page).getByRole('button',{name:'Re-create here'})).toHaveCount(0);
+  await expect(panel(page).getByRole('button',{name:'Dismiss with reason'})).toHaveCount(0);
+});
 async function nativeSelection(surface:Locator) {
   return surface.evaluate(element=>{
     const selection=window.getSelection()!;
@@ -74,7 +138,9 @@ async function point(surface:Locator,offset:number,edge:'start'|'end') {
 async function nativeAcrossExpiry(page:Page,s:Scenario,button:Locator,method:'pointer'|'Shift',writes:string[]) {
   await button.click();await left(page).scrollIntoViewIfNeeded();
   const marker=left(page).locator('.run--context');await expect(marker).not.toHaveCount(0);
-  const start=s.text.indexOf('😀new'),end=start+'😀new'.length;
+  // The context button belongs to the last pending item, now a distinct second
+  // producer finding. Select inside that revealed window, not the first match.
+  const start=s.text.lastIndexOf('😀new'),end=start+'😀new'.length;
   const a=await point(left(page),start,'start'),b=await point(left(page),end-1,'end');
   // Native drag or held-Shift pointer extension establishes the unfinished range.
   // No synthetic JS caret/range or unsupported caret-arrow assumption.
@@ -126,8 +192,8 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
   for(let i=0;i<items.length;i++) {
     const row=rows.nth(i),item=items[i];
     expect(item.reason).toBe('changed_segment');
-    await expect(row.getByRole('button')).toContainText(`${item.term_id}`);await expect(row.getByRole('button')).toContainText(item.layer_id);
-    await expect(row.getByRole('button')).toContainText('Seizure');
+    await expect(row.getByRole('button').first()).toContainText(`${item.term_id}`);await expect(row.getByRole('button').first()).toContainText(item.layer_id);
+    await expect(row.getByRole('button').first()).toContainText('Seizure');
     await expect(row.getByText('The evidence text changed.',{exact:true})).toBeVisible();
     expect(await row.locator('[data-old-context]').textContent()).toBe(item.old_context.text);
     await expect(row.locator('literal')).toHaveCount(0);
@@ -143,7 +209,7 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
   }
   await panel(page).locator('summary').click();await expect(rows.first()).toBeHidden();
   await panel(page).locator('summary').click();await expect(rows.first()).toBeVisible();
-  const button=rows.last().getByRole('button');await button.scrollIntoViewIfNeeded();
+  const button=rows.last().getByRole('button').first();await button.scrollIntoViewIfNeeded();
   const otherBefore=await comparison.locator('.text-container').evaluate(el=>el.scrollTop);
   const windowBefore=await page.evaluate(()=>({x:scrollX,y:scrollY}));
   await left(page).evaluate(el=>{el.scrollTop=0;});await button.click();

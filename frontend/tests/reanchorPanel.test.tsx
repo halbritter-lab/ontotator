@@ -1,9 +1,46 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { item } from './reanchorFixtures';
 import { ReanchorPanel, pendingDiffParts } from '../src/variants/ReanchorPanel';
+import { historical } from './variantFixtures';
 
 afterEach(cleanup);
+it('shows stale or deleted replacements as pending and preserves exact item identity', () => {
+  const pending=item(), replacement=historical.annotations[0];
+  const resolutions=[{item:{proposal_set_id:pending.proposal_set_id,source_ref:pending.source_ref},outcome:'recreated' as const,
+    replacement:{annotation_id:replacement.annotation.annotation_id,version:replacement.version},reviewer_id:'alice'}];
+  const props={items:[pending,item({proposal_set_id:5})],resolutions,labelFor:()=>null,onContext:()=>{},onRecreate:vi.fn()};
+  const mounted=render(<ReanchorPanel {...props} annotations={[replacement]}/>);
+  expect(screen.getByText('1 pending · 1 resolved')).toBeTruthy();expect(screen.getByText('Re-created')).toBeTruthy();
+  mounted.rerender(<ReanchorPanel {...props} annotations={[{...replacement,version:'edited'}]}/>);
+  expect(screen.getByText('2 pending · 0 resolved')).toBeTruthy();expect(screen.queryByText('Re-created')).toBeNull();
+  mounted.rerender(<ReanchorPanel {...props} annotations={[]}/>);
+  expect(screen.getAllByRole('button',{name:'Re-create here'})).toHaveLength(2);
+  fireEvent.click(screen.getAllByRole('button',{name:'Re-create here'})[1]);expect(props.onRecreate).toHaveBeenCalledWith(item({proposal_set_id:5}));
+});
+it('offers no mutation controls without callbacks', () => {
+  render(<ReanchorPanel items={[item()]} labelFor={() => null} onContext={() => {}} />);
+  expect(screen.queryByRole('button', { name: 'Re-create here' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Dismiss with reason' })).toBeNull();
+});
+it('requires a dismissal reason and retains it after failure and cancellation', async () => {
+  const dismiss = vi.fn().mockRejectedValueOnce(new Error('Save failed')).mockResolvedValue(undefined);
+  render(<ReanchorPanel items={[item()]} labelFor={() => null} onContext={() => {}} onDismiss={dismiss} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss with reason' }));
+  const reason = screen.getByRole('textbox', { name: /Reason for dismissal/ });
+  expect(screen.getByRole('button', { name: 'Save dismissal' })).toHaveProperty('disabled', true);
+  fireEvent.change(reason, { target: { value: '  Corrected text no longer supports this finding.  ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save dismissal' }));
+  await screen.findByText('Save failed');
+  expect(reason).toHaveProperty('value', '  Corrected text no longer supports this finding.  ');
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(dismiss).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss with reason' }));
+  expect(screen.getByRole('textbox')).toHaveProperty('value', '  Corrected text no longer supports this finding.  ');
+  fireEvent.click(screen.getByRole('button', { name: 'Save dismissal' }));
+  await waitFor(() => expect(dismiss).toHaveBeenCalledTimes(2));
+  expect(dismiss).toHaveBeenLastCalledWith(item(), 'Corrected text no longer supports this finding.');
+});
 it('hides empty items and preserves server order, layer identity and literal codepoint mention/cue contexts', () => {
   const reveal = vi.fn();
   const mounted = render(<ReanchorPanel items={[]} labelFor={() => null} onContext={reveal} />);
@@ -56,7 +93,7 @@ it('keeps the term ID beside the resolved label and provides a native collapsibl
 });
 
 it('shows unknown reason codes literally and never resolves inherited object keys',()=>{
-  const unknown=(reason:string)=>item({reason:reason as ReturnType<typeof item>['reason']});
+  const unknown=(reason:string)=>item({source_ref:{annotation_id:reason,version:'v1'},reason:reason as ReturnType<typeof item>['reason']});
   const mounted=render(<ReanchorPanel items={[item(),unknown('<img src=x onerror=alert(1)>'),unknown('toString'),unknown('__proto__')]} labelFor={()=>null} onContext={()=>{}}/>);
   expect(screen.getByRole('heading',{name:'Needs review after the text change (4)'})).toBeTruthy();
   expect(screen.getByText('The evidence text changed.')).toBeTruthy();

@@ -328,8 +328,15 @@ def spanless_decisions_package() -> ValidatedPackage:
     for number, original in enumerate(pkg.annotations.values()):
         if number == 0:
             annotation = original.annotation.model_copy(update={"evidence_refs": []})
-            original = snapshot(annotation, [], pkg.documents[original.document_id], profile)
-        original = snapshot(original.annotation, original.evidence, pkg.documents[original.document_id], profile)
+            original = snapshot(
+                annotation, [], pkg.documents[original.document_id], profile
+            )
+        original = snapshot(
+            original.annotation,
+            original.evidence,
+            pkg.documents[original.document_id],
+            profile,
+        )
         proposals[(original.annotation.annotation_id, original.version)] = original
     pkg.annotations = proposals
     return pkg
@@ -1022,6 +1029,7 @@ def register_reanchor_scenario_route(app: FastAPI) -> None:
         ]
         paragraphs[0] = "Hypotonia. " + paragraphs[0]
         paragraphs[8] = "Seizure 😀old <literal>. " + paragraphs[8]
+        paragraphs[10] = "Another Seizure 😀old finding. " + paragraphs[10]
         old_text = "\n\n".join(paragraphs)
         start = old_text.index("Seizure")
         source = native_unit(
@@ -1033,6 +1041,14 @@ def register_reanchor_scenario_route(app: FastAPI) -> None:
                 annotation("carried", (0, 9), text=old_text, term_id="HP:0001252"),
                 annotation(
                     "refused", (start, start + len("Seizure 😀old")), text=old_text
+                ),
+                annotation(
+                    "refused-second",
+                    (
+                        old_text.index("Seizure", start + 1),
+                        old_text.index("Seizure", start + 1) + len("Seizure 😀old"),
+                    ),
+                    text=old_text,
                 ),
             ],
         )
@@ -1132,6 +1148,7 @@ def register_reanchor_scenario_route(app: FastAPI) -> None:
         for name, role in [
             ("annotator", "annotator"),
             ("adjudicator", "adjudicator"),
+            ("second_reviewer", "adjudicator"),
             ("lead", "lead"),
         ]:
             username = f"{key}-{name}"
@@ -1147,6 +1164,9 @@ def register_reanchor_scenario_route(app: FastAPI) -> None:
         assignment = service.assign(
             Actor.cli(), key, document.document_id, users[owner], task
         )
+        second_assignment = service.assign(
+            Actor.cli(), key, document.document_id, users["second_reviewer"], "review"
+        )
         return {
             "project": key,
             "document_id": document.document_id,
@@ -1157,6 +1177,7 @@ def register_reanchor_scenario_route(app: FastAPI) -> None:
             "users": users,
             "pseudonyms": pseudonyms,
             "assignment_id": assignment.id,
+            "second_assignment_id": second_assignment.id,
             "task": task,
             "import_job_id": imported.id,
             "children": children,

@@ -62,6 +62,8 @@ export type AnnotationVersion = components["schemas"]["AnnotationVersion"];
 export type ReviewWorkspace = components["schemas"]["ReviewWorkspace"];
 export type TranslationReviewRecord = components["schemas"]["TranslationReviewRecord"];
 export type ReanchorItem = components["schemas"]["ReanchorItem"];
+export type PendingReanchorRef = components["schemas"]["PendingReanchorRef"];
+export type ReanchorResolution = components["schemas"]["ReanchorResolution"];
 export type TranslationReviewDraftRequest = components["schemas"]["DraftRequest"];
 export type TranslationReviewDraftResponse = components["schemas"]["DraftResponse"];
 export type TranslationReviewSubmitRequest = components["schemas"]["SubmitRequest"];
@@ -580,6 +582,12 @@ export class ApiClient {
         body: JSON.stringify(envelope),
       }
     );
+  }
+
+  async resolveReanchor(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request<Draft>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/reanchor-resolutions`, {
+      method: "POST", body: JSON.stringify(envelope),
+    });
   }
 
   async recordDecision(

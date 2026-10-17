@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api, type ReanchorItem } from '../api/client';
+import { api, type ReanchorItem, type PendingReanchorRef, type ReanchorResolution, type AnnotationSnapshot } from '../api/client';
 import { ErrorNotice } from '../admin/ErrorNotice';
 import { useTermLabels } from '../editor/useTermLabels';
-import { Button } from '../ui';
+import { Button, Textarea, StatusBadge } from '../ui';
 import { DiffView } from '../translation/DiffView';
 import type { TextDiffPart } from '../translation/textDiff';
 import { toUtf16 } from '../spans/offsets';
@@ -71,19 +71,71 @@ const reasons: Record<ReanchorItem['reason'],string> = {
   evidence_source_mismatch: 'The evidence belongs to another source.', invalid_bounds: 'The evidence offsets are invalid.',
   changed_segment: 'The evidence text changed.', changed_cue: 'The cue text changed.',
 };
-export function ReanchorPanel({ items, labelFor, onContext }: { items: readonly ReanchorItem[]; labelFor: (layer:string,term:string)=>string|null; onContext:(window:Window)=>void }) {
+export const reanchorKey = (item: PendingReanchorRef) => JSON.stringify([item.proposal_set_id,item.source_ref.annotation_id,item.source_ref.version]);
+export const reanchorRef = (item: ReanchorItem): PendingReanchorRef => ({proposal_set_id:item.proposal_set_id,source_ref:item.source_ref});
+/** A changed/deleted replacement requires a fresh explicit resolution. */
+export function currentReanchorResolution(item: PendingReanchorRef, resolutions: readonly ReanchorResolution[], annotations?: readonly AnnotationSnapshot[]) {
+  const resolution = resolutions.find(value => reanchorKey(value.item) === reanchorKey(item));
+  return resolution?.outcome === 'recreated' && annotations && !annotations.some(snapshot =>
+    snapshot.annotation.annotation_id === resolution.replacement?.annotation_id && snapshot.version === resolution.replacement.version)
+    ? undefined : resolution;
+}
+type PanelProps = { items: readonly ReanchorItem[]; labelFor: (layer:string,term:string)=>string|null; onContext:(window:Window)=>void;
+  resolutions?:readonly ReanchorResolution[]; annotations?:readonly AnnotationSnapshot[]; busy?:boolean;
+  onRecreate?:(item:ReanchorItem)=>void; onDismiss?:(item:ReanchorItem,reason:string)=>Promise<void>;
+  recreateUnavailableReason?:(item:ReanchorItem)=>string|undefined;
+};
+function ResolutionActions({item,resolution,busy,onRecreate,onDismiss,onResolved,recreateUnavailableReason}: Pick<PanelProps,'busy'|'onRecreate'|'onDismiss'|'recreateUnavailableReason'> & {
+  item:ReanchorItem; resolution:ReanchorResolution|undefined; onResolved:()=>void;
+}) {
+  const [editing,setEditing]=useState(false), [reason,setReason]=useState(''), [saving,setSaving]=useState(false), [error,setError]=useState<unknown>();
+  const input=useRef<HTMLTextAreaElement>(null), trigger=useRef<HTMLButtonElement>(null);
+  const unavailable=recreateUnavailableReason?.(item) ?? (!item.type_id ? 'The original finding type is unavailable for re-creation. You can still dismiss this finding with a reason.' : undefined);
+  useEffect(()=>{if(editing)input.current?.focus();},[editing]);
+  if(resolution) return <div><StatusBadge tone="success">{resolution.outcome === 'dismissed' ? 'Dismissed' : 'Re-created'}</StatusBadge>
+    <p>Reviewed by {resolution.reviewer_id}{resolution.reason ? `: ${resolution.reason}` : ''}</p>
+    {resolution.replacement && <p>Replacement: {resolution.replacement.annotation_id} ({resolution.replacement.version})</p>}</div>;
+  const cancel=()=>{setEditing(false);setError(undefined);trigger.current?.focus();};
+  return <div>
+    {(onRecreate || onDismiss) && <StatusBadge tone="warning">Pending</StatusBadge>}
+    {onRecreate && <Button disabled={busy || saving || !!unavailable} onClick={()=>onRecreate(item)}>Re-create here</Button>}
+    {onRecreate && unavailable && <p>{unavailable}</p>}
+    {onDismiss && <Button ref={trigger} disabled={busy || saving} onClick={()=>setEditing(true)}>Dismiss with reason</Button>}
+    {editing && onDismiss && <form onSubmit={event=>{
+      event.preventDefault(); if(!reason.trim() || saving || busy)return;
+      setSaving(true);setError(undefined);
+      void onDismiss(item,reason.trim()).then(()=>{setEditing(false);onResolved();},setError).finally(()=>setSaving(false));
+    }}>
+      <Textarea ref={input} id={`reanchor-reason-${encodeURIComponent(reanchorKey(item))}`} label="Reason for dismissal" required value={reason}
+        onChange={event=>setReason(event.target.value)} disabled={saving} />
+      {error !== undefined && <ErrorNotice error={error}/>}
+      <Button type="submit" loading={saving} disabled={busy || !reason.trim()}>Save dismissal</Button>
+      <Button disabled={saving} onClick={cancel}>Cancel</Button>
+    </form>}
+  </div>;
+}
+export function ReanchorPanel({ items, labelFor, onContext, resolutions=[], annotations, busy, onRecreate, onDismiss, recreateUnavailableReason }: PanelProps) {
+  const root=useRef<HTMLOListElement|null>(null);
   if (!items.length) return null;
+  const pending=items.filter(item=>!currentReanchorResolution(item,resolutions,annotations)).length;
   return <section className="reanchor-panel detail-section" aria-label="Needs review after the text change">
     <details open><summary><h3>Needs review after the text change ({items.length})</h3></summary>
-    <ol>{items.map((item,index) => {
+    {(onRecreate || onDismiss || resolutions.length>0) && <p role="status">{pending} pending · {items.length-pending} resolved</p>}
+    <ol ref={root}>{items.map((item,index) => {
       const parts = pendingDiffParts(item);
       const label = labelFor(item.layer_id,item.term_id);
-      return <li key={JSON.stringify([item.proposal_set_id,item.source_ref.annotation_id,item.source_ref.version,index])}>
+      const resolution=currentReanchorResolution(item,resolutions,annotations);
+      return <li key={reanchorKey(item)} data-reanchor-item={reanchorKey(item)} data-reanchor-pending={!resolution}>
         <Button variant="quiet" onClick={() => onContext(item.new_context)}>{label && label !== item.term_id ? `${label} (${item.term_id})` : item.term_id} · {item.layer_id}</Button>
         <p>{Object.prototype.hasOwnProperty.call(reasons, item.reason) ? reasons[item.reason] : `Unknown reason: ${item.reason}`}</p>
         <p>Old context</p><div className="reanchor-context" data-old-context data-context-start={item.old_context.start}>{oldContext(item)}</div>
         <p>New context</p><div className="reanchor-context">{validWindow(item.new_context) ? item.new_context.text : 'New context is unavailable.'}</div>
         {parts ? <div data-old-start={item.old_context.start} data-new-start={item.new_context.start}><DiffView before={item.old_context.text} after={item.new_context.text} parts={parts} /></div> : <p>Text changes are unavailable.</p>}
+        <ResolutionActions item={item} resolution={resolution} busy={busy} onRecreate={onRecreate} onDismiss={onDismiss} recreateUnavailableReason={recreateUnavailableReason} onResolved={()=>{
+          const rows=[...(root.current?.querySelectorAll<HTMLElement>('[data-reanchor-item]') ?? [])];
+          const next=rows.slice(index+1).concat(rows.slice(0,index)).find(row=>row.dataset.reanchorPending==='true');
+          (next ?? rows[index])?.querySelector<HTMLButtonElement>('button')?.focus();
+        }}/>
       </li>;
     })}</ol></details>
   </section>;
