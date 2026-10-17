@@ -1,7 +1,7 @@
 import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
-import { api, ConflictError, ValidationError, type Draft } from "../src/api/client";
+import { api, AuthError, ConflictError, ValidationError, type Draft } from "../src/api/client";
 
 it("never pre-fills clinical axis values (no assertion default for HPO terms)", () => {
   const axes = [
@@ -195,6 +195,57 @@ describe("CaseScreen integration", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
       state.rendered.unmount();
       expect(state.leaveGuardRef.current).toBeNull();
+    });
+  });
+
+  describe("annotation note transport recovery", () => {
+    const failures = [new TypeError("Failed to fetch"), new AuthError("Session ended", {}, "NOT_AUTHENTICATED", 401)];
+    const setup = (failure: Error) => {
+      const view = withEditableFinding(structuredClone(sampleView));
+      const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
+      const leaveGuardRef = { current: null as ((proceed: () => void) => void) | null };
+      const logout = vi.fn();
+      const apply = vi.spyOn(api, "applyCommand").mockRejectedValueOnce(failure).mockImplementation(async (_workspace, envelope) => {
+        const result = structuredClone(view.draft); result.revision = envelope.expected_revision + 1;
+        result.annotations![0].annotation.note = envelope.payload.note as string;
+        result.annotations![0].version = `note-${result.revision}`; return result;
+      });
+      render(<CaseScreen view={view} workspaceId="ws-note-transport" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} />);
+      selectEditableFinding();
+      fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Retained transport note" } });
+      fireEvent.blur(screen.getByLabelText("Annotation note"));
+      return { routeLeaveRef, leaveGuardRef, logout, apply };
+    };
+
+    it.each(failures)("navigation can cancel and then discard a retained note after %s", async failure => {
+      const state = setup(failure); await screen.findByRole("button", { name: "Retry" });
+      let departure!: Promise<boolean>;
+      act(() => { departure = state.routeLeaveRef.current!(); });
+      await screen.findByRole("dialog", { name: "Changes not saved" });
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      await act(async () => { expect(await departure).toBe(false); });
+      expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Retained transport note");
+      act(() => { departure = state.routeLeaveRef.current!(); });
+      fireEvent.click(await screen.findByRole("button", { name: "Discard edits and leave" }));
+      await act(async () => { expect(await departure).toBe(true); });
+      const unloading = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(unloading);
+      expect(unloading.defaultPrevented).toBe(false);
+      expect(state.apply).toHaveBeenCalledOnce();
+    });
+
+    it.each(failures)("logout releases a failed note flush and retry saves the latest text after %s", async failure => {
+      const state = setup(failure); await screen.findByRole("button", { name: "Retry" });
+      fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Latest local explanation" } });
+      act(() => state.leaveGuardRef.current?.(state.logout));
+      fireEvent.click(await screen.findByRole("button", { name: "Save and log out" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).toBeNull());
+      expect(state.logout).not.toHaveBeenCalled();
+      expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Latest local explanation");
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      await screen.findByText(/^Saved$/);
+      expect(state.apply).toHaveBeenLastCalledWith("ws-note-transport", expect.objectContaining({ payload: expect.objectContaining({ note: "Latest local explanation" }) }));
+      act(() => state.leaveGuardRef.current?.(state.logout));
+      expect(state.logout).toHaveBeenCalledOnce();
     });
   });
 
@@ -995,6 +1046,39 @@ describe("CaseScreen integration", () => {
     expect((within(retry).getByLabelText(/Reason for no text span/) as HTMLTextAreaElement).value).toBe("History supports the finding");
     fireEvent.click(within(retry).getByRole("button", { name: "Cancel" }));
     expect(apply).toHaveBeenCalledOnce();
+  });
+
+  it("editing a reason on a required-evidence copy waits for a mention before approving the replacement", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true });
+    view.layers![0].annotation_types[0].evidence_policy = "required_on_complete";
+    const copy = view.draft.annotations![0]; copy.annotation.note = "Initial reason";
+    const source = structuredClone(copy); source.annotation.annotation_id = "source-proposal"; source.version = "source-version";
+    copy.annotation.provenance.source_refs = ["source-proposal:source-version"];
+    view.available_inputs = [source]; view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: "source-proposal", version: "source-version" };
+    view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    const noted = structuredClone(view.draft); noted.revision = 1; noted.annotations![0].version = "noted-copy";
+    noted.annotations![0].annotation.note = "Revised reason before supporting text";
+    const supported = structuredClone(noted); supported.revision = 2; supported.annotations![0].version = "supported-copy";
+    supported.annotations![0].annotation.evidence_refs = [{ evidence_id: "support", version: "support-v" }];
+    supported.evidence = [{ version: "support-v", mention: { evidence_id: "support", segments: [{ start: 0, end: 3 }] } }] as any;
+    const apply = vi.spyOn(api, "applyCommand").mockResolvedValueOnce(noted).mockResolvedValueOnce(supported);
+    const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...supported, revision: 3 });
+    const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
+    render(<CaseScreen view={view} workspaceId="ws-required-copy" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
+    selectEditableFinding();
+    fireEvent.change(screen.getByLabelText(/Reason for no text span/), { target: { value: "Revised reason before supporting text" } });
+    fireEvent.blur(screen.getByLabelText(/Reason for no text span/));
+    await screen.findByText(/^Saved$/); expect(decide).not.toHaveBeenCalled(); expect(apply).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "+ Add Mention" }));
+    const text = document.querySelector(".text-container")!;
+    const node = text.querySelector(".run")!.firstChild!;
+    const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 3);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range); fireEvent.mouseUp(text);
+    await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-required-copy", expect.objectContaining({ payload: expect.objectContaining({ target, outcome: "changed", replacement: { annotation_id: "pending-finding", version: "supported-copy" } }) })));
+    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Revised reason before supporting text");
+    await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
   });
 
   it("reset preserves note text when an earlier blurred note save finishes afterward", async () => {

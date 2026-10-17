@@ -190,6 +190,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const ann = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === id)?.annotation;
     return ann && note !== (ann.note ?? "");
   });
+  const invalidAnnotationNotes = () => unsavedAnnotationNotes().filter(([id, note]) => {
+    const ann = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === id)?.annotation;
+    return view.enforce_spanless_rules && ann && !ann.evidence_refs?.length && !note.trim();
+  });
   const [isAttachingMention, setIsAttachingMention] = useState(false);
   const [textResyncToken, setTextResyncToken] = useState(0);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -531,12 +535,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const saveAndLogout = async () => {
     if (!logoutProceed || logoutSaving) return;
-    try { for (const [id] of unsavedAnnotationNotes()) await saveAnnotationNote(id); } catch (error) { reportError(error); setLogoutProceed(null); return; }
-    if (unsavedAnnotationNotes().length > 0) { setActionError("A reason is required for findings without a text span."); setLogoutProceed(null); return; }
+    if (invalidAnnotationNotes().length > 0) { setActionError("A reason is required for findings without a text span."); setLogoutProceed(null); return; }
     if (invalidReviewNoteGuard.current()) { setLogoutProceed(null); return; }
     setLogoutSaving(true);
     try {
-      await queueRef.current.flush();
+      await flushAnnotationNotes();
       if (queueRef.current.rejectedCount() !== logoutRejectedBaseline.current) {
         setActionError((current) => current ?? "A change could not be saved; you are still logged in.");
         return;
@@ -561,11 +564,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (leaveInProgress.current) return false;
     leaveInProgress.current = true;
     try {
-      try { for (const [id] of unsavedAnnotationNotes()) await saveAnnotationNote(id); } catch (error) { reportError(error); return false; }
-      if (!readOnlyRef.current && unsavedAnnotationNotes().length > 0) {
+      const invalidLocalAnnotationNotes = !readOnlyRef.current ? invalidAnnotationNotes() : [];
+      if (invalidLocalAnnotationNotes.length > 0) {
         const discard = await askConfirm("Changes not saved", "Annotation notes have unsaved edits. A reason is required when no text span is linked. Leaving discards these local edits.", "Discard edits and leave");
         if (!discard) return false;
-        setAnnotationNoteDrafts({}); annotationNoteDraftsRef.current = {};
+        const kept = { ...annotationNoteDraftsRef.current };
+        for (const [id] of invalidLocalAnnotationNotes) delete kept[id];
+        annotationNoteDraftsRef.current = kept; setAnnotationNoteDrafts(kept);
       }
       const invalidLocalNotes = !readOnlyRef.current ? (latestDraft.current.decisions ?? []).filter(d => {
         const local = noteDraftsRef.current[refKey(d.target)];
@@ -586,7 +591,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         return false;
       }
       try {
-        await queueRef.current.flush();
+        await flushAnnotationNotes();
         if (queueRef.current.rejectedCount() !== rejectedBefore) {
           setActionError("A change could not be saved. Reload the case before leaving.");
           return false;
@@ -605,6 +610,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         );
         if (!ok) return false;
         queueRef.current.discardPending();
+        annotationNoteDraftsRef.current = {}; setAnnotationNoteDrafts({});
       }
       try {
         await action();
@@ -827,6 +833,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const current = latestDraft.current;
     const ann = (current.annotations ?? []).find((a) => a.annotation.annotation_id === annotationId);
     if (!ann) return;
+    const type = view.layers?.find(layer => layer.layer_id === ann.annotation.layer_id)?.annotation_types.find(item => item.type_id === ann.annotation.type_id);
+    // Intermediate copies stay editable; approval waits for the profile's evidence.
+    if (type?.evidence_policy === "required_on_complete" && !ann.annotation.evidence_refs?.length) return;
     const decisions = current.decisions ?? [];
     let decision = decisions.find((d) => d.outcome === "changed" && d.replacement?.annotation_id === annotationId);
     let target: { annotation_id: string; version: string } | null = decision?.target ?? null;
@@ -869,6 +878,29 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     })();
     annotationNoteSaves.current.set(id, save);
     try { await save; } finally { annotationNoteSaves.current.delete(id); }
+  };
+
+  /** Drain saved-note continuations through the queue's error-aware flush path.
+   * Transport/session failures deliberately keep enqueue promises pending for retry.
+   */
+  const flushAnnotationNotes = async () => {
+    const requested = new Set<string>();
+    const rejectedBefore = queueRef.current.rejectedCount();
+    while (true) {
+      if (readOnlyRef.current) { await queueRef.current.flush(); return; }
+      const invalid = new Set(invalidAnnotationNotes().map(([id]) => id));
+      for (const [id] of unsavedAnnotationNotes()) {
+        if (!invalid.has(id) && (!requested.has(id) || !annotationNoteSaves.current.has(id))) {
+          requested.add(id); void saveAnnotationNote(id).catch(reportError);
+        }
+      }
+      await queueRef.current.flush();
+      // A domain rejection is reported by its save continuation; do not retry it.
+      if (queueRef.current.rejectedCount() !== rejectedBefore) return;
+      // A save can enqueue a newer note or replacement after an earlier drain.
+      const saveableNotes = unsavedAnnotationNotes().some(([id]) => !invalid.has(id));
+      if (annotationNoteSaves.current.size === 0 && !saveableNotes) return;
+    }
   };
 
   // Text selection handler
@@ -1383,7 +1415,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       );
       return;
     }
-    if ((reason?.trim() || supportingSegments?.length) && !(typeDef?.evidence_policy === "required_on_complete" && firstSegments.length === 0)) {
+    if (reason?.trim() || supportingSegments?.length) {
       try { await syncReplacementDecision(newAnnId); } catch (error) { reportError(error); }
     }
     setPendingEvidenceAdoption(null);
@@ -1481,8 +1513,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const handleSubmitWorkspace = async () => {
     if (readOnlyRef.current) return;
     setSubmitError(null);
-    try { for (const [id] of unsavedAnnotationNotes()) await saveAnnotationNote(id); } catch (error) { reportError(error); return; }
-    if (unsavedAnnotationNotes().length > 0) { setSubmitError("A reason is required for findings without a text span."); return; }
+    if (invalidAnnotationNotes().length > 0) { setSubmitError("A reason is required for findings without a text span."); return; }
     if (blockInvalidUnresolvedNotes()) return;
 
     // Validate only after pending saves have finished;
@@ -1490,7 +1521,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const rejectedBefore = queueRef.current.rejectedCount();
     setSubmitPending(true);
     try {
-      await queueRef.current.flush();
+      await flushAnnotationNotes();
     } catch (error) { reportError(error); return; } finally { setSubmitPending(false); }
     // A save the server refused shows its own error, but a later edit clears that one;
     // keep the reason why the case was not submitted.
