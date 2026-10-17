@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { api, type ReanchorItem, type ProposalSetView } from '../src/api/client';
+import { api, type ReanchorItem, type ProposalSetView, type ProjectSummary } from '../src/api/client';
 import { CaseScreen } from '../src/app/CaseScreen';
 import { CaseViewer } from '../src/variants/CaseViewer';
 import { PendingReanchorPanel } from '../src/variants/ReanchorPanel';
@@ -8,6 +8,10 @@ import { workspaceFixture } from './assignments';
 import { caseDetail, historical, ownRef } from './variantFixtures';
 import { refKey } from '../src/variants/versionState';
 import { item } from './reanchorFixtures';
+const leadProject: ProjectSummary = {
+  project_key: 'pkg', name: 'Reanchor browser project', description: null,
+  roles: ['lead'], allowed_modes: [], document_count: 3, can_manage: true,
+};
 beforeEach(()=>{
   vi.spyOn(api,'getCase').mockResolvedValue(caseDetail); vi.spyOn(api,'resolveTermLabels').mockResolvedValue([]);vi.spyOn(api,'listMyTasks').mockResolvedValue([]);
   vi.spyOn(api,'getVariantText').mockImplementation(async (_project,doc)=>({document_id:doc,text:'Immutable '+doc,text_sha256:'text'}));
@@ -37,6 +41,7 @@ it('uses inline actual-workspace offered metadata without ordinary public prefet
   await act(async()=>{});expect(get).not.toHaveBeenCalled();expect(api.getReanchorItems).not.toHaveBeenCalled();
 });
 it('loads viewer pending items only for an actually offered proposal ref, never Text only or own versions',async()=>{
+  vi.spyOn(api,'listProjects').mockResolvedValue([leadProject]);
   const props={projectKey:'pkg',caseId:caseDetail.case_id,variant:'target',username:'alice',onNavigate:vi.fn()};
   const mounted=render(<CaseViewer {...props}/>);await screen.findByText('Immutable target');expect(api.getReanchorItems).not.toHaveBeenCalled();
   mounted.rerender(<CaseViewer {...props} annotations={refKey(ownRef)}/>);await screen.findByText('HP:old');expect(api.getReanchorItems).not.toHaveBeenCalled();
@@ -56,6 +61,7 @@ it('ignores old pending replies after document/ref/permission context replacemen
 });
 
 it('retains the actual selected document identity for an offered pending-only proposal ref with no annotations',async()=>{
+  vi.spyOn(api,'listProjects').mockResolvedValue([leadProject]);
   vi.mocked(api.getAnnotationVersion).mockResolvedValue({ref:{...ownRef,kind:'proposals',id:'4'},annotations:[],evidence:[]});
   render(<CaseViewer projectKey="pkg" caseId={caseDetail.case_id} variant="target" username="alice" onNavigate={()=>{}} annotations={refKey({kind:'proposals',id:'4'})}/>);
   await screen.findByRole('heading',{name:'Needs review after the text change (1)'});

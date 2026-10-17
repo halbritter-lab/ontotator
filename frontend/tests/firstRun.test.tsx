@@ -2,19 +2,28 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../src/api/client";
+import { api, type ProjectSummary } from "../src/api/client";
 import { App } from "../src/App";
-import { CaseScreen } from "../src/app/CaseScreen";
+import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
 import { loggedInAs } from "./session";
-import { assigned, assignedList } from "./assignments";
+import { assigned, assignedList, workspaceFixture } from "./assignments";
 
-const view = () => ({
-  document: { document_id: "doc-2", text: "Patient has seizures.", language: "en", text_sha256: "x" },
-  key: { project_key: "pkg", document_id: "doc-2", annotator_id: "JPL", mode: "independent" as const, scope_id: "s", target_set_id: "t" },
-  scope: { scope_id: "s", mode: "independent" as const, editable_layer_ids: ["phenotype"], reference_layer_ids: [] },
-  draft: { schema_version: "ontocurator-draft/v3" as const, revision: 7, annotations: [], decisions: [] },
-  layers: [{ layer_id: "phenotype", label: "Phenotype", access: "editable" as const, default_visible: true, default_type_id: "default", annotation_types: [] }],
-}) as any;
+const view = (): WorkspaceView => {
+  const fixture = workspaceFixture("doc-2").view;
+  const key = { ...fixture.key, annotator_id: "JPL", target_set_id: "t" };
+  const targets = { ...fixture.targets, target_set_id: "t" };
+  return {
+    ...fixture, key, targets,
+    document: { ...fixture.document, text_sha256: "x" },
+    draft: { ...fixture.draft, key, targets, revision: 7 },
+    layers: fixture.layers?.filter(layer => layer.layer_id === "phenotype"),
+  };
+};
+const project: ProjectSummary = {
+  project_key: "pkg", name: "First run project", description: null,
+  roles: ["annotator"], allowed_modes: ["independent", "assisted"],
+  document_count: 1, can_manage: false,
+};
 
 afterEach(() => {
   cleanup();
@@ -26,7 +35,7 @@ describe("editor and page polish", () => {
   it("editor_shell_routes_logout_through_the_leave_guard", async () => {
     loggedInAs("JPL");
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: null, mode_by_package: {} });
-    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([project]);
     assignedList(view());
     vi.spyOn(api, "listOntologies").mockResolvedValue([]);
     vi.spyOn(api, "openAssignment").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: view() }));
