@@ -592,6 +592,8 @@ T4b continues this flow with adjudication; T4b with the release.
 
 **Commit rule in Part 2:** per task, `npm --prefix frontend run typecheck && npm --prefix frontend test`. Backend tasks also run `uv run ruff check --fix src tests && uv run ruff format src tests && uv run mypy src`. Then one conventional commit without AI attribution.
 
+**UX items deferred to Part 2:** the editor label and focus fixes listed under "Deferred to T4a" in `docs/superpowers/reviews/2026-10-17-ux-critique.md` belong to the tasks that touch `CaseScreen` and `AnnotationPanel`.
+
 **File names from T3b and T5:** this plan refers to the T3b "My tasks" route component and the T5 task route by their routes (`#/`, `#/tasks/:assignment`). Use the file names those plans created; do not create parallel components.
 
 ---
