@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { components } from "../api/generated";
 import { Button, Checkbox, Dialog, InlineMessage } from "../ui";
+import { formatDateTime } from "../app/labels";
 
 export type CodeOnceDialogProps = components["schemas"]["CodeResponse"] & {
   open: boolean;
@@ -40,7 +41,7 @@ function CodeSession({ code, expires_at, kind, onClose }: CodeOnceDialogProps): 
     footer={<Button variant="primary" disabled={!acknowledged} onClick={close}>Close</Button>}>
     <p>This code is shown only once. Hand it over in person or by a secure channel.</p>
     <p><code>{code}</code></p>
-    <p>Expires (local time): <time dateTime={expires_at}>{new Date(expires_at).toLocaleString()}</time></p>
+    <p>Expires (local time): <time dateTime={expires_at}>{formatDateTime(expires_at)}</time></p>
     <Button loading={copy === "pending"} onClick={() => { void copyCode(); }}>{copy === "copied" ? "Copied" : "Copy"}</Button>
     {copy === "copied" && <InlineMessage tone="success">Copied to clipboard.</InlineMessage>}
     {copy === "failed" && <InlineMessage tone="error">Could not copy to the clipboard. Select and copy the code manually.</InlineMessage>}

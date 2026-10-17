@@ -49,9 +49,9 @@ it("discards late task metadata after changing user and assignment", async () =>
 it("labels translation tasks with actual source/target languages and external identity", async () => {
   vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 17, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "submitted", updated_at: "2026-10-16T12:00:00Z" }]);
   render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
-  expect(await screen.findByText("Review translation en → de")).toBeDefined();
+  expect(await screen.findByText("Translation review (en to de)")).toBeDefined();
   expect(screen.getByText("EN 1/7")).toBeDefined();
-  expect(screen.getByRole("link", { name: "Open" }).getAttribute("href")).toBe("#/tasks/17");
+  expect(screen.getByRole("link", { name: "View" }).getAttribute("href")).toBe("#/tasks/17");
 });
 it("edits own qualification and sends only its changed field", async () => {
   vi.spyOn(api, "getProfile").mockResolvedValue(profile);

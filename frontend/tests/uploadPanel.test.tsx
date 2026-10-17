@@ -40,7 +40,7 @@ it("requires text language and obtains the persisted preview after the job", asy
   const file = await check();
   expect(api.createUpload).toHaveBeenCalledWith("p", "text", [file], "en");
   expect(api.getUpload).toHaveBeenCalledWith("p", 7);
-  expect(screen.getByText(/8 added/)).toBeTruthy();
+  expect(screen.getByText(/8 documents added/)).toBeTruthy();
 });
 it("commits the exact persisted hash and reports actual final job counts", async () => {
   const imported = vi.fn(); render(<UploadPanel projectKey="p" languages={["en"]} onImported={imported} />);
@@ -198,7 +198,7 @@ it("renders blocking issues, collisions, duplicates, normalization, tool provena
   };
   render(<UploadPreview plan={detailed} />);
   expect(screen.getByRole("alert").textContent).toContain("T1_TOOL_PROVENANCE");
-  for (const text of ["x.json", "ann", "aaaaaaaaaaaa", "bbbbbbbbbbbb", "other", "1 normalised", "Recognizer", "Already imported", "hidden_axis_value", "certainty", "Imported note", "Ontospan warning"]) expect(screen.getAllByText(new RegExp(text)).length).toBeGreaterThan(0);
+  for (const text of ["x.json", "ann", "aaaaaaaaaaaa", "bbbbbbbbbbbb", "other", "1 with normalized text", "Recognizer", "Already imported", "hidden_axis_value", "certainty", "Imported note", "Ontospan warning"]) expect(screen.getAllByText(new RegExp(text)).length).toBeGreaterThan(0);
 });
 it("counts distinct refused proposals per set while retaining every violated rule", () => {
   const proposalSet: NonNullable<ImportPlan["proposal_sets"]>[number] = {

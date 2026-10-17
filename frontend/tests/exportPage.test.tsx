@@ -6,7 +6,7 @@ import { ExportPage } from "../src/admin/ExportPage";
 const user: CurrentUser = { username: "lead", display_name: "Lead", pseudonym: "L", csrf_token: "csrf", is_system_admin: false };
 const job = (id: number, kind = "t1_export", status: JobView["status"] = "succeeded"): JobView => ({ id, kind, status, result: { path: "never-use-this-path" }, error: status === "failed" ? "EXPORT_FAILED: source missing" : null, created_at: "2026-10-16T10:00:00Z", finished_at: "2026-10-16T10:01:00Z" });
 const storageKey = (username = "lead", project = "p", kind = "t1") => `ontocurator:export:${JSON.stringify([username, project, kind])}`;
-const card = (title = "Annotation results (T1 bundle)") => within(screen.getByRole("region", { name: title }));
+const card = (title = "Annotation results") => within(screen.getByRole("region", { name: title }));
 beforeEach(() => {
   sessionStorage.clear();
   vi.spyOn(api, "startExport").mockImplementation(async (_key, kind) => ({ job_id: kind === "t1" ? 11 : 22 }));
@@ -22,8 +22,8 @@ it("starts actual export kinds, remembers namespaced IDs and downloads freshly a
   await waitFor(() => expect(downloads.saveDownload).toHaveBeenCalledWith(expect.objectContaining({ filename: "actual-server.zip" }), expect.stringMatching(/\.zip$/)));
   expect(api.startExport).toHaveBeenCalledWith("p", "t1"); expect(api.downloadJob).toHaveBeenCalledWith(11);
   expect(sessionStorage.getItem(storageKey())).toBe("11");
-  fireEvent.click(card("Edit log (JSONL)").getByRole("button", { name: "Create export" }));
-  await card("Edit log (JSONL)").findByRole("button", { name: "Download" });
+  fireEvent.click(card("Edit log").getByRole("button", { name: "Create export" }));
+  await card("Edit log").findByRole("button", { name: "Download" });
   expect(api.startExport).toHaveBeenCalledWith("p", "edit_log"); expect(sessionStorage.getItem(storageKey("lead", "p", "edit_log"))).toBe("22");
 });
 it("restores a persisted job without starting a new export and surfaces failed terminal data", async () => {
@@ -60,7 +60,7 @@ it("isolates remembered jobs across users, projects and kind, rejecting stale cr
   expect(api.getJob).not.toHaveBeenCalled(); expect(sessionStorage.getItem(storageKey("lead", "old"))).toBeNull();
   sessionStorage.setItem(storageKey("lead", "old"), "11");
   rerender(<ExportPage projectKey="old" currentUser={user} />); await card().findByRole("button", { name: "Download" });
-  expect(api.getJob).toHaveBeenCalledWith(11); expect(card("Edit log (JSONL)").queryByRole("button", { name: "Download" })).toBeNull();
+  expect(api.getJob).toHaveBeenCalledWith(11); expect(card("Edit log").queryByRole("button", { name: "Download" })).toBeNull();
 });
 it("blocks duplicate creates/downloads and ignores binary replies after unmount", async () => {
   let resolveCreate!: (value: { job_id: number }) => void;

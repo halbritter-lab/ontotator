@@ -74,7 +74,7 @@ it("uses the real Export create request and displays its server denial", async (
   window.history.replaceState(null, "", "#/projects/p%2Fkey/export");
   vi.spyOn(api, "startExport").mockRejectedValue(new ApiError(403, "private", "NOT_ALLOWED"));
   render(<App user={user} />);
-  const card = await screen.findByRole("region", { name: "Annotation results (T1 bundle)" });
+  const card = await screen.findByRole("region", { name: "Annotation results" });
   fireEvent.click(within(card).getByRole("button", { name: "Create export" }));
   await screen.findByText("You do not have access to this page.");
   expect(api.startExport).toHaveBeenCalledWith("p/key", "t1");

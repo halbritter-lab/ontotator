@@ -7,6 +7,9 @@ import { UploadPanel } from "./UploadPanel";
 import { AssignDialog } from "./AssignDialog";
 import { DistributionDialog } from "./DistributionDialog";
 import { AssignmentActions } from "./AssignmentActions";
+import { AssigneeSummary } from "./assignmentUI";
+import { assignmentStatusLabels, formatDateTime, labelFor } from "../app/labels";
+import { categoryLabels, decisionLabels } from "../translation/labels";
 import { originLabels, translationStatusLabels } from "./variantMetadata";
 
 export interface DocumentsPageProps { projectKey: string; query: ProjectDocumentsQuery; onNavigate: (route: Route) => void; canOverrideTranslationStatus?: boolean; currentUser?: Pick<CurrentUser, "username"> }
@@ -78,9 +81,10 @@ function DocumentEditor({ projectKey, query, onNavigate, canOverrideTranslationS
   const toggle = (id: string) => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const assignmentsChanged = (identity: string) => { if (currentSelection.current === identity) setRevision(value => value + 1); };
   const columns: Column<ProjectDocumentSummary>[] = [
-    { id: "select", header: <Checkbox id="documents-all" label="Select all visible" disabled={!rows.length || loading} checked={rows.length > 0 && rows.every(doc => selected.has(doc.document_id))} onChange={event => setSelected(new Set(event.target.checked ? rows.map(doc => doc.document_id) : []))} />, cell: doc => <Checkbox id={`document-select-${encodeURIComponent(doc.document_id)}`} label={`Select ${doc.document_id}`} checked={selected.has(doc.document_id)} onChange={() => toggle(doc.document_id)} /> },
+    { id: "select", header: <Checkbox id="documents-all" label={<span className="visually-hidden">Select all visible</span>} disabled={!rows.length || loading} checked={rows.length > 0 && rows.every(doc => selected.has(doc.document_id))} onChange={event => setSelected(new Set(event.target.checked ? rows.map(doc => doc.document_id) : []))} />, cell: doc => <Checkbox id={`document-select-${encodeURIComponent(doc.document_id)}`} label={<span className="visually-hidden">Select {doc.document_id}</span>} checked={selected.has(doc.document_id)} onChange={() => toggle(doc.document_id)} /> },
     { id: "id", header: "Document ID", cell: doc => doc.document_id },
-    { id: "external-id", header: "External ID", cell: doc => doc.external_id },
+    // The external ID only adds information when some row's differs from its document ID.
+    ...(rows.some(doc => doc.external_id && doc.external_id !== doc.document_id) ? [{ id: "external-id", header: "External ID", cell: (doc: ProjectDocumentSummary) => doc.external_id }] : []),
     { id: "case", header: "Case", cell: doc => {
       if (typeof doc.case_id !== "string") return null;
       const destination: Route = { name: "projectCase", key: projectKey, caseId: doc.case_id, variant: doc.document_id };
@@ -94,16 +98,16 @@ function DocumentEditor({ projectKey, query, onNavigate, canOverrideTranslationS
     { id: "origin", header: "Origin", cell: doc => originLabels[doc.origin] },
     { id: "translation-status", header: "Translation status", cell: doc => <span title={doc.status_reason ?? undefined}>{doc.accepted_without_review ? "Accepted without review" : doc.translation_status ? translationStatusLabels[doc.translation_status] : "—"}</span> },
     { id: "reviews", header: "Reviews", cell: doc => doc.translation_status != null ? <Button size="sm" onClick={() => setReviewDocument(doc.document_id)} aria-label={`Reviews for ${doc.document_id}`}>Reviews</Button> : null },
-    { id: "assignees", header: "Assignees", cell: doc => doc.assignees?.length ? <ul>{doc.assignees.map(assignee => {
+    { id: "assignees", header: "Assignees", cell: doc => doc.assignees?.length ? <ul className="assignee-list">{doc.assignees.map(assignee => {
       const actual = assignments.find(item => item.id === assignee.assignment_id && item.document_id === doc.document_id && item.project_key === projectKey && !item.revoked_at);
-      return <li key={assignee.assignment_id}><span>{assignee.pseudonym}: {assignee.task} {assignee.status}</span>{actual && <AssignmentActions assignment={actual} members={members} onChanged={() => assignmentsChanged(selectionIdentity)} />}</li>;
+      return <li key={assignee.assignment_id}><AssigneeSummary name={members.find(member => member.username === assignee.username)?.display_name} {...assignee} />{actual && <AssignmentActions assignment={actual} members={members} onChanged={() => assignmentsChanged(selectionIdentity)} />}</li>;
     })}</ul> : "Unassigned" },
   ];
   return <section>
     <h1>Documents</h1>
-    <Toolbar label="Document filters">
+    <Toolbar label="Document filters" className="filter-bar">
       <Select id="documents-language" label="Language" value={query.language ?? ""} onChange={event => navigate({ language: event.target.value || undefined })}><option value="">All languages</option>{[...new Set([...(settings?.languages ?? []), ...rows.map(doc => doc.language), ...(query.language ? [query.language] : [])])].map(value => <option key={value} value={value}>{value}</option>)}</Select>
-      <Select id="documents-status" label="Status" value={status ?? ""} onChange={event => navigate({ status: event.target.value || undefined })}><option value="">All statuses</option>{statuses.map(value => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</Select>
+      <Select id="documents-status" label="Status" value={status ?? ""} onChange={event => navigate({ status: event.target.value || undefined })}><option value="">All statuses</option>{statuses.map(value => <option key={value} value={value}>{labelFor(assignmentStatusLabels, value)}</option>)}</Select>
       <TextInput id="documents-prefix" label="ID prefix" value={query.q ?? ""} onChange={event => navigate({ q: event.target.value || undefined })} />
       <Select id="documents-origin" label="Origin" value={origin ?? ""} onChange={event => navigate({ origin: event.target.value || undefined })}><option value="">All origins</option>{Object.entries(originLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
       <Select id="documents-translation-status" label="Translation status" value={translationStatus ?? ""} onChange={event => navigate({ translation_status: event.target.value || undefined })}><option value="">All translation statuses</option>{Object.entries(translationStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
@@ -133,9 +137,15 @@ function ReviewHistory({ projectKey, documentId, onClose }: { projectKey: string
     void api.listTranslationReviews(projectKey, documentId).then(value => { if (active) setRecords(value); }, failure => { if (active) setError(failure); });
     return () => { active = false; };
   }, [projectKey, documentId]);
-  return <Dialog open title={`Translation reviews: ${documentId}`} size="lg" onClose={onClose}>
+  return <Dialog open title={`Translation reviews: ${documentId}`} size="lg" onClose={onClose} footer={<Button onClick={onClose}>Close</Button>}>
     {error !== undefined && <ErrorNotice error={error} />}{records === null && error === undefined && <p role="status">Loading reviews …</p>}
-    {records?.length === 0 && <p>No translation reviews.</p>}
-    {records && <ol>{records.map(record => <li key={record.id}><p>{record.reviewer_pseudonym} · {record.reviewer_qualification} · {record.reviewer_languages.join(", ")} · <time dateTime={record.created_at}>{new Date(record.created_at).toLocaleString()}</time></p><p>{record.decision.replaceAll("_", " ")} · {record.status_before} → {record.status_after}</p><p>{record.clinical_change ? "Clinical change" : "No clinical change"}{record.categories.length ? `: ${record.categories.join(", ")}` : ""}</p>{record.rationale && <p>{record.rationale}</p>}{record.created_variant_id && <p>Created variant: {record.created_variant_id}</p>}</li>)}</ol>}
+    {records?.length === 0 && <p>No one has reviewed this translation yet.</p>}
+    {records && <ol className="review-history">{records.map(record => <li key={record.id}>
+      <p><strong>{labelFor(decisionLabels, record.decision)}</strong> by {record.reviewer_pseudonym} · <time dateTime={record.created_at}>{formatDateTime(record.created_at)}</time></p>
+      <p className="cell-secondary">{[record.reviewer_qualification, record.reviewer_languages.length ? `reads ${record.reviewer_languages.join(", ")}` : ""].filter(Boolean).join(" · ")}</p>
+      <p>{record.status_before === record.status_after ? `Translation status stayed ${labelFor(translationStatusLabels, record.status_after)}.` : `Translation status changed from ${labelFor(translationStatusLabels, record.status_before)} to ${labelFor(translationStatusLabels, record.status_after)}.`}</p>
+      <p>{record.clinical_change ? "Clinical change" : "No clinical change"}{record.categories.length ? `: ${record.categories.map(category => labelFor(categoryLabels, category)).join(", ")}` : ""}</p>
+      {record.rationale && <p>{record.rationale}</p>}{record.created_variant_id && <p>Created variant: {record.created_variant_id}</p>}
+    </li>)}</ol>}
   </Dialog>;
 }

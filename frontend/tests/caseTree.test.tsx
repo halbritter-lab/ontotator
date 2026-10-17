@@ -640,9 +640,9 @@ describe("the tree in the App", () => {
     mockTree();
     const { container } = render(<App />);
     await waitFor(() =>
-      expect(screen.getByRole("link", { name: /^Open$/i }).hasAttribute("disabled")).toBe(false),
+      expect(screen.getByRole("link", { name: /^(Start|Continue|View)$/ }).hasAttribute("disabled")).toBe(false),
     );
-    fireEvent.click(screen.getByRole("link", { name: /^Open$/i }));
+    fireEvent.click(screen.getByRole("link", { name: /^(Start|Continue|View)$/ }));
     await waitFor(() => expect(entry(container, "a1")).not.toBeNull());
 
     const panel = await openPanel(container, "a1");

@@ -27,12 +27,15 @@ describe("My tasks component", () => {
     const rows = await screen.findAllByTestId("task-row");
     expect(rows.map(row => within(row).getByText(/^doc-/).textContent)).toEqual(["doc-4", "doc-2", "doc-3", "doc-1"]);
     expect(within(rows[1]).getByText("Review")).toBeDefined();
-    expect(within(rows[0]).getByText("Annotate")).toBeDefined();
+    expect(within(rows[0]).getByText("Annotation")).toBeDefined();
     expect(within(rows[0]).getByText("Reopened")).toBeDefined();
     expect(within(rows[0]).getByText("de")).toBeDefined();
     expect(rows[0].querySelector("time")?.getAttribute("datetime")).toBe(tasks[0].updated_at);
-    expect(within(rows[0]).getByRole("link", { name: "Open" }).getAttribute("href")).toBe("#/tasks/4");
-    fireEvent.click(within(rows[0]).getByRole("link", { name: "Open" }));
+    expect(within(rows[0]).getByRole("link", { name: "Continue" }).getAttribute("href")).toBe("#/tasks/4");
+    expect(within(rows[1]).getByRole("link", { name: "Continue" })).toBeDefined();
+    expect(within(rows[2]).getByRole("link", { name: "Start" })).toBeDefined();
+    expect(within(rows[3]).getByRole("link", { name: "View" })).toBeDefined();
+    fireEvent.click(within(rows[0]).getByRole("link", { name: "Continue" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 4 });
   });
 
@@ -91,7 +94,7 @@ describe("My tasks component", () => {
     expect(rows[1].getAttribute("aria-label")).toBe("Research (q): shared-doc");
     fireEvent.change(select, { target: { value: "q" } });
     expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q" });
-    fireEvent.click(within(rows[1]).getByRole("link", { name: "Open" }));
+    fireEvent.click(within(rows[1]).getByRole("link", { name: /^(Start|Continue|View)$/ }));
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "task", assignmentId: 12 });
   });
 
@@ -101,6 +104,8 @@ describe("My tasks component", () => {
     render(<MyTasks projects={[project("p", "Research", true), project("q", "Research", true)]} onNavigate={onNavigate} />);
     const first = await screen.findByRole("link", { name: "Assign documents in Research (p)" });
     const second = screen.getByRole("link", { name: "Assign documents in Research (q)" });
+    expect(screen.getByText(/As a project lead, you assign documents/)).toBeDefined();
+    expect(first.className).toBe("btn btn-secondary");
     expect(first.getAttribute("href")).toBe("#/projects/p/documents");
     expect(second.getAttribute("href")).toBe("#/projects/q/documents");
     fireEvent.click(second);

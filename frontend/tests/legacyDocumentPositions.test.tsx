@@ -72,7 +72,7 @@ describe("assignment App presentation positions", () => {
     render(<App user={testUser("ann-0007")} />);
     await screen.findByRole("table", { name: "My tasks" });
     const user = userEvent.setup();
-    await user.click(screen.getAllByRole("link", { name: "Open" })[0]);
+    await user.click(screen.getAllByRole("link", { name: /^(Start|Continue|View)$/ })[0]);
     const select = await screen.findByRole("combobox", { name: "Select case" }) as HTMLSelectElement;
     expect(Array.from(select.options).map((option) => option.textContent)).toEqual(ids.map((id, index) => `Case ${index + 1} of 4: ${id} (Open)`));
     expect((screen.getByRole("button", { name: "Previous Case" }) as HTMLButtonElement).disabled).toBe(true);

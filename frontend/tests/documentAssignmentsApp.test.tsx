@@ -57,7 +57,7 @@ it("assigns only the selected document through real role-filtered controls and r
   expect(api.createAssignments).toHaveBeenCalledWith("p/key", { task: "annotate", confirm_language: false, rows: [{ document_id: "z/doc", username: "alice" }] });
   expect(api.listAssignments).toHaveBeenCalledTimes(2);
   fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
-  await screen.findByText("A: annotate open");
+  await screen.findByText("Open", { selector: ".assignee .status-pill" });
   expect(screen.getAllByTestId("document-row").map(row => within(row).getAllByRole("cell")[1].textContent)).toEqual(["z/doc", "a"]);
   expect(window.location.hash).toBe("#/projects/p%2Fkey/documents");
 });
@@ -76,7 +76,7 @@ it("reopens the submitted assignee from its real row menu and reloads the assign
   const dialog = await screen.findByRole("dialog", { name: "Reopen z/doc" });
   fireEvent.change(within(dialog).getByLabelText("Reason (optional)"), { target: { value: "Recheck evidence" } });
   await user.click(within(dialog).getByRole("button", { name: "Reopen assignment" }));
-  await screen.findByText("A: annotate reopened");
+  await screen.findByText("Reopened", { selector: ".assignee .status-pill" });
   expect(api.reopenAssignment).toHaveBeenCalledWith(3, "Recheck evidence");
   expect(api.listAssignments).toHaveBeenCalledTimes(2);
   expect(api.listProjectDocuments).toHaveBeenCalledTimes(2);
