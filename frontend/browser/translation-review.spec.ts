@@ -136,7 +136,7 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   const submittedTask = page.getByTestId('task-row').filter({ has: page.locator(`a[href="#/tasks/${assignmentId}"]`) });
   await expect(submittedTask).toContainText('Submitted');
   await expect(submittedTask.getByRole('cell', { name: s.external_id, exact: true })).toBeVisible();
-  await submittedTask.getByRole('link', { name: 'Open', exact: true }).click();
+  await submittedTask.getByRole('link', { name: 'View', exact: true }).click();
   await expect(target(page)).toHaveAttribute('readonly', ''); expect(writes).toEqual([]);
   const reopenedLead = await leadContext(browser, s);
   try {

@@ -82,7 +82,9 @@ function DocumentEditor({ projectKey, query, onNavigate, canOverrideTranslationS
   const assignmentsChanged = (identity: string) => { if (currentSelection.current === identity) setRevision(value => value + 1); };
   const columns: Column<ProjectDocumentSummary>[] = [
     { id: "select", header: <Checkbox id="documents-all" label={<span className="visually-hidden">Select all visible</span>} disabled={!rows.length || loading} checked={rows.length > 0 && rows.every(doc => selected.has(doc.document_id))} onChange={event => setSelected(new Set(event.target.checked ? rows.map(doc => doc.document_id) : []))} />, cell: doc => <Checkbox id={`document-select-${encodeURIComponent(doc.document_id)}`} label={<span className="visually-hidden">Select {doc.document_id}</span>} checked={selected.has(doc.document_id)} onChange={() => toggle(doc.document_id)} /> },
-    { id: "id", header: "Document ID", cell: doc => <>{doc.document_id}{doc.external_id && doc.external_id !== doc.document_id && <span className="cell-secondary">External ID: {doc.external_id}</span>}</> },
+    { id: "id", header: "Document ID", cell: doc => doc.document_id },
+    // The external ID only adds information when some row's differs from its document ID.
+    ...(rows.some(doc => doc.external_id && doc.external_id !== doc.document_id) ? [{ id: "external-id", header: "External ID", cell: (doc: ProjectDocumentSummary) => doc.external_id }] : []),
     { id: "case", header: "Case", cell: doc => {
       if (typeof doc.case_id !== "string") return null;
       const destination: Route = { name: "projectCase", key: projectKey, caseId: doc.case_id, variant: doc.document_id };

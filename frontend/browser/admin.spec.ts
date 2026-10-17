@@ -119,8 +119,8 @@ async function importTwoDocuments(page: Page) {
   ]);
   await upload.getByRole("button", { name: "Check", exact: true }).click();
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
-  await expect(preview).toContainText("2 added");
-  await expect(preview).toContainText("1 normalised");
+  await expect(preview).toContainText("2 documents added");
+  await expect(preview).toContainText("1 with normalized text");
   await expect(page.getByTestId("document-row")).toHaveCount(0);
   await upload.getByRole("button", { name: "Import", exact: true }).click();
   await expect(upload.getByText("Imported 2 documents and 0 proposals.", { exact: true })).toBeVisible();
@@ -224,7 +224,7 @@ test.describe("Administration through real accounts and jobs", () => {
     await reopen.getByLabel("Reason (optional)").fill("Check this finding again.");
     await reopen.getByRole("button", { name: "Reopen assignment", exact: true }).click();
     await expect(reopen).toHaveCount(0);
-    await expect(document).toContainText("reopened");
+    await expect(document).toContainText("Reopened");
     await logout(page);
     await loginExisting(page, setup.annotator);
     await expect(page.getByTestId("task-row")).toHaveCount(1);

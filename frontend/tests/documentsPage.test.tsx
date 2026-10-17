@@ -65,12 +65,16 @@ it("renders all one thousand rows in server order without client truncation", as
   expect(visible).toHaveLength(1000); expect(visible[0].textContent).toContain("doc-1000");
   expect(screen.getByText("0 selected")).toBeTruthy();
 });
-it("shows the external ID only when it differs and hides repeated row labels visually", async () => {
+it("shows the external ID column only when some ID differs and hides repeated row labels visually", async () => {
   vi.mocked(api.listProjectDocuments).mockResolvedValueOnce([{ ...documents[0], external_id: "z-first" }, { ...documents[1], external_id: "EXT 7" }] as never);
   render(<DocumentsPage projectKey="p" query={{}} onNavigate={vi.fn()} />);
-  await screen.findByText("z-first");
+  await screen.findByRole("cell", { name: "EXT 7" });
+  expect(screen.getByRole("columnheader", { name: "External ID" })).toBeDefined();
+  expect(screen.getByRole("cell", { name: "EXT 7" })).toBeDefined();
+  vi.mocked(api.listProjectDocuments).mockResolvedValueOnce([{ ...documents[0], external_id: "z-first" }] as never);
+  fireEvent.click(screen.getByRole("button", { name: "Refresh documents" }));
+  await waitFor(() => expect(screen.queryByText("a-second")).toBeNull());
   expect(screen.queryByRole("columnheader", { name: "External ID" })).toBeNull();
-  expect(screen.getAllByText(/^External ID:/).map(item => item.textContent)).toEqual(["External ID: EXT 7"]);
   expect(screen.getByLabelText("Select z-first").closest("label")?.querySelector(".visually-hidden")?.textContent).toBe("Select z-first");
   expect(Array.from((screen.getByLabelText("Status") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["All statuses", "Unassigned", "Open", "In progress", "Submitted", "Reopened"]);
 });
