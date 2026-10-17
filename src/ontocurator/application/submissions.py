@@ -140,6 +140,13 @@ def validate_completion(
             raise IncompleteReview(
                 "Decisions must match exactly the active review targets"
             )
+        for decision in draft.decisions:
+            if decision.outcome == "uncertain" and not (
+                decision.note and decision.note.strip()
+            ):
+                raise DomainError(
+                    "REVIEW_NOTE_REQUIRED", {"target": decision.target.model_dump()}
+                )
         for snap in draft.annotations:
             linked_targets = [
                 t

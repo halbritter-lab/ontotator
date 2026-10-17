@@ -91,6 +91,7 @@ def test_submission_checks_materialized_result(profile, document, branch):
                 reviewer_id="a",
                 target=ref,
                 outcome=branch,
+                note="Further review required" if branch == "uncertain" else None,
                 replacement=ref if branch == "changed" else None,
             )
         ]

@@ -93,6 +93,11 @@ class ReviewService:
                 "TARGET_NOT_FOUND", "Target is unavailable in this document"
             )
 
+        if cmd.outcome == "uncertain" and not (cmd.note and cmd.note.strip()):
+            raise DomainError(
+                "REVIEW_NOTE_REQUIRED", {"target": cmd.target.model_dump()}
+            )
+
         if cmd.outcome is None:
             if cmd.replacement is not None:
                 raise DomainError(

@@ -234,7 +234,13 @@ def test_nonapproved_target_may_remain_incomplete(tmp_path, outcome):
     ReviewService(repo, registry=ontologies).decide(
         key,
         envelope(
-            "decide", 0, DecisionCommand(target=target, outcome=outcome).model_dump()
+            "decide",
+            0,
+            DecisionCommand(
+                target=target,
+                outcome=outcome,
+                note="Further review required" if outcome == "uncertain" else None,
+            ).model_dump(),
         ),
     )
     submission = SubmissionService(repo).submit(
