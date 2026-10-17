@@ -60,6 +60,7 @@ def _open(client, config, mode="independent", targets=None, scenario=None):
             "annotator_id": "reviewer",
             "mode": mode,
             "targets": targets,
+            "pending_proposal_set_ids": [] if targets is not None else None,
         },
     )
     assert response.status_code == 200, response.text

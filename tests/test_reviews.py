@@ -236,7 +236,7 @@ def test_review_decisions_for_human_and_tool_proposals(
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    view = ctx["ws_svc"].open(ws_key, target_set)
+    view = ctx["ws_svc"].open(ws_key, target_set, pending_proposal_set_ids=[])
     ws_key = view.key
 
     cmd = DecisionCommand(
@@ -275,7 +275,7 @@ def test_review_decision_can_be_cleared_to_offen(tmp_path: Path):
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    view = ctx["ws_svc"].open(ws_key, target_set)
+    view = ctx["ws_svc"].open(ws_key, target_set, pending_proposal_set_ids=[])
     ws_key = view.key
 
     # 1. Record decision
@@ -359,7 +359,7 @@ def test_review_decision_changed_requires_and_binds_replacement(tmp_path: Path):
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    view = ctx["ws_svc"].open(ws_key, target_set)
+    view = ctx["ws_svc"].open(ws_key, target_set, pending_proposal_set_ids=[])
     ws_key = view.key
 
     # 1. Create a replacement / counter-proposal
@@ -422,7 +422,7 @@ def test_obsolete_term_cannot_be_confirmed(tmp_path: Path):
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    view = ctx["ws_svc"].open(ws_key, target_set)
+    view = ctx["ws_svc"].open(ws_key, target_set, pending_proposal_set_ids=[])
     ws_key = view.key
 
     # Attempting to confirm obsolete term HP:0000123
@@ -456,7 +456,7 @@ def test_review_submission_completeness_and_export_scoping(tmp_path: Path):
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    view = ctx["ws_svc"].open(ws_key, target_set)
+    view = ctx["ws_svc"].open(ws_key, target_set, pending_proposal_set_ids=[])
     ws_key = view.key
 
     # 1. Submit before deciding -> raises IncompleteReview or DomainError
@@ -686,7 +686,7 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
         mode="review",
         target_set_id=targets.target_set_id,
     )
-    view = ws_svc.open(ws_key, targets)
+    view = ws_svc.open(ws_key, targets, pending_proposal_set_ids=[])
     ws_key = view.key
 
     # 1. Confirming an incomplete annotation fails

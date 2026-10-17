@@ -332,7 +332,10 @@ def open_assignment(
         principal,
     )
     return AssignmentOpenResponse(
-        **response.model_dump(), assignment=_views(request, [assignment])[0]
+        workspace_id=response.workspace_id,
+        view=response.view,
+        read_only=response.read_only,
+        assignment=_views(request, [assignment])[0],
     )
 
 

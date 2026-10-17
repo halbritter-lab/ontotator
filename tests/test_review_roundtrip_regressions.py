@@ -141,6 +141,7 @@ def strict_review(tmp_path):
                 target_set_id=targets.target_set_id,
             ),
             targets,
+            pending_proposal_set_ids=[],
         )
         .key
     )

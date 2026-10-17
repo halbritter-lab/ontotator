@@ -25,6 +25,7 @@ from ontocurator.api.identity import (
 )
 from ontocurator.application.editing import EditorService
 from ontocurator.application.preferences import Preferences, PreferencesUpdate
+from ontocurator.application.reanchor_resolutions import ReanchorResolutionService
 from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.workspaces import (
@@ -107,6 +108,7 @@ class OpenWorkspaceRequest(BaseModel):
     mode: WorkspaceMode = "independent"
     targets: ReviewTargetSet | None = None
     review_round_target_set_id: str | None = None
+    pending_proposal_set_ids: list[int] | None = None
 
 
 class OpenWorkspaceResponse(BaseModel):
@@ -418,7 +420,7 @@ def open_workspace(
         mode=req.mode,
         target_set_id=target_set_id,
     )
-    view = ws_svc.open(key, targets)
+    view = ws_svc.open(key, targets, req.pending_proposal_set_ids)
     assert isinstance(ws_svc.repo, ScopedRepository)
     assignment = ws_svc.repo.workspace_assignment(view.key)
     return OpenWorkspaceResponse(
@@ -454,6 +456,20 @@ def record_decision(
     key = own_key(principal, decode_workspace_id(workspace_id))
     require_mode(request, key.project_key, key.mode)
     return rev_svc.decide(key, envelope)
+
+
+@router.post("/workspaces/{workspace_id}/reanchor-resolutions")
+def resolve_reanchor(
+    workspace_id: str,
+    envelope: MutationEnvelope,
+    request: Request,
+    ws_svc: WorkspaceSvcDep,
+    principal: PrincipalDep,
+) -> Draft:
+    """Record an exact replacement or justified dismissal in this review only."""
+    key = own_key(principal, decode_workspace_id(workspace_id))
+    require_mode(request, key.project_key, key.mode)
+    return ReanchorResolutionService(ws_svc.repo).resolve(key, envelope)
 
 
 @router.post("/workspaces/{workspace_id}/submit")

@@ -18,6 +18,12 @@ from ontocurator.domain.annotations import (
     snapshot,
 )
 from ontocurator.domain.canonical import canonical_hash
+from ontocurator.domain.documents import (
+    EvidenceMention,
+    EvidenceRef,
+    Segment,
+    snapshot_evidence,
+)
 from ontocurator.domain.errors import DomainError, InvalidPackage
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
@@ -25,7 +31,19 @@ from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.storage.repository import Repository
 
 
-def add_proposal(package, *, layer_id="hpo-layer", axes_values=None):
+def add_proposal(
+    package, *, layer_id="hpo-layer", axes_values=None, with_evidence=False
+):
+    evidence = []
+    if with_evidence:
+        mention = snapshot_evidence(
+            EvidenceMention(
+                evidence_id="editable-evidence", segments=[Segment(start=21, end=30)]
+            ),
+            package.documents["doc-beta"],
+        )
+        evidence.append(mention)
+        package.evidence[(mention.mention.evidence_id, mention.version)] = mention
     annotation = Annotation(
         annotation_id="editable-proposal",
         document_id="doc-beta",
@@ -33,13 +51,19 @@ def add_proposal(package, *, layer_id="hpo-layer", axes_values=None):
         type_id="phenotype",
         term_id="HP:0001250",
         axes_values=axes_values or {},
-        evidence_refs=[],
+        evidence_refs=[
+            EvidenceRef(evidence_id=e.mention.evidence_id, version=e.version)
+            for e in evidence
+        ],
         provenance=Provenance(
             actor=ActorRef(actor_id="source", kind="tool"), method="import"
         ),
     )
     proposal = snapshot(
-        annotation, [], package.documents["doc-beta"], package.manifest.task_profile
+        annotation,
+        evidence,
+        package.documents["doc-beta"],
+        package.manifest.task_profile,
     )
     package.annotations[(annotation.annotation_id, proposal.version)] = proposal
     return proposal
@@ -69,7 +93,7 @@ def test_review_targets_exclude_references_but_workspace_keeps_them(tmp_path):
         mode="review",
         target_set_id=targets.target_set_id,
     )
-    view = service.open(key, targets)
+    view = service.open(key, targets, pending_proposal_set_ids=[])
     assert {s.annotation.annotation_id for s in view.available_inputs} == {
         "editable-proposal",
         "ann-ref-1",
@@ -185,9 +209,11 @@ def test_invalid_stored_axes_cannot_be_approved(tmp_path, axes_values, operation
     assert repo.get_submissions_for_workspace(key) == []
 
 
-def note_review_workspace(tmp_path, axes_values=None):
+def note_review_workspace(tmp_path, axes_values=None, *, with_evidence=False):
     package = make_layered_package("single")
-    proposal = add_proposal(package, axes_values=axes_values)
+    proposal = add_proposal(
+        package, axes_values=axes_values, with_evidence=with_evidence
+    )
     repo = Repository(database_for(tmp_path / "note-review.db"))
     repo.import_package(package)
     target = AnnotationRef(
@@ -310,7 +336,9 @@ def test_submission_revalidates_legacy_uncertain_notes_but_read_remains_supporte
 
 
 def test_confirmed_clinical_uncertainty_does_not_require_reviewer_note(tmp_path):
-    repo, key, target = note_review_workspace(tmp_path, {"assertion": "uncertain"})
+    repo, key, target = note_review_workspace(
+        tmp_path, {"assertion": "uncertain"}, with_evidence=True
+    )
     ReviewService(repo).decide(
         key,
         MutationEnvelope(

@@ -18,6 +18,7 @@ from ontocurator.domain.profiles import (
     resolve_ontology,
 )
 from ontocurator.domain.proposals import ProposalSetView
+from ontocurator.domain.reanchor_resolution import ReanchorItem
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, Submission, WorkspaceKey
@@ -67,6 +68,7 @@ class WorkspaceView(BaseModel):
     term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = Field(
         default_factory=dict
     )
+    pending_reanchor_items: list[ReanchorItem] = Field(default_factory=list)
     enforce_spanless_rules: bool = False
     allow_spanless_findings: bool = True
     axes_definition: str = "editor-axes/v1"
@@ -193,9 +195,18 @@ class WorkspaceService:
         ]
 
     def open(
-        self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
+        self,
+        key: WorkspaceKey,
+        targets: ReviewTargetSet | None = None,
+        pending_proposal_set_ids: list[int] | None = None,
     ) -> WorkspaceView:
         """Open or initialize a workspace view."""
+        if (
+            key.mode == "review"
+            and targets is not None
+            and pending_proposal_set_ids is None
+        ):
+            raise DomainError("REANCHOR_PENDING_SELECTION_REQUIRED")
         doc = self.get_document(key.project_key, key.document_id)
         profile = self.repo.get_task_profile(key.project_key)
         scope = build_scope(profile, key.mode)
@@ -260,7 +271,9 @@ class WorkspaceService:
                     )
                 if rounds:
                     key = rounds[0]
-                    effective_targets = self.repo.open_draft(key).targets
+                    effective_targets = self.repo.open_draft(
+                        key, pending_proposal_set_ids=pending_proposal_set_ids
+                    ).targets
                 else:
                     effective_targets = ReviewTargetSet.create(
                         [
@@ -325,7 +338,7 @@ class WorkspaceService:
                         "Review target ontology SHA-256 does not match configured layer ontology",
                     )
 
-        draft = self.repo.open_draft(key, effective_targets)
+        draft = self.repo.open_draft(key, effective_targets, pending_proposal_set_ids)
 
         for a in available_inputs:
             tid = a.annotation.term_id
@@ -361,6 +374,7 @@ class WorkspaceService:
             for row in self.repo.workspace_proposal_sets(key, offered)
         ]
         return WorkspaceView(
+            pending_reanchor_items=self.repo.workspace_reanchor_items(draft),
             enforce_spanless_rules=draft.spanless_policy_version == 1,
             allow_spanless_findings=self.repo.get_project_rules(
                 key.project_key

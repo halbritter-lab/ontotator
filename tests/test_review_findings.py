@@ -805,7 +805,9 @@ def test_review_confirms_proposal_recorded_with_alt_id(tmp_path: Path) -> None:
         mode="review",
         target_set_id=targets.target_set_id,
     )
-    view = WorkspaceService(repo, service).open(key, targets)
+    view = WorkspaceService(repo, service).open(
+        key, targets, pending_proposal_set_ids=[]
+    )
     assert view.term_statuses["hpo-layer:HP:0001290"] == "valid"
     draft = ReviewService(repo, ontology=service).decide(
         view.key,

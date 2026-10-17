@@ -299,6 +299,13 @@ class DraftRow(Base):
     checked_layer_ids: Mapped[list[Any]] = mapped_column(
         server_default=text("'[]'::jsonb")
     )
+    reanchor_inputs: Mapped[list[Any]] = mapped_column(
+        server_default=text("'[]'::jsonb")
+    )
+    reanchor_resolutions: Mapped[list[Any]] = mapped_column(
+        server_default=text("'[]'::jsonb")
+    )
+    reanchor_inputs_initialized_at: Mapped[datetime | None]
     updated_at: Mapped[datetime]
 
 

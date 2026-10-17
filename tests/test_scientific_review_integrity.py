@@ -40,7 +40,11 @@ def changed_review(ctx):
         annotation_id=source.annotation.annotation_id, version=source.version
     )
     targets = ReviewTargetSet.create([ref])
-    opened = ctx["ws_svc"].open(key(ctx, target_set_id=targets.target_set_id), targets)
+    opened = ctx["ws_svc"].open(
+        key(ctx, target_set_id=targets.target_set_id),
+        targets,
+        pending_proposal_set_ids=[],
+    )
     draft = ctx["edit_svc"].apply(
         opened.key,
         mutation(
@@ -230,7 +234,11 @@ def test_ambiguous_rounds_need_explicit_selection(tmp_path):
                 )
             ]
         )
-        ctx["ws_svc"].open(key(ctx, target_set_id=targets.target_set_id), targets)
+        ctx["ws_svc"].open(
+            key(ctx, target_set_id=targets.target_set_id),
+            targets,
+            pending_proposal_set_ids=[],
+        )
     with pytest.raises(DomainError, match="AMBIGUOUS_REVIEW_ROUND"):
         ctx["ws_svc"].open(key(ctx))
     selected = ctx["ws_svc"].open(key(ctx, target_set_id=targets.target_set_id))
@@ -264,6 +272,7 @@ def test_round_selection_api_resumes_selected_round_and_rejects_incompatible_req
             "/api/v1/workspaces/open",
             json={
                 **request,
+                "pending_proposal_set_ids": [],
                 "targets": {
                     "target_set_id": "",
                     "targets": [

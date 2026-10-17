@@ -1,7 +1,6 @@
 """Read-only case texts and exact, currently offered annotation versions."""
 
 from dataclasses import asdict
-from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import (
@@ -9,8 +8,6 @@ from pydantic import (
     ConfigDict,
     Field,
     ValidationError,
-    computed_field,
-    model_validator,
 )
 from sqlalchemy import select
 
@@ -20,9 +17,10 @@ from ontocurator.api.routes import get_access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.authz.versions import VersionRef, visible_annotation_versions
 from ontocurator.authz.visibility import qualifying_assignment
-from ontocurator.domain.annotations import AnnotationRef, AnnotationSnapshot
-from ontocurator.domain.documents import EvidenceRef, EvidenceSnapshot
+from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.documents import EvidenceSnapshot
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.reanchor_resolution import ReanchorItem as ReanchorItem
 from ontocurator.domain.variants import TranslationStatus, VariantOrigin
 from ontocurator.storage.tables import AssignmentRow
 
@@ -82,75 +80,6 @@ class AnnotationVersion(BaseModel):
     ref: VersionRef
     annotations: list[AnnotationSnapshot]
     evidence: list[EvidenceSnapshot]
-
-
-class TextWindowView(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    start: int = Field(ge=0)
-    end: int = Field(ge=0)
-    text: str
-
-    @model_validator(mode="after")
-    def valid_window(self) -> "TextWindowView":
-        if self.end < self.start or len(self.text) != self.end - self.start:
-            raise ValueError("Invalid absolute text window")
-        return self
-
-
-class OldMentionView(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    source_ref: EvidenceRef
-    segments: list[TextWindowView]
-    cue_segments: list[TextWindowView]
-
-
-class WindowOpcodeView(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    op: Literal["equal", "replace", "insert", "delete"]
-    old_start: int = Field(ge=0)
-    old_end: int = Field(ge=0)
-    new_start: int = Field(ge=0)
-    new_end: int = Field(ge=0)
-    old_text: str
-    new_text: str
-
-    @model_validator(mode="after")
-    def valid_ranges(self) -> "WindowOpcodeView":
-        if self.old_end - self.old_start != len(
-            self.old_text
-        ) or self.new_end - self.new_start != len(self.new_text):
-            raise ValueError("Invalid absolute opcode ranges")
-        return self
-
-
-class ReanchorItem(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    proposal_set_id: int
-    source_ref: AnnotationRef
-    term_id: str
-    layer_id: str
-    reason: Literal[
-        "source_text_mismatch",
-        "missing_evidence",
-        "evidence_version_mismatch",
-        "ambiguous_evidence",
-        "evidence_source_mismatch",
-        "invalid_bounds",
-        "changed_segment",
-        "changed_cue",
-    ]
-    old_mentions: list[OldMentionView]
-    old_context: TextWindowView
-    new_context: TextWindowView
-    diff: list[WindowOpcodeView]
-
-    @computed_field
-    def old_segments(self) -> list[TextWindowView]:
-        return [
-            segment
-            for mention in self.old_mentions
-            for segment in [*mention.segments, *mention.cue_segments]
-        ]
 
 
 def _repo(request: Request) -> ScopedRepository:

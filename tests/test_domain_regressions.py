@@ -24,7 +24,7 @@ def review(ctx, reviewer="one"):
         mode="review",
         target_set_id=targets.target_set_id,
     )
-    view = ctx["ws_svc"].open(key, targets)
+    view = ctx["ws_svc"].open(key, targets, pending_proposal_set_ids=[])
     return view.key, ref
 
 
@@ -68,7 +68,7 @@ def test_workspace_rejects_forged_target_identity(tmp_path):
     key, _ = review(ctx)
     forged = ReviewTargetSet(target_set_id=key.target_set_id, targets=[])
     with pytest.raises(DomainError):
-        ctx["ws_svc"].open(key, forged)
+        ctx["ws_svc"].open(key, forged, pending_proposal_set_ids=[])
 
 
 def test_edit_invalidates_replacement_approval(tmp_path):
@@ -81,6 +81,8 @@ def test_edit_invalidates_replacement_approval(tmp_path):
             expected_revision=0,
             payload={
                 "command": "create_annotation",
+                "evidence_id": "selected-evidence",
+                "segments": [{"start": 26, "end": 35}],
                 "annotation_id": "replacement",
                 "layer_id": "hpo-layer",
                 "type_id": "phenotype",
@@ -159,6 +161,8 @@ def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
             expected_revision=0,
             payload={
                 "command": "create_annotation",
+                "evidence_id": "selected-evidence",
+                "segments": [{"start": 26, "end": 35}],
                 "annotation_id": "new",
                 "layer_id": "hpo-layer",
                 "type_id": "phenotype",
@@ -191,6 +195,8 @@ def test_search_selection_is_bound_to_workspace_and_recorded(tmp_path):
                 expected_revision=0,
                 payload={
                     "command": "create_annotation",
+                    "evidence_id": "selected-evidence",
+                    "segments": [{"start": 26, "end": 35}],
                     "annotation_id": "new",
                     "layer_id": "hpo-layer",
                     "type_id": "phenotype",
@@ -333,7 +339,9 @@ def test_imported_submission_read_and_resume_are_scoped(tmp_path):
             local_key.model_copy(update={"annotator_id": "foreign"}),
             submission.submission_id,
         )
-    view = ctx["ws_svc"].open(local_key, submission.targets)
+    view = ctx["ws_svc"].open(
+        local_key, submission.targets, pending_proposal_set_ids=[]
+    )
     assert len(view.draft.decisions) == 1
     assert view.draft.annotations == []
     assert view.draft.revision == submission.draft_revision
@@ -371,6 +379,8 @@ def test_sequential_search_selections_survive_two_export_imports(tmp_path):
         if revision == 0:
             payload = {
                 "command": "create_annotation",
+                "evidence_id": "selected-evidence",
+                "segments": [{"start": 26, "end": 35}],
                 "annotation_id": "new",
                 "layer_id": "hpo-layer",
                 "type_id": "phenotype",

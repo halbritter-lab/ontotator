@@ -226,6 +226,31 @@ class SubmissionService:
         if cmd.checked_layer_ids is not None:
             draft.checked_layer_ids = list(cmd.checked_layer_ids)
 
+        from ontocurator.application.reanchor_resolutions import validate_resolution
+
+        seen = set()
+        for item in draft.reanchor_inputs:
+            pending_identity = (
+                item.proposal_set_id,
+                item.source_ref.annotation_id,
+                item.source_ref.version,
+            )
+            if pending_identity in seen or draft.key.mode != "review":
+                raise DomainError("INVALID_REANCHOR_ITEM")
+            seen.add(pending_identity)
+            self.repo.reanchor_source_identity(key, item)
+        resolved = set()
+        for resolution in draft.reanchor_resolutions:
+            pending_identity = (
+                resolution.item.proposal_set_id,
+                resolution.item.source_ref.annotation_id,
+                resolution.item.source_ref.version,
+            )
+            if pending_identity in resolved:
+                raise DomainError("INVALID_REANCHOR_ITEM")
+            resolved.add(pending_identity)
+            validate_resolution(self.repo, draft, resolution)
+
         task_profile = self.repo.get_task_profile(key.project_key)
         scope = build_scope(task_profile, key.mode)
         previous = latest_submissions(self.repo.get_submissions_for_workspace(key))
@@ -346,6 +371,14 @@ class SubmissionService:
             "snapshots": [s.version for s in deduped_snaps],
             "decisions": [d.model_dump() for d in decisions],
         }
+        if draft.reanchor_inputs or draft.reanchor_resolutions:
+            canonical_content["reanchor_inputs"] = [
+                item.model_dump(mode="json") for item in draft.reanchor_inputs
+            ]
+            canonical_content["reanchor_resolutions"] = [
+                resolution.model_dump(mode="json")
+                for resolution in draft.reanchor_resolutions
+            ]
         sub_id = f"sub-{canonical_hash(canonical_content)[:16]}"
 
         return Submission(
@@ -357,6 +390,8 @@ class SubmissionService:
             draft_revision=draft.revision + 1,
             snapshots=deduped_snaps,
             decisions=decisions,
+            reanchor_inputs=list(draft.reanchor_inputs),
+            reanchor_resolutions=list(draft.reanchor_resolutions),
             checked_layer_ids=list(draft.checked_layer_ids),
             document_checked=True,
             created_at=datetime.now(UTC).isoformat(),

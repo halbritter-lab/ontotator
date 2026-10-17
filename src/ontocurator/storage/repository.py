@@ -40,6 +40,7 @@ from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
 from ontocurator.domain.profiles import OntologyDefinition, TaskProfile, profile_hash
 from ontocurator.domain.project_rules import ProjectRules
+from ontocurator.domain.reanchor_resolution import PendingReanchorRef, ReanchorItem
 from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
@@ -196,6 +197,8 @@ class DraftState:
     evidence: tuple[tuple[str, str], ...] = ()
     decisions: tuple[dict[str, Any], ...] = ()
     checked_layer_ids: tuple[str, ...] = ()
+    reanchor_inputs: tuple[dict[str, Any], ...] = ()
+    reanchor_resolutions: tuple[dict[str, Any], ...] = ()
 
     @classmethod
     def of(cls, draft: Draft) -> DraftState:
@@ -210,6 +213,12 @@ class DraftState:
             ),
             decisions=tuple(d.model_dump(mode="json") for d in draft.decisions),
             checked_layer_ids=tuple(draft.checked_layer_ids),
+            reanchor_inputs=tuple(
+                item.model_dump(mode="json") for item in draft.reanchor_inputs
+            ),
+            reanchor_resolutions=tuple(
+                item.model_dump(mode="json") for item in draft.reanchor_resolutions
+            ),
         )
 
     @classmethod
@@ -219,6 +228,8 @@ class DraftState:
             evidence=tuple((str(i), str(v)) for i, v in stored["evidence"]),
             decisions=tuple(stored["decisions"]),
             checked_layer_ids=tuple(stored["checked_layer_ids"]),
+            reanchor_inputs=tuple(stored.get("reanchor_inputs", [])),
+            reanchor_resolutions=tuple(stored.get("reanchor_resolutions", [])),
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -227,6 +238,14 @@ class DraftState:
             "evidence": [list(pair) for pair in self.evidence],
             "decisions": list(self.decisions),
             "checked_layer_ids": list(self.checked_layer_ids),
+            **(
+                {
+                    "reanchor_inputs": list(self.reanchor_inputs),
+                    "reanchor_resolutions": list(self.reanchor_resolutions),
+                }
+                if self.reanchor_inputs or self.reanchor_resolutions
+                else {}
+            ),
         }
 
 
@@ -1863,12 +1882,18 @@ class Repository:
                 DraftRow.revision,
                 DraftRow.checked_layer_ids,
                 DraftRow.spanless_policy_version,
+                DraftRow.reanchor_inputs,
+                DraftRow.reanchor_resolutions,
+                DraftRow.reanchor_inputs_initialized_at,
                 DraftRow.targets,
             ).where(DraftRow.project_id == project_id, DraftRow.draft_key == key_string)
         ).one_or_none()
 
     def open_draft(
-        self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
+        self,
+        key: WorkspaceKey,
+        targets: ReviewTargetSet | None = None,
+        pending_proposal_set_ids: list[int] | None = None,
     ) -> Draft:
         """Open or initialize the draft of a workspace key.
 
@@ -1879,7 +1904,218 @@ class Repository:
             self._before_workspace_locks(conn, key)
             self._lock_draft(conn, key)
             self._before_open_draft(conn, key)
-            return self._open_draft(conn, key, targets)
+            draft = self._open_draft(conn, key, targets)
+            return self._freeze_reanchor_inputs(conn, draft, pending_proposal_set_ids)
+
+    def _freeze_reanchor_inputs(
+        self, conn: Connection, draft: Draft, selected: list[int] | None
+    ) -> Draft:
+        """Initialize only at open, under the same lock as draft creation."""
+        key = draft.key
+        if key.mode != "review":
+            if selected:
+                raise DomainError("INVALID_REANCHOR_ITEM")
+            return draft
+        project_id = self._require_project(conn, key.project_key)
+        row = self._draft_row(conn, project_id, _key_str(key))
+        assert row is not None
+        if row.reanchor_inputs_initialized_at is not None:
+            if selected is not None and set(selected) != {
+                item.proposal_set_id for item in draft.reanchor_inputs
+            }:
+                raise DomainError("REANCHOR_INPUTS_CONFLICT")
+            return draft
+        scope = build_scope(self.get_task_profile(key.project_key), key.mode)
+        rows = conn.execute(
+            select(ProposalSetRow.id, ProposalSetRow.pending_items)
+            .where(
+                ProposalSetRow.project_id == project_id,
+                ProposalSetRow.document_id == key.document_id,
+                ProposalSetRow.origin == "reanchor",
+            )
+            .order_by(ProposalSetRow.id)
+        ).all()
+        eligible: dict[int, list[PendingReanchorRef]] = {}
+        for candidate in rows:
+            refs = [
+                PendingReanchorRef(
+                    proposal_set_id=candidate.id, source_ref=raw["source_ref"]
+                )
+                for raw in candidate.pending_items
+                if raw["layer_id"] in scope.editable_layer_ids
+            ]
+            if refs:
+                eligible[candidate.id] = refs
+        if selected is not None and not set(selected).issubset(eligible):
+            raise DomainError("INVALID_REANCHOR_ITEM")
+        refs = [
+            ref
+            for set_id, items in eligible.items()
+            if selected is None or set_id in selected
+            for ref in items
+        ]
+        now = datetime.now(UTC)
+        conn.execute(
+            update(DraftRow)
+            .where(DraftRow.id == row.id)
+            .values(
+                reanchor_inputs=[ref.model_dump(mode="json") for ref in refs],
+                reanchor_inputs_initialized_at=now,
+            )
+        )
+        draft.reanchor_inputs = refs
+        draft.reanchor_inputs_initialized_at = now.isoformat()
+        return draft
+
+    def workspace_reanchor_items(self, draft: Draft) -> list[ReanchorItem]:
+        """Only the immutable pending context frozen into this workspace."""
+        refs = {
+            (
+                item.proposal_set_id,
+                item.source_ref.annotation_id,
+                item.source_ref.version,
+            )
+            for item in draft.reanchor_inputs
+        }
+        if not refs or draft.key.mode != "review":
+            return []
+        items = []
+        for raw in self.get_reanchor_items(
+            draft.key.project_key, draft.key.document_id
+        ):
+            identity = (
+                raw["proposal_set_id"],
+                raw["source_ref"]["annotation_id"],
+                raw["source_ref"]["version"],
+            )
+            if identity not in refs:
+                continue
+            source, content_valid = self.reanchor_source_identity(
+                draft.key,
+                PendingReanchorRef(
+                    proposal_set_id=raw["proposal_set_id"], source_ref=raw["source_ref"]
+                ),
+            )
+            items.append(
+                ReanchorItem.model_validate(
+                    {
+                        **raw,
+                        "type_id": source.annotation.type_id if content_valid else None,
+                    }
+                )
+            )
+        return items
+
+    def verified_reanchor_source(
+        self, key: WorkspaceKey, item: PendingReanchorRef
+    ) -> AnnotationSnapshot:
+        """Require valid source content before authoring or linking a finding."""
+        source, content_valid = self.reanchor_source_identity(key, item)
+        if not content_valid:
+            raise DomainError("INVALID_REANCHOR_ITEM")
+        return source
+
+    def reanchor_source_identity(
+        self, key: WorkspaceKey, item: PendingReanchorRef
+    ) -> tuple[AnnotationSnapshot, bool]:
+        """Narrow predecessor lookup: no permission to browse the predecessor."""
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, key.project_key)
+            current = (
+                conn.execute(
+                    select(DocumentRow).where(
+                        DocumentRow.project_id == project_id,
+                        DocumentRow.document_id == key.document_id,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if current is None or current["origin"] != "correction":
+                raise DomainError("INVALID_REANCHOR_ITEM")
+            previous = (
+                conn.execute(
+                    select(DocumentRow).where(
+                        DocumentRow.project_id == project_id,
+                        DocumentRow.document_id == current["derived_from"],
+                        DocumentRow.case_id == current["case_id"],
+                        DocumentRow.language == current["language"],
+                        DocumentRow.version == current["version"] - 1,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            producer = (
+                conn.execute(
+                    select(ProposalSetRow).where(
+                        ProposalSetRow.project_id == project_id,
+                        ProposalSetRow.id == item.proposal_set_id,
+                        ProposalSetRow.document_id == key.document_id,
+                        ProposalSetRow.origin == "reanchor",
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if previous is None or producer is None:
+                raise DomainError("INVALID_REANCHOR_ITEM")
+            pending = next(
+                (
+                    raw
+                    for raw in producer["pending_items"]
+                    if raw["source_ref"] == item.source_ref.model_dump()
+                ),
+                None,
+            )
+            if pending is None:
+                raise DomainError("INVALID_REANCHOR_ITEM")
+            members = conn.execute(
+                select(ProposalSetRow.id, AnnotationSnapshotRow.payload)
+                .join(
+                    ProposalAnnotationRow,
+                    and_(
+                        ProposalAnnotationRow.project_id == ProposalSetRow.project_id,
+                        ProposalAnnotationRow.proposal_set_id == ProposalSetRow.id,
+                    ),
+                )
+                .join(
+                    AnnotationSnapshotRow,
+                    and_(
+                        AnnotationSnapshotRow.project_id
+                        == ProposalAnnotationRow.project_id,
+                        AnnotationSnapshotRow.annotation_id
+                        == ProposalAnnotationRow.annotation_id,
+                        AnnotationSnapshotRow.version == ProposalAnnotationRow.version,
+                    ),
+                )
+                .where(
+                    ProposalSetRow.project_id == project_id,
+                    ProposalSetRow.document_id == previous["document_id"],
+                    AnnotationSnapshotRow.document_id == previous["document_id"],
+                    AnnotationSnapshotRow.annotation_id
+                    == item.source_ref.annotation_id,
+                    AnnotationSnapshotRow.version == item.source_ref.version,
+                )
+            ).all()
+            for source_set_id, payload in members:
+                expected = (
+                    f"{key.project_key}:reanchor:{key.document_id}:{source_set_id}"
+                )
+                if producer["annotation_set_id"] == expected:
+                    source = decode_snapshot(payload)
+                    content_valid = (
+                        source.text_sha256 == previous["text_sha256"]
+                        and source.document_id == previous["document_id"]
+                        and source.annotation.document_id == previous["document_id"]
+                        and source.annotation.annotation_id
+                        == item.source_ref.annotation_id
+                        and source.version == item.source_ref.version
+                        and source.annotation.layer_id == pending["layer_id"]
+                        and source.annotation.term_id == pending["term_id"]
+                    )
+                    return source, content_valid
+            raise DomainError("INVALID_REANCHOR_ITEM")
 
     def _before_workspace_locks(self, conn: Connection, key: WorkspaceKey) -> None:
         """Keep a contextual principal stable before any draft/assignment lock."""
@@ -2048,6 +2284,13 @@ class Repository:
             targets=ReviewTargetSet.model_validate(row.targets),
             revision=int(row.revision),
             spanless_policy_version=row.spanless_policy_version,
+            reanchor_inputs=row.reanchor_inputs,
+            reanchor_resolutions=row.reanchor_resolutions,
+            reanchor_inputs_initialized_at=(
+                row.reanchor_inputs_initialized_at.isoformat()
+                if row.reanchor_inputs_initialized_at is not None
+                else None
+            ),
             annotations=[decode_snapshot(p) for p in annotations],
             evidence=[EvidenceSnapshot.model_validate(p) for p in evidence],
             decisions=[ReviewDecision.model_validate(p) for p in decisions],
@@ -2125,6 +2368,15 @@ class Repository:
             update(DraftRow)
             .where(DraftRow.id == draft_id)
             .values(
+                reanchor_inputs=[
+                    r.model_dump(mode="json") for r in latest.reanchor_inputs
+                ],
+                reanchor_resolutions=[
+                    r.model_dump(mode="json") for r in latest.reanchor_resolutions
+                ],
+                reanchor_inputs_initialized_at=(
+                    datetime.now(UTC) if latest.reanchor_inputs else None
+                ),
                 targets=latest.targets.model_dump(mode="json"),
                 revision=latest.draft_revision,
                 checked_layer_ids=list(latest.checked_layer_ids),
@@ -2269,6 +2521,13 @@ class Repository:
                     .values(
                         revision=new_revision,
                         checked_layer_ids=list(result.checked_layer_ids),
+                        reanchor_inputs=[
+                            r.model_dump(mode="json") for r in result.reanchor_inputs
+                        ],
+                        reanchor_resolutions=[
+                            r.model_dump(mode="json")
+                            for r in result.reanchor_resolutions
+                        ],
                         updated_at=now,
                     )
                 )

@@ -40,6 +40,7 @@ from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.profiles import TaskProfile
 from ontocurator.domain.project_rules import ProjectRules
+from ontocurator.domain.reanchor_resolution import PendingReanchorRef, ReanchorItem
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import (
@@ -620,11 +621,33 @@ class ScopedRepository(Repository):
         ]
 
     def open_draft(
-        self, key: WorkspaceKey, targets: ReviewTargetSet | None = None
+        self,
+        key: WorkspaceKey,
+        targets: ReviewTargetSet | None = None,
+        pending_proposal_set_ids: list[int] | None = None,
     ) -> Draft:
         self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
-        return super().open_draft(key, targets)
+        return super().open_draft(key, targets, pending_proposal_set_ids)
+
+    def workspace_reanchor_items(self, draft: Draft) -> list[ReanchorItem]:
+        with self.db.transaction() as conn:
+            self.require_workable(conn, draft.key)
+            return super().workspace_reanchor_items(draft)
+
+    def reanchor_source_identity(
+        self, key: WorkspaceKey, item: PendingReanchorRef
+    ) -> tuple[AnnotationSnapshot, bool]:
+        with self.db.transaction() as conn:
+            self.require_workable(conn, key)
+            return super().reanchor_source_identity(key, item)
+
+    def verified_reanchor_source(
+        self, key: WorkspaceKey, item: PendingReanchorRef
+    ) -> AnnotationSnapshot:
+        with self.db.transaction() as conn:
+            self.require_workable(conn, key)
+            return super().verified_reanchor_source(key, item)
 
     def run_mutation(
         self,

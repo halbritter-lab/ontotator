@@ -364,7 +364,7 @@ def test_review_replacement_must_match_target_layer_and_type(
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    view = ws_svc.open(key, target_set)
+    view = ws_svc.open(key, target_set, pending_proposal_set_ids=[])
     ws_key = view.key
 
     # Create a draft annotation with layer-2 (type-req), trying to use it as replacement for layer-1 target
@@ -448,7 +448,7 @@ def test_review_decision_invalidates_only_target_layer_check(
         mode="review",
         target_set_id=target_set.target_set_id,
     )
-    view = ws_svc.open(key, target_set)
+    view = ws_svc.open(key, target_set, pending_proposal_set_ids=[])
     ws_key = view.key
 
     # Check both layer-1 and layer-2

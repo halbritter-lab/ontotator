@@ -54,7 +54,7 @@ def round_work(tmp_path):
             mode="review",
             target_set_id=targets.target_set_id,
         )
-        rounds.append(service.open(key, targets))
+        rounds.append(service.open(key, targets, pending_proposal_set_ids=[]))
     return app, client, row, service, rounds
 
 
@@ -107,7 +107,7 @@ def test_selected_submitted_round_remains_read_only(round_work):
         mode="review",
         target_set_id=empty.target_set_id,
     )
-    service.open(key, empty)
+    service.open(key, empty, pending_proposal_set_ids=[])
     opened = open_round(client, row, empty.target_set_id)
     assert opened.status_code == 200, opened.text
     token = opened.json()["workspace_id"]
@@ -172,7 +172,7 @@ def test_cross_document_round_is_refused_without_fallback(round_work):
         mode="review",
         target_set_id=empty.target_set_id,
     )
-    service.open(key, empty)
+    service.open(key, empty, pending_proposal_set_ids=[])
     response = open_round(client, row, empty.target_set_id)
     assert response.status_code == 422, response.text
     assert response.json()["code"] == "REVIEW_ROUND_NOT_FOUND"

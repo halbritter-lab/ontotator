@@ -35,6 +35,7 @@ from ontocurator.domain.profiles import (
     resolve_type,
 )
 from ontocurator.domain.project_rules import ProjectRules, rule_violations
+from ontocurator.domain.reanchor_resolution import PendingReanchorRef
 from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
@@ -103,6 +104,21 @@ class CreateAnnotationCommand(BaseModel):
     @property
     def axes(self) -> Axes:
         return Axes(definition_name="custom", values=self.axes_values)
+
+
+class RecreateReanchorCommand(BaseModel):
+    """Author current-text evidence against a verified frozen predecessor finding."""
+
+    model_config = ConfigDict(extra="forbid")
+    command: Literal["recreate_reanchor"] = "recreate_reanchor"
+    item: PendingReanchorRef
+    annotation_id: str
+    evidence_id: str
+    term_id: str
+    layer_id: str
+    type_id: str
+    axes_values: dict[str, str | None] = Field(default_factory=dict)
+    segments: list[Segment] = Field(min_length=1)
 
 
 class SetTermCommand(BaseModel):
@@ -247,6 +263,7 @@ class CheckLayerCommand(BaseModel):
 
 EditCommand = Annotated[
     CreateAnnotationCommand
+    | RecreateReanchorCommand
     | SetTermCommand
     | SetAnnotationNoteCommand
     | SetAxesCommand
@@ -325,7 +342,9 @@ class EditingService:
 
         services: dict[str, OntologyService | Exception] = {}
         preparation_error: RevisionConflict | None = None
-        if isinstance(cmd, (CreateAnnotationCommand, SetTermCommand)):
+        if isinstance(
+            cmd, (CreateAnnotationCommand, RecreateReanchorCommand, SetTermCommand)
+        ):
             if self.registry is not None:
                 try:
                     self.registry.ensure_package_conditions(self.repo, key.project_key)
@@ -340,7 +359,7 @@ class EditingService:
             # layers first rather than trusting an unlocked draft read. Keep
             # strong references so LRU eviction cannot cause a build in operation.
             layers = scope.editable_layer_ids
-            if isinstance(cmd, CreateAnnotationCommand):
+            if isinstance(cmd, (CreateAnnotationCommand, RecreateReanchorCommand)):
                 layers = []
                 if cmd.layer_id is not None:
                     if cmd.layer_id in scope.editable_layer_ids:
@@ -363,6 +382,19 @@ class EditingService:
                 (s.annotation.annotation_id, s.version) for s in draft.annotations
             }
             result = self._execute_edit(draft, cmd, doc, profile, scope, services)
+            current_refs = {
+                (s.annotation.annotation_id, s.version) for s in result.annotations
+            }
+            result.reanchor_resolutions = [
+                resolution
+                for resolution in result.reanchor_resolutions
+                if resolution.replacement is None
+                or (
+                    resolution.replacement.annotation_id,
+                    resolution.replacement.version,
+                )
+                in current_refs
+            ]
             if draft.spanless_policy_version == 1:
                 changed = [
                     s
@@ -458,6 +490,54 @@ class EditingService:
         scope: TaskScope,
         services: dict[str, OntologyService | Exception],
     ) -> Draft:
+        if isinstance(cmd, RecreateReanchorCommand):
+            if draft.key.mode != "review" or cmd.item not in draft.reanchor_inputs:
+                raise DomainError("INVALID_REANCHOR_ITEM")
+            source = self.repo.verified_reanchor_source(draft.key, cmd.item)
+            if (
+                cmd.layer_id != source.annotation.layer_id
+                or cmd.type_id != source.annotation.type_id
+            ):
+                raise DomainError("INVALID_REANCHOR_ITEM")
+            created = self._create_annotation(
+                draft,
+                CreateAnnotationCommand(
+                    annotation_id=cmd.annotation_id,
+                    evidence_id=cmd.evidence_id,
+                    term_id=cmd.term_id,
+                    layer_id=cmd.layer_id,
+                    type_id=cmd.type_id,
+                    axes_values=cmd.axes_values,
+                    segments=cmd.segments,
+                    actor_id=draft.key.annotator_id,
+                ),
+                doc,
+                profile,
+                scope,
+                services,
+            )
+            own = next(
+                a
+                for a in created.annotations
+                if a.annotation.annotation_id == cmd.annotation_id
+            )
+            annotation = own.annotation.model_copy(
+                update={
+                    "provenance": Provenance(
+                        actor=ActorRef(actor_id=draft.key.annotator_id, kind="human"),
+                        method="edited",
+                        source_refs=[
+                            f"{cmd.item.source_ref.annotation_id}:{cmd.item.source_ref.version}"
+                        ],
+                    )
+                }
+            )
+            replacement = snapshot(annotation, own.evidence, doc, profile)
+            created.annotations = [
+                replacement if a.annotation.annotation_id == cmd.annotation_id else a
+                for a in created.annotations
+            ]
+            return created
         if isinstance(cmd, CheckLayerCommand):
             return self._check_layer(draft, cmd, scope)
         if isinstance(cmd, CreateAnnotationCommand):

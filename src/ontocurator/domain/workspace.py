@@ -4,6 +4,10 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.documents import EvidenceSnapshot
+from ontocurator.domain.reanchor_resolution import (
+    PendingReanchorRef,
+    ReanchorResolution,
+)
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import TaskScope
 
@@ -33,9 +37,12 @@ class Draft(BaseModel):
     revision: int
     # Server-owned draft policy metadata; historical receipts omit it.
     spanless_policy_version: Literal[1] | None = None
+    reanchor_inputs_initialized_at: str | None = None
     annotations: list[AnnotationSnapshot] = Field(default_factory=list)
     evidence: list[EvidenceSnapshot] = Field(default_factory=list)
     decisions: list[ReviewDecision] = Field(default_factory=list)
+    reanchor_inputs: list[PendingReanchorRef] = Field(default_factory=list)
+    reanchor_resolutions: list[ReanchorResolution] = Field(default_factory=list)
     checked_layer_ids: list[str] = Field(default_factory=list)
 
     @property
@@ -87,6 +94,8 @@ class Submission(BaseModel):
     draft_revision: int
     snapshots: list[AnnotationSnapshot]
     decisions: list[ReviewDecision]
+    reanchor_inputs: list[PendingReanchorRef] = Field(default_factory=list)
+    reanchor_resolutions: list[ReanchorResolution] = Field(default_factory=list)
     checked_layer_ids: list[str] = Field(default_factory=list)
     document_checked: bool = True
     created_at: str

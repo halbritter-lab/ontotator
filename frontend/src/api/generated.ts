@@ -1002,6 +1002,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/reanchor-resolutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Reanchor
+         * @description Record an exact replacement or justified dismissal in this review only.
+         */
+        post: operations["resolve_reanchor_api_v1_workspaces__workspace_id__reanchor_resolutions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/submit": {
         parameters: {
             query?: never;
@@ -1627,12 +1647,18 @@ export interface components {
             revision: number;
             /** Spanless Policy Version */
             spanless_policy_version?: 1 | null;
+            /** Reanchor Inputs Initialized At */
+            reanchor_inputs_initialized_at?: string | null;
             /** Annotations */
             annotations?: components["schemas"]["AnnotationSnapshot"][];
             /** Evidence */
             evidence?: components["schemas"]["EvidenceSnapshot"][];
             /** Decisions */
             decisions?: components["schemas"]["ReviewDecision"][];
+            /** Reanchor Inputs */
+            reanchor_inputs?: components["schemas"]["PendingReanchorRef"][];
+            /** Reanchor Resolutions */
+            reanchor_resolutions?: components["schemas"]["ReanchorResolution"][];
             /** Checked Layer Ids */
             checked_layer_ids?: string[];
         };
@@ -2103,6 +2129,8 @@ export interface components {
             targets?: components["schemas"]["ReviewTargetSet"] | null;
             /** Review Round Target Set Id */
             review_round_target_set_id?: string | null;
+            /** Pending Proposal Set Ids */
+            pending_proposal_set_ids?: number[] | null;
         };
         /**
          * OpenWorkspaceResponse
@@ -2148,6 +2176,12 @@ export interface components {
             languages?: string[];
             /** Qualification */
             qualification?: string | null;
+        };
+        /** PendingReanchorRef */
+        PendingReanchorRef: {
+            /** Proposal Set Id */
+            proposal_set_id: number;
+            source_ref: components["schemas"]["AnnotationRef"];
         };
         /** PinnedOntology */
         PinnedOntology: {
@@ -2677,6 +2711,8 @@ export interface components {
             term_id: string;
             /** Layer Id */
             layer_id: string;
+            /** Type Id */
+            type_id?: string | null;
             /**
              * Reason
              * @enum {string}
@@ -2690,6 +2726,20 @@ export interface components {
             diff: components["schemas"]["WindowOpcodeView"][];
             /** Old Segments */
             readonly old_segments: components["schemas"]["TextWindowView"][];
+        };
+        /** ReanchorResolution */
+        ReanchorResolution: {
+            item: components["schemas"]["PendingReanchorRef"];
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "recreated" | "dismissed";
+            replacement?: components["schemas"]["AnnotationRef"] | null;
+            /** Reason */
+            reason?: string | null;
+            /** Reviewer Id */
+            reviewer_id: string;
         };
         /** ReasonRequest */
         ReasonRequest: {
@@ -3017,6 +3067,10 @@ export interface components {
             snapshots: components["schemas"]["AnnotationSnapshot"][];
             /** Decisions */
             decisions: components["schemas"]["ReviewDecision"][];
+            /** Reanchor Inputs */
+            reanchor_inputs?: components["schemas"]["PendingReanchorRef"][];
+            /** Reanchor Resolutions */
+            reanchor_resolutions?: components["schemas"]["ReanchorResolution"][];
             /** Checked Layer Ids */
             checked_layer_ids?: string[];
             /**
@@ -3599,6 +3653,8 @@ export interface components {
             term_statuses?: {
                 [key: string]: "valid" | "obsolete" | "unknown";
             };
+            /** Pending Reanchor Items */
+            pending_reanchor_items?: components["schemas"]["ReanchorItem"][];
             /**
              * Enforce Spanless Rules
              * @default false
@@ -5542,6 +5598,41 @@ export interface operations {
         };
     };
     record_decision_api_v1_workspaces__workspace_id__decisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MutationEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_reanchor_api_v1_workspaces__workspace_id__reanchor_resolutions_post: {
         parameters: {
             query?: never;
             header?: never;

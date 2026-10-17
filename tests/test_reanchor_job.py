@@ -771,6 +771,8 @@ def test_individual_submission_is_not_a_reanchor_source(runtime):
     token = opened.json()["workspace_id"]
     command = CreateAnnotationCommand(
         annotation_id="manual-own",
+        evidence_id="manual-own-evidence",
+        segments=[{"start": 6, "end": 19}],
         layer_id="hpo",
         type_id="phenotype",
         term_id="HP:0001250",

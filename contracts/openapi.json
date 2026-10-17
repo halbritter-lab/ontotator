@@ -3001,6 +3001,56 @@
         }
       }
     },
+    "/api/v1/workspaces/{workspace_id}/reanchor-resolutions": {
+      "post": {
+        "summary": "Resolve Reanchor",
+        "description": "Record an exact replacement or justified dismissal in this review only.",
+        "operationId": "resolve_reanchor_api_v1_workspaces__workspace_id__reanchor_resolutions_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/submit": {
       "post": {
         "summary": "Submit Workspace",
@@ -4543,6 +4593,17 @@
             ],
             "title": "Spanless Policy Version"
           },
+          "reanchor_inputs_initialized_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reanchor Inputs Initialized At"
+          },
           "annotations": {
             "items": {
               "$ref": "#/components/schemas/AnnotationSnapshot"
@@ -4563,6 +4624,20 @@
             },
             "type": "array",
             "title": "Decisions"
+          },
+          "reanchor_inputs": {
+            "items": {
+              "$ref": "#/components/schemas/PendingReanchorRef"
+            },
+            "type": "array",
+            "title": "Reanchor Inputs"
+          },
+          "reanchor_resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/ReanchorResolution"
+            },
+            "type": "array",
+            "title": "Reanchor Resolutions"
           },
           "checked_layer_ids": {
             "items": {
@@ -5591,6 +5666,20 @@
               }
             ],
             "title": "Review Round Target Set Id"
+          },
+          "pending_proposal_set_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Proposal Set Ids"
           }
         },
         "additionalProperties": false,
@@ -5698,6 +5787,24 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PatchUserRequest"
+      },
+      "PendingReanchorRef": {
+        "properties": {
+          "proposal_set_id": {
+            "type": "integer",
+            "title": "Proposal Set Id"
+          },
+          "source_ref": {
+            "$ref": "#/components/schemas/AnnotationRef"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "proposal_set_id",
+          "source_ref"
+        ],
+        "title": "PendingReanchorRef"
       },
       "PinnedOntology": {
         "properties": {
@@ -7077,6 +7184,17 @@
             "type": "string",
             "title": "Layer Id"
           },
+          "type_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Id"
+          },
           "reason": {
             "type": "string",
             "enum": [
@@ -7135,6 +7253,54 @@
           "old_segments"
         ],
         "title": "ReanchorItem"
+      },
+      "ReanchorResolution": {
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/PendingReanchorRef"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "recreated",
+              "dismissed"
+            ],
+            "title": "Outcome"
+          },
+          "replacement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnnotationRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "reviewer_id": {
+            "type": "string",
+            "title": "Reviewer Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item",
+          "outcome",
+          "reviewer_id"
+        ],
+        "title": "ReanchorResolution"
       },
       "ReasonRequest": {
         "properties": {
@@ -7978,6 +8144,20 @@
             },
             "type": "array",
             "title": "Decisions"
+          },
+          "reanchor_inputs": {
+            "items": {
+              "$ref": "#/components/schemas/PendingReanchorRef"
+            },
+            "type": "array",
+            "title": "Reanchor Inputs"
+          },
+          "reanchor_resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/ReanchorResolution"
+            },
+            "type": "array",
+            "title": "Reanchor Resolutions"
           },
           "checked_layer_ids": {
             "items": {
@@ -9621,6 +9801,13 @@
             },
             "type": "object",
             "title": "Term Statuses"
+          },
+          "pending_reanchor_items": {
+            "items": {
+              "$ref": "#/components/schemas/ReanchorItem"
+            },
+            "type": "array",
+            "title": "Pending Reanchor Items"
           },
           "enforce_spanless_rules": {
             "type": "boolean",
