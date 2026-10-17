@@ -20,7 +20,7 @@ test("sidebar scrolls proposals and curated annotations as one list", async ({ p
   // ... and is reached by scrolling the one sidebar list.
   await scroller.evaluate((el) => el.scrollTo(0, el.scrollHeight));
   await expect(curatedHeader).toBeInViewport();
-  await expect(scroller.getByRole("button", { name: "+ New Annotation" })).toBeInViewport();
+  await expect(scroller.getByRole("button", { name: "Add finding without a text span" })).toBeInViewport();
 
   // Half-way down, the proposals header sticks to the top of the list.
   await scroller.evaluate((el) => el.scrollTo(0, el.scrollHeight / 2));

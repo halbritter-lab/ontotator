@@ -10,6 +10,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import type { AnnotationVersion } from "../api/client";
 import type { Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
+import { Textarea } from "../ui/Textarea";
 import { Button } from "../ui/Button";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -176,6 +177,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     segments: SelectionPayload["segments"];
     isSpanless?: boolean;
   } | null>(null);
+  const [spanlessReason, setSpanlessReason] = useState("");
+  const [pendingAdoption, setPendingAdoption] = useState<TargetProposal | null>(null);
+  const [adoptionReasons, setAdoptionReasons] = useState<Record<string, string>>({});
+  const [spanlessReasonError, setSpanlessReasonError] = useState(false);
+  const [annotationNoteDrafts, setAnnotationNoteDrafts] = useState<Record<string, string>>({});
+  const annotationNoteSaves = useRef(new Map<string, Promise<void>>());
+  const annotationNoteDraftsRef = useRef(annotationNoteDrafts);
+  annotationNoteDraftsRef.current = annotationNoteDrafts;
+  const unsavedAnnotationNotes = () => Object.entries(annotationNoteDraftsRef.current).filter(([id, note]) => {
+    const ann = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === id)?.annotation;
+    return ann && note !== (ann.note ?? "");
+  });
   const [isAttachingMention, setIsAttachingMention] = useState(false);
   const [textResyncToken, setTextResyncToken] = useState(0);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -497,6 +510,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   useEffect(() => {
     if (!leaveGuardRef) return;
     leaveGuardRef.current = (proceed) => {
+      if (unsavedAnnotationNotes().length > 0) {
+        logoutRejectedBaseline.current = queueRef.current.rejectedCount();
+        setLogoutProceed(() => proceed); return;
+      }
       if (invalidReviewNoteGuard.current()) return;
       const queue = queueRef.current;
       if (queue.pendingCount() === 0 && queue.getState() !== "saving") proceed();
@@ -510,6 +527,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const saveAndLogout = async () => {
     if (!logoutProceed || logoutSaving) return;
+    try { for (const [id] of unsavedAnnotationNotes()) await saveAnnotationNote(id); } catch (error) { reportError(error); setLogoutProceed(null); return; }
+    if (unsavedAnnotationNotes().length > 0) { setActionError("A reason is required for findings without a text span."); setLogoutProceed(null); return; }
     if (invalidReviewNoteGuard.current()) { setLogoutProceed(null); return; }
     setLogoutSaving(true);
     try {
@@ -538,6 +557,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (leaveInProgress.current) return false;
     leaveInProgress.current = true;
     try {
+      try { for (const [id] of unsavedAnnotationNotes()) await saveAnnotationNote(id); } catch (error) { reportError(error); return false; }
+      if (!readOnlyRef.current && unsavedAnnotationNotes().length > 0) {
+        const discard = await askConfirm("Changes not saved", "Annotation notes have unsaved edits. A reason is required when no text span is linked. Leaving discards these local edits.", "Discard edits and leave");
+        if (!discard) return false;
+        setAnnotationNoteDrafts({}); annotationNoteDraftsRef.current = {};
+      }
       const invalidLocalNotes = !readOnlyRef.current ? (latestDraft.current.decisions ?? []).filter(d => {
         const local = noteDraftsRef.current[refKey(d.target)];
         return d.outcome === "uncertain" && local !== undefined && !local.trim() && local !== (d.note ?? "");
@@ -670,7 +695,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const local = noteDrafts[refKey(d.target)];
     return d.outcome === "uncertain" && local !== undefined && !local.trim() && local !== (d.note ?? "");
   });
-  hasInvalidReviewNoteRef.current = hasInvalidReviewNote;
+  hasInvalidReviewNoteRef.current = hasInvalidReviewNote || unsavedAnnotationNotes().length > 0;
   const statusText =
     queueState === "conflict" ? "Changed elsewhere – reload required"
     : queueState === "error" ? (
@@ -678,6 +703,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       : isNetworkError(queueError) || isOffline ? "Offline – changes not saved"
       : "Save error – changes not saved"
     )
+    : unsavedAnnotationNotes().length > 0 ? "Annotation note changes not saved"
     : hasInvalidReviewNote ? "Reviewer note required – changes not saved"
     : queueState === "saving" ? "Saving..."
     : queueState === "dirty" ? "Unsaved changes"
@@ -737,10 +763,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const value = draftNote ?? stored ?? "";
     return value.trim() || undefined;
   };
-  /** Whether an adopted copy differs from its source proposal (term, type, axes or mentions). */
+  /** Whether an adopted copy differs from its source proposal (term, type, axes, note or mentions). */
   const copyDiffersFromTarget = (copy: AnnotationSnapshot, target: { annotation_id: string; version: string }) => {
     const source = targetSnapshotOf(target);
     if (!source) return true;
+    if ((copy.annotation.note ?? "") !== (source.annotation.note ?? "")) return true;
     if (copy.annotation.term_id !== source.annotation.term_id) return true;
     if (copy.annotation.type_id !== source.annotation.type_id) return true;
     if (JSON.stringify(normalizeAxes(copy.annotation.axes_values)) !== JSON.stringify(normalizeAxes(source.annotation.axes_values))) return true;
@@ -821,6 +848,25 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     return updatedDraft;
   };
 
+  const saveAnnotationNote = async (id: string): Promise<void> => {
+    const running = annotationNoteSaves.current.get(id);
+    if (running) { await running; return saveAnnotationNote(id); }
+    if (readOnlyRef.current) return;
+    const note = annotationNoteDraftsRef.current[id];
+    const ann = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === id)?.annotation;
+    if (!ann || note === undefined || note === (ann.note ?? "")) return;
+    if (view.enforce_spanless_rules && !ann.evidence_refs?.length && !note.trim()) return;
+    const save = (async () => {
+      await mutateAnnotationAndSyncDecision(id, () => enqueueMutation({ command: "set_annotation_note", annotation_id: id, note: note.trim() || null }));
+      if (annotationNoteDraftsRef.current[id] === note) {
+        const next = { ...annotationNoteDraftsRef.current }; delete next[id];
+        annotationNoteDraftsRef.current = next; setAnnotationNoteDrafts(next);
+      }
+    })();
+    annotationNoteSaves.current.set(id, save);
+    try { await save; } finally { annotationNoteSaves.current.delete(id); }
+  };
+
   // Text selection handler
   const handleSelection = async (payload: SelectionPayload) => {
     if (readOnlyRef.current) return;
@@ -898,6 +944,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const createPendingAnnotation = async (termId: string, searchId?: string) => {
     if (readOnlyRef.current) return;
     if (!pendingAnnotation || creatingPending.current) return;
+    if (pendingAnnotation.isSpanless && view.enforce_spanless_rules && !spanlessReason.trim()) {
+      setSpanlessReasonError(true);
+      inspectorRef.current?.querySelector<HTMLTextAreaElement>("#spanless-reason")?.focus();
+      return;
+    }
     creatingPending.current = true;
     const pending = pendingAnnotation;
     try {
@@ -910,10 +961,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         type_id: pending.typeId,
         term_id: termId,
         search_event_id: searchId,
+        ...(pending.isSpanless && spanlessReason.trim() ? { note: spanlessReason.trim() } : {}),
         segments: pending.segments,
         axes_values: initialAxisValues(type?.axes ?? [], termId),
       });
       setPendingAnnotation(null);
+      setSpanlessReason(""); setSpanlessReasonError(false);
       setSelectedTargetId(null);
       setSelectedSourceId(null);
       setSelectedAnnotationId(pending.annotationId);
@@ -961,8 +1014,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
 
+  const activeSpanlessType = view.layers?.find(l => l.layer_id === layerSelection.activeLayerId)?.annotation_types.find(t => t.type_id === layerSelection.activeTypeId)
+    ?? view.layers?.find(l => l.layer_id === layerSelection.activeLayerId)?.annotation_types[0];
+  const spanlessBlockedReason = activeSpanlessType?.evidence_policy === "required_on_complete"
+    ? "This annotation type requires a text span."
+    : view.enforce_spanless_rules && !view.allow_spanless_findings ? "This project requires a text span for findings." : undefined;
+
   const handleStartSpanless = () => {
-    if (readOnlyRef.current) return;
+    if (readOnlyRef.current || spanlessBlockedReason) return;
     if (!layerSelection.activeLayerId) {
       setActionError("No active editable layer selected. Please activate a layer.");
       return;
@@ -1201,7 +1260,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Adopt a review target as an editable draft copy and switch to editing it.
   // The "changed" decision is recorded only once the copy actually differs.
-  const handleAdoptAndEditTarget = async (target: TargetProposal) => {
+  const handleAdoptAndEditTarget = async (target: TargetProposal, reason?: string) => {
     if (readOnlyRef.current) return;
     setActionError(null);
     const key = targetKeyOf(target);
@@ -1225,6 +1284,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const src = sourceTargetOf(a);
       return src !== null && refKey(src) === key;
     });
+
+    const sourceSnapshot = targetSnapshotOf(target);
+    if (!existingCopy && view.enforce_spanless_rules && !sourceSnapshot?.annotation.evidence_refs?.length) {
+      const sourceType = view.layers?.find(l => l.layer_id === sourceSnapshot?.annotation.layer_id)?.annotation_types.find(t => t.type_id === sourceSnapshot?.annotation.type_id);
+      if (sourceType?.evidence_policy === "required_on_complete") { setActionError("This annotation type requires a text span. Highlight supporting text to create a finding."); return; }
+      if (!view.allow_spanless_findings) { setActionError("This project requires a text span for findings."); return; }
+      if (!(reason ?? sourceSnapshot?.annotation.note ?? "").trim()) { setPendingAdoption(target); return; }
+    }
 
     // 2. An explicit decision exists: ask before replacing it.
     if (existingDecision && existingDecision.outcome !== "changed") {
@@ -1275,6 +1342,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         term_id: targetTerm,
         axes_values: initialAxes,
         segments: firstEvidence ? firstEvidence.mention.segments : [],
+        ...(reason?.trim() || snap?.annotation.note ? { note: reason?.trim() || snap?.annotation.note } : {}),
         source_annotation_id: target.annotation_id,
         source_version: target.version,
       });
@@ -1304,6 +1372,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       );
       return;
     }
+    if (reason?.trim()) { try { await syncReplacementDecision(newAnnId); } catch (error) { reportError(error); } }
     openCopy(newAnnId);
   };
 
@@ -1398,6 +1467,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const handleSubmitWorkspace = async () => {
     if (readOnlyRef.current) return;
     setSubmitError(null);
+    try { for (const [id] of unsavedAnnotationNotes()) await saveAnnotationNote(id); } catch (error) { reportError(error); return; }
+    if (unsavedAnnotationNotes().length > 0) { setSubmitError("A reason is required for findings without a text span."); return; }
     if (blockInvalidUnresolvedNotes()) return;
 
     // Validate only after pending saves have finished;
@@ -1884,13 +1955,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 <span>Curated Annotations ({visibleAnnotations.length})</span>
                 <Button
                   type="button"
-                  variant="secondary" size="sm"
-                  disabled={readOnly} onClick={handleStartSpanless}
+                  variant="quiet" size="sm"
+                  disabled={readOnly || !!spanlessBlockedReason} onClick={handleStartSpanless}
                   title="Create new annotation via ontology search"
                 >
-                  + New Annotation
+                  Add finding without a text span
                 </Button>
               </div>
+              {spanlessBlockedReason && <p className="field-hint">{spanlessBlockedReason}</p>}
               <ul className="doc-list">
                 {visibleAnnotations.map((annSnap) => {
                   const isSelected =
@@ -2009,6 +2081,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     ? "Select a term from the ontology for the new annotation."
                     : "The annotation will be saved upon selecting a term."}
                 </p>
+                {pendingAnnotation.isSpanless && <Textarea id="spanless-reason" label="Reason for no text span"
+                  required={view.enforce_spanless_rules} value={spanlessReason}
+                  error={spanlessReasonError && !spanlessReason.trim() ? "A reason is required before selecting a term." : undefined}
+                  onChange={event => { setSpanlessReason(event.target.value); setSpanlessReasonError(false); }} />}
                 <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
                   languages={searchLanguagesFor(pendingAnnotation.layerId)}
@@ -2063,6 +2139,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               searchLanguages={searchLanguagesFor(selectedAnnotation?.annotation.layer_id)}
               termLabel={selectedAnnotation ? termLabel(selectedAnnotation.annotation.layer_id, selectedAnnotation.annotation.term_id) : null}
               axesConfig={currentAxesConfig}
+              noteValue={selectedAnnotation ? annotationNoteDrafts[selectedAnnotation.annotation.annotation_id] ?? selectedAnnotation.annotation.note ?? "" : ""}
+              noteRequired={!!view.enforce_spanless_rules && !!selectedAnnotation && !selectedAnnotation.annotation.evidence_refs?.length}
+              onChangeNote={note => { if (selectedAnnotationId) { annotationNoteDraftsRef.current = { ...annotationNoteDraftsRef.current, [selectedAnnotationId]: note }; setAnnotationNoteDrafts(annotationNoteDraftsRef.current); } }}
+              onSaveNote={() => { if (selectedAnnotationId) void saveAnnotationNote(selectedAnnotationId).catch(reportError); }}
+              detachLastBlockedReason={selectedAnnotation && view.enforce_spanless_rules ? (!view.allow_spanless_findings ? "This project requires a text span for findings." :
+                view.layers?.find(l => l.layer_id === selectedAnnotation.annotation.layer_id)?.annotation_types.find(t => t.type_id === selectedAnnotation.annotation.type_id)?.evidence_policy === "required_on_complete" ? "This annotation type requires a text span." :
+                !(selectedAnnotation.annotation.note ?? "").trim() ? "Enter a reason in the annotation note before removing the last mention." : undefined) : undefined}
               linkedTarget={linkedTargetForSelectedAnnotation ? {
                 targetId: linkedTargetForSelectedAnnotation.targetKey,
                 termId: linkedTargetForSelectedAnnotation.termId,
@@ -2242,6 +2325,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           </Button>
         </div>
       </Dialog>
+
+      {pendingAdoption && <Dialog open title="Reason for no text span" onClose={() => setPendingAdoption(null)}>
+        <p>The editable copy needs a reason because this proposal has no text span.</p>
+        <Textarea id="adoption-spanless-reason" label="Reason for no text span" required
+          value={adoptionReasons[refKey(pendingAdoption)] ?? ""}
+          onChange={event => setAdoptionReasons(prev => ({ ...prev, [refKey(pendingAdoption)]: event.target.value }))} />
+        <Button variant="primary" disabled={!(adoptionReasons[refKey(pendingAdoption)] ?? "").trim()} onClick={() => {
+          const target = pendingAdoption; const reason = adoptionReasons[refKey(target)]; setPendingAdoption(null);
+          void handleAdoptAndEditTarget(target, reason).catch(reportError);
+        }}>Create editable copy</Button>
+        <Button onClick={() => setPendingAdoption(null)}>Cancel</Button>
+      </Dialog>}
 
       <ConfirmDialog open={!!logoutProceed} title="Unsaved changes"
         message={<p>Your latest changes are not saved yet.</p>} confirmLabel="Save and log out"

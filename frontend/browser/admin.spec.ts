@@ -206,7 +206,7 @@ test.describe("Administration through real accounts and jobs", () => {
     await page.reload();
     await expect(page.getByText("Submitted. The project lead can reopen it for changes.", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Finish & Submit Case/i })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "+ New Annotation", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Add finding without a text span", exact: true })).toBeDisabled();
     await logout(page);
     await loginExisting(page, setup.lead);
     await page.getByRole("link", { name: "Progress", exact: true }).click();

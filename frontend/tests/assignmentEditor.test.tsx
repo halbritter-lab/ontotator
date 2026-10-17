@@ -51,7 +51,7 @@ it("closes an unfinished new-annotation form when the mounted workspace becomes 
   const response = workspaceFixture();
   const props = { view: response.view, workspaceId: "ws", onClose: vi.fn() };
   const mounted = render(<CaseScreen {...props} />);
-  fireEvent.click(screen.getByRole("button", { name: /New Annotation/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Add finding without a text span/ }));
   expect(screen.getByRole("region", { name: "New Annotation" })).toBeDefined();
   mounted.rerender(<CaseScreen {...props} readOnly />);
   expect(screen.queryByRole("region", { name: "New Annotation" })).toBeNull();
@@ -63,7 +63,7 @@ it("keeps a submitted workspace readable while disabling submission and new find
   render(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} readOnly />);
   expect(screen.getByText("Submitted. The project lead can reopen it for changes.")).toBeDefined();
   expect((screen.getByRole("button", { name: /Finish & Submit Case/ }) as HTMLButtonElement).disabled).toBe(true);
-  const add = screen.getByRole("button", { name: /New Annotation/i }) as HTMLButtonElement;
+  const add = screen.getByRole("button", { name: /Add finding without a text span/i }) as HTMLButtonElement;
   expect(add.disabled).toBe(true);
   fireEvent.click(add);
   fireEvent.keyDown(document.querySelector(".text-container")!, { key: "1" });

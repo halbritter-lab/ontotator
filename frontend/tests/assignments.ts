@@ -1,3 +1,4 @@
+// Existing editor regression fixtures model drafts opened before the spanless rule; D3 cases opt into enforcement explicitly.
 import { vi } from "vitest";
 import { api, type AssignmentWorkspace, type TaskSummary, type OpenWorkspaceResponse } from "../src/api/client";
 
@@ -32,6 +33,6 @@ export function workspaceFixture(documentId = "doc", mode: "independent" | "revi
       default_type_id: "default", annotation_types: [{ type_id: "default", label: "Finding", axes: [], evidence_policy: "optional" }] },
       { layer_id: "reference", label: "Reference", ontology_id: "hp", default_type_id: "default", access: "reference", default_visible: true, annotation_types: [] }],
     checked_layer_ids: [], available_inputs: [], submissions: [], term_statuses: {},
-    axes_definition: "custom", axes_config: [], axes_config_sha256: "axes",
+    allow_spanless_findings: true, enforce_spanless_rules: false, axes_definition: "custom", axes_config: [], axes_config_sha256: "axes",
   } };
 }

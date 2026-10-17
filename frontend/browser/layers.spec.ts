@@ -26,7 +26,8 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.locator(".case-navigation").getByRole("button", { name: /Next Case|Nächster Fall/i })).toBeEnabled();
 
     // 3. Create annotation without any ontology/layer dialogs using unified search flow
-    await page.getByRole("button", { name: "+ New Annotation" }).click();
+    await page.getByRole("button", { name: "Add finding without a text span" }).click();
+    await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
     await page.getByLabel("Search ontology term").fill("HP:0001250");
     await page.locator(".candidate-card").filter({ hasText: "HP:0001250" }).first().click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);
@@ -34,7 +35,8 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await page.locator(".case-navigation").getByRole("button", { name: /Next Case|Nächster Fall/i }).click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
     await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 0");
-    await page.getByRole("button", { name: "+ New Annotation" }).click();
+    await page.getByRole("button", { name: "Add finding without a text span" }).click();
+    await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
     await page.getByLabel("Search ontology term").fill("HP:0001252");
     await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
     await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001252");
@@ -60,7 +62,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await page.getByRole("button", { name: "Next Case" }).click();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2:.*doc-beta/i);
     await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001250");
-    await expect(page.getByRole("button", { name: "+ New Annotation" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Add finding without a text span" })).toBeDisabled();
     await expect(page.getByRole("button", { name: /Finish & Submit Case/i })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Next Case" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Previous Case" })).toBeEnabled();
@@ -108,7 +110,8 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(refVisibility).toBeChecked();
 
     // 5. Annotate independently in target layer
-    await page.getByRole("button", { name: "+ New Annotation" }).click();
+    await page.getByRole("button", { name: "Add finding without a text span" }).click();
+    await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
     await page.getByLabel("Search ontology term").fill("HP:0001252");
     await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);

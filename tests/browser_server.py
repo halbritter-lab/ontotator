@@ -318,11 +318,26 @@ def decision_semantics_package() -> ValidatedPackage:
     return pkg
 
 
+def spanless_decisions_package() -> ValidatedPackage:
+    """Historical spanless proposal for repairing a new draft without rewriting its source."""
+    pkg = fixture_package(project_key="pkg-spanless-decisions")
+    profile = pkg.manifest.task_profile
+    proposals = {}
+    for number, original in enumerate(pkg.annotations.values()):
+        if number == 0:
+            annotation = original.annotation.model_copy(update={"evidence_refs": []})
+            original = snapshot(annotation, [], pkg.documents[original.document_id], profile)
+        proposals[(original.annotation.annotation_id, original.version)] = original
+    pkg.annotations = proposals
+    return pkg
+
+
 def seed_packages() -> list[ValidatedPackage]:
     """Every project the specs use, oldest first."""
     return [
         fixture_package(),
         decision_semantics_package(),
+        spanless_decisions_package(),
         fixture_package(project_key="pkg-many-proposals", proposals=MANY_PROPOSALS),
         fixture_package(project_key="translation-fixture"),
         design_package(),

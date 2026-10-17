@@ -170,7 +170,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     submissions: [],
     available_inputs: [],
     term_statuses: {},
-    axes_definition: "editor-axes/v1",
+    allow_spanless_findings: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
     axes_config: [
       { id: "assertion", label: "Vorhandensein (Assertion)", options: ["present", "absent", "uncertain"], allow_empty: true },
       { id: "experiencer", label: "Betroffene Person (Experiencer)", options: ["patient", "other"], allow_empty: true },

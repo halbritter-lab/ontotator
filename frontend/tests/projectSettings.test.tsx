@@ -89,7 +89,15 @@ describe("project settings sections", () => {
     await screen.findByText("Guideline saved.");
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
     await screen.findByText("Rules saved.");
-    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, annotate_accepted_translations_only: true, hidden_axis_values: {} });
+    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, annotate_accepted_translations_only: true, allow_spanless_findings: true, hidden_axis_values: {} });
+  });
+
+  it("persists the spanless rule and explains its new-draft scope", async () => {
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Allow findings without a text span" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, expect.objectContaining({ allow_spanless_findings: false })));
+    expect(screen.getByText(/New drafts use this rule/)).toBeDefined();
   });
 
   it("uses the real server defaults and every annotation type without guessing", async () => {

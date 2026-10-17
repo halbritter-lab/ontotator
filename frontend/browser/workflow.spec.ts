@@ -99,7 +99,8 @@ test("real backend: invalid input does not block correction", async ({ page }) =
   await importFixture(page, "browser-independent");
   await openCase(page, { task: "annotate" });
   await expect(page.getByText(/Review Proposals/i)).toHaveCount(0);
-  await page.getByRole("button", { name: /\+ New Annotation/i }).click();
+  await page.getByRole("button", { name: /Add finding without a text span/i }).click();
+  await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
   await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
   // Selected candidate creates annotation

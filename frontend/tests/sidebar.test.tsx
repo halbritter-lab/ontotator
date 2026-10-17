@@ -84,7 +84,7 @@ const reviewView = (annotations: any[] = []): WorkspaceView => {
     available_inputs: inputs,
     submissions: [],
     term_statuses: {},
-    axes_definition: "editor-axes/v1",
+    allow_spanless_findings: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
     axes_config: [{ id: "assertion", label: "Assertion", options: ["present", "absent", "uncertain"], allow_empty: true }],
     axes_config_sha256: "sha-axes",
     draft: {
@@ -167,7 +167,7 @@ describe("continuous sidebar", () => {
       expect(list.style.maxHeight).toBe("");
     }
     // The layer controls and the footer stay outside the scrolling part.
-    expect(scroller.contains(screen.getByRole("button", { name: /\+ New Annotation/ }))).toBe(true);
+    expect(scroller.contains(screen.getByRole("button", { name: /Add finding without a text span/ }))).toBe(true);
     expect(sidebar.lastElementChild).not.toBe(scroller);
   });
 

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { authenticatedRequest, importPackage, openCase, submitCase } from "./helpers";
+import { authenticatedRequest, importPackage, openCase, selectText, submitCase } from "./helpers";
 
 test("one confirmation submits a two-layer negative finding", async ({ page }) => {
   await importPackage(page, "multi_editable", "pkg-scenario-c", "decision-completion");
@@ -99,4 +99,104 @@ test("unresolved notes are required, survive reload and block submission when lo
   const submission = await (await submitted).json();
   expect(submission.decisions.find((d: { outcome: string }) => d.outcome === "uncertain").note).toBe("Corrected reviewer reason");
   expect(submission.snapshots).toHaveLength(1);
+});
+
+
+test("new-draft spanless findings require a reason, retain it through search and reload, and protect the last mention", async ({ page }) => {
+  await importPackage(page, "single", "browser-fixture", "spanless-reason-curator");
+  const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
+  await openCase(page);
+  const opened = await (await openedResponse).json();
+  expect(opened.view.enforce_spanless_rules).toBe(true);
+  const commands = `/api/v1/workspaces/${encodeURIComponent(opened.workspace_id)}/commands`;
+  const bypass = await authenticatedRequest(page, commands, "POST", { expected_revision: 0, payload: {
+    command: "create_annotation", annotation_id: "bypass-spanless", layer_id: "hpo-layer", type_id: "phenotype", term_id: "HP:0001252", segments: [], axes_values: {},
+  } });
+  expect(bypass.status()).toBe(422);
+  await page.getByRole("button", { name: "Add finding without a text span" }).click();
+  const reason = page.getByLabel("Reason for no text span");
+  await page.getByLabel(/Search ontology term/).fill("Hypotonia");
+  const candidate = page.locator(".candidate-card").filter({ hasText: "HP:0001252" });
+  await candidate.click();
+  await expect(reason).toBeFocused(); await expect(reason).toHaveAttribute("aria-invalid", "true");
+  await reason.fill("Finding recorded in the clinical summary");
+  await page.route("**/search", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ code: "SEARCH_UNAVAILABLE", message: "Search temporarily unavailable" }) }), { times: 1 });
+  const failedSearch = page.waitForResponse(r => r.url().endsWith("/search") && r.status() === 503);
+  await page.getByLabel(/Search ontology term/).fill("another query");
+  await failedSearch;
+  await expect(reason).toHaveValue("Finding recorded in the clinical summary");
+  await page.getByLabel(/Search ontology term/).fill("Hypotonia");
+  const savedResponse = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().method() === "POST" && r.request().postDataJSON().payload.command === "create_annotation");
+  await candidate.click();
+  const saved = await (await savedResponse).json();
+  expect(saved.annotations[0].annotation.note).toBe("Finding recorded in the clinical summary");
+  await expect(page.locator(".status-badge")).toHaveText("Saved");
+  await page.reload(); await page.locator('.sidebar [data-list-key^="annotation:"]').first().click();
+  await expect(page.getByLabel("Reason for no text span")).toHaveValue("Finding recorded in the clinical summary");
+  await page.getByRole("button", { name: "+ Add Mention", exact: true }).click();
+  await selectText(page, 0, 9);
+  await expect(page.getByRole("heading", { name: "Mentions (1)" })).toBeVisible();
+  await page.getByLabel("Annotation note").fill("");
+  const clearedNote = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "set_annotation_note");
+  await page.getByRole("heading", { name: "Mentions (1)" }).click();
+  expect((await clearedNote).ok()).toBeTruthy();
+  await expect(page.getByRole("button", { name: "Remove", exact: true })).toBeDisabled();
+  await page.getByLabel("Annotation note").fill("Evidence span is incidental; summary supports this finding");
+  const justifiedNote = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "set_annotation_note");
+  await page.getByRole("heading", { name: "Mentions (1)" }).click();
+  expect((await justifiedNote).ok()).toBeTruthy();
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByRole("button", { name: "Yes, remove", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Mentions (0)" })).toBeVisible();
+  await expect(page.getByLabel("Reason for no text span")).toHaveValue("Evidence span is incidental; summary supports this finding");
+  await page.getByLabel("Reason for no text span").fill("  ");
+  await page.getByRole("button", { name: /Finish & Submit Case/ }).click();
+  await expect(page.getByRole("dialog", { name: "Submit case" })).toHaveCount(0);
+  await expect(page.getByLabel("Reason for no text span")).toHaveValue("  ");
+});
+
+test("a lead persists the project spanless rule and new drafts explain the prohibition", async ({ page }) => {
+  await importPackage(page, "single", "browser-fixture", "spanless-settings-lead");
+  await page.goto("/#/projects/browser-fixture/settings");
+  const allow = page.getByRole("checkbox", { name: "Allow findings without a text span" });
+  await allow.uncheck(); await page.getByRole("button", { name: "Save rules" }).click();
+  await expect(page.getByText("Rules saved.")).toBeVisible(); await page.reload(); await expect(allow).not.toBeChecked();
+  await page.goto("/#/?project=browser-fixture"); await openCase(page);
+  await expect(page.getByRole("button", { name: "Add finding without a text span" })).toBeDisabled();
+  await expect(page.getByText("This project requires a text span for findings.")).toBeVisible();
+  const restored = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true });
+  expect(restored.ok()).toBeTruthy();
+});
+
+
+test("repairing a historical spanless proposal collects a clinical reason without changing its source", async ({ page }) => {
+  await importPackage(page, "spanless", "pkg-spanless-decisions", "spanless-source-repair");
+  const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
+  await openCase(page, { task: "review" });
+  const opened = await (await openedResponse).json();
+  const source = opened.view.available_inputs.find((item: { annotation: { evidence_refs: unknown[] } }) => !item.annotation.evidence_refs?.length);
+  const sourceBefore = JSON.stringify(source);
+  const proposals = page.locator('.sidebar [data-list-key^="target:"]');
+  await proposals.first().click(); await page.keyboard.press("1"); await expect(proposals.first()).toContainText("Confirmed");
+  await page.getByRole("button", { name: /Edit & Replace/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Reason for no text span" });
+  await dialog.getByLabel("Reason for no text span").fill("Specialist summary supports this finding");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(proposals.first()).toContainText("Confirmed");
+  await page.getByRole("button", { name: /Edit & Replace/ }).click();
+  await expect(dialog.getByLabel("Reason for no text span")).toHaveValue("Specialist summary supports this finding");
+  await dialog.getByRole("button", { name: "Create editable copy" }).click();
+  await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
+  await expect(proposals.first()).toContainText("Replaced");
+  await expect(page.getByLabel("Reason for no text span")).toHaveValue("Specialist summary supports this finding");
+  await proposals.nth(1).click(); await page.keyboard.press("2"); await expect(proposals.nth(1)).toContainText("Rejected");
+  const submitted = page.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST");
+  await submitCase(page);
+  const submission = await (await submitted).json();
+  expect(submission.snapshots).toHaveLength(1);
+  expect(submission.snapshots[0].annotation.note).toBe("Specialist summary supports this finding");
+  expect(submission.decisions.find((d: { outcome: string }) => d.outcome === "changed").replacement.version).toBe(submission.snapshots[0].version);
+  const reopened = await authenticatedRequest(page, `/api/v1/assignments/${opened.assignment.id}/open`, "POST");
+  const after = await reopened.json();
+  expect(JSON.stringify(after.view.available_inputs.find((item: { version: string }) => item.version === source.version))).toBe(sourceBefore);
 });

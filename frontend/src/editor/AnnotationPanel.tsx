@@ -1,4 +1,5 @@
 import { IconButton } from "../ui/IconButton";
+import { Textarea } from "../ui/Textarea";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/Button";
 import React, { useState } from "react";
@@ -40,6 +41,11 @@ export interface AnnotationPanelProps {
   /** Open the ontology tree at this annotation's term. */
   onShowInTree?: () => void;
   onSelectEvidence: (evidenceId: string) => void;
+  noteValue?: string;
+  noteRequired?: boolean;
+  onChangeNote?: (note: string) => void;
+  onSaveNote?: () => void;
+  detachLastBlockedReason?: string;
   onUpdateTerm: (termId: string, searchId?: string) => void;
   onUpdateAxes: (axes: Partial<Axes>) => void;
   onConfirmAxis?: (axisId: string) => void;
@@ -80,6 +86,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   onDeselect,
   onShowInTree,
   onSelectEvidence,
+  noteValue, noteRequired, onChangeNote, onSaveNote, detachLastBlockedReason,
   onUpdateTerm,
   onUpdateAxes,
   onConfirmAxis,
@@ -273,6 +280,13 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         </div>
       )}
 
+      <div className="detail-section">
+        <Textarea id={`annotation-note-${ann.annotation_id}`} label={noteRequired ? "Reason for no text span" : "Annotation note"}
+          required={noteRequired} value={noteValue ?? ann.note ?? ""} readOnly={readOnly}
+          error={noteRequired && !(noteValue ?? ann.note ?? "").trim() ? "A reason is required for a finding without a text span." : undefined}
+          onChange={event => onChangeNote?.(event.target.value)} onBlur={onSaveNote} />
+      </div>
+
       {/* 3. Evidence Mentions */}
       <div className="detail-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -368,7 +382,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     <Button
                       type="button"
                       variant="danger" size="sm"
-                      disabled={readOnly} onClick={() => setConfirmDetachId(ev.mention.evidence_id)}
+                      disabled={readOnly || (linkedEvidence.length === 1 && !!detachLastBlockedReason)} onClick={() => setConfirmDetachId(ev.mention.evidence_id)}
                       title="Detach mention from this annotation"
                     >
                       Remove
@@ -381,6 +395,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           </div>
         )}
       </div>
+
+      {detachLastBlockedReason && <p className="field-hint">{detachLastBlockedReason}</p>}
 
       {/* 4. Delete Annotation */}
       <div className="detail-section" style={{ marginTop: "auto" }}>

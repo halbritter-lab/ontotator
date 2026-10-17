@@ -50,7 +50,7 @@ function server(mode: WorkspaceMode = "independent") {
         layers: [{ layer_id: "phenotype", label: "Phenotype", ontology_id: "hp", access: "editable", default_visible: true, default_type_id: "default",
           annotation_types: [{ type_id: "default", label: "Phenotype", axes: [], evidence_policy: "optional" }] }],
         ontologies: [{ ontology_id: "hp", label: "HPO", release: "r", sha256: "s", format: "obo-graph-json" }],
-        checked_layer_ids: [], available_inputs: [], submissions: [], term_statuses: {}, axes_definition: "custom", axes_config: [], axes_config_sha256: "axes",
+        checked_layer_ids: [], available_inputs: [], submissions: [], term_statuses: {}, allow_spanless_findings: true, enforce_spanless_rules: false, axes_definition: "custom", axes_config: [], axes_config_sha256: "axes",
       },
     } as OpenWorkspaceResponse, assignmentId);
   });

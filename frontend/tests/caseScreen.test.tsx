@@ -19,6 +19,7 @@ it("never pre-fills clinical axis values (no assertion default for HPO terms)", 
 
 describe("CaseScreen integration", () => {
   const sampleView: WorkspaceView = {
+    allow_spanless_findings: true, enforce_spanless_rules: false,
     document: {
       document_id: "doc-test-1",
       text: "The patient showed severe hypotonia and seizure activity.",
@@ -223,6 +224,96 @@ describe("CaseScreen integration", () => {
     expect(layout.classList.contains("mobile-pane-details")).toBe(true);
   });
 
+  it("requires a spanless reason only when the workspace enforces the new rules", async () => {
+    const view = { ...sampleView, enforce_spanless_rules: true, allow_spanless_findings: true };
+    const apply = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
+    vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "s", candidates: [{ term_id: "HP:0001252", label: "Hypotonia", rank: 1 }] } as any);
+    render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
+    fireEvent.change(screen.getByLabelText(/Search ontology term/), { target: { value: "Hypotonia" } });
+    const candidate = (await screen.findByText("Hypotonia")).closest(".candidate-card")!;
+    fireEvent.keyDown(candidate, { key: "Enter" });
+    expect(apply).not.toHaveBeenCalled();
+    const reason = screen.getByLabelText(/Reason for no text span/);
+    fireEvent.change(reason, { target: { value: "  Summary outside this excerpt  " } });
+    fireEvent.keyDown(candidate, { key: "Enter" });
+    await waitFor(() => expect(apply).toHaveBeenCalledWith("ws", expect.objectContaining({ payload: expect.objectContaining({ command: "create_annotation", note: "Summary outside this excerpt" }) })));
+  });
+
+  it("explains prohibited spanless creation without overriding profile evidence requirements", () => {
+    const view = structuredClone(sampleView);
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: false });
+    render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+    expect((screen.getByRole("button", { name: "Add finding without a text span" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("This project requires a text span for findings.")).toBeDefined();
+  });
+
+  it("keeps an unsaved annotation note across selection and saves it through the mutation queue", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const apply = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
+    render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+    selectEditableFinding();
+    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Clinical explanation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    selectEditableFinding();
+    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Clinical explanation");
+    fireEvent.blur(screen.getByLabelText("Annotation note"));
+    await waitFor(() => expect(apply).toHaveBeenCalledWith("ws", expect.objectContaining({ payload: { command: "set_annotation_note", annotation_id: "pending-finding", note: "Clinical explanation" } })));
+  });
+
+  it("a delayed failed note save stays with its annotation after the target changes", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const second = structuredClone(view.draft.annotations![0]); second.annotation.annotation_id = "second-finding";
+    view.draft.annotations!.push(second);
+    let rejectSave!: (error: unknown) => void;
+    const apply = vi.spyOn(api, "applyCommand").mockReturnValue(new Promise((_resolve, reject) => { rejectSave = reject; }));
+    render(<CaseScreen view={view} workspaceId="ws-note" onClose={vi.fn()} />);
+    selectEditableFinding();
+    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "First unsaved explanation" } });
+    fireEvent.blur(screen.getByLabelText("Annotation note"));
+    await waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    fireEvent.click(document.querySelector('[data-list-key="annotation:second-finding"]')!);
+    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Second local explanation" } });
+    await act(async () => { rejectSave(new ValidationError("Delayed note refusal")); });
+    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Second local explanation");
+    selectEditableFinding();
+    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("First unsaved explanation");
+    expect(apply).toHaveBeenCalledWith("ws-note", expect.objectContaining({ payload: expect.objectContaining({ annotation_id: "pending-finding", note: "First unsaved explanation" }) }));
+  });
+
+  it("retains failed note autosaves and guards empty spanless reasons on submit and logout", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true });
+    Object.assign(view.draft.annotations![0].annotation, { note: "Stored reason" });
+    const apply = vi.spyOn(api, "applyCommand").mockRejectedValue(new ValidationError("Note save refused"));
+    const leaveGuardRef = { current: null as ((proceed: () => void) => void) | null };
+    const logout = vi.fn();
+    render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} leaveGuardRef={leaveGuardRef} />);
+    selectEditableFinding();
+    const field = screen.getByLabelText(/Reason for no text span/);
+    fireEvent.change(field, { target: { value: "New reason" } });
+    fireEvent.blur(field);
+    await screen.findByText("Note save refused");
+    expect((field as HTMLTextAreaElement).value).toBe("New reason");
+    fireEvent.change(field, { target: { value: "  " } }); fireEvent.blur(field);
+    expect(apply).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    await screen.findByText("A reason is required for findings without a text span.");
+    expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
+    act(() => leaveGuardRef.current?.(logout));
+    await screen.findByRole("dialog", { name: "Unsaved changes" });
+    expect(logout).not.toHaveBeenCalled();
+  });
+
+  it("keeps profile-required evidence mandatory even when the project permits spanless findings", () => {
+    const view = structuredClone(sampleView);
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true });
+    view.layers![0].annotation_types[0].evidence_policy = "required_on_complete";
+    render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
+    expect((screen.getByRole("button", { name: "Add finding without a text span" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("This annotation type requires a text span.")).toBeDefined();
+  });
+
   it("creates spanless annotation without text segments", async () => {
     const updatedDraft = {
       ...sampleView.draft,
@@ -275,7 +366,7 @@ describe("CaseScreen integration", () => {
     } as any);
 
     // Click "+ New Annotation" / "+ Neue Annotation"
-    fireEvent.click(screen.getByText(/\+ (New Annotation|Neue Annotation)/i));
+    fireEvent.click(screen.getByText(/Add finding without a text span/i));
 
     // Shows search panel for new annotation
     expect(screen.getByText(/Select term for new annotation|Begriff für neue Annotation wählen/i)).toBeDefined();
@@ -328,7 +419,7 @@ describe("CaseScreen integration", () => {
     const search = vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "s", candidates: [] } as any);
 
     render(<CaseScreen view={sampleView} workspaceId="ws-test-token" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByText(/\+ (New Annotation|Neue Annotation)/i));
+    fireEvent.click(screen.getByText(/Add finding without a text span/i));
 
     // The stored selection of this annotator is back after loading.
     const button = await screen.findByRole("button", { name: "Search languages: EN, ES" });
@@ -352,7 +443,7 @@ describe("CaseScreen integration", () => {
     vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: "user-test", mode_by_package: {} });
 
     render(<CaseScreen view={sampleView} workspaceId="ws-test-token" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByText(/\+ (New Annotation|Neue Annotation)/i));
+    fireEvent.click(screen.getByText(/Add finding without a text span/i));
 
     await waitFor(() => expect(listed).toHaveBeenCalledWith(sampleView.key.project_key));
     expect(screen.getByLabelText(/Search ontology term/i)).toBeDefined();
@@ -854,6 +945,55 @@ describe("CaseScreen integration", () => {
     expect(screen.getByTestId("axes-section")).toBeDefined();
     expect(document.querySelector('[data-list-key="annotation:pending-finding"]')?.classList.contains("selected")).toBe(true);
     expect(apply).not.toHaveBeenCalled(); expect(decide).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])("note autosave synchronizes the exact replacement version (existing decision: %s)", async (existingDecision) => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const replacement = view.draft.annotations![0];
+    const proposal = structuredClone(replacement);
+    proposal.annotation.annotation_id = "source-proposal"; proposal.version = "source-version";
+    replacement.annotation.provenance.source_refs = ["source-proposal:source-version"];
+    view.available_inputs = [proposal]; view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: "source-proposal", version: "source-version" };
+    view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    view.draft.decisions = existingDecision ? [{ decision_id: "d", reviewer_id: "reviewer", outcome: "changed", target,
+      replacement: { annotation_id: replacement.annotation.annotation_id, version: replacement.version } }] : [];
+    const saved = structuredClone(view.draft); saved.revision = 1; saved.annotations![0].version = "note-version";
+    saved.annotations![0].annotation.note = "Specific clinical reason";
+    const apply = vi.spyOn(api, "applyCommand").mockResolvedValue(saved);
+    const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...saved, revision: 2 });
+    render(<CaseScreen view={view} workspaceId="ws-note" onClose={vi.fn()} />);
+    selectEditableFinding();
+    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Specific clinical reason" } });
+    fireEvent.blur(screen.getByLabelText("Annotation note"));
+    await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-note", expect.objectContaining({ expected_revision: 1,
+      payload: expect.objectContaining({ outcome: "changed", target, replacement: { annotation_id: "pending-finding", version: "note-version" } }) })));
+    expect(apply).toHaveBeenCalledOnce();
+  });
+
+  it("collects a reason before adopting a spanless proposal into an enforced draft", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true });
+    const proposal = view.draft.annotations![0]; view.draft.annotations = []; view.available_inputs = [proposal];
+    view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: proposal.annotation.annotation_id, version: proposal.version };
+    view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    const apply = vi.spyOn(api, "applyCommand").mockRejectedValue(new ValidationError("Copy save refused"));
+    render(<CaseScreen view={view} workspaceId="ws-reason" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Reason for no text span" });
+    expect(apply).not.toHaveBeenCalled();
+    expect((within(dialog).getByRole("button", { name: "Create editable copy" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText(/Reason for no text span/), { target: { value: "History supports the finding" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create editable copy" }));
+    await waitFor(() => expect(apply).toHaveBeenCalledWith("ws-reason", expect.objectContaining({ payload: expect.objectContaining({ command: "create_annotation", note: "History supports the finding", source_annotation_id: "pending-finding" }) })));
+    await screen.findByText("Adopting the proposal failed: Copy save refused");
+    fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+    const retry = await screen.findByRole("dialog", { name: "Reason for no text span" });
+    expect((within(retry).getByLabelText(/Reason for no text span/) as HTMLTextAreaElement).value).toBe("History supports the finding");
+    fireEvent.click(within(retry).getByRole("button", { name: "Cancel" }));
+    expect(apply).toHaveBeenCalledOnce();
   });
 
   it("reset preserves note text when an earlier blurred note save finishes afterward", async () => {

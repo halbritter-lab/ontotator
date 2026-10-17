@@ -4,7 +4,8 @@ import { importPackage, LAUNCH_URL, openCase } from "./helpers";
 const ANNOTATOR = "lang-tester";
 
 const startSearch = async (page: Page, query: string) => {
-  await page.getByRole("button", { name: /\+ New Annotation/i }).click();
+  await page.getByRole("button", { name: /Add finding without a text span/i }).click();
+  await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
   await page.getByLabel(/Search ontology term/i).fill(query);
 };
 const seizure = (page: Page) => page.locator(".candidate-card").filter({ hasText: "HP:0001250" });
