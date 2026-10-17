@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { DocumentSummary, CaseSummary } from "../api/client";
 import { Button, Checkbox, Dialog, IconWarning, InlineMessage } from "../ui";
 import { BatchFeedback, eligibleMembers, TaskSelect, useAssignmentBatch, useMembers, type Task, useCaseVariants, canReviewSelection, taskLanguages } from "./assignmentUI";
+import { plural } from "../app/labels";
 export interface AssignDialogProps { projectKey: string; documents: DocumentSummary[]; cases?: readonly CaseSummary[] | null; onClose: () => void; onChanged: () => void }
 export function AssignDialog(props: AssignDialogProps): JSX.Element { return <AssignEditor key={JSON.stringify([props.projectKey, props.documents.map(doc => [doc.document_id, doc.language])])} {...props} />; }
 function AssignEditor({ projectKey, documents, cases, onClose, onChanged }: AssignDialogProps): JSX.Element {
@@ -14,7 +15,7 @@ function AssignEditor({ projectKey, documents, cases, onClose, onChanged }: Assi
   const languages = new Map(documents.map(doc => [doc.document_id, taskLanguages(doc, task, context.variants)]));
   const blocked = batch.busy || batch.attempted;
   return <Dialog open title="Assign documents" size="lg" onClose={batch.busy ? undefined : onClose} footer={<Button disabled={batch.busy} onClick={onClose}>Close</Button>}>
-    <p>{documents.length} documents selected.</p>
+    <p>{plural(documents.length, "document")} selected.</p>
     <TaskSelect value={task} disabled={blocked} translationReviewAllowed={reviewAllowed} onChange={value => { setTask(value); setSelected([]); }} />
     {context.notice}
     {notice}

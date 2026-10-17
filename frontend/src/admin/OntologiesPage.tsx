@@ -3,6 +3,7 @@ import { api, ApiError, type AdminOntology, type OntologyUploadResult } from "..
 import { routeHref, type Route } from "../app/router";
 import { Button, DataTable, EmptyState, Field, InlineMessage, Toolbar, type Column } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { formatDateTime } from "../app/labels";
 
 export interface OntologiesPageProps { onNavigate: (route: Route) => void }
 
@@ -81,7 +82,7 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
     { id: "release", header: "Release", cell: item => item.release ?? "—" },
     { id: "language", header: "Language", cell: item => item.language ?? "—" },
     { id: "sha", header: "SHA-256", cell: item => <><code title={item.sha256}>{item.sha256.slice(0, 12)}</code>{" "}<Button size="sm" variant="quiet" aria-label={`Copy SHA-256 for ${item.filename}`} disabled={copying !== null} onClick={() => { void copy(item); }}>Copy</Button></> },
-    { id: "uploaded", header: "Uploaded at", cell: item => <time dateTime={item.uploaded_at}>{new Date(item.uploaded_at).toLocaleString()}</time> },
+    { id: "uploaded", header: "Uploaded at", cell: item => <time dateTime={item.uploaded_at}>{formatDateTime(item.uploaded_at)}</time> },
     { id: "projects", header: "Pinned by", cell: item => item.projects.length ? <ul>{item.projects.map(key => {
       const route: Route = { name: "projectSettings", key };
       return <li key={key}><a href={routeHref(route)} onClick={event => {

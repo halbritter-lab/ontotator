@@ -65,7 +65,7 @@ it.each([
   await waitFor(() => expect(screen.getByRole("button", { name: "Propose" })).toHaveProperty("disabled", false));
   fireEvent.click(screen.getByRole("button", { name: "Propose" })); await screen.findByText("Proposal #123");
   fireEvent.change(screen.getByLabelText("z/doc, slot 1"), { target: { value: "alice" } });
-  expect(screen.getByText(`Alice (alice): ${before} → ${after}`)).toBeDefined();
+  expect(screen.getByText(`Alice (alice): ${before} now, ${after} after`)).toBeDefined();
   expect(api.listAssignments).toHaveBeenCalledOnce();
   expect(api.createAssignments).not.toHaveBeenCalled();
 });

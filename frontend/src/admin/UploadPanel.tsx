@@ -4,6 +4,7 @@ import { Button, Checkbox, Field, InlineMessage, Select, TextInput, Toolbar } fr
 import { ErrorNotice } from "./ErrorNotice";
 import { UploadPreview } from "./UploadPreview";
 import { useJob } from "./useJob";
+import { labelFor, plural, uploadKindLabels, uploadStatusLabels } from "../app/labels";
 
 export interface UploadPanelProps { projectKey: string; languages: readonly string[]; onImported: () => void; canOverrideTranslationStatus?: boolean }
 type Operation = { projectKey: string; uploadId: number; jobId: number; stage: "preview" | "commit" };
@@ -77,7 +78,7 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
         setView(current);
         if (operation.stage === "commit") {
           if (current.status !== "committed" || !count(job.result?.documents_added) || !count(job.result?.proposals)) throw new Error("The import finished, but its final counts are unavailable. Refresh the upload status.");
-          setImported(`Imported ${job.result.documents_added} documents and ${job.result.proposals} proposals.`);
+          setImported(`Imported ${plural(job.result.documents_added, "document")} and ${plural(job.result.proposals, "proposal")}.`);
           onImportedRef.current();
         }
         setOperation(null);
@@ -138,12 +139,11 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
     finally { if (lifetime.current === epoch) { mutation.current = false; setWorking(false); } }
   };
   const changed = () => { setView(null); setOperation(null); setError(undefined); setStale(false); setImported(null); };
-  return <section className="detail-section" aria-label="Upload documents">
-    <h2>Upload documents</h2>
+  return <section aria-label="Upload documents">
     <form onSubmit={event => { event.preventDefault(); void check(); }}>
-      <Select id="upload-kind" label="Format" value={kind} disabled={busy} onChange={event => { setKind(event.target.value as "t1" | "text"); changed(); }}><option value="t1">T1 exchange (.zip, .json)</option><option value="text">Plain text (.txt, .zip)</option></Select>
+      <Select id="upload-kind" label="Format" value={kind} disabled={busy} onChange={event => { setKind(event.target.value as "t1" | "text"); changed(); }}><option value="t1">{uploadKindLabels.t1}: .zip or .json</option><option value="text">{uploadKindLabels.text}: .txt or .zip</option></Select>
       {kind === "text" && (languages.length ? <Select id="upload-language" label="Upload language" required value={language} disabled={busy} onChange={event => { setLanguage(event.target.value); changed(); }}><option value="">Choose language</option>{languages.map(value => <option key={value} value={value}>{value}</option>)}</Select> : <TextInput id="upload-language" label="Upload language" hint="BCP-47 language tag, for example en or de." required value={language} disabled={busy} onChange={event => { setLanguage(event.target.value); changed(); }} />)}
-      <Field id="upload-files" label="Files" hint={kind === "t1" ? "Choose one or more T1 JSON files or ZIP archives. Files are checked before import." : "Choose UTF-8 text files or ZIP archives. Files are checked before import."}><input type="file" multiple required accept={kind === "t1" ? ".json,.zip" : ".txt,.zip"} disabled={busy} onChange={event => { setFiles(Array.from(event.target.files ?? [])); changed(); }} /></Field>
+      <Field id="upload-files" label="Files" hint={kind === "t1" ? "Documents, plus any annotation proposals from people or tools, in the ontospan (T1) exchange format that other annotation tools read and write. Choose one or more JSON files or ZIP archives. Files are checked before import." : "Choose UTF-8 text files or ZIP archives. Files are checked before import."}><input type="file" multiple required accept={kind === "t1" ? ".json,.zip" : ".txt,.zip"} disabled={busy} onChange={event => { setFiles(Array.from(event.target.files ?? [])); changed(); }} /></Field>
       {!!files.length && <p>{files.map(file => file.name).join(", ")}</p>}
       <Button type="submit" loading={busy && operation?.stage !== "commit"} disabled={busy || !files.length}>{busy && operation?.stage !== "commit" ? "Checking …" : "Check"}</Button>
     </form>
@@ -154,7 +154,7 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
     {stale && (files.length ? <Button disabled={busy} onClick={() => { void check(); }}>Check again</Button> : <p>Select the original files to check again.</p>)}
     {operation?.stage === "commit" && busy && <InlineMessage tone="info">Importing …</InlineMessage>}
     {imported && <InlineMessage tone="success">{imported}</InlineMessage>}
-    {view && <><p>Upload {view.id} · {view.status}</p>{view.preview && <UploadPreview plan={view.preview} />}
+    {view && <><p>Upload {view.id} · {labelFor(uploadStatusLabels, view.status)}</p>{view.preview && <UploadPreview plan={view.preview} />}
       {canOverrideTranslationStatus && view.status === "ready" && view.preview?.variants?.some(item => item.status !== null) && <fieldset disabled={busy || stale}><legend>Accept without review</legend>
         <p>Explicitly accept a translation without review. A reason is required for every selected variant.</p>
         {view.preview.variants.filter(item => item.status !== null).map(item => {
@@ -173,7 +173,7 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
       {["ready", "invalid"].includes(view.status) && <Toolbar label="Preview actions"><Button variant="primary" disabled={busy || stale || missingReason || view.status !== "ready" || !view.preview?.committable || !view.plan_sha256} onClick={() => { void commit(); }}>Import</Button><Button disabled={busy} onClick={() => { void discard(); }}>Discard</Button></Toolbar>}
     </>}
     <section className="detail-section"><h3>Recent uploads</h3>{listError !== undefined && <ErrorNotice error={listError} />}<Button disabled={busy} onClick={() => { void refreshList(lifetime.current); }}>Refresh uploads</Button>
-      {uploads.length ? <ul>{uploads.map(item => <li key={item.id}>Upload {item.id} · {item.kind} · {item.status} · {item.files.map(file => file.filename).join(", ")} <Button size="sm" disabled={busy} onClick={() => { void resume(item.id); }}>Resume upload {item.id}</Button></li>)}</ul> : <p>No retained uploads.</p>}
+      {uploads.length ? <ul>{uploads.map(item => <li key={item.id}>Upload {item.id} · {labelFor(uploadKindLabels, item.kind)} · {labelFor(uploadStatusLabels, item.status)} · {item.files.map(file => file.filename).join(", ")} <Button size="sm" disabled={busy} onClick={() => { void resume(item.id); }}>Resume upload {item.id}</Button></li>)}</ul> : <p>No retained uploads.</p>}
     </section>
   </section>;
 }

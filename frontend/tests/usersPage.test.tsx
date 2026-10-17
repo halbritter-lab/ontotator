@@ -32,7 +32,7 @@ describe("users administration", () => {
   it("lists server fields and filters by username or display name", async () => {
     render(<UsersPage currentUser={currentUser} />); await load();
     const table = within(screen.getByRole("table", { name: "Users" }));
-    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("study-one: lead, annotator")).toBeTruthy();
+    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("study-one: Project lead, Annotator")).toBeTruthy();
     expect(table.getByText("en")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "SMITH" } }); expect(table.queryByText("Root")).toBeNull();
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "root" } }); expect(table.queryByText("Alex Smith")).toBeNull();
@@ -164,5 +164,22 @@ describe("users administration", () => {
     expect(await leave.current?.()).toBe(false);
     await act(async () => pending.reject(new Error("Issuance failed")));
     await screen.findByText("Issuance failed"); expect(await leave.current?.()).toBe(true);
+  });
+});
+
+describe("users page access", () => {
+  it("shows only an explanation to someone who is not a system administrator", () => {
+    render(<UsersPage currentUser={{ ...currentUser, is_system_admin: false }} />);
+    expect(screen.getByText(/Only system administrators can see and manage user accounts/)).toBeDefined();
+    expect(screen.queryByRole("form", { name: "New user" })).toBeNull();
+    expect(screen.queryByLabelText("Filter users")).toBeNull();
+    expect(api.adminListUsers).not.toHaveBeenCalled();
+  });
+
+  it("drops the create form when the server refuses the user list", async () => {
+    vi.mocked(api.adminListUsers).mockRejectedValue(new ApiError(403, "Only a system administrator may do this.", "NOT_ALLOWED"));
+    render(<UsersPage currentUser={currentUser} />);
+    await screen.findByText(/Only system administrators can see and manage user accounts/);
+    expect(screen.queryByRole("form", { name: "New user" })).toBeNull();
   });
 });

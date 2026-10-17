@@ -99,7 +99,7 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   await page.getByRole("button", { name: "Create project", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings$`));
   const members = page.getByRole("form", { name: "Add member", exact: true });
-  for (const [actor, role] of [[lead, "lead"], [annotator, "annotator"]] as const) {
+  for (const [actor, role] of [[lead, "Project lead"], [annotator, "Annotator"]] as const) {
     await members.getByLabel(/^Username/).fill(actor.username);
     await members.getByRole("checkbox", { name: `New member: ${role}`, exact: true }).check();
     await members.getByRole("button", { name: "Add member", exact: true }).click();
@@ -119,8 +119,8 @@ async function importTwoDocuments(page: Page) {
   ]);
   await upload.getByRole("button", { name: "Check", exact: true }).click();
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
-  await expect(preview).toContainText("2 added");
-  await expect(preview).toContainText("1 normalised");
+  await expect(preview).toContainText("2 documents added");
+  await expect(preview).toContainText("1 with normalized text");
   await expect(page.getByTestId("document-row")).toHaveCount(0);
   await upload.getByRole("button", { name: "Import", exact: true }).click();
   await expect(upload.getByText("Imported 2 documents and 0 proposals.", { exact: true })).toBeVisible();
@@ -150,7 +150,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await expect(tasks).toHaveCount(1);
   await expect(tasks.getByRole("cell", { name: "one", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "two", exact: true })).toHaveCount(0);
-  await tasks.getByRole("link", { name: "Open", exact: true }).click();
+  await tasks.getByRole("link", { name: /^(Start|Continue|View)$/ }).click();
   await selectText(page, 0, 9);
   await page.getByLabel("Search ontology term").fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
@@ -202,7 +202,7 @@ test.describe("Administration through real accounts and jobs", () => {
     const tasks = page.getByTestId("task-row");
     await expect(tasks).toHaveCount(1);
     await expect(tasks).toContainText("Submitted");
-    await tasks.getByRole("link", { name: "Open", exact: true }).click();
+    await tasks.getByRole("link", { name: /^(Start|Continue|View)$/ }).click();
     await page.reload();
     await expect(page.getByText("Submitted. The project lead can reopen it for changes.", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Finish & Submit Case/i })).toBeDisabled();
@@ -224,7 +224,7 @@ test.describe("Administration through real accounts and jobs", () => {
     await reopen.getByLabel("Reason (optional)").fill("Check this finding again.");
     await reopen.getByRole("button", { name: "Reopen assignment", exact: true }).click();
     await expect(reopen).toHaveCount(0);
-    await expect(document).toContainText("reopened");
+    await expect(document).toContainText("Reopened");
     await logout(page);
     await loginExisting(page, setup.annotator);
     await expect(page.getByTestId("task-row")).toHaveCount(1);
@@ -239,7 +239,7 @@ test.describe("Administration through real accounts and jobs", () => {
     await logout(page);
     await loginExisting(page, setup.lead);
     await page.getByRole("link", { name: "Export", exact: true }).click();
-    const bundle = page.getByRole("region", { name: "Annotation results (T1 bundle)", exact: true });
+    const bundle = page.getByRole("region", { name: "Annotation results", exact: true });
     await bundle.getByRole("button", { name: "Create export", exact: true }).click();
     await expect(bundle.getByRole("button", { name: "Download", exact: true })).toBeVisible();
     await page.reload();
@@ -254,7 +254,7 @@ test.describe("Administration through real accounts and jobs", () => {
     const archive = readFileSync(zipPath!);
     expect(archive.length).toBeGreaterThan(22);
     expect(archive.subarray(0, 2).toString("ascii")).toBe("PK");
-    const log = page.getByRole("region", { name: "Edit log (JSONL)", exact: true });
+    const log = page.getByRole("region", { name: "Edit log", exact: true });
     await log.getByRole("button", { name: "Create export", exact: true }).click();
     const [jsonl] = await Promise.all([
       page.waitForEvent("download"), log.getByRole("button", { name: "Download", exact: true }).click(),

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CodeOnceDialog, type CodeOnceDialogProps } from "../src/admin/CodeOnceDialog";
+import { formatDateTime } from "../src/app/labels";
 
 const props = { open: true, kind: "setup" as const, code: "single-use-code-123", expires_at: "2026-10-16T12:30:00Z" };
 const acknowledgement = "I have handed over or stored the code";
@@ -26,7 +27,7 @@ describe("one-time code dialog", () => {
     expect(within(dialog).getByText(props.code)).toBeDefined();
     expect(within(dialog).getByText("This code is shown only once. Hand it over in person or by a secure channel.")).toBeDefined();
     expect(dialog.querySelector("time")?.dateTime).toBe(props.expires_at);
-    expect(dialog.querySelector("time")?.textContent).toBe(new Date(props.expires_at).toLocaleString());
+    expect(dialog.querySelector("time")?.textContent).toBe(formatDateTime(props.expires_at));
   });
 
   it("gates Close, Escape and the backdrop until acknowledged", async () => {

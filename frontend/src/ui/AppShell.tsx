@@ -53,7 +53,9 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
     </header>
     <div className="shell-body">
       {density !== "reading" && navigation}
-      <main ref={mainRef} id="main" tabIndex={-1} className={`shell-main density-${density}`}>{children}</main>
+      <main ref={mainRef} id="main" tabIndex={-1} className={`shell-main density-${density}`}>
+        {density === "reading" ? children : <div className="shell-page">{children}</div>}
+      </main>
     </div>
     <ShortcutHelpHost />
   </div>;

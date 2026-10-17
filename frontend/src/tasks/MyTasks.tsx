@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, onSessionRestored, type ProjectSummary, type TaskSummary } from "../api/client";
 import { routeHref, type Route } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
+import { assignmentStatusLabels, formatDateTime, taskLabels } from "../app/labels";
 import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, Toolbar, type Column } from "../ui";
 
 export interface MyTasksProps {
@@ -12,9 +13,15 @@ export interface MyTasksProps {
 
 type TaskState = { kind: "loading" } | { kind: "ready"; tasks: TaskSummary[] } | { kind: "error"; error: unknown };
 
-const statusLabels: Record<TaskSummary["status"], string> = {
-  open: "Open", reopened: "Reopened", in_progress: "In progress", submitted: "Submitted",
+/** The row action names what opening the task will do: start fresh work, continue it, or look at a submission. */
+export const taskActionLabels: Record<TaskSummary["status"], string> = {
+  open: "Start", reopened: "Continue", in_progress: "Continue", submitted: "View",
 };
+
+export function taskDescription(task: Pick<TaskSummary, "task" | "language" | "source_language" | "target_language">): string {
+  if (task.task !== "translation_review") return taskLabels[task.task];
+  return `${taskLabels.translation_review} (${task.source_language ?? "unknown language"} to ${task.target_language ?? task.language})`;
+}
 
 const projectLabel = (name: string, key: string): string => name === key ? name : `${name} (${key})`;
 
@@ -61,24 +68,24 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
     { id: "document", header: "Document", cell: task => task.external_id ?? task.document_id },
     { id: "project", header: "Project", cell: task => projectLabel(task.project_name, task.project_key) },
     { id: "language", header: "Language", cell: task => task.language },
-    { id: "task", header: "Task", cell: task => task.task === "translation_review" ? `Review translation ${task.source_language ?? "?"} → ${task.target_language ?? task.language}` : task.task === "annotate" ? "Annotate" : "Review" },
-    { id: "status", header: "Status", cell: task => <StatusBadge status={task.status}>{statusLabels[task.status]}</StatusBadge> },
-    { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{new Date(task.updated_at).toLocaleString()}</time> },
+    { id: "task", header: "Task", cell: task => taskDescription(task) },
+    { id: "status", header: "Status", cell: task => <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge> },
+    { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{formatDateTime(task.updated_at)}</time> },
     { id: "open", header: "Action", cell: task => <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate({ name: "task", assignmentId: task.assignment_id });
-    }}>Open</a> },
+    }}>{taskActionLabels[task.status]}</a> },
   ];
   const empty = <EmptyState title="No documents are assigned to you yet." action={managed.length > 0 &&
     <Toolbar label="Assignment actions">{managed.map(item => {
       const route: Route = { name: "projectDocuments", key: item.project_key };
-      return <a key={item.project_key} href={routeHref(route)} onClick={event => {
+      return <a key={item.project_key} className="btn btn-secondary" href={routeHref(route)} onClick={event => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         onNavigate(route);
       }}>{project === undefined ? `Assign documents in ${projectLabel(item.name, item.project_key)}` : "Assign documents"}</a>;
     })}</Toolbar>
-  } />;
+  }>{managed.length > 0 && "As a project lead, you assign documents to people, yourself included, on the Documents page."}</EmptyState>;
   return <section aria-label="My tasks">
     <h1>My tasks</h1>
     {state.kind === "loading" && <InlineMessage tone="info">Loading tasks…</InlineMessage>}
@@ -91,8 +98,8 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
         <option value={allProjectsValue}>All projects</option>
         {[...options].map(([key, name]) => <option key={key} value={key}>{name}</option>)}
       </Select>
-      <p aria-label="Task counts">Open: {filtered.filter(task => task.status === "open" || task.status === "reopened").length} · In progress: {filtered.filter(task => task.status === "in_progress").length} · Submitted: {filtered.filter(task => task.status === "submitted").length}</p>
-      {filtered.length === 0 ? empty : <DataTable label="My tasks" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${task.document_id}` })} />}
+      <p role="group" aria-label="Task counts">Open: {filtered.filter(task => task.status === "open" || task.status === "reopened").length} · In progress: {filtered.filter(task => task.status === "in_progress").length} · Submitted: {filtered.filter(task => task.status === "submitted").length}</p>
+      {filtered.length === 0 ? empty : <DataTable label="My tasks" className="data-table--pin-end" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${task.document_id}` })} />}
     </>}
   </section>;
 }

@@ -303,7 +303,7 @@ describe("the login gate", () => {
   it("keeps the case open when the session ends and saves the queued edit after logging in again", async () => {
     const fetchMock = caseWithEndedSession(testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-2" }));
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("link", { name: /^Open$/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
 
     const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
@@ -327,7 +327,7 @@ describe("the login gate", () => {
   it("starts afresh when someone else logs in after the session ended", async () => {
     const fetchMock = caseWithEndedSession(testUser("ann-0009", { display_name: "Bob", csrf_token: "csrf-b" }));
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("link", { name: /^Open$/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
 
     logInThrough(await screen.findByRole("dialog", { name: "Log in to Ontocurator" }), "bob");
@@ -353,7 +353,7 @@ describe("the login gate", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("link", { name: /^Open$/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
     await waitFor(() => expect(me).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(2));
@@ -371,7 +371,7 @@ describe("the login gate", () => {
       .mockRejectedValue(new AuthError("Not assigned", undefined, "ASSIGNMENT_NOT_FOUND", 403));
     vi.stubGlobal("fetch", fakeServer({ "POST /api/v1/workspaces/ws/commands": () => jsonResponse(403, { code: "CSRF_FAILED", details: "The page is out of date; reload it." }) }));
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("link", { name: /^Open$/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
     expect(await screen.findByText("You are now logged in as Bob (from another tab).")).toBeDefined();
     expect(screen.getByTestId("current-user").textContent).toBe("Bob · ann-0009");
@@ -387,7 +387,7 @@ describe("the login gate", () => {
     ]);
     const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...reviewCaseView().draft, revision: 2 });
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("link", { name: /^Open$/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
     const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
 
@@ -419,7 +419,7 @@ describe("the login gate", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<AuthGate />);
-    fireEvent.click(await screen.findByRole("link", { name: /^Open$/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
 
     expect(await screen.findByText("The page is out of date; reload it.")).toBeDefined();

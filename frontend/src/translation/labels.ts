@@ -28,3 +28,87 @@ export const issueMessages: Readonly<Record<IssueCode, string>> = {
   RATIONALE_REQUIRED: "A clinical change needs a rationale.",
   CATEGORIES_WITHOUT_CHANGE: "Categories need a clinical change.",
 };
+
+/** One-line explanation shown under each decision option. */
+export const decisionDescriptions: Readonly<Record<ReviewDecisionCode, string>> = {
+  accepted_unchanged: "The translation is correct as it stands. You made no edits.",
+  accepted_corrected: "You corrected the translation. Your version is accepted.",
+  query: "The meaning may differ clinically and needs clarification. Not accepted.",
+  rejected: "The translation changes clinical meaning and cannot be used. Not accepted.",
+};
+
+/** What submitting each decision will do, for the confirmation dialog. */
+export const decisionConsequences: Readonly<Record<ReviewDecisionCode, string>> = {
+  accepted_unchanged: "The translation will be accepted unchanged and becomes available for annotation.",
+  accepted_corrected: "Your corrected text will be saved as a new version, which is accepted and becomes available for annotation. The machine translation stays as it was.",
+  query: "The translation will be marked as reviewed with a query. It will not be accepted for annotation.",
+  rejected: "The translation will be marked as reviewed and rejected. It will not be accepted for annotation.",
+};
+
+/** What submitting did, for the success message. */
+export const decisionOutcomes: Readonly<Record<ReviewDecisionCode, string>> = {
+  accepted_unchanged: "The translation was accepted unchanged and is available for annotation.",
+  accepted_corrected: "Your corrected text was saved as a new version, which is accepted for annotation.",
+  query: "The translation is marked as reviewed with a query. It is not accepted for annotation.",
+  rejected: "The translation is marked as reviewed and rejected. It is not accepted for annotation.",
+};
+
+/** Hint under "Clinically relevant change", following the review rules for each decision. */
+export const clinicalChangeHints: Readonly<Record<ReviewDecisionCode, string>> = {
+  accepted_unchanged: "Not allowed with Accepted unchanged. Clear it or choose another decision.",
+  accepted_corrected: "Tick this if your correction changes the clinical meaning.",
+  query: "Required for a query.",
+  rejected: "Required for a rejection.",
+};
+
+const humanize = (code: string): string => {
+  const words = code.replace(/[_-]+/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Unnamed check";
+};
+
+/** Known automatic translation check codes; unknown codes are turned into words. */
+export const checkLabels: Readonly<Record<string, string>> = {
+  units_added: "Units added in translation",
+  numbers_changed: "Numbers changed in translation",
+};
+
+export function checkLabel(code: unknown): string {
+  const value = typeof code === "string" ? code : "";
+  return Object.prototype.hasOwnProperty.call(checkLabels, value) ? checkLabels[value] : humanize(value);
+}
+
+export function failedChecksTitle(count: number): string {
+  return count === 1 ? "1 automatic check failed" : `${count} automatic checks failed`;
+}
+
+/** Translation status of a document after a review, in words. */
+export const translationStatusWords: Readonly<Record<string, string>> = {
+  translated: "Translated",
+  automatic_check_failed: "Automatic check failed",
+  ready_for_review: "Ready for review",
+  reviewed: "Reviewed",
+  accepted: "Accepted",
+};
+
+export function translationStatusLabel(status: string): string {
+  return Object.prototype.hasOwnProperty.call(translationStatusWords, status) ? translationStatusWords[status] : humanize(status);
+}
+
+export function languageName(code: string): string {
+  try {
+    const name = new Intl.DisplayNames(["en"], { type: "language" }).of(code);
+    return name && name !== code ? name : code;
+  } catch {
+    return code;
+  }
+}
+
+const dateTime = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+});
+
+/** English date and time without seconds, in the reader's time zone. */
+export function formatReviewDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : dateTime.format(date);
+}
