@@ -168,7 +168,9 @@ def _submit_independent(repo, ontology, annotator_id: str) -> None:  # type: ign
     SubmissionService(repo, ontology).submit(
         key,
         MutationEnvelope(
-            mutation_id=f"submit-{annotator_id}", expected_revision=1, payload={}
+            mutation_id=f"submit-{annotator_id}",
+            expected_revision=1,
+            payload={"document_checked": True},
         ),
     )
 
@@ -317,7 +319,7 @@ class _Session:
             MutationEnvelope(
                 mutation_id=f"m-{self.counter}",
                 expected_revision=self.revision,
-                payload={},
+                payload={"document_checked": True},
             ),
         )
 
@@ -910,7 +912,7 @@ def _annotate(client, annotator: str, document_id: str, term_id: str) -> str:  #
         json={
             "mutation_id": f"{annotator}-{document_id}-submit",
             "expected_revision": len(steps),
-            "payload": {},
+            "payload": {"document_checked": True},
         },
     )
     assert resp.status_code == 200, resp.text
