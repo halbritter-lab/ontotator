@@ -28,9 +28,10 @@ it("keeps proposal inspection useful but prevents notes, decisions and replaceme
   fireEvent.click(Array.from(document.querySelectorAll(".sidebar .doc-item")).find(node => node.textContent?.includes("HP:2"))!);
   const note = screen.getByRole("textbox", { name: "Reviewer note" }) as HTMLInputElement;
   expect(note.readOnly).toBe(true);
-  for (const name of [/^Confirm/, /^Reject/, /Edit & Replace/, /^Uncertain/, /Assign replacement from draft/]) {
+  for (const name of [/^Confirm/, /^Reject/, /Edit & Replace/, /^Unresolved/]) {
     expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
   }
+  expect(screen.queryByRole("button", { name: /Assign replacement from draft/ })).toBeNull();
   fireEvent.keyDown(document.querySelector(".text-container")!, { key: "1" });
   fireEvent.keyDown(document.querySelector(".text-container")!, { key: "3" });
   expect(command).not.toHaveBeenCalled(); expect(decide).not.toHaveBeenCalled();

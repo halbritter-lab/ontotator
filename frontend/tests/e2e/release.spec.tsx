@@ -245,7 +245,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Uncertain|Unsicher/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Unresolved/i })).toBeDefined();
 
     // Confirm human proposal
     fireEvent.click(screen.getByRole("button", { name: /Confirm|Bestätigen/i }));
@@ -267,16 +267,23 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Uncertain|Unsicher/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Unresolved/i })).toBeDefined();
 
-    // Reject tool proposal so all targets are decided
-    fireEvent.click(screen.getByRole("button", { name: /Reject|Verwerfen/i }));
+    // Unresolved is a reviewer decision: require a note before completing this target.
+    fireEvent.click(screen.getByRole("button", { name: /Unresolved/i }));
+    expect(recordDecisionSpy).toHaveBeenCalledTimes(1);
+    const note = screen.getByRole("textbox", { name: "Reviewer note" });
+    expect(document.activeElement).toBe(note);
+    expect(note.getAttribute("aria-invalid")).toBe("true");
+    fireEvent.change(note, { target: { value: "Clinical interpretation needs specialist review" } });
+    fireEvent.click(screen.getByRole("button", { name: /Unresolved/i }));
     await waitFor(() => {
       expect(recordDecisionSpy).toHaveBeenCalledWith(
         "ws-e2e-token",
         expect.objectContaining({
           payload: expect.objectContaining({
-            outcome: "rejected",
+            outcome: "uncertain",
+            note: "Clinical interpretation needs specialist review",
             target: { annotation_id: "prop-tool", version: "v-tool-1" },
           }),
         })

@@ -116,7 +116,7 @@ afterEach(() => {
 describe("A1/A7: dashboard blinding, identity and persistence", () => {
   it("opens a zero-proposal case for a review-only role without constructing fresh targets", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", allowed_modes: ["review"] }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", roles: ["reviewer"], can_manage: false, allowed_modes: ["review"] }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue([{ ...docs[0], has_review_inputs: false }]);
     const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
     const view = reviewView();
@@ -135,7 +135,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
 
   it("requires and sends explicit round selection when resuming is ambiguous", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", allowed_modes: ["review"] }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", roles: ["reviewer"], can_manage: false, allowed_modes: ["review"] }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     assignedList(reviewView());
     vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: reviewView() }).assignment);
@@ -268,15 +268,18 @@ describe("A4/A5: review decisions and notes", () => {
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
     expect(decide.mock.calls[1][1].payload).toEqual(expect.objectContaining({ outcome: "rejected", note: "laterality differs" }));
 
-    // Toggling the active outcome off removes the decision but keeps the note text in the editor.
+    // Repeating the outcome keeps it; explicit zero resets while retaining the note.
     fireEvent.click(screen.getByRole("button", { name: /Reject/ }));
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(3));
-    expect(decide.mock.calls[2][1].payload.outcome).toBeNull();
+    expect(decide.mock.calls[2][1].payload.outcome).toBe("rejected");
+    fireEvent.keyDown(window, { key: "0" });
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(4));
+    expect(decide.mock.calls[3][1].payload.outcome).toBeNull();
     expect((screen.getByLabelText("Reviewer note") as HTMLInputElement).value).toBe("laterality differs");
     // ...and the next decision carries it again.
     fireEvent.keyDown(window, { key: "1" });
-    await waitFor(() => expect(decide).toHaveBeenCalledTimes(4));
-    expect(decide.mock.calls[3][1].payload).toEqual(expect.objectContaining({ outcome: "confirmed", note: "laterality differs" }));
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(5));
+    expect(decide.mock.calls[4][1].payload).toEqual(expect.objectContaining({ outcome: "confirmed", note: "laterality differs" }));
   });
 
   it("ReviewActions sends the typed note when it is committed with an existing decision", () => {
@@ -633,7 +636,7 @@ describe("Shortcuts and error handling", () => {
 
   it("shows errors from the assignment open flow", async () => {
     asAnnotator("dr-a");
-    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg" }] as any);
+    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", roles: ["reviewer"], can_manage: false }] as any);
     vi.spyOn(api, "listDocuments").mockResolvedValue(docs);
     assignedList(baseView());
     vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: baseView() }).assignment);

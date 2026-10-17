@@ -151,7 +151,6 @@ it("submits the API payload and preserves its envelope through a lost-response r
  expect(submit.mock.calls[0][1].payload).toEqual({
    command: "submit_workspace",
    document_checked: true,
-   checked_layer_ids: ["phenotype"],
  });
  fireEvent.click(screen.getByText(/Retry|Erneut versuchen/i));
  await waitFor(() => expect(screen.getByText(/Case successfully submitted|Fall erfolgreich abgegeben/i)).toBeDefined());
@@ -180,7 +179,7 @@ const proposal = (version: string, hpoId: string) => ({
    term_id: hpoId,
    axes_values: { assertion: "absent" },
    evidence_refs: [{ evidence_id: "ev", version: "ev-version" }],
-   provenance: { actor: { actor_id: "source", kind: "human" as const }, method: "manual" },
+   provenance: { actor: { actor_id: "source", kind: "human" as const }, method: "manual", source_refs: [] as string[] },
  },
  evidence: [{ mention: { evidence_id: "ev", segments: [{ start: 0, end: 5 }], cue_segments: [] }, version: "ev-version", document_id: "doc", text_sha256: "text" }],
  version,
@@ -242,7 +241,7 @@ it("allows clearing an existing review decision back to offen", async () => {
  await waitFor(() => expect(screen.getByText(/open|offen/i)).toBeDefined());
 });
 
-it("allows toggling an active review decision button to reset to offen", async () => {
+it("keeps a repeated outcome explicit and resets only through zero", async () => {
  const target = proposal("v1", "HP:1");
  const view = baseView();
  view.key = { ...key, mode: "review" };
@@ -260,18 +259,20 @@ it("allows toggling an active review decision button to reset to offen", async (
    reviewer_id: "annotator",
   }],
  };
- const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({
-  ...view.draft,
-  revision: 1,
-  decisions: [],
- });
+ const decide = vi.spyOn(api, "recordDecision").mockResolvedValueOnce({ ...view.draft, revision: 1 })
+  .mockResolvedValueOnce({ ...view.draft, revision: 2, decisions: [] });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:1"));
  const confirmBtn = screen.getByRole("button", { name: /Confirm|Bestätigen/ });
  expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
  fireEvent.click(confirmBtn);
  await waitFor(() => expect(decide).toHaveBeenCalled());
- expect(decide.mock.calls[0][1].payload.outcome).toBeNull();
+ expect(decide.mock.calls[0][1].payload.outcome).toBe("confirmed");
+ expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
+ fireEvent.keyDown(window, { key: "0" });
+ await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+ expect(decide.mock.calls[1][1].payload.outcome).toBeNull();
+ expect(decide.mock.calls[1][1].payload.target).toEqual({ annotation_id: "same", version: "v1" });
  expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v1" });
 });
 
@@ -309,7 +310,7 @@ it("strictly separates selection between review targets and own annotations in s
 it("lets the server resolve review targets only after opening explicitly opened assigned review task (blinding)", async () => {
  window.localStorage.clear();
  asAnnotator("dr-a");
- vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", ontology: { release: "test" } }] as any);
+ vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", roles: ["reviewer"], can_manage: false, ontology: { release: "test" } }] as any);
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  const inputs = vi.spyOn(api, "getReviewInputs").mockResolvedValue([proposal("v1", "HP:1"), proposal("v2", "HP:2")]);
  const view = baseView(); view.key.mode = "review"; view.scope.mode = "review";
@@ -335,7 +336,7 @@ it("lets the server resolve review targets only after opening explicitly opened 
 
 it("opens a review workspace without any review targets", async () => {
  window.localStorage.clear();
- vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", ontology: { release: "test" } }] as any);
+ vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", roles: ["reviewer"], can_manage: false, ontology: { release: "test" } }] as any);
  vi.spyOn(api, "listDocuments").mockResolvedValue([{ document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" }]);
  vi.spyOn(api, "getReviewInputs").mockResolvedValue([]);
  asAnnotator("dr-a");
@@ -355,25 +356,30 @@ it("binds a changed decision to the replacement version after queued edits", asy
  const view = baseView(), target = proposal("target-v1", "HP:1");
  const own = proposal("own-v1", "HP:3");
  own.annotation.annotation_id = "own";
+ own.annotation.provenance.source_refs = ["same:target-v1"];
  view.key = { ...key, mode: "review" };
  view.scope = { ...scope, mode: "review" };
  view.available_inputs = [target];
  view.targets = { target_set_id: "targets", targets: [{ annotation_id: "same", version: "target-v1" }] };
  view.draft = { ...view.draft, key: view.key, targets: view.targets, annotations: [own] };
+ const updated = { ...view.draft, revision: 1, annotations: [{ ...own, version: "own-v2",
+   annotation: { ...own.annotation, axes_values: { assertion: "present" } } }] };
  let finish!: (value: typeof view.draft) => void;
- vi.spyOn(api, "applyCommand").mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
- const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...view.draft, revision: 2 });
+ const apply = vi.spyOn(api, "applyCommand").mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+ const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...updated, revision: 2 });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
- fireEvent.click(screen.getByText("HP:3"));
+ fireEvent.click(screen.getByText("HP:1"));
+ fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+ await screen.findByText(/Context Axes/);
+ expect(apply).not.toHaveBeenCalled(); // Existing adopted copy is resumed rather than cloned again.
  fireEvent.click(screen.getByRole("radio", { name: /Present|Vorhanden/i }));
  await waitFor(() => expect(finish).toBeDefined());
- fireEvent.click(screen.getByText("HP:1"));
- fireEvent.click(screen.getByRole("button", { name: /Assign replacement from draft|Gegenfassung aus Entwurf zuordnen/i }));
- fireEvent.click(screen.getByRole("button", { name: /Confirm replacement|Änderung bestätigen/i }));
+ expect(apply.mock.calls[0][1].payload).toEqual(expect.objectContaining({ command: "set_axes", annotation_id: "own" }));
  expect(decide).not.toHaveBeenCalled();
- await act(async () => finish({ ...view.draft, revision: 1, annotations: [{ ...own, version: "own-v2" }] }));
+ await act(async () => finish(updated));
  await waitFor(() => expect(decide).toHaveBeenCalled());
- expect(decide.mock.calls[0][1].payload.replacement).toEqual({ annotation_id: "own", version: "own-v2" });
+ expect(decide.mock.calls[0][1].payload).toEqual(expect.objectContaining({ outcome: "changed",
+   target: { annotation_id: "same", version: "target-v1" }, replacement: { annotation_id: "own", version: "own-v2" } }));
  expect(decide.mock.calls[0][1].expected_revision).toBe(1);
 });
 
@@ -408,7 +414,10 @@ it("exposes an immutable historical submission", () => {
    targets: view.targets,
  }];
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
- fireEvent.click(screen.getByRole("button", { name: /yesterday/ }));
+ fireEvent.click(screen.getByRole("button", { name: "Submission 1 · Date unavailable" }));
+ const historical = screen.getByRole("dialog", { name: /Historical submission/ });
+ fireEvent.click(within(historical).getByText("Technical details"));
+ expect(within(historical).getByText("historical")).toBeDefined();
  expect(screen.getByRole("dialog", { name: /Historical submission|Historische Abgabe/i })).toBeDefined();
  expect(screen.getByText("HP:old")).toBeDefined();
 });
