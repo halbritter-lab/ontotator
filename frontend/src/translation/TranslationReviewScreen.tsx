@@ -69,7 +69,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const [submitted, setSubmitted] = useState<TranslationReviewRecord | null>(null);
   const [createdVersion, setCreatedVersion] = useState<number | null>(null);
   const [serverIssues, setServerIssues] = useState<string[]>([]);
-  const [showChanges, setShowChanges] = useState(false), [coupled, setCoupled] = useState(true), [confirming, setConfirming] = useState(false);
+  const [showChanges, setShowChanges] = useState(false), [confirming, setConfirming] = useState(false);
   const decisionHeading = useRef<HTMLHeadingElement | null>(null), submitReason = useRef<HTMLDivElement | null>(null);
   const [comparisonId, setComparisonId] = useState(workspace.comparisons[0]?.variant.document_id ?? "");
   const [sourceElement, setSourceElement] = useState<HTMLDivElement | null>(null), [targetElement, setTargetElement] = useState<HTMLDivElement | null>(null), [comparisonElement, setComparisonElement] = useState<HTMLDivElement | null>(null);
@@ -81,9 +81,16 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const sourceStarts = useMemo(() => paragraphStarts(workspace.source.text), [workspace.source.text]);
   const targetStarts = useMemo(() => paragraphStarts(text), [text]);
   const comparisonStarts = useMemo(() => paragraphStarts(comparison?.text ?? ""), [comparison?.text]);
-  // Both the editor and the change view carry paragraph markers, so scrolling stays coupled in either mode.
-  useCoupledScroll(sourceElement, targetElement, { leftStarts: sourceStarts, rightStarts: targetStarts, enabled: coupled });
-  useCoupledScroll(targetElement, comparison ? comparisonElement : null, { leftStarts: targetStarts, rightStarts: comparisonStarts, enabled: coupled });
+  const canCouple = readOnly || showChanges;
+  const couplingIdentity = useMemo(() => ({}), [workspace, text, showChanges, readOnly, comparisonId]);
+  const [requestedCoupling, setRequestedCoupling] = useState<object | null>(null);
+  const coupled = canCouple && requestedCoupling === couplingIdentity;
+  const panes = useMemo(() => [
+    { id: 'source', element: sourceElement, starts: sourceStarts },
+    { id: 'target', element: targetElement, starts: targetStarts },
+    { id: 'comparison', element: comparison ? comparisonElement : null, starts: comparisonStarts },
+  ], [sourceElement, targetElement, comparisonElement, sourceStarts, targetStarts, comparisonStarts, comparison]);
+  const pairing = useCoupledScroll(panes, { enabled: coupled });
   type Leave = { kind: "leave" | "logout"; resolve?: (allowed: boolean) => void; proceed?: () => void };
   const [leave, setLeave] = useState<Leave | null>(null);
   const pendingLeave = useRef<Leave | null>(null), leavePromise = useRef<Promise<boolean> | null>(null);
@@ -245,7 +252,9 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
       <div className="translation-texts">
         <div className="translation-toolbar density-compact" role="group" aria-label="Text view">
           <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
-          <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setCoupled(event.target.checked)} />
+          <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} disabled={!canCouple} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />
+          {!canCouple && <p className="translation-toolbar-note">Coupled scrolling is available in read-only views.</p>}
+          {coupled && <><p className="translation-toolbar-note">Paragraphs are paired by position, not by meaning</p><p className="translation-toolbar-note" aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${({source:'Source',target:'Translation',comparison:'Comparison'} as Record<string,string>)[pair.paneId]} paragraph ${pair.paragraph+1}`).join(' ↔ ')}</p></>}
           {comparison && <Select id="review-comparison" label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
             {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} · {row.variant.language}</option>)}</Select>}
           {coupled && sourceStarts.length !== targetStarts.length && paragraphNote(sourceStarts.length, targetStarts.length)}

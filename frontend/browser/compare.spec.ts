@@ -76,11 +76,12 @@ async function markerOffset(surface: Locator, index: number) {
   }, index);
 }
 async function scrollParagraph(surface: Locator, index: number) {
+  await surface.dispatchEvent('wheel');
   const range = await surface.evaluate(async (element, number) => {
     const marker = element.querySelector<HTMLElement>(`[data-paragraph="${number}"]`);
     if (!marker) throw new Error(`Missing real paragraph ${number}`);
     // One pixel beyond the boundary avoids fractional scrollTop rounding selecting
-    // the preceding paragraph; geometry assertions below still measure real alignment.
+    // the preceding paragraph; geometry assertions below still measure live positions.
     const wanted = element.scrollTop + marker.getBoundingClientRect().top - element.getBoundingClientRect().top - element.clientTop + 1;
     const maximum = element.scrollHeight - element.clientHeight;
     element.scrollTop = wanted;
@@ -111,8 +112,7 @@ async function dragEndTo(page: Page, surface: Locator, offset: number) {
   await page.mouse.down(); await page.mouse.move(point.x, point.y, { steps: 8 }); await page.mouse.up();
 }
 async function afterEchoWindow(page: Page) {
-  // This is the specified 150ms echo-guard expiry, not a substitute for the
-  // separate polled marker-alignment assertions.
+  // Wait beyond the former echo timer to exercise persistent ownership.
   await page.waitForTimeout(175);
 }
 async function exactText(surface: Locator, text: string) {
@@ -150,8 +150,8 @@ async function manage(browser: Browser, s: Scenario, assignment: number, operati
   } finally { await context.close(); }
 }
 
-test('real wrapping aligns equal paragraphs in both directions without changing immutable text or markers', async ({ page }) => {
-  const s = await scenario(page); await loginExisting(page, s.users.alice);
+test('real wrapping pairs equal-count paragraphs in both directions without changing immutable text or markers', async ({ page }) => {
+  const s = await scenario(page); await loginExisting(page, s.users.lead);
   await page.setViewportSize({ width: 1280, height: 720 });
   await openViewer(page, s); await openComparison(page, s);
   const left = viewerLeft(page), right = rightText(page);
@@ -160,6 +160,9 @@ test('real wrapping aligns equal paragraphs in both directions without changing 
   const leftHeight = await markerOffset(left, 2) - await markerOffset(left, 1);
   const rightHeight = await markerOffset(right, 2) - await markerOffset(right, 1);
   expect(Math.abs(leftHeight - rightHeight)).toBeGreaterThan(20);
+  await expect(comparison(page).getByLabel('Couple scrolling')).not.toBeChecked();
+  await comparison(page).getByLabel('Couple scrolling').check();
+  await expect(page.getByText('Paragraphs are paired by position, not by meaning', {exact:true})).toBeVisible();
   await scrollParagraph(left, 3); await align(right, 3);
   await afterEchoWindow(page);
   await scrollParagraph(right, 6); await align(left, 6);
@@ -173,7 +176,7 @@ test('real wrapping aligns equal paragraphs in both directions without changing 
 });
 
 test('unequal counts map proportionally, toggle off and below1100 suspend coupling, resize back resumes it', async ({ page }) => {
-  const s = await scenario(page); await loginExisting(page, s.users.alice);
+  const s = await scenario(page); await loginExisting(page, s.users.lead);
   await page.setViewportSize({ width: 1280, height: 720 });
   await openViewer(page, s); await openComparison(page, s);
   const pane = comparison(page), left = viewerLeft(page), right = rightText(page);
@@ -181,6 +184,7 @@ test('unequal counts map proportionally, toggle off and below1100 suspend coupli
   await pane.getByLabel('Text version', { exact: true }).selectOption(s.documents.other);
   await expect(right.locator('[data-paragraph]')).toHaveCount(9);
   await expect(pane.getByText('Paragraphs differ (13 / 9); scrolling is approximate.', { exact: true })).toBeVisible();
+  await pane.getByLabel('Couple scrolling').check();
   await scrollParagraph(left, 6); await align(right, 4);
   await afterEchoWindow(page); await scrollParagraph(right, 3); await align(left, 5);
   await pane.getByLabel('Couple scrolling', { exact: true }).uncheck();
@@ -197,6 +201,7 @@ test('unequal counts map proportionally, toggle off and below1100 suspend coupli
   const boxes = await Promise.all([left.boundingBox(), right.boundingBox()]);
   expect(boxes[0]!.x).toBeCloseTo(boxes[1]!.x, 0); expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y + boxes[0]!.height);
   await page.setViewportSize({ width: 1280, height: 720 });
+  await pane.getByLabel('Couple scrolling').check();
   await scrollParagraph(left, 6); await align(right, 4);
 });
 
@@ -404,4 +409,41 @@ for (const width of [800, 600]) test(`comparison stacks with reachable independe
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await comparison(page).getByRole('button', { name: 'Close comparison', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeFocused(); await expect(comparison(page)).toHaveCount(0);
+});
+
+test('equal-count merged and split paragraphs show positional partners and continuous progress without feedback', async ({page}) => {
+  await page.setViewportSize({width:1280,height:720});
+  const response=await page.request.post('/__test_variants__?comparison=true&merge_split=true');
+  expect(response.ok()).toBeTruthy(); const s=await response.json() as Scenario;
+  await loginExisting(page,s.users.lead); await openViewer(page,s); await openComparison(page,s);
+  const left=viewerLeft(page),right=rightText(page),box=comparison(page).getByLabel('Couple scrolling');
+  await expect(box).not.toBeChecked(); const before=await left.evaluate(el=>el.scrollHeight);
+  await box.focus(); await page.keyboard.press('Space');
+  await expect(page.getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toBeVisible();
+  expect(await left.evaluate(el=>el.scrollHeight)).toBe(before);
+  for(const fraction of [0.25,0.5,0.75]) {
+    await left.dispatchEvent('wheel');
+    const position=await left.evaluate((el,fraction)=>{
+      const rows=el.querySelectorAll('[data-paragraph]'); const top=(i:number)=>el.scrollTop+rows[i].getBoundingClientRect().top-el.getBoundingClientRect().top-el.clientTop;
+      el.scrollTop=top(1)+(top(2)-top(1))*fraction; return el.scrollTop;
+    },fraction);
+    await expect.poll(()=>right.evaluate(el=>{const rows=el.querySelectorAll('[data-paragraph]'); const top=(i:number)=>el.scrollTop+rows[i].getBoundingClientRect().top-el.getBoundingClientRect().top-el.clientTop; return (el.scrollTop-top(1))/(top(2)-top(1));})).toBeCloseTo(fraction,2);
+    await right.dispatchEvent('scroll'); await page.waitForTimeout(180); await right.dispatchEvent('scroll');
+    expect(await left.evaluate(el=>el.scrollTop)).toBe(position);
+    await expect(page.getByLabel('Paragraph pairing')).toHaveText('Current text paragraph 2 ↔ Comparison paragraph 2');
+  }
+  await expect(left.locator('[data-paragraph-number="2"]')).toHaveAttribute('data-coupled-active','true');
+  await expect(right.locator('[data-paragraph-number="2"]')).toHaveAttribute('data-coupled-active','true');
+  const selected=await left.evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);const selection=window.getSelection()!; selection.removeAllRanges();selection.addRange(range);return selection.toString();});
+  expect(selected).toBe(s.texts.target);
+  await page.context().grantPermissions(['clipboard-read','clipboard-write']);
+  await page.keyboard.press('Control+c');
+  // Windows native copy uses CRLF; compare the canonical LF fixture after that platform conversion.
+  expect((await page.evaluate(()=>navigator.clipboard.readText())).replace(/\r\n/g,'\n')).toBe(s.texts.target);
+  await left.evaluate(()=>window.getSelection()?.removeAllRanges());
+  await scrollParagraph(left,1);
+  await page.screenshot({path:test.info().outputPath('coupling-desktop.png')});
+  await page.setViewportSize({width:1099,height:768});
+  await expect(left.locator('[data-paragraph-number]')).toHaveCount(0);
+  await page.screenshot({path:test.info().outputPath('coupling-narrow.png')});
 });

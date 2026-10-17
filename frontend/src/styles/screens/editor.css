@@ -1734,3 +1734,23 @@
 
 .reanchor-context mark { background: var(--warning-light); color: inherit; }
 .reanchor-context mark[data-old-kind~="cue"] { text-decoration: underline dotted; }
+/* Empty marker adornments occupy the existing reading gutter, never the clinical text flow. */
+[data-paragraph] { position: relative; pointer-events: none; user-select: none; }
+[data-paragraph-number]::before {
+  content: attr(data-paragraph-number);
+  position: absolute;
+  inset-inline-end: var(--space-2);
+  top: 0;
+  min-width: 1.2rem;
+  box-sizing: border-box;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: var(--size-xs);
+  line-height: var(--leading-sm);
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  pointer-events: none;
+  user-select: none;
+}
+[data-coupled-active]::before { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+.compare-controls > p { margin: var(--space-2); font-size: var(--size-sm); line-height: var(--leading-sm); }

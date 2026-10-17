@@ -152,3 +152,6 @@
 @media (prefers-reduced-motion: reduce) {
   .review-decision { transition: none; }
 }
+/* Reserve the number gutter in both editing and reading modes. */
+.translation-text, .translation-review .translation-diff,
+.translation-editor-mirror, .translation-editor-input { padding-inline-start: var(--space-6); }

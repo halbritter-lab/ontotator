@@ -242,35 +242,17 @@ it("clinical-off clears categories through the actual controlled form but retain
   fireEvent.click(screen.getByRole("checkbox", { name: "Clinically relevant change" })); await clock();
   expect(save).toHaveBeenCalledWith(17, { expected_revision: 6, text: "Changed", form: { decision: "accepted_corrected", clinical_change: false, categories: [], rationale: "Keep rationale" } });
 });
-it("couples the source with the editor and with the change view that replaces it", async () => {
-  const { container } = setup(reviewWorkspace({ text: "Deleted paragraph\n\n😀one\n\ntwo", draft: { text: "😀one\n\ntwo", revision: 6, form: {} } }));
-  const input = await screen.findByRole("textbox", { name: "Translation (de)" });
-  const source = screen.getByRole("region", { name: "Source (en)" });
-  const editor = input.closest(".translation-editor") as HTMLElement;
-  expect(editor.querySelectorAll("[data-paragraph]")).toHaveLength(2);
-  expect(container.querySelector(".translation-editor-mirror")?.getAttribute("aria-hidden")).toBe("true");
-  expect(screen.queryByRole("region", { name: "Text changes" })).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
-  expect(screen.queryByRole("textbox", { name: "Translation (de)" })).toBeNull();
-  const target = screen.getByRole("region", { name: "Text changes" });
-  function geometry(element: HTMLElement, step: number) {
-    element.getBoundingClientRect = () => ({ top: 0 } as DOMRect);
-    element.querySelectorAll<HTMLElement>("[data-paragraph]").forEach(marker => {
-      marker.getBoundingClientRect = () => ({ top: Number(marker.dataset.paragraph) * step - element.scrollTop } as DOMRect);
-    });
-  }
-  geometry(source, 120); geometry(target, 360);
-  source.scrollTop = 130; fireEvent.scroll(source);
-  expect(target.scrollTop).toBe(360);
-  expect(container.querySelector("textarea [data-paragraph]")).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
-  expect(screen.queryByRole("region", { name: "Text changes" })).toBeNull();
-  source.scrollTop = 0; fireEvent.scroll(source); expect(target.scrollTop).toBe(360);
-  const restored = (screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLElement).closest(".translation-editor") as HTMLElement;
-  geometry(restored, 240); source.scrollTop = 130; fireEvent.scroll(source);
-  expect(restored.scrollTop).toBe(240);
-  fireEvent.click(screen.getByRole("checkbox", { name: "Couple scrolling" }));
-  restored.scrollTop = 0; source.scrollTop = 250; fireEvent.scroll(source); expect(restored.scrollTop).toBe(0);
+it("couples only opted-in reading views and clears the request on return to editing", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  const box=screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
+  expect(box.checked).toBe(false); expect(box.disabled).toBe(true);
+  fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'}));
+  expect(box.disabled).toBe(false); fireEvent.click(box);
+  expect(screen.getByText('Paragraphs are paired by position, not by meaning')).toBeDefined();
+  expect(screen.getByLabelText('Paragraph pairing')).toBeDefined();
+  fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'}));
+  expect(box.checked).toBe(false); expect(box.disabled).toBe(true);
+  fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'})); expect(box.checked).toBe(false);
 });
 it("uses only the workspace's comparison choices and shows passed inherited checks on demand", async () => {
   const workspace = reviewWorkspace();
@@ -362,4 +344,12 @@ it("explains a blocked submit right at the button with the rules' own issues", a
   expect(within(screen.getByRole("list", { name: "Review issues" })).getAllByRole("listitem").map(item => item.textContent))
     .toEqual([issueMessages.CATEGORY_REQUIRED, issueMessages.RATIONALE_REQUIRED]);
   expect(submitButton().disabled).toBe(true);
+});
+
+it('allows explicit coupling on a submitted read-only target',async()=>{
+  setup(reviewWorkspace({read_only:true,submitted_record:reviewRecord()}));
+  await screen.findByRole('textbox',{name:'Translation (de)'});
+  const box=screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
+  expect(box.disabled).toBe(false);expect(box.checked).toBe(false);fireEvent.click(box);expect(box.checked).toBe(true);
+  expect(screen.getByText('Paragraphs are paired by position, not by meaning')).toBeDefined();
 });

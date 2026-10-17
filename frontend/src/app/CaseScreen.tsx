@@ -154,7 +154,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const comparison = compareOpen && versions && versionContext ? <ComparePane
     projectKey={view.key.project_key} username={versionContext.username} caseDetail={versions.detail}
     leftDocumentId={view.document.document_id} leftText={view.document.text} leftElement={leftTextElement}
-    leftContext={JSON.stringify([versionIdentity, display?.selection ?? "draft"])} onClose={closeComparison} /> : null;
+    editing={!serverReadOnly && display === null} leftContext={JSON.stringify([versionIdentity, display?.selection ?? "draft"])} onClose={closeComparison} /> : null;
   const [versionBusy, setVersionBusy] = useState(false);
   const versionGeneration = useRef(0);
   useEffect(() => { versionGeneration.current++; setVersionBusy(false); return () => { versionGeneration.current++; }; }, [versionIdentity]);

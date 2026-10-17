@@ -167,3 +167,12 @@ it('keeps the actual comparison and its choices mounted across left draft/histor
   expect(screen.getByRole('region', { name: 'Comparison' })).toBe(panel);
   expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('other-run');
 });
+
+it('keeps a working annotation draft independently scrollable with comparison open', async () => {
+  vi.spyOn(api,'getVariantText').mockResolvedValue({document_id:'source',text:'one\n\ntwo',text_sha256:'text'});
+  render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
+  fireEvent.click(await screen.findByRole('button',{name:'Compare'}));
+  const box=await screen.findByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
+  expect(box.disabled).toBe(true); expect(box.checked).toBe(false);
+  expect(screen.getByText('Coupled scrolling is available in read-only views.')).toBeDefined();
+});

@@ -68,6 +68,7 @@ async function section(page: Page, name: string) {
   await page.getByRole('link', { name, exact: true }).click();
 }
 async function alignAt(surface: Locator, index: number) {
+  await surface.dispatchEvent('wheel');
   await surface.evaluate((el, index) => {
     const marker = el.querySelector<HTMLElement>(`[data-paragraph="${index}"]`)!;
     el.scrollTop += marker.getBoundingClientRect().top - el.getBoundingClientRect().top - el.clientTop;
@@ -310,16 +311,14 @@ for (const width of [1280, 1024, 600]) test(`review source, the one editable tra
     const mirror = el.querySelector('.translation-editor-mirror')!, input = el.querySelector('textarea')!;
     return Math.abs(mirror.getBoundingClientRect().height - input.getBoundingClientRect().height) <= 1 && input.scrollHeight <= input.clientHeight + 1;
   })).toBe(true);
+  await expect(page.getByRole('checkbox', {name:'Couple scrolling',exact:true})).toBeDisabled();
   if (width >= 1100) {
-    await expect(page.getByText('Paragraphs differ (14 / 16); scrolling is approximate.', { exact: true })).toBeVisible();
-    await alignAt(source, 2); await expect.poll(() => markerDistance(editor, 2)).toBeLessThanOrEqual(20);
-    await page.getByRole('checkbox', { name: 'Couple scrolling', exact: true }).uncheck();
-    const retained = await editor.evaluate(el => el.scrollTop); await alignAt(source, 5);
-    await expect.poll(() => editor.evaluate(el => el.scrollTop)).toBe(retained);
-    await page.getByRole('checkbox', { name: 'Couple scrolling', exact: true }).check();
-    await alignAt(editor, 8); await expect.poll(() => markerDistance(comparison, 9)).toBeLessThanOrEqual(20);
-    await showChanges.check(); await expect(target(page)).toHaveCount(0); await expect(diff).toHaveText(s.texts.target);
-    await alignAt(source, 2); await expect.poll(() => markerDistance(diff, 2)).toBeLessThanOrEqual(20);
+    const initial = await editor.evaluate(el=>el.scrollTop); await alignAt(source,2); expect(await editor.evaluate(el=>el.scrollTop)).toBe(initial);
+    await showChanges.check(); await expect(diff).toHaveText(s.texts.target);
+    await page.getByRole('checkbox', {name:'Couple scrolling',exact:true}).check();
+    await expect(page.getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toBeVisible();
+    await alignAt(source, 3); await alignAt(source, 2); await expect.poll(() => markerDistance(diff, 2)).toBeLessThanOrEqual(20);
+    await alignAt(diff, 8); await expect.poll(() => markerDistance(comparison, 9)).toBeLessThanOrEqual(20);
   } else {
     const initial = await editor.evaluate(el => el.scrollTop); await alignAt(source, 2); expect(await editor.evaluate(el => el.scrollTop)).toBe(initial);
     const sourceBox = await source.boundingBox(), editorBox = await editor.boundingBox(); expect(sourceBox && editorBox && editorBox.y > sourceBox.y).toBeTruthy();
@@ -343,4 +342,34 @@ for (const width of [1280, 1024, 600]) test(`review source, the one editable tra
   await page.getByRole('radio', { name: 'Query', exact: true }).scrollIntoViewIfNeeded(); await expect(page.getByRole('radio', { name: 'Query', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath(`review-${width}.png`), fullPage: true });
+});
+
+test('three reading panes preserve positional progress and reject delayed feedback after equal-count merge/split', async ({page})=>{
+  await page.setViewportSize({width:1280,height:900});
+  const response=await page.request.post('/__test_translation_review__?assignment=target&merge_split=true'); expect(response.ok()).toBeTruthy();
+  const s=await response.json() as Scenario; await openReview(page,s); await page.evaluate(()=>document.fonts.ready);
+  const box=page.getByRole('checkbox',{name:'Couple scrolling',exact:true}),show=page.getByRole('checkbox',{name:'Show changes',exact:true});
+  const source=page.getByRole('region',{name:'Source (en)',exact:true}),diff=page.getByRole('region',{name:'Text changes',exact:true}),comparison=page.getByRole('region',{name:'Comparison',exact:true});
+  await expect(box).not.toBeChecked(); await expect(box).toBeDisabled();
+  await target(page).evaluate(el=>{(el as HTMLTextAreaElement).setSelectionRange(8,15);});
+  await source.dispatchEvent('wheel'); await alignAt(source,1);
+  expect(await target(page).evaluate(el=>[(el as HTMLTextAreaElement).selectionStart,(el as HTMLTextAreaElement).selectionEnd])).toEqual([8,15]);
+  await show.check(); await box.check();
+  await expect(page.getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toBeVisible();
+  for(const leader of [source,diff,comparison]) {
+    for(const fraction of [0.25,0.5,0.75]) {
+      await leader.dispatchEvent('wheel');
+      const position=await leader.evaluate((el,fraction)=>{const rows=el.querySelectorAll('[data-paragraph]');const top=(i:number)=>el.scrollTop+rows[i].getBoundingClientRect().top-el.getBoundingClientRect().top-el.clientTop;el.scrollTop=top(1)+(top(2)-top(1))*fraction;return el.scrollTop;},fraction);
+      for(const follower of [source,diff,comparison].filter(p=>p!==leader)) {
+        await expect.poll(()=>follower.evaluate(el=>{const rows=el.querySelectorAll('[data-paragraph]');const top=(i:number)=>el.scrollTop+rows[i].getBoundingClientRect().top-el.getBoundingClientRect().top-el.clientTop;return (el.scrollTop-top(1))/(top(2)-top(1));})).toBeCloseTo(fraction,2);
+        await follower.dispatchEvent('scroll');
+      }
+      await page.waitForTimeout(180); for(const follower of [source,diff,comparison].filter(p=>p!==leader)) await follower.dispatchEvent('scroll');
+      expect(await leader.evaluate(el=>el.scrollTop)).toBe(position);
+      await expect(page.getByLabel('Paragraph pairing')).toHaveText('Source paragraph 2 ↔ Translation paragraph 2 ↔ Comparison paragraph 2');
+    }
+  }
+  await show.uncheck(); await expect(box).not.toBeChecked(); await expect(box).toBeDisabled();
+  await target(page).fill(s.texts.target+' Native correction.'); await expect(target(page)).toHaveValue(s.texts.target+' Native correction.');
+  await show.check(); await expect(box).not.toBeChecked();
 });

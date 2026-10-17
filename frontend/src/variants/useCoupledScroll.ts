@@ -1,76 +1,75 @@
-import { useEffect } from "react";
+import { useEffect, useState } from 'react';
 
-export interface CoupledScrollOptions {
-  leftStarts: readonly number[];
-  rightStarts: readonly number[];
-  enabled: boolean;
-}
+export interface CoupledScrollPane { id: string; element: HTMLElement | null; starts: readonly number[] }
+export interface CoupledScrollState { leaderId: string | null; pairs: ReadonlyArray<{ paneId: string; paragraph: number }> }
+const empty: CoupledScrollState = { leaderId: null, pairs: [] };
+const navigationKeys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar']);
 
-/** Couple only the supplied scrollports; paragraph positions come from live DOM markers. */
-export function useCoupledScroll(
-  left: HTMLElement | null,
-  right: HTMLElement | null,
-  { leftStarts, rightStarts, enabled }: CoupledScrollOptions,
-): void {
+/** A group has one owner until deliberate input transfers ownership. Follower scroll events never feed back. */
+export function useCoupledScroll(panes: readonly CoupledScrollPane[], { enabled }: { enabled: boolean }): CoupledScrollState {
+  const [state, setState] = useState<CoupledScrollState>(empty);
   useEffect(() => {
-    if (!enabled || !left || !right || left === right) return;
-    const wide = window.matchMedia("(min-width: 1100px)");
+    setState(value => value.leaderId === null && !value.pairs.length ? value : empty);
+    if (!enabled) return;
+    const wide = window.matchMedia('(min-width: 1100px)');
     let detach = () => {};
-
     const bind = () => {
       detach();
+      setState(value => value.leaderId === null && !value.pairs.length ? value : empty);
       if (!wide.matches) return;
-      const echoes = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
-      const clearEcho = (element: HTMLElement) => {
-        const timer = echoes.get(element);
-        if (timer !== undefined) clearTimeout(timer);
-        echoes.delete(element);
-      };
-      const sync = (from: HTMLElement, to: HTMLElement, n: number, m: number) => {
-        if (echoes.has(from) || n === 0 || m === 0) return;
-        const edge = from.getBoundingClientRect().top + from.clientTop;
-        let paragraph: number | undefined;
-        for (const marker of from.querySelectorAll<HTMLElement>("[data-paragraph]")) {
+      const participants = panes.filter((pane): pane is CoupledScrollPane & { element: HTMLElement } => pane.element !== null);
+      let leaderId: string | null = null;
+      const decorated = new Set<HTMLElement>();
+      const markers = (pane: CoupledScrollPane & { element: HTMLElement }) => {
+        const edge = pane.element.getBoundingClientRect().top + pane.element.clientTop;
+        return [...pane.element.querySelectorAll<HTMLElement>('[data-paragraph]')].flatMap(marker => {
           const index = Number(marker.dataset.paragraph);
-          if (!Number.isInteger(index) || index < 0 || index >= n) continue;
-          const top = marker.getBoundingClientRect().top;
-          if (!Number.isFinite(top)) continue;
-          paragraph ??= index; // First paragraph while its leading padding is visible.
-          if (top <= edge) paragraph = index;
+          if (!Number.isInteger(index) || index < 0 || index >= pane.starts.length) return [];
+          marker.dataset.paragraphNumber = String(index + 1); decorated.add(marker);
+          return [{ marker, index, top: pane.element.scrollTop + marker.getBoundingClientRect().top - edge }];
+        }).filter(row => Number.isFinite(row.top)).sort((a,b) => a.index-b.index);
+      };
+      participants.forEach(markers);
+      const sync = (source: typeof participants[number], move = true) => {
+        const geometry = markers(source);
+        const current = geometry.filter(row => row.top <= source.element.scrollTop).at(-1) ?? geometry[0];
+        if (!current) return;
+        const end = geometry.find(row => row.index > current.index)?.top ?? source.element.scrollHeight;
+        const height = end - current.top;
+        if (!Number.isFinite(height) || height <= 0) return;
+        const fraction = Math.max(0, Math.min(1, (source.element.scrollTop-current.top)/height));
+        const pairs: { paneId: string; paragraph: number }[] = [];
+        for (const pane of participants) {
+          const mapped = source.starts.length <= 1 || pane.starts.length <= 1 ? 0 : Math.round(current.index*(pane.starts.length-1)/(source.starts.length-1));
+          const rows = markers(pane), partner = rows.find(row => row.index === mapped);
+          rows.forEach(row => { delete row.marker.dataset.coupledActive; });
+          if (!partner) continue;
+          partner.marker.dataset.coupledActive = 'true'; pairs.push({paneId:pane.id,paragraph:mapped});
+          if (pane === source || !move) continue;
+          const partnerEnd = rows.find(row => row.index > mapped)?.top ?? pane.element.scrollHeight;
+          const partnerHeight = partnerEnd-partner.top;
+          if (!Number.isFinite(partnerHeight) || partnerHeight <= 0) continue;
+          const target = partner.top+fraction*partnerHeight;
+          if (Number.isFinite(target)) pane.element.scrollTop = Math.max(0, Math.min(Math.max(0,pane.element.scrollHeight-pane.element.clientHeight),target));
         }
-        if (paragraph === undefined) return;
-        const mapped = n <= 1 || m <= 1 ? 0 : Math.round(paragraph * (m - 1) / (n - 1));
-        const marker = to.querySelector<HTMLElement>(`[data-paragraph="${mapped}"]`);
-        if (!marker) return;
-        const before = to.scrollTop;
-        const offset = before + marker.getBoundingClientRect().top
-          - (to.getBoundingClientRect().top + to.clientTop);
-        if (!Number.isFinite(offset) || offset === before) return;
-        const previous = echoes.get(to);
-        // Install before writing: a programmatic target event must never echo back.
-        const timer = setTimeout(() => echoes.delete(to), 150);
-        echoes.set(to, timer);
-        to.scrollTop = offset; // The browser retains its native scroll-range clamping.
-        if (to.scrollTop === before) {
-          clearEcho(to);
-          // A clamped no-op must neither cancel nor extend an earlier movement's guard.
-          if (previous !== undefined) echoes.set(to, previous);
-        } else if (previous !== undefined) clearTimeout(previous);
+        setState(previous => previous.leaderId === leaderId && previous.pairs.length === pairs.length && pairs.every((pair,i) => pair.paneId === previous.pairs[i].paneId && pair.paragraph === previous.pairs[i].paragraph) ? previous : { leaderId, pairs });
       };
-      const onLeft = () => sync(left, right, leftStarts.length, rightStarts.length);
-      const onRight = () => sync(right, left, rightStarts.length, leftStarts.length);
-      left.addEventListener("scroll", onLeft, { passive: true });
-      right.addEventListener("scroll", onRight, { passive: true });
-      detach = () => {
-        left.removeEventListener("scroll", onLeft);
-        right.removeEventListener("scroll", onRight);
-        for (const timer of echoes.values()) clearTimeout(timer);
-        echoes.clear();
-      };
+      const removals: (() => void)[] = [];
+      participants.forEach(pane => {
+        const input = () => { leaderId = pane.id; };
+        const key = (event: KeyboardEvent) => { if (navigationKeys.has(event.key)) input(); };
+        const scroll = () => { if (leaderId === null) leaderId = pane.id; if (leaderId === pane.id) sync(pane); };
+        for (const type of ['wheel','touchstart','pointerdown']) {
+          pane.element.addEventListener(type,input,{passive:true}); removals.push(()=>pane.element.removeEventListener(type,input));
+        }
+        pane.element.addEventListener('keydown',key); pane.element.addEventListener('scroll',scroll,{passive:true});
+        removals.push(()=>{ pane.element.removeEventListener('keydown',key); pane.element.removeEventListener('scroll',scroll); });
+      });
+      if (participants[0]) sync(participants[0],false);
+      detach = () => { removals.forEach(remove=>remove()); decorated.forEach(marker=>{ delete marker.dataset.paragraphNumber; delete marker.dataset.coupledActive; }); leaderId=null; };
     };
-
-    bind();
-    wide.addEventListener("change", bind);
-    return () => { wide.removeEventListener("change", bind); detach(); };
-  }, [left, right, leftStarts, rightStarts, enabled]);
+    bind(); wide.addEventListener('change',bind);
+    return () => { wide.removeEventListener('change',bind); detach(); };
+  },[panes,enabled]);
+  return state;
 }

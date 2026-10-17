@@ -12,7 +12,7 @@ import { ReadOnlyAnnotationView } from './ReadOnlyAnnotationView';
 
 export interface ComparePaneProps {
   projectKey: string; username: string; caseDetail: CaseDetail; leftDocumentId: string;
-  leftText: string; leftElement: HTMLElement | null; leftContext: string; suspended?: boolean; onClose: () => void;
+  leftText: string; leftElement: HTMLElement | null; leftContext: string; suspended?: boolean; editing?: boolean; onClose: () => void;
 }
 
 /** Only traverse explicitly readable, same-case lineage. No ID or status inference. */
@@ -32,7 +32,7 @@ function defaultComparison(detail: CaseDetail, documentId: string) {
   return { id: row ? documentId : null, source: !row };
 }
 
-export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, suspended = false, onClose }: ComparePaneProps): JSX.Element {
+export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, suspended = false, editing = false, onClose }: ComparePaneProps): JSX.Element {
   // User choices outlive left annotation changes; requests must still reauthorize in each context.
   const choiceIdentity = useMemo(() => ({}), [projectKey, username, caseDetail.case_id, leftDocumentId]);
   const identity = useMemo(() => ({}), [choiceIdentity, caseDetail, leftContext]);
@@ -58,10 +58,13 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
   const payloadError = payload?.identity === payloadIdentity ? payload.error : undefined;
   const labelFor = useTermLabels(projectKey, (snapshot?.annotations ?? []).map(row => ({ layer_id: row.annotation.layer_id, term_id: row.annotation.term_id })));
   const [rightElement, setRightElement] = useState<HTMLDivElement | null>(null);
-  const [coupled, setCoupled] = useState(true);
+  const couplingIdentity = useMemo(() => ({}), [identity, selectedId, selection, leftText, editing, suspended]);
+  const [requestedCoupling, setRequestedCoupling] = useState<object | null>(null);
+  const coupled = requestedCoupling === couplingIdentity && !editing && !suspended;
   const leftStarts = useMemo(() => paragraphStarts(leftText), [leftText, identity]);
   const rightStarts = useMemo(() => paragraphStarts(current?.text?.text ?? ''), [current?.text, contentIdentity]);
-  useCoupledScroll(leftElement, current?.text ? rightElement : null, { leftStarts, rightStarts, enabled: coupled });
+  const panes = useMemo(() => [{ id: 'left', element: leftElement, starts: leftStarts }, { id: 'right', element: current?.text ? rightElement : null, starts: rightStarts }], [leftElement, rightElement, leftStarts, rightStarts, current?.text]);
+  const pairing = useCoupledScroll(panes, { enabled: coupled });
 
   useEffect(() => {
     if (suspended || !available || !selectedId) return;
@@ -86,9 +89,11 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
   return <section className="compare-pane" aria-label="Comparison">
     <div className="compare-controls">
     <div className="compare-toolbar density-compact"><h2>Compare</h2>
-      <label><input type="checkbox" checked={coupled} onChange={event => setCoupled(event.target.checked)} /> Couple scrolling</label>
+      <label><input type="checkbox" checked={coupled} disabled={editing || suspended} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} /> Couple scrolling</label>
       <IconButton label="Close comparison" icon={<IconClose />} onClick={onClose} />
     </div>
+    {editing && <p>Coupled scrolling is available in read-only views.</p>}
+    {coupled && <><p>Paragraphs are paired by position, not by meaning</p><p aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${pair.paneId === 'left' ? 'Current text' : 'Comparison'} paragraph ${pair.paragraph + 1}`).join(' ↔ ')}</p></>}
     {!initial.id && <InlineMessage tone="info">Original source is not available; choose a comparison text.</InlineMessage>}
     {selectedId && !available && <InlineMessage tone="info">This comparison text is not available to you.</InlineMessage>}
     {!available && caseDetail.variants.some(row => row.document_id === leftDocumentId) && <Button onClick={() => select(leftDocumentId)}>Compare current text</Button>}

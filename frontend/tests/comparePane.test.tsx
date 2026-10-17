@@ -23,7 +23,7 @@ it('defaults a translation to exact source Text only and renders live paragraph 
   expect(api.getAnnotationVersion).not.toHaveBeenCalled();
   expect(screen.getByLabelText<HTMLSelectElement>('Annotations').value).toBe('text');
   expect(screen.getByText('Paragraphs differ (2 / 1); scrolling is approximate.')).toBeTruthy();
-  expect((screen.getByRole('checkbox', { name: 'Couple scrolling' }) as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByRole('checkbox', { name: 'Couple scrolling' }) as HTMLInputElement).checked).toBe(false);
   expect(document.querySelectorAll('[data-paragraph]')).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: 'Close comparison' }));
   expect(props.onClose).toHaveBeenCalled();
@@ -97,7 +97,10 @@ it('controls actual paired scrollports with the checkbox without modifying the l
   right.querySelectorAll<HTMLElement>('[data-paragraph]').forEach((marker, index) => {
     marker.getBoundingClientRect = () => ({ top: 600 + index * 300 - right.scrollTop } as DOMRect);
   });
-  left.scrollTop = 225; fireEvent.scroll(left); expect(right.scrollTop).toBe(600);
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Couple scrolling' }));
+  Object.defineProperties(left, { scrollHeight: {value:400}, clientHeight:{value:0} });
+  Object.defineProperties(right, { scrollHeight: {value:900}, clientHeight:{value:0} });
+  left.scrollTop = 200; fireEvent.scroll(left); expect(right.scrollTop).toBe(600);
   fireEvent.click(screen.getByRole('checkbox', { name: 'Couple scrolling' }));
   right.scrollTop = 0; fireEvent.scroll(left); expect(right.scrollTop).toBe(0);
   fireEvent.click(screen.getByRole('checkbox', { name: 'Couple scrolling' }));
@@ -147,4 +150,14 @@ it('retains an explicit removed variant without fallback reads and recovers in a
   fireEvent.click(screen.getByRole('button', { name: 'Compare current text' }));
   await screen.findByText('Immutable target');
   expect(screen.getByLabelText<HTMLSelectElement>('Text version').value).toBe('target');
+});
+
+it('clears coupling when editing, even with equal paragraph counts', async () => {
+  const mounted=render(<ComparePane {...props} leftText="one" />); await screen.findByText('Immutable source');
+  const box=screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
+  fireEvent.click(box); expect(box.checked).toBe(true);
+  expect(screen.getByText('Paragraphs are paired by position, not by meaning')).toBeTruthy();
+  mounted.rerender(<ComparePane {...props} leftText="one" editing />);
+  expect(box.disabled).toBe(true); expect(box.checked).toBe(false);
+  mounted.rerender(<ComparePane {...props} leftText="one" />); expect(box.checked).toBe(false);
 });
