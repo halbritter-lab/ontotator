@@ -44,7 +44,7 @@ These narrow questions resolve actual implementation gaps; they do not reopen D1
 | P0-S | Apply spanless note/disable rules to existing open drafts? | Keep completed submissions immutable; require a note in future submissions and evidence/removal if the project disables spanless findings. Imported proposals remain readable; newly adopted/submitted results obey current rules. | Asked; awaiting answer |
 | P0-A | Can independent annotators still read their own previous submissions? | Yes, through own-history access; restrict general version browsing/comparison. Assigned translation reviewers retain source/target access. | Asked; awaiting answer |
 | P0-R | Must every frozen pending re-anchor item be resolved before submitting its review? | Yes; re-create or dismiss with a reason, with a count and jump from submit. | Asked; awaiting answer |
-| P0-U | May an unresolved proposal with unknown/obsolete term or incomplete required clinical content be submitted/exported as a finding? | Require correction or rejection for new submissions; preserve historical data and expose export failures explicitly. Do not silently discard or promote it. | Open; ask before enforcing new semantics |
+| P0-U | May an unresolved proposal with unknown/obsolete term or incomplete required clinical content be submitted/exported as a finding? | Require correction or rejection for new submissions; preserve historical data and expose export failures explicitly. Do not silently discard or promote it. | Asked; awaiting answer |
 
 For D2, new unresolved decisions require a note as already approved. Historical decisions without notes remain readable; exports must not invent notes. The plan specifies an explicit legacy warning. Format field names and minor version are technical decisions, not an additional user approval gate.
 
@@ -81,14 +81,26 @@ D15 must not silently reconfirm superseded defaults from [the old index](2026-10
 - Docker was reachable during planning. Locked dependencies were restored with `uv sync --frozen` and `npm --prefix frontend ci`; the initial environment lacked ontospan and the frontend `diff` package. No dependency manifests or lockfiles were changed.
 - Planning verification: inspect paths, links, task dependencies, decisions and `git diff --check`; no claim that product tests passed.
 - [x] Plans reviewed and prepared for the local docs commit on `docs/phase0-execution-plans`; see `../reviews/2026-10-17-phase0-plan-review.md`.
-- [ ] P0.1 completed and focused tests reviewed.
-- [ ] P0.2 completed and focused tests reviewed.
-- [ ] P0.3 completed and focused tests reviewed.
+- [x] P0.1 completed and reviewed (`2fcfa34`, review fixes `ed9bca9`); complete source gate passed.
+- [x] P0.2 completed and reviewed (`9191b36`, journey tests `7b1fd89`, review fix `57f0f1e`); complete source gate passed.
+- [ ] P0.3 completed and focused tests reviewed. Decided restrictions are implemented and independently reviewed in `bf88e37`; P0-A remains unanswered and existing exact own history is retained.
 - [ ] P0.4 completed and focused tests reviewed.
 - [ ] P0.5 completed including format compatibility and exact export assertions.
 - [ ] P0.6 completed including persistence, isolation and replay assertions.
-- [ ] P0.7 completed and focused tests reviewed.
-- [ ] Combined candidate reviewed and `scripts/check.sh` passed.
+- [x] P0.7 implemented and reviewed (`312554d`, `bf88e37`, `b0fd793`, `ac0935e`, `defe2ac`); own-history visibility remains pending P0-A; complete source gate passed.
+- [x] Delivered source subset reviewed and `scripts/check.sh` passed. Embedded-web replacement and full Phase 0 acceptance remain open.
 - [ ] Candidate preparation status recorded; merge/push approval requested only for a concrete reviewed result.
 
 All execution statuses above remain open until backed by actual results. If an external dependency publication or unanswered product policy blocks a subtask, record it precisely and continue independent authorized work.
+
+### Local implementation evidence
+
+- B0.1: 74 focused component tests and typecheck passed. The comparison/translation-review browser run passed 17 of 18 cases; the remaining native Windows clipboard assertion passed after normalizing only CRLF in the test. Two independent review findings were reproduced and fixed in `ed9bca9`, with 33 focused tests passing and a scoped rereview approving both fixes. Desktop/narrow screenshots were inspected. The complete final source gate also passed.
+- B0.4 ready cleanups: `312554d` replaces flags with language codes, removes the Progress placeholder and explains hidden-axis effects. 47 focused tests passed; independent review found no actionable findings. This does not complete the access or remaining editor tasks.
+- B0.2 Task 1: one explicit document confirmation, idempotent outcome shortcuts and defaulted-result warnings are implemented. 55 focused component tests, 47 navigation/session tests, seven browser cases and 55 final targeted backend tests passed. A broader backend run passed 289 cases and exposed one obsolete validation assertion, subsequently corrected and rerun. Review found an effective-result filtering error; five new regression cases and a scoped rereview verified `57f0f1e`. Historical per-layer fields remain readable.
+- B0.4 decided D16 slice: `bf88e37` restricts public sibling text/metadata and generic browser controls while preserving assigned translation-review inputs and exact own output metadata. 76 UI tests, 68 targeted backend follow-ups, 117 policy/visibility tests, 16 lineage tests and five output/input/roundtrip tests passed. Browser failures in the initial 6/8 run were corrected and passed in a four-case follow-up. Independent Astra review through this commit found no actionable P1/P2 findings. Own-history policy remains pending; no new permission was inferred.
+- B0.2 Task 3: `9909bd7`, `b0fd793`, `ac0935e` and `defe2ac` implement the reviewer-note requirement, visible Unresolved label, preserved local invalid edits, explicit route-discard behavior and legacy clean-state compatibility. 75 backend tests, 152 integration/component tests, four browser cases and 104 targeted tests after the final legacy fix passed. Astra approved the final scoped fix. Flagged export remains unfinished; UI explicitly says unresolved proposals are excluded by the current exporter.
+- B0.4 remaining editor cleanups: duplicate manual replacement selection is removed; existing Edit & Replace remains. Existing own-history rows use readable dates and distinct ordinals, retaining exact IDs in details. This changes presentation only and does not settle P0-A.
+- One final mechanical UI scan of the 13 changed TSX/CSS files reported no findings. Embedded-web refresh was rejected by automatic approval review even after narrowing removal to two named obsolete generated files; explicit permission is pending. Source validation continues, but the bundled frontend is not yet updated.
+- Ontospan prerequisite: local reviewed commit `738f3d43ca0896c9d146a15fb9538b938229368a` adds format 1.2 structured review resolution, preserves frozen schemas and rejects lossy Phenopacket conversion. Upstream tests: 251 passed, one Windows symlink skip. Independent compatibility review approved it. Publication approval is pending; Ontocurator has not been pinned to an unavailable remote commit.
+- Final source verification at `0e8fe52`: `scripts/check.sh` exited zero with 1,263 frontend tests, 2,089 backend tests (one Windows POSIX-permissions skip), 81 browser tests, static/type/contract checks and wheel lock/content checks. Integration failures were corrected without weakening semantic/security assertions; the only additional production change was the reviewed error-code catalog entry `54a3ea4`. See [the verification report](../reviews/2026-10-17-phase0-verification.md). The fresh frontend build passed, but embedded assets remain old pending permission; no release image or isolated acceptance candidate is claimed.

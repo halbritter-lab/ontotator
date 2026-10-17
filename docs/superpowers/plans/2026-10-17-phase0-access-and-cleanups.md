@@ -49,6 +49,8 @@ The following are existing technical constraints, not additional approval questi
 - Preserve every qualifying assigned text, including when a user has multiple assignments. Unrelated cases and projects remain inaccessible.
 - Translation-review source, target and comparisons remain scoped to the existing authorized review assignment and its resolved inputs, whether provided by the dedicated workspace or an existing direct read. Do not turn this into blanket sibling browsing or deny required review inputs merely because the assignee has only the annotator role.
 
+Implementation ruling from the browser journey: the existing post-submit success view requests metadata for its newly created correction. Preserve this with a metadata-only exception in `get_variant` for the exact `TranslationReviewRow.created_variant_id` produced by the caller's own still-qualifying translation-review assignment. Recheck current account, role, assignment nonrevocation, project and reviewer ownership. This does not expose the correction's text, annotation versions or additional case-list entries. Tests cover the own output, foreign output, revocation and role removal, plus the existing edit/save/submit/reopen journey. This is a narrower preservation of existing authorized output metadata, not a general sibling exception; no new response contract is needed.
+
 P0-A gates only own-history decisions and their dependent assertions. The decided independent browsing restriction and unrelated ready work can proceed. The small cleanups must not be reported as completion of B0.4 while D16 remains unimplemented.
 
 ## Sequencing and files
