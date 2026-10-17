@@ -105,6 +105,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   REPLACEMENT_LAYER_TYPE_MISMATCH: "The replacement must use the same layer and annotation type.",
   REPLACEMENT_NOT_FOUND: "The replacement annotation could not be found.",
   REVISION_CONFLICT: "This work changed elsewhere. Reload the latest revision before retrying.",
+  REVIEW_NOTE_REQUIRED: "Add a reviewer note before marking a proposal as unresolved or submitting it.",
   REVIEW_ROUND_NOT_FOUND: "The requested review round is unavailable. Reload the task.",
   REVISION_NOT_FOUND: "The requested revision is unavailable.",
   ROLE_INVALID: "Choose valid project roles.",
