@@ -138,8 +138,7 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
     finally { if (lifetime.current === epoch) { mutation.current = false; setWorking(false); } }
   };
   const changed = () => { setView(null); setOperation(null); setError(undefined); setStale(false); setImported(null); };
-  return <section className="detail-section" aria-label="Upload documents">
-    <h2>Upload documents</h2>
+  return <section aria-label="Upload documents">
     <form onSubmit={event => { event.preventDefault(); void check(); }}>
       <Select id="upload-kind" label="Format" value={kind} disabled={busy} onChange={event => { setKind(event.target.value as "t1" | "text"); changed(); }}><option value="t1">T1 exchange (.zip, .json)</option><option value="text">Plain text (.txt, .zip)</option></Select>
       {kind === "text" && (languages.length ? <Select id="upload-language" label="Upload language" required value={language} disabled={busy} onChange={event => { setLanguage(event.target.value); changed(); }}><option value="">Choose language</option>{languages.map(value => <option key={value} value={value}>{value}</option>)}</Select> : <TextInput id="upload-language" label="Upload language" hint="BCP-47 language tag, for example en or de." required value={language} disabled={busy} onChange={event => { setLanguage(event.target.value); changed(); }} />)}

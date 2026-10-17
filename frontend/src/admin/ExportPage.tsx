@@ -23,13 +23,14 @@ function readRemembered(key: string): { id: number | null; storageError: boolean
 }
 
 export function ExportPage({ projectKey, currentUser }: ExportPageProps): JSX.Element {
-  return <section className="detail-section"><h1>Export</h1>{definitions.map(definition => {
+  return <section><h1>Export</h1>{definitions.map((definition, index) => {
     const storageKey = `ontocurator:export:${JSON.stringify([currentUser.username, projectKey, definition.kind])}`;
-    return <ExportCard key={storageKey} projectKey={projectKey} storageKey={storageKey} {...definition} />;
+    return <ExportCard key={storageKey} projectKey={projectKey} storageKey={storageKey} lead={index === 0} {...definition} />;
   })}</section>;
 }
 
-function ExportCard({ projectKey, storageKey, kind, title, description }: { projectKey: string; storageKey: string; kind: CardKind; title: string; description: string }): JSX.Element {
+// One primary action per view: only the first (lead) export card carries it.
+function ExportCard({ projectKey, storageKey, kind, title, description, lead }: { projectKey: string; storageKey: string; kind: CardKind; title: string; description: string; lead: boolean }): JSX.Element {
   const [remembered] = useState(() => readRemembered(storageKey));
   const [jobId, setJobId] = useState<number | null>(remembered.id);
   const [storageError, setStorageError] = useState(remembered.storageError);
@@ -42,6 +43,7 @@ function ExportCard({ projectKey, storageKey, kind, title, description }: { proj
   const { job, error: pollError } = useJob(jobId);
   const expectedKind = jobKinds[kind];
   const correctKind = job?.kind === expectedKind;
+  const downloadable = correctKind && job.status === "succeeded";
   const polling = jobId !== null && !pollError && (!job || (job.status !== "failed" && job.status !== "succeeded"));
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const remember = (id: number | null) => {
@@ -82,8 +84,8 @@ function ExportCard({ projectKey, storageKey, kind, title, description }: { proj
   };
   return <section className="detail-section" aria-label={title}>
     <h2>{title}</h2><p>{description}</p>
-    <Toolbar label={`${title} actions`}><Button variant="primary" loading={creating} disabled={polling || downloading} onClick={() => { void start(); }}>Create export</Button>
-      {correctKind && job.status === "succeeded" && <Button loading={downloading} onClick={() => { void download(); }}>Download</Button>}
+    <Toolbar label={`${title} actions`}><Button variant={lead && !downloadable ? "primary" : "secondary"} loading={creating} disabled={polling || downloading} onClick={() => { void start(); }}>Create export</Button>
+      {downloadable && <Button variant={lead ? "primary" : "secondary"} loading={downloading} onClick={() => { void download(); }}>Download</Button>}
     </Toolbar>
     {polling && <p role="status">Checking export …</p>}
     {correctKind && <p role="status">Export job {job.id}: {job.status}</p>}

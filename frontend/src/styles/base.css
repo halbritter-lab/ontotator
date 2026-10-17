@@ -93,3 +93,104 @@ kbd.kbd {
   outline: var(--focus-width) solid var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
+
+/* Links: accent with a quiet underline, so a link never depends on colour alone.
+   Zero specificity: classed links (buttons, navigation, tree) keep their own look. */
+:where(a) {
+  color: var(--accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+:where(a):hover,
+:where(a):focus-visible {
+  color: var(--accent-hover);
+  text-decoration-color: currentColor;
+}
+
+:where(a):focus-visible {
+  border-radius: var(--radius-sm);
+}
+
+/* Raw elements on compact pages (.shell-page) and the translation review take the
+   type ramp. Scoped and zero-specificity on purpose: the editor's reading surface
+   keeps its own heading treatment, and any classed rule wins. */
+:where(.shell-page, .translation-review) :where(h1:not([class])) {
+  font-family: var(--font-serif);
+  font-size: var(--size-2xl);
+  line-height: var(--leading-2xl);
+  font-weight: var(--weight-regular);
+  text-wrap: balance;
+  margin-bottom: var(--space-5);
+}
+
+:where(.shell-page, .translation-review) :where(h2:not([class])) {
+  font-family: var(--font-serif);
+  font-size: var(--size-xl);
+  line-height: var(--leading-xl);
+  font-weight: var(--weight-regular);
+  text-wrap: balance;
+  margin-bottom: var(--space-3);
+}
+
+:where(.shell-page, .translation-review) :where(h3:not([class])) {
+  font-family: var(--font-sans);
+  font-size: var(--size-base);
+  line-height: var(--leading-base);
+  font-weight: var(--weight-strong);
+  margin-bottom: var(--space-2);
+}
+
+:where(.shell-page, .translation-review) :where(fieldset:not([class])) {
+  min-width: 0;
+  border: 0;
+  margin-bottom: var(--space-5);
+}
+
+:where(.shell-page, .translation-review) :where(legend:not([class])) {
+  margin-bottom: var(--space-3);
+  font-size: var(--size-base);
+  line-height: var(--leading-base);
+  font-weight: var(--weight-strong);
+  color: var(--text);
+}
+
+:where(.shell-page, .translation-review) :where(dl:not([class]) dt) {
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  color: var(--text-muted);
+}
+
+:where(.shell-page, .translation-review) :where(dl:not([class]) dd) {
+  margin-bottom: var(--space-2);
+}
+
+/* Native fields take the page's type and text colour instead of the UA's. */
+:where(.shell-page, .translation-review) :where(input, select, textarea) {
+  font: inherit;
+  color: inherit;
+}
+
+:where(.shell-page) :where(p:not([class])) {
+  max-width: 75ch;
+  margin-bottom: var(--space-3);
+}
+
+:where(.shell-page) :where(ul:not([class]), ol:not([class])) {
+  padding-inline-start: var(--space-5);
+  margin-bottom: var(--space-3);
+}
+
+:where(.shell-page) :where(td ul:not([class]), td ol:not([class])) {
+  list-style: none;
+  padding-inline-start: 0;
+  margin-bottom: 0;
+}
+
+:where(.shell-page) :where(code:not([class])) {
+  font-family: var(--font-mono);
+  font-size: var(--size-sm);
+  overflow-wrap: anywhere;
+}

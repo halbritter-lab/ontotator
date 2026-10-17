@@ -218,7 +218,7 @@ Choose `AppShell density="reading"` for editor, document and comparison views; c
 | `--cell-pad-x` | 16px | 12px |
 | `--control-height` | 36px | 30px |
 
-The shell provides a skip link to `#main`, header/breadcrumb, user/logout and optional navigation. Reading main surfaces preserve the editor's independent scrolling; compact surfaces scroll their main content. The shell stacks below 700 px. Existing editor layouts adapt at 1279, 1024 and 700 px; use those incumbent transitions rather than making document content unreadably narrow.
+The shell provides a skip link to `#main`, header/breadcrumb, user/logout and optional navigation. Reading main surfaces preserve the editor's independent scrolling; compact surfaces scroll their main content. In compact density `AppShell` wraps the page in `.shell-page`: one left-aligned column capped at `--page-max-width` (1100px) with `space-6` padding, in which raw `h1`/`h2`/`h3`, `fieldset`/`legend`, `dl`, lists and native fields take the type ramp, and `.form-control`/`.form-select` stop at `--field-max-width` while tables stay full width; pages add no padding of their own. Below 900 px the compact sidebar becomes a wrapping navigation band above the content; the reading shell keeps its "Sections" disclosure. The shell stacks below 700 px. Existing editor layouts adapt at 1279, 1024 and 700 px; use those incumbent transitions rather than making document content unreadably narrow.
 
 ## Elevation & Depth
 

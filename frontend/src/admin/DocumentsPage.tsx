@@ -99,7 +99,7 @@ function DocumentEditor({ projectKey, query, onNavigate, canOverrideTranslationS
       return <li key={assignee.assignment_id}><span>{assignee.pseudonym}: {assignee.task} {assignee.status}</span>{actual && <AssignmentActions assignment={actual} members={members} onChanged={() => assignmentsChanged(selectionIdentity)} />}</li>;
     })}</ul> : "Unassigned" },
   ];
-  return <section className="detail-section">
+  return <section>
     <h1>Documents</h1>
     <Toolbar label="Document filters">
       <Select id="documents-language" label="Language" value={query.language ?? ""} onChange={event => navigate({ language: event.target.value || undefined })}><option value="">All languages</option>{[...new Set([...(settings?.languages ?? []), ...rows.map(doc => doc.language), ...(query.language ? [query.language] : [])])].map(value => <option key={value} value={value}>{value}</option>)}</Select>

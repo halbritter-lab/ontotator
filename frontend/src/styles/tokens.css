@@ -84,6 +84,10 @@
   --space-6: 32px;
   --space-7: 48px;
 
+  /* Layout: compact pages cap their content; form fields keep a readable width. */
+  --page-max-width: 1100px;
+  --field-max-width: 32rem;
+
   /* Shape */
   --radius-sm: 3px;
   --radius: 6px;

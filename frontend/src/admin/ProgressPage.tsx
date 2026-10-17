@@ -46,13 +46,13 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
       }}>Assign</a>;
     } },
   ];
-  return <section className="detail-section">
+  return <section>
     <h1>Progress</h1>
     <Toolbar label="Progress actions"><Button disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh progress</Button></Toolbar>
     {loading && <p role="status">Loading progress …</p>}
     {error !== undefined && (error instanceof ApiError && [403, 404].includes(error.status) ? <InlineMessage tone="error">You do not have access to this page.</InlineMessage> : <ErrorNotice error={error} />)}
     {progress && <>
-      <section className="detail-section" aria-label="Project totals"><h2>Totals</h2><p>Open, in progress, submitted and reopened count assignments.</p><dl>{(["documents", "unassigned", ...statuses] as const).map(value => <div key={value}><dt>{label(value)}</dt><dd>{progress.totals[value]}</dd></div>)}</dl></section>
+      <section className="detail-section" aria-label="Project totals"><h2>Totals</h2><p>Open, in progress, submitted and reopened count assignments.</p><dl className="stat-row">{(["documents", "unassigned", ...statuses] as const).map(value => <div key={value}><dt>{label(value)}</dt><dd>{progress.totals[value]}</dd></div>)}</dl></section>
       <section className="detail-section"><h2>People</h2><DataTable label="People" columns={peopleColumns} rows={people} rowKey={person => person.username} empty={<EmptyState title="No assignments">People appear here when work is assigned.</EmptyState>} /></section>
       <section className="detail-section"><h2>Documents</h2><Select id="progress-status" label="Document status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option><option value="unassigned">Unassigned</option>{statuses.map(value => <option key={value} value={value}>{label(value)}</option>)}</Select>
         <DataTable label="Progress documents" columns={documentColumns} rows={documents} rowKey={doc => doc.document_id} empty={<EmptyState title="No matching documents">Choose another status to see other documents.</EmptyState>} />

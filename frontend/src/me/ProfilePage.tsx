@@ -151,7 +151,7 @@ export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePa
     }
   };
 
-  if (!model) return <section className="detail-section">
+  if (!model) return <section>
     <h1>Profile</h1>
     {loading ? <InlineMessage tone="info">Loading profile…</InlineMessage> : <>
       <ErrorNotice error={loadError} />
