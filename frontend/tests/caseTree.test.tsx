@@ -1,7 +1,7 @@
 import { assigned, assignedList } from "./assignments";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ValidationError } from "../src/api/client";
+import { api, ValidationError, type ProjectSummary } from "../src/api/client";
 import { App } from "../src/App";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
 import { loggedInAs } from "./session";
@@ -627,7 +627,12 @@ describe("the tree in the App", () => {
     loggedInAs("dr-a");
     vi.spyOn(api, "getPreferences").mockResolvedValue(stored);
     const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: "dr-a", mode_by_package: {} });
-    vi.spyOn(api, "listProjects").mockResolvedValue([{ project_key: "pkg", ontology: { release: "test" } }] as any);
+    const project: ProjectSummary = {
+      project_key: "pkg", name: "Tree test project", description: null,
+      roles: ["annotator"], allowed_modes: ["independent", "assisted"],
+      document_count: 1, can_manage: false,
+    };
+    vi.spyOn(api, "listProjects").mockResolvedValue([project]);
     vi.spyOn(api, "listDocuments").mockResolvedValue([
       { document_id: "doc", text_length: 10, language: "en", position: 1, status: "not_started" },
     ]);
