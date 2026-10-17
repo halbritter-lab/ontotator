@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { api, ApiError, type ReviewWorkspace, type TranslationReviewRecord } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
-import { Button, Checkbox, Dialog, EmptyState, InlineMessage, Select, Textarea } from "../ui";
+import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconChevronLeft, IconRetry, InlineMessage, Select, StatusBadge, type StatusTone } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
-import { ReadOnlyAnnotationView } from "../variants/ReadOnlyAnnotationView";
 import { paragraphStarts } from "../variants/paragraphs";
 import { useCoupledScroll } from "../variants/useCoupledScroll";
 import { createDraftSaver, type DraftSaver } from "./draftSaver";
-import { DiffView } from "./DiffView";
+import { DiffView, TextView } from "./DiffView";
+import { TranslationEditor } from "./TranslationEditor";
+import { ChecksSummary, ReviewSummary, SubmitSummary } from "./ReviewParts";
 import { ReviewForm } from "./ReviewForm";
-import { categoryLabels, decisionLabels, issueMessages } from "./labels";
+import { categoryLabels, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName } from "./labels";
 import { checkReview, type ClinicalCategory, type IssueCode, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
 
 export interface TranslationReviewScreenProps {
@@ -68,7 +69,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const [submitted, setSubmitted] = useState<TranslationReviewRecord | null>(null);
   const [createdVersion, setCreatedVersion] = useState<number | null>(null);
   const [serverIssues, setServerIssues] = useState<string[]>([]);
-  const [showChanges, setShowChanges] = useState(true), [allChecks, setAllChecks] = useState(false), [coupled, setCoupled] = useState(true);
+  const [showChanges, setShowChanges] = useState(false), [coupled, setCoupled] = useState(true), [confirming, setConfirming] = useState(false);
+  const decisionHeading = useRef<HTMLHeadingElement | null>(null), submitReason = useRef<HTMLDivElement | null>(null);
   const [comparisonId, setComparisonId] = useState(workspace.comparisons[0]?.variant.document_id ?? "");
   const [sourceElement, setSourceElement] = useState<HTMLDivElement | null>(null), [targetElement, setTargetElement] = useState<HTMLDivElement | null>(null), [comparisonElement, setComparisonElement] = useState<HTMLDivElement | null>(null);
   const record = submitted ?? (workspace.read_only ? workspace.submitted_record : null);
@@ -79,8 +81,9 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const sourceStarts = useMemo(() => paragraphStarts(workspace.source.text), [workspace.source.text]);
   const targetStarts = useMemo(() => paragraphStarts(text), [text]);
   const comparisonStarts = useMemo(() => paragraphStarts(comparison?.text ?? ""), [comparison?.text]);
-  useCoupledScroll(sourceElement, showChanges ? targetElement : null, { leftStarts: sourceStarts, rightStarts: targetStarts, enabled: coupled && showChanges });
-  useCoupledScroll(showChanges ? targetElement : null, comparison ? comparisonElement : null, { leftStarts: targetStarts, rightStarts: comparisonStarts, enabled: coupled && showChanges });
+  // Both the editor and the change view carry paragraph markers, so scrolling stays coupled in either mode.
+  useCoupledScroll(sourceElement, targetElement, { leftStarts: sourceStarts, rightStarts: targetStarts, enabled: coupled });
+  useCoupledScroll(targetElement, comparison ? comparisonElement : null, { leftStarts: targetStarts, rightStarts: comparisonStarts, enabled: coupled });
   type Leave = { kind: "leave" | "logout"; resolve?: (allowed: boolean) => void; proceed?: () => void };
   const [leave, setLeave] = useState<Leave | null>(null);
   const pendingLeave = useRef<Leave | null>(null), leavePromise = useRef<Promise<boolean> | null>(null);
@@ -158,8 +161,9 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     try { const variant = await api.getVariantMetadata(workspace.assignment.project_key, value.created_variant_id); if (alive.current) setCreatedVersion(variant.version); }
     catch (failure) { if (alive.current) setError(failure); }
   };
+  const saveState = saver.current?.state ?? "saved";
   const canSubmit = !readOnly && !busy && form !== null && issues.length === 0 && nonblank(qualification)
-    && (saver.current?.state ?? "saved") === "saved" && !saver.current?.hasUnsavedChanges;
+    && saveState === "saved" && !saver.current?.hasUnsavedChanges;
   const submit = async () => {
     const currentForm = typedForm(draftRef.current.form);
     if (operation.current || readOnlyRef.current || !currentForm || checkReview(currentForm, workspace.text, draftRef.current.text).length || !nonblank(qualification)) return;
@@ -169,7 +173,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
       const revision = saver.current?.revision ?? workspace.draft.revision;
       const value = await api.submitTranslationReview(props.assignmentId, revision);
       if (!alive.current) return;
-      readOnlyRef.current = true; saver.current?.dispose(); saver.current = null; setSubmitted(value);
+      readOnlyRef.current = true; saver.current?.dispose(); saver.current = null; setSubmitted(value); setConfirming(false);
       await loadCreated(value);
     } catch (failure) {
       if (!alive.current) return;
@@ -179,56 +183,143 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
         setQualification(null);
         try { const profile = await api.getProfile(); if (alive.current) setQualification(profile.qualification ?? null); } catch { /* Keep the refusal and current input visible. */ }
       }
-    } finally { if (alive.current) { operation.current = false; setBusy(false); } }
+    } finally { if (alive.current) { operation.current = false; setBusy(false); setConfirming(false); } }
   };
-  useShortcut("Ctrl+Enter", () => { void submit(); }, { scope: "screen", group: "Translation review", description: "Submit review", enabled: canSubmit, allowInInputs: true });
-  const status = readOnly ? "Read-only" : ({ saved: "Saved", dirty: "Changes not saved", saving: "Saving…", error: "Changes not saved", conflict: "Conflict: reload" }[saver.current?.state ?? "saved"]);
-  const checks = allChecks ? (Array.isArray(workspace.translation_ancestor.translation?.checks) ? workspace.translation_ancestor.translation.checks : workspace.failed_checks) : workspace.failed_checks;
+  /** Submitting is immutable, so it always goes through a confirmation. */
+  const requestSubmit = () => {
+    if (canSubmit) setConfirming(true);
+    else submitReason.current?.focus();
+  };
+  useShortcut("Ctrl+Enter", requestSubmit, { scope: "screen", group: "Translation review", description: "Submit review (asks for confirmation)", enabled: !readOnly, allowInInputs: true });
+  const focusDecision = () => { decisionHeading.current?.scrollIntoView?.({ block: "nearest" }); decisionHeading.current?.focus(); };
+
+  const [status, statusTone]: readonly [string, StatusTone] = readOnly ? ["Read-only", "neutral"] : ({
+    saved: ["Saved", "neutral"], dirty: ["Changes not saved", "info"], saving: ["Saving…", "info"],
+    error: ["Changes not saved", "warning"], conflict: ["Conflict: reload", "danger"],
+  } satisfies Record<typeof saveState, readonly [string, StatusTone]>)[saveState];
+  const submitBlocker: string | null = readOnly || busy ? null
+    : !decision(rawForm.decision) ? "Choose a decision to submit."
+    : !form ? "Update the unsupported values above to submit."
+    : issues.length > 0 ? null
+    : !nonblank(qualification) ? "Your qualification is required to submit."
+    : saveState === "conflict" ? "This review was changed elsewhere. Reload from server to continue."
+    : saveState === "error" ? "Your changes are not saved. Retry saving to submit."
+    : saveState !== "saved" || saver.current?.hasUnsavedChanges ? "Saving your changes…"
+    : null;
+  const allChecks = Array.isArray(workspace.translation_ancestor.translation?.checks) ? workspace.translation_ancestor.translation.checks as unknown[] : null;
   const run = workspace.translation_ancestor.translation;
-  const navigateLink = (route: Route, label: string) => <a href={routeHref(route)} onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); props.onNavigate(route); }}>{label}</a>;
+  const sourceLanguage = workspace.source.variant.language, targetLanguage = workspace.variant.language;
+  const changed = text !== workspace.text;
+  const earlier = workspace.previous_reviews.filter(value => value.id !== record?.id);
+  const navigateLink = (route: Route, label: ReactNode, className?: string) => <a className={className} href={routeHref(route)} onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); props.onNavigate(route); }}>{label}</a>;
+  const paragraphNote = (left: number, right: number) => <p className="translation-toolbar-note">Paragraphs differ ({left} / {right}); scrolling is approximate.</p>;
+
   return <section className="translation-review" aria-label="Translation review">
-    <div className="translation-review-header"><h1>{workspace.variant.external_id}</h1>
-      <p>{workspace.source.variant.language} → {workspace.variant.language}{run && ` · ${String(run.provider ?? "")}${run.model ? ` · ${String(run.model)}` : ""}`}</p>
-      <span role="status">{status}</span>{navigateLink({ name: "tasks" }, "Back to my tasks")}</div>
-    <section className="translation-checks" aria-label="Translation checks"><h2>Inherited translation-run checks</h2>
-      <Checkbox id="review-all-checks" label="Show all checks" checked={allChecks} onChange={event => setAllChecks(event.target.checked)} />
-      <ul>{checks.map((raw, index) => { const check = raw as Record<string, unknown>; return <li key={index}>{String(check.code ?? "Check")} — {check.passed ? "Passed" : "Failed"}{check.detail ? `: ${String(check.detail)}` : ""}</li>; })}</ul>
-    </section>
-    <div className="translation-review-controls"><Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
-      <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} disabled={!showChanges} onChange={event => setCoupled(event.target.checked)} />
-      {showChanges && sourceStarts.length !== targetStarts.length && <InlineMessage tone="info">Paragraphs differ ({sourceStarts.length} / {targetStarts.length}); scrolling is approximate.</InlineMessage>}</div>
-    <div className={`translation-columns${comparison ? " translation-columns--comparison" : ""}`}>
-      <section aria-label={`Source (${workspace.source.variant.language})`}><h2>Source ({workspace.source.variant.language})</h2>
-        <ReadOnlyAnnotationView text={workspace.source.text} annotations={[]} evidence={[]} labelFor={() => null} onTextElement={setSourceElement} /></section>
-      <section><Textarea id="review-translation" label={`Translation (${workspace.variant.language})`} value={text} readOnly={readOnly} disabled={busy} onChange={event => edit({ ...draftRef.current, text: event.target.value })} />
-        {showChanges && <DiffView ref={setTargetElement} before={workspace.text} after={text} />}</section>
-      {comparison && <section aria-label="Comparison"><h2>Comparison</h2>
-        <Select id="review-comparison" label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
-          {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} · {row.variant.language}</option>)}</Select>
-        {showChanges && comparisonStarts.length !== targetStarts.length && <InlineMessage tone="info">Paragraphs differ ({targetStarts.length} / {comparisonStarts.length}); scrolling is approximate.</InlineMessage>}
-        <ReadOnlyAnnotationView key={comparisonId} text={comparison.text} annotations={[]} evidence={[]} labelFor={() => null} onTextElement={setComparisonElement} /></section>}
+    <Button className="translation-skip" onClick={focusDecision}>Skip to decision</Button>
+    <div className="translation-review-header density-compact">
+      <div className="translation-review-bar">
+        {navigateLink({ name: "tasks" }, <><IconChevronLeft /> Back to my tasks</>, "translation-back")}
+        <div className="translation-review-tools">
+          <span role="status" className="translation-save-status"><StatusBadge tone={statusTone}>{status}</StatusBadge></span>
+          {!readOnly && <Button variant="quiet" size="sm" icon={<IconRetry />} onClick={() => { void reload(); }}
+            title="Load the latest saved state of this review. Unsaved edits are saved first; if that fails, you choose whether to discard them.">Reload from server</Button>}
+        </div>
+      </div>
+      <h1>{workspace.variant.external_id}</h1>
+      <div className="translation-review-meta">
+        <p>Translation review · {languageName(sourceLanguage)} <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> {languageName(targetLanguage)}</p>
+        <details className="translation-details">
+          <summary>Translation details</summary>
+          <dl>
+            {run?.provider != null && <div><dt>Machine translation</dt><dd>{String(run.provider)}</dd></div>}
+            {run?.model != null && <div><dt>Model</dt><dd>{String(run.model)}</dd></div>}
+            {run?.run_id != null && <div><dt>Run</dt><dd>{String(run.run_id)}</dd></div>}
+            <div><dt>Reviewed version</dt><dd>v{workspace.variant.version}</dd></div>
+            <div><dt>Source document</dt><dd>{workspace.source.variant.external_id}</dd></div>
+          </dl>
+        </details>
+      </div>
     </div>
-    <div className="translation-decision density-compact">
-      {!readOnly && !decision(rawForm.decision) && <p>Select a decision before submitting.</p>}
-      {!readOnly && decision(rawForm.decision) && !form && <InlineMessage tone="error">The review form contains unsupported values. Update the affected fields before submitting.</InlineMessage>}
-      <ReviewForm value={visualForm(rawForm)} issues={issues} readOnly={readOnly || busy} onChange={next => {
-        const current = draftRef.current;
-        edit({ ...current, form: { ...(!has(current.form, "clinical_change") ? { clinical_change: false } : {}), ...current.form, ...next } });
-      }} />
-      {!nonblank(qualification) && !readOnly && <p>{navigateLink({ name: "me" }, "Add your qualification in your profile")}</p>}
-      {(error ?? saver.current?.error) != null && <ErrorNotice error={error ?? saver.current?.error} />}
-      {serverIssues.length > 0 && <ol aria-label="Server review issues">{serverIssues.map((code, index) => <li key={index}>{has(issueMessages, code) ? issueMessages[code as IssueCode] : `Review issue: ${code}`}</li>)}</ol>}
-      {!readOnly && saver.current?.state === "error" && <Button onClick={() => { void retrySave(); }}>Retry save</Button>}
-      {!readOnly && <><Button onClick={() => { void reload(); }}>Reload review</Button><Button variant="primary" disabled={!canSubmit} loading={busy} onClick={() => { void submit(); }}>Submit review</Button></>}
-      {submitted && <InlineMessage tone="success"><strong>Review submitted</strong><p>Resulting status: {submitted.status_after}</p>{createdVersion !== null && <p>A corrected version v{createdVersion} was created.</p>}
-        {submitted.created_variant_id && createdVersion === null && <Button onClick={() => { void loadCreated(submitted); }}>Retry corrected version metadata</Button>}</InlineMessage>}
-      {workspace.previous_reviews.filter(value => value.id !== record?.id).length > 0 && <section><h2>Previous reviews</h2>{workspace.previous_reviews.filter(value => value.id !== record?.id).map(value => <details key={value.id}><summary>{decisionLabels[value.decision]} · {value.created_at}</summary><p>{value.proposed_text}</p><p>{value.rationale}</p></details>)}</section>}
+    <ChecksSummary failed={workspace.failed_checks} all={allChecks} />
+    <div className="translation-workspace">
+      <div className="translation-texts">
+        <div className="translation-toolbar density-compact" role="group" aria-label="Text view">
+          <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
+          <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setCoupled(event.target.checked)} />
+          {comparison && <Select id="review-comparison" label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
+            {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} · {row.variant.language}</option>)}</Select>}
+          {coupled && sourceStarts.length !== targetStarts.length && paragraphNote(sourceStarts.length, targetStarts.length)}
+          {coupled && comparison && comparisonStarts.length !== targetStarts.length && paragraphNote(targetStarts.length, comparisonStarts.length)}
+        </div>
+        <div className={`translation-columns${comparison ? " translation-columns--comparison" : ""}`}>
+          <div className="translation-column">
+            <div className="translation-column-head"><h2 className="translation-column-title">Source ({sourceLanguage})</h2></div>
+            <TextView ref={setSourceElement} text={workspace.source.text} label={`Source (${sourceLanguage})`} lang={sourceLanguage} />
+          </div>
+          <div className="translation-column">
+            <div className="translation-column-head"><h2 id="review-translation-label" className="translation-column-title">Translation ({targetLanguage})</h2></div>
+            {showChanges
+              ? <DiffView ref={setTargetElement} before={workspace.text} after={text} lang={targetLanguage} />
+              : <TranslationEditor ref={setTargetElement} id="review-translation" labelledBy="review-translation-label" describedBy="review-translation-note"
+                  machineText={workspace.text} value={text} lang={targetLanguage} readOnly={readOnly} disabled={busy}
+                  onChange={event => edit({ ...draftRef.current, text: event.target.value })} />}
+            <p id="review-translation-note" className="translation-column-note">{showChanges
+              ? "Showing changes against the machine translation. Turn off Show changes to edit."
+              : changed ? "Underlined text differs from the machine translation." : "Same as the machine translation."}</p>
+          </div>
+          {comparison && <div className="translation-column">
+            <div className="translation-column-head"><h2 className="translation-column-title">Comparison</h2></div>
+            <TextView key={comparisonId} ref={setComparisonElement} text={comparison.text} label="Comparison" lang={comparison.variant.language} />
+          </div>}
+        </div>
+      </div>
+      <aside className="translation-decision density-compact" aria-labelledby="translation-decision-heading">
+        <div className="translation-decision-body">
+          <h2 id="translation-decision-heading" className="translation-section-title" ref={decisionHeading} tabIndex={-1}>Your review</h2>
+          {submitted && <InlineMessage tone="success" title="Review submitted"><p>{decisionOutcomes[submitted.decision]}</p>
+            {createdVersion !== null && <p>A corrected version v{createdVersion} was created.</p>}
+            {submitted.created_variant_id && createdVersion === null && <Button size="sm" onClick={() => { void loadCreated(submitted); }}>Retry corrected version metadata</Button>}</InlineMessage>}
+          {record ? <ReviewSummary record={record} heading="Submitted review" />
+            : readOnly ? <InlineMessage tone="info">This review can no longer be edited.</InlineMessage>
+            : <>
+              {decision(rawForm.decision) && !form && <InlineMessage tone="error">The review form contains unsupported values. Update the affected fields before submitting.</InlineMessage>}
+              <ReviewForm value={visualForm(rawForm)} issues={[]} readOnly={busy} onChange={next => {
+                const current = draftRef.current;
+                edit({ ...current, form: { ...(!has(current.form, "clinical_change") ? { clinical_change: false } : {}), ...current.form, ...next } });
+              }} />
+            </>}
+          {(error ?? saver.current?.error) != null && <ErrorNotice error={error ?? saver.current?.error} />}
+          {serverIssues.length > 0 && <ol className="review-issues" aria-label="Server review issues">{serverIssues.map((code, index) => <li key={index}>{has(issueMessages, code) ? issueMessages[code as IssueCode] : `Review issue: ${code}`}</li>)}</ol>}
+          {!readOnly && saveState === "error" && <Button onClick={() => { void retrySave(); }}>Retry save</Button>}
+          {earlier.length > 0 && <section className="review-history" aria-labelledby="review-history-heading">
+            <h2 id="review-history-heading" className="translation-section-title">Previous reviews</h2>
+            {earlier.map(value => <details key={value.id}><summary>{decisionLabels[value.decision]} · {formatReviewDate(value.created_at)}</summary>
+              <ReviewSummary record={value} heading="Review details" />
+              <h3 className="review-history-label">Proposed text</h3>
+              <p className="review-history-text">{value.proposed_text}</p></details>)}
+          </section>}
+        </div>
+        {!readOnly && <div className="translation-decision-footer">
+          {!nonblank(qualification) && <p className="translation-submit-note">{navigateLink({ name: "me" }, "Add your qualification in your profile")}</p>}
+          {/* Why Submit is unavailable, right next to it; the review rules' issues are listed here too. */}
+          {(submitBlocker || issues.length > 0) && <div id="review-submit-reason" ref={submitReason} tabIndex={-1} className="translation-submit-reason" aria-live="polite">
+            {issues.length > 0 && !busy
+              ? <><p>Before submitting:</p><ol className="review-issues" aria-label="Review issues">{issues.map((issue, index) => <li key={`${issue}-${index}`}>{issueMessages[issue]}</li>)}</ol></>
+              : <p>{submitBlocker}</p>}
+          </div>}
+          <Button variant="primary" aria-describedby={submitBlocker || issues.length > 0 ? "review-submit-reason" : undefined} disabled={!canSubmit} loading={busy} onClick={requestSubmit}>Submit review…</Button>
+        </div>}
+      </aside>
     </div>
-    {leave && <Dialog open title={leave.kind === "logout" ? "Unsaved changes" : "Changes not saved"} onClose={busy ? undefined : () => closeLeave(false)}>
-      <p>Your latest changes are not saved yet. Discarding them cannot be undone.</p>
+    {form && <ConfirmDialog open={confirming} title="Submit this review?" confirmLabel="Submit review" cancelLabel="Keep editing" busy={busy}
+      message={<SubmitSummary decision={form.decision} clinical={form.clinical_change} categories={form.categories ?? []} rationale={form.rationale} />}
+      onCancel={() => setConfirming(false)} onConfirm={() => { void submit(); }} />}
+    {leave && <Dialog open title={leave.kind === "logout" ? "Unsaved changes" : "Changes not saved"} onClose={busy ? undefined : () => closeLeave(false)} footer={<>
       <Button disabled={busy} onClick={() => closeLeave(false)}>Cancel</Button>
       <Button variant="danger" disabled={busy} onClick={() => closeLeave(true)}>{leave.kind === "logout" ? "Discard and log out" : "Discard edits and leave"}</Button>
       {leave.kind === "logout" && <Button loading={busy} onClick={() => { if (operation.current) return; operation.current = true; setBusy(true); void flush().then(allowed => { if (allowed) closeLeave(true); }, failure => { if (alive.current) setError(failure); }).finally(() => { if (alive.current && !departing.current) { operation.current = false; setBusy(false); } }); }}>Save and log out</Button>}
+    </>}>
+      <p>Your latest changes are not saved yet. Discarding them cannot be undone.</p>
     </Dialog>}
   </section>;
 }
