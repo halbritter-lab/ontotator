@@ -4,6 +4,7 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, type AdminOntology, type OntologyUploadResult } from "../src/api/client";
 import { OntologiesPage } from "../src/admin/OntologiesPage";
+import { formatDateTime } from "../src/app/labels";
 
 const ontology: AdminOntology = { filename: "mondo.json", kind: "ontology", prefix: "MONDO", release: "2026-09-01", language: null, sha256: "a".repeat(64), uploaded_at: "2026-10-15T09:30:00Z", projects: ["project / one"] };
 const translation: AdminOntology = { ...ontology, filename: "mondo-de.tsv", kind: "translation", language: "de", release: null, sha256: "b".repeat(64), projects: [] };
@@ -26,7 +27,7 @@ describe("ontology administration page", () => {
     expect(within(table).getByText("2026-09-01")).toBeTruthy();
     expect(within(table).getByText("de")).toBeTruthy();
     expect(within(table).getByText("a".repeat(12)).getAttribute("title")).toBe(ontology.sha256);
-    expect(within(table).getAllByText(new Date(ontology.uploaded_at).toLocaleString())).toHaveLength(2);
+    expect(within(table).getAllByText(formatDateTime(ontology.uploaded_at))).toHaveLength(2);
     const link = screen.getByRole("link", { name: "project / one" });
     expect(link.getAttribute("href")).toBe("#/projects/project%20%2F%20one/settings");
     fireEvent.click(link, { ctrlKey: true }); expect(navigate).not.toHaveBeenCalled();

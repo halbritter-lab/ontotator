@@ -30,7 +30,8 @@ it("renders server totals, stable people workload order and document order witho
   expect(progress.people[0].username).toBe("low");
   const docs = within(screen.getByRole("table", { name: "Progress documents" })).getAllByRole("row").slice(1);
   expect(docs.map(row => row.textContent)).toEqual([expect.stringContaining("z-special"), expect.stringContaining("a-unassigned")]);
-  expect(screen.getByText("Reader A: annotate submitted")).toBeTruthy(); expect(screen.getByText("Reader B: review open")).toBeTruthy();
+  const assignees = Array.from(screen.getByRole("table", { name: "Progress documents" }).querySelectorAll(".assignee")).map(item => item.textContent);
+  expect(assignees).toEqual(["First tie (Reader A)AnnotationSubmitted", "Second tie (Reader B)ReviewOpen"]);
   expect(screen.getByText("Agreement figures follow with workflows.")).toBeTruthy();
 });
 it("filters by any assignment status and treats unassigned as no assignees", async () => {

@@ -33,7 +33,7 @@ describe("editor and page polish", () => {
     vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(assigned({ read_only: false, workspace_id: "ws", view: view() }).assignment);
     const onLogout = vi.fn();
     render(<App onLogout={onLogout} />);
-    fireEvent.click(await screen.findByRole("link", { name: /^Open$/i }));
+    fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     await screen.findByRole("group", { name: "Case" });
     fireEvent.click(screen.getByRole("button", { name: "Log out" }));
     expect(onLogout).toHaveBeenCalledOnce();

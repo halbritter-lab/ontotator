@@ -197,7 +197,7 @@ it("refreshes displayed identity from the saved Profile response and keeps the s
   expect(logout).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled();
   clickSection("My tasks");
   const table = await screen.findByRole("table", { name: "My tasks" });
-  fireEvent.click(within(table).getAllByRole("link", { name: "Open" })[0]);
+  fireEvent.click(within(table).getAllByRole("link", { name: /^(Start|Continue|View)$/ })[0]);
   await waitFor(() => expect(screen.getByTestId("annotator-identity").textContent).toContain("Alice Smith (alice)"));
   expect(first.view.key.annotator_id).toBe("alice");
 });

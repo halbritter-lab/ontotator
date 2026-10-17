@@ -580,6 +580,25 @@ textarea.form-control {
 .empty-state-action { margin-top: var(--space-4); }
 
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* Filters sit on one even grid so five controls read as one calm group. */
+.toolbar.filter-bar { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); align-items: end; gap: var(--space-3); max-width: 60rem; }
+.shell-page .filter-bar :is(.form-control, .form-select) { width: 100%; max-width: none; }
+
+/* Available to assistive technology, hidden on screen (repeated per-row labels). */
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+.data-table .form-group:has(.form-checkbox-row .visually-hidden) { margin-bottom: 0; }
+
+/* Secondary line inside a cell or card: identifiers and formats that support the main text. */
+.cell-secondary { display: block; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
+
+.assignee-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.assignee { display: grid; gap: var(--space-1); }
+.assignee-pseudonym { color: var(--text-muted); font-size: var(--size-sm); }
+.assignee-work { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); font-size: var(--size-sm); line-height: var(--leading-sm); }
+
+.review-history { margin: 0; padding-left: var(--space-5); }
+.review-history > li + li { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.review-history p { margin: 0 0 var(--space-1); }
 .language-tokens { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
 .language-token { display: inline-flex; align-items: center; gap: var(--space-1); padding-inline: var(--space-2); border-radius: var(--radius-sm); font-size: var(--size-sm); background: var(--surface-sunken); }
 

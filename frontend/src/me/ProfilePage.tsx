@@ -163,9 +163,11 @@ export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePa
   return <div className="density-compact">
     <section className="detail-section">
       <h1>Profile</h1>
+      <dl>
+        <dt>Username</dt><dd>{model.baseline.username}</dd>
+        <dt>Pseudonym</dt><dd>{model.baseline.pseudonym}<div className="field-hint">Your pseudonym appears in exports instead of your name.</div></dd>
+      </dl>
       <form aria-label="Profile" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-        <TextInput id="profile-username" label="Username" value={model.baseline.username} readOnly />
-        <TextInput id="profile-pseudonym" label="Pseudonym" value={model.baseline.pseudonym} readOnly hint="Your pseudonym appears in exports instead of your name." />
         <TextInput id="profile-display-name" label="Display name" required value={draft.display_name} disabled={!!busy} onChange={(event) => edit({ display_name: event.target.value })} />
         <TextInput id="profile-email" label="E-mail" type="email" value={draft.email ?? ""} disabled={!!busy} onChange={(event) => edit({ email: event.target.value })} />
         <LanguagesField id="profile-languages" label="Languages you can read" value={draft.languages} disabled={!!busy} onChange={(languages) => edit({ languages })} />

@@ -175,7 +175,7 @@ test('ordinary lead downloads real review JSONL bytes and a later current-role r
     const record = await submitReview(reviewer.page, s); await loginExisting(page, s.users.lead);
     const reviewed = await variant(page, s, s.documents.target), source = await variant(page, s, s.documents.source);
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
-    const card = page.getByRole('region', { name: 'Translation reviews (JSONL)', exact: true });
+    const card = page.getByRole('region', { name: 'Translation reviews', exact: true });
     const creating = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`${root(s)}/exports/translation-reviews`));
     await card.getByRole('button', { name: 'Create export', exact: true }).click(); const created = await creating; expect(created.ok()).toBeTruthy();
     const jobId = (await created.json() as { job_id: number }).job_id, job = await finishedJob(page, jobId);

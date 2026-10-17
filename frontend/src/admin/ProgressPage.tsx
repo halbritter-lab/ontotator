@@ -3,10 +3,12 @@ import { api, ApiError, type ProjectProgress } from "../api/client";
 import { routeHref, type Route } from "../app/router";
 import { Button, DataTable, EmptyState, InlineMessage, Select, Toolbar, type Column } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { AssigneeSummary } from "./assignmentUI";
+import { assignmentStatusLabels, labelFor } from "../app/labels";
 
 export interface ProgressPageProps { projectKey: string; onNavigate: (route: Route) => void }
 const statuses = ["open", "in_progress", "submitted", "reopened"] as const;
-const label = (value: string) => value === "in_progress" ? "In progress" : value[0].toUpperCase() + value.slice(1);
+const label = (value: string) => value === "documents" ? "Documents" : labelFor(assignmentStatusLabels, value);
 
 export function ProgressPage(props: ProgressPageProps): JSX.Element {
   return <ProgressContent key={props.projectKey} {...props} />;
@@ -37,10 +39,10 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
   const documentColumns: Column<ProjectProgress["documents"][number]>[] = [
     { id: "document", header: "Document", cell: doc => doc.document_id },
     { id: "language", header: "Language", cell: doc => doc.language },
-    { id: "assignees", header: "Assignees", cell: doc => doc.assignees?.length ? <ul>{doc.assignees.map(assignee => <li key={assignee.assignment_id}>{assignee.pseudonym}: {assignee.task} {assignee.status}</li>)}</ul> : "Unassigned" },
+    { id: "assignees", header: "Assignees", cell: doc => doc.assignees?.length ? <ul className="assignee-list">{doc.assignees.map(assignee => <li key={assignee.assignment_id}><AssigneeSummary name={progress?.people.find(person => person.username === assignee.username)?.display_name} {...assignee} /></li>)}</ul> : "Unassigned" },
     { id: "assign", header: "Assignment", cell: doc => {
       const route: Route = { name: "projectDocuments", key: projectKey, select: doc.document_id };
-      return <a href={routeHref(route)} onClick={event => {
+      return <a className="btn btn-secondary btn-sm" href={routeHref(route)} onClick={event => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault(); onNavigate(route);
       }}>Assign</a>;

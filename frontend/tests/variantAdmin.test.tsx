@@ -100,10 +100,10 @@ it("uses annotator membership for translation review, both languages and only fa
 it("disables translation review for native corrections and accepted current rows", async () => {
   const nativeCorrection = { ...translated, origin: "correction" as const, version: 2, derived_from: source.document_id, translation: null };
   const view = render(<AssignDialog projectKey="p" documents={[readyTarget]} cases={[{ case_id: target.case_id, variants: [source, nativeCorrection] }]} onClose={vi.fn()} onChanged={vi.fn()} />);
-  expect((screen.getByRole("option", { name: "Translation review" }) as HTMLOptionElement).disabled).toBe(true);
+  expect(screen.queryByRole("option", { name: "Translation review" })).toBeNull();
   view.rerender(<AssignDialog projectKey="p" documents={[target]} cases={inventory} onClose={vi.fn()} onChanged={vi.fn()} />);
   await act(async () => {});
-  expect((screen.getByRole("option", { name: "Translation review" }) as HTMLOptionElement).disabled).toBe(true);
+  expect(screen.queryByRole("option", { name: "Translation review" })).toBeNull();
 });
 
 it("keeps translation distribution context exact through partial language retry", async () => {
@@ -192,11 +192,21 @@ it("shows ordered readonly reviewer snapshots, rationale and created variant", a
   render(<DocumentsPage projectKey="p" query={{}} onNavigate={vi.fn()} />);
   fireEvent.click(await screen.findByRole("button", { name: `Reviews for ${target.document_id}` }));
   const history = within(screen.getByRole("dialog", { name: `Translation reviews: ${target.document_id}` }));
-  expect(await history.findByText(/Original pseudonym.*Original qualification.*en, de/)).toBeTruthy();
+  expect((await history.findByText(/by Original pseudonym/)).textContent).toMatch(/^Accepted with corrections by Original pseudonym · \d{1,2} Oct 2026, \d{2}:\d{2}$/);
+  expect(history.getByText("Original qualification · reads en, de")).toBeTruthy();
+  expect(history.getByText("Translation status changed from Ready for review to Reviewed.")).toBeTruthy();
+  expect(history.getByText("Clinical change: Number or unit")).toBeTruthy();
+  expect(history.queryByText(/ready_for_review|→/)).toBeNull();
   expect(history.getByText("Original rationale")).toBeTruthy();
   expect(history.getByText("Created variant: actual-created-variant")).toBeTruthy();
   expect(history.queryByRole("textbox")).toBeNull();
   expect(history.queryByRole("button", { name: /Reopen|Submit/ })).toBeNull();
+  fireEvent.click(history.getByRole("button", { name: "Close" }));
+  expect(screen.queryByRole("dialog", { name: `Translation reviews: ${target.document_id}` })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: `Reviews for ${target.document_id}` }));
+  const reopened = await screen.findByRole("dialog", { name: `Translation reviews: ${target.document_id}` });
+  fireEvent.keyDown(reopened, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: `Translation reviews: ${target.document_id}` })).toBeNull());
 });
 
 it("resets explicit override choices when a different persisted upload has the same logical tuple", async () => {
@@ -208,7 +218,7 @@ it("resets explicit override choices when a different persisted upload has the s
   fireEvent.click(await screen.findByLabelText(/^Accept without review:/));
   fireEvent.change(screen.getByLabelText(/^Reason:/), { target: { value: "Specific to first upload" } });
   fireEvent.click(screen.getByRole("button", { name: "Resume upload 8" }));
-  await screen.findByText("Upload 8 · ready");
+  await screen.findByText("Upload 8 · Ready to import");
   expect(screen.queryByLabelText(/^Reason:/)).toBeNull();
   expect((screen.getByLabelText(/^Accept without review:/) as HTMLInputElement).checked).toBe(false);
 });
@@ -226,7 +236,7 @@ it("keeps original File identity for stale Check again and does not carry its ov
   fireEvent.change(screen.getByLabelText(/^Reason:/), { target: { value: "Initial reason" } });
   fireEvent.click(screen.getByRole("button", { name: "Import" }));
   fireEvent.click(await screen.findByRole("button", { name: "Check again" }));
-  await screen.findByText("Upload 8 · ready");
+  await screen.findByText("Upload 8 · Ready to import");
   expect(vi.mocked(api.createUpload).mock.calls[1][2][0]).toBe(file);
   expect(screen.queryByLabelText(/^Reason:/)).toBeNull();
   expect(api.commitUpload).toHaveBeenCalledTimes(1);
@@ -251,7 +261,7 @@ it("rechecks authenticated translation-review downloads including an empty JSONL
   vi.spyOn(api, "downloadJob").mockResolvedValueOnce(payload).mockRejectedValueOnce(new ApiError(403, "Permission changed"));
   const save = vi.spyOn(downloads, "saveDownload").mockImplementation(() => {});
   render(<ExportPage projectKey="p" currentUser={currentUser} />);
-  const card = within(screen.getByRole("region", { name: "Translation reviews (JSONL)" }));
+  const card = within(screen.getByRole("region", { name: "Translation reviews" }));
   fireEvent.click(await card.findByRole("button", { name: "Download" }));
   await waitFor(() => expect(save).toHaveBeenCalledWith(payload, expect.stringMatching(/\.jsonl$/)));
   await waitFor(() => expect((card.getByRole("button", { name: "Download" }) as HTMLButtonElement).disabled).toBe(false));
@@ -310,7 +320,7 @@ it("uses the dedicated third export endpoint and true job kind", async () => {
   vi.spyOn(api, "startExport").mockResolvedValue({ job_id: 11 });
   vi.spyOn(api, "getJob").mockResolvedValue({ id: 33, kind: "translation_review_export", status: "succeeded", result: { sha256: "a".repeat(64), reviews: 0 }, error: null, created_at: "2026-10-16T00:00:00Z", finished_at: "2026-10-16T00:01:00Z" });
   render(<ExportPage projectKey="p" currentUser={currentUser} />);
-  const card = within(screen.getByRole("region", { name: "Translation reviews (JSONL)" }));
+  const card = within(screen.getByRole("region", { name: "Translation reviews" }));
   fireEvent.click(card.getByRole("button", { name: "Create export" }));
   await card.findByRole("button", { name: "Download" });
   expect(api.exportTranslationReviews).toHaveBeenCalledWith("p");

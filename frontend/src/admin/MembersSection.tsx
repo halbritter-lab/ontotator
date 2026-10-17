@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type AdminUser, type Member } from "../api/client";
 import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, TextInput, type Column } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { labelFor, roleLabels, taskLabels } from "../app/labels";
 export interface MembersSectionProps { projectKey: string; isSystemAdmin: boolean }
 
 const roles = ["lead", "annotator", "adjudicator"] as const;
@@ -66,7 +67,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
     { id: "user", header: "User", cell: member => <>{member.display_name} ({member.username})</> },
     { id: "pseudonym", header: "Pseudonym", cell: member => member.pseudonym },
     { id: "languages", header: "Languages", cell: member => member.languages.join(", ") || "None" },
-    ...roles.map(role => ({ id: role, header: role, cell: (member: Member) => <Checkbox id={`${id}-${member.username}-${role}`} label={role} aria-label={`${member.username}: ${role}`} checked={member.roles.includes(role)} disabled={blocked} onChange={event => {
+    ...roles.map(role => ({ id: role, header: roleLabels[role], cell: (member: Member) => <Checkbox id={`${id}-${member.username}-${role}`} label={<span className="visually-hidden">{member.username}: {roleLabels[role]}</span>} checked={member.roles.includes(role)} disabled={blocked} onChange={event => {
       if (blocked) return;
       void change(member.username, event.target.checked ? [...member.roles, role] : member.roles.filter(item => item !== role), false);
     }} /> })),
@@ -85,11 +86,11 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
     }}><fieldset disabled={blocked}><legend>Add member</legend>
       <TextInput id={`${id}-username`} label="Username" hint="Enter the exact username." value={username} required list={isSystemAdmin ? `${id}-suggestions` : undefined} onChange={event => setUsername(event.target.value)} />
       {isSystemAdmin && <datalist id={`${id}-suggestions`}>{suggestions.map(user => <option key={user.username} value={user.username}>{user.display_name} ({user.username})</option>)}</datalist>}
-      {roles.map(role => <Checkbox key={role} id={`${id}-new-${role}`} label={role} aria-label={`New member: ${role}`} checked={newRoles.includes(role)} onChange={event => setNewRoles(event.target.checked ? [...newRoles, role] : newRoles.filter(item => item !== role))} />)}
+      {roles.map(role => <Checkbox key={role} id={`${id}-new-${role}`} label={roleLabels[role]} aria-label={`New member: ${roleLabels[role]}`} checked={newRoles.includes(role)} onChange={event => setNewRoles(event.target.checked ? [...newRoles, role] : newRoles.filter(item => item !== role))} />)}
       <Button type="submit" loading={busy}>Add member</Button>
     </fieldset></form>
     <ConfirmDialog open={pending !== null} title="Revoke affected assignments?" busy={busy} confirmLabel="Remove and revoke their open assignments"
-      message={pending && <><p>Changing roles for {pending.username} affects these assignments:</p><ul>{pending.assignments.map(assignment => <li key={assignment.id}>{assignment.document_id} — {assignment.task} (assignment {assignment.id})</li>)}</ul>{error !== undefined && <ErrorNotice error={error} />}</>}
+      message={pending && <><p>Changing roles for {pending.username} affects these assignments:</p><ul>{pending.assignments.map(assignment => <li key={assignment.id}>{assignment.document_id} — {labelFor(taskLabels, assignment.task)} (assignment {assignment.id})</li>)}</ul>{error !== undefined && <ErrorNotice error={error} />}</>}
       onCancel={() => { if (!writing.current) { setPending(null); setError(undefined); } }}
       onConfirm={() => { if (pending) void change(pending.username, pending.roles, true, pending.fromAdd); }} />
   </section>;

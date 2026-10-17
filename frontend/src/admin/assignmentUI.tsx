@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type AssignRequest, type AssignResponse, type Member, type CaseSummary, type VariantSummary, type DocumentSummary } from "../api/client";
-import { Button, InlineMessage, Select } from "../ui";
+import { Button, InlineMessage, Select, StatusBadge } from "../ui";
+import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
 import { errorMessage } from "./errors";
 import { ErrorNotice } from "./ErrorNotice";
 import { reviewLanguages } from "./variantMetadata";
@@ -34,7 +35,7 @@ export function useAlive() {
   return alive;
 }
 export function TaskSelect({ value, onChange, disabled, translationReviewAllowed = false }: { value: Task; onChange: (task: Task) => void; disabled?: boolean; translationReviewAllowed?: boolean }) {
-  return <Select id="assignment-task" label="Task" value={value} disabled={disabled} onChange={event => { if (event.target.value !== "translation_review" || translationReviewAllowed) onChange(event.target.value as Task); }}><option value="annotate">Annotate</option><option value="review">Review</option><option value="translation_review" disabled={!translationReviewAllowed}>Translation review</option></Select>;
+  return <Select id="assignment-task" label="Task" value={value} disabled={disabled} onChange={event => { if (event.target.value !== "translation_review" || translationReviewAllowed) onChange(event.target.value as Task); }}><option value="annotate">{taskLabels.annotate}</option><option value="review">{taskLabels.review}</option>{translationReviewAllowed && <option value="translation_review">{taskLabels.translation_review}</option>}</Select>;
 }
 export function useMembers(key: string) {
   const [members, setMembers] = useState<Member[] | null>(null);
@@ -81,4 +82,12 @@ export function BatchFeedback({ batch, onConfirmLanguage, disabled, languages }:
     {batch.refused.length > 0 && <ul aria-label="Refused assignments">{batch.refused.map(row => <li key={rowKey(row)}>{row.document_id} — {row.username}: <span>{errorMessage(new ApiError(422, row.code, row.code))}</span></li>)}</ul>}
     {batch.languageRows.length > 0 && <section aria-label="Confirm document languages"><p>These people's profiles do not list the required document languages. Assign anyway?</p><ul>{batch.languageRows.map(row => <li key={rowKey(row)}>{row.document_id} — {row.username}: {languages?.get(row.document_id)?.join(", ") || "Required languages unavailable"}</li>)}</ul><Button disabled={disabled} loading={batch.busy} onClick={onConfirmLanguage}>Assign anyway</Button></section>}
   </>;
+}
+/** One assignee as person, task and status in plain words; the pseudonym is secondary when a name is known. */
+export function AssigneeSummary({ name, pseudonym, task, status }: { name?: string | null; pseudonym: string; task: string; status: string }) {
+  const person = name || pseudonym;
+  return <span className="assignee">
+    <span className="assignee-person">{person}{person !== pseudonym && <span className="assignee-pseudonym"> ({pseudonym})</span>}</span>
+    <span className="assignee-work"><span>{labelFor(taskLabels, task)}</span><StatusBadge status={status}>{labelFor(assignmentStatusLabels, status)}</StatusBadge></span>
+  </span>;
 }

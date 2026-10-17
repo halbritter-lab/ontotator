@@ -19,7 +19,8 @@ it("uses controlled URL filters, preserves server order and shows actual assignm
   await screen.findByText("z-first");
   expect(api.listProjectDocuments).toHaveBeenCalledWith("p", { language: "en", status: "open", q: "z" });
   expect(screen.getAllByTestId("document-row").map(row => row.textContent)).toEqual([expect.stringContaining("z-first"), expect.stringContaining("a-second")]);
-  expect(screen.getByText("Reader A: annotate open")).toBeTruthy();
+  const assignee = screen.getByText("Reader A").closest(".assignee")!;
+  expect(assignee.querySelector(".assignee-work")?.textContent).toBe("AnnotationOpen");
   expect(screen.queryByText("private-user")).toBeNull();
   fireEvent.change(screen.getByLabelText("Language"), { target: { value: "de" } });
   expect(navigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", status: "open", q: "z", select: undefined });
@@ -63,4 +64,13 @@ it("renders all one thousand rows in server order without client truncation", as
   const visible = screen.getAllByTestId("document-row");
   expect(visible).toHaveLength(1000); expect(visible[0].textContent).toContain("doc-1000");
   expect(screen.getByText("0 selected")).toBeTruthy();
+});
+it("shows the external ID only when it differs and hides repeated row labels visually", async () => {
+  vi.mocked(api.listProjectDocuments).mockResolvedValueOnce([{ ...documents[0], external_id: "z-first" }, { ...documents[1], external_id: "EXT 7" }] as never);
+  render(<DocumentsPage projectKey="p" query={{}} onNavigate={vi.fn()} />);
+  await screen.findByText("z-first");
+  expect(screen.queryByRole("columnheader", { name: "External ID" })).toBeNull();
+  expect(screen.getAllByText(/^External ID:/).map(item => item.textContent)).toEqual(["External ID: EXT 7"]);
+  expect(screen.getByLabelText("Select z-first").closest("label")?.querySelector(".visually-hidden")?.textContent).toBe("Select z-first");
+  expect(Array.from((screen.getByLabelText("Status") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["All statuses", "Unassigned", "Open", "In progress", "Submitted", "Reopened"]);
 });

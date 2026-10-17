@@ -4,12 +4,17 @@ import { saveDownload } from "../api/download";
 import { Button, InlineMessage, Toolbar } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { useJob } from "./useJob";
+import { jobStatusLabels, labelFor } from "../app/labels";
 
 export interface ExportPageProps { projectKey: string; currentUser: CurrentUser }
+const jsonl = "JSONL file: one JSON record per line";
 const definitions = [
-  { kind: "t1", title: "Annotation results (T1 bundle)", description: "The latest submission of each annotator and task per document, with pseudonyms." },
-  { kind: "edit_log", title: "Edit log (JSONL)", description: "Every editing step with pseudonyms, for method analyses." },
-  { kind: "translation_reviews", title: "Translation reviews (JSONL)", description: "Immutable translation review decisions with reviewer snapshots and source provenance." },
+  { kind: "t1", title: "Annotation results", format: "ZIP of T1 (ontospan) bundles",
+    description: "The latest submission of each person for each document and task, with pseudonyms instead of names. Use it for analysis or to load the annotations into another tool that reads ontospan." },
+  { kind: "edit_log", title: "Edit log", format: jsonl,
+    description: "Every editing step in order, with pseudonyms. For method studies, such as how long annotation took or how decisions changed; read it with a script, for example in Python or R." },
+  { kind: "translation_reviews", title: "Translation reviews", format: jsonl,
+    description: "Every translation review decision, with the reviewer's qualification at that time and the source text it refers to. For reporting on translation quality." },
 ] as const;
 type CardKind = ExportKind | "translation_reviews";
 const jobKinds: Record<CardKind, string> = { t1: "t1_export", edit_log: "edit_log_export", translation_reviews: "translation_review_export" };
@@ -30,7 +35,7 @@ export function ExportPage({ projectKey, currentUser }: ExportPageProps): JSX.El
 }
 
 // One primary action per view: only the first (lead) export card carries it.
-function ExportCard({ projectKey, storageKey, kind, title, description, lead }: { projectKey: string; storageKey: string; kind: CardKind; title: string; description: string; lead: boolean }): JSX.Element {
+function ExportCard({ projectKey, storageKey, kind, title, format, description, lead }: { projectKey: string; storageKey: string; kind: CardKind; title: string; format: string; description: string; lead: boolean }): JSX.Element {
   const [remembered] = useState(() => readRemembered(storageKey));
   const [jobId, setJobId] = useState<number | null>(remembered.id);
   const [storageError, setStorageError] = useState(remembered.storageError);
@@ -83,12 +88,12 @@ function ExportCard({ projectKey, storageKey, kind, title, description, lead }: 
     } finally { if (alive.current) { downloadRequest.current = false; setDownloading(false); } }
   };
   return <section className="detail-section" aria-label={title}>
-    <h2>{title}</h2><p>{description}</p>
+    <h2>{title}</h2><p>{description}</p><p className="cell-secondary">Format: {format}</p>
     <Toolbar label={`${title} actions`}><Button variant={lead && !downloadable ? "primary" : "secondary"} loading={creating} disabled={polling || downloading} onClick={() => { void start(); }}>Create export</Button>
       {downloadable && <Button variant={lead ? "primary" : "secondary"} loading={downloading} onClick={() => { void download(); }}>Download</Button>}
     </Toolbar>
     {polling && <p role="status">Checking export …</p>}
-    {correctKind && <p role="status">Export job {job.id}: {job.status}</p>}
+    {correctKind && <p role="status">Export {job.id}: {labelFor(jobStatusLabels, job.status)}</p>}
     {correctKind && job.status === "failed" && <InlineMessage tone="error">{job.error || "The export failed without further details."}</InlineMessage>}
     {error !== undefined && (error instanceof ApiError && error.status === 403 ? <InlineMessage tone="error">You do not have access to this page.</InlineMessage> : <ErrorNotice error={error} />)}
     {storageError && <InlineMessage tone="warning">This browser cannot remember export jobs. Keep this page open until your export is ready.</InlineMessage>}

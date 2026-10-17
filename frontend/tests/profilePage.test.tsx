@@ -8,7 +8,7 @@ import { ProfilePage } from "../src/me/ProfilePage";
 const profile: Profile = { qualification: null, username: "long-username-123", pseudonym: "ann-0042", display_name: "Alex", email: "alex@example.org", orcid: "0000-0002-1825-0097", orcid_consent: true, languages: ["en"] };
 beforeEach(() => { vi.spyOn(api, "getProfile").mockResolvedValue(profile); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-const loaded = async () => { await screen.findByDisplayValue("ann-0042"); };
+const loaded = async () => { await screen.findByText("ann-0042"); };
 const passwordForm = () => screen.getByRole("form", { name: "Change password" });
 function passwordValues(next: string, repeat = next) {
   fireEvent.change(screen.getByLabelText("Current password (required)"), { target: { value: "current-password" } });
@@ -23,8 +23,10 @@ describe("ProfilePage component", () => {
     const onSaved = vi.fn();
     render(<ProfilePage onSaved={onSaved} />);
     await loaded();
-    expect((screen.getByLabelText("Username") as HTMLInputElement).readOnly).toBe(true);
-    expect((screen.getByLabelText("Pseudonym") as HTMLInputElement).readOnly).toBe(true);
+    const account = screen.getByText("Username").closest("dl")!;
+    expect(account.textContent).toContain(`Username${profile.username}`);
+    expect(account.textContent).toContain(`Pseudonym${profile.pseudonym}`);
+    expect(screen.queryByRole("textbox", { name: "Username" })).toBeNull();
     expect(screen.getByText("Your pseudonym appears in exports instead of your name.")).toBeDefined();
     const user = userEvent.setup();
     await user.clear(screen.getByLabelText("Display name (required)"));

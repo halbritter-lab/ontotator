@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import { api, type AdminUser, type AdminUserPatch, type CodeResponse, type CreateUserRequest, type CurrentUser } from "../api/client";
+import { api, ApiError, type AdminUser, type AdminUserPatch, type CodeResponse, type CreateUserRequest, type CurrentUser } from "../api/client";
 import { Button, Checkbox, ConfirmDialog, DataTable, Dialog, EmptyState, InlineMessage, TextInput, Toolbar, type Column } from "../ui";
 import { CodeOnceDialog } from "./CodeOnceDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { LanguagesField } from "./LanguagesField";
+import { labelFor, roleLabels } from "../app/labels";
 
 export interface UsersPageProps {
   currentUser: CurrentUser;
@@ -15,7 +16,14 @@ type PendingChange = { username: string; change: AdminUserPatch; kind: "admin" |
 type EditState = { baseline: AdminUser; draft: AdminUser };
 const emptyCreate = (): CreateUserRequest => ({ username: "", display_name: "", email: "", languages: [], system_admin: false });
 
-export function UsersPage({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Element {
+const accessMessage = "Only system administrators can see and manage user accounts. Ask an administrator if someone needs an account or a new sign-in code.";
+
+export function UsersPage(props: UsersPageProps): JSX.Element {
+  if (!props.currentUser.is_system_admin) return <section className="detail-section"><h1>Users</h1><InlineMessage tone="info">{accessMessage}</InlineMessage></section>;
+  return <UsersContent {...props} />;
+}
+
+function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Element {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>();
@@ -131,7 +139,7 @@ export function UsersPage({ currentUser, routeLeaveRef }: UsersPageProps): JSX.E
     { id: "name", header: "Display name", cell: user => user.display_name },
     { id: "pseudonym", header: "Pseudonym", cell: user => user.pseudonym },
     { id: "languages", header: "Languages", cell: user => user.languages.join(", ") || "None" },
-    { id: "projects", header: "Projects", cell: user => user.projects.length ? <ul>{user.projects.map(project => <li key={project.project_key}>{project.project_key}: {project.roles.join(", ")}</li>)}</ul> : "None" },
+    { id: "projects", header: "Projects", cell: user => user.projects.length ? <ul>{user.projects.map(project => <li key={project.project_key}>{project.project_key}: {project.roles.map(role => labelFor(roleLabels, role)).join(", ")}</li>)}</ul> : "None" },
     { id: "admin", header: "Admin", cell: user => user.is_system_admin ? "Yes" : "No" },
     { id: "active", header: "Active", cell: user => user.active ? "Yes" : "No" },
     { id: "actions", header: "Actions", cell: user => <Toolbar label={`Actions for ${user.username}`}>
@@ -144,6 +152,7 @@ export function UsersPage({ currentUser, routeLeaveRef }: UsersPageProps): JSX.E
     </Toolbar> },
   ];
   const query = filter.trim().toLowerCase();
+  if (loadError instanceof ApiError && loadError.status === 403) return <section className="detail-section"><h1>Users</h1><InlineMessage tone="info">{accessMessage}</InlineMessage></section>;
   return <div className="density-compact">
     <section className="detail-section">
       <h1>Users</h1>
