@@ -177,6 +177,8 @@ def test_cold_edit_service_build_runs_before_mutation_transaction(
                 payload={
                     "command": "create_annotation",
                     "annotation_id": "annotation",
+                    "evidence_id": "current-finding",
+                    "segments": [{"start": 26, "end": 35}],
                     "term_id": "HP:0001252",
                     "layer_id": "hpo-layer",
                 },
@@ -201,6 +203,8 @@ def test_cold_edit_service_build_runs_before_mutation_transaction(
     }
     if command == "create_annotation":
         payload["layer_id"] = "hpo-layer"
+        payload["evidence_id"] = "current-finding"
+        payload["segments"] = [{"start": 26, "end": 35}]
     envelope = MutationEnvelope(
         mutation_id="cold-edit", expected_revision=revision, payload=payload
     )
@@ -354,6 +358,8 @@ def test_blocked_cold_edit_releases_connection_for_unrelated_draft(
         payload={
             "command": "create_annotation",
             "annotation_id": "annotation",
+            "evidence_id": "current-finding",
+            "segments": [{"start": 26, "end": 35}],
             "term_id": "HP:0001252",
             "layer_id": "hpo-layer",
         },

@@ -159,6 +159,8 @@ def test_verified_adoption_normalizes_term_id_and_keeps_source(
     draft = session.apply(
         command="create_annotation",
         annotation_id="a-1",
+        evidence_id="current-hypotonia",
+        segments=[{"start": 26, "end": 35}],
         term_id="hp:0001252",
         source_annotation_id="src-1",
         source_version=session.source.version,

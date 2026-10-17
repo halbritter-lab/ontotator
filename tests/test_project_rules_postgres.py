@@ -211,6 +211,7 @@ def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass
             target_set_id=targets.target_set_id,
         ),
         targets,
+        pending_proposal_set_ids=[],
     )
 
     def apply(revision, **payload):

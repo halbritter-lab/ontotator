@@ -631,6 +631,7 @@ class ScopedRepository(Repository):
         return super().open_draft(key, targets, pending_proposal_set_ids)
 
     def workspace_reanchor_items(self, draft: Draft) -> list[ReanchorItem]:
+        self._visible(draft.key.project_key)
         with self.db.transaction() as conn:
             self.require_workable(conn, draft.key)
             return super().workspace_reanchor_items(draft)
@@ -638,6 +639,7 @@ class ScopedRepository(Repository):
     def reanchor_source_identity(
         self, key: WorkspaceKey, item: PendingReanchorRef
     ) -> tuple[AnnotationSnapshot, bool]:
+        self._visible(key.project_key)
         with self.db.transaction() as conn:
             self.require_workable(conn, key)
             return super().reanchor_source_identity(key, item)
@@ -645,6 +647,7 @@ class ScopedRepository(Repository):
     def verified_reanchor_source(
         self, key: WorkspaceKey, item: PendingReanchorRef
     ) -> AnnotationSnapshot:
+        self._visible(key.project_key)
         with self.db.transaction() as conn:
             self.require_workable(conn, key)
             return super().verified_reanchor_source(key, item)

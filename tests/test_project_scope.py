@@ -22,10 +22,12 @@ from ontocurator.authz.memberships import MembershipService
 from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import PROJECT_FREE, ScopedRepository
 from ontocurator.config import AppConfig
+from ontocurator.domain.annotations import AnnotationRef
 from ontocurator.domain.documents import OntologyRef
 from ontocurator.domain.errors import AccessDenied, DomainError
+from ontocurator.domain.reanchor_resolution import PendingReanchorRef
 from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.workspace import MutationEnvelope, WorkspaceKey
+from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.packages.models import SearchEventRecord, ValidatedPackage
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import Repository
@@ -136,6 +138,21 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     ),
     "get_proposal_set": lambda r: r.get_proposal_set("B", 1),
     "workspace_proposal_sets": lambda r: r.workspace_proposal_sets(_key("B"), []),
+    "workspace_reanchor_items": lambda r: r.workspace_reanchor_items(
+        Draft(key=_key("B"), targets=ReviewTargetSet.create([]), revision=0)
+    ),
+    "verified_reanchor_source": lambda r: r.verified_reanchor_source(
+        _key("B"),
+        PendingReanchorRef(
+            proposal_set_id=1, source_ref=AnnotationRef(annotation_id="a", version="v")
+        ),
+    ),
+    "reanchor_source_identity": lambda r: r.reanchor_source_identity(
+        _key("B"),
+        PendingReanchorRef(
+            proposal_set_id=1, source_ref=AnnotationRef(annotation_id="a", version="v")
+        ),
+    ),
     "proposal_metadata": lambda r: r.proposal_metadata("B", "doc-beta"),
     "list_documents": lambda r: r.list_documents("B"),
     "get_annotation_snapshot": lambda r: r.get_annotation_snapshot("a", "v", "B"),
@@ -207,6 +224,41 @@ def test_every_project_method_checks_the_scope(db: Database, method: str) -> Non
         assert error.value.code == "NOT_ALLOWED"
     else:
         assert error.value.code == "PROJECT_NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "workspace_reanchor_items",
+        "reanchor_source_identity",
+        "verified_reanchor_source",
+    ],
+)
+def test_reanchor_methods_hide_foreign_and_missing_projects(
+    db: Database, method: str
+) -> None:
+    alice = ScopedRepository(db, _access({"A": {"annotator", "lead"}}))
+    errors = []
+    for project in ("B", "missing"):
+        key = _key(project)
+        with pytest.raises(DomainError) as error:
+            if method == "workspace_reanchor_items":
+                alice.workspace_reanchor_items(
+                    Draft(key=key, targets=ReviewTargetSet.create([]), revision=0)
+                )
+            else:
+                getattr(alice, method)(
+                    key,
+                    PendingReanchorRef(
+                        proposal_set_id=1,
+                        source_ref=AnnotationRef(annotation_id="a", version="v"),
+                    ),
+                )
+        errors.append(
+            (error.value.code, str(error.value.details).replace(project, "project"))
+        )
+    assert errors[0] == errors[1]
+    assert errors[0][0] == "PROJECT_NOT_FOUND"
 
 
 @pytest.mark.parametrize(

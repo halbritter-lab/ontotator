@@ -124,6 +124,8 @@ def walk(app_client):
         0,
         {
             "command": "create_annotation",
+            "evidence_id": "current-finding",
+            "segments": [{"start": 21, "end": 30}],
             "annotation_id": "ann-1",
             "layer_id": "hpo-layer",
             "type_id": "phenotype",
@@ -166,6 +168,8 @@ def _walk_on(tmp_path, path, term_id):
         0,
         {
             "command": "create_annotation",
+            "evidence_id": "current-finding",
+            "segments": [{"start": 21, "end": 30}],
             "annotation_id": "ann-1",
             "layer_id": "hpo-layer",
             "type_id": "phenotype",
@@ -601,6 +605,8 @@ def test_expanding_a_walk_leaves_its_copy_in_another_project(tmp_path):
         0,
         {
             "command": "create_annotation",
+            "evidence_id": "current-finding",
+            "segments": [{"start": 21, "end": 30}],
             "annotation_id": "ann-1",
             "layer_id": "hpo-layer",
             "type_id": "phenotype",
@@ -660,6 +666,8 @@ def _two_layers_one_ontology():
 def _create(annotation_id, layer_id, term_id, event_id=None):
     return {
         "command": "create_annotation",
+        "evidence_id": "current-finding",
+        "segments": [{"start": 21, "end": 30}],
         "annotation_id": annotation_id,
         "layer_id": layer_id,
         "type_id": "type-opt",
@@ -754,6 +762,8 @@ def test_tree_requests_pass_the_same_checks_as_a_search(app_client):
         0,
         {
             "command": "create_annotation",
+            "evidence_id": "current-finding",
+            "segments": [{"start": 21, "end": 30}],
             "annotation_id": "ann-1",
             "layer_id": "layer-1",
             "type_id": "type-opt",
@@ -799,6 +809,8 @@ def test_a_failing_draft_lookup_does_not_skip_the_layer_check(app_client, monkey
         0,
         {
             "command": "create_annotation",
+            "evidence_id": "current-finding",
+            "segments": [{"start": 21, "end": 30}],
             "annotation_id": "ann-1",
             "layer_id": "layer-1",
             "type_id": "type-opt",

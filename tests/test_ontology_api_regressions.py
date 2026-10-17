@@ -97,6 +97,8 @@ def test_second_ontology_is_used_for_editing_and_workspace_status(tmp_path):
                 "payload": {
                     "command": "create_annotation",
                     "annotation_id": "ann-mondo",
+                    "evidence_id": "current-finding",
+                    "segments": [{"start": 21, "end": 30}],
                     "layer_id": "layer-2",
                     "type_id": "type-req",
                     "term_id": "MONDO:0000001",

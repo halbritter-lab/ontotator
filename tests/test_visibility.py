@@ -426,7 +426,10 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
     import ontocurator.authz.scoped as scoped_module
     import ontocurator.authz.versions as versions_module
     from ontocurator.api.routes import decode_workspace_id
-    from ontocurator.domain.workspace import MutationEnvelope
+    from ontocurator.domain.annotations import AnnotationRef
+    from ontocurator.domain.reanchor_resolution import PendingReanchorRef
+    from ontocurator.domain.review import ReviewTargetSet
+    from ontocurator.domain.workspace import Draft, MutationEnvelope
     from ontocurator.packages.models import SearchEventRecord
     from ontocurator.storage.repository import Repository
     from ontocurator.storage.tables import ProposalSetRow, StoredFileRow
@@ -528,6 +531,27 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
         ),
         "proposal_metadata": lambda: repo.proposal_metadata(PROJECT, "doc-alpha"),
         "workspace_proposal_sets": lambda: repo.workspace_proposal_sets(key, []),
+        "workspace_reanchor_items": lambda: repo.workspace_reanchor_items(
+            Draft(key=key, targets=ReviewTargetSet.create([]), revision=0)
+        ),
+        "verified_reanchor_source": lambda: repo.verified_reanchor_source(
+            key,
+            PendingReanchorRef(
+                proposal_set_id=set_id,
+                source_ref=AnnotationRef(
+                    annotation_id=snap.annotation.annotation_id, version=snap.version
+                ),
+            ),
+        ),
+        "reanchor_source_identity": lambda: repo.reanchor_source_identity(
+            key,
+            PendingReanchorRef(
+                proposal_set_id=set_id,
+                source_ref=AnnotationRef(
+                    annotation_id=snap.annotation.annotation_id, version=snap.version
+                ),
+            ),
+        ),
         "get_proposal_set": lambda: repo.get_proposal_set(PROJECT, set_id),
         "get_annotation_snapshot": lambda: repo.get_annotation_snapshot(
             snap.annotation.annotation_id, snap.version, PROJECT
