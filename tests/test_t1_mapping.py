@@ -811,3 +811,60 @@ def test_independent_adoption_export_preserves_exact_imported_source_notes():
         "Reason",
         "imported note",
     ]
+
+
+def test_shared_replacement_exports_notes_from_all_exact_changed_targets():
+    doc = document_from_unit(sketch_unit())
+    sources = [
+        own_snapshot(doc, name, "HP:0001250", None, {}) for name in ("first", "second")
+    ]
+    original = own_snapshot(doc, "replacement", "HP:0001252", None, {})
+    replacement = snapshot(
+        original.annotation.model_copy(update={"note": "Reason"}),
+        [],
+        doc,
+        hpo_profile(),
+    )
+    targets = [
+        AnnotationRef(
+            annotation_id=source.annotation.annotation_id, version=source.version
+        )
+        for source in sources
+    ]
+    replacement_ref = AnnotationRef(
+        annotation_id="replacement", version=replacement.version
+    )
+    decisions = [
+        ReviewDecision(
+            decision_id=f"d-{index}",
+            target=target,
+            outcome="changed",
+            reviewer_id="ann-0007",
+            replacement=replacement_ref,
+        )
+        for index, target in enumerate(targets)
+    ]
+    unit, _ = submission_to_unit(
+        submission([replacement], mode="review", decisions=decisions, targets=targets),
+        doc,
+        hpo_profile(),
+        layers(),
+        {
+            (source.annotation.annotation_id, source.version): source
+            for source in sources
+        },
+        set_id="out",
+        proposal_notes={
+            ("first", sources[0].version): ["first source note", "shared", "Reason"],
+            ("second", sources[1].version): ["second source note", "shared", "Reason"],
+            ("first", "wrong-version"): ["must not export"],
+            ("second", "wrong-version"): ["also must not export"],
+        },
+    )
+    assert len(unit.annotation_set.annotations) == 1
+    assert list(unit.annotation_set.annotations[0].provenance.notes) == [
+        "Reason",
+        "first source note",
+        "shared",
+        "second source note",
+    ]

@@ -547,7 +547,7 @@ def submission_to_unit(
 
     # (annotation id, version) -> (method, source ref) for review results.
     reviewed: dict[tuple[str, str], tuple[Method, str]] = {}
-    note_sources: dict[tuple[str, str], tuple[str, str]] = {}
+    note_sources: dict[tuple[str, str], list[tuple[str, str]]] = {}
     snapshots = list(submission.snapshots)
     present = {(s.annotation.annotation_id, s.version) for s in snapshots}
     decision: ReviewDecision
@@ -572,7 +572,7 @@ def submission_to_unit(
                 decision.replacement.version,
             )
             reviewed[replacement] = ("edited", source)
-            note_sources[replacement] = target
+            note_sources.setdefault(replacement, []).append(target)
         elif decision.outcome == "rejected":
             counts["rejected"] += 1
         else:
@@ -594,10 +594,7 @@ def submission_to_unit(
                 source_refs=tuple(item.provenance.source_refs),
             )
         note_refs = [(item.annotation_id, snap.version)]
-        if (
-            target_ref := note_sources.get((item.annotation_id, snap.version))
-        ) is not None:
-            note_refs.append(target_ref)
+        note_refs.extend(note_sources.get((item.annotation_id, snap.version), []))
         # Adoption copies retain an exact source ref even outside review mode.
         for source_ref in item.provenance.source_refs:
             source_id, separator, source_version = source_ref.rpartition(":")
