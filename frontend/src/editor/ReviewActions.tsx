@@ -1,7 +1,7 @@
 import { IconButton } from "../ui/IconButton";
-import { Select } from "../ui/Select";
+import { TextInput } from "../ui/TextInput";
 import { Button } from "../ui/Button";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ProposalSource } from "./ProposalSource";
 import type { EditorProposal, AnnotationSnapshot } from "../api/client";
 import type { components } from "../api/generated";
@@ -57,6 +57,31 @@ export interface ReviewActionsProps {
   onNoteChange?: (note: string) => void;
   /** Delay for auto-saving an edited note onto an existing decision. */
   noteSaveDelayMs?: number;
+  /** Parent requests note validation/focus after an unresolved keyboard action. */
+  requireNote?: boolean;
+}
+
+type NoteSaveSession = {
+  timer: ReturnType<typeof setTimeout> | null;
+  note: string;
+  decision: ReviewDecision | null;
+  decide: ReviewActionsProps["onDecide"];
+  readOnly: boolean;
+};
+
+function cancelNoteSave(session: NoteSaveSession) {
+  if (session.timer) clearTimeout(session.timer);
+  session.timer = null;
+}
+
+function saveNote(session: NoteSaveSession) {
+  cancelNoteSave(session);
+  const { note, decision, decide, readOnly } = session;
+  if (readOnly || !decision) return;
+  const normalized = note.trim() || undefined;
+  if (decision.outcome === "uncertain" && !normalized) return;
+  if ((decision.note ?? undefined) === normalized) return;
+  decide({ outcome: decision.outcome, replacement: decision.replacement ?? undefined, note: normalized });
 }
 
 export const ReviewActions: React.FC<ReviewActionsProps> = ({
@@ -76,108 +101,60 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   note: controlledNote,
   onNoteChange,
   noteSaveDelayMs = 800,
+  requireNote = false,
 }) => {
-  const [selectedReplacementId, setSelectedReplacementId] = useState<string>(currentDecision?.replacement?.annotation_id ?? "");
-  const [localNote, setLocalNote] = useState<string>(currentDecision?.note ?? "");
-  const note = controlledNote ?? localNote;
-  const setNote = (value: string) => {
-    if (onNoteChange) onNoteChange(value);
-    else setLocalNote(value);
-  };
-  const [showReplacementSelect, setShowReplacementSelect] = useState<boolean>(
-    currentDecision?.outcome === "changed"
-  );
-  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = useRef({ note, currentDecision, onDecide, readOnly });
-  latest.current = { note, currentDecision, onDecide, readOnly };
-
-  /** Save the note onto the existing decision (no-op if there is no decision or nothing changed). */
-  const commitNote = () => {
-    if (latest.current.readOnly) return;
-    if (noteTimer.current) clearTimeout(noteTimer.current);
-    noteTimer.current = null;
-    const { note: current, currentDecision: decision, onDecide: decide } = latest.current;
-    if (!decision) return;
-    const normalized = current.trim() || undefined;
-    if ((decision.note ?? undefined) === normalized) return;
-    decide({
-      outcome: decision.outcome as ReviewDecisionOutcome,
-      replacement: decision.replacement ?? undefined,
-      note: normalized,
-    });
-  };
-  // Flush a pending note save when the panel unmounts (e.g. selecting another target).
-  useEffect(() => () => { if (noteTimer.current) commitNote(); }, []);
+  const targetIdentity = JSON.stringify([target.annotation_id, target.version]);
+  const [localNote, setLocalNote] = useState({ targetIdentity, value: currentDecision?.note ?? "" });
+  const [attemptedUnresolved, setAttemptedUnresolved] = useState<string | null>(null);
+  const note = controlledNote ?? (localNote.targetIdentity === targetIdentity ? localNote.value : currentDecision?.note ?? "");
+  const noteInput = useRef<HTMLInputElement>(null);
+  const noteId = useId();
+  const needsNote = requireNote || attemptedUnresolved === targetIdentity || currentDecision?.outcome === "uncertain";
+  const noteInvalid = !readOnly && needsNote && !note.trim();
+  // Each exact target owns its save session. A delayed callback/unmount can only
+  // save that target through its original parent callback, even after re-selection.
+  const noteSession = useMemo<NoteSaveSession>(() => ({ timer: null, note: "", decision: null, decide: onDecide, readOnly }), [targetIdentity]);
+  Object.assign(noteSession, { note, decision: currentDecision, decide: onDecide, readOnly });
+  useEffect(() => () => { if (noteSession.timer) saveNote(noteSession); }, [noteSession]);
+  useEffect(() => {
+    if (requireNote && !readOnly && !note.trim()) noteInput.current?.focus();
+  }, [requireNote, readOnly, targetIdentity]);
 
   const handleNoteChange = (value: string) => {
     if (readOnly) return;
-    setNote(value);
-    if (noteTimer.current) clearTimeout(noteTimer.current);
-    noteTimer.current = null;
-    if (currentDecision && noteSaveDelayMs > 0) {
-      noteTimer.current = setTimeout(commitNote, noteSaveDelayMs);
+    noteSession.note = value;
+    if (onNoteChange) onNoteChange(value);
+    else setLocalNote({ targetIdentity, value });
+    cancelNoteSave(noteSession);
+    if (currentDecision && noteSaveDelayMs > 0 && !(currentDecision.outcome === "uncertain" && !value.trim())) {
+      noteSession.timer = setTimeout(() => saveNote(noteSession), noteSaveDelayMs);
     }
   };
 
   const handleOutcomeClick = (outcome: ReviewDecisionOutcome) => {
     if (readOnly) return;
-    if (noteTimer.current) clearTimeout(noteTimer.current);
-    noteTimer.current = null;
-
-    if (outcome === "changed") {
-      setShowReplacementSelect(true);
-      // If there's an existing draft replacement or first draft annotation
-      const repl = draftAnnotations.find(
-        (a) => a.annotation.annotation_id !== target.annotation_id
-      );
-      if (repl && !selectedReplacementId) {
-        setSelectedReplacementId(repl.annotation.annotation_id);
-      }
+    cancelNoteSave(noteSession);
+    if (outcome === "uncertain" && !note.trim()) {
+      setAttemptedUnresolved(targetIdentity);
+      noteInput.current?.focus();
       return;
     }
-
-    setShowReplacementSelect(false);
-    onDecide({
-      outcome,
-      replacement: undefined,
-      note: note.trim() || undefined,
-    });
+    setAttemptedUnresolved(null);
+    onDecide({ outcome, replacement: undefined, note: note.trim() || undefined });
   };
 
   const handleClearDecision = () => {
     if (readOnly) return;
-    if (noteTimer.current) clearTimeout(noteTimer.current);
-    noteTimer.current = null;
-    setShowReplacementSelect(false);
-    onDecide({
-      outcome: null,
-      replacement: undefined,
-      note: undefined,
-    });
-  };
-
-  const handleConfirmChanged = () => {
-    if (readOnly) return;
-    const replSnap = draftAnnotations.find(
-      (a) => a.annotation.annotation_id === selectedReplacementId
-    );
-    if (!replSnap) return;
-
-    onDecide({
-      outcome: "changed",
-      replacement: {
-        annotation_id: replSnap.annotation.annotation_id,
-        version: replSnap.version,
-      },
-      note: note.trim() || undefined,
-    });
+    cancelNoteSave(noteSession);
+    setAttemptedUnresolved(null);
+    onDecide({ outcome: null, replacement: undefined, note: undefined });
   };
 
   const outcomeLabels: Record<ReviewDecisionOutcome, string> = {
     confirmed: "Confirmed",
     rejected: "Rejected",
     changed: "Replaced",
-    uncertain: "Uncertain",
+    uncertain: "Unresolved",
   };
   const pressed = (outcome: ReviewDecisionOutcome) => currentDecision?.outcome === outcome;
 
@@ -243,7 +220,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       {target.is_obsolete && (
         <div className="review-actions__warning">
           <IconWarning />
-          <span>Obsolete term cannot be confirmed. Please reject, mark as uncertain, or replace with a valid term.</span>
+          <span>Obsolete term cannot be confirmed. Please reject, mark as unresolved, or replace with a valid term.</span>
         </div>
       )}
 
@@ -276,7 +253,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <Button
           type="button"
           variant="secondary" className="decision-btn decision-btn--changed"
-          disabled={readOnly}
+          disabled={readOnly || !(onAdoptAndEdit || (currentDecision?.outcome === "changed" && onEditReplacement))}
           aria-pressed={pressed("changed")}
           onClick={() => {
             if (currentDecision?.outcome === "changed" && currentDecision.replacement?.annotation_id && onEditReplacement) {
@@ -284,7 +261,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             } else if (onAdoptAndEdit) {
               onAdoptAndEdit();
             } else {
-              handleOutcomeClick("changed");
+              return;
             }
           }}
           title={
@@ -302,12 +279,15 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           variant="secondary" className="decision-btn decision-btn--uncertain"
           aria-pressed={pressed("uncertain")}
           disabled={readOnly} onClick={() => handleOutcomeClick("uncertain")}
-          title="Set reviewer uncertainty (Key: 4)"
+          title="Mark proposal as unresolved; reviewer note required (Key: 4)"
         >
-          <span className="decision-btn__label"><IconQuestion />Uncertain</span>
+          <span className="decision-btn__label"><IconQuestion />Unresolved</span>
           <kbd className="kbd">4</kbd>
         </Button>
       </div>
+
+      <p className="field-hint">A reviewer decision, separate from clinical uncertainty. A note is required.</p>
+      <p className="field-hint">Unresolved proposals require a note. This export version excludes unresolved proposals.</p>
 
       {/* Reset Decision Button */}
       {currentDecision && (
@@ -358,103 +338,15 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </div>
       )}
 
-      {/* Manual Replacement Selection (Fallback / Existing Annotations) */}
-      {draftAnnotations.length > 0 && (
-        <div className="review-actions__row">
-          {!showReplacementSelect ? (
-            <Button
-              type="button"
-              className="link-button"
-              disabled={readOnly}
-              onClick={() => {
-                if (readOnly) return;
-                setShowReplacementSelect(true);
-                const repl = draftAnnotations.find(
-                  (a) => a.annotation.annotation_id !== target.annotation_id
-                );
-                if (repl && !selectedReplacementId) {
-                  setSelectedReplacementId(repl.annotation.annotation_id);
-                }
-              }}
-            >
-              Assign replacement from draft...
-            </Button>
-          ) : (
-            <div className="review-actions__block">
-              <div className="review-actions__block-head">
-                <label htmlFor="replacement-select" className="form-label">
-                  Select replacement annotation:
-                </label>
-                <Button
-                  type="button"
-                  variant="quiet" size="sm"
-                  onClick={() => setShowReplacementSelect(false)}
-                >
-                  <IconClose />
-                  Close
-                </Button>
-              </div>
-              <Select label={null}
-                id="replacement-select"
-                aria-label="Select replacement annotation"
-                className="form-select"
-                disabled={readOnly}
-                value={selectedReplacementId}
-                onChange={(e) => setSelectedReplacementId(e.target.value)}
-              >
-                <option value="">(Select an annotation from draft)</option>
-                {draftAnnotations
-                  .filter((snap) => {
-                    if (target.layer_id && snap.annotation.layer_id !== target.layer_id) return false;
-                    if (target.type_id && snap.annotation.type_id !== target.type_id) return false;
-                    return true;
-                  })
-                  .map((snap) => {
-                    const term = snap.annotation.term_id;
-                    const label = resolveTermLabel?.(snap.annotation.layer_id, term);
-                    return (
-                      <option key={snap.annotation.annotation_id} value={snap.annotation.annotation_id}>
-                        {label ? `${label} (${term})` : term} · {snap.annotation.annotation_id.slice(0, 10)}
-                      </option>
-                    );
-                  })}
-              </Select>
-              <Button
-                type="button"
-                variant="primary" size="sm"
-                onClick={handleConfirmChanged}
-                disabled={readOnly || !selectedReplacementId}
-              >
-                Confirm replacement
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Reviewer Note */}
-      <div className="form-group review-actions__note">
-        <input
-          type="text"
-          className="form-control"
-          aria-label="Reviewer note"
-          readOnly={readOnly}
-          placeholder="Optional reviewer note / justification..."
-          value={note}
-          onChange={(e) => handleNoteChange(e.target.value)}
-          onBlur={commitNote}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitNote(); } }}
-        />
-        {!currentDecision && note.trim() && (
-          <div className="field-hint">
-            The note is saved together with the next decision.
-          </div>
-        )}
-        {currentDecision && (currentDecision.note ?? "") !== note.trim() && (
-          <div className="field-hint">
-            Unsaved note – saved automatically when you leave the field.
-          </div>
-        )}
+      <div className="review-actions__note">
+        <TextInput id={noteId} ref={noteInput} label="Reviewer note" aria-label="Reviewer note"
+          required={needsNote} readOnly={readOnly} value={note}
+          error={noteInvalid ? "A reviewer note is required for an unresolved decision." : undefined}
+          hint={!noteInvalid && !currentDecision && note.trim() ? "The note is saved together with the next decision."
+            : !noteInvalid && currentDecision && (currentDecision.note ?? "") !== note.trim()
+              ? "Unsaved note – saved automatically when you leave the field." : undefined}
+          onChange={e => handleNoteChange(e.target.value)} onBlur={() => saveNote(noteSession)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); saveNote(noteSession); } }} />
       </div>
     </div>
   );

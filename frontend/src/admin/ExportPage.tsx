@@ -10,7 +10,7 @@ export interface ExportPageProps { projectKey: string; currentUser: CurrentUser 
 const jsonl = "JSONL file: one JSON record per line";
 const definitions = [
   { kind: "t1", title: "Annotation results", format: "ZIP of T1 (ontospan) bundles",
-    description: "The latest submission of each person for each document and task, with pseudonyms instead of names. Use it for analysis or to load the annotations into another tool that reads ontospan." },
+    description: "The latest submission of each person for each document and task, with pseudonyms instead of names. Use it for analysis or to load the annotations into another tool that reads ontospan. Unresolved proposals require a note. This export version excludes unresolved proposals." },
   { kind: "edit_log", title: "Edit log", format: jsonl,
     description: "Every editing step in order, with pseudonyms. For method studies, such as how long annotation took or how decisions changed; read it with a script, for example in Python or R." },
   { kind: "translation_reviews", title: "Translation reviews", format: jsonl,

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ReviewActions, type TargetProposal } from "../src/editor/ReviewActions";
 
@@ -36,7 +36,7 @@ describe("ReviewActions", () => {
     expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Uncertain|Unsicher/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Unresolved/i })).toBeDefined();
 
     // Rerender with human provenance
     const humanTarget: TargetProposal = {
@@ -59,7 +59,7 @@ describe("ReviewActions", () => {
     expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Uncertain|Unsicher/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Unresolved/i })).toBeDefined();
   });
 
   it("calls onDecide with confirmed when clicking Bestätigen/Confirm", () => {
@@ -137,7 +137,7 @@ describe("ReviewActions", () => {
     });
   });
 
-  it.each([ ["confirmed", "Confirm"], ["rejected", "Reject"], ["uncertain", "Uncertain"] ])(
+  it.each([ ["confirmed", "Confirm"], ["rejected", "Reject"], ["uncertain", "Unresolved"] ])(
     "repeated %s clicks preserve the chosen outcome and reviewer note", (outcome, label) => {
       const onDecide = vi.fn();
       render(<ReviewActions target={sampleTarget} draftAnnotations={[]} onDecide={onDecide}
@@ -221,4 +221,80 @@ describe("ReviewActions", () => {
     );
     expect(screen.queryByText("AI")).toBeNull();
   });
+  it("requires and focuses a reviewer note before setting unresolved", () => {
+    const decide = vi.fn();
+    render(<ReviewActions target={sampleTarget} currentDecision={null} draftAnnotations={[]} onDecide={decide} />);
+    fireEvent.click(screen.getByRole("button", { name: /Unresolved/ }));
+    const input = screen.getByRole("textbox", { name: "Reviewer note" });
+    expect(decide).not.toHaveBeenCalled(); expect(document.activeElement).toBe(input);
+    expect(input.getAttribute("aria-invalid")).toBe("true"); expect(input.hasAttribute("required")).toBe(true);
+    expect(screen.getByRole("alert").textContent).toContain("reviewer note is required");
+    fireEvent.change(input, { target: { value: "  Need specialist input  " } });
+    fireEvent.click(screen.getByRole("button", { name: /Unresolved/ }));
+    expect(decide).toHaveBeenCalledWith({ outcome: "uncertain", replacement: undefined, note: "Need specialist input" });
+    expect(screen.getByText("A reviewer decision, separate from clinical uncertainty. A note is required.")).toBeDefined();
+    expect(screen.getByText("Unresolved proposals require a note. This export version excludes unresolved proposals.")).toBeDefined();
+  });
+
+  it("honors a parent note request and preserves the controlled draft on reset", () => {
+    const decide = vi.fn(); const noteChange = vi.fn();
+    const decision = { decision_id: "d", target: { annotation_id: "prop-1", version: "v-prop-1" },
+      outcome: "confirmed" as const, reviewer_id: "r" };
+    const props = { target: sampleTarget, currentDecision: decision, draftAnnotations: [], onDecide: decide, onNoteChange: noteChange };
+    const { rerender } = render(<ReviewActions {...props} note="" />);
+    rerender(<ReviewActions {...props} note="" requireNote />);
+    const input = screen.getByRole("textbox", { name: "Reviewer note" });
+    expect(document.activeElement).toBe(input); expect(input.getAttribute("aria-invalid")).toBe("true");
+    fireEvent.change(input, { target: { value: "  Local draft  " } });
+    expect(noteChange).toHaveBeenCalledWith("  Local draft  ");
+    rerender(<ReviewActions {...props} note="  Local draft  " requireNote />);
+    fireEvent.click(screen.getByRole("button", { name: /Reset decision/ }));
+    expect(decide).toHaveBeenCalledWith({ outcome: null, replacement: undefined, note: undefined });
+    expect((input as HTMLInputElement).value).toBe("  Local draft  ");
+  });
+
+  it("keeps a blank unresolved note locally without sending an invalid save", () => {
+    vi.useFakeTimers();
+    try {
+      const decide = vi.fn();
+      render(<ReviewActions target={sampleTarget} currentDecision={{ decision_id: "d", target: { annotation_id: "prop-1", version: "v-prop-1" },
+        outcome: "uncertain", reviewer_id: "r", note: "Saved note" }} draftAnnotations={[]} onDecide={decide} />);
+      const input = screen.getByRole("textbox", { name: "Reviewer note" });
+      fireEvent.change(input, { target: { value: "  " } });
+      act(() => { vi.advanceTimersByTime(1000); }); fireEvent.blur(input);
+      expect(decide).not.toHaveBeenCalled(); expect((input as HTMLInputElement).value).toBe("  ");
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      expect(screen.queryByText(/saved automatically/)).toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("flushes a delayed note only to its original exact target on rapid selection", () => {
+    vi.useFakeTimers();
+    try {
+      const first = vi.fn(); const second = vi.fn();
+      const decision = { decision_id: "d", target: { annotation_id: "prop-1", version: "v-prop-1" },
+        outcome: "confirmed" as const, reviewer_id: "r", note: "Saved first" };
+      const { rerender } = render(<ReviewActions target={sampleTarget} currentDecision={decision} draftAnnotations={[]} onDecide={first} />);
+      fireEvent.change(screen.getByRole("textbox", { name: "Reviewer note" }), { target: { value: "Draft first" } });
+      rerender(<ReviewActions target={{ ...sampleTarget, annotation_id: "second", version: "second-version" }}
+        currentDecision={{ ...decision, target: { annotation_id: "second", version: "second-version" }, note: "Saved second" }}
+        draftAnnotations={[]} onDecide={second} />);
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(first).toHaveBeenCalledWith({ outcome: "confirmed", replacement: undefined, note: "Draft first" });
+      expect(second).not.toHaveBeenCalled();
+      expect((screen.getByRole("textbox", { name: "Reviewer note" }) as HTMLInputElement).value).toBe("Saved second");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("offers direct editing without a second manual replacement selector", () => {
+    const adopt = vi.fn(); const decide = vi.fn();
+    render(<ReviewActions target={sampleTarget} currentDecision={null} onDecide={decide} onAdoptAndEdit={adopt} note="Keep this note"
+      draftAnnotations={[{ annotation: { annotation_id: "own", term_id: "HP:0001252" }, version: "v1" } as any]} />);
+    expect(screen.queryByRole("button", { name: /Assign replacement from draft/ })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /replacement/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+    expect(adopt).toHaveBeenCalledOnce(); expect(decide).not.toHaveBeenCalled();
+    expect((screen.getByRole("textbox", { name: "Reviewer note" }) as HTMLInputElement).value).toBe("Keep this note");
+  });
+
 });

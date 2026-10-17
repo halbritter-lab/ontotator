@@ -85,3 +85,8 @@ it("does not offer a download for a restored upload job", async () => {
   render(<ExportPage projectKey="p" currentUser={user} />); await screen.findByText("This job is not an annotation results export.");
   expect(screen.queryByRole("button", { name: "Download" })).toBeNull(); expect(sessionStorage.getItem(storageKey())).toBeNull();
 });
+
+it("explains the unresolved export exclusion until structured flagged results are supported", () => {
+  render(<ExportPage projectKey="p" currentUser={user} />);
+  expect(card().getByText(/Unresolved proposals require a note\. This export version excludes unresolved proposals\./)).toBeDefined();
+});
