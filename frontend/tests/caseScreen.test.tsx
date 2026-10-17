@@ -754,6 +754,33 @@ describe("CaseScreen integration", () => {
     expect((note as HTMLInputElement).value).toBe("  Keep this attempted note  ");
   });
 
+  it("keeps an untouched legacy missing-note decision clean and permits logout while blocking a new submission", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const proposal = view.draft.annotations![0]; view.draft.annotations = [];
+    view.available_inputs = [proposal]; view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: proposal.annotation.annotation_id, version: proposal.version };
+    view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    view.draft.decisions = [{ decision_id: "legacy", target, outcome: "uncertain", reviewer_id: "r" }];
+    const logout = vi.fn();
+    const leaveGuardRef = { current: null as ((proceed: () => void) => void) | null };
+    const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
+    const submit = vi.spyOn(api, "submitWorkspace");
+    render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} leaveGuardRef={leaveGuardRef} routeLeaveRef={routeLeaveRef} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    expect(screen.getByText(/^Saved$/)).toBeDefined();
+    const unloading = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unloading); expect(unloading.defaultPrevented).toBe(false);
+    act(() => leaveGuardRef.current?.(logout));
+    expect(logout).toHaveBeenCalledOnce();
+    await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    expect((await screen.findAllByText(/unresolved proposals require a reviewer note before submitting/)).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("dialog", { name: /Submit case/ })).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Reviewer note" }));
+  });
+
   it("blocks submit for a blank local unresolved note after selecting another target", async () => {
     const view = withEditableFinding(structuredClone(sampleView));
     const first = view.draft.annotations![0]; const second = structuredClone(first);

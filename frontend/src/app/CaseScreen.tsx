@@ -666,8 +666,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
   }, []);
 
-  const hasInvalidReviewNote = !readOnly && view.key.mode === "review" && (draft.decisions ?? []).some(d =>
-    d.outcome === "uncertain" && !(noteDrafts[refKey(d.target)] ?? d.note ?? "").trim());
+  const hasInvalidReviewNote = !readOnly && view.key.mode === "review" && (draft.decisions ?? []).some(d => {
+    const local = noteDrafts[refKey(d.target)];
+    return d.outcome === "uncertain" && local !== undefined && !local.trim() && local !== (d.note ?? "");
+  });
   hasInvalidReviewNoteRef.current = hasInvalidReviewNote;
   const statusText =
     queueState === "conflict" ? "Changed elsewhere – reload required"
@@ -1376,8 +1378,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const blockInvalidUnresolvedNotes = (action: "submitting" | "leaving" = "submitting") => {
     if (readOnlyRef.current || view.key.mode !== "review") return false;
-    const invalid = (latestDraft.current.decisions ?? []).filter(d =>
-      d.outcome === "uncertain" && !currentNoteFor(refKey(d.target)));
+    const invalid = (latestDraft.current.decisions ?? []).filter(d => {
+      const local = noteDraftsRef.current[refKey(d.target)];
+      // Submission revalidates legacy decisions; leaving only protects changed local drafts.
+      return d.outcome === "uncertain" && !currentNoteFor(refKey(d.target)) &&
+        (action === "submitting" || (local !== undefined && local !== (d.note ?? "")));
+    });
     if (invalid.length === 0) return false;
     setSubmitError(`${invalid.length} unresolved proposals require a reviewer note before ${action}.`);
     const target = reviewTargets.find(t => refKey(t) === refKey(invalid[0].target));
