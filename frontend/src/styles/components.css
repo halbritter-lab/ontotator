@@ -591,7 +591,7 @@ textarea.form-control {
 /* Secondary line inside a cell or card: identifiers and formats that support the main text. */
 .cell-secondary { display: block; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 
-.assignee-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.assignee-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); min-width: 13rem; }
 .assignee { display: grid; gap: var(--space-1); }
 .assignee-pseudonym { color: var(--text-muted); font-size: var(--size-sm); }
 .assignee-work { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); font-size: var(--size-sm); line-height: var(--leading-sm); }

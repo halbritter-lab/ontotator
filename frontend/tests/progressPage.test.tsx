@@ -32,7 +32,7 @@ it("renders server totals, stable people workload order and document order witho
   expect(docs.map(row => row.textContent)).toEqual([expect.stringContaining("z-special"), expect.stringContaining("a-unassigned")]);
   const assignees = Array.from(screen.getByRole("table", { name: "Progress documents" }).querySelectorAll(".assignee")).map(item => item.textContent);
   expect(assignees).toEqual(["First tie (Reader A)AnnotationSubmitted", "Second tie (Reader B)ReviewOpen"]);
-  expect(screen.getByText("Agreement figures follow with workflows.")).toBeTruthy();
+  expect(screen.getByText("Agreement between annotators is not shown here yet.")).toBeTruthy();
 });
 it("filters by any assignment status and treats unassigned as no assignees", async () => {
   render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />); await screen.findByText("a-unassigned");
