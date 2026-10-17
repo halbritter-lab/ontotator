@@ -4,7 +4,25 @@ import { App } from "../src/App";
 import { api, ApiError, type AssignmentWorkspace } from "../src/api/client";
 import { testUser } from "./session";
 import userEvent from "@testing-library/user-event";
-import { assigned, taskOf, workspaceFixture } from "./assignments";
+import { assigned, taskOf, workspaceFixture as emptyWorkspaceFixture } from "./assignments";
+
+/** A real editable finding lets navigation tests queue an annotation save. */
+function workspaceFixture(...args: Parameters<typeof emptyWorkspaceFixture>) {
+  const response = emptyWorkspaceFixture(...args);
+  response.view.layers![0].annotation_types[0].axes = [{ id: 'assertion', label: 'Assertion', options: ['present', 'absent'], allow_empty: true }];
+  response.view.draft.annotations = [{ schema_version: 'ontocurator-annotation/v3', version: 'pending-v1',
+    document_id: response.view.document.document_id, text_sha256: 'text', ontology_sha256: 'ontology', layer_config_sha256: 'layer',
+    annotation: { annotation_id: 'pending-finding', document_id: response.view.document.document_id, layer_id: 'phenotype',
+      type_id: 'default', term_id: 'HP:0001252', axes_values: {}, evidence_refs: [],
+      provenance: { actor: { actor_id: response.view.key.annotator_id, kind: 'human' }, method: 'manual', source_refs: [] } }, evidence: [] }];
+  return response;
+}
+async function editFinding() {
+  await waitFor(() => expect(document.querySelector('[data-list-key="annotation:pending-finding"]')).not.toBeNull());
+  fireEvent.click(document.querySelector('[data-list-key="annotation:pending-finding"]')!);
+  fireEvent.click(screen.getByRole('radio', { name: 'Present' }));
+}
+
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, "", "#/"); });
 function clickSection(name: string): void {
@@ -50,7 +68,7 @@ it("holds shell navigation during a save and honors only the latest destination"
   vi.spyOn(api, "applyCommand").mockImplementation(() => new Promise(resolve => { save = resolve; }));
   vi.spyOn(api, "getProfile").mockReturnValue(new Promise(() => {}));
   render(<App user={testUser("alice")} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await waitFor(() => expect(api.applyCommand).toHaveBeenCalledOnce());
   const editor = document.querySelector(".text-container");
   clickSection("My tasks");
@@ -67,7 +85,7 @@ it("cancels a raw-hash leave without losing the editor or duplicating its unsave
   editorServer();
   vi.spyOn(api, "applyCommand").mockRejectedValue(new TypeError("Offline"));
   render(<App user={testUser("alice")} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText("Offline – changes not saved");
   const editor = document.querySelector(".text-container");
   act(() => { window.location.hash = "#/me"; });
@@ -89,7 +107,7 @@ it("does not leave when a refused save emptied the pending queue", async () => {
   editorServer();
   vi.spyOn(api, "applyCommand").mockRejectedValue(new ApiError(422, "Invalid change", "INVALID_COMMAND"));
   render(<App user={testUser("alice")} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText("Invalid change");
   clickSection("My tasks");
   await screen.findByText("A change could not be saved. Reload the case before leaving.");
@@ -106,7 +124,7 @@ it("restores the accepted history entry after cancelling several raw-hash destin
   editorServer();
   vi.spyOn(api, "applyCommand").mockRejectedValue(new TypeError("Offline"));
   render(<App user={testUser("alice")} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText("Offline – changes not saved");
   act(() => { window.location.hash = "#/me"; });
   const dialog = await screen.findByRole("dialog", { name: "Changes not saved" });
@@ -123,7 +141,7 @@ it("does not commit a pending route after the authenticated App unmounts", async
   let finish!: (value: typeof first.view.draft) => void;
   vi.spyOn(api, "applyCommand").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   const mounted = render(<App user={testUser("alice")} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await waitFor(() => expect(api.applyCommand).toHaveBeenCalledOnce());
   clickSection("Profile");
   mounted.unmount();
@@ -159,7 +177,7 @@ it("reloads a task read-only after another session submitted it, with a visible 
   open.mockResolvedValueOnce(assigned(first, 17)).mockResolvedValue(assigned({ ...first, read_only: true }, 17));
   const command = vi.spyOn(api, "applyCommand").mockRejectedValue(new ApiError(403, "Already submitted", "ASSIGNMENT_SUBMITTED"));
   render(<App user={testUser("alice")} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText(/Another session submitted this task/);
   await screen.findByText("Submitted. The project lead can reopen it for changes.");
   expect(open).toHaveBeenCalledTimes(2);
@@ -235,7 +253,7 @@ it("restores browser history after cancelling Back, then lets Back and Forward n
   render(<App user={testUser("alice")} />);
   fireEvent.click(await screen.findByRole("button", { name: "Next Case" }));
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/4"));
-  fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText("Offline – changes not saved");
   act(() => window.history.back());
   fireEvent.click(within(await screen.findByRole("dialog", { name: "Changes not saved" })).getByRole("button", { name: "Cancel" }));
@@ -263,7 +281,7 @@ async function threeTaskHistory() {
     await waitFor(() => expect(window.location.hash).toBe(`#/tasks/${id}`));
     await waitFor(() => expect(open).toHaveBeenLastCalledWith(id));
   }
-  fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText("Offline – changes not saved");
   act(() => window.history.back());
   const dialog = await screen.findByRole("dialog", { name: "Changes not saved" });

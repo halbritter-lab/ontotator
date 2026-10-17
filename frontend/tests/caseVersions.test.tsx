@@ -2,9 +2,27 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../src/api/client';
 import { CaseScreen } from '../src/app/CaseScreen';
-import { workspaceFixture } from './assignments';
+import { workspaceFixture as emptyWorkspaceFixture } from './assignments';
 import { caseDetail, historical, ownRef } from './variantFixtures';
 import { refKey } from '../src/variants/versionState';
+
+/** A real editable finding lets navigation tests queue an annotation save. */
+function workspaceFixture(...args: Parameters<typeof emptyWorkspaceFixture>) {
+  const response = emptyWorkspaceFixture(...args);
+  response.view.layers![0].annotation_types[0].axes = [{ id: 'assertion', label: 'Assertion', options: ['present', 'absent'], allow_empty: true }];
+  response.view.draft.annotations = [{ schema_version: 'ontocurator-annotation/v3', version: 'pending-v1',
+    document_id: response.view.document.document_id, text_sha256: 'text', ontology_sha256: 'ontology', layer_config_sha256: 'layer',
+    annotation: { annotation_id: 'pending-finding', document_id: response.view.document.document_id, layer_id: 'phenotype',
+      type_id: 'default', term_id: 'HP:0001252', axes_values: {}, evidence_refs: [],
+      provenance: { actor: { actor_id: response.view.key.annotator_id, kind: 'human' }, method: 'manual', source_refs: [] } }, evidence: [] }];
+  return response;
+}
+async function editFinding() {
+  await waitFor(() => expect(document.querySelector('[data-list-key="annotation:pending-finding"]')).not.toBeNull());
+  fireEvent.click(document.querySelector('[data-list-key="annotation:pending-finding"]')!);
+  fireEvent.click(screen.getByRole('radio', { name: 'Present' }));
+}
+
 
 beforeEach(() => {
   vi.spyOn(api, 'getVariantMetadata').mockResolvedValue(caseDetail.variants[1]);
@@ -17,7 +35,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const context = { username: 'alice', assignmentId: 1, onNavigate: vi.fn() };
 
 it('resolves real case metadata and displays history separately from the unchanged draft', async () => {
-  const view = workspaceFixture('target').view;
+  const view = emptyWorkspaceFixture('target').view;
   const command = vi.spyOn(api, 'applyCommand'), submit = vi.spyOn(api, 'submitWorkspace');
   render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
   const select = await screen.findByLabelText('Annotations');
@@ -45,7 +63,7 @@ it('returning from history never unlocks a submitted server task', async () => {
 it('preserves draft display, selection and focus when an unsaved snapshot transition is cancelled', async () => {
   vi.spyOn(api, 'applyCommand').mockRejectedValue(new TypeError('Offline'));
   render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
-  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText('Offline – changes not saved');
   const select = await screen.findByLabelText('Annotations');
   select.focus();
@@ -68,7 +86,7 @@ it('navigates exact sibling identities through the existing outer route guard ca
 it('refuses history display after a rejected save even when the command queue became empty', async () => {
   vi.spyOn(api, 'applyCommand').mockRejectedValue(new ApiError(422, 'Invalid change', 'INVALID_COMMAND'));
   render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
-  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText('Invalid change');
   fireEvent.change(await screen.findByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
   await screen.findByText('A change could not be saved. Reload the case before leaving.');
@@ -79,7 +97,7 @@ it('does not open a second leave dialog when an outer navigation arrives during 
   vi.spyOn(api, 'applyCommand').mockRejectedValue(new TypeError('Offline'));
   const routeLeaveRef = { current: null as null | (() => Promise<boolean>) };
   render(<CaseScreen view={workspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} versionContext={context} />);
-  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText('Offline – changes not saved');
   fireEvent.change(await screen.findByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
   const dialog = await screen.findByRole('dialog', { name: 'Changes not saved' });
@@ -100,16 +118,16 @@ it('waits for the actual pending draft command before fetching and displaying hi
   let save!: (draft: typeof response.view.draft) => void;
   vi.spyOn(api, 'applyCommand').mockImplementation(() => new Promise(resolve => { save = resolve; }));
   render(<CaseScreen view={response.view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
-  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await waitFor(() => expect(api.applyCommand).toHaveBeenCalledOnce());
   fireEvent.change(await screen.findByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
   expect(api.getAnnotationVersion).not.toHaveBeenCalled();
   expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft');
-  await act(async () => save({ ...response.view.draft, revision: 1, checked_layer_ids: ['phenotype'] }));
+  await act(async () => save({ ...response.view.draft, revision: 1, annotations: response.view.draft.annotations.map(snapshot => ({ ...snapshot, annotation: { ...snapshot.annotation, axes_values: { assertion: 'present' } } })) }));
   await screen.findByText('HP:old');
   fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
   await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
-  expect(screen.getByRole('button', { name: /Mark Phenotype as verified/ }).textContent).toContain('Phenotype verified (Reset)');
+  expect((screen.getByRole('radio', { name: 'Present' }) as HTMLInputElement).checked).toBe(true);
 });
 
 it('opens and closes comparison without remounting or flushing an unsaved draft, returning focus', async () => {
@@ -119,7 +137,7 @@ it('opens and closes comparison without remounting or flushing an unsaved draft,
   const view = workspaceFixture('target').view;
   const originalDraft = JSON.stringify(view.draft);
   render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} versionContext={context} />);
-  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText('Offline – changes not saved');
   const compare = await screen.findByRole('button', { name: 'Compare' });
   const editor = document.querySelector('.text-container');

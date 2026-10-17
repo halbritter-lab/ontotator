@@ -4,8 +4,26 @@ import { App } from '../src/App';
 import { api } from '../src/api/client';
 import { routeHref } from '../src/app/router';
 import { testUser } from './session';
-import { assigned, taskOf, workspaceFixture } from './assignments';
+import { assigned, taskOf, workspaceFixture as emptyWorkspaceFixture } from './assignments';
 import { caseDetail } from './variantFixtures';
+
+/** A real editable finding lets navigation tests queue an annotation save. */
+function workspaceFixture(...args: Parameters<typeof emptyWorkspaceFixture>) {
+  const response = emptyWorkspaceFixture(...args);
+  response.view.layers![0].annotation_types[0].axes = [{ id: 'assertion', label: 'Assertion', options: ['present', 'absent'], allow_empty: true }];
+  response.view.draft.annotations = [{ schema_version: 'ontocurator-annotation/v3', version: 'pending-v1',
+    document_id: response.view.document.document_id, text_sha256: 'text', ontology_sha256: 'ontology', layer_config_sha256: 'layer',
+    annotation: { annotation_id: 'pending-finding', document_id: response.view.document.document_id, layer_id: 'phenotype',
+      type_id: 'default', term_id: 'HP:0001252', axes_values: {}, evidence_refs: [],
+      provenance: { actor: { actor_id: response.view.key.annotator_id, kind: 'human' }, method: 'manual', source_refs: [] } }, evidence: [] }];
+  return response;
+}
+async function editFinding() {
+  await waitFor(() => expect(document.querySelector('[data-list-key="annotation:pending-finding"]')).not.toBeNull());
+  fireEvent.click(document.querySelector('[data-list-key="annotation:pending-finding"]')!);
+  fireEvent.click(screen.getByRole('radio', { name: 'Present' }));
+}
+
 
 beforeEach(() => {
   vi.spyOn(api, 'listProjects').mockResolvedValue([]);
@@ -36,7 +54,7 @@ it('keeps the real task, URL and text after cancelling a failed-save sibling tra
   vi.mocked(api.listMyTasks).mockResolvedValue([taskOf(response.view, 17)]);
   vi.spyOn(api, 'applyCommand').mockRejectedValue(new TypeError('Offline'));
   render(<App user={testUser('alice')} />);
-  fireEvent.click(await screen.findByRole('button', { name: /Mark Phenotype as verified/ }));
+  await editFinding();
   await screen.findByText('Offline – changes not saved');
   const text = document.querySelector('.text-container');
   fireEvent.change(await screen.findByLabelText('Language'), { target: { value: 'en' } });

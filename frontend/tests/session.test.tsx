@@ -59,11 +59,11 @@ const csrfOf = (init?: RequestInit) => (init?.headers as Headers).get("X-CSRF-To
 const key = { project_key: "pkg", document_id: "doc-1", annotator_id: "ann-0007", mode: "independent" as const, scope_id: "scope-default", target_set_id: "empty" };
 const caseView = (): any => ({
   key,
-  // Two layers, so the layer controls (with "Mark ... as verified") are shown.
+  // Keep the multilayer editor fixture while mutations edit an actual finding.
   scope: { scope_id: "scope-default", mode: "independent", editable_layer_ids: ["phenotype", "findings"], reference_layer_ids: [] },
   layers: ["Phenotype", "Findings"].map((label) => ({
     layer_id: label.toLowerCase(), label, ontology_id: "hp", access: "editable", default_visible: true, default_type_id: "default",
-    annotation_types: [{ type_id: "default", label, evidence_policy: "optional", axes: [] }],
+    annotation_types: [{ type_id: "default", label, evidence_policy: "optional", axes: [{ id: "assertion", label: "Assertion", options: ["present", "absent"], allow_empty: true }] }],
   })),
   ontologies: [],
   checked_layer_ids: [],
@@ -75,8 +75,15 @@ const caseView = (): any => ({
   axes_definition: "editor-axes/v1",
   axes_config: [],
   axes_config_sha256: "sha-axes",
-  draft: { key, targets: { target_set_id: "empty", targets: [] }, revision: 0, annotations: [], evidence: [], decisions: [], checked_layer_ids: [] },
+  draft: { key, targets: { target_set_id: "empty", targets: [] }, revision: 0, annotations: [{ schema_version: "ontocurator-annotation/v3", version: "pending-v1", document_id: "doc-1", text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
+    annotation: { annotation_id: "pending-finding", document_id: "doc-1", layer_id: "phenotype", type_id: "default", term_id: "HP:0001252", axes_values: {}, evidence_refs: [],
+      provenance: { actor: { actor_id: "ann-0007", kind: "human" }, method: "manual", source_refs: [] } }, evidence: [] }], evidence: [], decisions: [], checked_layer_ids: [] },
 });
+async function editFinding() {
+  await waitFor(() => expect(document.querySelector('[data-list-key="annotation:pending-finding"]')).not.toBeNull());
+  fireEvent.click(document.querySelector('[data-list-key="annotation:pending-finding"]')!);
+  fireEvent.click(screen.getByRole('radio', { name: 'Present' }));
+}
 
 /** Alice opens a case; her session has ended on the server, so the first save gets a 401. */
 const caseWithEndedSession = (relogin: CurrentUser, view = caseView()) => {
@@ -107,6 +114,8 @@ const reviewCaseView = (): any => {
   view.key = reviewKey;
   view.scope = { ...view.scope, mode: "review" };
   view.document = { ...view.document, document_id: "doc-2" };
+  view.draft.annotations[0].document_id = "doc-2";
+  view.draft.annotations[0].annotation.document_id = "doc-2";
   view.targets = targets;
   view.available_inputs = [{
     schema_version: "ontocurator-annotation/v3",
@@ -304,7 +313,7 @@ describe("the login gate", () => {
     const fetchMock = caseWithEndedSession(testUser("ann-0007", { display_name: "Alice", csrf_token: "csrf-2" }));
     render(<AuthGate />);
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
+    await editFinding();
 
     const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
     expect(dialog.getAttribute("aria-modal")).toBe("true");
@@ -319,7 +328,7 @@ describe("the login gate", () => {
     await waitFor(() => expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(2));
     const retried = callsTo(fetchMock, "/api/v1/workspaces/ws/commands")[1][1];
     expect(csrfOf(retried)).toBe("csrf-2");
-    expect(JSON.parse(retried?.body as string).payload).toEqual({ command: "check_layer", layer_id: "phenotype", checked: true });
+    expect(JSON.parse(retried?.body as string).payload).toEqual({ command: "set_axes", annotation_id: "pending-finding", axes_values: { assertion: "present" }, chosen_axis_ids: ["assertion"] });
     await screen.findByText(/^Saved$/);
     expect(screen.getByTestId("annotator-identity")).toBeDefined();
   });
@@ -328,7 +337,7 @@ describe("the login gate", () => {
     const fetchMock = caseWithEndedSession(testUser("ann-0009", { display_name: "Bob", csrf_token: "csrf-b" }));
     render(<AuthGate />);
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
+    await editFinding();
 
     logInThrough(await screen.findByRole("dialog", { name: "Log in to Ontocurator" }), "bob");
 
@@ -354,7 +363,7 @@ describe("the login gate", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<AuthGate />);
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
+    await editFinding();
     await waitFor(() => expect(me).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(2));
     expect(csrfOf(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")[0][1])).toBe("csrf-1");
@@ -372,7 +381,7 @@ describe("the login gate", () => {
     vi.stubGlobal("fetch", fakeServer({ "POST /api/v1/workspaces/ws/commands": () => jsonResponse(403, { code: "CSRF_FAILED", details: "The page is out of date; reload it." }) }));
     render(<AuthGate />);
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
+    await editFinding();
     expect(await screen.findByText("You are now logged in as Bob (from another tab).")).toBeDefined();
     expect(screen.getByTestId("current-user").textContent).toBe("Bob · ann-0009");
     await screen.findByText("This task is no longer assigned to you.");
@@ -388,7 +397,7 @@ describe("the login gate", () => {
     const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...reviewCaseView().draft, revision: 2 });
     render(<AuthGate />);
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
+    await editFinding();
     const dialog = await screen.findByRole("dialog", { name: "Log in to Ontocurator" });
 
     // The editor behind the dialog is inert, and its window shortcuts do not see these keys.
@@ -420,7 +429,7 @@ describe("the login gate", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<AuthGate />);
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Mark Phenotype as verified/i }));
+    await editFinding();
 
     expect(await screen.findByText("The page is out of date; reload it.")).toBeDefined();
     await new Promise((resolve) => setTimeout(resolve, 50));
