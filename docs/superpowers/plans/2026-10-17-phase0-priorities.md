@@ -13,7 +13,7 @@ Deliver a reliable everyday annotation/review loop before workflow builders, rep
 | P0.1 | Read source/translation without forced jumps or implied semantic alignment | [B0.1 scrolling](2026-10-17-phase0-coupled-scrolling.md) | D1 decided; ready |
 | P0.2 | Stable decision keys, visible defaulted values, one explicit completion confirmation | [B0.2 semantics](2026-10-17-phase0-decision-semantics.md), Task 1 | D4/D5 decided; ready; sequence CaseScreen edits after B0.1 |
 | P0.3 | Restrict independent version browsing without breaking assigned translation review | [B0.4 access](2026-10-17-phase0-access-and-cleanups.md), access tasks | D16 decided; P0-A clarifies own-history scope |
-| P0.4 | Justify findings without text evidence; project setting enforced by backend | B0.2 Task 2 | D3 decided; P0-S controls old open drafts; migration 0007 |
+| P0.4 | Justify findings without text evidence; project setting enforced by backend | B0.2 Task 2 | D3 decided; storage/export/new-draft enforcement ready; only existing-open-draft enforcement awaits P0-S; migration 0007 |
 | P0.5 | Distinguish unresolved review from clinical uncertainty; require note; export explicit flag | B0.2 Tasks 3–4 | D2 decided; ontospan 1.2 format/dependency work; P0-U for invalid targets |
 | P0.6 | Finish reviewing findings after text correction | [B0.3 re-anchor](2026-10-17-phase0-reanchor-decisions.md) | D3 storage and D16 policy landed locally; P0-R completion policy; migration 0008 |
 | P0.7 | Remove duplicate controls and opaque labels | B0.4 remaining tasks | Shared editor files stable; keep behind correctness tasks |
@@ -84,9 +84,9 @@ D15 must not silently reconfirm superseded defaults from [the old index](2026-10
 - [x] P0.1 completed and reviewed (`2fcfa34`, review fixes `ed9bca9`); complete source gate passed.
 - [x] P0.2 completed and reviewed (`9191b36`, journey tests `7b1fd89`, review fix `57f0f1e`); complete source gate passed.
 - [ ] P0.3 completed and focused tests reviewed. Decided restrictions are implemented and independently reviewed in `bf88e37`; P0-A remains unanswered and existing exact own history is retained.
-- [ ] P0.4 completed and focused tests reviewed.
+- [ ] P0.4 completed and focused tests reviewed. Backend new-draft rules, notes/settings and export preservation are implemented in `a2abec1`, with reviewed shared-replacement export fix `7660a08`. UI implementation and repair flows are in `bd12c44` and `1ef8c25`, awaiting final UI review and the integrated gate. P0-S gates only the existing-open-draft slice.
 - [ ] P0.5 completed including format compatibility and exact export assertions.
-- [ ] P0.6 completed including persistence, isolation and replay assertions.
+- [ ] P0.6 completed including persistence, isolation and replay assertions. Backend and UI implementation of frozen inputs and explicit resolutions is underway; P0-R gates only the unresolved-item completion policy.
 - [x] P0.7 implemented and reviewed (`312554d`, `bf88e37`, `b0fd793`, `ac0935e`, `defe2ac`); own-history visibility remains pending P0-A; complete source gate passed.
 - [x] Delivered source subset reviewed and `scripts/check.sh` passed. Embedded-web replacement and full Phase 0 acceptance remain open.
 - [ ] Candidate preparation status recorded; merge/push approval requested only for a concrete reviewed result.
