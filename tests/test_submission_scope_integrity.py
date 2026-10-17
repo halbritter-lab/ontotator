@@ -56,6 +56,7 @@ def test_independent_projected_scope_survives_second_export_import_and_analysis(
                 expected_revision=revision,
                 payload=CreateAnnotationCommand(
                     annotation_id="own-finding",
+                    note="Document-level finding in the scope fixture.",
                     layer_id="target-layer",
                     type_id="phenotype",
                     term_id="HP:0001252",

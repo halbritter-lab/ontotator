@@ -330,6 +330,7 @@ class SubmissionService:
             task_profile,
             self.repo.get_project_rules(key.project_key),
             at_submission=True,
+            enforce_spanless=draft.spanless_policy_version == 1,
         )
         if violations:
             raise DomainError(

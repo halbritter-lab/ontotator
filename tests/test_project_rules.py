@@ -152,12 +152,14 @@ def test_row_settings_are_copied_into_frozen_value_sets() -> None:
     hidden = {"second": {"presence": ["unknown"]}}
     row = SimpleNamespace(
         contiguous_mentions_only=True,
+        allow_spanless_findings=False,
         require_chosen_axes=True,
         hidden_axis_values=hidden,
     )
     rules = ProjectRules.of(row)
     hidden["second"]["presence"].append("yes")
     hidden["second"]["context"] = ["past"]
+    assert rules.allow_spanless_findings is False
     assert rules.contiguous_mentions_only is True
     assert rules.require_chosen_axes is True
     assert rules.hidden_axis_values == {"second": {"presence": frozenset({"unknown"})}}
@@ -171,6 +173,7 @@ def test_default_settings_preserve_optional_behavior(
     rules = ProjectRules.of(
         SimpleNamespace(
             contiguous_mentions_only=False,
+            allow_spanless_findings=True,
             require_chosen_axes=False,
             hidden_axis_values={},
         )
@@ -498,3 +501,28 @@ def test_violation_order_follows_refs_and_profile_axes(
         ),
         RuleViolation("ann", "hidden_axis_value", {"axis": "context", "value": "past"}),
     ]
+
+
+@pytest.mark.parametrize(
+    "allowed, note, expected",
+    [
+        (False, "reason", "spanless_disallowed"),
+        (True, None, "spanless_note_required"),
+        (True, "   ", "spanless_note_required"),
+        (True, "reason", None),
+    ],
+)
+def test_spanless_validation_is_explicitly_opted_in(
+    profile, document, allowed, note, expected
+):
+    item = annotation_snapshot(profile, document)
+    item = item.model_copy(
+        update={"annotation": item.annotation.model_copy(update={"note": note})}
+    )
+    rules = ProjectRules(allow_spanless_findings=allowed)
+    assert rule_violations([item], {}, profile, rules, at_submission=False) == []
+    actual = rule_violations(
+        [item], {}, profile, rules, at_submission=False, enforce_spanless=True
+    )
+    assert [v.rule for v in actual] == ([expected] if expected else [])
+    assert all(v.annotation_id == "ann" for v in actual)

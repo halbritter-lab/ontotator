@@ -75,6 +75,7 @@ class Annotation(BaseModel):
     axes_defaulted: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    note: str | None = Field(default=None, exclude_if=lambda value: not value)
     evidence_refs: list[EvidenceRef] = Field(default_factory=list)
     provenance: Provenance
 
@@ -149,6 +150,8 @@ def annotation_content(annotation: Annotation) -> dict[str, Any]:
         "evidence_refs": [r.model_dump() for r in annotation.evidence_refs],
         "provenance": annotation.provenance.model_dump(),
     }
+    if annotation.note:
+        content["note"] = annotation.note
     if annotation.axes_defaulted:
         content["axes_defaulted"] = list(annotation.axes_defaulted)
     return content

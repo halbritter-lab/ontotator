@@ -3495,6 +3495,17 @@
             "type": "array",
             "title": "Axes Defaulted"
           },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
           "evidence_refs": {
             "items": {
               "$ref": "#/components/schemas/EvidenceRef"
@@ -4519,6 +4530,18 @@
           "revision": {
             "type": "integer",
             "title": "Revision"
+          },
+          "spanless_policy_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "const": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spanless Policy Version"
           },
           "annotations": {
             "items": {
@@ -6548,6 +6571,11 @@
             ],
             "title": "Guideline Version"
           },
+          "allow_spanless_findings": {
+            "type": "boolean",
+            "title": "Allow Spanless Findings",
+            "default": true
+          },
           "require_chosen_axes": {
             "type": "boolean",
             "title": "Require Chosen Axes",
@@ -6667,6 +6695,11 @@
               }
             ],
             "title": "Guideline Version"
+          },
+          "allow_spanless_findings": {
+            "type": "boolean",
+            "title": "Allow Spanless Findings",
+            "default": true
           },
           "require_chosen_axes": {
             "type": "boolean",
@@ -7449,7 +7482,9 @@
             "enum": [
               "discontinuous_mention",
               "hidden_axis_value",
-              "axis_not_chosen"
+              "axis_not_chosen",
+              "spanless_disallowed",
+              "spanless_note_required"
             ],
             "title": "Rule"
           },
@@ -9586,6 +9621,16 @@
             },
             "type": "object",
             "title": "Term Statuses"
+          },
+          "enforce_spanless_rules": {
+            "type": "boolean",
+            "title": "Enforce Spanless Rules",
+            "default": false
+          },
+          "allow_spanless_findings": {
+            "type": "boolean",
+            "title": "Allow Spanless Findings",
+            "default": true
           },
           "axes_definition": {
             "type": "string",

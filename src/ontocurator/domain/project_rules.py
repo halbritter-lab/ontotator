@@ -13,6 +13,9 @@ class _ProjectSettings(Protocol):
     def contiguous_mentions_only(self) -> bool: ...
 
     @property
+    def allow_spanless_findings(self) -> bool: ...
+
+    @property
     def require_chosen_axes(self) -> bool: ...
 
     @property
@@ -28,11 +31,13 @@ class ProjectRules:
     hidden_axis_values: Mapping[str, Mapping[str, frozenset[str]]] = field(
         default_factory=dict
     )
+    allow_spanless_findings: bool = True
 
     @classmethod
     def of(cls, row: _ProjectSettings) -> Self:
         return cls(
             contiguous_mentions_only=row.contiguous_mentions_only,
+            allow_spanless_findings=row.allow_spanless_findings,
             require_chosen_axes=row.require_chosen_axes,
             hidden_axis_values={
                 layer: {axis: frozenset(values) for axis, values in axes.items()}
@@ -46,7 +51,13 @@ class RuleViolation:
     """A project restriction violated by one annotation's immutable content."""
 
     annotation_id: str
-    rule: Literal["discontinuous_mention", "hidden_axis_value", "axis_not_chosen"]
+    rule: Literal[
+        "discontinuous_mention",
+        "hidden_axis_value",
+        "axis_not_chosen",
+        "spanless_disallowed",
+        "spanless_note_required",
+    ]
     detail: dict[str, str]
 
 
@@ -57,6 +68,7 @@ def rule_violations(
     rules: ProjectRules,
     *,
     at_submission: bool,
+    enforce_spanless: bool = False,
 ) -> list[RuleViolation]:
     """Inspect snapshots without changing content or defaulted-axis provenance.
 
@@ -85,6 +97,18 @@ def rule_violations(
                         annotation.annotation_id,
                         "discontinuous_mention",
                         {"evidence_id": ref.evidence_id, "version": ref.version},
+                    )
+                )
+
+        if enforce_spanless and not annotation.evidence_refs:
+            if not rules.allow_spanless_findings:
+                violations.append(
+                    RuleViolation(annotation.annotation_id, "spanless_disallowed", {})
+                )
+            elif not (annotation.note and annotation.note.strip()):
+                violations.append(
+                    RuleViolation(
+                        annotation.annotation_id, "spanless_note_required", {}
                     )
                 )
 

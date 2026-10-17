@@ -517,6 +517,7 @@ def test_authenticated_edit_rejects_stale_prepared_profile(
         "payload": {
             "command": "create_annotation",
             "annotation_id": "a1",
+            "note": "Document-level test finding",
             "term_id": "HP:0001250",
         },
     }
@@ -554,6 +555,7 @@ def test_authenticated_edit_rejects_stale_prepared_profile(
             "payload": {
                 "command": "create_annotation",
                 "annotation_id": "a1",
+                "note": "Document-level test finding",
                 "term_id": "HP:0001250",
             },
         },
@@ -677,3 +679,34 @@ def test_pins_can_upgrade_before_work_and_rebind_actual_release(app):
     assert rebound.ontologies[0].sha256 == stored.sha256
     assert rebound.ontologies[0].release == stored.release
     assert result.json()["pins"][0]["sha256"] == stored.sha256
+
+
+def test_spanless_setting_defaults_and_patch_retains_false_with_audit(app):
+    admin = logged_in(app, "root", system_admin=True)
+    assert create_project(app, admin)["allow_spanless_findings"] is True
+    lead = logged_in(app, "lead", projects={"phenotypes": ["lead"]})
+    annotator = logged_in(app, "annotator", projects={"phenotypes": ["annotator"]})
+    endpoint = "/api/v1/projects/phenotypes/settings"
+    assert (
+        annotator.patch(endpoint, json={"allow_spanless_findings": False}).status_code
+        == 403
+    )
+    changed = lead.patch(endpoint, json={"allow_spanless_findings": False})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["allow_spanless_findings"] is False
+    assert (
+        lead.patch(endpoint, json={"description": "updated"}).json()[
+            "allow_spanless_findings"
+        ]
+        is False
+    )
+    assert (
+        app.state.repo.get_project_rules("phenotypes").allow_spanless_findings is False
+    )
+    with app.state.repo.db.transaction() as conn:
+        rows = conn.execute(
+            select(AuditEventRow.details).where(
+                AuditEventRow.action == "project.update"
+            )
+        ).all()
+    assert "allow_spanless_findings" in str(rows)

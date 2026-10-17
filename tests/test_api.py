@@ -257,6 +257,7 @@ def test_document_list_with_position_and_status(app_client):
             "expected_revision": 0,
             "payload": {
                 "command": "create_annotation",
+                "note": "Finding inferred from the complete document",
                 "annotation_id": "ann-1",
                 "layer_id": "hpo-layer",
                 "type_id": "phenotype",
@@ -389,6 +390,7 @@ def test_search_discards_mismatched_annotation_layer(app_client):
             "expected_revision": 0,
             "payload": {
                 "command": "create_annotation",
+                "note": "Finding inferred from the complete document",
                 "annotation_id": "ann-hpo-1",
                 "layer_id": "layer-1",
                 "type_id": "type-opt",
@@ -478,6 +480,7 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
             "expected_revision": 0,
             "payload": {
                 "command": "create_annotation",
+                "note": "Finding inferred from the complete document",
                 "annotation_id": "ann-hp",
                 "layer_id": "layer-1",
                 "type_id": "type-opt",
@@ -494,6 +497,7 @@ def test_same_term_id_in_different_layers_isolated_status(app_client):
             "expected_revision": 1,
             "payload": {
                 "command": "create_annotation",
+                "note": "Finding inferred from the complete document",
                 "annotation_id": "ann-mondo",
                 "layer_id": "layer-2",
                 "type_id": "type-req",
@@ -618,6 +622,7 @@ def test_api_create_term_with_term_id_and_alias_conflict(app_client):
             "expected_revision": 0,
             "payload": {
                 "command": "create_annotation",
+                "note": "Finding inferred from the complete document",
                 "annotation_id": "ann-term-1",
                 "layer_id": "hpo-layer",
                 "type_id": "phenotype",
@@ -684,6 +689,7 @@ def test_api_retry_lost_response_before_and_after_restart(tmp_path: Path):
         "expected_revision": 0,
         "payload": {
             "command": "create_annotation",
+            "note": "Finding inferred from the complete document",
             "annotation_id": "ann-lost-1",
             "layer_id": "hpo-layer",
             "type_id": "phenotype",

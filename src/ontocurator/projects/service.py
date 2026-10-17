@@ -56,6 +56,7 @@ class ProjectSettingsChange(BaseModel):
     languages: list[str] = Field(default_factory=list)
     guideline_url: str | None = None
     guideline_version: str | None = None
+    allow_spanless_findings: bool = True
     require_chosen_axes: bool = False
     adjudicator_not_annotator: bool = False
     contiguous_mentions_only: bool = False

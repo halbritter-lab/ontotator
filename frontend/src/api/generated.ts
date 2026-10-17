@@ -1229,6 +1229,8 @@ export interface components {
             };
             /** Axes Defaulted */
             axes_defaulted?: string[];
+            /** Note */
+            note?: string | null;
             /** Evidence Refs */
             evidence_refs?: components["schemas"]["EvidenceRef"][];
             provenance: components["schemas"]["Provenance"];
@@ -1623,6 +1625,8 @@ export interface components {
             targets: components["schemas"]["ReviewTargetSet"];
             /** Revision */
             revision: number;
+            /** Spanless Policy Version */
+            spanless_policy_version?: 1 | null;
             /** Annotations */
             annotations?: components["schemas"]["AnnotationSnapshot"][];
             /** Evidence */
@@ -2465,6 +2469,11 @@ export interface components {
             /** Guideline Version */
             guideline_version?: string | null;
             /**
+             * Allow Spanless Findings
+             * @default true
+             */
+            allow_spanless_findings: boolean;
+            /**
              * Require Chosen Axes
              * @default false
              */
@@ -2519,6 +2528,11 @@ export interface components {
             guideline_url?: string | null;
             /** Guideline Version */
             guideline_version?: string | null;
+            /**
+             * Allow Spanless Findings
+             * @default true
+             */
+            allow_spanless_findings: boolean;
             /**
              * Require Chosen Axes
              * @default false
@@ -2810,7 +2824,7 @@ export interface components {
              * Rule
              * @enum {string}
              */
-            rule: "discontinuous_mention" | "hidden_axis_value" | "axis_not_chosen";
+            rule: "discontinuous_mention" | "hidden_axis_value" | "axis_not_chosen" | "spanless_disallowed" | "spanless_note_required";
             /** Detail */
             detail: {
                 [key: string]: string;
@@ -3585,6 +3599,16 @@ export interface components {
             term_statuses?: {
                 [key: string]: "valid" | "obsolete" | "unknown";
             };
+            /**
+             * Enforce Spanless Rules
+             * @default false
+             */
+            enforce_spanless_rules: boolean;
+            /**
+             * Allow Spanless Findings
+             * @default true
+             */
+            allow_spanless_findings: boolean;
             /**
              * Axes Definition
              * @default editor-axes/v1

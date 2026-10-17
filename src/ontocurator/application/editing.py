@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from uuid import uuid4
@@ -33,6 +34,7 @@ from ontocurator.domain.profiles import (
     resolve_layer,
     resolve_type,
 )
+from ontocurator.domain.project_rules import ProjectRules, rule_violations
 from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
@@ -55,6 +57,7 @@ class CreateAnnotationCommand(BaseModel):
     axes_values: dict[str, str | None] = Field(default_factory=dict)
     evidence_id: str | None = None
     segments: list[Segment] = Field(default_factory=list)
+    note: str | None = None
     label: str | None = None
     actor_kind: ActorKind = "human"
     # None: attributed to the annotator of the workspace the command is applied to.
@@ -138,6 +141,16 @@ class SetTermCommand(BaseModel):
     @hpo_id.setter
     def hpo_id(self, val: str) -> None:
         self.term_id = val
+
+
+class SetAnnotationNoteCommand(BaseModel):
+    """Set or clear an annotation justification in a new draft version."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    command: Literal["set_annotation_note"] = "set_annotation_note"
+    annotation_id: str
+    note: str | None
 
 
 class SetAxesCommand(BaseModel):
@@ -235,6 +248,7 @@ class CheckLayerCommand(BaseModel):
 EditCommand = Annotated[
     CreateAnnotationCommand
     | SetTermCommand
+    | SetAnnotationNoteCommand
     | SetAxesCommand
     | AttachMentionCommand
     | EditMentionCommand
@@ -345,7 +359,34 @@ class EditingService:
                     services[layer_id] = exc
 
         def operation(draft: Draft) -> Draft:
+            previous_refs = {
+                (s.annotation.annotation_id, s.version) for s in draft.annotations
+            }
             result = self._execute_edit(draft, cmd, doc, profile, scope, services)
+            if draft.spanless_policy_version == 1:
+                changed = [
+                    s
+                    for s in result.annotations
+                    if (s.annotation.annotation_id, s.version) not in previous_refs
+                ]
+                rules = self.repo.get_project_rules(key.project_key)
+                violations = rule_violations(
+                    changed,
+                    {
+                        (e.mention.evidence_id, e.version): e
+                        for s in changed
+                        for e in s.evidence
+                    },
+                    profile,
+                    ProjectRules(allow_spanless_findings=rules.allow_spanless_findings),
+                    at_submission=False,
+                    enforce_spanless=True,
+                )
+                if violations:
+                    raise DomainError(
+                        "PROJECT_RULE_VIOLATION",
+                        {"violations": [asdict(v) for v in violations]},
+                    )
             if (
                 isinstance(cmd, (CreateAnnotationCommand, SetTermCommand))
                 and cmd.search_event_id
@@ -423,6 +464,8 @@ class EditingService:
             return self._create_annotation(draft, cmd, doc, profile, scope, services)
         if isinstance(cmd, SetTermCommand):
             return self._set_term(draft, cmd, doc, profile, scope, services)
+        if isinstance(cmd, SetAnnotationNoteCommand):
+            return self._set_annotation_note(draft, cmd, doc, profile, scope)
         if isinstance(cmd, SetAxesCommand):
             return self._set_axes(draft, cmd, doc, profile, scope)
         if isinstance(cmd, AttachMentionCommand):
@@ -655,6 +698,7 @@ class EditingService:
             if source is not None
             else [],
             evidence_refs=evidence_refs,
+            note=(cmd.note.strip() or None) if cmd.note is not None else None,
             provenance=prov,
         )
         snap = snapshot(ann, evidence_list, doc, profile)
@@ -701,6 +745,47 @@ class EditingService:
 
         term_id = self._validate_term_for_layer(services[layer_id], cmd.term_id)
         updated_ann = existing.annotation.model_copy(update={"term_id": term_id})
+        new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
+        draft.annotations = [
+            a if a.annotation.annotation_id != cmd.annotation_id else new_snap
+            for a in draft.annotations
+        ]
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != layer_id
+        ]
+        self._update_decision_replacements(draft, cmd.annotation_id, new_snap)
+        return draft
+
+    def _set_annotation_note(
+        self,
+        draft: Draft,
+        cmd: SetAnnotationNoteCommand,
+        doc: Document,
+        profile: TaskProfile,
+        scope: TaskScope,
+    ) -> Draft:
+        existing = next(
+            (
+                a
+                for a in draft.annotations
+                if a.annotation.annotation_id == cmd.annotation_id
+            ),
+            None,
+        )
+        if existing is None:
+            raise DomainError(
+                "ANNOTATION_NOT_FOUND",
+                f"Annotation '{cmd.annotation_id}' not found in current draft",
+            )
+        layer_id = existing.annotation.layer_id
+        if layer_id not in scope.editable_layer_ids:
+            raise DomainError(
+                "REFERENCE_LAYER_READ_ONLY",
+                f"Annotation '{cmd.annotation_id}' belongs to reference layer '{layer_id}'",
+            )
+
+        note = (cmd.note.strip() or None) if cmd.note is not None else None
+        updated_ann = existing.annotation.model_copy(update={"note": note})
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [
             a if a.annotation.annotation_id != cmd.annotation_id else new_snap

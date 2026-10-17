@@ -367,6 +367,7 @@ def test_adopted_obsolete_term_is_visible_but_blocks_submit(tmp_path: Path) -> N
     draft = session.apply(
         command="create_annotation",
         annotation_id="a-1",
+        note="Finding inferred from the complete document",
         term_id="HP:0000123",
         source_annotation_id="src-1",
         source_version=session.source.version,
@@ -398,7 +399,10 @@ def test_attach_existing_evidence_id_with_other_segments_is_rejected(
         segments=[HYPOTONIA],
     )
     session.apply(
-        command="create_annotation", annotation_id="a-2", term_id="HP:0001250"
+        command="create_annotation",
+        annotation_id="a-2",
+        term_id="HP:0001250",
+        note="Finding recorded before attaching its evidence",
     )
     with pytest.raises(DomainError) as exc:
         session.apply(
@@ -431,7 +435,10 @@ def _shared_evidence_session(tmp_path: Path) -> _Session:
         segments=[HYPOTONIA],
     )
     session.apply(
-        command="create_annotation", annotation_id="a-2", term_id="HP:0001250"
+        command="create_annotation",
+        annotation_id="a-2",
+        term_id="HP:0001250",
+        note="Finding recorded before attaching its evidence",
     )
     session.apply(
         command="attach_mention",
@@ -890,6 +897,7 @@ def _annotate(client, annotator: str, document_id: str, term_id: str) -> str:  #
     steps = [
         {
             "command": "create_annotation",
+            "note": "Finding inferred from the complete document",
             "annotation_id": f"ann-{annotator}",
             "layer_id": "hpo-layer",
             "term_id": term_id,

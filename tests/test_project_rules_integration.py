@@ -290,3 +290,87 @@ def test_materialized_result_resolves_distinct_versions_of_same_evidence_id(
             "own",
             "target",
         }
+
+
+@pytest.mark.parametrize("branch", ["own", "confirmed", "changed"])
+def test_new_draft_submission_validates_spanless_materialized_results(
+    profile, document, branch
+):
+    from ontocurator.domain.annotations import AnnotationRef
+
+    item = annotation_snapshot(profile, document)
+    ref = AnnotationRef(annotation_id="ann", version=item.version)
+    decisions = (
+        []
+        if branch == "own"
+        else [
+            ReviewDecision(
+                decision_id="d",
+                reviewer_id="a",
+                target=ref,
+                outcome=branch,
+                replacement=ref if branch == "changed" else None,
+            )
+        ]
+    )
+    draft = draft_for(
+        profile,
+        mode="independent" if branch == "own" else "review",
+        annotations=[item] if branch in {"own", "changed"} else [],
+        targets=[] if branch == "own" else [ref],
+        decisions=decisions,
+    ).model_copy(update={"spanless_policy_version": 1})
+    repo = SimpleNamespace(
+        get_task_profile=lambda _: profile,
+        get_submissions_for_workspace=lambda _: [],
+        get_project_rules=lambda _: ProjectRules(),
+        list_annotations_for_document=lambda *_: [item],
+    )
+    with pytest.raises(DomainError) as exc:
+        SubmissionService(repo)._create_submission(draft, SubmitCommand(), draft.key)
+    assert exc.value.code == "PROJECT_RULE_VIOLATION"
+    assert exc.value.details["violations"][0]["rule"] == "spanless_note_required"
+
+
+def test_spanless_note_cannot_override_required_profile_evidence(profile, document):
+    from ontocurator.application.submissions import validate_annotation_completion
+    from ontocurator.domain.annotations import snapshot
+
+    profile.layers[1].annotation_types[1].evidence_policy = "required_on_complete"
+    item = annotation_snapshot(profile, document)
+    item = snapshot(
+        item.annotation.model_copy(update={"note": "Reason"}), [], document, profile
+    )
+    with pytest.raises(DomainError) as exc:
+        validate_annotation_completion(item, profile)
+    assert exc.value.code == "MISSING_EVIDENCE"
+
+
+def test_note_edit_invalidates_approved_exact_replacement_version(profile, document):
+    from ontocurator.application.editing import SetAnnotationNoteCommand
+    from ontocurator.domain.annotations import AnnotationRef
+
+    item = annotation_snapshot(profile, document)
+    ref = AnnotationRef(annotation_id="ann", version=item.version)
+    decision = ReviewDecision(
+        decision_id="d", reviewer_id="a", target=ref, outcome="changed", replacement=ref
+    )
+    draft = draft_for(
+        profile, mode="review", annotations=[item], targets=[ref], decisions=[decision]
+    )
+    result = EditingService(SimpleNamespace(), SimpleNamespace())._set_annotation_note(
+        draft,
+        SetAnnotationNoteCommand(annotation_id="ann", note=" Reason "),
+        document,
+        profile,
+        build_scope(profile, "review"),
+    )
+    assert result.annotations[0].annotation.note == "Reason"
+    assert result.annotations[0].version != item.version
+    assert result.decisions == []
+    repo = SimpleNamespace(
+        get_task_profile=lambda _: profile, get_submissions_for_workspace=lambda _: []
+    )
+    with pytest.raises(DomainError) as exc:
+        SubmissionService(repo)._create_submission(result, SubmitCommand(), draft.key)
+    assert exc.value.code == "INCOMPLETE_REVIEW"

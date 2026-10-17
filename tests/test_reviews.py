@@ -730,6 +730,7 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
             expected_revision=1,
             payload=CreateAnnotationCommand(
                 annotation_id="rep-bad",
+                note="Synthetic replacement without text evidence.",
                 layer_id="strict-layer",
                 type_id="strict-type",
                 term_id="HP:0001252",
@@ -764,6 +765,7 @@ def test_required_axes_enforced_on_confirmation_replacement_and_submission(
             expected_revision=2,
             payload=CreateAnnotationCommand(
                 annotation_id="rep-1",
+                note="Synthetic replacement without text evidence.",
                 layer_id="strict-layer",
                 type_id="strict-type",
                 term_id="HP:0001252",

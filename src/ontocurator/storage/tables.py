@@ -80,6 +80,9 @@ class ProjectRow(Base):
     languages: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
     guideline_url: Mapped[str | None]
     guideline_version: Mapped[str | None]
+    allow_spanless_findings: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("true")
+    )
     require_chosen_axes: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false")
     )
@@ -290,6 +293,9 @@ class DraftRow(Base):
     target_set_id: Mapped[str]
     targets: Mapped[dict[str, Any]]
     revision: Mapped[int] = mapped_column(server_default=text("0"))
+    spanless_policy_version: Mapped[int | None] = mapped_column(
+        server_default=text("1")
+    )
     checked_layer_ids: Mapped[list[Any]] = mapped_column(
         server_default=text("'[]'::jsonb")
     )

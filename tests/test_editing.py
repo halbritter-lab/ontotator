@@ -226,6 +226,7 @@ def test_spanless_annotation_and_subsequent_evidence_addition(tmp_path: Path):
     # 1. Create spanless annotation
     cmd1 = CreateAnnotationCommand(
         annotation_id="ann-spanless",
+        note="Finding inferred from the complete document",
         layer_id="hpo-layer",
         type_id="phenotype",
         term_id="HP:0001250",  # Seizure
@@ -415,6 +416,7 @@ def test_create_and_set_term_with_term_id(tmp_path: Path):
     # 1. Create with term_id
     cmd = CreateAnnotationCommand(
         annotation_id="ann-term-1",
+        note="Finding inferred from the complete document",
         layer_id="hpo-layer",
         type_id="phenotype",
         term_id="HP:0001252",
@@ -533,3 +535,72 @@ def test_discontinuous_segments_and_repeated_evidence_mentions(tmp_path: Path):
         "ev-second",
     }
     assert len(draft2.evidence) == 2
+
+
+def test_annotation_note_mutations_trim_new_input_and_preserve_receipts(tmp_path):
+    _, _, ws, editor, _ = _setup_test_env(tmp_path)
+    key = ws.open(
+        WorkspaceKey(
+            project_key="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    ).key
+    created = editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="note-create",
+            expected_revision=0,
+            payload={
+                "command": "create_annotation",
+                "annotation_id": "a",
+                "term_id": "HP:0001252",
+                "note": "  µ reason  ",
+            },
+        ),
+    )
+    assert created.annotations[0].annotation.note == "µ reason"
+    assert ws.open(key).allow_spanless_findings is True
+    old_version = created.annotations[0].version
+    envelope = MutationEnvelope(
+        mutation_id="note-edit",
+        expected_revision=1,
+        payload={
+            "command": "set_annotation_note",
+            "annotation_id": "a",
+            "note": "  another reason  ",
+        },
+    )
+    edited = editor.apply(key, envelope)
+    assert edited.revision == 2
+    assert edited.annotations[0].annotation.note == "another reason"
+    assert edited.annotations[0].version != old_version
+    assert editor.apply(key, envelope) == edited
+    editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="note-attach",
+            expected_revision=2,
+            payload={
+                "command": "attach_mention",
+                "annotation_id": "a",
+                "evidence_id": "note-ev",
+                "segments": [{"start": 27, "end": 36}],
+            },
+        ),
+    )
+    cleared = editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="note-clear",
+            expected_revision=3,
+            payload={
+                "command": "set_annotation_note",
+                "annotation_id": "a",
+                "note": "   ",
+            },
+        ),
+    )
+    assert cleared.annotations[0].annotation.note is None

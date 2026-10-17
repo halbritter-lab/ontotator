@@ -271,6 +271,7 @@ def test_required_axes_and_evidence_on_complete_enforced(
     # Create spanless annotation on layer-2 with type-req (requires evidence on complete, and required axis 'severity')
     cmd = CreateAnnotationCommand(
         annotation_id="ann-req-1",
+        note="Fixture justification; required text evidence is still missing.",
         layer_id="layer-2",
         type_id="type-req",
         term_id="MONDO:0000001",
@@ -369,6 +370,7 @@ def test_review_replacement_must_match_target_layer_and_type(
     # Create a draft annotation with layer-2 (type-req), trying to use it as replacement for layer-1 target
     cmd_rep = CreateAnnotationCommand(
         annotation_id="ann-rep-1",
+        note="Fixture justification; required text evidence is still missing.",
         layer_id="layer-2",
         type_id="type-req",
         term_id="MONDO:0000001",

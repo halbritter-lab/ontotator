@@ -693,3 +693,121 @@ def test_the_example_hpo_profile_fits_t1() -> None:
     profile = TaskProfile.model_validate_json(raw)
 
     check_t1_profile(profile, {"hp": Pin(sha256="0" * 64, t1_profile="hpo-phenotype")})
+
+
+def test_annotation_note_preserves_legacy_hash_and_historical_whitespace():
+    from ontocurator.domain.serialization import decode_snapshot
+
+    doc = document_from_unit(sketch_unit())
+    original = own_snapshot(doc, "own", "HP:0001250", None, {})
+    raw = encode_snapshot(original)
+    assert "note" not in raw["annotation"]
+    assert (
+        original.version
+        == "da4e6537a48aae9ca2d18127a9b69f666f47f4237d2cd8637f22d68ecf0b9f80"
+    )
+    assert encode_snapshot(decode_snapshot(raw)) == raw
+    annotated = snapshot(
+        original.annotation.model_copy(update={"note": "  µ reason  "}),
+        [],
+        doc,
+        hpo_profile(),
+    )
+    assert annotated.version != original.version
+    assert decode_snapshot(encode_snapshot(annotated)).annotation.note == "  µ reason  "
+    verify_snapshot(annotated)
+    empty = snapshot(
+        original.annotation.model_copy(update={"note": ""}), [], doc, hpo_profile()
+    )
+    assert empty.version == original.version
+    assert "note" not in encode_snapshot(empty)["annotation"]
+
+
+@pytest.mark.parametrize(
+    "source_notes", [[], ["source"], ["source", "other", "source", "µ reason"]]
+)
+def test_export_annotation_justification_then_exact_source_notes(source_notes):
+    doc = document_from_unit(sketch_unit())
+    original = own_snapshot(doc, "own", "HP:0001250", None, {})
+    noted = snapshot(
+        original.annotation.model_copy(update={"note": "µ reason"}),
+        [],
+        doc,
+        hpo_profile(),
+    )
+    unit, _ = submission_to_unit(
+        submission([noted]),
+        doc,
+        hpo_profile(),
+        layers(),
+        {},
+        set_id="out",
+        proposal_notes={(noted.annotation.annotation_id, noted.version): source_notes},
+    )
+    assert list(unit.annotation_set.annotations[0].provenance.notes) == list(
+        dict.fromkeys(["µ reason", *source_notes])
+    )
+
+
+@pytest.mark.parametrize("outcome", ["confirmed", "changed"])
+def test_review_export_retains_source_notes_on_exact_target(outcome):
+    doc = document_from_unit(sketch_unit())
+    source = own_snapshot(doc, "source", "HP:0001250", None, {})
+    replacement = own_snapshot(doc, "replacement", "HP:0001252", None, {})
+    ref = AnnotationRef(annotation_id="source", version=source.version)
+    result = source if outcome == "confirmed" else replacement
+    decision = ReviewDecision(
+        decision_id="d",
+        target=ref,
+        outcome=outcome,
+        reviewer_id="ann-0007",
+        replacement=AnnotationRef(
+            annotation_id="replacement", version=replacement.version
+        )
+        if outcome == "changed"
+        else None,
+    )
+    unit, _ = submission_to_unit(
+        submission([result], mode="review", decisions=[decision], targets=[ref]),
+        doc,
+        hpo_profile(),
+        layers(),
+        {("source", source.version): source},
+        set_id="out",
+        proposal_notes={
+            ("source", source.version): ["source note", "other"],
+            ("source", "stale-version"): ["wrong"],
+        },
+    )
+    assert list(unit.annotation_set.annotations[0].provenance.notes) == [
+        "source note",
+        "other",
+    ]
+
+
+def test_independent_adoption_export_preserves_exact_imported_source_notes():
+    doc = document_from_unit(sketch_unit())
+    source = own_snapshot(doc, "urn:source", "HP:0001250", None, {})
+    copy = own_snapshot(doc, "copy", "HP:0001250", None, {})
+    provenance = copy.annotation.provenance.model_copy(
+        update={"source_refs": [f"urn:source:{source.version}"]}
+    )
+    copy = snapshot(
+        copy.annotation.model_copy(update={"note": "Reason", "provenance": provenance}),
+        [],
+        doc,
+        hpo_profile(),
+    )
+    unit, _ = submission_to_unit(
+        submission([copy]),
+        doc,
+        hpo_profile(),
+        layers(),
+        {},
+        set_id="out",
+        proposal_notes={("urn:source", source.version): ["imported note"]},
+    )
+    assert list(unit.annotation_set.annotations[0].provenance.notes) == [
+        "Reason",
+        "imported note",
+    ]

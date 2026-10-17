@@ -196,3 +196,66 @@ def test_a_project_role_is_lead_annotator_or_adjudicator(tmp_path: Path) -> None
         add(role)
     with pytest.raises(IntegrityError, match="ck_project_memberships_role"):
         add("owner")
+
+
+def test_spanless_migration_preserves_old_draft_marker_and_defaults_only_new_rows(
+    tmp_path,
+):
+    from alembic import command
+
+    from ontocurator.storage.schema import alembic_config
+
+    url = unmigrated_database_url(tmp_path / "spanless.db")
+    upgrade(url, "0006")
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO ontocurator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) VALUES ('p', 'p', '{}', 'm', '{}', 't')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO ontocurator.drafts (project_id, draft_key, document_id, annotator_id, mode, scope_id, target_set_id, targets, updated_at) SELECT id, 'old', 'doc', 'a', 'independent', '', 'targets-0', '{}', now() FROM ontocurator.projects"
+            )
+        )
+    upgrade(url, "0007")
+    with engine.begin() as conn:
+        assert (
+            conn.execute(
+                text(
+                    "SELECT spanless_policy_version FROM ontocurator.drafts WHERE draft_key = 'old'"
+                )
+            ).scalar_one()
+            is None
+        )
+        assert (
+            conn.execute(
+                text("SELECT allow_spanless_findings FROM ontocurator.projects")
+            ).scalar_one()
+            is True
+        )
+        conn.execute(
+            text(
+                "INSERT INTO ontocurator.drafts (project_id, draft_key, document_id, annotator_id, mode, scope_id, target_set_id, targets, updated_at) SELECT id, 'new', 'doc', 'b', 'independent', '', 'targets-0', '{}', now() FROM ontocurator.projects"
+            )
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT spanless_policy_version FROM ontocurator.drafts WHERE draft_key = 'new'"
+                )
+            ).scalar_one()
+            == 1
+        )
+        command.downgrade(alembic_config(conn), "0006")
+        assert (
+            conn.execute(text("SELECT count(*) FROM ontocurator.drafts")).scalar_one()
+            == 2
+        )
+        assert not conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema='ontocurator' AND column_name IN ('spanless_policy_version', 'allow_spanless_findings')"
+            )
+        ).all()
+    engine.dispose()

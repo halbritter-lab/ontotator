@@ -295,6 +295,7 @@ def test_check_layer_command_and_invalidation(tmp_path: Path) -> None:
 
     # 1. Create an annotation in layer-1
     cmd_create = CreateAnnotationCommand(
+        note="Finding inferred from the complete document",
         annotation_id="ann-hp-1",
         layer_id="layer-1",
         type_id="type-opt",
@@ -368,6 +369,7 @@ def test_retry_with_lost_response_and_competing_browser_revisions(
 
     # 1. Client A executes mutation 1 with expected_revision=0
     cmd_1 = CreateAnnotationCommand(
+        note="Finding inferred from the complete document",
         annotation_id="ann-a",
         layer_id="hpo-layer",
         type_id="phenotype",
@@ -388,6 +390,7 @@ def test_retry_with_lost_response_and_competing_browser_revisions(
 
     # 3. Competing Client B with stale revision=0 tries to submit mutation
     cmd_b = CreateAnnotationCommand(
+        note="Finding inferred from the complete document",
         annotation_id="ann-b",
         layer_id="hpo-layer",
         type_id="phenotype",

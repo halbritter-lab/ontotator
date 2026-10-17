@@ -62,6 +62,7 @@ def test_submission_is_refused_with_annotation_ids_and_draft_stays_editable(app_
             "payload": {
                 "command": "create_annotation",
                 "annotation_id": "missing-axis",
+                "note": "Document-level finding",
                 "term_id": "HP:0001252",
                 "layer_id": "hpo-layer",
                 "type_id": "phenotype",
@@ -137,6 +138,7 @@ def test_workspace_filters_nested_and_legacy_options_but_retains_current_hidden_
             payload={
                 "command": "create_annotation",
                 "annotation_id": "own",
+                "note": "Document-level finding",
                 "term_id": "HP:0001252",
                 "axes_values": {"assertion": "uncertain"},
             },
@@ -225,6 +227,7 @@ def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass
         0,
         command="create_annotation",
         annotation_id="copy",
+        note="Reviewer finding inferred from the complete document",
         term_id="HP:0001252",
         axes_values={"assertion": "present"},
         source_annotation_id="source",
@@ -312,3 +315,402 @@ def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass
         ].annotation.axes_defaulted
         == []
     )
+
+
+def test_new_draft_spanless_writes_are_transactional_and_setting_applies(tmp_path):
+    from sqlalchemy import select
+
+    from ontocurator.storage.tables import DraftRow
+
+    repo, _, ws, editor, _ = _setup_test_env(tmp_path)
+    key = ws.open(
+        WorkspaceKey(
+            project_key="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    ).key
+    assert ws.open(key).enforce_spanless_rules is True
+    payload = {
+        "command": "create_annotation",
+        "annotation_id": "a",
+        "term_id": "HP:0001252",
+    }
+    before = {
+        table: count_rows(repo, table)
+        for table in ("annotation_snapshots", "mutation_receipts", "edit_events")
+    }
+    for note in (None, "   "):
+        with pytest.raises(DomainError) as exc:
+            editor.apply(
+                key,
+                MutationEnvelope(
+                    mutation_id="bad",
+                    expected_revision=0,
+                    payload={**payload, "note": note},
+                ),
+            )
+        assert exc.value.code == "PROJECT_RULE_VIOLATION"
+        assert exc.value.details["violations"][0]["rule"] == "spanless_note_required"
+        assert ws.open(key).draft.revision == 0
+        assert {table: count_rows(repo, table) for table in before} == before
+    good = MutationEnvelope(
+        mutation_id="good", expected_revision=0, payload={**payload, "note": "Reason"}
+    )
+    editor.apply(key, good)
+    set_rules(repo, "pkg-1", allow_spanless_findings=False)
+    assert editor.apply(key, good).revision == 1
+    with pytest.raises(DomainError) as exc:
+        editor.apply(
+            key,
+            MutationEnvelope(
+                mutation_id="disabled",
+                expected_revision=1,
+                payload={
+                    "command": "set_annotation_note",
+                    "annotation_id": "a",
+                    "note": "Another",
+                },
+            ),
+        )
+    assert exc.value.details["violations"][0]["rule"] == "spanless_disallowed"
+    with repo.db.transaction() as conn:
+        assert conn.execute(select(DraftRow.spanless_policy_version)).scalar_one() == 1
+
+
+def test_existing_draft_keeps_policy_marker_and_legacy_behavior(tmp_path):
+    from ontocurator.storage.tables import DraftRow
+
+    repo, _, ws, editor, _ = _setup_test_env(tmp_path)
+    key = ws.open(
+        WorkspaceKey(
+            project_key="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    ).key
+    with repo.db.transaction() as conn:
+        conn.execute(update(DraftRow).values(spanless_policy_version=None))
+    assert ws.open(key).enforce_spanless_rules is False
+    set_rules(repo, "pkg-1", allow_spanless_findings=False)
+    result = editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="legacy",
+            expected_revision=0,
+            payload={
+                "command": "create_annotation",
+                "annotation_id": "a",
+                "term_id": "HP:0001252",
+            },
+        ),
+    )
+    assert result.annotations[0].annotation.note is None
+    assert result.spanless_policy_version is None
+    assert ws.open(key).draft.spanless_policy_version is None
+    submitted = SubmissionService(repo).submit(
+        key,
+        MutationEnvelope(
+            mutation_id="legacy-submit",
+            expected_revision=1,
+            payload={"document_checked": True},
+        ),
+    )
+    assert submitted.snapshots[0].annotation.note is None
+    assert ws.open(key).draft.spanless_policy_version is None
+
+
+def test_client_cannot_override_new_draft_policy(tmp_path):
+    from pydantic import ValidationError
+
+    _, _, ws, editor, _ = _setup_test_env(tmp_path)
+    key = ws.open(
+        WorkspaceKey(
+            project_key="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    ).key
+    with pytest.raises(ValidationError):
+        editor.apply(
+            key,
+            MutationEnvelope(
+                mutation_id="override",
+                expected_revision=0,
+                payload={
+                    "command": "create_annotation",
+                    "annotation_id": "a",
+                    "term_id": "HP:0001252",
+                    "spanless_policy_version": None,
+                },
+            ),
+        )
+    assert ws.open(key).enforce_spanless_rules is True
+
+
+def test_remove_last_mention_and_clear_spanless_note_are_rejected_without_revision(
+    tmp_path,
+):
+    _, _, ws, editor, _ = _setup_test_env(tmp_path)
+    key = ws.open(
+        WorkspaceKey(
+            project_key="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    ).key
+    created = editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="create",
+            expected_revision=0,
+            payload={
+                "command": "create_annotation",
+                "annotation_id": "a",
+                "term_id": "HP:0001252",
+                "evidence_id": "ev",
+                "segments": [{"start": 27, "end": 36}],
+            },
+        ),
+    )
+    with pytest.raises(DomainError):
+        editor.apply(
+            key,
+            MutationEnvelope(
+                mutation_id="detach",
+                expected_revision=1,
+                payload={
+                    "command": "detach_mention",
+                    "annotation_id": "a",
+                    "evidence_id": "ev",
+                },
+            ),
+        )
+    assert ws.open(key).draft.annotations == created.annotations
+    editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="note",
+            expected_revision=1,
+            payload={
+                "command": "set_annotation_note",
+                "annotation_id": "a",
+                "note": "Reason",
+            },
+        ),
+    )
+    detached = editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="detach-good",
+            expected_revision=2,
+            payload={
+                "command": "detach_mention",
+                "annotation_id": "a",
+                "evidence_id": "ev",
+            },
+        ),
+    )
+    assert detached.annotations[0].annotation.evidence_refs == []
+    with pytest.raises(DomainError):
+        editor.apply(
+            key,
+            MutationEnvelope(
+                mutation_id="clear",
+                expected_revision=3,
+                payload={
+                    "command": "set_annotation_note",
+                    "annotation_id": "a",
+                    "note": "  ",
+                },
+            ),
+        )
+    assert ws.open(key).draft.revision == 3
+    assert ws.open(key).draft.annotations == detached.annotations
+
+
+def test_new_draft_restores_historical_snapshot_without_rewriting_then_requires_note(
+    tmp_path,
+):
+    from ontocurator.domain.scopes import build_scope
+    from ontocurator.domain.serialization import encode_snapshot
+    from ontocurator.domain.workspace import Submission
+    from ontocurator.storage.repository import _key_str
+
+    repo, _, ws, editor, doc = _setup_test_env(tmp_path)
+    profile = repo.get_task_profile("pkg-1")
+    key = WorkspaceKey(
+        project_key="pkg-1",
+        document_id="doc-1",
+        annotator_id="annotator-1",
+        mode="independent",
+        scope_id=build_scope(profile, "independent").scope_id,
+        target_set_id="targets-0",
+    )
+    historical = snapshot(
+        Annotation(
+            annotation_id="old",
+            document_id="doc-1",
+            term_id="HP:0001252",
+            provenance=Provenance(
+                actor=ActorRef(actor_id="annotator-1", kind="human"), method="manual"
+            ),
+        ),
+        [],
+        doc,
+        profile,
+    )
+    raw = encode_snapshot(historical)
+    submission = Submission(
+        submission_id="historical",
+        origin_key=key,
+        targets=ReviewTargetSet.create([]),
+        draft_revision=4,
+        snapshots=[historical],
+        decisions=[],
+        created_at="2026-10-01T00:00:00Z",
+    )
+    with repo.db.transaction() as conn:
+        project_id = repo._require_project(conn, "pkg-1")
+        repo._insert_submission(
+            conn, project_id, submission, local_key=_key_str(key), imported=True
+        )
+    restored = ws.open(key)
+    assert restored.draft.spanless_policy_version == 1
+    assert encode_snapshot(restored.draft.annotations[0]) == raw
+    with pytest.raises(DomainError) as exc:
+        SubmissionService(repo).submit(
+            key,
+            MutationEnvelope(
+                mutation_id="invalid-submit",
+                expected_revision=4,
+                payload={"document_checked": True},
+            ),
+        )
+    assert exc.value.details["violations"][0]["rule"] == "spanless_note_required"
+    corrected = editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="justify",
+            expected_revision=4,
+            payload={
+                "command": "set_annotation_note",
+                "annotation_id": "old",
+                "note": "Reason",
+            },
+        ),
+    )
+    assert corrected.annotations[0].version != historical.version
+    assert (
+        repo.get_submissions_for_workspace(key)[0].snapshots[0].version
+        == historical.version
+    )
+    SubmissionService(repo).submit(
+        key,
+        MutationEnvelope(
+            mutation_id="valid-submit",
+            expected_revision=5,
+            payload={"document_checked": True},
+        ),
+    )
+
+
+def test_export_content_freezes_exact_proposal_notes_without_changing_imported_snapshot(
+    tmp_path,
+):
+    from pg_harness import insert_proposal
+
+    from ontocurator.storage.tables import ProposalAnnotationRow
+
+    repo, _, ws, editor, _ = _setup_test_env(tmp_path)
+    key = ws.open(
+        WorkspaceKey(
+            project_key="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    ).key
+    draft = editor.apply(
+        key,
+        MutationEnvelope(
+            mutation_id="source",
+            expected_revision=0,
+            payload={
+                "command": "create_annotation",
+                "annotation_id": "source",
+                "term_id": "HP:0001252",
+                "note": "Reason",
+            },
+        ),
+    )
+    source = draft.annotations[0]
+    insert_proposal(repo, "pkg-1", source)
+    with repo.db.transaction() as conn:
+        conn.execute(update(ProposalAnnotationRow).values(notes=["first", "second"]))
+    frozen = repo.t1_export_content("pkg-1")
+    assert frozen.proposal_notes[("source", source.version)] == ["first", "second"]
+    with repo.db.transaction() as conn:
+        conn.execute(update(ProposalAnnotationRow).values(notes=["later"]))
+    assert frozen.proposal_notes[("source", source.version)] == ["first", "second"]
+    assert frozen.proposals[("source", source.version)] == source
+
+
+def test_historical_receipt_replay_cannot_downgrade_persisted_draft_policy(tmp_path):
+    from datetime import UTC, datetime
+
+    from sqlalchemy import insert
+
+    from ontocurator.domain.canonical import canonical_hash
+    from ontocurator.storage.repository import _key_str
+    from ontocurator.storage.tables import MutationReceiptRow
+
+    repo, _, ws, editor, _ = _setup_test_env(tmp_path)
+    opened = ws.open(
+        WorkspaceKey(
+            project_key="pkg-1",
+            document_id="doc-1",
+            annotator_id="annotator-1",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    )
+    key = opened.key
+    envelope = MutationEnvelope(
+        mutation_id="historical-replay",
+        expected_revision=0,
+        payload={
+            "command": "create_annotation",
+            "annotation_id": "a",
+            "term_id": "HP:0001252",
+        },
+    )
+    historical_response = opened.draft.model_dump(mode="json")
+    historical_response.pop("spanless_policy_version")
+    with repo.db.transaction() as conn:
+        project_id = repo._require_project(conn, "pkg-1")
+        conn.execute(
+            insert(MutationReceiptRow).values(
+                project_id=project_id,
+                workspace_key=_key_str(key),
+                mutation_id=envelope.mutation_id,
+                request_hash=canonical_hash(envelope.model_dump()),
+                response=historical_response,
+                created_at=datetime.now(UTC),
+            )
+        )
+    replayed = editor.apply(key, envelope)
+    assert replayed.spanless_policy_version is None
+    assert ws.open(key).draft.spanless_policy_version == 1
+    with pytest.raises(DomainError) as exc:
+        editor.apply(key, envelope.model_copy(update={"mutation_id": "fresh"}))
+    assert exc.value.details["violations"][0]["rule"] == "spanless_note_required"

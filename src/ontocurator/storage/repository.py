@@ -9,7 +9,7 @@ are append-only (T2 D6): the application role can only insert and read them.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 from urllib.parse import quote
@@ -256,6 +256,7 @@ class ProjectExport:
     proposals: dict[tuple[str, str], AnnotationSnapshot]
     contributors: list[tuple[str, str, str | None]]
     guideline_ref: str | None = None
+    proposal_notes: dict[tuple[str, str], list[str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -1092,25 +1093,20 @@ class Repository:
                 .where(SubmissionRow.project_id == project.id)
                 .order_by(SubmissionRow.recorded_at, SubmissionRow.submission_id)
             ).all()
-            proposal_payloads = (
-                conn.execute(
-                    select(AnnotationSnapshotRow.payload)
-                    .join(
-                        ProposalAnnotationRow,
-                        and_(
-                            ProposalAnnotationRow.project_id
-                            == AnnotationSnapshotRow.project_id,
-                            ProposalAnnotationRow.annotation_id
-                            == AnnotationSnapshotRow.annotation_id,
-                            ProposalAnnotationRow.version
-                            == AnnotationSnapshotRow.version,
-                        ),
-                    )
-                    .where(AnnotationSnapshotRow.project_id == project.id)
+            proposal_payloads = conn.execute(
+                select(AnnotationSnapshotRow.payload, ProposalAnnotationRow.notes)
+                .join(
+                    ProposalAnnotationRow,
+                    and_(
+                        ProposalAnnotationRow.project_id
+                        == AnnotationSnapshotRow.project_id,
+                        ProposalAnnotationRow.annotation_id
+                        == AnnotationSnapshotRow.annotation_id,
+                        ProposalAnnotationRow.version == AnnotationSnapshotRow.version,
+                    ),
                 )
-                .scalars()
-                .all()
-            )
+                .where(AnnotationSnapshotRow.project_id == project.id)
+            ).all()
             annotators = {row.annotator_id for row in submission_rows}
             contributors = [
                 (row.pseudonym, row.display_name, row.orcid)
@@ -1140,15 +1136,19 @@ class Repository:
             for _key, group in sorted(groups.items())
         ]
         proposals: dict[tuple[str, str], AnnotationSnapshot] = {}
-        for payload in proposal_payloads:
+        proposal_notes: dict[tuple[str, str], list[str]] = {}
+        for payload, notes in proposal_payloads:
             snap = decode_snapshot(payload)
-            proposals[(snap.annotation.annotation_id, snap.version)] = snap
+            ref = (snap.annotation.annotation_id, snap.version)
+            proposals[ref] = snap
+            proposal_notes[ref] = list(notes)
         return ProjectExport(
             profile=TaskProfile.model_validate(project.task_profile),
             pins=pins,
             documents=documents,
             submissions=submissions,
             proposals=proposals,
+            proposal_notes=proposal_notes,
             contributors=contributors,
             guideline_ref=f"{project.guideline_url}@{project.guideline_version}"
             if project.guideline_url and project.guideline_version
@@ -1272,6 +1272,7 @@ class Repository:
             row = conn.execute(
                 select(
                     ProjectRow.contiguous_mentions_only,
+                    ProjectRow.allow_spanless_findings,
                     ProjectRow.require_chosen_axes,
                     ProjectRow.hidden_axis_values,
                 ).where(ProjectRow.project_key == project_key)
@@ -1861,6 +1862,7 @@ class Repository:
                 DraftRow.id,
                 DraftRow.revision,
                 DraftRow.checked_layer_ids,
+                DraftRow.spanless_policy_version,
                 DraftRow.targets,
             ).where(DraftRow.project_id == project_id, DraftRow.draft_key == key_string)
         ).one_or_none()
@@ -2045,6 +2047,7 @@ class Repository:
             key=key,
             targets=ReviewTargetSet.model_validate(row.targets),
             revision=int(row.revision),
+            spanless_policy_version=row.spanless_policy_version,
             annotations=[decode_snapshot(p) for p in annotations],
             evidence=[EvidenceSnapshot.model_validate(p) for p in evidence],
             decisions=[ReviewDecision.model_validate(p) for p in decisions],
@@ -2072,6 +2075,7 @@ class Repository:
                 scope_id=key.scope_id,
                 target_set_id=key.target_set_id,
                 targets=effective.model_dump(mode="json"),
+                spanless_policy_version=1,
                 updated_at=datetime.now(UTC),
             )
             .on_conflict_do_nothing(index_elements=["project_id", "draft_key"])

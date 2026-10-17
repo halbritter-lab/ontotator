@@ -31,6 +31,8 @@ class Draft(BaseModel):
     key: WorkspaceKey
     targets: ReviewTargetSet
     revision: int
+    # Server-owned draft policy metadata; historical receipts omit it.
+    spanless_policy_version: Literal[1] | None = None
     annotations: list[AnnotationSnapshot] = Field(default_factory=list)
     evidence: list[EvidenceSnapshot] = Field(default_factory=list)
     decisions: list[ReviewDecision] = Field(default_factory=list)

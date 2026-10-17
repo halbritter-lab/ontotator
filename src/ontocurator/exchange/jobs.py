@@ -202,6 +202,7 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             content.profile,
             layers,
             content.proposals,
+            proposal_notes=content.proposal_notes,
             set_id=f"{project}:{key.annotator_id}:{key.mode}:{submission.submission_id}",
             source_text_sha256=stored.source_text_sha256,
             guideline_ref=content.guideline_ref,

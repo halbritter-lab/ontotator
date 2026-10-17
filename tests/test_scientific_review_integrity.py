@@ -47,6 +47,7 @@ def changed_review(ctx):
             0,
             CreateAnnotationCommand(
                 annotation_id="adopted",
+                note="Synthetic review replacement without text evidence.",
                 layer_id="hpo-layer",
                 type_id="phenotype",
                 term_id="HP:0001250",
@@ -160,6 +161,7 @@ def test_decision_switch_discards_adopted_copy_but_keeps_authored_finding(tmp_pa
             2,
             CreateAnnotationCommand(
                 annotation_id="additional",
+                note="Synthetic additional finding without text evidence.",
                 layer_id="hpo-layer",
                 type_id="phenotype",
                 term_id="HP:0001250",

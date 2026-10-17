@@ -64,6 +64,7 @@ def test_independent_trimmed_profile_roundtrip_restores_own_submission(tmp_path)
             0,
             CreateAnnotationCommand(
                 annotation_id="own-annotation",
+                note="Document-level finding in the roundtrip fixture.",
                 layer_id="target-layer",
                 type_id="phenotype",
                 term_id="HP:0001252",
@@ -169,6 +170,7 @@ def test_replacement_approval_requires_evidence(tmp_path):
             0,
             CreateAnnotationCommand(
                 annotation_id="replacement",
+                note="This explanation does not replace required evidence.",
                 layer_id="layer-2",
                 type_id="type-req",
                 term_id="MONDO:0005071",
