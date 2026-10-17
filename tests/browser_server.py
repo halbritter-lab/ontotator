@@ -322,11 +322,14 @@ def spanless_decisions_package() -> ValidatedPackage:
     """Historical spanless proposal for repairing a new draft without rewriting its source."""
     pkg = fixture_package(project_key="pkg-spanless-decisions")
     profile = pkg.manifest.task_profile
+    profile.layers[0].annotation_types[0].evidence_policy = "required_on_complete"
+    pkg.manifest.task_profile_sha256 = profile_hash(profile)
     proposals = {}
     for number, original in enumerate(pkg.annotations.values()):
         if number == 0:
             annotation = original.annotation.model_copy(update={"evidence_refs": []})
             original = snapshot(annotation, [], pkg.documents[original.document_id], profile)
+        original = snapshot(original.annotation, original.evidence, pkg.documents[original.document_id], profile)
         proposals[(original.annotation.annotation_id, original.version)] = original
     pkg.annotations = proposals
     return pkg

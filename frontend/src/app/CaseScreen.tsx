@@ -178,6 +178,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     isSpanless?: boolean;
   } | null>(null);
   const [spanlessReason, setSpanlessReason] = useState("");
+  const [pendingEvidenceAdoption, setPendingEvidenceAdoption] = useState<TargetProposal | null>(null);
   const [pendingAdoption, setPendingAdoption] = useState<TargetProposal | null>(null);
   const [adoptionReasons, setAdoptionReasons] = useState<Record<string, string>>({});
   const [spanlessReasonError, setSpanlessReasonError] = useState(false);
@@ -205,6 +206,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  useEffect(() => {
+    if (readOnly || (pendingEvidenceAdoption && selectedTargetId !== refKey(pendingEvidenceAdoption))) setPendingEvidenceAdoption(null);
+  }, [readOnly, selectedTargetId, pendingEvidenceAdoption]);
   const [selectionIntent, setSelectionIntent] = useState<"new_mention" | "extend_mention">("new_mention");
   const [queueState, setQueueState] = useState<QueueState>("saved");
   const [queueError, setQueueError] = useState<unknown>(null);
@@ -874,6 +878,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setMobilePane("details");
 
     setActionError(null);
+    if (pendingEvidenceAdoption) {
+      if (selectedTargetId !== refKey(pendingEvidenceAdoption) || creatingPending.current) return;
+      creatingPending.current = true;
+      try { await handleAdoptAndEditTarget(pendingEvidenceAdoption, undefined, payload.segments); }
+      catch (error) { reportError(error); }
+      finally { creatingPending.current = false; }
+      return;
+    }
     try {
       if (payload.intent === "extend_mention" && selectedEvidenceId) {
         const evidenceId = selectedEvidenceId;
@@ -1260,7 +1272,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Adopt a review target as an editable draft copy and switch to editing it.
   // The "changed" decision is recorded only once the copy actually differs.
-  const handleAdoptAndEditTarget = async (target: TargetProposal, reason?: string) => {
+  const handleAdoptAndEditTarget = async (target: TargetProposal, reason?: string, supportingSegments?: SelectionPayload["segments"]) => {
     if (readOnlyRef.current) return;
     setActionError(null);
     const key = targetKeyOf(target);
@@ -1286,10 +1298,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     });
 
     const sourceSnapshot = targetSnapshotOf(target);
-    if (!existingCopy && view.enforce_spanless_rules && !sourceSnapshot?.annotation.evidence_refs?.length) {
-      const sourceType = view.layers?.find(l => l.layer_id === sourceSnapshot?.annotation.layer_id)?.annotation_types.find(t => t.type_id === sourceSnapshot?.annotation.type_id);
-      if (sourceType?.evidence_policy === "required_on_complete") { setActionError("This annotation type requires a text span. Highlight supporting text to create a finding."); return; }
-      if (!view.allow_spanless_findings) { setActionError("This project requires a text span for findings."); return; }
+    if (!existingCopy && view.enforce_spanless_rules && !sourceSnapshot?.annotation.evidence_refs?.length && !supportingSegments?.length) {
+      if (!view.allow_spanless_findings) { setPendingEvidenceAdoption(target); setMobilePane("text"); return; }
       if (!(reason ?? sourceSnapshot?.annotation.note ?? "").trim()) { setPendingAdoption(target); return; }
     }
 
@@ -1330,7 +1340,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const newAnnId = `ann-${crypto.randomUUID()}`;
     const evidenceList = snap?.evidence ?? [];
     const firstEvidence = evidenceList[0];
-    const firstEvidenceId = firstEvidence ? newEvidenceId() : undefined;
+    const firstSegments = supportingSegments ?? firstEvidence?.mention.segments ?? [];
+    const firstEvidenceId = firstSegments.length > 0 ? newEvidenceId() : undefined;
     let created = false;
     try {
       await enqueueMutation({
@@ -1341,7 +1352,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         type_id: targetType,
         term_id: targetTerm,
         axes_values: initialAxes,
-        segments: firstEvidence ? firstEvidence.mention.segments : [],
+        segments: firstSegments,
         ...(reason?.trim() || snap?.annotation.note ? { note: reason?.trim() || snap?.annotation.note } : {}),
         source_annotation_id: target.annotation_id,
         source_version: target.version,
@@ -1372,7 +1383,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       );
       return;
     }
-    if (reason?.trim()) { try { await syncReplacementDecision(newAnnId); } catch (error) { reportError(error); } }
+    if ((reason?.trim() || supportingSegments?.length) && !(typeDef?.evidence_policy === "required_on_complete" && firstSegments.length === 0)) {
+      try { await syncReplacementDecision(newAnnId); } catch (error) { reportError(error); }
+    }
+    setPendingEvidenceAdoption(null);
     openCopy(newAnnId);
   };
 
@@ -1651,7 +1665,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       : []),
   ], [mentionsDisplay, targetMentions, sourceMentions, pendingAnnotation]);
 
-  const cancelAttach = useMemo(() => () => setIsAttachingMention(false), []);
+  const cancelAttach = useMemo(() => () => { setIsAttachingMention(false); setPendingEvidenceAdoption(null); }, []);
 
   const versionControls = versions && versionContext?.canBrowseVersions ? <details className="case-version-controls"><summary>Versions</summary>
     <VariantSelectors caseDetail={versions.detail} currentDocumentId={view.document.document_id}
@@ -2036,7 +2050,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           contextSegments={reanchorContext.contextSegments}
           text={view.document.text}
           mentions={textMentions}
-          isAttachingMention={isAttachingMention}
+          isAttachingMention={isAttachingMention || (!!pendingEvidenceAdoption && !confirmRequest)}
+          attachMessage={pendingEvidenceAdoption ? "Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement." : undefined}
           onCancelAttach={cancelAttach}
           selectedEvidenceId={selectedEvidenceId}
           selectionIntent={selectionIntent}

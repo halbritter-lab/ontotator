@@ -109,10 +109,12 @@ test("new-draft spanless findings require a reason, retain it through search and
   const opened = await (await openedResponse).json();
   expect(opened.view.enforce_spanless_rules).toBe(true);
   const commands = `/api/v1/workspaces/${encodeURIComponent(opened.workspace_id)}/commands`;
-  const bypass = await authenticatedRequest(page, commands, "POST", { expected_revision: 0, payload: {
+  const bypass = await authenticatedRequest(page, commands, "POST", { mutation_id: "bypass-spanless-reason", expected_revision: 0, payload: {
     command: "create_annotation", annotation_id: "bypass-spanless", layer_id: "hpo-layer", type_id: "phenotype", term_id: "HP:0001252", segments: [], axes_values: {},
   } });
   expect(bypass.status()).toBe(422);
+  const bypassError = await bypass.json(); expect(bypassError.code).toBe("PROJECT_RULE_VIOLATION");
+  expect(bypassError.details.violations[0].rule).toBe("spanless_note_required");
   await page.getByRole("button", { name: "Add finding without a text span" }).click();
   const reason = page.getByLabel("Reason for no text span");
   await page.getByLabel(/Search ontology term/).fill("Hypotonia");
@@ -177,18 +179,29 @@ test("repairing a historical spanless proposal collects a clinical reason withou
   const source = opened.view.available_inputs.find((item: { annotation: { evidence_refs: unknown[] } }) => !item.annotation.evidence_refs?.length);
   const sourceBefore = JSON.stringify(source);
   const proposals = page.locator('.sidebar [data-list-key^="target:"]');
-  await proposals.first().click(); await page.keyboard.press("1"); await expect(proposals.first()).toContainText("Confirmed");
+  await proposals.first().click(); await page.keyboard.press("2"); await expect(proposals.first()).toContainText("Rejected");
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
   const dialog = page.getByRole("dialog", { name: "Reason for no text span" });
   await dialog.getByLabel("Reason for no text span").fill("Specialist summary supports this finding");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(proposals.first()).toContainText("Confirmed");
+  await expect(proposals.first()).toContainText("Rejected");
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
   await expect(dialog.getByLabel("Reason for no text span")).toHaveValue("Specialist summary supports this finding");
+  const copied = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "create_annotation");
   await dialog.getByRole("button", { name: "Create editable copy" }).click();
   await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
-  await expect(proposals.first()).toContainText("Replaced");
   await expect(page.getByLabel("Reason for no text span")).toHaveValue("Specialist summary supports this finding");
+  await expect(proposals.first()).toContainText("open");
+  const draft = await (await copied).json();
+  const replacement = draft.annotations[0];
+  const premature = await authenticatedRequest(page, `/api/v1/workspaces/${encodeURIComponent(opened.workspace_id)}/decisions`, "POST", {
+    mutation_id: "premature-required-evidence-approval", expected_revision: draft.revision, payload: { target: { annotation_id: source.annotation.annotation_id, version: source.version }, outcome: "changed",
+      replacement: { annotation_id: replacement.annotation.annotation_id, version: replacement.version } },
+  });
+  expect(premature.status()).toBe(422); expect((await premature.json()).code).toBe("MISSING_EVIDENCE");
+  await page.getByRole("button", { name: "+ Add Mention", exact: true }).click(); await selectText(page, 0, 9);
+  await expect(proposals.first()).toContainText("Replaced");
+  await expect(page.getByLabel("Annotation note")).toHaveValue("Specialist summary supports this finding");
   await proposals.nth(1).click(); await page.keyboard.press("2"); await expect(proposals.nth(1)).toContainText("Rejected");
   const submitted = page.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST");
   await submitCase(page);
@@ -199,4 +212,46 @@ test("repairing a historical spanless proposal collects a clinical reason withou
   const reopened = await authenticatedRequest(page, `/api/v1/assignments/${opened.assignment.id}/open`, "POST");
   const after = await reopened.json();
   expect(JSON.stringify(after.view.available_inputs.find((item: { version: string }) => item.version === source.version))).toBe(sourceBefore);
+});
+
+
+test("a project prohibiting spanless findings repairs a source only after supporting text is selected", async ({ page }) => {
+  await importPackage(page, "spanless", "pkg-spanless-decisions", "spanless-prohibited-repair");
+  const disabled = await authenticatedRequest(page, "/api/v1/projects/pkg-spanless-decisions/settings", "PATCH", { allow_spanless_findings: false });
+  expect(disabled.ok()).toBeTruthy();
+  const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
+  await openCase(page, { task: "review" });
+  const opened = await (await openedResponse).json();
+  const source = opened.view.available_inputs.find((item: { annotation: { evidence_refs: unknown[] } }) => !item.annotation.evidence_refs?.length);
+  const sourceBefore = JSON.stringify(source);
+  const proposals = page.locator('.sidebar [data-list-key^="target:"]');
+  await proposals.first().click(); await page.keyboard.press("2"); await expect(proposals.first()).toContainText("Rejected");
+  const creates: unknown[] = [];
+  page.on("request", request => { if (request.url().endsWith("/commands") && request.postDataJSON()?.payload?.command === "create_annotation") creates.push(request.postDataJSON()); });
+  await page.getByRole("button", { name: /Edit & Replace/ }).click();
+  await expect(page.getByText("Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement.")).toBeVisible();
+  expect(creates).toHaveLength(0);
+  await page.getByRole("button", { name: "Cancel (Esc)" }).click();
+  await expect(proposals.first()).toContainText("Rejected"); expect(creates).toHaveLength(0);
+  await page.getByRole("button", { name: /Edit & Replace/ }).click();
+  await proposals.nth(1).click();
+  await expect(page.getByRole("button", { name: "Cancel (Esc)" })).toHaveCount(0);
+  await proposals.first().click(); await page.getByRole("button", { name: /Edit & Replace/ }).click();
+  const copied = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "create_annotation");
+  await selectText(page, 0, 9);
+  await expect(page.getByRole("button", { name: "Reset decision and edit copy" })).toBeVisible();
+  await page.keyboard.press("Escape"); await expect(proposals.first()).toContainText("Rejected"); expect(creates).toHaveLength(0);
+  await selectText(page, 0, 9); await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
+  const copyResponse = await copied; expect(copyResponse.ok()).toBeTruthy();
+  const copy = (await copyResponse.json()).annotations[0];
+  expect(creates).toHaveLength(1);
+  expect((creates[0] as { payload: { segments: unknown[] } }).payload.segments).toEqual([{ start: 0, end: 9 }]);
+  expect(copy.annotation.note).toBeUndefined(); expect(copy.annotation.evidence_refs).toHaveLength(1);
+  await expect(proposals.first()).toContainText("Replaced");
+  await proposals.nth(1).click(); await page.keyboard.press("2"); await expect(proposals.nth(1)).toContainText("Rejected");
+  await submitCase(page);
+  const reopened = await authenticatedRequest(page, `/api/v1/assignments/${opened.assignment.id}/open`, "POST");
+  expect(JSON.stringify((await reopened.json()).view.available_inputs.find((item: { version: string }) => item.version === source.version))).toBe(sourceBefore);
+  const restored = await authenticatedRequest(page, "/api/v1/projects/pkg-spanless-decisions/settings", "PATCH", { allow_spanless_findings: true });
+  expect(restored.ok()).toBeTruthy();
 });

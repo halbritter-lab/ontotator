@@ -971,13 +971,14 @@ describe("CaseScreen integration", () => {
     expect(apply).toHaveBeenCalledOnce();
   });
 
-  it("collects a reason before adopting a spanless proposal into an enforced draft", async () => {
+  it.each(["optional", "required_on_complete"] as const)("collects a reason before adopting a spanless proposal (%s)", async (evidencePolicy) => {
     const view = withEditableFinding(structuredClone(sampleView));
     Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true });
     const proposal = view.draft.annotations![0]; view.draft.annotations = []; view.available_inputs = [proposal];
     view.key.mode = "review"; view.draft.key.mode = "review";
     const target = { annotation_id: proposal.annotation.annotation_id, version: proposal.version };
     view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    view.layers![0].annotation_types[0].evidence_policy = evidencePolicy;
     const apply = vi.spyOn(api, "applyCommand").mockRejectedValue(new ValidationError("Copy save refused"));
     render(<CaseScreen view={view} workspaceId="ws-reason" onClose={vi.fn()} />);
     fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
