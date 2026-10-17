@@ -464,6 +464,19 @@ def test_scoped_metadata_never_reveals_hidden_documents_after_authority_loss(
     scoped = ScopedRepository(
         db, Access(uid, "reader", False, {"p": frozenset({"annotator"})})
     )
+    assert [v.document_id for v in scoped.list_variants("p")] == ["native"]
+    with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
+        scoped.get_variant("p", "translation")
+    with pytest.raises(DomainError, match="DOCUMENT_NOT_FOUND"):
+        scoped.get_variant_text("p", "translation")
+    # Current mixed roles allow case browsing, while work/proposals stay exact.
+    # The already-created repository must use the new role, not its cached Access.
+    with db.transaction() as conn:
+        conn.execute(
+            insert(ProjectMembershipRow).values(
+                project_id=pid, user_id=uid, role="adjudicator"
+            )
+        )
     assert [v.document_id for v in scoped.list_variants("p")] == [
         "native",
         "translation",

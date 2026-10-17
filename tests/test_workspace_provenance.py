@@ -256,15 +256,32 @@ def test_sibling_text_visibility_and_forged_associations_do_not_grant_sets(env):
     assert response.status_code == 200
     view = response.json()["view"]
     key = WorkspaceKey.model_validate(view["key"])
-    assert (
-        env.alice.get("/api/v1/projects/proj/documents/sibling/text").status_code == 200
-    )
+    sibling_text = "/api/v1/projects/proj/documents/sibling/text"
+    assert env.alice.get(sibling_text).status_code == 404
+    # Explicit current browsing authority preserves this test's stronger premise:
+    # readable sibling text still cannot supply another workspace's proposal sets.
+    with env.db.transaction() as conn:
+        pid = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == "proj")
+        ).scalar_one()
+        conn.execute(
+            insert(ProjectMembershipRow).values(
+                project_id=pid, user_id=env.user.id, role="adjudicator"
+            )
+        )
+    assert env.alice.get(sibling_text).status_code == 200
     sibling_metadata = env.app.state.repo.proposal_metadata("proj", "sibling")
     sibling_offers = [
         (aid, version, meta["proposal_set_id"])
         for (aid, version), meta in sibling_metadata.items()
     ]
     assert env.repo.workspace_proposal_sets(key, sibling_offers) == []
+    assert (
+        env.alice.get(
+            f"/api/v1/projects/proj/proposal-sets/{sibling_offers[0][2]}"
+        ).status_code
+        == 404
+    )
     aid, version, _set_id = offers(view)[0]
     assert (
         env.repo.workspace_proposal_sets(key, [(aid, version, sibling_offers[0][2])])
