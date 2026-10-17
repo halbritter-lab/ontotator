@@ -621,8 +621,9 @@ test.describe("ontology tree", () => {
       });
     }
     // Direction C with the compact reading shell (48 px) and case toolbar (52 px).
-    // The disclosure restores full editor width and frees six vertical pixels;
-    // all floors, ratios, docking, containment and focus checks above remain pinned.
+    // The disclosure restores full editor width and frees six vertical pixels.
+    // D3 adds the annotation note and last-mention guidance to intrinsic panel height;
+    // the tree still retains its minimum, and every usability check above stays pinned.
     expect(heights).toEqual([
       "1025x720: 248/372",
       "1100x700: 240/360",
@@ -630,8 +631,8 @@ test.describe("ontology tree", () => {
       "1440x900: 400/400",
       "1599x900: 400/400",
       "1600x900: 400/400",
-      "1920x1080: 480/500",
-      "2560x1440: 536/804",
+      "1920x1080: 490/490",
+      "2560x1440: 639/701",
     ]);
   });
 
