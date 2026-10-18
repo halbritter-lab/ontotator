@@ -103,6 +103,7 @@ Recommended option first.
 - D1: (a) opt-in coupling, never while editing, visible paragraph pairing, no snap-back.
 - D2: (a) export "Uncertain" decisions flagged as uncertain, note required, renamed so it cannot be confused with the axis value.
 - D3: (b) spanless findings need a note, the button is renamed and demoted, and a project rule can disable them.
+  - User clarification on 2026-10-18: the note requirement must also be configurable. Provide three project modes: prohibited, allowed with a required reason, and allowed with an optional reason. This supersedes the unconditional note requirement; see the Phase 0 decision-semantics plan amendment.
 - D4: (a) warning with count and jump in the submit dialog, badge in the list.
 - D5: (a) only the "Entire text checked" confirmation; per-layer "verified" is removed.
 - Re-anchor items: resolved by the reviewer in the case ("re-create here" or "dismiss with reason").

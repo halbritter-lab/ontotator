@@ -12,6 +12,18 @@
 
 ## Global Constraints
 
+### Binding D3 clarification, 2026-10-18
+
+The user clarified that requiring a justification must itself be configurable, and approved three project modes: prohibited, allowed with a required reason, and allowed with an optional reason. This supersedes the unconditional D3 note requirement in the original task text below. Keep the current default (allowed with a required reason); the user has not selected a different default or answered P0-S about existing open drafts.
+
+Technical implementation: retain `allow_spanless_findings` and add `require_spanless_note: bool = True` to project storage/settings/rule projection and the read-only workspace view. Migration 0009 follows re-anchor migration 0008 and adds only the project column; do not alter old migrations, draft classification or immutable content. Prohibition takes precedence. When spanless findings are allowed, reject an absent/blank reason only if the new flag is true. Existing evidence/profile requirements and authorization remain unchanged. Use one three-option control in Project Settings, mapping to the two backend fields; optional mode must permit note-less creation, removing the last mention, note clearing, historical proposal replacement and submission. A supplied optional note retains existing autosave, versioning and export behavior.
+
+Execution follow-up:
+
+- [ ] Backend: update `domain/project_rules.py`, `projects/service.py`, `storage/tables.py`, `storage/repository.py`, workspace projection and migration `0009_spanless_note_rule.py`; regenerate OpenAPI/TypeScript contracts. Cover all three modes, partial settings updates, authorization, migration from 0008 and preserved legacy draft/snapshot behavior with focused pytest tests.
+- [ ] Frontend: update `admin/ProjectSettingsPage.tsx`, `app/CaseScreen.tsx`, affected editor props/copy and handwritten API types. Cover optional-note creation, clearing/autosave/navigation, last-mention removal, historical replacement, and saved settings with focused Vitest tests (`--maxWorkers=4 --minWorkers=1`) and `frontend/browser/decision-semantics.spec.ts` on the disposable server only. Reuse existing profile/forbidden-mode regression coverage.
+- [ ] Review this amendment's complete diff independently, fix confirmed findings, and verify the integrated source locally. Earlier gate evidence applies only through `bf80b24`; no new bundled UI or acceptance candidate is implied. Keep commits local and retain the reserved demo and pending asset/publication approvals.
+
 - English UI only. Light theme only. React 18 single-page app with plain CSS and no UI library.
 - Runs in offline and closed networks: no request may leave the app's origin (no CDN, no external fonts).
 - Ontologies, documents and annotations are pinned and hashed; Unicode codepoint offsets are exact.

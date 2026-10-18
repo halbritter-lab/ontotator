@@ -13,7 +13,7 @@ Deliver a reliable everyday annotation/review loop before workflow builders, rep
 | P0.1 | Read source/translation without forced jumps or implied semantic alignment | [B0.1 scrolling](2026-10-17-phase0-coupled-scrolling.md) | D1 decided; ready |
 | P0.2 | Stable decision keys, visible defaulted values, one explicit completion confirmation | [B0.2 semantics](2026-10-17-phase0-decision-semantics.md), Task 1 | D4/D5 decided; ready; sequence CaseScreen edits after B0.1 |
 | P0.3 | Restrict independent version browsing without breaking assigned translation review | [B0.4 access](2026-10-17-phase0-access-and-cleanups.md), access tasks | D16 decided; P0-A clarifies own-history scope |
-| P0.4 | Justify findings without text evidence; project setting enforced by backend | B0.2 Task 2 | D3 decided; storage/export/new-draft enforcement ready; only existing-open-draft enforcement awaits P0-S; migration 0007 |
+| P0.4 | Configure findings without text evidence: prohibited, required reason, optional reason | B0.2 Task 2 and 2026-10-18 clarification | User approved all three modes; optional-reason follow-up underway with migration 0009; existing-open-draft enforcement still awaits P0-S |
 | P0.5 | Distinguish unresolved review from clinical uncertainty; require note; export explicit flag | B0.2 Tasks 3–4 | D2 decided; ontospan 1.2 format/dependency work; P0-U for invalid targets |
 | P0.6 | Finish reviewing findings after text correction | [B0.3 re-anchor](2026-10-17-phase0-reanchor-decisions.md) | D3 storage and D16 policy landed locally; P0-R completion policy; migration 0008 |
 | P0.7 | Remove duplicate controls and opaque labels | B0.4 remaining tasks | Shared editor files stable; keep behind correctness tasks |
@@ -38,6 +38,8 @@ Login/NAT hardening can run independently when capacity exists. Refresh P9's rem
 ## Immediate policy register
 
 These narrow questions resolve actual implementation gaps; they do not reopen D1–D5.
+
+On 2026-10-18 the user clarified D3: projects must also be able to allow spanless findings without a required reason. The three-mode correction is approved and ready for implementation; it does not settle the existing-draft question P0-S. Keep the previously implemented required-reason default until a different default is selected. See the binding amendment in the decision-semantics plan. This answer does not grant ontospan publication, embedded-asset replacement or merge approval.
 
 | ID | Question | Recommendation | Status |
 | --- | --- | --- | --- |
