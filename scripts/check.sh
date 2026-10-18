@@ -1,17 +1,85 @@
 #!/usr/bin/env bash
-# The complete local gate. There is no CI (T2 index R2); run this before a merge.
-# Docker must be running: the backend and browser tests use PostgreSQL containers
-# (or set ONTOCURATOR_TEST_PG_URL to a throwaway server's superuser URL).
-# Works in Git Bash on Windows and on Linux and macOS. Stops at the first failure.
+# Serial local checks. The default is the complete required gate.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 summary=()
+total_started=$SECONDS
+selected=""
+
+usage() {
+    cat <<'HELP'
+Usage: bash scripts/check.sh [--only STAGE]
+
+Without arguments, run the complete local gate serially.
+--only runs a partial gate: static | frontend | backend | browser | containers
+  static      lint, format, types, contracts, cheap contract tests, wheel
+  frontend    frontend unit tests
+  backend     complete backend tests with the 20 slowest durations
+  browser     frontend build and complete Playwright suite (one worker)
+  containers  opt-in container checks and smoke tests
+
+CHECK_VITEST_WORKERS: positive integer, default 2; use 4 on a dedicated machine.
+CHECK_CONTAINERS=1 adds containers to the complete gate; CHECK_IMAGE selects image.
+ONTOCURATOR_TEST_PG_URL may select a disposable PostgreSQL test server.
+HELP
+}
 
 fail() {
     echo "" >&2
     echo "check.sh: $*" >&2
     exit 1
+}
+
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        --help|-h)
+            [ "$#" -eq 1 ] || fail "--help accepts no other arguments."
+            usage
+            exit 0
+            ;;
+        --only)
+            [ "$#" -eq 2 ] || fail "Use --only with exactly one stage; see --help."
+            selected="$2"
+            case "$selected" in
+                static|frontend|backend|browser|containers) ;;
+                *) fail "Unknown stage '$selected'; see --help." ;;
+            esac
+            ;;
+        *) fail "Unknown argument '$1'; see --help." ;;
+    esac
+fi
+
+runs() { [ -z "$selected" ] || [ "$selected" = "$1" ]; }
+
+vitest_workers="${CHECK_VITEST_WORKERS:-2}"
+if runs frontend; then
+    [[ "$vitest_workers" =~ ^[1-9][0-9]*$ ]] \
+        || fail "CHECK_VITEST_WORKERS must be a positive integer."
+fi
+
+if runs static || runs backend || [ "$selected" = containers ]; then
+    command -v uv >/dev/null 2>&1 || fail "uv is not on PATH; install it from https://docs.astral.sh/uv/."
+fi
+if runs static || runs frontend || runs browser || [ "$selected" = containers ]; then
+    command -v npm >/dev/null 2>&1 || fail "npm is not on PATH; install Node.js 20 or later."
+    [ -d frontend/node_modules ] || fail "frontend dependencies are missing; run 'npm --prefix frontend ci' first."
+fi
+if [ "$selected" = containers ] || { [ -z "$selected" ] && [ "${CHECK_CONTAINERS:-0}" = 1 ]; } \
+    || { { runs backend || runs browser; } && [ -z "${ONTOCURATOR_TEST_PG_URL:-}" ]; }; then
+    command -v docker >/dev/null 2>&1 \
+        || fail "docker is not on PATH. Start Docker or set ONTOCURATOR_TEST_PG_URL for PostgreSQL checks."
+    docker info >/dev/null 2>&1 \
+        || fail "Docker is not reachable. Start Docker Desktop or the Docker daemon."
+fi
+
+print_summary() {
+    echo ""
+    echo "Summary:"
+    if [ "${#summary[@]}" -gt 0 ]; then
+        printf '  %s\n' "${summary[@]}"
+    fi
+    echo "  total $((SECONDS - total_started))s"
 }
 
 step() {
@@ -20,46 +88,44 @@ step() {
     local started=$SECONDS
     echo ""
     echo "==> ${name}"
-    if ! "$@"; then
-        fail "FAILED: ${name} (command: $*)"
+    if "$@"; then
+        summary+=("ok      $(printf '%4ds' $((SECONDS - started)))  ${name}")
+    else
+        local status=$?
+        summary+=("failed  $(printf '%4ds' $((SECONDS - started)))  ${name}")
+        print_summary
+        fail "FAILED: ${name} (exit ${status}; command: $*)"
     fi
-    summary+=("ok  $(printf '%4ds' $((SECONDS - started)))  ${name}")
 }
 
-command -v uv >/dev/null 2>&1 || fail "uv is not on PATH; install it from https://docs.astral.sh/uv/."
-command -v npm >/dev/null 2>&1 || fail "npm is not on PATH; install Node.js 20 or later."
-[ -d frontend/node_modules ] || fail "frontend dependencies are missing; run 'npm --prefix frontend ci' first."
-
-if [ -z "${ONTOCURATOR_TEST_PG_URL:-}" ]; then
-    command -v docker >/dev/null 2>&1 \
-        || fail "docker is not on PATH. The tests need PostgreSQL: install and start Docker (Desktop), or set ONTOCURATOR_TEST_PG_URL."
-    docker info >/dev/null 2>&1 \
-        || fail "Docker is not reachable. Start Docker Desktop (or the Docker daemon) and run this script again, or set ONTOCURATOR_TEST_PG_URL."
-fi
-
-# The wheel check writes its wheel here (build/ is ignored by Git).
+# Only the static phase creates this disposable build directory.
 wheel_dir=build/check-wheel
-trap 'rm -rf "$wheel_dir"' EXIT
-
-total_started=$SECONDS
-
-step "ruff check" uv run ruff check .
-step "ruff format --check" uv run ruff format --check .
-step "mypy" uv run mypy src
-step "OpenAPI drift" uv run python scripts/export_openapi.py --check
-step "frontend typecheck" npm --prefix frontend run typecheck
-step "TypeScript API drift" npm --prefix frontend run api:check
-# uv lock --check, then the wheel from the committed web assets and its contents.
-step "wheel build (lock and contents)" uv run python scripts/check_wheel.py \
-    --out-dir "$wheel_dir"
-# Bounded workers: one jsdom worker per core exhausted memory on a 16 GB machine
-# with Docker running. Override with CHECK_VITEST_WORKERS.
-step "frontend unit tests" npm --prefix frontend test -- \
-    --maxWorkers="${CHECK_VITEST_WORKERS:-4}" --minWorkers=1
-step "backend tests (PostgreSQL)" uv run pytest -q
-step "browser tests (Playwright)" npm --prefix frontend run test:e2e
-
-if [ "${CHECK_CONTAINERS:-0}" = "1" ]; then
+if runs static; then
+    trap 'rm -rf "$wheel_dir"' EXIT
+    step "ruff check" uv run ruff check .
+    step "ruff format --check" uv run ruff format --check .
+    step "mypy" uv run mypy src
+    step "OpenAPI drift" uv run python scripts/export_openapi.py --check
+    step "admin error catalog drift" uv run python scripts/export_admin_error_codes.py --check
+    step "source and wheel contract preflight" uv run pytest \
+        tests/test_admin_error_codes.py tests/test_check_wheel.py tests/test_check_script.py -q
+    step "frontend typecheck" npm --prefix frontend run typecheck
+    step "TypeScript API drift" npm --prefix frontend run api:check
+    step "wheel build (lock and contents)" uv run python scripts/check_wheel.py \
+        --out-dir "$wheel_dir"
+fi
+if runs frontend; then
+    # Keep RAM available for Docker and other work; callers can override explicitly.
+    step "frontend unit tests" npm --prefix frontend test -- \
+        --maxWorkers="$vitest_workers" --minWorkers=1
+fi
+if runs backend; then
+    step "backend tests (PostgreSQL)" uv run pytest -q --durations=20
+fi
+if runs browser; then
+    step "browser tests (Playwright)" npm --prefix frontend run test:e2e
+fi
+if [ "$selected" = containers ] || { [ -z "$selected" ] && [ "${CHECK_CONTAINERS:-0}" = 1 ]; }; then
     container_args=(--smoke)
     if [ -n "${CHECK_IMAGE:-}" ]; then
         container_args+=(--image "$CHECK_IMAGE")
@@ -68,8 +134,9 @@ if [ "${CHECK_CONTAINERS:-0}" = "1" ]; then
         "${container_args[@]}"
 fi
 
-echo ""
-echo "Summary:"
-printf '  %s\n' "${summary[@]}"
-echo "  total $((SECONDS - total_started))s"
-echo "All local checks passed."
+print_summary
+if [ -z "$selected" ]; then
+    echo "All local checks passed."
+else
+    echo "Selected stage checks passed (partial gate: ${selected})."
+fi

@@ -294,7 +294,7 @@ CHECK_CONTAINERS=1 bash scripts/check.sh
 CHECK_CONTAINERS=1 CHECK_IMAGE=ontocurator:release bash scripts/check.sh
 ```
 
-The base gate includes backend PostgreSQL and Playwright tests plus formatting, linting, typing, API drift and wheel checks. `ONTOCURATOR_TEST_PG_URL` can target a disposable test superuser database; never production. `CHECK_VITEST_WORKERS` bounds frontend test parallelism (default 4). There is no active CI gate.
+The base gate includes backend PostgreSQL and Playwright tests plus formatting, linting, typing, API drift and wheel checks. `ONTOCURATOR_TEST_PG_URL` can target a disposable test superuser database; never production. `CHECK_VITEST_WORKERS` bounds frontend test parallelism (default 2; use 4 on a dedicated machine). See [focused local checks](operations/local-checks.md) for partial phases and prerequisites. There is no active CI gate.
 
 `CHECK_CONTAINERS=1` adds the container checker and browser smoke on one shared stack. Set `CHECK_IMAGE` to reuse a verified local image for app and migrations; otherwise the checker builds the dev image with `GITHUB_TOKEN_FILE`. For the container checks and smoke alone, run:
 
