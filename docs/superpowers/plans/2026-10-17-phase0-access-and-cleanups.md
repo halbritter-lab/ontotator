@@ -1,5 +1,7 @@
 # Phase 0: Version Access and Small Cleanups Implementation Plan
 
+**Binding P0-A answer, 2026-10-18:** The user approved exact own-history access for independent annotators. Preserve the implemented access checks; general sibling/version browsing and other annotators' submissions remain restricted. Existing coverage includes `tests/test_annotation_versions.py` (own refs, foreign denial, assignment revocation) and `frontend/browser/variants.spec.ts` (restricted task and exact own history). The passing baseline gate covers this unchanged behavior; no new permission expansion is needed.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Enforce D16's independent-annotation version restrictions in the backend and UI, then complete B0.4's six small usability cleanups.

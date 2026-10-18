@@ -153,6 +153,8 @@ Existing drafts retain their current enforcement behavior provisionally until P0
 
 ### Task 4: Export unresolved results with a validated structured flag
 
+**Approval update, 2026-10-18:** P0-U and P0-S are approved as recommended in the master register. All future submissions, including existing drafts, obey the selected spanless mode; incremental legacy edits and historical submissions retain compatibility. Invalid unresolved results require correction or rejection. Reviewed ontospan `738f3d43ca0896c9d146a15fb9538b938229368a` is published on its approved branch and the remote ref has been verified; use that immutable pin. No new migration or immutable payload backfill is required for these submission-boundary changes.
+
 **Prerequisites:** Task 3 and the reviewed ontospan 1.2 deliverable described above; consult P0-U before enabling invalid-target submission semantics. Never edit the sibling repository as an incidental unreviewed dependency fix.
 
 **Files:**

@@ -10,6 +10,8 @@
 
 **Spec:** `2026-10-17-next-agentic-work.md`, decided re-anchor behavior; execution order and decision register in `2026-10-17-phase0-priorities.md`.
 
+**Binding P0-R answer, 2026-10-18:** The user approved mandatory resolution of every frozen pending item before submission, either by re-creation or dismissal with a reason. Implement the count and queue navigation in the submit dialog and `REANCHOR_ITEMS_UNRESOLVED` server enforcement. Earlier provisional statements below apply only to the previous implementation checkpoint; they no longer gate this work.
+
 ## Global constraints
 
 - English UI, existing shared UI components and shortcut registry, Unicode codepoint offsets.
