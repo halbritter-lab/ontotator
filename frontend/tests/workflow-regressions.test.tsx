@@ -110,7 +110,7 @@ const baseView = (): WorkspaceView => ({
   available_inputs: [],
   submissions: [],
   term_statuses: {},
-  allow_spanless_findings: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
+  allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
   axes_config: [
     { id: "assertion", label: "Vorhandensein (Assertion)", options: ["present", "absent", "uncertain"], allow_empty: true },
   ],

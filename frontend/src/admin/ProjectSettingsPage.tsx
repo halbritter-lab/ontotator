@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, type CurrentUser, type OntologyInfo, type ProjectSettings } from "../api/client";
-import { Button, Checkbox, InlineMessage, Textarea, TextInput } from "../ui";
+import { Button, Checkbox, InlineMessage, Select, Textarea, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { HiddenAxisValuesField } from "./HiddenAxisValuesField";
 import { LanguagesField } from "./LanguagesField";
@@ -29,7 +29,7 @@ export function ProjectSettingsPage(props: ProjectSettingsPageProps): JSX.Elemen
 type Section = "General" | "Guideline" | "Rules" | "Pins" | "Profile";
 const generalOf = (settings: ProjectSettings) => ({ name: settings.name, description: settings.description ?? "", languages: settings.languages ?? [] });
 const guidelineOf = (settings: ProjectSettings) => ({ url: settings.guideline_url ?? "", version: settings.guideline_version ?? "" });
-const rulesOf = (settings: ProjectSettings) => ({ allow_spanless_findings: settings.allow_spanless_findings ?? true, require_chosen_axes: settings.require_chosen_axes, adjudicator_not_annotator: settings.adjudicator_not_annotator, contiguous_mentions_only: settings.contiguous_mentions_only, annotate_accepted_translations_only: settings.annotate_accepted_translations_only, hidden_axis_values: settings.hidden_axis_values ?? {} });
+const rulesOf = (settings: ProjectSettings) => ({ allow_spanless_findings: settings.allow_spanless_findings ?? true, require_spanless_note: settings.require_spanless_note ?? true, require_chosen_axes: settings.require_chosen_axes, adjudicator_not_annotator: settings.adjudicator_not_annotator, contiguous_mentions_only: settings.contiguous_mentions_only, annotate_accepted_translations_only: settings.annotate_accepted_translations_only, hidden_axis_values: settings.hidden_axis_values ?? {} });
 
 function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved }: ProjectSettingsPageProps & { initial: ProjectSettings; ontologies: OntologyInfo[] }): JSX.Element {
   const [model, setModel] = useState(initial);
@@ -88,7 +88,13 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved 
     </form>
     <form aria-label="Rules" onSubmit={event => submit(event, "Rules", () => api.updateProjectSettings(projectKey, rules))}>
       <fieldset disabled={busy !== null}><legend>Rules</legend>
-        <Checkbox id="project-rule-spanless" label="Allow findings without a text span" hint="New drafts use this rule and require a reason when no text span is linked. The policy for existing open drafts is pending. Profile requirements for text evidence still apply." checked={rules.allow_spanless_findings} onChange={event => { setRules({ ...rules, allow_spanless_findings: event.target.checked }); setSaved(null); }} />
+        <Select id="project-rule-spanless" label="Findings without a text span" hint="Applies to new drafts. Profile requirements for text evidence still apply."
+          value={!rules.allow_spanless_findings ? "prohibited" : rules.require_spanless_note ? "required" : "optional"}
+          onChange={event => { const mode = event.target.value; setRules({ ...rules, allow_spanless_findings: mode !== "prohibited", require_spanless_note: mode === "prohibited" ? rules.require_spanless_note : mode === "required" }); setSaved(null); }}>
+          <option value="prohibited">Prohibited</option>
+          <option value="required">Allowed with a required reason</option>
+          <option value="optional">Allowed with an optional reason</option>
+        </Select>
         <Checkbox id="project-rule-chosen" label="Every axis must be chosen before submission" checked={rules.require_chosen_axes} onChange={event => { setRules({ ...rules, require_chosen_axes: event.target.checked }); setSaved(null); }} />
         <Checkbox id="project-rule-adjudicator" label="The adjudicator of a document may not be one of its annotators" checked={rules.adjudicator_not_annotator} onChange={event => { setRules({ ...rules, adjudicator_not_annotator: event.target.checked }); setSaved(null); }} />
         <Checkbox id="project-rule-contiguous" label="Only contiguous mentions" checked={rules.contiguous_mentions_only} onChange={event => { setRules({ ...rules, contiguous_mentions_only: event.target.checked }); setSaved(null); }} />

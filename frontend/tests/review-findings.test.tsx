@@ -52,7 +52,7 @@ const baseView = (): WorkspaceView => ({
   available_inputs: [],
   submissions: [],
   term_statuses: {},
-  allow_spanless_findings: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
+  allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
   axes_config: [{ id: "assertion", label: "Assertion", options: ["present", "absent", "uncertain"], allow_empty: true }],
   axes_config_sha256: "sha-axes",
   draft: { key, targets: { target_set_id: "empty", targets: [] }, revision: 0, annotations: [], evidence: [], decisions: [], checked_layer_ids: [] },

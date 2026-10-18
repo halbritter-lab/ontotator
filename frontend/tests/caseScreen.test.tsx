@@ -19,7 +19,7 @@ it("never pre-fills clinical axis values (no assertion default for HPO terms)", 
 
 describe("CaseScreen integration", () => {
   const sampleView: WorkspaceView = {
-    allow_spanless_findings: true, enforce_spanless_rules: false,
+    allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false,
     document: {
       document_id: "doc-test-1",
       text: "The patient showed severe hypotonia and seizure activity.",
@@ -289,6 +289,89 @@ describe("CaseScreen integration", () => {
     fireEvent.change(reason, { target: { value: "  Summary outside this excerpt  " } });
     fireEvent.keyDown(candidate, { key: "Enter" });
     await waitFor(() => expect(apply).toHaveBeenCalledWith("ws", expect.objectContaining({ payload: expect.objectContaining({ command: "create_annotation", note: "Summary outside this excerpt" }) })));
+  });
+
+  it("creates a finding without a reason when the enforced workspace makes it optional", async () => {
+    const view = { ...sampleView, enforce_spanless_rules: true, allow_spanless_findings: true, require_spanless_note: false };
+    const apply = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
+    vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "optional-search", candidates: [{ term_id: "HP:0001252", label: "Hypotonia", rank: 1 }] } as any);
+    render(<CaseScreen view={view} workspaceId="ws-optional" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
+    expect((screen.getByLabelText(/Reason for no text span/) as HTMLTextAreaElement).required).toBe(false);
+    fireEvent.change(screen.getByLabelText(/Search ontology term/), { target: { value: "Hypotonia" } });
+    fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
+    await waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    expect(apply.mock.calls[0][1].payload).toMatchObject({ command: "create_annotation", segments: [], term_id: "HP:0001252" });
+    expect(apply.mock.calls[0][1].payload).not.toHaveProperty("note");
+  });
+
+  it("autosaves a cleared optional reason before navigation without a discard guard", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true, require_spanless_note: false });
+    view.draft.annotations![0].annotation.note = "Previous optional reason";
+    const saved = structuredClone(view.draft); saved.revision = 1; delete saved.annotations![0].annotation.note;
+    const apply = vi.spyOn(api, "applyCommand").mockResolvedValue(saved);
+    const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
+    render(<CaseScreen view={view} workspaceId="ws-optional-clear" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
+    selectEditableFinding();
+    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "  " } });
+    await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
+    expect(apply).toHaveBeenCalledWith("ws-optional-clear", expect.objectContaining({ payload: { command: "set_annotation_note", annotation_id: "pending-finding", note: null } }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("permits removing the last mention without an optional reason", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true, require_spanless_note: false });
+    view.draft.annotations![0].annotation.evidence_refs = [{ evidence_id: "mention", version: "mention-version" }];
+    view.draft.evidence = [{ version: "mention-version", mention: { evidence_id: "mention", segments: [{ start: 0, end: 3 }] } }] as any;
+    const apply = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
+    render(<CaseScreen view={view} workspaceId="ws-optional-detach" onClose={vi.fn()} />);
+    selectEditableFinding();
+    const remove = screen.getByRole("button", { name: "Remove" });
+    expect((remove as HTMLButtonElement).disabled).toBe(false); fireEvent.click(remove);
+    fireEvent.click(screen.getByRole("button", { name: "Yes, remove" }));
+    await waitFor(() => expect(apply).toHaveBeenCalledWith("ws-optional-detach", expect.objectContaining({ payload: expect.objectContaining({ command: "detach_mention" }) })));
+  });
+
+  it.each(["optional", "required_on_complete"] as const)("opens a note-less historical editable copy when reasons are optional (%s)", async evidencePolicy => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true, require_spanless_note: false });
+    const proposal = view.draft.annotations![0]; view.draft.annotations = []; view.available_inputs = [proposal];
+    view.layers![0].annotation_types[0].evidence_policy = evidencePolicy;
+    view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: proposal.annotation.annotation_id, version: proposal.version };
+    view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_workspace, envelope) => {
+      const copy = structuredClone(proposal); copy.annotation.annotation_id = envelope.payload.annotation_id as string;
+      copy.annotation.provenance.source_refs = [`${target.annotation_id}:${target.version}`];
+      return { ...view.draft, revision: 1, annotations: [copy] };
+    });
+    const decide = vi.spyOn(api, "recordDecision");
+    render(<CaseScreen view={view} workspaceId="ws-optional-copy" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+    await waitFor(() => expect(apply).toHaveBeenCalledOnce());
+    expect(apply.mock.calls[0][1].payload).not.toHaveProperty("note");
+    expect(screen.queryByRole("dialog", { name: "Reason for no text span" })).toBeNull();
+    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).required).toBe(false);
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("keeps an unresolved reviewer note mandatory when clinical reasons are optional", () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: true, require_spanless_note: false });
+    const proposal = view.draft.annotations![0]; view.draft.annotations = []; view.available_inputs = [proposal];
+    view.key.mode = "review"; view.draft.key.mode = "review";
+    const target = { annotation_id: proposal.annotation.annotation_id, version: proposal.version };
+    view.targets!.targets = [target]; view.draft.targets = view.targets!;
+    const decide = vi.spyOn(api, "recordDecision");
+    render(<CaseScreen view={view} workspaceId="ws-optional-review" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    fireEvent.click(screen.getByRole("button", { name: /Unresolved/ }));
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Reviewer note" }));
+    expect(screen.getByRole("textbox", { name: "Reviewer note" }).getAttribute("aria-invalid")).toBe("true");
+    expect(decide).not.toHaveBeenCalled();
   });
 
   it("explains prohibited spanless creation without overriding profile evidence requirements", () => {

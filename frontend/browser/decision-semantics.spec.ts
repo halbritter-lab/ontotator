@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { authenticatedRequest, importPackage, openCase, selectText, submitCase } from "./helpers";
+import { authenticatedRequest, importPackage, loginExisting, openCase, selectText, submitCase } from "./helpers";
 
 test("one confirmation submits a two-layer negative finding", async ({ page }) => {
   await importPackage(page, "multi_editable", "pkg-scenario-c", "decision-completion");
@@ -160,9 +160,9 @@ test("new-draft spanless findings require a reason, retain it through search and
 test("a lead persists the project spanless rule and new drafts explain the prohibition", async ({ page }) => {
   await importPackage(page, "single", "browser-fixture", "spanless-settings-lead");
   await page.goto("/#/projects/browser-fixture/settings");
-  const allow = page.getByRole("checkbox", { name: "Allow findings without a text span" });
-  await allow.uncheck(); await page.getByRole("button", { name: "Save rules" }).click();
-  await expect(page.getByText("Rules saved.")).toBeVisible(); await page.reload(); await expect(allow).not.toBeChecked();
+  const mode = page.getByRole("combobox", { name: "Findings without a text span" });
+  await mode.selectOption("prohibited"); await page.getByRole("button", { name: "Save rules" }).click();
+  await expect(page.getByText("Rules saved.")).toBeVisible(); await page.reload(); await expect(mode).toHaveValue("prohibited");
   await page.goto("/#/?project=browser-fixture"); await openCase(page);
   await expect(page.getByRole("button", { name: "Add finding without a text span" })).toBeDisabled();
   await expect(page.getByText("This project requires a text span for findings.")).toBeVisible();
@@ -254,4 +254,56 @@ test("a project prohibiting spanless findings repairs a source only after suppor
   expect(JSON.stringify((await reopened.json()).view.available_inputs.find((item: { version: string }) => item.version === source.version))).toBe(sourceBefore);
   const restored = await authenticatedRequest(page, "/api/v1/projects/pkg-spanless-decisions/settings", "PATCH", { allow_spanless_findings: true });
   expect(restored.ok()).toBeTruthy();
+});
+
+
+test("a lead enables optional reasons and an annotator creates, clears and submits a note-less finding", async ({ page, browser }) => {
+  await importPackage(page, "single", "browser-fixture", "optional-spanless-lead");
+  await page.goto("/#/projects/browser-fixture/settings");
+  const mode = page.getByRole("combobox", { name: "Findings without a text span" });
+  await mode.selectOption("optional"); await page.getByRole("button", { name: "Save rules" }).click();
+  await expect(page.getByText("Rules saved.")).toBeVisible(); await page.reload(); await expect(mode).toHaveValue("optional");
+  await page.getByRole("form", { name: "Rules" }).screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/spanless-modes-project-rules.png" });
+  const provisioned = await page.request.post("/__test_user__?username=optional-spanless-annotator&pseudonym=optional-spanless-annotator&projects=browser-fixture");
+  expect(provisioned.ok()).toBeTruthy();
+  const restricted = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/members/optional-spanless-annotator", "PUT", { roles: ["annotator"], revoke_assignments: true });
+  expect(restricted.ok()).toBeTruthy(); expect((await restricted.json()).roles).toEqual(["annotator"]);
+  const annotatorContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+    const annotator = await annotatorContext.newPage();
+    await loginExisting(annotator, "optional-spanless-annotator");
+    const openedResponse = annotator.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
+    await openCase(annotator, { projectKey: "browser-fixture" });
+    const opened = await (await openedResponse).json();
+    expect(opened.view.enforce_spanless_rules).toBe(true); expect(opened.view.require_spanless_note).toBe(false);
+    await annotator.getByRole("button", { name: "Add finding without a text span" }).click();
+    await expect(annotator.getByLabel("Reason for no text span")).not.toHaveAttribute("required", "");
+    await annotator.getByLabel(/Search ontology term/).fill("Hypotonia");
+    const createdResponse = annotator.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "create_annotation");
+    await annotator.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
+    const created = await (await createdResponse).json(); expect(created.annotations[0].annotation.note).toBeUndefined();
+    const note = annotator.getByLabel("Annotation note");
+    await note.fill("Optional clinical context");
+    const notedResponse = annotator.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "set_annotation_note");
+    await annotator.getByRole("heading", { name: "Mentions (0)" }).click();
+    const noted = await (await notedResponse).json(); expect(noted.annotations[0].annotation.note).toBe("Optional clinical context");
+    expect(noted.annotations[0].version).not.toBe(created.annotations[0].version);
+    await note.fill("");
+    const clearedResponse = annotator.waitForResponse(r => r.url().endsWith("/commands") && r.request().postDataJSON().payload.command === "set_annotation_note");
+    await annotator.getByRole("heading", { name: "Mentions (0)" }).click();
+    const cleared = await (await clearedResponse).json(); expect(cleared.annotations[0].annotation.note).toBeUndefined();
+    await annotator.getByRole("button", { name: "+ Add Mention", exact: true }).click(); await selectText(annotator, 0, 9);
+    await expect(annotator.getByRole("heading", { name: "Mentions (1)" })).toBeVisible();
+    await expect(annotator.getByRole("button", { name: "Remove", exact: true })).toBeEnabled();
+    await annotator.getByRole("button", { name: "Remove", exact: true }).click(); await annotator.getByRole("button", { name: "Yes, remove" }).click();
+    await expect(annotator.getByRole("heading", { name: "Mentions (0)" })).toBeVisible();
+    const submittedResponse = annotator.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST");
+    await submitCase(annotator);
+    const submitted = await (await submittedResponse).json(); expect(submitted.snapshots).toHaveLength(1);
+    expect(submitted.snapshots[0].annotation.note).toBeUndefined(); expect(submitted.snapshots[0].annotation.evidence_refs).toEqual([]);
+  } finally {
+    await annotatorContext.close();
+    const restored = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true, require_spanless_note: true });
+    expect(restored.ok()).toBeTruthy();
+  }
 });

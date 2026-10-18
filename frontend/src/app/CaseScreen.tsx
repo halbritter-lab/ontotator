@@ -164,6 +164,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const versionGeneration = useRef(0);
   useEffect(() => { versionGeneration.current++; setVersionBusy(false); return () => { versionGeneration.current++; }; }, [versionIdentity]);
   const readOnly = serverReadOnly || display !== null;
+  const spanlessNotesRequired = view.enforce_spanless_rules && view.require_spanless_note !== false;
   // A ref also protects callbacks retained before this task became read-only.
   const readOnlyRef = useRef(readOnly);
   readOnlyRef.current = readOnly;
@@ -196,7 +197,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   });
   const invalidAnnotationNotes = () => unsavedAnnotationNotes().filter(([id, note]) => {
     const ann = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === id)?.annotation;
-    return view.enforce_spanless_rules && ann && !ann.evidence_refs?.length && !note.trim();
+    return spanlessNotesRequired && ann && !ann.evidence_refs?.length && !note.trim();
   });
   const [isAttachingMention, setIsAttachingMention] = useState(false);
   const [textResyncToken, setTextResyncToken] = useState(0);
@@ -933,7 +934,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const note = annotationNoteDraftsRef.current[id];
     const ann = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === id)?.annotation;
     if (!ann || note === undefined || note === (ann.note ?? "")) return;
-    if (view.enforce_spanless_rules && !ann.evidence_refs?.length && !note.trim()) return;
+    if (spanlessNotesRequired && !ann.evidence_refs?.length && !note.trim()) return;
     const save = (async () => {
       await mutateAnnotationAndSyncDecision(id, () => enqueueMutation({ command: "set_annotation_note", annotation_id: id, note: note.trim() || null }));
       if (annotationNoteDraftsRef.current[id] === note) {
@@ -1070,7 +1071,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const createPendingAnnotation = async (termId: string, searchId?: string) => {
     if (readOnlyRef.current) return;
     if (!pendingAnnotation || creatingPending.current) return;
-    if (pendingAnnotation.isSpanless && view.enforce_spanless_rules && !spanlessReason.trim()) {
+    if (pendingAnnotation.isSpanless && spanlessNotesRequired && !spanlessReason.trim()) {
       setSpanlessReasonError(true);
       inspectorRef.current?.querySelector<HTMLTextAreaElement>("#spanless-reason")?.focus();
       return;
@@ -1418,7 +1419,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const sourceSnapshot = targetSnapshotOf(target);
     if (!existingCopy && view.enforce_spanless_rules && !sourceSnapshot?.annotation.evidence_refs?.length && !supportingSegments?.length) {
       if (!view.allow_spanless_findings) { setPendingEvidenceAdoption(target); setMobilePane("text"); return; }
-      if (!(reason ?? sourceSnapshot?.annotation.note ?? "").trim()) { setPendingAdoption(target); return; }
+      if (spanlessNotesRequired && !(reason ?? sourceSnapshot?.annotation.note ?? "").trim()) { setPendingAdoption(target); return; }
     }
 
     // 2. An explicit decision exists: ask before replacing it.
@@ -2236,7 +2237,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   {!savedPendingReanchor && <p>Or select a different term below.</p>}
                 </>}
                 {pendingAnnotation.isSpanless && <Textarea id="spanless-reason" label="Reason for no text span"
-                  required={view.enforce_spanless_rules} value={spanlessReason}
+                  required={spanlessNotesRequired} hint={!spanlessNotesRequired ? "Optional context for this finding." : undefined} value={spanlessReason}
                   error={spanlessReasonError && !spanlessReason.trim() ? "A reason is required before selecting a term." : undefined}
                   onChange={event => { setSpanlessReason(event.target.value); setSpanlessReasonError(false); }} />}
                 {!savedPendingReanchor && <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
@@ -2294,12 +2295,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               termLabel={selectedAnnotation ? termLabel(selectedAnnotation.annotation.layer_id, selectedAnnotation.annotation.term_id) : null}
               axesConfig={currentAxesConfig}
               noteValue={selectedAnnotation ? annotationNoteDrafts[selectedAnnotation.annotation.annotation_id] ?? selectedAnnotation.annotation.note ?? "" : ""}
-              noteRequired={!!view.enforce_spanless_rules && !!selectedAnnotation && !selectedAnnotation.annotation.evidence_refs?.length}
+              noteRequired={spanlessNotesRequired && !!selectedAnnotation && !selectedAnnotation.annotation.evidence_refs?.length}
               onChangeNote={note => { if (selectedAnnotationId) { annotationNoteDraftsRef.current = { ...annotationNoteDraftsRef.current, [selectedAnnotationId]: note }; setAnnotationNoteDrafts(annotationNoteDraftsRef.current); } }}
               onSaveNote={() => { if (selectedAnnotationId) void saveAnnotationNote(selectedAnnotationId).catch(reportError); }}
               detachLastBlockedReason={selectedAnnotation && view.enforce_spanless_rules ? (!view.allow_spanless_findings ? "This project requires a text span for findings." :
                 view.layers?.find(l => l.layer_id === selectedAnnotation.annotation.layer_id)?.annotation_types.find(t => t.type_id === selectedAnnotation.annotation.type_id)?.evidence_policy === "required_on_complete" ? "This annotation type requires a text span." :
-                !(selectedAnnotation.annotation.note ?? "").trim() ? "Enter a reason in the annotation note before removing the last mention." : undefined) : undefined}
+                spanlessNotesRequired && !(selectedAnnotation.annotation.note ?? "").trim() ? "Enter a reason in the annotation note before removing the last mention." : undefined) : undefined}
               linkedTarget={linkedTargetForSelectedAnnotation ? {
                 targetId: linkedTargetForSelectedAnnotation.targetKey,
                 termId: linkedTargetForSelectedAnnotation.termId,

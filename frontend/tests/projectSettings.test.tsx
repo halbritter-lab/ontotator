@@ -89,15 +89,30 @@ describe("project settings sections", () => {
     await screen.findByText("Guideline saved.");
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
     await screen.findByText("Rules saved.");
-    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, annotate_accepted_translations_only: true, allow_spanless_findings: true, hidden_axis_values: {} });
+    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, annotate_accepted_translations_only: true, allow_spanless_findings: true, require_spanless_note: true, hidden_axis_values: {} });
   });
 
-  it("persists the spanless rule and explains its new-draft scope", async () => {
+  it.each([
+    ["prohibited", false, true], ["required", true, true], ["optional", true, false],
+  ] as const)("persists the %s spanless mode through one setting", async (mode, allow, requireNote) => {
     render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Allow findings without a text span" }));
+    const control = await screen.findByRole("combobox", { name: "Findings without a text span" });
+    expect((control as HTMLSelectElement).value).toBe("required");
+    expect(within(control).getAllByRole("option")).toHaveLength(3);
+    fireEvent.change(control, { target: { value: mode } });
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
-    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, expect.objectContaining({ allow_spanless_findings: false })));
-    expect(screen.getByText(/New drafts use this rule/)).toBeDefined();
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, expect.objectContaining({ allow_spanless_findings: allow, require_spanless_note: requireNote })));
+    expect(screen.getByText(/Applies to new drafts/)).toBeDefined();
+  });
+
+  it("loads the saved optional mode and preserves its flag when prohibiting spanless findings", async () => {
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, require_spanless_note: false });
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const control = await screen.findByRole("combobox", { name: "Findings without a text span" });
+    expect((control as HTMLSelectElement).value).toBe("optional");
+    fireEvent.change(control, { target: { value: "prohibited" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, expect.objectContaining({ allow_spanless_findings: false, require_spanless_note: false })));
   });
 
   it("uses the real server defaults and every annotation type without guessing", async () => {
