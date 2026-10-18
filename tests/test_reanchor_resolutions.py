@@ -184,4 +184,6 @@ def test_upgrade_preserves_pending_producer_payloads(pending):
                 "SELECT reanchor_inputs, reanchor_resolutions, reanchor_inputs_initialized_at FROM ontocurator.drafts"
             )
         ).one() == ([], [], None)
+    # The current application requires the head schema after the 0008 checks.
+    upgrade(engine.url)
     assert len(opened(pending).json()["view"]["draft"]["reanchor_inputs"]) == 2
