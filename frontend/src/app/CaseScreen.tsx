@@ -7,6 +7,7 @@ import { useCaseVersions } from "../variants/useCaseVersions";
 import { VariantDetails, variantDescription } from "../variants/CaseViewer";
 import { annotationOptions, pickVariant, refForKey } from "../variants/versionState";
 import { ErrorNotice } from "../admin/ErrorNotice";
+import { errorMessage } from "../admin/errors";
 import type { AnnotationVersion } from "../api/client";
 import type { Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
@@ -1556,6 +1557,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const confirmedCount = (draft.decisions ?? []).filter((d) => d.outcome === "confirmed").length;
 
   const completionResults = resultSnapshots(draft, view.available_inputs ?? []);
+  // Submission always uses current project rules, including legacy open drafts.
+  const submissionEvidenceIssues = completionResults.flatMap(snapshot => {
+    const ann = snapshot.annotation;
+    if (ann.evidence_refs?.length) return [];
+    const type = view.layers?.find(layer => layer.layer_id === ann.layer_id)?.annotation_types?.find(type => type.type_id === ann.type_id);
+    const reason = type?.evidence_policy === "required_on_complete" ? "This annotation type requires a text span."
+      : view.allow_spanless_findings === false ? "This project requires a text span for findings."
+      : view.require_spanless_note !== false && !(ann.note ?? "").trim() ? "A reason is required for this finding without a text span." : null;
+    return reason ? [{ snapshot, reason }] : [];
+  });
   const defaulted = defaultedResults(completionResults);
   const defaultedKeys = new Set(defaulted.map(s => refKey({ annotation_id: s.annotation.annotation_id, version: s.version })));
   const [focusDefaultedAxes, setFocusDefaultedAxes] = useState(false);
@@ -1576,6 +1587,29 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setSelectedAnnotationId(target ? null : first.annotation.annotation_id);
     setSelectedSourceId(null); setSelectedEvidenceId(null); cancelPending();
     setMobilePane("details"); setSubmitDialogOpen(false); setFocusDefaultedAxes(true);
+  };
+
+  const reviewEvidenceIssue = (snapshot: AnnotationSnapshot) => {
+    const ann = snapshot.annotation;
+    setLayerSelection(previous => ({ ...previous, activeLayerId: ann.layer_id, activeTypeId: ann.type_id,
+      visibleLayerIds: [...new Set([...previous.visibleLayerIds, ann.layer_id])] }));
+    const target = reviewTargets.find(t => refKey(t) === refKey({ annotation_id: ann.annotation_id, version: snapshot.version }));
+    setSelectedTargetId(target ? refKey(target) : null); setSelectedAnnotationId(target ? null : ann.annotation_id);
+    setSelectedSourceId(null); setSelectedEvidenceId(null); cancelPending();
+    setMobilePane("details"); setSubmitDialogOpen(false);
+    requestAnimationFrame(() => (inspectorRef.current?.querySelector<HTMLElement>('textarea') ?? inspectorRef.current?.querySelector<HTMLElement>('input, button'))?.focus());
+  };
+  const reviewPendingReanchor = () => {
+    const item = pendingReanchorItems.find(item => !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? []));
+    if (!item) return;
+    setSubmitDialogOpen(false); setMobilePane("list");
+    requestAnimationFrame(() => {
+      const row = [...(sidebarScrollRef.current?.querySelectorAll<HTMLElement>('[data-reanchor-item]') ?? [])]
+        .find(row => row.dataset.reanchorItem === reanchorKey(item));
+      const disclosure = row?.closest("details");
+      if (disclosure) disclosure.open = true;
+      row?.scrollIntoView?.({ block: "nearest" }); row?.querySelector<HTMLButtonElement>('button')?.focus();
+    });
   };
 
   const blockInvalidUnresolvedNotes = (action: "submitting" | "leaving" = "submitting") => {
@@ -1625,7 +1659,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Step 2: submit after the explicit "entire text checked" confirmation.
   const confirmSubmit = async () => {
     if (readOnlyRef.current) return;
-    if (!textCheckedConfirmed || blockInvalidUnresolvedNotes()) return;
+    if (!textCheckedConfirmed || blockInvalidUnresolvedNotes() || submissionEvidenceIssues.length || unresolvedReanchorCount) return;
     if (view.key.mode === "review") {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
       if (missingTargets.length > 0) {
@@ -1661,8 +1695,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       }
     } catch (err: unknown) {
       if (err instanceof DiscardedChangesError) return;
-      const msg = err instanceof Error ? err.message : String(err);
-      reportError(err);
+      const msg = errorMessage(err);
+      setActionError(null);
       setSubmitError(`Submission failed: ${msg}`);
     }
   };
@@ -2443,8 +2477,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
           {view.key.mode === "review" ? (
             <li>
-              {confirmedCount + (draft.annotations ?? []).length} annotation(s) will be submitted
-              ({confirmedCount} confirmed proposal(s), {(draft.annotations ?? []).length} curated)
+              {completionResults.length} annotation(s) will be submitted
+              ({confirmedCount} confirmed proposal(s), {(draft.decisions ?? []).filter(d => d.outcome === "uncertain").length} unresolved with reviewer flags, {(draft.annotations ?? []).length} curated)
             </li>
           ) : (
             <li>{(draft.annotations ?? []).length} annotation(s) in this case</li>
@@ -2458,6 +2492,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           {pendingReanchorItems.length > 0 && <li>{unresolvedReanchorCount} finding(s) after text correction still pending</li>}
 
         </ul>
+        {submissionEvidenceIssues.length > 0 && <InlineMessage tone="error">
+          <p>{submissionEvidenceIssues.length} finding(s) need evidence or a reason before submission.</p>
+          <ul>{submissionEvidenceIssues.map(({snapshot, reason}) => <li key={refKey({ annotation_id: snapshot.annotation.annotation_id, version: snapshot.version })}>
+            <Button variant="quiet" onClick={() => reviewEvidenceIssue(snapshot)}><TermName termId={snapshot.annotation.term_id ?? snapshot.annotation.annotation_id} label={termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id ?? snapshot.annotation.annotation_id)} />: {reason}</Button>
+          </li>)}</ul>
+        </InlineMessage>}
+        {unresolvedReanchorCount > 0 && <InlineMessage tone="error">
+          <p>{unresolvedReanchorCount} finding(s) after text correction must be re-created or dismissed with a reason.</p>
+          <Button onClick={reviewPendingReanchor}>Review pending findings after text correction</Button>
+        </InlineMessage>}
         {defaulted.length > 0 && <InlineMessage tone="warning">
           <p>{defaulted.length} annotations have defaulted axis values.</p>
           <Button onClick={reviewDefaulted}>Review defaulted annotations</Button>
@@ -2479,7 +2523,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <Button
             type="button"
             variant="primary"
-            disabled={readOnly || !textCheckedConfirmed || (view.key.mode === "review" && openReviewTargets.length > 0)}
+            disabled={readOnly || !textCheckedConfirmed || submissionEvidenceIssues.length > 0 || unresolvedReanchorCount > 0 || (view.key.mode === "review" && openReviewTargets.length > 0)}
             onClick={() => { void confirmSubmit(); }}
           >
             Submit case

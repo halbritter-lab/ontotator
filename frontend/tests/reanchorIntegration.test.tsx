@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api, ValidationError, type Draft, type ReanchorItem, type ProposalSetView, type ProjectSummary } from '../src/api/client';
 import { CaseScreen } from '../src/app/CaseScreen';
@@ -200,4 +200,22 @@ it('retains the actual selected document identity for an offered pending-only pr
   render(<CaseViewer projectKey="pkg" caseId={caseDetail.case_id} variant="target" username="alice" onNavigate={()=>{}} annotations={refKey({kind:'proposals',id:'4'})}/>);
   await screen.findByRole('heading',{name:'Needs review after the text change (1)'});
   expect(api.getReanchorItems).toHaveBeenCalledWith('pkg','target');
+});
+
+it('blocks submission for an invalidated frozen reanchor resolution and focuses its repair queue',async()=>{
+  const {view,pending}=editableReanchor();
+  view.draft.reanchor_resolutions=[{item:{proposal_set_id:pending.proposal_set_id,source_ref:pending.source_ref},outcome:'recreated',replacement:{annotation_id:'deleted',version:'old'},reviewer_id:'alice'}];
+  const submit=vi.spyOn(api,'submitWorkspace');
+  render(<CaseScreen view={view} workspaceId="reanchor-submit" onClose={()=>{}}/>);
+  const disclosure = screen.getByRole('button', {name:'HP:1 · phenotype'}).closest('details')!;
+  disclosure.open = false;
+  fireEvent.click(screen.getByRole('button',{name:/Finish & Submit Case/}));
+  const dialog=await screen.findByRole('dialog',{name:'Submit case'});
+  expect(within(dialog).getByText(/1 finding\(s\) after text correction must be re-created/)).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole('checkbox'));
+  expect(within(dialog).getByRole('button',{name:'Submit case'})).toHaveProperty('disabled',true);
+  fireEvent.click(within(dialog).getByRole('button',{name:'Review pending findings after text correction'}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'HP:1 · phenotype'})).toBe(document.activeElement));
+  expect(disclosure.open).toBe(true);
+  expect(submit).not.toHaveBeenCalled();
 });

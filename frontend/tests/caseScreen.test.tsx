@@ -835,6 +835,40 @@ describe("CaseScreen integration", () => {
     expect(within(dialog).queryByText("HP:0001252")).toBeNull();
   });
 
+  it.each([
+    [false, true, "This project requires a text span for findings.", "optional"],
+    [true, true, "A reason is required for this finding without a text span.", "optional"],
+    [true, false, "This annotation type requires a text span.", "required_on_complete"],
+  ] as const)("checks current rules on a legacy draft at submission (%s, %s)", async (allow, requireNote, reason, evidencePolicy) => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: false, allow_spanless_findings: allow, require_spanless_note: requireNote });
+    view.draft.annotations![0].annotation.evidence_refs = [];
+    view.layers![0].annotation_types![0].evidence_policy = evidencePolicy;
+    delete view.draft.annotations![0].annotation.note;
+    const submit = vi.spyOn(api, "submitWorkspace");
+    render(<CaseScreen view={view} workspaceId="legacy-rules" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    expect(within(dialog).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", true);
+    fireEvent.click(within(dialog).getByRole("button", { name: new RegExp(reason.replace(".", "\\.")) }));
+    expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByLabelText("Annotation note")).toBe(document.activeElement));
+  });
+
+  it("permits a legacy spanless result without a note under the current optional mode", async () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: false, allow_spanless_findings: true, require_spanless_note: false });
+    view.draft.annotations![0].annotation.evidence_refs = [];
+    delete view.draft.annotations![0].annotation.note;
+    render(<CaseScreen view={view} workspaceId="legacy-optional" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    expect(within(dialog).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
+  });
+
   it("escape_cancels_the_submit_dialog", async () => {
     render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
@@ -1207,7 +1241,7 @@ describe("CaseScreen integration", () => {
   describe("Finish & Submit while a save is pending", () => {
     // Pending clinical edits must finish before opening the completion dialog.
     const twoLayerView = (): WorkspaceView => withEditableFinding({
-      ...sampleView,
+      ...sampleView, require_spanless_note: false,
       scope: { ...sampleView.scope!, editable_layer_ids: ["phenotype"], reference_layer_ids: ["disease"] },
       layers: [
         sampleView.layers![0],

@@ -10,7 +10,7 @@ export interface ExportPageProps { projectKey: string; currentUser: CurrentUser 
 const jsonl = "JSONL file: one JSON record per line";
 const definitions = [
   { kind: "t1", title: "Annotation results", format: "ZIP of T1 (ontospan) bundles",
-    description: "The latest submission of each person for each document and task, with pseudonyms instead of names. Use it for analysis or to load the annotations into another tool that reads ontospan. Unresolved proposals require a note. This export version excludes unresolved proposals." },
+    description: "The latest submission of each person for each document and task, with pseudonyms instead of names. Use it for analysis or to load the annotations into another tool that reads ontospan. Unresolved proposals are included in exports with a separate reviewer flag and note. Clinical axis values are unchanged. Bundles with reviewer flags cannot currently be re-imported into proposal storage." },
   { kind: "edit_log", title: "Edit log", format: jsonl,
     description: "Every editing step in order, with pseudonyms. For method studies, such as how long annotation took or how decisions changed; read it with a script, for example in Python or R." },
   { kind: "translation_reviews", title: "Translation reviews", format: jsonl,
@@ -95,6 +95,14 @@ function ExportCard({ projectKey, storageKey, kind, title, format, description, 
     {polling && <p role="status">Checking export …</p>}
     {correctKind && <p role="status">Export {job.id}: {labelFor(jobStatusLabels, job.status)}</p>}
     {correctKind && job.status === "failed" && <InlineMessage tone="error">{job.error || "The export failed without further details."}</InlineMessage>}
+    {downloadable && kind === "t1" && typeof job.result?.counts === "object" && job.result.counts !== null && <p>
+      {String((job.result.counts as Record<string, unknown>).uncertain ?? 0)} unresolved result(s) included with reviewer flags; {String((job.result.counts as Record<string, unknown>).rejected ?? 0)} rejected result(s) omitted.
+    </p>}
+    {downloadable && Array.isArray(job.result?.warnings) && job.result.warnings.map((warning, index) => {
+      if (typeof warning !== "object" || warning === null || !("code" in warning) || warning.code !== "LEGACY_UNRESOLVED_NOTE_MISSING") return null;
+      const item = warning as Record<string, unknown>;
+      return <InlineMessage key={index} tone="warning">Historical unresolved proposal {String(item.annotation_id)} ({String(item.version)}) has no reviewer note. It is included with its reviewer flag and without an invented note.</InlineMessage>;
+    })}
     {error !== undefined && (error instanceof ApiError && error.status === 403 ? <InlineMessage tone="error">You do not have access to this page.</InlineMessage> : <ErrorNotice error={error} />)}
     {storageError && <InlineMessage tone="warning">This browser cannot remember export jobs. Keep this page open until your export is ready.</InlineMessage>}
   </section>;

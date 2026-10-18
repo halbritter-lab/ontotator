@@ -110,6 +110,8 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   REPLACEMENT_LAYER_TYPE_MISMATCH: "The replacement must use the same layer and annotation type.",
   REPLACEMENT_NOT_FOUND: "The replacement annotation could not be found.",
   REVISION_CONFLICT: "This work changed elsewhere. Reload the latest revision before retrying.",
+  REANCHOR_ITEMS_UNRESOLVED: "Re-create pending findings after text correction or dismiss them with a reason before submitting.",
+  UNSUPPORTED_REVIEW_RESOLUTION: "Bundles with reviewer flags cannot currently be re-imported into proposal storage.",
   REVIEW_NOTE_REQUIRED: "Add a reviewer note before marking a proposal as unresolved or submitting it.",
   REVIEW_ROUND_NOT_FOUND: "The requested review round is unavailable. Reload the task.",
   REVISION_NOT_FOUND: "The requested revision is unavailable.",
@@ -148,6 +150,10 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
 };
 
 export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.code === "REANCHOR_ITEMS_UNRESOLVED" && typeof error.details === "object" && error.details !== null) {
+    const count = error.details.count;
+    if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) return `${count} finding(s) after text correction still need review. Re-create them or dismiss them with a reason before submitting.`;
+  }
   // ORCID's checksum/format explanation is already specific and user-facing.
   if (error instanceof ApiError && error.code === "ORCID_INVALID" && error.message.trim()) return error.message;
   if (error instanceof ApiError && error.code && Object.hasOwn(ERROR_MESSAGES, error.code)) {

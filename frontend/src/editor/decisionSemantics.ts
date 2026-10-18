@@ -3,7 +3,7 @@ import type { AnnotationSnapshot, Draft } from "../api/client";
 const identity = (ref: { annotation_id: string; version: string }) => JSON.stringify([ref.annotation_id, ref.version]);
 const snapshotKey = (snapshot: AnnotationSnapshot) => identity({ annotation_id: snapshot.annotation.annotation_id, version: snapshot.version });
 
-/** Results relevant to completion, including unresolved proposals before their export support lands. */
+/** Results relevant to completion, including unresolved proposals with reviewer flags. */
 export function resultSnapshots(draft: Draft, proposals: AnnotationSnapshot[]): AnnotationSnapshot[] {
   const annotations = draft.annotations ?? [];
   if (draft.key.mode !== "review") return unique(annotations);

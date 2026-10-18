@@ -220,11 +220,11 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       {target.is_obsolete && (
         <div className="review-actions__warning">
           <IconWarning />
-          <span>Obsolete term cannot be confirmed. Please reject, mark as unresolved, or replace with a valid term.</span>
+          <span>Obsolete terms cannot be submitted, including as unresolved. Reject this proposal or replace it with a valid term.</span>
         </div>
       )}
 
-      {target.is_unknown && <p role="alert">Unknown term cannot be confirmed.</p>}
+      {target.is_unknown && <p role="alert">Unknown terms cannot be submitted, including as unresolved. Reject this proposal or replace it with a valid term.</p>}
       {/* 4 Action Buttons: a quiet ruled grid; the chosen outcome is filled. */}
       <div className="decision-grid">
         <Button
@@ -287,7 +287,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       </div>
 
       <p className="field-hint">A reviewer decision, separate from clinical uncertainty. A note is required.</p>
-      <p className="field-hint">Unresolved proposals require a note. This export version excludes unresolved proposals.</p>
+      <p className="field-hint">Unresolved proposals are included in exports with a separate reviewer flag and note. Clinical axis values are unchanged.</p>
 
       {/* Reset Decision Button */}
       {currentDecision && (

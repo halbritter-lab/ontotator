@@ -86,7 +86,20 @@ it("does not offer a download for a restored upload job", async () => {
   expect(screen.queryByRole("button", { name: "Download" })).toBeNull(); expect(sessionStorage.getItem(storageKey())).toBeNull();
 });
 
-it("explains the unresolved export exclusion until structured flagged results are supported", () => {
+it("explains reviewer flags without changing clinical uncertainty", () => {
   render(<ExportPage projectKey="p" currentUser={user} />);
-  expect(card().getByText(/Unresolved proposals require a note\. This export version excludes unresolved proposals\./)).toBeDefined();
+  expect(card().getByText(/Unresolved proposals are included in exports with a separate reviewer flag and note\. Clinical axis values are unchanged\./)).toBeDefined();
+});
+
+it("explains included reviewer flags, omitted rejections and historical missing-note warnings", async () => {
+  sessionStorage.setItem(storageKey(), "11");
+  vi.mocked(api.getJob).mockResolvedValue({ ...job(11), result: { counts: { uncertain: 2, rejected: 3 }, warnings: [
+    { code: "LEGACY_UNRESOLVED_NOTE_MISSING", annotation_id: "old-result", version: "original-version" },
+  ] } });
+  render(<ExportPage projectKey="p" currentUser={user} />);
+  expect(card().getByText(/Clinical axis values are unchanged/)).toBeTruthy();
+  expect(card().getByText(/cannot currently be re-imported into proposal storage/)).toBeTruthy();
+  await card().findByText(/2 unresolved result\(s\) included with reviewer flags; 3 rejected result\(s\) omitted/);
+  expect(card().getByText(/old-result \(original-version\) has no reviewer note/)).toBeTruthy();
+  expect(card().queryByText(/excludes unresolved/)).toBeNull();
 });

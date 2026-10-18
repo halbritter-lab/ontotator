@@ -100,7 +100,7 @@ describe("ReviewActions", () => {
 
     const confirmBtn = screen.getByRole("button", { name: /Confirm|Bestätigen/i });
     expect(confirmBtn.hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(/Obsolete term|Veralteter Begriff/i)).toBeDefined();
+    expect(screen.getByText("Obsolete terms cannot be submitted, including as unresolved. Reject this proposal or replace it with a valid term.")).toBeDefined();
   });
 
   it("keeps the chosen outcome when its button is clicked again", () => {
@@ -233,7 +233,7 @@ describe("ReviewActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /Unresolved/ }));
     expect(decide).toHaveBeenCalledWith({ outcome: "uncertain", replacement: undefined, note: "Need specialist input" });
     expect(screen.getByText("A reviewer decision, separate from clinical uncertainty. A note is required.")).toBeDefined();
-    expect(screen.getByText("Unresolved proposals require a note. This export version excludes unresolved proposals.")).toBeDefined();
+    expect(screen.getByText("Unresolved proposals are included in exports with a separate reviewer flag and note. Clinical axis values are unchanged.")).toBeDefined();
   });
 
   it("honors a parent note request and preserves the controlled draft on reset", () => {

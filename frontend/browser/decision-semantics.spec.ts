@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 import { authenticatedRequest, importPackage, loginExisting, openCase, selectText, submitCase } from "./helpers";
 
@@ -58,8 +59,10 @@ test("repeated outcome keys keep decisions and zero resets without losing the no
 
 
 test("unresolved notes are required, survive reload and block submission when locally cleared", async ({ page }) => {
-  await importPackage(page, "single", "browser-fixture", "unresolved-note-reviewer");
+  await importPackage(page, "single", "pkg-unresolved-export", "unresolved-note-reviewer");
+  const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
   await openCase(page, { task: "review" });
+  const opened = await (await openedResponse).json();
   const proposals = page.locator('.sidebar [data-list-key^="target:"]');
   await proposals.first().click();
   const note = page.getByRole("textbox", { name: "Reviewer note" });
@@ -98,7 +101,39 @@ test("unresolved notes are required, survive reload and block submission when lo
   await submitCase(page);
   const submission = await (await submitted).json();
   expect(submission.decisions.find((d: { outcome: string }) => d.outcome === "uncertain").note).toBe("Corrected reviewer reason");
-  expect(submission.snapshots).toHaveLength(1);
+  expect(submission.snapshots).toHaveLength(2);
+  const source = opened.view.available_inputs.find((snapshot: { annotation: { annotation_id: string }; version: string }) =>
+    snapshot.annotation.annotation_id === unresolved.target.annotation_id && snapshot.version === unresolved.target.version);
+  expect(source).toBeDefined();
+  const originalAssertion = source.annotation.axes_values.assertion;
+  expect(originalAssertion).toBe("present");
+  await page.getByRole("button", { name: "Stay in case" }).click();
+  await page.goto("/#/projects/pkg-unresolved-export/export");
+  const bundle = page.getByRole("region", { name: "Annotation results", exact: true });
+  await bundle.getByRole("button", { name: "Create export", exact: true }).click();
+  await expect(bundle.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent("download"), bundle.getByRole("button", { name: "Download", exact: true }).click()]);
+  expect(await download.failure()).toBeNull();
+  const python = process.env.E2E_PYTHON ?? (process.platform === "win32" ? "../.venv/Scripts/python.exe" : "../.venv/bin/python");
+  const annotations = JSON.parse(execFileSync(python, ["-c", `import json,sys,zipfile
+with zipfile.ZipFile(sys.argv[1]) as bundle:
+    units=[json.loads(bundle.read(name)) for name in bundle.namelist() if name.endswith('.json')]
+def annotations(value):
+    if isinstance(value,dict):
+        if 'review_resolution' in value and value['review_resolution']:
+            yield value
+        else:
+            for child in value.values(): yield from annotations(child)
+    elif isinstance(value,list):
+        for child in value: yield from annotations(child)
+print(json.dumps(list(annotations(units))))`, (await download.path())!], { encoding: "utf8" }));
+  const flagged = annotations.filter((annotation: { annotation_id: string }) => annotation.annotation_id === unresolved.target.annotation_id);
+  expect(flagged).toHaveLength(1);
+  expect(flagged[0].provenance.source_refs).toContain(`urn:ontospan:${encodeURIComponent("pkg-unresolved-export:proposals")}:${encodeURIComponent(unresolved.target.annotation_id)}`);
+  expect(flagged[0].review_resolution.outcome).toBe("uncertain");
+  expect(flagged[0].review_resolution.note).toBe("Corrected reviewer reason");
+  expect(flagged[0].review_resolution.reviewer).toMatchObject({ actor_id: "unresolved-note-reviewer", kind: "human" });
+  expect(flagged[0].axes.assertion.value).toBe(originalAssertion);
 });
 
 
@@ -297,6 +332,18 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
     await expect(annotator.getByRole("button", { name: "Remove", exact: true })).toBeEnabled();
     await annotator.getByRole("button", { name: "Remove", exact: true }).click(); await annotator.getByRole("button", { name: "Yes, remove" }).click();
     await expect(annotator.getByRole("heading", { name: "Mentions (0)" })).toBeVisible();
+    const prohibited = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: false });
+    expect(prohibited.ok()).toBeTruthy();
+    await annotator.reload();
+    await annotator.getByRole("button", { name: /Finish & Submit Case/ }).click();
+    const readiness = annotator.getByRole("dialog", { name: "Submit case" });
+    await expect(readiness.getByText("1 finding(s) need evidence or a reason before submission.")).toBeVisible();
+    await readiness.screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/submission-current-rules-repair.png" });
+    await readiness.getByRole("button", { name: /This project requires a text span for findings/ }).click();
+    await expect(annotator.getByLabel("Annotation note")).toBeFocused();
+    const optionalAgain = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true, require_spanless_note: false });
+    expect(optionalAgain.ok()).toBeTruthy();
+    await annotator.reload();
     const submittedResponse = annotator.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST");
     await submitCase(annotator);
     const submitted = await (await submittedResponse).json(); expect(submitted.snapshots).toHaveLength(1);
