@@ -1,6 +1,6 @@
 # Phase 0 local implementation verification
 
-Status: the implemented source through `bf80b24` is independently reviewed and passed the complete local gate on 2026-10-17, including the D3 new-draft and re-anchor storage/action slices. Dependent policy slices, flagged export and embedded-web refresh remain open. This record does not claim Phase 0 acceptance or authorize integration.
+Status: the implemented source, including the user's 2026-10-18 three-mode D3 correction, is independently reviewed and passed the complete local gate through `ad23b28` on 2026-10-18. Dependent policy slices, flagged export and embedded-web refresh remain open. This record does not claim Phase 0 acceptance or authorize integration.
 
 ## Workspace and boundaries
 
@@ -64,6 +64,20 @@ A parallel full browser run passed 85 of 86 cases. The remaining exact-height as
 
 The seventh integrated `scripts/check.sh` run on `bf80b24a1af074d609e3bcb3aad7cb1c06f04ea2` exited zero. All 1,289 frontend tests across 121 files, 2,146 backend tests and 86 Playwright cases passed; one POSIX file-permissions test was skipped on Windows. Ruff, formatting, mypy, OpenAPI/TypeScript API drift, frontend typecheck and wheel lock/content checks also passed. Total duration was 1,503 seconds: frontend unit tests 65 seconds, backend 1,010 seconds and browser checks 410 seconds. Evidence is retained in `phase0-check-7.log` under the ignored execution ledger. The later tracking commit changes documentation only and needs no repeated product suite. The wheel still packages the old embedded UI; the browser suite builds and tests the current frontend separately.
 
+## User correction on 2026-10-18: three spanless rule modes
+
+The user clarified that the reason requirement itself must be configurable, accepting three project modes: prohibited, allowed with a required reason, and allowed with an optional reason. Backend `240800c` retains the existing prohibition flag and adds `require_spanless_note`, default true, through settings/rule/workspace projection. Migration 0009 adds only that project column; previous migrations, legacy draft classification and immutable content stay unchanged. Prohibition takes precedence; existing profile evidence requirements still apply. The user has not answered P0-S about existing open drafts or selected a different default.
+
+UI `1de4616` exposes one three-option Settings control. Conditional note validation covers creation, clearing a saved note, navigation/autosave, removal of the last mention and historical proposal replacement. Supplied optional notes use normal versioning and export preservation. D2 unresolved reviewer notes remain mandatory.
+
+Backend red/green evidence concludes with 136 focused tests passing, plus Ruff, formatting, mypy and contract checks. Frontend red/green evidence concludes with 78 focused tests, typecheck and all nine decision browser cases passing. The live optional-mode case saves and reloads the setting as a lead, then uses a separate annotator-only account to create a note-less finding, save and clear a note, remove the last mention and submit. A real migration test compares prior project/draft/snapshot rows before and after upgrade and downgrade. Independent review approved the combined correction with no actionable findings; one Settings screenshot was inspected and the bounded two-file UI detector returned no findings.
+
+Gate 8 passed all 1,298 frontend tests; backend finished with 2,155 passed, one failed and one Windows skip. The failure was an older re-anchor migration test opening the current application against the explicitly retained 0008 schema. Its original 0007-to-0008 payload/default assertions passed. Test-only `ad23b28` preserves those assertions and restores the head schema immediately before reopening the current app; the focused failing case then passed, as did Ruff and diff checks.
+
+Corrected gate 9 on `ad23b2870c185b4b232f5385d9811c15ed2def69` exited zero. All 1,298 frontend tests across 121 files, 2,156 backend tests and 87 Playwright cases passed, with one Windows POSIX file-permissions skip. Ruff, formatting, mypy, OpenAPI/TypeScript API drift, frontend typecheck and wheel lock/content checks passed. Total duration was 1,556 seconds: frontend unit checks 88 seconds, backend 1,023 seconds and browser checks 412 seconds. The evidence is `phase0-check-9.log` in the ignored ledger. The later tracking commit changes only documentation.
+
+The browser gate built the current frontend successfully (`index-C5v_3iqZ.js`, `index-ytX3jISo.css`). The new file/hash comparison again finds only `index.html` and the old/new JavaScript/CSS bundles differ from the embedded copy; `spanless-modes-web-manifest-comparison.json` retains the comparison. Embedded assets remain unchanged pending approval, so the wheel check still validates packaging of the old embedded UI. No release image or acceptance candidate was built.
+
 ## Test resource utilization
 
 The current gate uses up to four Vitest workers, one backend pytest process and one Playwright worker. The backend harness creates and drops a migrated PostgreSQL database for each test; low aggregate CPU utilization on a 12-logical-CPU host is therefore consistent with the serial execution and database waits. `pytest-xdist` is not installed. A future bounded parallel runner must isolate database initialization: default testcontainers are process-local, but `ONTOCURATOR_TEST_PG_URL` currently shares a fixed template name and role initialization across processes. Browser parallelism likewise requires isolation of the shared server and fixture state. No worker, dependency or harness change was made during this verification run.
@@ -76,7 +90,7 @@ Publication approval is pending. Ontocurator has not been pinned to an unreachab
 
 ## Remaining gates
 
-- The implemented source gate is complete through `bf80b24`, including D3 and re-anchor work. Independent reviews and scoped rereviews found no remaining actionable P1/P2 findings. The final bounded scan of the five newly changed UI files returned no findings; preserved desktop and narrow screenshots were inspected once.
+- The implemented source gate is complete through `ad23b28`, including the three-mode D3 correction and re-anchor work. Independent reviews and scoped rereviews found no remaining actionable P1/P2 findings. The latest bounded scan of two changed UI files returned no findings; the actual Settings screenshot was inspected once.
 - Update the embedded frontend and verify its exact file/hash match with the fresh build. Automatic approval review rejected both a checked-directory replacement and a narrower operation naming only the two obsolete generated assets, giving only `blocked by policy`. Neither operation executed. Explicit user permission is pending; no workaround is being attempted. Until this is resolved, wheel checks package the old embedded frontend and do not validate the new bundled UI.
 - Record answers for P0-S, P0-A, P0-R and P0-U before their dependent policy changes; see the master roadmap. Do not infer approval from the recommendations.
 - Complete the remaining policy-dependent slices after answers arrive. P0-S gates only enforcement on existing open drafts; P0-R gates only the unresolved-item completion policy. The implemented D3 new-draft and re-anchor storage/action slices passed the combined gate. Flagged export awaits publication of the reviewed dependency and the dependent P0-U policy.
