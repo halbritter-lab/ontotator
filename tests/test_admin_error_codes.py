@@ -39,6 +39,34 @@ PATHS = (
 )
 
 
+def finite_string_values(node: ast.AST | None) -> set[str]:
+    """Resolve only literal strings and conditional branches that are both finite."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return {node.value}
+    if isinstance(node, ast.IfExp):
+        left = finite_string_values(node.body)
+        right = finite_string_values(node.orelse)
+        return left | right if left and right else set()
+    return set()
+
+
+def named_string_values(tree: ast.AST) -> dict[str, set[str]]:
+    values: dict[str, set[str]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
+        choices = finite_string_values(node.value)
+        if choices:
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    values.setdefault(target.id, set()).update(choices)
+    return values
+
+
 def source_codes(source: str, *, error_defaults: bool = False) -> set[str]:
     """Inspect error constructors, code= diagnostics and code-first helpers.
 
@@ -52,25 +80,7 @@ def source_codes(source: str, *, error_defaults: bool = False) -> set[str]:
         for parent in ast.walk(tree)
         for child in ast.iter_child_nodes(parent)
     }
-    constants = {
-        target.id: node.value.value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        and isinstance(node.value, ast.Constant)
-        and isinstance(node.value.value, str)
-        for target in node.targets
-        if isinstance(target, ast.Name)
-    }
-    constants.update(
-        {
-            node.target.id: node.value.value
-            for node in ast.walk(tree)
-            if isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, str)
-        }
-    )
+    constants = named_string_values(tree)
     constructors = {"DomainError", "AccessDenied"}
     for node in ast.walk(tree):
         if (
@@ -113,15 +123,17 @@ def source_codes(source: str, *, error_defaults: bool = False) -> set[str]:
         ):
             candidates.append(node.args[helpers[node.func.id]])
         for candidate in candidates:
-            code = (
-                candidate.value
-                if isinstance(candidate, ast.Constant)
-                else constants.get(candidate.id)
+            choices = (
+                constants.get(candidate.id, set())
                 if isinstance(candidate, ast.Name)
-                else None
+                else finite_string_values(candidate)
             )
-            if isinstance(code, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", code):
-                result.add(code)
+            if choices:
+                result.update(
+                    code
+                    for code in choices
+                    if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", code)
+                )
             elif isinstance(candidate, ast.JoinedStr):
                 result.update(guarded_format_codes(candidate, parents))
     return result
@@ -194,23 +206,7 @@ def actual_codes() -> set[str]:
     for path in paths:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source)
-        constants = {
-            target.id
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Assign)
-            and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, str)
-            for target in node.targets
-            if isinstance(target, ast.Name)
-        }
-        constants.update(
-            node.target.id
-            for node in ast.walk(tree)
-            if isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, str)
-        )
+        constants = named_string_values(tree)
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Call)
@@ -270,3 +266,15 @@ def test_source_coverage_detects_new_code_without_treating_labels_as_errors():
     assert source_codes(
         'if status.status in {"obsolete", "unknown"}:\n raise DomainError(f"{status.status.upper()}_TERM")'
     ) == {"OBSOLETE_TERM", "UNKNOWN_TERM"}
+
+
+def test_source_coverage_resolves_finite_conditional_codes_without_allowing_forwarding():
+    assert source_codes(
+        'code = "UNKNOWN_TERM" if missing else "OBSOLETE_TERM"\nraise DomainError(code)'
+    ) == {"UNKNOWN_TERM", "OBSOLETE_TERM"}
+    assert source_codes(
+        'code: str = "FIRST" if condition else "SECOND"\nraise DomainError(code)'
+    ) == {"FIRST", "SECOND"}
+    # A branch forwarding arbitrary values must still require explicit auditing.
+    unresolved = ast.parse('code = "KNOWN" if condition else external_code')
+    assert named_string_values(unresolved) == {}
