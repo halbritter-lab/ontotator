@@ -78,7 +78,17 @@ Corrected gate 9 on `ad23b2870c185b4b232f5385d9811c15ed2def69` exited zero. All 
 
 The browser gate built the current frontend successfully (`index-C5v_3iqZ.js`, `index-ytX3jISo.css`). The new file/hash comparison again finds only `index.html` and the old/new JavaScript/CSS bundles differ from the embedded copy; `spanless-modes-web-manifest-comparison.json` retains the comparison. Embedded assets remain unchanged pending approval, so the wheel check still validates packaging of the old embedded UI. No release image or acceptance candidate was built.
 
-## Test resource utilization
+## Approved completion on 2026-10-18
+
+The user explicitly approved P0-S/A/R/U, the specific ontospan branch publication without merge, and local embedded-asset replacement. The remote branch was pushed and verified at `738f3d43ca0896c9d146a15fb9538b938229368a`; Ontocurator now pins that immutable commit. Backend `873e466` implements flagged unresolved export, strict future result validation, current-rule submission enforcement for existing drafts, and the frozen re-anchor queue completion gate. UI `0480fe2` adds count/repair navigation, matching export copy and warnings, and actual downloaded-bundle browser assertions. No new migration or immutable payload backfill was needed.
+
+Focused backend runs passed 167 and 69 tests. The latter include direct HTTP submission bypass attempts: unfinished queues return their remaining count without changing revision, snapshots or submissions. Historical invalid unresolved exports fail without a success artifact. Frontend checks passed 122 tests, typecheck and all nine decision browser cases; the downloaded ZIP preserves the exact flag, reviewer, note, source URN and clinical assertion. A dedicated canonical synthetic fixture replaces unsuitable general-purpose fixture data only for the export journey.
+
+An additional seven-suite compatibility run passed 124 tests and found one obsolete expectation that grandfathered drafts could still submit prohibited spanless findings. Test-only `50fdc0a` preserves legacy incremental editing and the null marker, verifies atomic submission rejection, then verifies optional mode permits the original unchanged snapshot. The affected test passed. Independent Astra review approved the complete delta and this follow-up with no actionable P1/P2 findings. The actual submit-repair screenshot was inspected; bounded UI scans returned no findings.
+
+The fresh frontend build produced `index-Bh_N9xcP.js` and `index-ytX3jISo.css`. Automatic execution review again rejected the bounded replacement with only `blocked by policy`, despite explicit user approval. A safer copy-only update succeeded: the active index and both new bundles match the build hashes. The two old, unreferenced bundles remain pending the requested manual removal; exact whole-directory equality is not yet claimed. No demo service was changed. The reserved demo was already stopped at this checkpoint and its container, image and mount identities were recorded for comparison.
+
+## Test resource utilization (unchanged harness)
 
 The current gate uses up to four Vitest workers, one backend pytest process and one Playwright worker. The backend harness creates and drops a migrated PostgreSQL database for each test; low aggregate CPU utilization on a 12-logical-CPU host is therefore consistent with the serial execution and database waits. `pytest-xdist` is not installed. A future bounded parallel runner must isolate database initialization: default testcontainers are process-local, but `ONTOCURATOR_TEST_PG_URL` currently shares a fixed template name and role initialization across processes. Browser parallelism likewise requires isolation of the shared server and fixture state. No worker, dependency or harness change was made during this verification run.
 
@@ -86,14 +96,12 @@ The current gate uses up to four Vitest workers, one backend pytest process and 
 
 Ontospan branch `feat/review-resolution-format` contains local commit `738f3d43ca0896c9d146a15fb9538b938229368a`, based on the existing pinned `4105ec1`. It introduces format 1.2 structured review resolution, retains frozen 1.0/1.1 schemas, and rejects lossy Phenopacket conversion. Its full suite passed 251 tests with one Windows symlink skip; lint, format, mypy, schema drift, lock and wheel checks passed. Independent compatibility review approved it, including byte-identical frozen schemas and all nine schemas in the wheel.
 
-Publication approval is pending. Ontocurator has not been pinned to an unreachable remote commit. Flagged export and a reproducible image using that dependency remain unfinished.
+The dependency was subsequently published with explicit user approval, verified remotely and pinned in `873e466`, as recorded above. No ontospan merge occurred.
 
 ## Remaining gates
 
-- The implemented source gate is complete through `ad23b28`, including the three-mode D3 correction and re-anchor work. Independent reviews and scoped rereviews found no remaining actionable P1/P2 findings. The latest bounded scan of two changed UI files returned no findings; the actual Settings screenshot was inspected once.
-- Update the embedded frontend and verify its exact file/hash match with the fresh build. Automatic approval review rejected both a checked-directory replacement and a narrower operation naming only the two obsolete generated assets, giving only `blocked by policy`. Neither operation executed. Explicit user permission is pending; no workaround is being attempted. Until this is resolved, wheel checks package the old embedded frontend and do not validate the new bundled UI.
-- Record answers for P0-S, P0-A, P0-R and P0-U before their dependent policy changes; see the master roadmap. Do not infer approval from the recommendations.
-- Complete the remaining policy-dependent slices after answers arrive. P0-S gates only enforcement on existing open drafts; P0-R gates only the unresolved-item completion policy. The implemented D3 new-draft and re-anchor storage/action slices passed the combined gate. Flagged export awaits publication of the reviewed dependency and the dependent P0-U policy.
+- Run the final combined gate for the approved completion delta and refreshed active frontend. The earlier full gate on `ad23b28` covers only the prior checkpoint; current focused evidence is recorded above.
+- Verify removal of the two obsolete embedded bundles if the user performs the requested manual step. Current entrypoint and bundles are refreshed and hash-verified; the remaining files are unreferenced old assets.
 - Prepare an isolated acceptance candidate only after successful verification and a reproducible dependency pin. No candidate URL, image digest or acceptance result exists yet.
 
 Detailed commands and red/green evidence are retained in the ignored `.superpowers/sdd/2026-10-17-phase0-priorities/` directory. Complete the remaining gates before claiming an acceptance candidate or requesting integration of the full roadmap.
