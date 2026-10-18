@@ -43,7 +43,7 @@ On 2026-10-18 the user clarified D3: projects must also be able to allow spanles
 
 | ID | Question | Recommendation | Status |
 | --- | --- | --- | --- |
-| P0-S | Apply spanless note/disable rules to existing open drafts? | Keep completed submissions immutable; require a note in future submissions and evidence/removal if the project disables spanless findings. Imported proposals remain readable; newly adopted/submitted results obey current rules. | Asked; awaiting answer |
+| P0-S | Apply the selected spanless rule to existing open drafts? | Keep completed submissions immutable; enforce the project's selected mode at the next submission: evidence/removal if prohibited, a note if required, or no mandatory note in optional mode. Imported proposals remain readable. | Asked; awaiting answer |
 | P0-A | Can independent annotators still read their own previous submissions? | Yes, through own-history access; restrict general version browsing/comparison. Assigned translation reviewers retain source/target access. | Asked; awaiting answer |
 | P0-R | Must every frozen pending re-anchor item be resolved before submitting its review? | Yes; re-create or dismiss with a reason, with a count and jump from submit. | Asked; awaiting answer |
 | P0-U | May an unresolved proposal with unknown/obsolete term or incomplete required clinical content be submitted/exported as a finding? | Require correction or rejection for new submissions; preserve historical data and expose export failures explicitly. Do not silently discard or promote it. | Asked; awaiting answer |
