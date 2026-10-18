@@ -96,13 +96,12 @@ def test_recreated_and_dismissed_resolutions_survive_submission_readback(pending
     assert decoded.reanchor_inputs == decoded.reanchor_resolutions == []
 
 
-def test_new_submission_rejects_dangling_resolution_without_new_pending_gate(pending):
+def test_submission_rejects_unresolved_frozen_inputs(pending):
     view = opened(pending).json()
-    # No P0-R decision exists: retain the existing ability to submit pending items.
     baseline = submitted(pending, view, 0)
-    assert baseline.status_code == 200, baseline.text
-    assert len(baseline.json()["reanchor_inputs"]) == 2
-    assert baseline.json()["reanchor_resolutions"] == []
+    assert baseline.status_code == 422, baseline.text
+    assert baseline.json()["code"] == "REANCHOR_ITEMS_UNRESOLVED"
+    assert baseline.json()["details"] == {"count": 2}
 
 
 def test_injected_dangling_replacement_is_rejected(pending):
@@ -126,7 +125,13 @@ def test_old_submission_without_metadata_is_read_without_rewriting_payload(pendi
     from pg_harness import tamper
     from sqlalchemy import text
 
-    view = opened(pending).json()
+    from ontocurator.domain.review import ReviewTargetSet
+
+    view = opened(
+        pending,
+        targets=ReviewTargetSet.create([]).model_dump(),
+        pending_proposal_set_ids=[],
+    ).json()
     original = submitted(pending, view, 0).json()
     submission_id = original["submission_id"]
     tamper(

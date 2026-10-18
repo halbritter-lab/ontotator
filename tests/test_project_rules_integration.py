@@ -91,8 +91,8 @@ def test_submission_checks_materialized_result(profile, document, branch):
                 reviewer_id="a",
                 target=ref,
                 outcome=branch,
-                note="Further review required" if branch == "uncertain" else None,
                 replacement=ref if branch == "changed" else None,
+                note="Check" if branch == "uncertain" else None,
             )
         ]
     )
@@ -106,11 +106,13 @@ def test_submission_checks_materialized_result(profile, document, branch):
     repo = SimpleNamespace(
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
-        get_project_rules=lambda _: ProjectRules(require_chosen_axes=True),
+        get_project_rules=lambda _: ProjectRules(
+            require_chosen_axes=True, require_spanless_note=False
+        ),
         list_annotations_for_document=lambda *_: [item],
     )
     service = SubmissionService(repo)
-    if branch in {"rejected", "uncertain"}:
+    if branch == "rejected":
         assert (
             service._create_submission(draft, SubmitCommand(), draft.key).snapshots
             == []
@@ -292,9 +294,10 @@ def test_materialized_result_resolves_distinct_versions_of_same_evidence_id(
         }
 
 
-@pytest.mark.parametrize("branch", ["own", "confirmed", "changed"])
+@pytest.mark.parametrize("branch", ["own", "confirmed", "changed", "uncertain"])
+@pytest.mark.parametrize("marker", [None, 1])
 def test_new_draft_submission_validates_spanless_materialized_results(
-    profile, document, branch
+    profile, document, branch, marker
 ):
     from ontocurator.domain.annotations import AnnotationRef
 
@@ -310,6 +313,7 @@ def test_new_draft_submission_validates_spanless_materialized_results(
                 target=ref,
                 outcome=branch,
                 replacement=ref if branch == "changed" else None,
+                note="Check" if branch == "uncertain" else None,
             )
         ]
     )
@@ -319,7 +323,7 @@ def test_new_draft_submission_validates_spanless_materialized_results(
         annotations=[item] if branch in {"own", "changed"} else [],
         targets=[] if branch == "own" else [ref],
         decisions=decisions,
-    ).model_copy(update={"spanless_policy_version": 1})
+    ).model_copy(update={"spanless_policy_version": marker})
     repo = SimpleNamespace(
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
@@ -374,3 +378,123 @@ def test_note_edit_invalidates_approved_exact_replacement_version(profile, docum
     with pytest.raises(DomainError) as exc:
         SubmissionService(repo)._create_submission(result, SubmitCommand(), draft.key)
     assert exc.value.code == "INCOMPLETE_REVIEW"
+
+
+@pytest.mark.parametrize("resolved", [False, True])
+def test_submission_requires_each_frozen_reanchor_resolution(profile, resolved):
+    from ontocurator.domain.annotations import AnnotationRef
+    from ontocurator.domain.reanchor_resolution import (
+        PendingReanchorRef,
+        ReanchorResolution,
+    )
+
+    item = PendingReanchorRef(
+        proposal_set_id=1,
+        source_ref=AnnotationRef(annotation_id="source", version="v1"),
+    )
+    draft = draft_for(profile, mode="review")
+    draft.reanchor_inputs = [item]
+    if resolved:
+        draft.reanchor_resolutions = [
+            ReanchorResolution(
+                item=item,
+                outcome="dismissed",
+                reason="No clinical finding",
+                reviewer_id="a",
+            )
+        ]
+    repo = SimpleNamespace(
+        get_task_profile=lambda _: profile,
+        get_submissions_for_workspace=lambda _: [],
+        get_project_rules=lambda _: ProjectRules(),
+        list_annotations_for_document=lambda *_: [],
+        reanchor_source_identity=lambda *_: (None, None),
+    )
+    if resolved:
+        result = SubmissionService(repo)._create_submission(
+            draft, SubmitCommand(), draft.key
+        )
+        assert result.reanchor_resolutions == draft.reanchor_resolutions
+    else:
+        with pytest.raises(DomainError) as exc:
+            SubmissionService(repo)._create_submission(
+                draft, SubmitCommand(), draft.key
+            )
+        assert exc.value.code == "REANCHOR_ITEMS_UNRESOLVED"
+        assert exc.value.details == {"count": 1}
+
+
+@pytest.mark.parametrize("status", ["unknown", "obsolete"])
+def test_unresolved_submission_validates_immutable_target_term(
+    profile, document, status
+):
+    from ontocurator.domain.annotations import AnnotationRef
+
+    item = annotation_snapshot(profile, document)
+    ref = AnnotationRef(annotation_id="ann", version=item.version)
+    draft = draft_for(
+        profile,
+        mode="review",
+        targets=[ref],
+        decisions=[
+            ReviewDecision(
+                decision_id="u",
+                reviewer_id="a",
+                target=ref,
+                outcome="uncertain",
+                note="Review",
+            )
+        ],
+    )
+    repo = SimpleNamespace(
+        get_task_profile=lambda _: profile,
+        get_submissions_for_workspace=lambda _: [],
+        get_project_rules=lambda _: ProjectRules(require_spanless_note=False),
+        list_annotations_for_document=lambda *_: [item],
+    )
+    ontology = SimpleNamespace(
+        validate_term=lambda _: SimpleNamespace(
+            status=status, replaced_by=None, consider=[]
+        )
+    )
+    with pytest.raises(DomainError) as exc:
+        SubmissionService(repo, ontology)._create_submission(
+            draft, SubmitCommand(), draft.key
+        )
+    assert exc.value.code == status.upper() + "_TERM"
+
+
+@pytest.mark.parametrize("marker", [None, 1])
+@pytest.mark.parametrize(
+    "allow, require_note, expected",
+    [
+        (True, False, None),
+        (True, True, "spanless_note_required"),
+        (False, False, "spanless_disallowed"),
+    ],
+)
+def test_current_spanless_setting_applies_to_open_drafts(
+    profile, document, marker, allow, require_note, expected
+):
+    item = annotation_snapshot(profile, document)
+    draft = draft_for(profile, annotations=[item]).model_copy(
+        update={"spanless_policy_version": marker}
+    )
+    repo = SimpleNamespace(
+        get_task_profile=lambda _: profile,
+        get_submissions_for_workspace=lambda _: [],
+        get_project_rules=lambda _: ProjectRules(
+            allow_spanless_findings=allow, require_spanless_note=require_note
+        ),
+    )
+    if expected:
+        with pytest.raises(DomainError) as exc:
+            SubmissionService(repo)._create_submission(
+                draft, SubmitCommand(), draft.key
+            )
+        assert exc.value.details["violations"][0]["rule"] == expected
+    else:
+        assert SubmissionService(repo)._create_submission(
+            draft, SubmitCommand(), draft.key
+        ).snapshots == [item]
+    assert draft.spanless_policy_version == marker

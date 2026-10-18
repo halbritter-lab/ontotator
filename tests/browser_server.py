@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import tempfile
+import unicodedata
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -56,7 +57,11 @@ if str(ROOT) not in sys.path:
 from support.v2_import import PackageImportService  # noqa: E402
 
 from ontocurator.packages.models import PackageManifest, ValidatedPackage  # noqa: E402
-from ontocurator.storage.tables import JobRow, ProjectRow  # noqa: E402
+from ontocurator.storage.tables import (  # noqa: E402
+    JobRow,
+    ProjectOntologyRow,
+    ProjectRow,
+)
 from tests.layered_fixtures import HP_DIGEST, make_layered_package  # noqa: E402
 from tests.t1_fixtures import (  # noqa: E402
     bundle,
@@ -76,6 +81,7 @@ def fixture_package(
     project_key: str = "browser-fixture",
     created_at: str = "2026-10-01T00:00:00Z",
     proposals: list[tuple[str, str, int, int]] | None = None,
+    canonical: bool = False,
 ) -> ValidatedPackage:
     hp_ont = OntologyDefinition(
         ontology_id="hp",
@@ -116,6 +122,8 @@ def fixture_package(
     )
 
     text = "Hypotonia and seizure. A😀e\u0301\r\nB"
+    if canonical:
+        text = unicodedata.normalize("NFC", text.replace("\r\n", "\n"))
     doc = Document(
         document_id="browser-doc",
         text=text,
@@ -346,6 +354,7 @@ def seed_packages() -> list[ValidatedPackage]:
     """Every project the specs use, oldest first."""
     return [
         fixture_package(),
+        fixture_package(project_key="pkg-unresolved-export", canonical=True),
         decision_semantics_package(),
         spanless_decisions_package(),
         fixture_package(project_key="pkg-many-proposals", proposals=MANY_PROPOSALS),
@@ -1208,6 +1217,26 @@ if __name__ == "__main__":
         importer = PackageImportService(app.state.repo, app.state.ontology_registry)
         for package in seed_packages():
             importer.import_package(package)
+            # The retired package importer creates no server export pins.
+            # Only this dedicated canonical fixture exercises the export API.
+            if package.manifest.package_id != "pkg-unresolved-export":
+                continue
+            with app.state.repo.db.transaction() as conn:
+                project_id = conn.execute(
+                    select(ProjectRow.id).where(
+                        ProjectRow.project_key == package.manifest.package_id
+                    )
+                ).scalar_one()
+                for definition in package.manifest.task_profile.ontologies:
+                    conn.execute(
+                        ProjectOntologyRow.__table__.insert().values(
+                            project_id=project_id,
+                            ontology_id=definition.ontology_id,
+                            sha256=definition.sha256,
+                            allowed_roots=[],
+                            t1_profile="generic",
+                        )
+                    )
 
         def grant_all(user_id: int, username: str, project_key: str) -> None:
             """Every role in the project, without ending the user's sessions."""

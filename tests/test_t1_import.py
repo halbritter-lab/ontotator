@@ -450,3 +450,23 @@ def test_a_project_profile_must_fit_its_t1_profile(tmp_path: Path) -> None:
 
     assert getattr(error.value, "code", None) == "PROFILE_NOT_T1"
     assert "future" in str(error.value)
+
+
+def test_flagged_unit_refuses_whole_import_without_losing_resolution(db, tmp_path):
+    flagged = annotation("flagged", (6, 19))
+    flagged["review_resolution"] = {
+        "outcome": "uncertain",
+        "reviewer": {"actor_id": "reviewer", "kind": "human"},
+        "note": "Needs review",
+    }
+    job = run_import(
+        db,
+        bundle(
+            tmp_path / "flagged.zip",
+            [unit("ordinary"), unit("flagged-doc", annotations=[flagged])],
+        ),
+    )
+    assert job.status == "failed"
+    assert "UNSUPPORTED_REVIEW_RESOLUTION" in job.error
+    assert "flagged" in job.error
+    assert _rows(db, DocumentRow.document_id) == []

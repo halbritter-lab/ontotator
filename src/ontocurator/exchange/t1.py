@@ -326,6 +326,11 @@ def _refuse_unrepresentable(
     annotations: Sequence[ontospan.Annotation], profile: TaskProfile
 ) -> None:
     """Refuse the whole unit, listing every affected annotation (Q11)."""
+    for item in annotations:
+        if item.review_resolution is not None:
+            raise DomainError(
+                "UNSUPPORTED_REVIEW_RESOLUTION", {"annotation_id": item.annotation_id}
+            )
     with_modifiers = [a.annotation_id for a in annotations if a.modifiers]
     if with_modifiers:
         raise DomainError("T1_UNSUPPORTED", {"annotations": with_modifiers})
@@ -538,7 +543,8 @@ def submission_to_unit(
 
     In review mode confirmed proposals become ``adopted`` and changed ones
     ``edited`` (both with the proposal's URN in ``source_refs`` and the reviewer
-    as actor); rejected and uncertain decisions are left out and counted.
+    as actor). Rejected proposals are omitted; unresolved proposals preserve
+    their source provenance and carry a separate reviewer resolution flag.
     """
     key = submission.origin_key
     reviewer = ontospan.Actor(actor_id=key.annotator_id, kind="human")
@@ -548,6 +554,7 @@ def submission_to_unit(
     # (annotation id, version) -> (method, source ref) for review results.
     reviewed: dict[tuple[str, str], tuple[Method, str]] = {}
     note_sources: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    unresolved: dict[tuple[str, str], ReviewDecision] = {}
     snapshots = list(submission.snapshots)
     present = {(s.annotation.annotation_id, s.version) for s in snapshots}
     decision: ReviewDecision
@@ -576,10 +583,30 @@ def submission_to_unit(
         elif decision.outcome == "rejected":
             counts["rejected"] += 1
         else:
-            counts["uncertain"] += 1
+            proposal = proposals.get(target)
+            if proposal is None:
+                raise DomainError(
+                    "TARGET_NOT_FOUND",
+                    {"annotation_id": target[0], "version": target[1]},
+                )
+            unresolved[target] = decision
+            if target not in present:
+                snapshots.append(proposal)
+                present.add(target)
+            else:
+                snapshots = [
+                    proposal if (s.annotation.annotation_id, s.version) == target else s
+                    for s in snapshots
+                ]
 
     annotations = []
+    exported_refs: set[tuple[str, str]] = set()
     for snap in snapshots:
+        identity = (snap.annotation.annotation_id, snap.version)
+        if identity in exported_refs:
+            continue
+        exported_refs.add(identity)
+        unresolved_decision = unresolved.get(identity)
         item = snap.annotation
         review = reviewed.get((item.annotation_id, snap.version))
         if review is not None:
@@ -591,7 +618,18 @@ def submission_to_unit(
                     kind=item.provenance.actor.kind,
                 ),
                 method=_method(item.provenance),
-                source_refs=tuple(item.provenance.source_refs),
+                source_refs=tuple(
+                    dict.fromkeys(
+                        [
+                            *item.provenance.source_refs,
+                            *(
+                                [_proposal_ref(item.annotation_id, key.project_key)]
+                                if unresolved_decision
+                                else []
+                            ),
+                        ]
+                    )
+                ),
             )
         note_refs = [(item.annotation_id, snap.version)]
         note_refs.extend(note_sources.get((item.annotation_id, snap.version), []))
@@ -616,6 +654,8 @@ def submission_to_unit(
         axes, defaulted = _axes(snap, t1_profiles.get(item.layer_id, "generic"))
         counts["defaulted_axes"] += defaulted
         mentions = _mentions(snap, document.text)
+        if unresolved_decision is not None:
+            counts["uncertain"] += 1
         annotations.append(
             ontospan.Annotation(
                 annotation_id=item.annotation_id,
@@ -625,6 +665,13 @@ def submission_to_unit(
                 mentions=mentions,
                 document_level=not mentions,
                 provenance=provenance,
+                review_resolution=ontospan.ReviewResolution(
+                    outcome="uncertain",
+                    reviewer=reviewer,
+                    note=unresolved_decision.note,
+                )
+                if unresolved_decision
+                else None,
             )
         )
 

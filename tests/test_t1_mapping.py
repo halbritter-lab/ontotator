@@ -505,6 +505,7 @@ def test_review_decisions_map_to_methods_and_counts() -> None:
         ("HP:0001250", "adopted"),
         ("HP:0002133", "edited"),
         ("HP:0000365", "manual"),
+        ("HP:0001284", "manual"),
     }
     adopted = by_term[("HP:0001250", "adopted")]
     assert adopted.provenance.source_refs == (confirmed.annotation.annotation_id,)
@@ -517,7 +518,7 @@ def test_review_decisions_map_to_methods_and_counts() -> None:
     # its defaulted experiencer (resolved 2026-10-15, user).
     assert adopted.axes["experiencer"].basis == "defaulted"
     assert adopted.axes["assertion"].basis == "chosen"
-    assert counts["defaulted_axes"] == 3
+    assert counts["defaulted_axes"] == 6
     assert by_term[("HP:0000365", "manual")].document_level is True
     report = ontospan.validate(exported, hp_ontologies())
     assert report.ok, report.errors
@@ -868,3 +869,115 @@ def test_shared_replacement_exports_notes_from_all_exact_changed_targets():
         "shared",
         "second source note",
     ]
+
+
+@pytest.mark.parametrize("already_present", [False, True])
+def test_unresolved_export_preserves_source_and_roundtrips_flag(already_present):
+    unit = sketch_unit()
+    document = document_from_unit(unit)
+    imported = unit_to_proposals(unit, hpo_profile(), document, bundle_id=BUNDLE_ID)
+    target = imported.annotations[1]
+    ref = AnnotationRef(
+        annotation_id=target.annotation.annotation_id, version=target.version
+    )
+    before = encode_snapshot(target)
+    decision = ReviewDecision(
+        decision_id="u",
+        target=ref,
+        outcome="uncertain",
+        reviewer_id="ann-0007",
+        note="Needs clinical review",
+    )
+    result, counts = submission_to_unit(
+        submission(
+            [target, target] if already_present else [],
+            mode="review",
+            decisions=[decision],
+            targets=[ref],
+        ),
+        document,
+        hpo_profile(),
+        layers(),
+        {(ref.annotation_id, ref.version): target},
+        set_id="review",
+        proposal_notes={(ref.annotation_id, ref.version): ["Source note"]},
+    )
+    restored = ontospan.AnnotatedDocument.model_validate_json(result.model_dump_json())
+    [annotation] = restored.annotation_set.annotations
+    assert annotation.axes["assertion"].value == "present"
+    assert annotation.axes["assertion"].basis == "defaulted"
+    assert annotation.provenance.method == "manual"
+    assert annotation.provenance.actor.actor_id == "ann-03"
+    assert annotation.provenance.source_refs == (ref.annotation_id,)
+    assert annotation.provenance.notes == ("Source note",)
+    assert annotation.review_resolution.model_dump(mode="json") == {
+        "outcome": "uncertain",
+        "reviewer": {
+            "actor_id": "ann-0007",
+            "kind": "human",
+            "name": None,
+            "version": None,
+            "model": None,
+            "run_id": None,
+        },
+        "note": "Needs clinical review",
+    }
+    assert counts["uncertain"] == 1
+    assert encode_snapshot(target) == before
+    assert ontospan.validate(restored, hp_ontologies()).ok
+    with pytest.raises(DomainError) as exc:
+        unit_to_proposals(restored, hpo_profile(), document, bundle_id=None)
+    assert exc.value.code == "UNSUPPORTED_REVIEW_RESOLUTION"
+    assert exc.value.details == {"annotation_id": ref.annotation_id}
+
+
+def test_unresolved_missing_exact_target_fails_export():
+    document = document_from_unit(sketch_unit())
+    ref = AnnotationRef(annotation_id="missing", version="v1")
+    decision = ReviewDecision(
+        decision_id="u",
+        target=ref,
+        outcome="uncertain",
+        reviewer_id="ann-0007",
+        note="Check",
+    )
+    with pytest.raises(DomainError) as exc:
+        submission_to_unit(
+            submission([], mode="review", decisions=[decision], targets=[ref]),
+            document,
+            hpo_profile(),
+            layers(),
+            {},
+            set_id="review",
+        )
+    assert exc.value.code == "TARGET_NOT_FOUND"
+
+
+def test_confirmed_clinically_uncertain_target_has_no_reviewer_flag():
+    document = document_from_unit(sketch_unit())
+    target = own_snapshot(
+        document,
+        "clinically-uncertain",
+        "HP:0001250",
+        (6, 19),
+        {"assertion": "uncertain"},
+    )
+    ref = AnnotationRef(
+        annotation_id=target.annotation.annotation_id, version=target.version
+    )
+    decision = ReviewDecision(
+        decision_id="c", target=ref, outcome="confirmed", reviewer_id="ann-0007"
+    )
+    result, counts = submission_to_unit(
+        submission([target], mode="review", decisions=[decision], targets=[ref]),
+        document,
+        hpo_profile(),
+        layers(),
+        {(ref.annotation_id, ref.version): target},
+        set_id="review",
+    )
+    [annotation] = result.annotation_set.annotations
+    assert annotation.axes["assertion"].value == "uncertain"
+    assert annotation.review_resolution is None
+    assert annotation.provenance.method == "adopted"
+    assert counts["uncertain"] == 0

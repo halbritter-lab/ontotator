@@ -274,7 +274,65 @@ def test_diagnostic_source_mismatch_can_be_dismissed_but_not_recreated(pending, 
         },
     )
     assert dismissed.status_code == 200, dismissed.text
-    submission = submitted(pending, view, 1)
+    second = resolve(
+        pending,
+        view,
+        {
+            "item": item(view, 1),
+            "outcome": "dismissed",
+            "reason": "No current counterpart",
+        },
+        1,
+        "dismiss-second",
+    )
+    assert second.status_code == 200, second.text
+    submission = submitted(pending, view, 2)
     assert submission.status_code == 200, submission.text
     assert submission.json()["snapshots"] == []
     assert submission.json()["reanchor_resolutions"][0]["outcome"] == "dismissed"
+
+
+def test_submit_blocks_each_unresolved_frozen_input_with_count(pending):
+    view = opened(pending).json()
+
+    def submit(revision, mutation):
+        return pending.reviewer.post(
+            f"/api/v1/workspaces/{view['workspace_id']}/submit",
+            json=envelope(
+                {"document_checked": True, "checked_layer_ids": ["hpo"]},
+                revision,
+                mutation,
+            ),
+        )
+
+    blocked = submit(0, "blocked-two")
+    assert blocked.status_code == 422, blocked.text
+    assert blocked.json()["code"] == "REANCHOR_ITEMS_UNRESOLVED"
+    assert blocked.json()["details"] == {"count": 2}
+    unchanged = opened(pending).json()["view"]
+    assert unchanged["draft"]["revision"] == 0
+    assert unchanged["submissions"] == []
+    dismissed = resolve(
+        pending,
+        view,
+        {"item": item(view), "outcome": "dismissed", "reason": "No current finding"},
+    )
+    assert dismissed.status_code == 200, dismissed.text
+    blocked = submit(1, "blocked-one")
+    assert blocked.status_code == 422, blocked.text
+    assert blocked.json()["details"] == {"count": 1}
+    final = resolve(
+        pending,
+        view,
+        {
+            "item": item(view, 1),
+            "outcome": "dismissed",
+            "reason": "No corresponding evidence",
+        },
+        1,
+        "dismiss-second",
+    )
+    assert final.status_code == 200, final.text
+    result = submit(2, "complete")
+    assert result.status_code == 200, result.text
+    assert len(result.json()["reanchor_resolutions"]) == 2

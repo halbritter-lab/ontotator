@@ -251,6 +251,12 @@ class SubmissionService:
             resolved.add(pending_identity)
             validate_resolution(self.repo, draft, resolution)
 
+        missing_resolutions = seen - resolved
+        if missing_resolutions:
+            raise DomainError(
+                "REANCHOR_ITEMS_UNRESOLVED", {"count": len(missing_resolutions)}
+            )
+
         task_profile = self.repo.get_task_profile(key.project_key)
         scope = build_scope(task_profile, key.mode)
         previous = latest_submissions(self.repo.get_submissions_for_workspace(key))
@@ -289,7 +295,7 @@ class SubmissionService:
                     raise DomainError(
                         "TARGET_NOT_FOUND", "Reviewed target is unavailable"
                     )
-                if dec.outcome == "confirmed":
+                if dec.outcome in {"confirmed", "uncertain"}:
                     snapshots.append(target)
                 elif dec.outcome == "changed":
                     rep = dec.replacement
@@ -326,6 +332,14 @@ class SubmissionService:
         for snap in snapshots:
             validate_annotation_completion(snap, task_profile)
 
+        if self.ontology is not None:
+            validate_draft_terms(
+                draft.model_copy(update={"annotations": snapshots}),
+                task_profile,
+                self.ontology,
+                self.repo,
+            )
+
         # Deduplicate snapshots stably
         seen_snaps: set[tuple[str, str]] = set()
         deduped_snaps: list[AnnotationSnapshot] = []
@@ -355,7 +369,7 @@ class SubmissionService:
             task_profile,
             self.repo.get_project_rules(key.project_key),
             at_submission=True,
-            enforce_spanless=draft.spanless_policy_version == 1,
+            enforce_spanless=True,
         )
         if violations:
             raise DomainError(

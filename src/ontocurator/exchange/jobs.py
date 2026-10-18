@@ -183,6 +183,17 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     layers = layers_for(content.profile, content.pins)
     units: list[ontospan.AnnotatedDocument] = []
     counts: ExportCounts = {"rejected": 0, "uncertain": 0, "defaulted_axes": 0}
+    legacy_warnings = [
+        {
+            "code": "LEGACY_UNRESOLVED_NOTE_MISSING",
+            "annotation_id": decision.target.annotation_id,
+            "version": decision.target.version,
+        }
+        for submission in content.submissions
+        for decision in submission.decisions
+        if decision.outcome == "uncertain"
+        and not (decision.note and decision.note.strip())
+    ]
     source_variant_hashes = {
         doc_id: entry.document.text_sha256
         for doc_id, entry in content.documents.items()
@@ -220,6 +231,34 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         ontology_id: ontospan.ObographOntology.load(db.blobs.path(pin.sha256))
         for ontology_id, pin in content.pins.items()
     }
+    # Historical submissions may predate materialization of unresolved targets.
+    # Check their original immutable proposals against the project profile too.
+    from ontocurator.application.submissions import validate_annotation_completion
+
+    ontology_by_layer = {layer.layer_id: layer.ontology.id for layer in layers}
+    for submission in content.submissions:
+        for decision in submission.decisions:
+            if decision.outcome != "uncertain":
+                continue
+            proposal = content.proposals.get(
+                (decision.target.annotation_id, decision.target.version)
+            )
+            if proposal is None:
+                raise DomainError("TARGET_NOT_FOUND", decision.target.model_dump())
+            validate_annotation_completion(proposal, content.profile)
+            view = ontologies[ontology_by_layer[proposal.annotation.layer_id]]
+            term_id = proposal.annotation.term_id
+            if not view.is_active(term_id):
+                code = (
+                    "UNKNOWN_TERM" if view.label(term_id) is None else "OBSOLETE_TERM"
+                )
+                raise DomainError(
+                    code,
+                    {
+                        "annotation_id": proposal.annotation.annotation_id,
+                        "term_id": term_id,
+                    },
+                )
     _validate(units, ontologies)
     now = datetime.now(UTC).replace(microsecond=0)
     bundle_id = f"{project}-{now:%Y%m%dT%H%M%SZ}"
@@ -246,6 +285,7 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         "units": len(units),
         "contributors": len(contributors),
         "counts": dict(counts),
+        "warnings": legacy_warnings,
     }
     _audit(db, actor, "project.export", project, {**result, "job_id": job.id})
     return result

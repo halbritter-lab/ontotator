@@ -39,6 +39,7 @@ from ontocurator.domain.documents import (
     Segment,
     snapshot_evidence,
 )
+from ontocurator.domain.profiles import AxisDefinition
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.workspace import MutationEnvelope, Submission, WorkspaceKey
 from ontocurator.exchange.jobs import HANDLERS
@@ -508,3 +509,113 @@ def test_only_leads_and_admins_export(db: Database) -> None:
         db, Access(5, "ann-0005", False, roles={"proj": frozenset({"lead"})})
     )
     assert lead.edit_log("proj") == []
+
+
+@pytest.mark.parametrize("note", [None, "Clinical review needed"])
+def test_unresolved_bundle_includes_flag_and_historical_warning(db, note):
+    target = _proposals(db)[1]
+    ref = AnnotationRef(
+        annotation_id=target.annotation.annotation_id, version=target.version
+    )
+    _submit(
+        db,
+        "ann-0003",
+        "review",
+        [],
+        submission_id="s-unresolved",
+        decisions=[
+            ReviewDecision(
+                decision_id="u",
+                target=ref,
+                outcome="uncertain",
+                reviewer_id="ann-0003",
+                note=note,
+            )
+        ],
+        targets=[ref],
+    )
+    job = _run(db, "t1_export")
+    _, [exported] = _read(db, job)
+    [item] = exported.annotation_set.annotations
+    assert item.review_resolution.note == note
+    assert item.review_resolution.reviewer.actor_id == "ann-0003"
+    assert item.axes["assertion"].value == target.annotation.axes_values["assertion"]
+    assert job.result["counts"]["uncertain"] == 1
+    assert job.result["warnings"] == (
+        []
+        if note
+        else [
+            {
+                "code": "LEGACY_UNRESOLVED_NOTE_MISSING",
+                "annotation_id": ref.annotation_id,
+                "version": ref.version,
+            }
+        ]
+    )
+
+
+@pytest.mark.parametrize("invalid", ["unknown", "obsolete", "profile"])
+def test_historical_unresolved_invalid_target_fails_without_artifact(db, invalid):
+    from ontocurator.authz.scoped import ScopedRepository
+
+    target = _proposals(db)[1]
+    ref = AnnotationRef(
+        annotation_id=target.annotation.annotation_id, version=target.version
+    )
+    _submit(
+        db,
+        "ann-0003",
+        "review",
+        [],
+        submission_id="s-invalid",
+        decisions=[
+            ReviewDecision(
+                decision_id="u",
+                target=ref,
+                outcome="uncertain",
+                reviewer_id="ann-0003",
+                note="Check",
+            )
+        ],
+        targets=[ref],
+    )
+    # A historical exact target is resolved from immutable proposal storage.
+    # Substitute content at the repository boundary without changing stored hashes.
+    from unittest.mock import patch
+
+    original = ScopedRepository.t1_export_content
+
+    def content(repo, project):
+        result = original(repo, project)
+        if invalid == "profile":
+            result.profile.layers[0].annotation_types[0].axes.append(
+                AxisDefinition(
+                    id="required-extra",
+                    label="Extra",
+                    options=["yes"],
+                    allow_empty=False,
+                )
+            )
+        else:
+            changed = target.model_copy(
+                update={
+                    "annotation": target.annotation.model_copy(
+                        update={
+                            "term_id": "HP:9999999"
+                            if invalid == "unknown"
+                            else "HP:0000123"
+                        }
+                    )
+                }
+            )
+            result.proposals[(ref.annotation_id, ref.version)] = changed
+        return result
+
+    with patch.object(ScopedRepository, "t1_export_content", content):
+        job = _run(db, "t1_export")
+    assert job.status == "failed", job.result
+    assert job.result is None
+    assert any(
+        code in job.error
+        for code in {"UNKNOWN_TERM", "OBSOLETE_TERM", "INCOMPLETE_AXES"}
+    )

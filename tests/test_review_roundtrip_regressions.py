@@ -232,7 +232,9 @@ def test_submission_revalidates_confirmed_imported_content(tmp_path):
 
 
 @pytest.mark.parametrize("outcome", ["rejected", "uncertain"])
-def test_nonapproved_target_may_remain_incomplete(tmp_path, outcome):
+def test_unresolved_target_must_be_complete_but_rejected_may_remain_incomplete(
+    tmp_path, outcome
+):
     repo, ontologies, key, target = strict_review(tmp_path)
     ReviewService(repo, registry=ontologies).decide(
         key,
@@ -246,6 +248,22 @@ def test_nonapproved_target_may_remain_incomplete(tmp_path, outcome):
             ).model_dump(),
         ),
     )
+    if outcome == "uncertain":
+        with pytest.raises(DomainError) as exc:
+            SubmissionService(repo).submit(
+                key,
+                envelope(
+                    "submit",
+                    1,
+                    {
+                        "document_checked": True,
+                        "checked_layer_ids": ["layer-1", "layer-2"],
+                    },
+                ),
+            )
+        assert exc.value.code == "MISSING_EVIDENCE"
+        assert repo.get_submissions_for_workspace(key) == []
+        return
     submission = SubmissionService(repo).submit(
         key,
         envelope(
