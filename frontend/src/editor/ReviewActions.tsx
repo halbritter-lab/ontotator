@@ -1,5 +1,5 @@
 import { IconButton } from "../ui/IconButton";
-import { TextInput } from "../ui/TextInput";
+import { Textarea } from "../ui/Textarea";
 import { Button } from "../ui/Button";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ProposalSource } from "./ProposalSource";
@@ -20,6 +20,7 @@ export interface TargetProposal {
   term_id?: string;
   axes?: Record<string, unknown> | null;
   axes_values?: Record<string, string | null> | null;
+  axes_defaulted?: string[];
   /** Null when the proposal's snapshot is missing, so its origin is unknown. */
   provenance: components["schemas"]["Provenance"] | null;
   evidence_count: number;
@@ -107,7 +108,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   const [localNote, setLocalNote] = useState({ targetIdentity, value: currentDecision?.note ?? "" });
   const [attemptedUnresolved, setAttemptedUnresolved] = useState<string | null>(null);
   const note = controlledNote ?? (localNote.targetIdentity === targetIdentity ? localNote.value : currentDecision?.note ?? "");
-  const noteInput = useRef<HTMLInputElement>(null);
+  const noteInput = useRef<HTMLTextAreaElement>(null);
   const noteId = useId();
   const needsNote = requireNote || attemptedUnresolved === targetIdentity || currentDecision?.outcome === "uncertain";
   const noteInvalid = !readOnly && needsNote && !note.trim();
@@ -189,7 +190,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             return entries.map(([k, v]) => (
               <React.Fragment key={k}>
                 <dt>{k}</dt>
-                <dd>{typeof v === "string" ? v : (v !== null && v !== undefined ? String(v) : "Not specified")}</dd>
+                <dd>{typeof v === "string" ? v : (v !== null && v !== undefined ? String(v) : "Not specified")} {target.axes_defaulted?.includes(k) && <span className="badge">Defaulted</span>}</dd>
               </React.Fragment>
             ));
           })()}
@@ -203,6 +204,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </details>
       </div>
       <ProposalSource source={source} />
+      {!!target.axes_defaulted?.length && <p className="field-hint">To confirm or change defaulted values, use Edit &amp; Replace, choose “Reset decision and edit copy” if asked, then use Confirm for each axis in the copy.</p>}
       {/* Origin Info */}
       <div className="review-actions__origin">
         {target.provenance ? (
@@ -252,7 +254,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
 
         <Button
           type="button"
-          variant="secondary" className="decision-btn decision-btn--changed"
+          variant="secondary" className="decision-btn decision-btn--changed" data-repair="edit-proposal"
           disabled={readOnly || !(onAdoptAndEdit || (currentDecision?.outcome === "changed" && onEditReplacement))}
           aria-pressed={pressed("changed")}
           onClick={() => {
@@ -339,14 +341,14 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
       )}
 
       <div className="review-actions__note">
-        <TextInput id={noteId} ref={noteInput} label="Reviewer note" aria-label="Reviewer note"
+        <Textarea rows={3} id={noteId} ref={noteInput} label="Reviewer note" aria-label="Reviewer note"
           required={needsNote} readOnly={readOnly} value={note}
           error={noteInvalid ? "A reviewer note is required for an unresolved decision." : undefined}
           hint={!noteInvalid && !currentDecision && note.trim() ? "The note is saved together with the next decision."
             : !noteInvalid && currentDecision && (currentDecision.note ?? "") !== note.trim()
               ? "Unsaved note – saved automatically when you leave the field." : undefined}
           onChange={e => handleNoteChange(e.target.value)} onBlur={() => saveNote(noteSession)}
-          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); saveNote(noteSession); } }} />
+ />
       </div>
     </div>
   );

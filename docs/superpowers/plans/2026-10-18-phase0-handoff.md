@@ -1,12 +1,12 @@
 # Phase 0 continuation state (2026-10-18)
 
-This file describes the current state, replacing the earlier blocked handoff. Read `PRODUCT.md`, `DESIGN.md`, [the priority roadmap](2026-10-17-phase0-priorities.md) and [verification evidence](../reviews/2026-10-17-phase0-verification.md). Historical pending statements in earlier evidence do not reopen approvals.
+Latest follow-up: [Phase 0 review fixes and verification](../reviews/2026-10-18-phase0-review-fixes.md). The user authorized all review fixes and a local merge after verification on 2026-10-18. The original candidate records below are historical where explicitly marked. Read `PRODUCT.md`, `DESIGN.md`, [the priority roadmap](2026-10-17-phase0-priorities.md) and [verification evidence](../reviews/2026-10-17-phase0-verification.md). Historical pending statements in earlier evidence do not reopen approvals.
 
 ## Authority and boundaries
 
 - The user authorized autonomous implementation of decided Phase 0 functions, efficient GPT-6.1-sol medium implementers and independent Astra review.
 - The explicit six-item approval settled P0-S/A/R/U, permitted publishing only the reviewed ontospan branch and permitted replacing embedded assets. All six are implemented. A renewed exact-file deletion approval succeeded; no manual deletion remains.
-- No Ontocurator merge or push is authorized. Keep its branches local. D6–D15 remain undecided later product questions, already prepared in the roadmap.
+- The subsequent user instruction authorizes the reviewed Phase 0 local merge after verification. No Ontocurator push is requested. D6–D15 remain undecided later product questions, already prepared in the roadmap.
 - Preserve the reserved port-18080 project `ontocurator-t5-acceptance-ready`, its files and volumes. It was already stopped; do not restart, seed, migrate or replace it.
 - Preserve the primary checkout's untracked `.impeccable/critique/` directory. All implementation is in `.worktrees/phase0-implementation`, branch `feat/phase0-usability`.
 - German conversation; English files/commits; no co-author/generated-by trailers; no GitHub Actions.
@@ -21,7 +21,9 @@ Ontospan `738f3d43ca0896c9d146a15fb9538b938229368a` (format/package 1.2) was pus
 
 ## Artifacts and verification
 
-All 31 embedded frontend paths/hashes match the fresh build. Current bundles are `index-Bh_N9xcP.js` and `index-ytX3jISo.css`; obsolete bundles were removed in `4688ebb`.
+All 31 embedded frontend paths/hashes match the fresh build. Current bundles are `index-DAM43_6Y.js` and `index-Bz01LmIQ.css`; obsolete bundles are replaced as part of the review fixes.
+
+**Historical pre-review container candidate (does not contain the later review fixes):**
 
 - Runtime source: `001c6729487eee532647f80aa6d0e3442019d1f7`.
 - Image: `sha256:9c42d4545a3c1cb4331b513b77160edfda3d78574a4fc849140454687167370a`.

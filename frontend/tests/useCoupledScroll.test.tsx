@@ -22,6 +22,17 @@ beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ get matches() { return width >= 1100; }, addEventListener: (_: string, cb: () => void) => changes.add(cb), removeEventListener: (_: string, cb: () => void) => changes.delete(cb) }));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); changes.clear(); });
+it('keeps panes independent when the environment cannot detect viewport support', () => {
+  vi.stubGlobal('matchMedia', undefined);
+  const source = pane('source', [0, 200]), target = pane('target', [0, 400]);
+  const panes = [source, target];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: true }));
+  expect(result.current.available).toBe(false);
+  scroll(source, 100);
+  expect(target.element!.scrollTop).toBe(0);
+  expect(result.current.pairs).toEqual([]);
+  expect(source.element!.querySelector('[data-paragraph-number]')).toBeNull();
+});
 it('preserves progress with positional mapping and never echoes delayed follower events', async () => {
   const source = pane('source', [0, 200, 400, 600]), target = pane('target', [0, 400, 800, 1200, 1600, 1800, 1900], 2200), comparison = pane('comparison', [0, 300, 600, 900]);
   const panes = [source, target, comparison];
@@ -53,6 +64,14 @@ it('off, narrow, replacement and unmount clean up attributes and listeners', () 
   mounted.rerender({enabled:true,follower:c}); expect(b.element!.querySelector('[data-paragraph-number]')).toBeNull();
   fireEvent.wheel(b.element!); scroll(b,300); expect(a.element!.scrollTop).toBe(100);
   act(() => { width=1099; changes.forEach(cb=>cb()); }); expect(a.element!.querySelector('[data-paragraph-number]')).toBeNull();
+  const pausedPosition = c.element!.scrollTop;
+  scroll(a, 50); expect(c.element!.scrollTop).toBe(pausedPosition);
+  expect(mounted.result.current.available).toBe(false);
+  expect(mounted.result.current.pairs).toEqual([]);
+  act(() => { width=1100; changes.forEach(cb=>cb()); });
+  expect(mounted.result.current.available).toBe(true);
+  expect(c.element!.scrollTop).toBe(pausedPosition);
+  scroll(a, 100); expect(c.element!.scrollTop).toBe(300);
   mounted.unmount(); expect(changes.size).toBe(0);
 });
 it.each([[0,0],[0,1],[1,1],[1,4],[4,1]])('keeps empty/short %i/%i geometry finite and clamped', (n,m) => {

@@ -88,7 +88,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved 
     </form>
     <form aria-label="Rules" onSubmit={event => submit(event, "Rules", () => api.updateProjectSettings(projectKey, rules))}>
       <fieldset disabled={busy !== null}><legend>Rules</legend>
-        <Select id="project-rule-spanless" label="Findings without a text span" hint="Applies to new drafts. Profile requirements for text evidence still apply."
+        <Select id="project-rule-spanless" label="Findings without a text span" hint="Applies to every future submission; completed submissions are unchanged. Profile requirements for text evidence still apply."
           value={!rules.allow_spanless_findings ? "prohibited" : rules.require_spanless_note ? "required" : "optional"}
           onChange={event => { const mode = event.target.value; setRules({ ...rules, allow_spanless_findings: mode !== "prohibited", require_spanless_note: mode === "prohibited" ? rules.require_spanless_note : mode === "required" }); setSaved(null); }}>
           <option value="prohibited">Prohibited</option>

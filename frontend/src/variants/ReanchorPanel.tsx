@@ -94,7 +94,9 @@ function ResolutionActions({item,resolution,busy,onRecreate,onDismiss,onResolved
   useEffect(()=>{if(editing)input.current?.focus();},[editing]);
   if(resolution) return <div><StatusBadge tone="success">{resolution.outcome === 'dismissed' ? 'Dismissed' : 'Re-created'}</StatusBadge>
     <p>Reviewed by {resolution.reviewer_id}{resolution.reason ? `: ${resolution.reason}` : ''}</p>
-    {resolution.replacement && <p>Replacement: {resolution.replacement.annotation_id} ({resolution.replacement.version})</p>}</div>;
+    {resolution.replacement && <details><summary>Resolution details</summary>
+      <p style={{overflowWrap:'anywhere'}}>Replacement: {resolution.replacement.annotation_id} ({resolution.replacement.version})</p>
+    </details>}</div>;
   const cancel=()=>{setEditing(false);setError(undefined);trigger.current?.focus();};
   return <div>
     {(onRecreate || onDismiss) && <StatusBadge tone="warning">Pending</StatusBadge>}
@@ -128,9 +130,14 @@ export function ReanchorPanel({ items, labelFor, onContext, resolutions=[], anno
       return <li key={reanchorKey(item)} data-reanchor-item={reanchorKey(item)} data-reanchor-pending={!resolution}>
         <Button variant="quiet" onClick={() => onContext(item.new_context)}>{label && label !== item.term_id ? `${label} (${item.term_id})` : item.term_id} · {item.layer_id}</Button>
         <p>{Object.prototype.hasOwnProperty.call(reasons, item.reason) ? reasons[item.reason] : `Unknown reason: ${item.reason}`}</p>
-        <p>Old context</p><div className="reanchor-context" data-old-context data-context-start={item.old_context.start}>{oldContext(item)}</div>
-        <p>New context</p><div className="reanchor-context">{validWindow(item.new_context) ? item.new_context.text : 'New context is unavailable.'}</div>
-        {parts ? <div data-old-start={item.old_context.start} data-new-start={item.new_context.start}><DiffView before={item.old_context.text} after={item.new_context.text} parts={parts} /></div> : <p>Text changes are unavailable.</p>}
+        {item.axes_values && <p aria-label="Original clinical axes">{Object.entries(item.axes_values).map(([axis,value],axisIndex)=><span key={axis}>
+          {axisIndex>0 && ' · '}<span>{axis}: {value ?? 'Not specified'}{item.axes_defaulted?.includes(axis) ? ' (defaulted)' : ''}</span>
+        </span>)}</p>}
+        <p>Current context</p><div className="reanchor-context" data-current-context>{validWindow(item.new_context) ? item.new_context.text : 'New context is unavailable.'}</div>
+        <details><summary>Original context and text changes</summary>
+          <p>Original context</p><div className="reanchor-context" data-old-context data-context-start={item.old_context.start}>{oldContext(item)}</div>
+          {parts ? <div data-old-start={item.old_context.start} data-new-start={item.new_context.start}><DiffView before={item.old_context.text} after={item.new_context.text} parts={parts} /></div> : <p>Text changes are unavailable.</p>}
+        </details>
         <ResolutionActions item={item} resolution={resolution} busy={busy} onRecreate={onRecreate} onDismiss={onDismiss} recreateUnavailableReason={recreateUnavailableReason} onResolved={()=>{
           const rows=[...(root.current?.querySelectorAll<HTMLElement>('[data-reanchor-item]') ?? [])];
           const next=rows.slice(index+1).concat(rows.slice(0,index)).find(row=>row.dataset.reanchorPending==='true');

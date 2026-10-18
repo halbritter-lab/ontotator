@@ -196,15 +196,40 @@ def test_exact_text_recheck_refuses_a_forged_equal_block():
     assert result.reason == "changed_segment"
 
 
-def test_contexts_and_absolute_diff_windows_have_exact_positions():
-    old = "A" * 60 + "one" + "Z" * 60
-    new = "A" * 60 + "TWO LONGER" + "Z" * 60
-    result = run(old, new, (((60, 63),),))
+def test_context_windows_include_whole_words_with_exact_unicode_offsets():
+    prefix = "😀 clinical background " * 6
+    suffix = " unchanged contextual information" * 6
+    old = prefix + "Ataxia" + suffix
+    new = prefix + "Tremor" + suffix
+    result = run(old, new, (((len(prefix), len(prefix) + 6),),))
     assert isinstance(result, NeedsReview)
-    assert (result.old_context.start, result.old_context.end) == (20, 103)
-    assert (result.new_context.start, result.new_context.end) == (20, 110)
-    assert result.old_context.text == old[20:103]
-    assert result.new_context.text == new[20:110]
+    for text, window in ((old, result.old_context), (new, result.new_context)):
+        assert (
+            window.start == 0
+            or text[window.start - 1].isspace()
+            or text[window.start].isspace()
+        )
+        assert (
+            window.end == len(text)
+            or text[window.end].isspace()
+            or text[window.end - 1].isspace()
+        )
+        assert window.text == text[window.start : window.end]
+        assert len(prefix) - 72 <= window.start <= len(prefix) - 40
+        assert len(prefix) + 46 <= window.end <= len(prefix) + 78
+    assert "".join(op.old_text for op in result.diff) == result.old_context.text
+    assert "".join(op.new_text for op in result.diff) == result.new_context.text
+
+
+def test_long_unbroken_contexts_stay_bounded_with_exact_absolute_diff_positions():
+    old = "A" * 100 + "one" + "Z" * 100
+    new = "A" * 100 + "TWO LONGER" + "Z" * 100
+    result = run(old, new, (((100, 103),),))
+    assert isinstance(result, NeedsReview)
+    assert (result.old_context.start, result.old_context.end) == (60, 143)
+    assert (result.new_context.start, result.new_context.end) == (60, 150)
+    assert result.old_context.text == old[60:143]
+    assert result.new_context.text == new[60:150]
     assert "".join(op.old_text for op in result.diff) == result.old_context.text
     assert "".join(op.new_text for op in result.diff) == result.new_context.text
     assert {op.op for op in result.diff} == {"equal", "replace"}

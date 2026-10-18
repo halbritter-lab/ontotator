@@ -60,11 +60,15 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
   const [rightElement, setRightElement] = useState<HTMLDivElement | null>(null);
   const couplingIdentity = useMemo(() => ({}), [identity, selectedId, selection, leftText, editing, suspended]);
   const [requestedCoupling, setRequestedCoupling] = useState<object | null>(null);
-  const coupled = requestedCoupling === couplingIdentity && !editing && !suspended;
+  const couplingRequested = requestedCoupling === couplingIdentity && !editing && !suspended;
   const leftStarts = useMemo(() => paragraphStarts(leftText), [leftText, identity]);
   const rightStarts = useMemo(() => paragraphStarts(current?.text?.text ?? ''), [current?.text, contentIdentity]);
   const panes = useMemo(() => [{ id: 'left', element: leftElement, starts: leftStarts }, { id: 'right', element: current?.text ? rightElement : null, starts: rightStarts }], [leftElement, rightElement, leftStarts, rightStarts, current?.text]);
-  const pairing = useCoupledScroll(panes, { enabled: coupled });
+  const pairing = useCoupledScroll(panes, { enabled: couplingRequested });
+  // A stacked layout pauses the preference; it never opts the reader in.
+  const coupled = couplingRequested && pairing.available;
+  const couplingUnavailable = editing ? 'Coupled scrolling is available in read-only views.'
+    : !pairing.available ? 'Widen the window to at least 1100 px to couple scrolling in side-by-side panes.' : null;
 
   useEffect(() => {
     if (suspended || !available || !selectedId) return;
@@ -89,11 +93,11 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
   return <section className="compare-pane" aria-label="Comparison">
     <div className="compare-controls">
     <div className="compare-toolbar density-compact"><h2>Compare</h2>
-      <label><input type="checkbox" checked={coupled} disabled={editing || suspended} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} /> Couple scrolling</label>
+      <label><input type="checkbox" checked={coupled} disabled={editing || suspended || !pairing.available} aria-describedby={couplingUnavailable ? 'compare-coupling-note' : undefined} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} /> Couple scrolling</label>
       <IconButton label="Close comparison" icon={<IconClose />} onClick={onClose} />
     </div>
-    {editing && <p>Coupled scrolling is available in read-only views.</p>}
-    {coupled && <><p>Paragraphs are paired by position, not by meaning</p><p aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${pair.paneId === 'left' ? 'Current text' : 'Comparison'} paragraph ${pair.paragraph + 1}`).join(' ↔ ')}</p></>}
+    {couplingUnavailable && <p id="compare-coupling-note">{couplingUnavailable}</p>}
+    {coupled && <><p>Paragraphs are paired by position, not by meaning</p><p role="status" aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${pair.paneId === 'left' ? 'Current text' : 'Comparison'} paragraph ${pair.paragraph + 1}`).join(' ↔ ')}</p></>}
     {!initial.id && <InlineMessage tone="info">Original source is not available; choose a comparison text.</InlineMessage>}
     {selectedId && !available && <InlineMessage tone="info">This comparison text is not available to you.</InlineMessage>}
     {!available && caseDetail.variants.some(row => row.document_id === leftDocumentId) && <Button onClick={() => select(leftDocumentId)}>Compare current text</Button>}

@@ -102,7 +102,7 @@ describe("project settings sections", () => {
     fireEvent.change(control, { target: { value: mode } });
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
     await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, expect.objectContaining({ allow_spanless_findings: allow, require_spanless_note: requireNote })));
-    expect(screen.getByText(/Applies to new drafts/)).toBeDefined();
+    expect(screen.getByText(/Applies to every future submission/)).toBeDefined();
   });
 
   it("loads the saved optional mode and preserves its flag when prohibiting spanless findings", async () => {

@@ -106,21 +106,20 @@
 
 .sidebar-header--actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
 }
 
 .sidebar-header--actions > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex-basis: 100%;
+  white-space: normal;
 }
 
 .sidebar-header--actions .btn {
-  flex-shrink: 0;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 
 /* Read-only reference annotation: laid out like a list entry. */

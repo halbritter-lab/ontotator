@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 import pytest
 from auth_harness import logged_in
 from sqlalchemy import select, update
+from t1_fixtures import annotation, unit
+from test_reanchor_job import children, corrected, execute, generated
 from test_reanchor_resolutions import opened
 from test_reanchor_resolutions import pending as pending
 from test_reanchor_resolutions import runtime as runtime
@@ -127,6 +129,106 @@ def test_recreate_exact_unicode_current_evidence_then_resolve_and_invalidate(pen
     )
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["reanchor_resolutions"] == []
+
+
+@pytest.mark.parametrize("submitted_axes", [{}, {"assertion": "present"}])
+@pytest.mark.parametrize("finish", ["edit", "submit_and_export"])
+def test_recreate_preserves_verified_absent_historical_axes_and_defaults(
+    runtime, submitted_axes, finish
+):
+    original = annotation("absent-past", (6, 19), assertion="absent")
+    original["axes"]["temporality"] = {"value": "historical", "basis": "chosen"}
+    runtime.source = unit("case", annotations=[original])
+    corrected(runtime, "😀 Neue Befunde Ω")
+    assert execute(runtime, children(runtime)[0]).status == "succeeded"
+    runtime.output = generated(runtime)[0]
+    runtime.reviewer = logged_in(
+        runtime.app,
+        "reviewer",
+        projects={"proj": ["adjudicator"]},
+        assignments=[("proj", runtime.output["document_id"], "review")],
+    )
+    view = opened(runtime).json()
+    result = create(runtime, view, command(item(view), axes_values=submitted_axes))
+    assert result.status_code == 200, result.text
+    expected = {
+        "assertion": "absent",
+        "experiencer": "patient",
+        "temporality": "historical",
+    }
+    recreated = result.json()["annotations"][0]["annotation"]
+    assert recreated["axes_values"] == expected
+    assert recreated["axes_defaulted"] == ["experiencer"]
+    enriched = view["view"]["pending_reanchor_items"][0]
+    assert enriched["axes_values"] == expected
+    assert enriched["axes_defaulted"] == ["experiencer"]
+    # Enrichment must not alter the immutable producer payload.
+    assert "axes_values" not in runtime.output["pending_items"][0]
+    if finish == "submit_and_export":
+        from test_reanchor_resolution_roundtrip import submitted
+
+        from ontocurator.domain.workspace import Submission
+        from ontocurator.exchange.t1 import layers_for, submission_to_unit
+
+        linked = resolve(
+            runtime,
+            view,
+            {
+                "item": item(view),
+                "outcome": "recreated",
+                "replacement": {
+                    "annotation_id": "new",
+                    "version": result.json()["annotations"][0]["version"],
+                },
+            },
+            1,
+        )
+        assert linked.status_code == 200, linked.text
+        submitted_result = submitted(runtime, view, 2)
+        assert submitted_result.status_code == 200, submitted_result.text
+        submission = Submission.model_validate(submitted_result.json())
+        assert len(submission.snapshots) == 1
+        assert submission.snapshots[0].annotation.axes_values == expected
+        assert submission.snapshots[0].annotation.axes_defaulted == ["experiencer"]
+        repo = runtime.app.state.repo
+        profile = repo.get_task_profile("proj")
+        exported, _ = submission_to_unit(
+            submission,
+            repo.get_document("proj", runtime.output["document_id"]),
+            profile,
+            layers_for(profile, repo.project_pins("proj")),
+            {},
+            set_id="reviewed-absent-historical",
+            variant=repo.get_variant("proj", runtime.output["document_id"]),
+            source_variant_hashes={
+                v.document_id: v.text_sha256 for v in repo._variants("proj")
+            },
+            single_native_case=False,
+        )
+        assert len(exported.annotation_set.annotations) == 1
+        axes = exported.annotation_set.annotations[0].axes
+        assert {key: value.model_dump() for key, value in axes.items()} == {
+            "assertion": {"value": "absent", "basis": "chosen"},
+            "temporality": {"value": "historical", "basis": "chosen"},
+            "experiencer": {"value": "patient", "basis": "defaulted"},
+        }
+        return
+    edited = create(
+        runtime,
+        view,
+        {
+            "command": "set_axes",
+            "annotation_id": "new",
+            "axes_values": {**expected, "assertion": "present"},
+            "chosen_axis_ids": ["experiencer"],
+        },
+        1,
+        "explicit-axis-edit",
+    )
+    assert edited.status_code == 200, edited.text
+    updated = edited.json()["annotations"][0]["annotation"]
+    assert updated["axes_values"]["assertion"] == "present"
+    assert updated.get("axes_defaulted", []) == []
 
 
 @pytest.mark.parametrize("forgery", ["set", "source", "layer", "ordinary"])
@@ -261,6 +363,8 @@ def test_diagnostic_source_mismatch_can_be_dismissed_but_not_recreated(pending, 
     assert view.status_code == 200, view.text
     view = view.json()
     assert view["view"]["pending_reanchor_items"][0]["type_id"] is None
+    assert view["view"]["pending_reanchor_items"][0]["axes_values"] is None
+    assert view["view"]["pending_reanchor_items"][0]["axes_defaulted"] is None
     denied = create(pending, view)
     assert denied.status_code == 422, denied.text
     assert denied.json()["code"] == "INVALID_REANCHOR_ITEM"

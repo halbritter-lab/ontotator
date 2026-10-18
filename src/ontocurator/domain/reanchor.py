@@ -135,6 +135,24 @@ def _boundary(m: TextMap, position: int, *, end: bool, new_length: int) -> int:
     return min(new_length, max(0, result))
 
 
+def _whole_word_window(text: str, left: int, right: int) -> tuple[int, int]:
+    """Extend to nearby token edges, without unbounded scans of unbroken text."""
+    start, end = left, right
+    while 0 < start < len(text) and not (
+        text[start - 1].isspace() or text[start].isspace()
+    ):
+        if left - start == 32:
+            start = left
+            break
+        start -= 1
+    while 0 < end < len(text) and not (text[end - 1].isspace() or text[end].isspace()):
+        if end - right == 32:
+            end = right
+            break
+        end += 1
+    return start, end
+
+
 def _needs_review(
     source: AnnotationSnapshot,
     mentions: tuple[OldMention, ...],
@@ -151,9 +169,11 @@ def _needs_review(
     ]
     left = max(0, min(span.start for span in valid) - 40) if valid else 0
     right = min(len(old), max(span.end for span in valid) + 40) if valid else len(old)
+    left, right = _whole_word_window(old, left, right)
     new_left = _boundary(m, left, end=False, new_length=len(new))
     new_right = _boundary(m, right, end=True, new_length=len(new))
     new_right = max(new_left, new_right)
+    new_left, new_right = _whole_word_window(new, new_left, new_right)
     old_window = TextWindow(left, right, old[left:right])
     new_window = TextWindow(new_left, new_right, new[new_left:new_right])
     matcher = SequenceMatcher(None, old_window.text, new_window.text, autojunk=False)

@@ -84,13 +84,16 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const canCouple = readOnly || showChanges;
   const couplingIdentity = useMemo(() => ({}), [workspace, text, showChanges, readOnly, comparisonId]);
   const [requestedCoupling, setRequestedCoupling] = useState<object | null>(null);
-  const coupled = canCouple && requestedCoupling === couplingIdentity;
+  const couplingRequested = canCouple && requestedCoupling === couplingIdentity;
   const panes = useMemo(() => [
     { id: 'source', element: sourceElement, starts: sourceStarts },
     { id: 'target', element: targetElement, starts: targetStarts },
     { id: 'comparison', element: comparison ? comparisonElement : null, starts: comparisonStarts },
   ], [sourceElement, targetElement, comparisonElement, sourceStarts, targetStarts, comparisonStarts, comparison]);
-  const pairing = useCoupledScroll(panes, { enabled: coupled });
+  const pairing = useCoupledScroll(panes, { enabled: couplingRequested });
+  const coupled = couplingRequested && pairing.available;
+  const couplingUnavailable = !canCouple ? 'Coupled scrolling is available in read-only views.'
+    : !pairing.available ? 'Widen the window to at least 1100 px to couple scrolling in side-by-side panes.' : null;
   type Leave = { kind: "leave" | "logout"; resolve?: (allowed: boolean) => void; proceed?: () => void };
   const [leave, setLeave] = useState<Leave | null>(null);
   const pendingLeave = useRef<Leave | null>(null), leavePromise = useRef<Promise<boolean> | null>(null);
@@ -252,9 +255,9 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
       <div className="translation-texts">
         <div className="translation-toolbar density-compact" role="group" aria-label="Text view">
           <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
-          <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} disabled={!canCouple} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />
-          {!canCouple && <p className="translation-toolbar-note">Coupled scrolling is available in read-only views.</p>}
-          {coupled && <><p className="translation-toolbar-note">Paragraphs are paired by position, not by meaning</p><p className="translation-toolbar-note" aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${({source:'Source',target:'Translation',comparison:'Comparison'} as Record<string,string>)[pair.paneId]} paragraph ${pair.paragraph+1}`).join(' ↔ ')}</p></>}
+          <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} disabled={!canCouple || !pairing.available} aria-describedby={couplingUnavailable ? 'review-coupling-note' : undefined} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />
+          {couplingUnavailable && <p id="review-coupling-note" className="translation-toolbar-note">{couplingUnavailable}</p>}
+          {coupled && <><p className="translation-toolbar-note">Paragraphs are paired by position, not by meaning</p><p role="status" className="translation-toolbar-note" aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${({source:'Source',target:'Translation',comparison:'Comparison'} as Record<string,string>)[pair.paneId]} paragraph ${pair.paragraph+1}`).join(' ↔ ')}</p></>}
           {comparison && <Select id="review-comparison" label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
             {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} · {row.variant.language}</option>)}</Select>}
           {coupled && sourceStarts.length !== targetStarts.length && paragraphNote(sourceStarts.length, targetStarts.length)}

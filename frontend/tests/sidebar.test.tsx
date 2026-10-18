@@ -166,9 +166,9 @@ describe("continuous sidebar", () => {
     for (const list of Array.from(sidebar.querySelectorAll<HTMLElement>(".doc-list"))) {
       expect(list.style.maxHeight).toBe("");
     }
-    // The layer controls and the footer stay outside the scrolling part.
+    // Creation remains in the shared scroller; submission errors have one global location.
     expect(scroller.contains(screen.getByRole("button", { name: /Add finding without a text span/ }))).toBe(true);
-    expect(sidebar.lastElementChild).not.toBe(scroller);
+    expect(sidebar.querySelector(".sidebar-footer__error")).toBeNull();
   });
 
   it("scrolls the selected entry into view", () => {

@@ -554,8 +554,18 @@ def test_unresolved_bundle_includes_flag_and_historical_warning(db, note):
     )
 
 
-@pytest.mark.parametrize("invalid", ["unknown", "obsolete", "profile"])
-def test_historical_unresolved_invalid_target_fails_without_artifact(db, invalid):
+@pytest.mark.parametrize(
+    ("invalid", "cause_code"),
+    [
+        ("unknown", "UNKNOWN_TERM"),
+        ("obsolete", "OBSOLETE_TERM"),
+        ("profile", "INCOMPLETE_AXES"),
+        ("missing", "TARGET_NOT_FOUND"),
+    ],
+)
+def test_historical_unresolved_invalid_target_fails_without_artifact(
+    db, invalid, cause_code
+):
     from ontocurator.authz.scoped import ScopedRepository
 
     target = _proposals(db)[1]
@@ -596,6 +606,8 @@ def test_historical_unresolved_invalid_target_fails_without_artifact(db, invalid
                     allow_empty=False,
                 )
             )
+        elif invalid == "missing":
+            del result.proposals[(ref.annotation_id, ref.version)]
         else:
             changed = target.model_copy(
                 update={
@@ -614,8 +626,37 @@ def test_historical_unresolved_invalid_target_fails_without_artifact(db, invalid
     with patch.object(ScopedRepository, "t1_export_content", content):
         job = _run(db, "t1_export")
     assert job.status == "failed", job.result
-    assert job.result is None
-    assert any(
-        code in job.error
-        for code in {"UNKNOWN_TERM", "OBSOLETE_TERM", "INCOMPLETE_AXES"}
+    assert job.result is not None
+    assert "sha256" not in job.result
+    error = job.result["error"]
+    assert error["code"] == "EXPORT_UNRESOLVED_INVALID"
+    assert error["details"]["document_id"] == DOC
+    assert error["details"]["submission_id"] == "s-invalid"
+    assert error["details"]["annotation_id"] == ref.annotation_id
+    assert error["details"]["version"] == ref.version
+    assert error["details"]["cause"]["code"] == cause_code
+    assert error["details"]["cause"]["details"]
+    assert cause_code in job.error
+
+    # A corrected submission supersedes this historical result; export must
+    # stop validating the old unresolved decision, even if its target is invalid.
+    _submit(
+        db,
+        "ann-0003",
+        "review",
+        [],
+        submission_id="s-corrected",
+        decisions=[
+            ReviewDecision(
+                decision_id="rejected",
+                target=ref,
+                outcome="rejected",
+                reviewer_id="ann-0003",
+            )
+        ],
+        targets=[ref],
     )
+    with patch.object(ScopedRepository, "t1_export_content", content):
+        corrected = _run(db, "t1_export")
+    assert corrected.status == "succeeded", corrected.error
+    assert corrected.result["counts"]["rejected"] == 1

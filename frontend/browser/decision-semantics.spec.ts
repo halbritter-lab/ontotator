@@ -19,10 +19,12 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await page.keyboard.press("2");
   await expect(page.locator('.sidebar [data-list-key^="target:"]').nth(1)).toContainText("Rejected");
   await page.getByRole("button", { name: /Finish & Submit Case/i }).click();
-  await expect(page.getByText("1 annotations have defaulted axis values.")).toBeVisible();
+  await expect(page.getByText("1 annotation has defaulted axis values.")).toBeVisible();
   await page.getByRole("button", { name: "Review defaulted annotations" }).click();
   await expect(page.getByRole("checkbox", { name: "Visibility for Hidden findings" })).toBeChecked();
   await expect(page.getByLabel("Proposal details")).toBeFocused();
+  await expect(page.getByLabel("Proposal details").getByText("Defaulted", { exact: true })).toBeVisible();
+  await expect(page.getByText(/To confirm or change defaulted values/)).toBeVisible();
   await page.getByRole("button", { name: /Edit & Replace/i }).click();
   await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
   await page.getByRole("button", { name: "Confirm Assertion value" }).click();
@@ -205,6 +207,46 @@ test("a lead persists the project spanless rule and new drafts explain the prohi
   expect(restored.ok()).toBeTruthy();
 });
 
+test("stale rules recover to an actionable evidence repair at desktop and narrow widths", async ({ page }) => {
+  await importPackage(page, "single", "browser-fixture", "stale-policy-repair");
+  const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
+  await openCase(page);
+  const opened = await (await openedResponse).json();
+  const created = await authenticatedRequest(page, `/api/v1/workspaces/${encodeURIComponent(opened.workspace_id)}/commands`, "POST", {
+    mutation_id: "stale-rule-finding", expected_revision: opened.view.draft.revision, payload: {
+      command: "create_annotation", annotation_id: "stale-rule-finding", layer_id: "hpo-layer", type_id: "phenotype",
+      term_id: "HP:0001252", segments: [], axes_values: {}, note: "Reported in the clinical summary",
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Add finding without a text span" })).toBeEnabled();
+  const changed = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: false });
+  expect(changed.ok()).toBeTruthy();
+  try {
+    await page.getByRole("button", { name: /Finish & Submit Case/ }).click();
+    const dialog = page.getByRole("dialog", { name: "Submit case", exact: true });
+    await dialog.getByRole("checkbox").check(); await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
+    await expect(page.getByText(/Submission failed:/)).toHaveCount(1);
+    await expect(page.getByText(/Reload the case to load the current rules/)).toBeVisible();
+    await page.getByRole("button", { name: "Reload current rules", exact: true }).click();
+    for (const width of [1440, 1024]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.getByRole("button", { name: /Finish & Submit Case/ }).click();
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText(/Use Add Mention to select supporting text/)).toBeVisible();
+      await dialog.getByRole("button", { name: /requires a text span/ }).click();
+      await expect(page.getByRole("button", { name: "+ Add Mention", exact: true })).toBeFocused();
+      await expect(page.getByLabel("Annotation note")).not.toHaveAttribute("required", "");
+      const heading = page.locator(".sidebar-header--actions > span");
+      expect(await heading.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await page.screenshot({ path: test.info().outputPath(`policy-repair-${width}.png`), fullPage: true });
+    }
+  } finally {
+    expect((await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true })).ok()).toBeTruthy();
+  }
+});
+
 
 test("repairing a historical spanless proposal collects a clinical reason without changing its source", async ({ page }) => {
   await importPackage(page, "spanless", "pkg-spanless-decisions", "spanless-source-repair");
@@ -337,10 +379,10 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
     await annotator.reload();
     await annotator.getByRole("button", { name: /Finish & Submit Case/ }).click();
     const readiness = annotator.getByRole("dialog", { name: "Submit case" });
-    await expect(readiness.getByText("1 finding(s) need evidence or a reason before submission.")).toBeVisible();
+    await expect(readiness.getByText("1 finding(s) need attention before submission.")).toBeVisible();
     await readiness.screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/submission-current-rules-repair.png" });
     await readiness.getByRole("button", { name: /This project requires a text span for findings/ }).click();
-    await expect(annotator.getByLabel("Annotation note")).toBeFocused();
+    await expect(annotator.getByRole("button", { name: "+ Add Mention", exact: true })).toBeFocused();
     const optionalAgain = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true, require_spanless_note: false });
     expect(optionalAgain.ok()).toBeTruthy();
     await annotator.reload();

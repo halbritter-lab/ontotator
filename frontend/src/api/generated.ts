@@ -2723,6 +2723,12 @@ export interface components {
             layer_id: string;
             /** Type Id */
             type_id?: string | null;
+            /** Axes Values */
+            axes_values?: {
+                [key: string]: string | null;
+            } | null;
+            /** Axes Defaulted */
+            axes_defaulted?: string[] | null;
             /**
              * Reason
              * @enum {string}

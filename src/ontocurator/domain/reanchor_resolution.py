@@ -55,6 +55,8 @@ class ReanchorItem(BaseModel):
     layer_id: str
     # Enriched only in authorized workspace context; never written into producer JSON.
     type_id: str | None = None
+    axes_values: dict[str, str | None] | None = None
+    axes_defaulted: list[str] | None = None
     reason: Literal[
         "source_text_mismatch",
         "missing_evidence",

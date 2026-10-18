@@ -369,6 +369,16 @@ test('three reading panes preserve positional progress and reject delayed feedba
       await expect(page.getByLabel('Paragraph pairing')).toHaveText('Source paragraph 2 ↔ Translation paragraph 2 ↔ Comparison paragraph 2');
     }
   }
+  await page.setViewportSize({width:1024,height:900});
+  await expect(box).toBeDisabled(); await expect(box).not.toBeChecked();
+  await expect(page.getByText(/Widen the window/)).toBeVisible();
+  await expect(page.getByRole('status',{name:'Paragraph pairing'})).toHaveCount(0);
+  await expect(page.getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toHaveCount(0);
+  await box.scrollIntoViewIfNeeded();
+  await page.screenshot({path:test.info().outputPath('coupling-unavailable-1024.png')});
+  await page.setViewportSize({width:1280,height:900});
+  await expect(box).toBeEnabled(); await expect(box).toBeChecked();
+  await expect(page.getByRole('status',{name:'Paragraph pairing'})).toBeVisible();
   await show.uncheck(); await expect(box).not.toBeChecked(); await expect(box).toBeDisabled();
   await target(page).fill(s.texts.target+' Native correction.'); await expect(target(page)).toHaveValue(s.texts.target+' Native correction.');
   await show.check(); await expect(box).not.toBeChecked();

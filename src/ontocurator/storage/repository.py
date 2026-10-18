@@ -2002,6 +2002,12 @@ class Repository:
                     {
                         **raw,
                         "type_id": source.annotation.type_id if content_valid else None,
+                        "axes_values": source.annotation.axes_values
+                        if content_valid
+                        else None,
+                        "axes_defaulted": source.annotation.axes_defaulted
+                        if content_valid
+                        else None,
                     }
                 )
             )

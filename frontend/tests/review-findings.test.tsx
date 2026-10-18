@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { assigned, assignedList } from "./assignments";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -282,7 +283,7 @@ describe("A4/A5: review decisions and notes", () => {
     expect(decide.mock.calls[4][1].payload).toEqual(expect.objectContaining({ outcome: "confirmed", note: "laterality differs" }));
   });
 
-  it("ReviewActions sends the typed note when it is committed with an existing decision", () => {
+  it("ReviewActions permits multiline notes and saves them on blur with an existing decision", async () => {
     const onDecide = vi.fn();
     render(
       <ReviewActions
@@ -293,9 +294,11 @@ describe("A4/A5: review decisions and notes", () => {
       />,
     );
     const field = screen.getByLabelText("Reviewer note");
-    fireEvent.change(field, { target: { value: "ok after re-reading" } });
-    fireEvent.keyDown(field, { key: "Enter" });
-    expect(onDecide).toHaveBeenCalledWith({ outcome: "confirmed", replacement: undefined, note: "ok after re-reading" });
+    await userEvent.type(field, "ok after re-reading{Enter}Confirmed with source");
+    expect(field).toHaveProperty("value", "ok after re-reading\nConfirmed with source");
+    expect(onDecide).not.toHaveBeenCalled();
+    fireEvent.blur(field);
+    expect(onDecide).toHaveBeenCalledWith({ outcome: "confirmed", replacement: undefined, note: "ok after re-reading\nConfirmed with source" });
   });
 
   it("asks before adopting (key 3) a proposal that is already rejected", async () => {

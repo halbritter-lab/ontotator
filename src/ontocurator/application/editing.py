@@ -510,7 +510,9 @@ class EditingService:
                     term_id=cmd.term_id,
                     layer_id=cmd.layer_id,
                     type_id=cmd.type_id,
-                    axes_values=cmd.axes_values,
+                    # Re-anchoring changes evidence, not the clinical finding.
+                    # Axis changes require a later explicit edit command.
+                    axes_values=source.annotation.axes_values,
                     segments=cmd.segments,
                     actor_id=draft.key.annotator_id,
                 ),
@@ -526,13 +528,14 @@ class EditingService:
             )
             annotation = own.annotation.model_copy(
                 update={
+                    "axes_defaulted": list(source.annotation.axes_defaulted),
                     "provenance": Provenance(
                         actor=ActorRef(actor_id=draft.key.annotator_id, kind="human"),
                         method="edited",
                         source_refs=[
                             f"{cmd.item.source_ref.annotation_id}:{cmd.item.source_ref.version}"
                         ],
-                    )
+                    ),
                 }
             )
             replacement = snapshot(annotation, own.evidence, doc, profile)

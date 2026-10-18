@@ -31,6 +31,32 @@ it("restores a persisted job without starting a new export and surfaces failed t
   render(<ExportPage projectKey="p" currentUser={user} />);
   await screen.findByText("EXPORT_FAILED: source missing"); expect(api.startExport).not.toHaveBeenCalled(); expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
 });
+it.each([
+  ["UNKNOWN_TERM", "The term is not in the project's pinned ontology."],
+  ["OBSOLETE_TERM", "The term is obsolete in the project's pinned ontology."],
+  ["INCOMPLETE_AXES", "Required clinical axis values are missing."],
+])("explains historical unresolved export failure %s with its context and recovery", async (code, reason) => {
+  sessionStorage.setItem(storageKey(), "11");
+  vi.mocked(api.getJob).mockResolvedValue({ ...job(11, "t1_export", "failed"), result: {
+    error: { code: "EXPORT_UNRESOLVED_INVALID", details: {
+      document_id: "document-17", submission_id: "submission-21", annotation_id: "finding-42", version: "original-version",
+      cause: { code, details: { term_id: "HP:9999999" } },
+    } },
+  } });
+  render(<ExportPage projectKey="p" currentUser={user} />);
+  await card().findByText(/A historical unresolved finding is invalid/);
+  expect(card().getByText(/No export was created/)).toBeTruthy();
+  expect(card().getByText(/Reopen the affected review assignment/)).toBeTruthy();
+  expect(card().getByText(/submit the corrected review/)).toBeTruthy();
+  expect(card().getByText(/Document: document-17/)).toBeTruthy();
+  expect(card().getByText(/Submission: submission-21/)).toBeTruthy();
+  expect(card().getByText(/Finding: finding-42/)).toBeTruthy();
+  expect(card().getByText(/Version: original-version/)).toBeTruthy();
+  expect(card().getByText(reason, { exact: false })).toBeTruthy();
+  expect(card().getByText(/HP:9999999/)).toBeTruthy();
+  expect(card().queryByText("EXPORT_FAILED: source missing")).toBeNull();
+  expect(card().queryByRole("button", { name: "Download" })).toBeNull();
+});
 it.each(["0", "-1", "NaN", "1e3", "1.5", "9007199254740992", "" ])("does not restore invalid stored job ID %s", value => {
   sessionStorage.setItem(storageKey(), value); render(<ExportPage projectKey="p" currentUser={user} />); expect(api.getJob).not.toHaveBeenCalled();
 });

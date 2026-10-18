@@ -6,17 +6,24 @@ const empty: CoupledScrollState = { leaderId: null, pairs: [] };
 const navigationKeys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar']);
 
 /** A group has one owner until deliberate input transfers ownership. Follower scroll events never feed back. */
-export function useCoupledScroll(panes: readonly CoupledScrollPane[], { enabled }: { enabled: boolean }): CoupledScrollState {
+export function useCoupledScroll(panes: readonly CoupledScrollPane[], { enabled }: { enabled: boolean }): CoupledScrollState & { available: boolean } {
   const [state, setState] = useState<CoupledScrollState>(empty);
+  const [wide] = useState(() => window.matchMedia?.('(min-width: 1100px)'));
+  const [available, setAvailable] = useState(wide?.matches ?? false);
+  useEffect(() => {
+    if (!wide) return;
+    const update = () => setAvailable(wide.matches);
+    update();
+    wide.addEventListener('change', update);
+    return () => wide.removeEventListener('change', update);
+  }, [wide]);
   useEffect(() => {
     setState(value => value.leaderId === null && !value.pairs.length ? value : empty);
-    if (!enabled) return;
-    const wide = window.matchMedia('(min-width: 1100px)');
+    if (!enabled || !available) return;
     let detach = () => {};
     const bind = () => {
       detach();
       setState(value => value.leaderId === null && !value.pairs.length ? value : empty);
-      if (!wide.matches) return;
       const participants = panes.filter((pane): pane is CoupledScrollPane & { element: HTMLElement } => pane.element !== null);
       let leaderId: string | null = null;
       const decorated = new Set<HTMLElement>();
@@ -96,8 +103,8 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], { enabled 
       refreshMarkers();
       detach = () => { removals.forEach(remove=>remove()); decorated.forEach(marker=>{ delete marker.dataset.paragraphNumber; delete marker.dataset.coupledActive; }); leaderId=null; };
     };
-    bind(); wide.addEventListener('change',bind);
-    return () => { wide.removeEventListener('change',bind); detach(); };
-  },[panes,enabled]);
-  return state;
+    bind();
+    return () => detach();
+  },[panes,enabled,available]);
+  return { ...state, available };
 }

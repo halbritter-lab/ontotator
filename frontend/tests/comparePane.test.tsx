@@ -162,6 +162,35 @@ it('clears coupling when editing, even with equal paragraph counts', async () =>
   mounted.rerender(<ComparePane {...props} leftText="one" />); expect(box.checked).toBe(false);
 });
 
+it('disables coupling in stacked layouts and resumes only the existing opt-in after resize', async () => {
+  let width = 1024;
+  const listeners = new Set<() => void>();
+  vi.stubGlobal('matchMedia', () => ({ get matches() { return width >= 1100; }, addEventListener: (_: string, cb: () => void) => listeners.add(cb), removeEventListener: (_: string, cb: () => void) => listeners.delete(cb) }));
+  const resize = (next: number) => act(() => { width = next; listeners.forEach(listener => listener()); });
+  render(<ComparePane {...props} />);
+  await screen.findByText('Immutable source');
+  const box = screen.getByRole<HTMLInputElement>('checkbox', { name: 'Couple scrolling' });
+  expect(box.disabled).toBe(true);
+  expect(box.checked).toBe(false);
+  expect(document.getElementById(box.getAttribute('aria-describedby')!)?.textContent).toMatch(/widen.*1100/i);
+  resize(1100);
+  expect(box.disabled).toBe(false);
+  expect(box.checked).toBe(false);
+  fireEvent.click(box);
+  expect(screen.getByRole('status', { name: 'Paragraph pairing' })).toBeDefined();
+  resize(1099);
+  expect(box.disabled).toBe(true);
+  expect(box.checked).toBe(false);
+  expect(screen.queryByText('Paragraphs are paired by position, not by meaning')).toBeNull();
+  expect(screen.queryByRole('status', { name: 'Paragraph pairing' })).toBeNull();
+  resize(1100);
+  expect(box.checked).toBe(true);
+  fireEvent.click(box);
+  resize(1024);
+  resize(1440);
+  expect(box.checked).toBe(false);
+});
+
 it('restores coupling numbers after a late annotation payload replaces vendor marker nodes',async()=>{
   let finish!:(value:typeof historical)=>void;
   vi.mocked(api.getAnnotationVersion).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));

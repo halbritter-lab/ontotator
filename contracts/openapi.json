@@ -7205,6 +7205,41 @@
             ],
             "title": "Type Id"
           },
+          "axes_values": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Axes Values"
+          },
+          "axes_defaulted": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Axes Defaulted"
+          },
           "reason": {
             "type": "string",
             "enum": [

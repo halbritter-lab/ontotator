@@ -5,6 +5,24 @@ import { ReanchorPanel, pendingDiffParts } from '../src/variants/ReanchorPanel';
 import { historical } from './variantFixtures';
 
 afterEach(cleanup);
+it('keeps current context and clinical axes visible while old context and exact replacement stay expandable', () => {
+  const pending=item({axes_values:{assertion:'absent',temporality:'historical',experiencer:'patient'},axes_defaulted:['experiencer']});
+  const mounted=render(<ReanchorPanel items={[pending]} labelFor={()=>null} onContext={()=>{}}
+    resolutions={[{item:{proposal_set_id:pending.proposal_set_id,source_ref:pending.source_ref},outcome:'recreated',replacement:{annotation_id:'replacement-id',version:'exact-version'},reviewer_id:'alice'}]}/>);
+  expect(screen.getByText('assertion: absent')).toBeTruthy();
+  expect(screen.getByText('temporality: historical')).toBeTruthy();
+  expect(screen.getByText('experiencer: patient (defaulted)')).toBeTruthy();
+  const old=mounted.container.querySelector('[data-old-context]')!;
+  const details=old.closest('details')!;
+  expect(details.open).toBe(false);
+  expect(details.querySelector('summary')?.textContent).toBe('Original context and text changes');
+  expect(mounted.container.querySelector('[data-current-context]')?.textContent).toBe(pending.new_context.text);
+  fireEvent.click(details.querySelector('summary')!);
+  expect(details.open).toBe(true);
+  const replacement=screen.getByText(/replacement-id/);
+  expect(replacement.closest('details')?.open).toBe(false);
+  expect(replacement.style.overflowWrap).toBe('anywhere');
+});
 it('shows stale or deleted replacements as pending and preserves exact item identity', () => {
   const pending=item(), replacement=historical.annotations[0];
   const resolutions=[{item:{proposal_set_id:pending.proposal_set_id,source_ref:pending.source_ref},outcome:'recreated' as const,

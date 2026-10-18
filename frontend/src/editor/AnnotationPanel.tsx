@@ -43,6 +43,7 @@ export interface AnnotationPanelProps {
   onSelectEvidence: (evidenceId: string) => void;
   noteValue?: string;
   noteRequired?: boolean;
+  noteHint?: string;
   onChangeNote?: (note: string) => void;
   onSaveNote?: () => void;
   detachLastBlockedReason?: string;
@@ -86,7 +87,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   onDeselect,
   onShowInTree,
   onSelectEvidence,
-  noteValue, noteRequired, onChangeNote, onSaveNote, detachLastBlockedReason,
+  noteValue, noteRequired, noteHint, onChangeNote, onSaveNote, detachLastBlockedReason,
   onUpdateTerm,
   onUpdateAxes,
   onConfirmAxis,
@@ -188,7 +189,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             <Button
               type="button"
               variant="secondary" size="sm"
-              onClick={() => setShowSearch(!showSearch)}
+              data-repair="change-term" onClick={() => setShowSearch(!showSearch)}
             >
               {showSearch ? "Close search" : readOnly ? "Search ontology" : "Change term"}
             </Button>
@@ -282,7 +283,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
       <div className="detail-section">
         <Textarea id={`annotation-note-${ann.annotation_id}`} label={noteRequired ? "Reason for no text span" : "Annotation note"}
-          required={noteRequired} value={noteValue ?? ann.note ?? ""} readOnly={readOnly}
+          data-repair="annotation-note" hint={noteHint} required={noteRequired} value={noteValue ?? ann.note ?? ""} readOnly={readOnly}
           error={noteRequired && !(noteValue ?? ann.note ?? "").trim() ? "A reason is required for a finding without a text span." : undefined}
           onChange={event => onChangeNote?.(event.target.value)} onBlur={onSaveNote} />
       </div>
@@ -292,7 +293,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <h3>Mentions ({linkedEvidence.length})</h3>
           <Button
-            type="button"
+            type="button" data-repair="add-mention"
             variant="secondary" size="sm"
             disabled={readOnly} onClick={() => onSetIntent("new_mention")}
             aria-pressed={isAttachingMention}

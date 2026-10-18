@@ -854,7 +854,91 @@ describe("CaseScreen integration", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: new RegExp(reason.replace(".", "\\.")) }));
     expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
     expect(submit).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByLabelText("Annotation note")).toBe(document.activeElement));
+    await waitFor(() => expect(allow && requireNote && evidencePolicy === "optional"
+      ? screen.getByLabelText("Annotation note") : screen.getByRole("button", { name: /Add Mention/ })).toBe(document.activeElement));
+  });
+
+  it("does not request a reason when a text span is required", () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    Object.assign(view, { enforce_spanless_rules: true, allow_spanless_findings: false, require_spanless_note: true });
+    render(<CaseScreen view={view} workspaceId="prohibited" onClose={vi.fn()} />);
+    selectEditableFinding();
+    expect(screen.queryByLabelText(/Reason for no text span/)).toBeNull();
+    expect(screen.getByLabelText("Annotation note")).toHaveProperty("required", false);
+  });
+
+  it.each([false, true])("explains current submission rules without restricting legacy edits (%s)", allow => {
+    const view = structuredClone(sampleView);
+    Object.assign(view, { enforce_spanless_rules: false, allow_spanless_findings: allow, require_spanless_note: true });
+    render(<CaseScreen view={view} workspaceId="legacy-guidance" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
+    expect(screen.queryByText("Optional context for this finding.")).toBeNull();
+    expect(screen.getAllByText(allow ? /Before submission, add a reason/ : /Before submission, add a text span or remove/).length).toBeGreaterThan(0);
+  });
+
+  const proposalView = () => {
+    const view = withEditableFinding(structuredClone(sampleView));
+    const proposal = view.draft.annotations![0];
+    view.draft.annotations = []; view.available_inputs = [proposal];
+    view.key.mode = "review"; view.draft.key.mode = "review";
+    view.targets!.targets = [{ annotation_id: proposal.annotation.annotation_id, version: proposal.version }];
+    view.draft.targets = view.targets!;
+    view.draft.decisions = [{ decision_id: "confirmed", target: view.targets!.targets[0], outcome: "confirmed", reviewer_id: "user-test" }];
+    return { view, proposal };
+  };
+
+  it("focuses Edit & Replace for a proposal missing its annotation reason", async () => {
+    const { view } = proposalView();
+    render(<CaseScreen view={view} workspaceId="proposal-reason" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
+    expect(within(dialog).getByText(/The reviewer note does not supply the annotation reason/)).toBeDefined();
+    fireEvent.click(within(dialog).getByRole("button", { name: /A reason is required/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Edit & Replace/ })).toBe(document.activeElement));
+  });
+
+  it.each(["unknown", "obsolete"] as const)("names and focuses an invalid unresolved proposal (%s)", status => {
+    const { view, proposal } = proposalView();
+    view.require_spanless_note = false;
+    view.draft.decisions![0].outcome = "uncertain";
+    view.draft.decisions![0].note = "Needs review";
+    view.term_statuses = { [`phenotype:${proposal.annotation.term_id}`]: status };
+    render(<CaseScreen view={view} workspaceId="invalid-proposal" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    return screen.findByRole("dialog", { name: "Submit case" }).then(async dialog => {
+      fireEvent.click(within(dialog).getByRole("checkbox"));
+      expect(within(dialog).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", true);
+      expect(within(dialog).getByText(/Reject this proposal or use Edit & Replace/)).toBeDefined();
+      fireEvent.click(within(dialog).getByRole("button", { name: new RegExp(`term is ${status}`) }));
+      await waitFor(() => expect(screen.getByRole("button", { name: /Edit & Replace/ })).toBe(document.activeElement));
+    });
+  });
+
+  it("shows one actionable stale-policy rejection and reloads current rules", async () => {
+    const view = withEditableFinding(structuredClone(sampleView)); view.require_spanless_note = false;
+    const reload = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(api, "submitWorkspace").mockRejectedValue(new ValidationError("Rules changed", "PROJECT_RULE_VIOLATION", { violations: [] }));
+    render(<CaseScreen view={view} workspaceId="stale-policy" onClose={vi.fn()} onReload={reload} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.click(within(dialog).getByRole("checkbox")); fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+    await screen.findByText(/Reload the case to load the current rules/);
+    expect(screen.getAllByText(/Submission failed:/)).toHaveLength(1);
+    expect(screen.queryByText(/highlighted values/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reload current rules" }));
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  });
+
+  it("identifies defaulted proposal axes and explains how to confirm them", async () => {
+    const { view, proposal } = proposalView(); view.require_spanless_note = false;
+    proposal.annotation.axes_values = { assertion: "present" }; proposal.annotation.axes_defaulted = ["assertion"];
+    render(<CaseScreen view={view} workspaceId="proposal-defaults" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.click(screen.getByRole("button", { name: "Review defaulted annotations" }));
+    await waitFor(() => expect(document.activeElement).toHaveProperty("className", "detail-section review-actions__proposal"));
+    expect(within(document.activeElement as HTMLElement).getByText("Defaulted")).toBeDefined();
+    expect(screen.getByText(/Reset decision and edit copy.*Confirm/)).toBeDefined();
   });
 
   it("permits a legacy spanless result without a note under the current optional mode", async () => {
@@ -928,7 +1012,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }));
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
-    expect(await screen.findByText("1 annotations have defaulted axis values.")).toBeDefined();
+    expect(await screen.findByText("1 annotation has defaulted axis values.")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Review defaulted annotations" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("axes-section")));
     expect((screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }) as HTMLInputElement).checked).toBe(true);

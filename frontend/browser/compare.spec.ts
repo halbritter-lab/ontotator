@@ -203,15 +203,18 @@ test('unequal counts map proportionally, toggle off and below1100 suspend coupli
   expect(Math.abs(await right.evaluate(element => element.scrollTop) - before)).toBeLessThanOrEqual(1);
   await pane.getByLabel('Couple scrolling', { exact: true }).check();
   await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(pane.getByLabel('Couple scrolling', { exact: true })).toBeDisabled();
+  await expect(pane.getByLabel('Couple scrolling', { exact: true })).not.toBeChecked();
+  await expect(pane.getByText(/Widen the window/)).toBeVisible();
   const uncoupled = await right.evaluate(element => element.scrollTop);
   await scrollParagraph(left, 4);
   expect(Math.abs(await right.evaluate(element => element.scrollTop) - uncoupled)).toBeLessThanOrEqual(1);
-  await expect(pane.getByLabel('Couple scrolling', { exact: true })).toBeChecked();
   await recordGeometry(page, 'below1100-stack');
   const boxes = await Promise.all([left.boundingBox(), right.boundingBox()]);
   expect(boxes[0]!.x).toBeCloseTo(boxes[1]!.x, 0); expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y + boxes[0]!.height);
   await page.setViewportSize({ width: 1280, height: 720 });
-  await pane.getByLabel('Couple scrolling').check();
+  await expect(pane.getByLabel('Couple scrolling', { exact: true })).toBeEnabled();
+  await expect(pane.getByLabel('Couple scrolling', { exact: true })).toBeChecked();
   await scrollParagraph(left, 6); await align(right, 4);
 });
 

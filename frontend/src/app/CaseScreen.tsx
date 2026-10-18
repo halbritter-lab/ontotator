@@ -165,7 +165,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const versionGeneration = useRef(0);
   useEffect(() => { versionGeneration.current++; setVersionBusy(false); return () => { versionGeneration.current++; }; }, [versionIdentity]);
   const readOnly = serverReadOnly || display !== null;
-  const spanlessNotesRequired = view.enforce_spanless_rules && view.require_spanless_note !== false;
+  const spanlessNotesRequired = view.enforce_spanless_rules && view.allow_spanless_findings !== false && view.require_spanless_note !== false;
   // A ref also protects callbacks retained before this task became read-only.
   const readOnlyRef = useRef(readOnly);
   readOnlyRef.current = readOnly;
@@ -250,6 +250,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const completedNextAssignment = useRef<number | undefined>(undefined);
   const [historySubmission, setHistorySubmission] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [reloadSubmissionRules, setReloadSubmissionRules] = useState(false);
   const [mobilePane, setMobilePane] = useState<"list" | "text" | "details">("text");
   // The ontology tree, docked under the annotation panel while a walk is open. One entry
   // is one walk; a new nonce starts a new one.
@@ -400,6 +401,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         term_id: termId,
         axes: (snap?.annotation.axes_values ?? (snap?.annotation as any)?.axes?.values) as any,
         axes_values: snap?.annotation.axes_values ?? null,
+        axes_defaulted: snap?.annotation.axes_defaulted ?? [],
         provenance: snap?.annotation.provenance ?? null,
         evidence_count: snap?.annotation.evidence_refs?.length ?? 0,
         quote: snap?.evidence?.[0] ? quoteSegments(view.document.text, snap.evidence[0].mention.segments, 40) : undefined,
@@ -487,7 +489,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const inspectorRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (requiredNoteKey !== null && selectedTargetId !== requiredNoteKey) setRequiredNoteKey(null);
-    else if (requiredNoteKey !== null) inspectorRef.current?.querySelector<HTMLInputElement>('[aria-label="Reviewer note"]')?.focus();
+    else if (requiredNoteKey !== null) inspectorRef.current?.querySelector<HTMLTextAreaElement>('[aria-label="Reviewer note"]')?.focus();
   }, [selectedTargetId, requiredNoteKey]);
   const inspectorKey = pendingAnnotation ? `pending:${pendingAnnotation.annotationId}` : selectedListKey;
   useLayoutEffect(() => {
@@ -692,6 +694,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setIsReloading(true);
     try {
       await onReload();
+      setReloadSubmissionRules(false); setSubmitError(null);
     } catch (error) {
       reportError(error);
     } finally {
@@ -1093,7 +1096,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         ...(!pending.reanchorItem ? {search_event_id:searchId} : {}),
         ...(pending.isSpanless && spanlessReason.trim() ? { note: spanlessReason.trim() } : {}),
         segments: pending.segments,
-        axes_values: initialAxisValues(type?.axes ?? [], termId),
+        axes_values: pending.reanchorItem?.axes_values ?? initialAxisValues(type?.axes ?? [], termId),
       });
       if (pending.reanchorItem) await resolveReanchor(pending.reanchorItem,"recreated",pending.annotationId);
       setPendingAnnotation(null);
@@ -1146,6 +1149,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
 
+  const legacySubmissionHint = !view.enforce_spanless_rules
+    ? !view.allow_spanless_findings ? "Before submission, add a text span or remove this finding. This older draft still permits intermediate edits."
+      : view.require_spanless_note !== false ? "Before submission, add a reason for every finding without a text span. This older draft still permits intermediate edits." : undefined
+    : undefined;
   const activeSpanlessType = view.layers?.find(l => l.layer_id === layerSelection.activeLayerId)?.annotation_types.find(t => t.type_id === layerSelection.activeTypeId)
     ?? view.layers?.find(l => l.layer_id === layerSelection.activeLayerId)?.annotation_types[0];
   const spanlessBlockedReason = activeSpanlessType?.evidence_policy === "required_on_complete"
@@ -1336,7 +1343,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setRequiredNoteKey(key); setSelectedTargetId(key);
     setSelectedAnnotationId(null); setSelectedSourceId(null); setSelectedEvidenceId(null);
     cancelPending(); setMobilePane("details");
-    if (selectedTargetId === key) inspectorRef.current?.querySelector<HTMLInputElement>('[aria-label="Reviewer note"]')?.focus();
+    if (selectedTargetId === key) inspectorRef.current?.querySelector<HTMLTextAreaElement>('[aria-label="Reviewer note"]')?.focus();
   };
 
   // Review Decision Handler: always carries the current reviewer note.
@@ -1558,14 +1565,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const completionResults = resultSnapshots(draft, view.available_inputs ?? []);
   // Submission always uses current project rules, including legacy open drafts.
-  const submissionEvidenceIssues = completionResults.flatMap(snapshot => {
+  const submissionIssues = completionResults.flatMap(snapshot => {
     const ann = snapshot.annotation;
+    const target = reviewTargets.some(t => t.annotation_id === ann.annotation_id && t.version === snapshot.version);
+    const status = view.term_statuses?.[`${ann.layer_id}:${ann.term_id}`] ?? view.term_statuses?.[ann.term_id];
+    if (status === "unknown" || status === "obsolete") return [{ snapshot, reason: `This term is ${status}.`,
+      remedy: target ? "Reject this proposal or use Edit & Replace to choose a valid term." : "Change the term or delete this finding.",
+      focus: target ? '[data-repair="edit-proposal"]' : '[data-repair="change-term"]' }];
     if (ann.evidence_refs?.length) return [];
     const type = view.layers?.find(layer => layer.layer_id === ann.layer_id)?.annotation_types?.find(type => type.type_id === ann.type_id);
+    const needsSpan = type?.evidence_policy === "required_on_complete" || view.allow_spanless_findings === false;
     const reason = type?.evidence_policy === "required_on_complete" ? "This annotation type requires a text span."
       : view.allow_spanless_findings === false ? "This project requires a text span for findings."
       : view.require_spanless_note !== false && !(ann.note ?? "").trim() ? "A reason is required for this finding without a text span." : null;
-    return reason ? [{ snapshot, reason }] : [];
+    const remedy = target ? needsSpan ? "Use Edit & Replace to add supporting text, or reject this proposal."
+      : "Use Edit & Replace to add an annotation reason. The reviewer note does not supply the annotation reason."
+      : needsSpan ? "Use Add Mention to select supporting text, or delete this finding." : "Enter the reason in the annotation note.";
+    return reason ? [{ snapshot, reason, remedy, focus: target ? '[data-repair="edit-proposal"]' : needsSpan ? '[data-repair="add-mention"]' : '[data-repair="annotation-note"]' }] : [];
   });
   const defaulted = defaultedResults(completionResults);
   const defaultedKeys = new Set(defaulted.map(s => refKey({ annotation_id: s.annotation.annotation_id, version: s.version })));
@@ -1589,7 +1605,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setMobilePane("details"); setSubmitDialogOpen(false); setFocusDefaultedAxes(true);
   };
 
-  const reviewEvidenceIssue = (snapshot: AnnotationSnapshot) => {
+  const [repairFocus, setRepairFocus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!repairFocus || submitDialogOpen) return;
+    const control = inspectorRef.current?.querySelector<HTMLElement>(repairFocus);
+    if (control) { control.focus(); control.scrollIntoView?.({ block: "nearest" }); setRepairFocus(null); }
+  }, [repairFocus, submitDialogOpen, selectedAnnotationId, selectedTargetId]);
+  const reviewEvidenceIssue = (snapshot: AnnotationSnapshot, focus: string) => {
     const ann = snapshot.annotation;
     setLayerSelection(previous => ({ ...previous, activeLayerId: ann.layer_id, activeTypeId: ann.type_id,
       visibleLayerIds: [...new Set([...previous.visibleLayerIds, ann.layer_id])] }));
@@ -1597,7 +1619,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setSelectedTargetId(target ? refKey(target) : null); setSelectedAnnotationId(target ? null : ann.annotation_id);
     setSelectedSourceId(null); setSelectedEvidenceId(null); cancelPending();
     setMobilePane("details"); setSubmitDialogOpen(false);
-    requestAnimationFrame(() => (inspectorRef.current?.querySelector<HTMLElement>('textarea') ?? inspectorRef.current?.querySelector<HTMLElement>('input, button'))?.focus());
+    setRepairFocus(focus);
   };
   const reviewPendingReanchor = () => {
     const item = pendingReanchorItems.find(item => !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? []));
@@ -1634,7 +1656,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const handleSubmitWorkspace = async () => {
     if (readOnlyRef.current) return;
     setSubmitError(null);
-    if (invalidAnnotationNotes().length > 0) { setSubmitError("A reason is required for findings without a text span."); return; }
+    if (invalidAnnotationNotes().length > 0) { setActionError(null); setSubmitError("A reason is required for findings without a text span."); return; }
     if (blockInvalidUnresolvedNotes()) return;
 
     // Validate only after pending saves have finished;
@@ -1659,7 +1681,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Step 2: submit after the explicit "entire text checked" confirmation.
   const confirmSubmit = async () => {
     if (readOnlyRef.current) return;
-    if (!textCheckedConfirmed || blockInvalidUnresolvedNotes() || submissionEvidenceIssues.length || unresolvedReanchorCount) return;
+    if (!textCheckedConfirmed || blockInvalidUnresolvedNotes() || submissionIssues.length || unresolvedReanchorCount) return;
     if (view.key.mode === "review") {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
       if (missingTargets.length > 0) {
@@ -1697,7 +1719,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       if (err instanceof DiscardedChangesError) return;
       const msg = errorMessage(err);
       setActionError(null);
-      setSubmitError(`Submission failed: ${msg}`);
+      const refresh = err instanceof ApiError && ["PROJECT_RULE_VIOLATION", "UNKNOWN_TERM", "OBSOLETE_TERM"].includes(err.code ?? "");
+      setReloadSubmissionRules(refresh);
+      setSubmitError(`Submission failed: ${msg}${refresh ? " Reload the case to load the current rules and term status, then review the submission checklist." : ""}`);
     }
   };
 
@@ -1962,8 +1986,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
       {(actionError || submitError) && (
         <InlineMessage tone="error">{actionError ?? submitError}
-          {queueRef.current.rejectedCount() > 0 && onReload && <Button type="button" variant="secondary" size="sm"
-            disabled={isReloading} onClick={() => { void reloadCase(); }}>Reload case</Button>}
+          {(queueRef.current.rejectedCount() > 0 || reloadSubmissionRules) && onReload && <Button type="button" variant="secondary" size="sm"
+            disabled={isReloading} onClick={() => { void reloadCase(); }}>{reloadSubmissionRules ? "Reload current rules" : "Reload case"}</Button>}
         </InlineMessage>
       )}
       <div className="case-reading-layout">
@@ -2136,6 +2160,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 </Button>
               </div>
               {spanlessBlockedReason && <p className="field-hint">{spanlessBlockedReason}</p>}
+              {legacySubmissionHint && <p className="field-hint">{legacySubmissionHint}</p>}
               <ul className="doc-list">
                 {visibleAnnotations.map((annSnap) => {
                   const isSelected =
@@ -2192,14 +2217,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </Button>)}
           </div>}
 
-          {/* Submission Box at bottom of sidebar */}
-          <div className="sidebar-footer">
-            {submitError && (
-              <div className="sidebar-footer__error">
-                {submitError}
-              </div>
-            )}
-          </div>
         </aside>
 
         {/* Center: Text View */}
@@ -2266,12 +2283,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 {pendingAnnotation.reanchorItem && <>
                   <p><TermName termId={savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id} label={termLabel(pendingAnnotation.layerId,savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id)} /> · {pendingAnnotation.layerId}</p>
                   <p>Finding type: {view.layers?.find(layer=>layer.layer_id===pendingAnnotation.layerId)?.annotation_types.find(type=>type.type_id===pendingAnnotation.typeId)?.label ?? pendingAnnotation.typeId}</p>
+                  {!savedPendingReanchor && pendingAnnotation.reanchorItem.axes_values && <p>Original clinical context: {Object.entries(pendingAnnotation.reanchorItem.axes_values).map(([axis, value]) => `${axis}: ${value ?? "Not specified"}${pendingAnnotation.reanchorItem!.axes_defaulted?.includes(axis) ? " (defaulted)" : ""}`).join(" · ")}. These values will be carried over; you can edit them after saving.</p>}
                   {savedPendingReanchor && <p>The replacement is saved. Link its saved version to finish reviewing this item.</p>}
-                  <Button variant="primary" disabled={queueState === "saving"} onClick={()=>{void createPendingAnnotation(pendingAnnotation.reanchorItem!.term_id);}}>{savedPendingReanchor ? "Resolve saved finding" : "Save re-created finding"}</Button>
+                  <Button variant="secondary" disabled={queueState === "saving"} onClick={()=>{void createPendingAnnotation(pendingAnnotation.reanchorItem!.term_id);}}>{savedPendingReanchor ? "Resolve saved finding" : "Save re-created finding"}</Button>
                   {!savedPendingReanchor && <p>Or select a different term below.</p>}
                 </>}
                 {pendingAnnotation.isSpanless && <Textarea id="spanless-reason" label="Reason for no text span"
-                  required={spanlessNotesRequired} hint={!spanlessNotesRequired ? "Optional context for this finding." : undefined} value={spanlessReason}
+                  required={spanlessNotesRequired} hint={legacySubmissionHint ?? (!spanlessNotesRequired ? "Optional context for this finding." : undefined)} value={spanlessReason}
                   error={spanlessReasonError && !spanlessReason.trim() ? "A reason is required before selecting a term." : undefined}
                   onChange={event => { setSpanlessReason(event.target.value); setSpanlessReasonError(false); }} />}
                 {!savedPendingReanchor && <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
@@ -2330,6 +2348,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               axesConfig={currentAxesConfig}
               noteValue={selectedAnnotation ? annotationNoteDrafts[selectedAnnotation.annotation.annotation_id] ?? selectedAnnotation.annotation.note ?? "" : ""}
               noteRequired={spanlessNotesRequired && !!selectedAnnotation && !selectedAnnotation.annotation.evidence_refs?.length}
+              noteHint={!selectedAnnotation?.annotation.evidence_refs?.length ? legacySubmissionHint : undefined}
               onChangeNote={note => { if (selectedAnnotationId) { annotationNoteDraftsRef.current = { ...annotationNoteDraftsRef.current, [selectedAnnotationId]: note }; setAnnotationNoteDrafts(annotationNoteDraftsRef.current); } }}
               onSaveNote={() => { if (selectedAnnotationId) void saveAnnotationNote(selectedAnnotationId).catch(reportError); }}
               detachLastBlockedReason={selectedAnnotation && view.enforce_spanless_rules ? (!view.allow_spanless_findings ? "This project requires a text span for findings." :
@@ -2492,10 +2511,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           {pendingReanchorItems.length > 0 && <li>{unresolvedReanchorCount} finding(s) after text correction still pending</li>}
 
         </ul>
-        {submissionEvidenceIssues.length > 0 && <InlineMessage tone="error">
-          <p>{submissionEvidenceIssues.length} finding(s) need evidence or a reason before submission.</p>
-          <ul>{submissionEvidenceIssues.map(({snapshot, reason}) => <li key={refKey({ annotation_id: snapshot.annotation.annotation_id, version: snapshot.version })}>
-            <Button variant="quiet" onClick={() => reviewEvidenceIssue(snapshot)}><TermName termId={snapshot.annotation.term_id ?? snapshot.annotation.annotation_id} label={termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id ?? snapshot.annotation.annotation_id)} />: {reason}</Button>
+        {submissionIssues.length > 0 && <InlineMessage tone="error">
+          <p>{submissionIssues.length} finding(s) need attention before submission.</p>
+          <ul>{submissionIssues.map(({snapshot, reason, remedy, focus}) => <li key={refKey({ annotation_id: snapshot.annotation.annotation_id, version: snapshot.version })}>
+            <Button variant="quiet" onClick={() => reviewEvidenceIssue(snapshot, focus)}><TermName termId={snapshot.annotation.term_id ?? snapshot.annotation.annotation_id} label={termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id ?? snapshot.annotation.annotation_id)} />: {reason}</Button><p>{remedy}</p>
           </li>)}</ul>
         </InlineMessage>}
         {unresolvedReanchorCount > 0 && <InlineMessage tone="error">
@@ -2503,7 +2522,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <Button onClick={reviewPendingReanchor}>Review pending findings after text correction</Button>
         </InlineMessage>}
         {defaulted.length > 0 && <InlineMessage tone="warning">
-          <p>{defaulted.length} annotations have defaulted axis values.</p>
+          <p>{defaulted.length} {defaulted.length === 1 ? "annotation has" : "annotations have"} defaulted axis values.</p>
           <Button onClick={reviewDefaulted}>Review defaulted annotations</Button>
         </InlineMessage>}
         <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
@@ -2523,7 +2542,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <Button
             type="button"
             variant="primary"
-            disabled={readOnly || !textCheckedConfirmed || submissionEvidenceIssues.length > 0 || unresolvedReanchorCount > 0 || (view.key.mode === "review" && openReviewTargets.length > 0)}
+            disabled={readOnly || !textCheckedConfirmed || submissionIssues.length > 0 || unresolvedReanchorCount > 0 || (view.key.mode === "review" && openReviewTargets.length > 0)}
             onClick={() => { void confirmSubmit(); }}
           >
             Submit case

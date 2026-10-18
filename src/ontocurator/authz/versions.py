@@ -125,7 +125,7 @@ def visible_annotation_versions(
         if hint is None:
             raise DomainError("VERSION_NOT_FOUND")
     exact = visible_documents(conn, fresh, project_id, key)
-    # P0-A remains pending: retain the existing exact own-history branch.
+    # Exact own-submission history remains available within current authority.
     own = (
         conn.execute(
             select(

@@ -10,8 +10,8 @@ import { ShortcutHelpHost, openShortcutHelp } from "../src/ui/ShortcutHelp";
 import type { ReviewDecisionCode } from "../src/translation/reviewRules";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-function setup(workspace = reviewWorkspace(), strict = false) {
-  vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: true, media: query, onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: () => true })));
+function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }) {
+  vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ get matches() { return !viewport || viewport.width >= 1100; }, media: query, onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: (_: string, cb: () => void) => viewport?.listeners.add(cb), removeEventListener: (_: string, cb: () => void) => viewport?.listeners.delete(cb), dispatchEvent: () => true })));
   const open = vi.spyOn(api, "openTranslationReview").mockResolvedValue(workspace);
   const save = vi.spyOn(api, "saveTranslationReviewDraft").mockResolvedValue({ revision: 41 });
   const submit = vi.spyOn(api, "submitTranslationReview").mockResolvedValue(reviewRecord());
@@ -352,4 +352,27 @@ it('allows explicit coupling on a submitted read-only target',async()=>{
   const box=screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
   expect(box.disabled).toBe(false);expect(box.checked).toBe(false);fireEvent.click(box);expect(box.checked).toBe(true);
   expect(screen.getByText('Paragraphs are paired by position, not by meaning')).toBeDefined();
+});
+
+it('pauses read-only coupling while stacked and retains opt-in through a resize', async () => {
+  const viewport = { width: 1024, listeners: new Set<() => void>() };
+  const resize = (width: number) => act(() => { viewport.width = width; viewport.listeners.forEach(listener => listener()); });
+  setup(reviewWorkspace({ read_only: true, submitted_record: reviewRecord() }), false, viewport);
+  await screen.findByRole('textbox', { name: 'Translation (de)' });
+  const box = screen.getByRole<HTMLInputElement>('checkbox', { name: 'Couple scrolling' });
+  expect(box.disabled).toBe(true);
+  expect(box.checked).toBe(false);
+  expect(document.getElementById(box.getAttribute('aria-describedby')!)?.textContent).toMatch(/widen.*1100/i);
+  resize(1100);
+  expect(box.disabled).toBe(false);
+  expect(box.checked).toBe(false);
+  fireEvent.click(box);
+  expect(screen.getByRole('status', { name: 'Paragraph pairing' })).toBeDefined();
+  resize(1099);
+  expect(box.disabled).toBe(true);
+  expect(box.checked).toBe(false);
+  expect(screen.queryByText('Paragraphs are paired by position, not by meaning')).toBeNull();
+  expect(screen.queryByRole('status', { name: 'Paragraph pairing' })).toBeNull();
+  resize(1440);
+  expect(box.checked).toBe(true);
 });

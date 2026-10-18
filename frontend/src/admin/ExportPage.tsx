@@ -3,6 +3,7 @@ import { api, ApiError, type CurrentUser, type ExportKind } from "../api/client"
 import { saveDownload } from "../api/download";
 import { Button, InlineMessage, Toolbar } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { ERROR_MESSAGES } from "./errors";
 import { useJob } from "./useJob";
 import { jobStatusLabels, labelFor } from "../app/labels";
 
@@ -25,6 +26,33 @@ const positiveJobId = (value: string | null) => value !== null && /^[1-9]\d*$/.t
 function readRemembered(key: string): { id: number | null; storageError: boolean } {
   try { return { id: positiveJobId(sessionStorage.getItem(key)), storageError: false }; }
   catch { return { id: null, storageError: true }; }
+}
+
+const record = (value: unknown): Record<string, unknown> | undefined => typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+const exportFailureReasons: Record<string, string> = {
+  UNKNOWN_TERM: "The term is not in the project's pinned ontology.",
+  OBSOLETE_TERM: "The term is obsolete in the project's pinned ontology.",
+  INCOMPLETE_AXES: "Required clinical axis values are missing.",
+  TARGET_NOT_FOUND: "The original finding version is missing.",
+};
+
+function ExportFailure({ result, error }: { result: Record<string, unknown> | null; error: string | null }): JSX.Element {
+  const failure = record(result?.error);
+  const details = record(failure?.details);
+  const cause = record(details?.cause);
+  if (failure?.code !== "EXPORT_UNRESOLVED_INVALID" || !details || typeof cause?.code !== "string") {
+    return <InlineMessage tone="error">{error || "The export failed without further details."}</InlineMessage>;
+  }
+  const causeDetails = record(cause.details);
+  return <InlineMessage tone="error">
+    <p>{ERROR_MESSAGES.EXPORT_UNRESOLVED_INVALID}</p>
+    <p>Document: {String(details.document_id)} · Submission: {String(details.submission_id)}</p>
+    <p>Finding: {String(details.annotation_id)} · Version: {String(details.version)}</p>
+    <p>{exportFailureReasons[cause.code] || ERROR_MESSAGES[cause.code] || "The finding does not meet the project profile."} ({cause.code})</p>
+    {typeof cause.details === "string" && <p>{cause.details}</p>}
+    {typeof causeDetails?.term_id === "string" && <p>Term: {causeDetails.term_id}</p>}
+    <p>If this review is not available to reopen, ask the project lead or server operator to correct its imported history.</p>
+  </InlineMessage>;
 }
 
 export function ExportPage({ projectKey, currentUser }: ExportPageProps): JSX.Element {
@@ -94,7 +122,7 @@ function ExportCard({ projectKey, storageKey, kind, title, format, description, 
     </Toolbar>
     {polling && <p role="status">Checking export …</p>}
     {correctKind && <p role="status">Export {job.id}: {labelFor(jobStatusLabels, job.status)}</p>}
-    {correctKind && job.status === "failed" && <InlineMessage tone="error">{job.error || "The export failed without further details."}</InlineMessage>}
+    {correctKind && job.status === "failed" && <ExportFailure result={job.result} error={job.error} />}
     {downloadable && kind === "t1" && typeof job.result?.counts === "object" && job.result.counts !== null && <p>
       {String((job.result.counts as Record<string, unknown>).uncertain ?? 0)} unresolved result(s) included with reviewer flags; {String((job.result.counts as Record<string, unknown>).rejected ?? 0)} rejected result(s) omitted.
     </p>}

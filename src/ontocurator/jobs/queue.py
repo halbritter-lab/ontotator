@@ -51,6 +51,15 @@ class JobContext:
 
 Handler = Callable[[Job, JobContext], dict[str, Any]]
 
+
+class StructuredJobError(DomainError):
+    """Opt in to a public ``result.error`` payload alongside the legacy error text.
+
+    Details must be JSON serializable and safe for the job's authorized readers.
+    Other failures retain their historical null result.
+    """
+
+
 # The claim statements are the contract (T2d plan, Task 3).
 _CLAIM_NEXT = text(
     """
@@ -164,7 +173,13 @@ class JobQueue:
         except Exception as exc:
             logger.warning("Job %s (%s) failed: %s", job.id, job.kind, exc)
             self._finish(
-                job.id, worker, status="failed", error=f"{type(exc).__name__}: {exc}"
+                job.id,
+                worker,
+                status="failed",
+                error=f"{type(exc).__name__}: {exc}",
+                result={"error": {"code": exc.code, "details": exc.details}}
+                if isinstance(exc, StructuredJobError)
+                else None,
             )
         else:
             self._finish(job.id, worker, status="succeeded", result=result)
