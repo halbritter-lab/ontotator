@@ -66,4 +66,4 @@ Files: useCoupledScroll.ts, ComparePane.tsx, TranslationReviewScreen.tsx, authz/
 - [x] Regenerate OpenAPI, TypeScript and error catalog contracts and rebuild embedded frontend.
 - [x] Review the complete change with a fresh reviewer and resolve substantive findings.
 - [x] Run the complete local gate, plus bounded browser visual checks at desktop and narrow widths; after correcting one obsolete browser assertion, rerun the full browser stage successfully.
-- [ ] Record evidence and resolution of every review item, commit changes, merge into local main and verify the merged tree.
+- [x] Record evidence and resolution of every review item, commit changes, merge into local main and verify the merged tree (`778e3a0`; identical tree hashes recorded in the resolution report).

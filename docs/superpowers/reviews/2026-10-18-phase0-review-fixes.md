@@ -40,6 +40,10 @@ The complete `scripts/check.sh` run passed every stage except one obsolete brows
 
 Ignored logs: `build/review-fixes-full-gate-final.log` and `build/review-fixes-browser-final.log`. Existing React test `act` warnings, the Starlette/httpx deprecation and Vite's chunk-size advisory remain non-failing. The historical demo image was not rebuilt; its identity and age are explicit in the handoff.
 
+### Local integration
+
+Review fixes were committed as `778e3a04c922a4ed6dab0bfb766def3f27990742`. Local `main` was fast-forwarded from `4de9aaa` to that commit, including the reviewed Phase 0 implementation. Both branch trees were verified as `8f55d544523b3c8c7115c1be461d44e34fb16f74`; no merge conflict or source alteration occurred. This completion record changes documentation only. Nothing was pushed. The primary checkout's untracked `.impeccable/critique/` and the implementation worktree's ignored evidence were preserved.
+
 ## Decisions retained
 
 - Legacy editing remains permissive between saves; current submission validation is authoritative.
