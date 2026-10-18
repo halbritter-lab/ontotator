@@ -1,5 +1,7 @@
 # Phase 0 handoff for a fresh context
 
+> Update, 2026-10-18: the user explicitly approved all six presented items: P0-S/A/R/U as recommended, the specific ontospan branch push without merge, and local embedded-frontend replacement. The reviewed ontospan commit is now published and its remote ref verified. Earlier pending/blocking statements in this historical handoff are superseded; see the master roadmap's binding approval and current execution ledger. Continue the dependent implementation without asking again. No Ontocurator push or merge is authorized.
+
 ## Objective and authorization
 
 Finish the approved usability-first Phase 0 roadmap, implementing decided functions, independently reviewing them, verifying locally, and preparing a separate acceptance candidate when prerequisites permit. The user explicitly authorized autonomous planning followed by implementation, efficient GPT-6.1-sol medium implementers and Astra content review. The user now wants to continue in a fresh context. The previous thread's stored goal is blocked, not complete; this document carries the remaining objective and evidence.

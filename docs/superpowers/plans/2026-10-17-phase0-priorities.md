@@ -39,14 +39,18 @@ Login/NAT hardening can run independently when capacity exists. Refresh P9's rem
 
 These narrow questions resolve actual implementation gaps; they do not reopen D1–D5.
 
+**Binding approval, 2026-10-18:** The user answered “ja darfst du alles” to the explicit six-item request. P0-S, P0-A, P0-R and P0-U below are approved as recommended. The same approval permits pushing only ontospan `feat/review-resolution-format` at `738f3d43ca0896c9d146a15fb9538b938229368a` without merging, and replacing the implementation worktree's embedded frontend with the verified build, removing obsolete generated bundles. The ontospan remote branch now resolves to that exact commit. No Ontocurator push or merge is authorized. Earlier pending statements below describe historical checkpoints and are superseded by this approval.
+
+Technical execution: enforce P0-S when submitting every open draft; preserve the existing marker for incremental legacy edits and do not rewrite completed submissions. P0-A confirms existing exact own-history access. P0-R checks the frozen per-reviewer queue, not later document-wide arrivals. P0-U applies ordinary result validation to unresolved targets; historical export failures remain explicit. Refresh embedded assets after the remaining UI edits to avoid repeated generated changes.
+
 On 2026-10-18 the user clarified D3: projects must also be able to allow spanless findings without a required reason. The three-mode correction is implemented and verified; it does not settle the existing-draft question P0-S. Keep the previously implemented required-reason default until a different default is selected. See the binding amendment in the decision-semantics plan. This answer does not grant ontospan publication, embedded-asset replacement or merge approval.
 
 | ID | Question | Recommendation | Status |
 | --- | --- | --- | --- |
-| P0-S | Apply the selected spanless rule to existing open drafts? | Keep completed submissions immutable; enforce the project's selected mode at the next submission: evidence/removal if prohibited, a note if required, or no mandatory note in optional mode. Imported proposals remain readable. | Asked; awaiting answer |
-| P0-A | Can independent annotators still read their own previous submissions? | Yes, through own-history access; restrict general version browsing/comparison. Assigned translation reviewers retain source/target access. | Asked; awaiting answer |
-| P0-R | Must every frozen pending re-anchor item be resolved before submitting its review? | Yes; re-create or dismiss with a reason, with a count and jump from submit. | Asked; awaiting answer |
-| P0-U | May an unresolved proposal with unknown/obsolete term or incomplete required clinical content be submitted/exported as a finding? | Require correction or rejection for new submissions; preserve historical data and expose export failures explicitly. Do not silently discard or promote it. | Asked; awaiting answer |
+| P0-S | Apply the selected spanless rule to existing open drafts? | Keep completed submissions immutable; enforce the project's selected mode at the next submission: evidence/removal if prohibited, a note if required, or no mandatory note in optional mode. Imported proposals remain readable. | Approved 2026-10-18; implementation pending |
+| P0-A | Can independent annotators still read their own previous submissions? | Yes, through own-history access; restrict general version browsing/comparison. Assigned translation reviewers retain source/target access. | Approved 2026-10-18; existing implementation retained |
+| P0-R | Must every frozen pending re-anchor item be resolved before submitting its review? | Yes; re-create or dismiss with a reason, with a count and jump from submit. | Approved 2026-10-18; implementation pending |
+| P0-U | May an unresolved proposal with unknown/obsolete term or incomplete required clinical content be submitted/exported as a finding? | Require correction or rejection for new submissions; preserve historical data and expose export failures explicitly. Do not silently discard or promote it. | Approved 2026-10-18; implementation pending |
 
 For D2, new unresolved decisions require a note as already approved. Historical decisions without notes remain readable; exports must not invent notes. The plan specifies an explicit legacy warning. Format field names and minor version are technical decisions, not an additional user approval gate.
 
