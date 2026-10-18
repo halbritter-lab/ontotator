@@ -14,7 +14,9 @@ This document is the authoritative handoff for the manual acceptance round. Read
 C:\Users\jan-p\Development\ontocurator\.worktrees\phase0-implementation\docs\superpowers\reviews\2026-10-18-phase0-manual-acceptance.md
 ```
 
-The file at the same relative path in the root checkout and the copy on GitHub are older. Do not overwrite this worktree copy with either of them. Work in `C:\Users\jan-p\Development\ontocurator\.worktrees\phase0-implementation` when updating this record.
+The root checkout on `main` remains older. The completed record was published on the new branch `feat/phase0-acceptance-plan` in commit `14b5b63`; use that branch when opening it on GitHub. Do not overwrite this worktree copy with the old main-branch record. Work in `C:\Users\jan-p\Development\ontocurator\.worktrees\phase0-implementation` when updating this record.
+
+Planning follow-up: [repository analysis](2026-10-18-acceptance-sol61-analysis.md), [full-protocol Impeccable analysis](2026-10-18-acceptance-impeccable-analysis.md), and [consolidated implementation plan](../plans/2026-10-18-acceptance-remediation.md). These are planning artifacts; the observed runtime state below is unchanged.
 
 ### Latest user request and boundaries
 
@@ -49,7 +51,7 @@ Do not confuse the submitted annotation task on accepted-translation with the la
 
 ### Runtime, login and restart information
 
-- Worktree branch: `feat/phase0-usability`; root checkout branch: `main`.
+- Worktree branch at collection: `feat/phase0-usability`; now `feat/phase0-acceptance-plan` for the explicitly requested planning follow-up. Root checkout branch: `main`.
 - Private directory, relative to the worktree: `build/t5-acceptance/phase0-candidate`.
 - `credentials.json` has `host` and an `accounts` array with `username`, `password`, `role`. Use accounts demo-lead (lead), demo-reviewer (translation reviewer and now also Adjudicator), demo-annotator (annotator). The user's Adjudicator grant is runtime state; the seed's original role description may not include it.
 - `identity.json` supplies `project`, `environment`, `env_file`, `base_compose` and `override`. `commands.json` contains preparation/start information. Do not print the environment or credential contents into logs or commits.
