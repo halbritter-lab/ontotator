@@ -1,17 +1,18 @@
 # Phase 0 local acceptance candidate
 
-The separate candidate is prepared for **http://127.0.0.1:18081**. It was started, seeded and health-checked successfully, then stopped to preserve RAM for the user's other process. Start it with the commands below when ready. It contains the approved Phase 0 annotation, review, export and text-correction changes. User acceptance is pending. The older T5 environment on port 18080 remains separate and was not changed.
+The separate candidate at **http://127.0.0.1:18081** includes the completed Phase 0 review fixes from pushed source `0e9271a`. Its image was refreshed while preserving the existing data, credentials, volumes and open acceptance tasks; it was not seeded again. It is stopped to preserve RAM. Start Docker Desktop and then use the commands below when ready. Manual user acceptance is still pending. The older T5 environment on port 18080 remains separate and unchanged.
 
 ## Identity and credentials
 
 - Worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation`.
-- Source revision: `001c6729487eee532647f80aa6d0e3442019d1f7`.
-- Image: `sha256:9c42d4545a3c1cb4331b513b77160edfda3d78574a4fc849140454687167370a`.
-- Seed/tooling revision: `87367d8bd963646d7b4ffd05f7c3f9a13bc5b8e1`. Later commits update documentation only.
+- Runtime source revision: `0e9271aeb5310c39a7497dc97e0576d6de927628`.
+- Image: `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8e8950c928d` (local tag `ontocurator-phase0:reviewed`; startup uses the immutable ID).
+- Original seed/tooling revision: `87367d8bd963646d7b4ffd05f7c3f9a13bc5b8e1`. This identifies the initial fixture preparation, not the current application image. The refresh from `001c6729` to `0e9271a` includes application fixes; subsequent acceptance-documentation changes do not change runtime code.
 - Compose project: `ontocurator-t5-acceptance-phase0`.
 - Preparation directory: `build/t5-acceptance/phase0-candidate` within that worktree.
 - Private account passwords: `credentials.json` within the preparation directory. Do not copy them into issues or commits.
-- `identity.json`, `commands.json` and `seed-result.json` retain the exact startup identity and seed evidence.
+- `identity.json` and `commands.json` describe current startup. `seed-result.json` remains historical initial-seed evidence; `refresh-result.json` records the updated image, readiness and preserved database contents.
+- Refresh evidence and the pre-refresh database backup are private under `build/t5-acceptance/phase0-review-refresh`. Do not commit those files or replace them with the older demo's identities.
 
 | Account | Role | Prepared starting point |
 | --- | --- | --- |
@@ -37,6 +38,13 @@ The existing seeder creates six synthetic document variants. It prepares one acc
 
 Additional annotation-review roles and assignments are explicit acceptance setup; the seed does not consume these journeys. Automated isolated tests cover the flows. User acceptance remains pending.
 
+During those journeys, check the review fixes explicitly:
+
+- At 1024 px, the curated-list heading remains readable and the submission repair link focuses the relevant evidence, reason or term control. A server rejection after changed rules offers **Reload current rules**; reload before continuing repairs.
+- Below 1100 px, **Couple scrolling** is disabled and unchecked with a width explanation. Widening restores a previously enabled choice in a read-only comparison. Reviewer notes accept multiple lines.
+- Before saving **Re-create here**, compare the displayed original clinical axes and default markers. The replacement must preserve them; a subsequent deliberate axis edit is separate. Old context and technical IDs can be expanded when needed.
+- Proposal details identify defaulted axes and explain **Edit & Replace** followed by explicit axis confirmation. After recreating/resolving, finish the queue and submit as described above.
+
 ## Start and inspect this candidate
 
 Run PowerShell in the implementation worktree:
@@ -57,9 +65,11 @@ For a normal stop, use `& docker @candidateComposeArgs stop`; retain the volumes
 
 ## Verification
 
-The complete local gate exited 0: 1,305 frontend tests, 2,183 backend tests (one Windows POSIX-permissions skip), and all 87 browser cases passed. Static/type/API/wheel checks passed. The later local-check harness passed independent review and its real static phase, including 26 focused regression/preflight tests. Disposable packaged container contracts and the real annotation smoke passed.
+The reviewed source passed all required stages: 1,320 frontend tests, 2,209 backend tests (one expected Windows POSIX-permissions skip), 88 browser tests, static/type/contract checks and wheel validation. The browser stage was rerun after updating one obsolete assertion; the initial combined invocation did not exit 0. See the [exact source verification record](../superpowers/reviews/2026-10-18-phase0-review-fixes.md).
 
-Candidate seeding exited 0 and verified six documents, two open translation reviews and one open annotation assignment. `/readyz` returned 200 before the normal stop. Candidate volumes and private identity/credentials are retained. The reserved older demo's container IDs, image IDs, stopped state and mount identities match the recorded baseline.
+The refreshed image's OCI source label and all 31 packaged frontend paths/hashes match the reviewed source and build. `container_check.py --image <immutable-id> --smoke` exited 0, including the real login/annotation/submission journey and container permission/readiness checks, entirely on a disposable stack.
+
+Initial seeding verified six documents, two open translation reviews and one open annotation assignment. The refresh backed up the existing database and verified unchanged row counts and content hashes for all 36 application tables before and after startup. `/readyz` returned 200. Existing data-volume identities, credentials and initial seed records are retained. The reserved older demo's container IDs, image IDs, stopped state and mount identities match the baseline exactly.
 
 Browser evidence includes `decision-semantics.spec.ts`, `variants.spec.ts`, `translation-review.spec.ts` and `reanchor.spec.ts`. Tests used disposable fixture services, not these acceptance assignments. See the [Phase 0 verification record](../superpowers/reviews/2026-10-17-phase0-verification.md).
 

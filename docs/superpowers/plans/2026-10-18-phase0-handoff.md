@@ -1,12 +1,12 @@
 # Phase 0 continuation state (2026-10-18)
 
-Latest follow-up: [Phase 0 review fixes and verification](../reviews/2026-10-18-phase0-review-fixes.md). The user authorized all review fixes and a local merge after verification on 2026-10-18. The original candidate records below are historical where explicitly marked. Read `PRODUCT.md`, `DESIGN.md`, [the priority roadmap](2026-10-17-phase0-priorities.md) and [verification evidence](../reviews/2026-10-17-phase0-verification.md). Historical pending statements in earlier evidence do not reopen approvals.
+Latest follow-up: all [Phase 0 review fixes](../reviews/2026-10-18-phase0-review-fixes.md) were merged and pushed with user approval (`origin/main` verified at `0e9271a`). The user then approved documentation and demo refresh for manual acceptance; see the [current candidate instructions](../../operations/phase0-acceptance.md). The original candidate records below are historical where explicitly marked. Read `PRODUCT.md`, `DESIGN.md`, [the priority roadmap](2026-10-17-phase0-priorities.md) and [verification evidence](../reviews/2026-10-17-phase0-verification.md). Historical pending statements in earlier evidence do not reopen approvals.
 
 ## Authority and boundaries
 
 - The user authorized autonomous implementation of decided Phase 0 functions, efficient GPT-6.1-sol medium implementers and independent Astra review.
 - The explicit six-item approval settled P0-S/A/R/U, permitted publishing only the reviewed ontospan branch and permitted replacing embedded assets. All six are implemented. A renewed exact-file deletion approval succeeded; no manual deletion remains.
-- The subsequent user instruction authorizes the reviewed Phase 0 local merge after verification. No Ontocurator push is requested. D6–D15 remain undecided later product questions, already prepared in the roadmap.
+- Subsequent instructions authorized the reviewed Phase 0 merge, push and separate candidate refresh. D6–D15 remain undecided later product questions, already prepared in the roadmap.
 - Preserve the reserved port-18080 project `ontocurator-t5-acceptance-ready`, its files and volumes. It was already stopped; do not restart, seed, migrate or replace it.
 - Preserve the primary checkout's untracked `.impeccable/critique/` directory. All implementation is in `.worktrees/phase0-implementation`, branch `feat/phase0-usability`.
 - German conversation; English files/commits; no co-author/generated-by trailers; no GitHub Actions.
@@ -22,6 +22,8 @@ Ontospan `738f3d43ca0896c9d146a15fb9538b938229368a` (format/package 1.2) was pus
 ## Artifacts and verification
 
 All 31 embedded frontend paths/hashes match the fresh build. Current bundles are `index-DAM43_6Y.js` and `index-Bz01LmIQ.css`; obsolete bundles are replaced as part of the review fixes.
+
+**Current refreshed candidate:** runtime source `0e9271aeb5310c39a7497dc97e0576d6de927628`, image `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8e8950c928d` (local tag `ontocurator-phase0:reviewed`). The image source label and all 31 frontend file hashes were verified. Disposable packaged container checks and the real browser smoke passed. Startup returned `/readyz` 200, all 36 application-table contents matched before/after, and existing credentials and volumes were preserved without reseeding. Evidence and a pre-refresh database backup remain private under `build/t5-acceptance/phase0-review-refresh`.
 
 **Historical pre-review container candidate (does not contain the later review fixes):**
 
@@ -40,10 +42,10 @@ The original candidate gate used the pre-change harness. The review-fix verifica
 
 ## Completion and next action
 
-Phase 0 implementation, all review fixes, independent review and full stage verification are complete. Review-fix commit `778e3a0` was fast-forwarded into local `main`; identical branch tree hashes were verified. The final checks passed 1,320 frontend tests, 2,209 backend tests (one expected Windows skip), 88 browser tests and all static/contract/wheel checks. No required implementation work or test runner remains active. The subsequent completion record is documentation only. Nothing was pushed.
+Phase 0 implementation, all review fixes, independent review and full stage verification are complete. Review-fix commit `778e3a0` was fast-forwarded into local `main`; identical branch tree hashes were verified. The final checks passed 1,320 frontend tests, 2,209 backend tests (one expected Windows skip), 88 browser tests and all static/contract/wheel checks. The documentation completion at `0e9271a` was then pushed with explicit user approval and verified remotely. The current demo refresh changes deployment identity and documentation, not application code.
 
-The separate candidate was prepared from clean seed/tooling revision `87367d8bd963646d7b4ffd05f7c3f9a13bc5b8e1`, started, seeded once and health-checked (`/readyz` 200). It contains six synthetic documents, two open translation reviews and one open annotation task. Its exact project is `ontocurator-t5-acceptance-phase0`, app port 18081, PostgreSQL port 15544; private files live at `build/t5-acceptance/phase0-candidate` in this worktree.
+The separate candidate was originally prepared from clean seed/tooling revision `87367d8bd963646d7b4ffd05f7c3f9a13bc5b8e1` and seeded once. Its image has now been refreshed to the reviewed source above. It retains six synthetic documents, two open translation reviews and one open annotation task. Its exact project is `ontocurator-t5-acceptance-phase0`, app port 18081, PostgreSQL port 15544; private files live at `build/t5-acceptance/phase0-candidate` in this worktree. `seed-result.json` records the original seed, while `refresh-result.json` records the current deployment.
 
-It is initially stopped to preserve the requested RAM headroom. Retain its volumes and use [the acceptance instructions](../../operations/phase0-acceptance.md) to start it without reseeding. Those instructions include actual image/source identity, private credential-file location, the additional Adjudicator role required for annotation review, and the correct order for the test journeys. The reserved old demo's identities/state match the baseline exactly.
+It is stopped after verification to preserve the requested RAM headroom. Retain its volumes and use [the acceptance instructions](../../operations/phase0-acceptance.md) to start it without reseeding. Those instructions include actual image/source identity, private credential-file location, the additional Adjudicator role required for annotation review, and the correct order for the test journeys. The reserved old demo's identities/state match the baseline exactly.
 
-The approved local merge is complete. Remote publication, rebuilding the historical demo candidate and D6–D15 implementation require a separate relevant instruction. Keep the local branch/worktree and ignored evidence. The earlier stored `blocked` goal status described an old approval wait; all Phase 0 approvals and required work are now resolved.
+The approved merge, push and demo refresh are complete; manual user acceptance is the next step. D6–D15 implementation is not part of this authorization. Keep the local branch/worktree and ignored evidence. The earlier stored `blocked` goal status described an old approval wait; all Phase 0 approvals and required work are now resolved.

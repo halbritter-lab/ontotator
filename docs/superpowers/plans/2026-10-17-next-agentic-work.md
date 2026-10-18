@@ -4,7 +4,7 @@ Execution update: [the usability-first index](2026-10-17-phase0-priorities.md)
 and its five Phase 0 plans refine the batches below against `main` at `4de9aaa`.
 The user authorized finishing the plans and then implementing already decided
 functions autonomously. The new index controls execution order, shared-file
-ownership and narrow unresolved policy questions. The 2026-10-18 follow-up authorizes the reviewed Phase 0 local merge after verification; no push is requested. See [review fixes](../reviews/2026-10-18-phase0-review-fixes.md). The reserved port-18080 demo stays untouched.
+ownership and narrow unresolved policy questions. The 2026-10-18 follow-ups authorized the reviewed Phase 0 merge, its push and then an update of the separate acceptance demo. `origin/main` was verified at `0e9271a` after the push. See [review fixes](../reviews/2026-10-18-phase0-review-fixes.md) and [current acceptance instructions](../../operations/phase0-acceptance.md). The reserved port-18080 demo stays untouched.
 
 Basis: main at `2aee6a7` (T2, T3a/b, T5, T6a, UX critique fixes). Inputs: the
 UX critique (`../reviews/2026-10-17-ux-critique.md`), a feature audit and an

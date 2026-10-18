@@ -1,6 +1,6 @@
 # Usability-first execution roadmap (2026-10-17)
 
-**2026-10-18 follow-up:** The user authorized all [independent review findings](../reviews/2026-10-18-phase0-opus55-review.md) to be fixed and Phase 0 to be merged locally after verification. This supersedes older statements below withholding Ontocurator merge authorization; it does not request a push. See [fixes and verification](../reviews/2026-10-18-phase0-review-fixes.md).
+**2026-10-18 follow-up:** All [independent review findings](../reviews/2026-10-18-phase0-opus55-review.md) were fixed and Phase 0 was merged. The user then explicitly authorized the push; `origin/main` was verified at `0e9271a`. The subsequent instruction authorizes documentation and separate demo refresh for manual acceptance. These instructions supersede the historical merge/push restrictions below. See [fixes and verification](../reviews/2026-10-18-phase0-review-fixes.md) and [current acceptance instructions](../../operations/phase0-acceptance.md).
 
 
 **Baseline:** Ontocurator `main` at `4de9aaa`. This is the execution index for the five Phase 0 plans. It refines the ordering in [the original roadmap](2026-10-17-next-agentic-work.md); original decisions remain the source of product intent.

@@ -24,7 +24,7 @@ An independent fresh-context reviewer found no critical or important issue. Its 
 
 Focused verification passed: 105 editor/review/settings tests, 73 coupling/translation tests, 30 re-anchor UI tests, 27 re-anchor database tests, 50 pure re-anchor tests, 24 export/job backend tests, and 21 export UI tests. The extended fidelity regression passed its four targeted cases. These runs overlap; the counts are not additive suite totals.
 
-Browser repairs passed at 1440/1024 px and re-anchor recreation/resolution passed at 1280/600 px. Screenshots, including unavailable coupling at 1024 px, were inspected and retained under `.superpowers/sdd/2026-10-18-phase0-review-fixes/browser/`. The embedded frontend matches all 31 build files by SHA-256. Full-suite follow-up also covers absence of `matchMedia` and multiline reviewer-note saving. No remote publication is requested.
+Browser repairs passed at 1440/1024 px and re-anchor recreation/resolution passed at 1280/600 px. Screenshots, including unavailable coupling at 1024 px, were inspected and retained under `.superpowers/sdd/2026-10-18-phase0-review-fixes/browser/`. The embedded frontend matches all 31 build files by SHA-256. Full-suite follow-up also covers absence of `matchMedia` and multiline reviewer-note saving. Publication was authorized separately after this verification, as recorded below.
 
 ### Final verification
 
@@ -38,11 +38,11 @@ Browser repairs passed at 1440/1024 px and re-anchor recreation/resolution passe
 
 The complete `scripts/check.sh` run passed every stage except one obsolete browser assertion that expected coupling to remain visibly checked below 1100 px (87 other browser tests passed). Only that test was then updated to require the new disabled/unchecked state, its explanation, and automatic restoration of the prior opt-in on widening. The entire browser stage was rerun with `scripts/check.sh --only browser` and exited 0. Application code did not change between those runs; the successful static, unit and backend results remain applicable. This is full stage coverage assembled from those runs, not a claim that the initial combined invocation exited 0.
 
-Ignored logs: `build/review-fixes-full-gate-final.log` and `build/review-fixes-browser-final.log`. Existing React test `act` warnings, the Starlette/httpx deprecation and Vite's chunk-size advisory remain non-failing. The historical demo image was not rebuilt; its identity and age are explicit in the handoff.
+Ignored logs: `build/review-fixes-full-gate-final.log` and `build/review-fixes-browser-final.log`. Existing React test `act` warnings, the Starlette/httpx deprecation and Vite's chunk-size advisory remain non-failing. The demo image was not rebuilt during the review-fix task. The subsequently authorized refresh and its current identity are documented in the [acceptance instructions](../../operations/phase0-acceptance.md).
 
 ### Local integration
 
-Review fixes were committed as `778e3a04c922a4ed6dab0bfb766def3f27990742`. Local `main` was fast-forwarded from `4de9aaa` to that commit, including the reviewed Phase 0 implementation. Both branch trees were verified as `8f55d544523b3c8c7115c1be461d44e34fb16f74`; no merge conflict or source alteration occurred. This completion record changes documentation only. Nothing was pushed. The primary checkout's untracked `.impeccable/critique/` and the implementation worktree's ignored evidence were preserved.
+Review fixes were committed as `778e3a04c922a4ed6dab0bfb766def3f27990742`. Local `main` was fast-forwarded from `4de9aaa` to that commit, including the reviewed Phase 0 implementation. Both branch trees were verified as `8f55d544523b3c8c7115c1be461d44e34fb16f74`; no merge conflict or source alteration occurred. Completion commit `0e9271a` changed documentation only. The user subsequently authorized the push; `git ls-remote` verified `origin/main` at `0e9271aeb5310c39a7497dc97e0576d6de927628`. The primary checkout's untracked `.impeccable/critique/` and the implementation worktree's ignored evidence were preserved.
 
 ## Decisions retained
 

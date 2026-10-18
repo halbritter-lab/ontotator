@@ -1,5 +1,22 @@
 # Phase 0 B0.5: Acceptance candidate implementation plan
 
+## Authorized post-review refresh (2026-10-18)
+
+The original preparation below is complete and historical. The user subsequently approved updating documentation and the separate port-18081 demo after the reviewed source was merged and pushed. This refresh preserves the existing candidate data, credentials, volumes and unconsumed acceptance tasks. It does not repeat preparation or seeding. The reserved port-18080 project remains untouched.
+
+- [x] Verify the clean worktree at pushed source `0e9271a`, record both stopped stacks and build an immutable image from that source.
+- [x] Match all 31 packaged frontend files to the reviewed embedded distribution.
+- [x] Run packaged container contracts and a real browser smoke on a disposable stack.
+- [x] Back up the candidate database and original startup identity, update its pinned image, start it and verify readiness, unchanged data and reserved-demo identity (all 36 application tables matched).
+- [x] Update current acceptance/roadmap/handoff documentation and verify the startup instructions. Retain private evidence under `build/t5-acceptance/phase0-review-refresh`.
+- [x] Review the documentation, integrate it and preserve RAM by stopping the candidate normally after verification. Manual user acceptance stays pending.
+
+Ruling: no application source changes or new behavior are required. Reuse the already completed full source verification, and validate the new packaged image and deployment specifically. Original seed results remain historical; a separate refresh result records the new image and source. No automated write journey may consume the user's existing acceptance tasks.
+
+Completion: image `sha256:74b37290e03e802b281ef0d6dc8639891152f8e84b49e3dba190b8e8950c928d` passed the packaged contract/browser checks. The exact documented startup returned readiness 200. All 36 table fingerprints and existing volume/credential identities were preserved; the reserved stack matched its baseline. The candidate was stopped normally, then Docker Desktop was stopped after confirming no running containers remained. A fresh independent documentation review found no critical, important or minor issues; 29 local links and `git diff --check` passed. Only the seven documentation files are integrated; private build/backup/credential artifacts remain ignored.
+
+## Original preparation plan
+
 > **For agentic workers:** Use superpowers:executing-plans for the sequential operational tasks below. Checkboxes track execution.
 
 **Goal:** Prepare an isolated, verified acceptance candidate containing the usability fixes, while preserving the user's existing T5 acceptance environment.

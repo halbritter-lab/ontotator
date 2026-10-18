@@ -2,7 +2,7 @@
 
 The newer, separate [Phase 0 acceptance candidate](phase0-acceptance.md) is prepared on port 18081 and initially stopped to preserve RAM. This document remains the record of the reserved port-18080 environment.
 
-The tested local demo is running at **http://127.0.0.1:18080**.
+The reserved demo address is **http://127.0.0.1:18080**; that environment is currently stopped and has not been refreshed. Use the separate Phase 0 candidate above for the latest fixes. The remaining sections record its original T5 preparation.
 Implementation and main contain the completed T5 functionality; user acceptance
 is the next checkpoint before T4. See the [verification record](../superpowers/reviews/2026-10-16-t5-final-review.md).
 
