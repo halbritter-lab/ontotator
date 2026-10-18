@@ -155,11 +155,14 @@ it.each(["open", "submitted"] as const)("retains the actual submitted dialog aft
   open.mockImplementation(async id => assigned(id === 17 ? first : { ...workspaceFixture("a-first"), read_only: status === "submitted" }, id));
   vi.mocked(api.listMyTasks).mockResolvedValueOnce(tasks).mockResolvedValue([tasks[1], { ...tasks[0], status: "submitted" }]);
   first.view.draft.checked_layer_ids = ["phenotype"];
+  // This navigation case submits a valid spanless result under current project rules.
+  first.view.draft.annotations![0].annotation.note = "Finding supported by the clinical summary";
   vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "submission", created_at: "2026-10-14T12:00:00Z", draft_revision: 1 } as any);
   render(<App user={testUser("alice")} />);
   fireEvent.click(await screen.findByRole("button", { name: /Finish & Submit Case/ }));
   const submit = await screen.findByRole("dialog", { name: "Submit case" });
   fireEvent.click(within(submit).getByLabelText("Entire text checked for further findings"));
+  expect(within(submit).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
   fireEvent.click(within(submit).getByRole("button", { name: "Submit case" }));
   const dialog = await screen.findByRole("dialog", { name: "Case submitted" });
   await waitFor(() => expect(api.listMyTasks).toHaveBeenCalledTimes(2));

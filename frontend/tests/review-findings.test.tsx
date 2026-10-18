@@ -437,7 +437,7 @@ describe("Review cases", () => {
     render(<CaseScreen view={reviewView([confirmed], [own], own.evidence)} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
-    expect(dialog.textContent).toMatch(/2 annotation\(s\) will be submitted \(1 confirmed proposal\(s\), 1 curated\)/);
+    expect(dialog.textContent).toMatch(/2 annotation\(s\) will be submitted \(1 confirmed proposal\(s\), 0 unresolved with reviewer flags, 1 curated\)/);
   });
 
   it("offers the next case including zero proposals after submitting a review", async () => {
