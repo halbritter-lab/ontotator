@@ -153,6 +153,7 @@ def test_row_settings_are_copied_into_frozen_value_sets() -> None:
     row = SimpleNamespace(
         contiguous_mentions_only=True,
         allow_spanless_findings=False,
+        require_spanless_note=False,
         require_chosen_axes=True,
         hidden_axis_values=hidden,
     )
@@ -160,6 +161,7 @@ def test_row_settings_are_copied_into_frozen_value_sets() -> None:
     hidden["second"]["presence"].append("yes")
     hidden["second"]["context"] = ["past"]
     assert rules.allow_spanless_findings is False
+    assert rules.require_spanless_note is False
     assert rules.contiguous_mentions_only is True
     assert rules.require_chosen_axes is True
     assert rules.hidden_axis_values == {"second": {"presence": frozenset({"unknown"})}}
@@ -174,6 +176,7 @@ def test_default_settings_preserve_optional_behavior(
         SimpleNamespace(
             contiguous_mentions_only=False,
             allow_spanless_findings=True,
+            require_spanless_note=True,
             require_chosen_axes=False,
             hidden_axis_values={},
         )
@@ -504,22 +507,28 @@ def test_violation_order_follows_refs_and_profile_axes(
 
 
 @pytest.mark.parametrize(
-    "allowed, note, expected",
+    "allowed, required, note, expected",
     [
-        (False, "reason", "spanless_disallowed"),
-        (True, None, "spanless_note_required"),
-        (True, "   ", "spanless_note_required"),
-        (True, "reason", None),
+        (False, True, "reason", "spanless_disallowed"),
+        (False, False, "reason", "spanless_disallowed"),
+        (True, True, None, "spanless_note_required"),
+        (True, True, "   ", "spanless_note_required"),
+        (True, True, "reason", None),
+        (True, False, None, None),
+        (True, False, "   ", None),
+        (True, False, "reason", None),
     ],
 )
 def test_spanless_validation_is_explicitly_opted_in(
-    profile, document, allowed, note, expected
+    profile, document, allowed, required, note, expected
 ):
     item = annotation_snapshot(profile, document)
     item = item.model_copy(
         update={"annotation": item.annotation.model_copy(update={"note": note})}
     )
-    rules = ProjectRules(allow_spanless_findings=allowed)
+    rules = ProjectRules(
+        allow_spanless_findings=allowed, require_spanless_note=required
+    )
     assert rule_violations([item], {}, profile, rules, at_submission=False) == []
     actual = rule_violations(
         [item], {}, profile, rules, at_submission=False, enforce_spanless=True

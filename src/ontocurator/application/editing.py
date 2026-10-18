@@ -410,7 +410,10 @@ class EditingService:
                         for e in s.evidence
                     },
                     profile,
-                    ProjectRules(allow_spanless_findings=rules.allow_spanless_findings),
+                    ProjectRules(
+                        allow_spanless_findings=rules.allow_spanless_findings,
+                        require_spanless_note=rules.require_spanless_note,
+                    ),
                     at_submission=False,
                     enforce_spanless=True,
                 )

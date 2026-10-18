@@ -710,3 +710,33 @@ def test_spanless_setting_defaults_and_patch_retains_false_with_audit(app):
             )
         ).all()
     assert "allow_spanless_findings" in str(rows)
+
+
+def test_optional_spanless_reason_setting_is_authorized_persisted_and_audited(app):
+    admin = logged_in(app, "root", system_admin=True)
+    assert create_project(app, admin)["require_spanless_note"] is True
+    lead = logged_in(app, "lead", projects={"phenotypes": ["lead"]})
+    annotator = logged_in(app, "annotator", projects={"phenotypes": ["annotator"]})
+    adjudicator = logged_in(app, "reviewer", projects={"phenotypes": ["adjudicator"]})
+    endpoint = "/api/v1/projects/phenotypes/settings"
+    for client in (annotator, adjudicator):
+        assert (
+            client.patch(endpoint, json={"require_spanless_note": False}).status_code
+            == 403
+        )
+    changed = lead.patch(endpoint, json={"require_spanless_note": False})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["require_spanless_note"] is False
+    retained = lead.patch(endpoint, json={"description": "updated"})
+    assert retained.json()["require_spanless_note"] is False
+    assert app.state.repo.get_project_rules("phenotypes").require_spanless_note is False
+    with app.state.repo.db.transaction() as conn:
+        rows = conn.execute(
+            select(AuditEventRow.details).where(
+                AuditEventRow.action == "project.update"
+            )
+        ).all()
+    assert sorted(row[0]["fields"] for row in rows) == [
+        ["description"],
+        ["require_spanless_note"],
+    ]

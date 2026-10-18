@@ -16,6 +16,9 @@ class _ProjectSettings(Protocol):
     def allow_spanless_findings(self) -> bool: ...
 
     @property
+    def require_spanless_note(self) -> bool: ...
+
+    @property
     def require_chosen_axes(self) -> bool: ...
 
     @property
@@ -32,12 +35,14 @@ class ProjectRules:
         default_factory=dict
     )
     allow_spanless_findings: bool = True
+    require_spanless_note: bool = True
 
     @classmethod
     def of(cls, row: _ProjectSettings) -> Self:
         return cls(
             contiguous_mentions_only=row.contiguous_mentions_only,
             allow_spanless_findings=row.allow_spanless_findings,
+            require_spanless_note=row.require_spanless_note,
             require_chosen_axes=row.require_chosen_axes,
             hidden_axis_values={
                 layer: {axis: frozenset(values) for axis, values in axes.items()}
@@ -105,7 +110,9 @@ def rule_violations(
                 violations.append(
                     RuleViolation(annotation.annotation_id, "spanless_disallowed", {})
                 )
-            elif not (annotation.note and annotation.note.strip()):
+            elif rules.require_spanless_note and not (
+                annotation.note and annotation.note.strip()
+            ):
                 violations.append(
                     RuleViolation(
                         annotation.annotation_id, "spanless_note_required", {}

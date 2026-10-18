@@ -71,6 +71,7 @@ class WorkspaceView(BaseModel):
     pending_reanchor_items: list[ReanchorItem] = Field(default_factory=list)
     enforce_spanless_rules: bool = False
     allow_spanless_findings: bool = True
+    require_spanless_note: bool = True
     axes_definition: str = "editor-axes/v1"
     axes_config: list[AxisDefinition] = Field(default_factory=list)
     axes_config_sha256: str = ""
@@ -373,12 +374,12 @@ class WorkspaceService:
             ProposalSetView.model_validate(row)
             for row in self.repo.workspace_proposal_sets(key, offered)
         ]
+        rules = self.repo.get_project_rules(key.project_key)
         return WorkspaceView(
             pending_reanchor_items=self.repo.workspace_reanchor_items(draft),
             enforce_spanless_rules=draft.spanless_policy_version == 1,
-            allow_spanless_findings=self.repo.get_project_rules(
-                key.project_key
-            ).allow_spanless_findings,
+            allow_spanless_findings=rules.allow_spanless_findings,
+            require_spanless_note=rules.require_spanless_note,
             key=key,
             document=doc,
             draft=draft,

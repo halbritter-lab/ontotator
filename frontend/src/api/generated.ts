@@ -2508,6 +2508,11 @@ export interface components {
              */
             allow_spanless_findings: boolean;
             /**
+             * Require Spanless Note
+             * @default true
+             */
+            require_spanless_note: boolean;
+            /**
              * Require Chosen Axes
              * @default false
              */
@@ -2567,6 +2572,11 @@ export interface components {
              * @default true
              */
             allow_spanless_findings: boolean;
+            /**
+             * Require Spanless Note
+             * @default true
+             */
+            require_spanless_note: boolean;
             /**
              * Require Chosen Axes
              * @default false
@@ -3665,6 +3675,11 @@ export interface components {
              * @default true
              */
             allow_spanless_findings: boolean;
+            /**
+             * Require Spanless Note
+             * @default true
+             */
+            require_spanless_note: boolean;
             /**
              * Axes Definition
              * @default editor-axes/v1

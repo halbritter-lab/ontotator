@@ -83,6 +83,9 @@ class ProjectRow(Base):
     allow_spanless_findings: Mapped[bool] = mapped_column(
         Boolean, server_default=text("true")
     )
+    require_spanless_note: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("true")
+    )
     require_chosen_axes: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false")
     )

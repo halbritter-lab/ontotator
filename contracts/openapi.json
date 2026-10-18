@@ -6683,6 +6683,11 @@
             "title": "Allow Spanless Findings",
             "default": true
           },
+          "require_spanless_note": {
+            "type": "boolean",
+            "title": "Require Spanless Note",
+            "default": true
+          },
           "require_chosen_axes": {
             "type": "boolean",
             "title": "Require Chosen Axes",
@@ -6806,6 +6811,11 @@
           "allow_spanless_findings": {
             "type": "boolean",
             "title": "Allow Spanless Findings",
+            "default": true
+          },
+          "require_spanless_note": {
+            "type": "boolean",
+            "title": "Require Spanless Note",
             "default": true
           },
           "require_chosen_axes": {
@@ -9817,6 +9827,11 @@
           "allow_spanless_findings": {
             "type": "boolean",
             "title": "Allow Spanless Findings",
+            "default": true
+          },
+          "require_spanless_note": {
+            "type": "boolean",
+            "title": "Require Spanless Note",
             "default": true
           },
           "axes_definition": {

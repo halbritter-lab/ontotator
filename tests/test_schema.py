@@ -259,3 +259,110 @@ def test_spanless_migration_preserves_old_draft_marker_and_defaults_only_new_row
             )
         ).all()
     engine.dispose()
+
+
+def test_spanless_note_migration_preserves_content_and_legacy_markers(tmp_path):
+    from alembic import command
+
+    from ontocurator.storage.schema import alembic_config
+
+    url = unmigrated_database_url(tmp_path / "spanless-note.db")
+    upgrade(url, "0008")
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO ontocurator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) VALUES ('p', 'p', '{\"original\": true}', 'm', '{}', 't')"
+            )
+        )
+        for key, marker in (("old", None), ("current", 1)):
+            conn.execute(
+                text(
+                    "INSERT INTO ontocurator.drafts (project_id, draft_key, document_id, annotator_id, mode, scope_id, target_set_id, targets, updated_at, spanless_policy_version) SELECT id, :key, 'doc', :key, 'independent', '', 'targets-0', '{}', now(), :marker FROM ontocurator.projects"
+                ),
+                {"key": key, "marker": marker},
+            )
+        conn.execute(
+            text(
+                "INSERT INTO ontocurator.annotation_snapshots (project_id, annotation_id, version, document_id, payload) SELECT id, 'a', 'immutable-version', 'doc', '{\"note\": null}' FROM ontocurator.projects"
+            )
+        )
+        before_drafts = conn.execute(
+            text("SELECT to_jsonb(d) FROM ontocurator.drafts d ORDER BY draft_key")
+        ).all()
+        before_snapshots = conn.execute(
+            text("SELECT to_jsonb(a) FROM ontocurator.annotation_snapshots a")
+        ).all()
+        before_projects = conn.execute(
+            text("SELECT to_jsonb(p) FROM ontocurator.projects p")
+        ).all()
+    upgrade(url, "0009")
+    with engine.begin() as conn:
+        assert (
+            conn.execute(
+                text("SELECT to_jsonb(d) FROM ontocurator.drafts d ORDER BY draft_key")
+            ).all()
+            == before_drafts
+        )
+        assert (
+            conn.execute(
+                text("SELECT to_jsonb(a) FROM ontocurator.annotation_snapshots a")
+            ).all()
+            == before_snapshots
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT to_jsonb(p) - 'require_spanless_note' FROM ontocurator.projects p"
+                )
+            ).all()
+            == before_projects
+        )
+        assert (
+            conn.execute(
+                text("SELECT require_spanless_note FROM ontocurator.projects")
+            ).scalar_one()
+            is True
+        )
+        conn.execute(
+            text("UPDATE ontocurator.projects SET require_spanless_note = false")
+        )
+        conn.execute(
+            text(
+                "INSERT INTO ontocurator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) VALUES ('new', 'new', '{}', 'n', '{}', 't')"
+            )
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT require_spanless_note FROM ontocurator.projects WHERE project_key = 'new'"
+                )
+            ).scalar_one()
+            is True
+        )
+        command.downgrade(alembic_config(conn), "0008")
+        assert (
+            conn.execute(
+                text("SELECT to_jsonb(d) FROM ontocurator.drafts d ORDER BY draft_key")
+            ).all()
+            == before_drafts
+        )
+        assert (
+            conn.execute(
+                text("SELECT to_jsonb(a) FROM ontocurator.annotation_snapshots a")
+            ).all()
+            == before_snapshots
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT to_jsonb(p) FROM ontocurator.projects p WHERE project_key = 'p'"
+                )
+            ).all()
+            == before_projects
+        )
+        assert (
+            conn.execute(text("SELECT count(*) FROM ontocurator.projects")).scalar_one()
+            == 2
+        )
+    engine.dispose()

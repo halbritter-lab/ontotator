@@ -167,8 +167,10 @@ def test_workspace_filters_nested_and_legacy_options_but_retains_current_hidden_
     assert exc.value.code == "PROJECT_RULE_VIOLATION"
 
 
+@pytest.mark.parametrize("required_reason", [True, False])
 def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass(
     tmp_path,
+    required_reason,
 ):
     from support.v2_exports import ExportService
 
@@ -199,7 +201,12 @@ def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass
         annotations={("source", source.version): source},
     )
     repo.import_package(package)
-    set_rules(repo, "basis-project", require_chosen_axes=True)
+    set_rules(
+        repo,
+        "basis-project",
+        require_chosen_axes=True,
+        require_spanless_note=required_reason,
+    )
     target = AnnotationRef(annotation_id="source", version=source.version)
     targets = ReviewTargetSet.create([target])
     view = workspaces.open(
@@ -228,7 +235,9 @@ def test_real_adopt_edit_confirm_submit_export_preserves_basis_and_blocks_bypass
         0,
         command="create_annotation",
         annotation_id="copy",
-        note="Reviewer finding inferred from the complete document",
+        note="Reviewer finding inferred from the complete document"
+        if required_reason
+        else None,
         term_id="HP:0001252",
         axes_values={"assertion": "present"},
         source_annotation_id="source",
@@ -715,3 +724,99 @@ def test_historical_receipt_replay_cannot_downgrade_persisted_draft_policy(tmp_p
     with pytest.raises(DomainError) as exc:
         editor.apply(key, envelope.model_copy(update={"mutation_id": "fresh"}))
     assert exc.value.details["violations"][0]["rule"] == "spanless_note_required"
+
+
+@pytest.mark.parametrize("initial_note", [None, "   ", "Optional reason"])
+def test_optional_spanless_reason_create_edit_clear_detach_and_submit(
+    tmp_path, initial_note
+):
+    from support.v2_exports import ExportService
+
+    repo, _, ws, editor, _ = _setup_test_env(tmp_path)
+    set_rules(repo, "pkg-1", require_spanless_note=False)
+    view = ws.open(
+        WorkspaceKey(
+            project_key="pkg-1",
+            document_id="doc-1",
+            annotator_id="a",
+            mode="independent",
+            target_set_id="targets-0",
+        )
+    )
+    assert view.require_spanless_note is False
+    assert view.enforce_spanless_rules is True
+
+    def apply(revision, payload):
+        return editor.apply(
+            view.key,
+            MutationEnvelope(
+                mutation_id=f"optional-{revision}",
+                expected_revision=revision,
+                payload=payload,
+            ),
+        )
+
+    created = apply(
+        0,
+        {
+            "command": "create_annotation",
+            "annotation_id": "a",
+            "term_id": "HP:0001252",
+            "note": initial_note,
+        },
+    )
+    edited = apply(
+        1,
+        {
+            "command": "set_annotation_note",
+            "annotation_id": "a",
+            "note": "Recorded optional reason",
+        },
+    )
+    assert edited.annotations[0].annotation.note == "Recorded optional reason"
+    assert edited.annotations[0].version != created.annotations[0].version
+    cleared = apply(
+        2, {"command": "set_annotation_note", "annotation_id": "a", "note": "   "}
+    )
+    assert not (cleared.annotations[0].annotation.note or "").strip()
+    apply(
+        3,
+        {
+            "command": "create_annotation",
+            "annotation_id": "b",
+            "term_id": "HP:0001252",
+            "evidence_id": "ev",
+            "segments": [{"start": 27, "end": 36}],
+        },
+    )
+    detached = apply(
+        4, {"command": "detach_mention", "annotation_id": "b", "evidence_id": "ev"}
+    )
+    assert all(not item.annotation.evidence_refs for item in detached.annotations)
+    apply(
+        5,
+        {
+            "command": "set_annotation_note",
+            "annotation_id": "b",
+            "note": "Preserved optional reason",
+        },
+    )
+    submitted = SubmissionService(repo).submit(
+        view.key,
+        MutationEnvelope(
+            mutation_id="submit",
+            expected_revision=6,
+            payload={"document_checked": True},
+        ),
+    )
+    notes = {
+        item.annotation.annotation_id: item.annotation.note
+        for item in submitted.snapshots
+    }
+    assert not (notes["a"] or "").strip()
+    assert notes["b"] == "Preserved optional reason"
+    exported = ExportService(repo).for_workspace(view.key)
+    assert any(
+        item.annotation.note == "Preserved optional reason"
+        for item in exported.annotations.values()
+    )

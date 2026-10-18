@@ -1292,6 +1292,7 @@ class Repository:
                 select(
                     ProjectRow.contiguous_mentions_only,
                     ProjectRow.allow_spanless_findings,
+                    ProjectRow.require_spanless_note,
                     ProjectRow.require_chosen_axes,
                     ProjectRow.hidden_axis_values,
                 ).where(ProjectRow.project_key == project_key)
