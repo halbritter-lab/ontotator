@@ -390,7 +390,9 @@ def test_new_draft_spanless_writes_are_transactional_and_setting_applies(tmp_pat
         assert conn.execute(select(DraftRow.spanless_policy_version)).scalar_one() == 1
 
 
-def test_existing_draft_keeps_policy_marker_and_legacy_behavior(tmp_path):
+def test_legacy_draft_keeps_edit_marker_but_submits_under_current_spanless_policy(
+    tmp_path,
+):
     from ontocurator.storage.tables import DraftRow
 
     repo, _, ws, editor, _ = _setup_test_env(tmp_path)
@@ -422,14 +424,36 @@ def test_existing_draft_keeps_policy_marker_and_legacy_behavior(tmp_path):
     assert result.annotations[0].annotation.note is None
     assert result.spanless_policy_version is None
     assert ws.open(key).draft.spanless_policy_version is None
+    original = result.annotations[0]
+    with pytest.raises(DomainError) as exc:
+        SubmissionService(repo).submit(
+            key,
+            MutationEnvelope(
+                mutation_id="legacy-submit-prohibited",
+                expected_revision=1,
+                payload={"document_checked": True},
+            ),
+        )
+    assert exc.value.code == "PROJECT_RULE_VIOLATION"
+    assert exc.value.details["violations"] == [
+        {"annotation_id": "a", "rule": "spanless_disallowed", "detail": {}}
+    ]
+    unchanged = ws.open(key).draft
+    assert unchanged.revision == 1
+    assert unchanged.spanless_policy_version is None
+    assert unchanged.annotations == [original]
+    assert repo.get_submissions_for_workspace(key) == []
+
+    set_rules(repo, "pkg-1", allow_spanless_findings=True, require_spanless_note=False)
     submitted = SubmissionService(repo).submit(
         key,
         MutationEnvelope(
-            mutation_id="legacy-submit",
+            mutation_id="legacy-submit-optional",
             expected_revision=1,
             payload={"document_checked": True},
         ),
     )
+    assert submitted.snapshots == [original]
     assert submitted.snapshots[0].annotation.note is None
     assert ws.open(key).draft.spanless_policy_version is None
 
