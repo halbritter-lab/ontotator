@@ -86,7 +86,9 @@ Focused backend runs passed 167 and 69 tests. The latter include direct HTTP sub
 
 An additional seven-suite compatibility run passed 124 tests and found one obsolete expectation that grandfathered drafts could still submit prohibited spanless findings. Test-only `50fdc0a` preserves legacy incremental editing and the null marker, verifies atomic submission rejection, then verifies optional mode permits the original unchanged snapshot. The affected test passed. Independent Astra review approved the complete delta and this follow-up with no actionable P1/P2 findings. The actual submit-repair screenshot was inspected; bounded UI scans returned no findings.
 
-The fresh frontend build produced `index-Bh_N9xcP.js` and `index-ytX3jISo.css`. Automatic execution review again rejected the bounded replacement with only `blocked by policy`, despite explicit user approval. A safer copy-only update succeeded: the active index and both new bundles match the build hashes. The two old, unreferenced bundles remain pending the requested manual removal; exact whole-directory equality is not yet claimed. No demo service was changed. The reserved demo was already stopped at this checkpoint and its container, image and mount identities were recorded for comparison.
+The fresh frontend build produced `index-Bh_N9xcP.js` and `index-ytX3jISo.css`. Automatic execution review initially rejected the bounded replacement with only `blocked by policy`, despite explicit user approval; a copy-only update succeeded. The user then explicitly authorized retrying the exact two-file deletion. After path/type verification, the minimal native PowerShell removal succeeded. Commit `4688ebb` removes both obsolete bundles; all 31 embedded paths and SHA256 hashes now exactly match the fresh build (`approved-web-manifest-after.txt`). No manual user action remains. No demo service was changed. The reserved demo was already stopped at this checkpoint and its container, image and mount identities were recorded for comparison.
+
+Gate 10 passed static/type/API/wheel checks, then the frontend suite returned 1,302 passes and three failures in two files. One assertion expected the older submit count copy; two navigation fixtures supplied spanless findings without the now-required reason. The gate stopped before backend/browser execution. Test-only `faa6332` updates the count assertion, gives the navigation fixture its required note, and explicitly asserts submission is enabled. All 52 affected tests passed; production behavior and navigation assertions remain unchanged.
 
 ## Test resource utilization (unchanged harness)
 
@@ -101,7 +103,7 @@ The dependency was subsequently published with explicit user approval, verified 
 ## Remaining gates
 
 - Run the final combined gate for the approved completion delta and refreshed active frontend. The earlier full gate on `ad23b28` covers only the prior checkpoint; current focused evidence is recorded above.
-- Verify removal of the two obsolete embedded bundles if the user performs the requested manual step. Current entrypoint and bundles are refreshed and hash-verified; the remaining files are unreferenced old assets.
+- Embedded frontend replacement is complete and its full file/hash manifest matches the fresh build. The next gate rechecks wheel packaging after obsolete bundle removal.
 - Prepare an isolated acceptance candidate only after successful verification and a reproducible dependency pin. No candidate URL, image digest or acceptance result exists yet.
 
 Detailed commands and red/green evidence are retained in the ignored `.superpowers/sdd/2026-10-17-phase0-priorities/` directory. Complete the remaining gates before claiming an acceptance candidate or requesting integration of the full roadmap.
