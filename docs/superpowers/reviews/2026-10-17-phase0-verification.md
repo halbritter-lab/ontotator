@@ -90,9 +90,9 @@ The fresh frontend build produced `index-Bh_N9xcP.js` and `index-ytX3jISo.css`. 
 
 Gate 10 passed static/type/API/wheel checks, then the frontend suite returned 1,302 passes and three failures in two files. One assertion expected the older submit count copy; two navigation fixtures supplied spanless findings without the now-required reason. The gate stopped before backend/browser execution. Test-only `faa6332` updates the count assertion, gives the navigation fixture its required note, and explicitly asserts submission is enabled. All 52 affected tests passed; production behavior and navigation assertions remain unchanged.
 
-## Test resource utilization (unchanged harness)
+## Test resource utilization at the earlier checkpoint
 
-The current gate uses up to four Vitest workers, one backend pytest process and one Playwright worker. The backend harness creates and drops a migrated PostgreSQL database for each test; low aggregate CPU utilization on a 12-logical-CPU host is therefore consistent with the serial execution and database waits. `pytest-xdist` is not installed. A future bounded parallel runner must isolate database initialization: default testcontainers are process-local, but `ONTOCURATOR_TEST_PG_URL` currently shares a fixed template name and role initialization across processes. Browser parallelism likewise requires isolation of the shared server and fixture state. No worker, dependency or harness change was made during this verification run.
+The current gate uses up to four Vitest workers, one backend pytest process and one Playwright worker. The backend harness creates and drops a migrated PostgreSQL database for each test; low aggregate CPU utilization on a 12-logical-CPU host is therefore consistent with the serial execution and database waits. `pytest-xdist` is not installed. A future bounded parallel runner must isolate database initialization: default testcontainers are process-local, but `ONTOCURATOR_TEST_PG_URL` currently shares a fixed template name and role initialization across processes. Browser parallelism likewise requires isolation of the shared server and fixture state. No harness change was made during that verification run. The later user-requested harness improvement is recorded below.
 
 ## Dependency prerequisite
 
@@ -100,10 +100,24 @@ Ontospan branch `feat/review-resolution-format` contains local commit `738f3d43c
 
 The dependency was subsequently published with explicit user approval, verified remotely and pinned in `873e466`, as recorded above. No ontospan merge occurred.
 
+## Approved completion: final integration and runtime artifact
+
+Gate 11 completed with 2,180 backend passes, two catalog-only failures and one Windows skip. `001c672` sorts the error catalog and lets its static test scanner enumerate finite literal conditional error codes, with a regression test. Four catalog tests, eight UI error tests, typecheck, Ruff and catalog drift passed. Independent follow-up review approved this correction and the test-only fixture/smoke changes without coverage weakening.
+
+Corrected full gate 12 uses source `001c6729487eee532647f80aa6d0e3442019d1f7`. Static/type/API/wheel checks and 1,305 frontend tests passed. Backend: **2,183 passed, one Windows POSIX-permissions skip**, in 1,249.55 seconds. Its final browser phase passed all **87 cases**. The complete command exited **0**, total **1,863 seconds**. A separate browser preflight had also passed all 87 cases on the same production code. Log: `phase0-check-12.log`.
+
+The local runtime image is `sha256:9c42d4545a3c1cb4331b513b77160edfda3d78574a4fc849140454687167370a`, OCI revision `001c6729487eee532647f80aa6d0e3442019d1f7`. All 31 packaged web paths/hashes match the verified fresh build. A temporary BuildKit secret used the existing credential store; no credential was printed or committed. Building the local artifact alongside final verification was a documented scheduling decision; acceptance startup still waits for the full gate.
+
+The first disposable container smoke exposed stale test labels, not a production failure. Test-only `06fa716` uses the current Annotation/Start flow, selects a real text span, explicitly sets required axes and preserves save/submit/reload assertions. The second `container_check.py --image <digest> --smoke` exited **0**: browser **1/1 passed**, all container contracts passed (non-root/read-only runtime, private storage, migration/readiness failure cases). Its temporary stack was cleaned up. This host test change does not alter the verified image.
+
+## Local-check efficiency and shared RAM
+
+On 2026-10-18 the user requested more efficient checks while another process also needs RAM. The 16 GB host had approximately 2–3.4 GB free. Only one heavy test runner remains active; no additional build, browser worker or PostgreSQL worker is introduced. The bounded harness change provides explicit partial-stage execution, early cheap contract tests, duration/failure summaries and a frontend default of two workers with a positive-integer override. It preserves the full default gate and never treats a selected stage as complete verification. There is no cached-success mechanism.
+
+The complete earlier gate took 1,556 seconds: backend 1,023, browser 412, frontend units 88. The intended gain is less repeated unrelated work and earlier detection of cheap failures, with lower frontend memory pressure; no measured whole-suite speedup is claimed. Independent review approved the harness after a regression-tested fix for container-smoke prerequisites. The script was installed only after gate 12 exited. Its actual `bash scripts/check.sh --only static` exited 0 in 49 seconds: Ruff, types, API/catalog drift, **26 preflight tests** and wheel lock/contents passed. The command correctly reported a partial gate. Evidence: `phase0-efficient-static.log`; red/green and review details remain in the execution ledger. The new harness is host tooling only; the verified runtime image is unchanged.
+
 ## Remaining gates
 
-- Run the final combined gate for the approved completion delta and refreshed active frontend. The earlier full gate on `ad23b28` covers only the prior checkpoint; current focused evidence is recorded above.
-- Embedded frontend replacement is complete and its full file/hash manifest matches the fresh build. The next gate rechecks wheel packaging after obsolete bundle removal.
-- Prepare an isolated acceptance candidate only after successful verification and a reproducible dependency pin. No candidate URL, image digest or acceptance result exists yet.
+- Prepare and seed the separate fresh acceptance candidate, then publish its actual identity and instructions. User acceptance and Ontocurator integration remain unperformed.
 
-Detailed commands and red/green evidence are retained in the ignored `.superpowers/sdd/2026-10-17-phase0-priorities/` directory. Complete the remaining gates before claiming an acceptance candidate or requesting integration of the full roadmap.
+Detailed commands and red/green evidence remain in the ignored `.superpowers/sdd/2026-10-17-phase0-priorities/` directory. No manual asset deletion or Phase 0 policy answer remains pending.

@@ -15,8 +15,8 @@
 - This plan supersedes the old B0.5 wording to rebuild the reserved demo in place.
 - No seed, submit, save, migration, restart or image replacement against port 18080 or project `ontocurator-t5-acceptance-ready`.
 - No secrets in terminal output, docs or commits. Existing credential files need not be opened for this task.
-- Docker must run; no GitHub Actions. Before a candidate build run `bash scripts/check.sh` from Git Bash, not WSL's `C:\Windows\system32\bash.exe`.
-- Build only after the local implementation review and gates pass. Merge/push approval remains outstanding; a local branch candidate is sufficient for a separate preview.
+- Docker must run; no GitHub Actions. Run `bash scripts/check.sh` from Git Bash, not WSL's `C:\Windows\system32\bash.exe`.
+- Candidate startup requires the local implementation review and complete gates to pass. On 2026-10-18, the local immutable image was prepared alongside the final gate after complete functional evidence and a catalog-only correction; this scheduling ruling risked only a rebuild and changed no demo. Gate12 subsequently passed before candidate startup. Merge/push approval remains outstanding; a local branch candidate is sufficient for a separate preview.
 
 ## Review focus
 
@@ -30,10 +30,10 @@
 
 **Files:** Read `Dockerfile`, `docker-compose.dev.yml`, `scripts/check.sh`, `scripts/container_check.py`. Create `docs/superpowers/reviews/2026-10-17-phase0-verification.md` when execution occurs. No source change is expected.
 
-- [ ] Run the full local gate once on the combined implementation and record commit SHA, command, exit status and check summary. Use `--maxWorkers=4 --minWorkers=1` for any separate Vitest run.
-- [ ] Build using the existing BuildKit secret mechanism and an OCI `org.opencontainers.image.revision` label containing the exact source SHA. Reuse the established local credential mechanism; never print a token or add it to a URL or command argument. If no build secret is configured, record the missing prerequisite instead of altering private-demo configuration.
-- [ ] Resolve the built image to its immutable `sha256:` identifier. Run `uv run python scripts/container_check.py --image <digest> --smoke`; this harness owns its separate temporary project. Record the digest and actual result.
-- [ ] A format dependency commit unavailable remotely prevents a reproducible Docker build. Complete local ontospan testing first and record this boundary; do not push a dependency to bypass the user's push approval rule.
+- [x] Run the full local gate once on the combined implementation and record commit SHA, command, exit status and check summary. The completed gate used `--maxWorkers=4 --minWorkers=1`; subsequent shared-RAM runs default to two workers, minimum one, under the later user constraint.
+- [x] Build using the existing BuildKit secret mechanism and an OCI `org.opencontainers.image.revision` label containing the exact source SHA. Reuse the established local credential mechanism; never print a token or add it to a URL or command argument. If no build secret is configured, record the missing prerequisite instead of altering private-demo configuration.
+- [x] Resolve the built image to its immutable `sha256:` identifier. Run `uv run python scripts/container_check.py --image <digest> --smoke`; this harness owns its separate temporary project. Record the digest and actual result.
+- [x] A format dependency commit unavailable remotely prevents a reproducible Docker build. Complete local ontospan testing first and record this boundary; do not push a dependency to bypass the user's push approval rule.
 
 **Acceptance:** Local checks pass, source/image identities match, container checks operate only on their own project. A skipped image build is explicitly not reported as an accepted demo.
 

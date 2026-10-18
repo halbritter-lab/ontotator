@@ -1,85 +1,46 @@
-# Phase 0 handoff for a fresh context
+# Phase 0 continuation state (2026-10-18)
 
-> Update, 2026-10-18: the user explicitly approved all six presented items: P0-S/A/R/U as recommended, the specific ontospan branch push without merge, and local embedded-frontend replacement. The reviewed ontospan commit is now published and its remote ref verified. Earlier pending/blocking statements in this historical handoff are superseded; see the master roadmap's binding approval and current execution ledger. Continue the dependent implementation without asking again. No Ontocurator push or merge is authorized.
+This file describes the current state, replacing the earlier blocked handoff. Read `PRODUCT.md`, `DESIGN.md`, [the priority roadmap](2026-10-17-phase0-priorities.md) and [verification evidence](../reviews/2026-10-17-phase0-verification.md). Historical pending statements in earlier evidence do not reopen approvals.
 
-## Objective and authorization
+## Authority and boundaries
 
-Finish the approved usability-first Phase 0 roadmap, implementing decided functions, independently reviewing them, verifying locally, and preparing a separate acceptance candidate when prerequisites permit. The user explicitly authorized autonomous planning followed by implementation, efficient GPT-6.1-sol medium implementers and Astra content review. The user now wants to continue in a fresh context. The previous thread's stored goal is blocked, not complete; this document carries the remaining objective and evidence.
-
-Speak briefly in German; files and commits in English. No AI co-author trailers or generated-by lines. No GitHub Actions. No merge or push without explicit approval. Do not interpret a general acknowledgement or request to resume as answers to domain questions or publication approval.
-
-## Authoritative workspace
-
-- Primary checkout: `C:/Users/jan-p/Development/ontocurator`, branch `docs/phase0-execution-plans` at `5b8b4b0`; `main` remains `4de9aaa`. Preserve the user's untracked `.impeccable/critique/`.
-- Implementation worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation`, branch `feat/phase0-usability`.
-- Last implementation/test commit: `ad23b2870c185b4b232f5385d9811c15ed2def69`. Tracking documentation: `8a07493`. The commit containing this handoff changes documentation only; inspect `git status` and `git log` before proceeding.
-- Ontospan prerequisite worktree: `C:/Users/jan-p/Development/ontospan/.worktrees/format-1-2`, branch `feat/review-resolution-format`, reviewed local commit `738f3d43ca0896c9d146a15fb9538b938229368a`.
-- Ignored execution ledger and reports: `.superpowers/sdd/2026-10-17-phase0-priorities/` in the implementation worktree. Keep reports/logs/screenshots ignored; never force-add them.
-- No implementation or verification process remains running at handoff. Do not restart completed work from an old ledger entry.
-
-Read `PRODUCT.md`, `DESIGN.md`, `docs/superpowers/plans/2026-10-17-phase0-priorities.md` and `docs/superpowers/reviews/2026-10-17-phase0-verification.md`. The original `2026-10-17-next-agentic-work.md` is product background; the dated D3 amendment in `2026-10-17-phase0-decision-semantics.md` supersedes its original unconditional-note wording.
+- The user authorized autonomous implementation of decided Phase 0 functions, efficient GPT-6.1-sol medium implementers and independent Astra review.
+- The explicit six-item approval settled P0-S/A/R/U, permitted publishing only the reviewed ontospan branch and permitted replacing embedded assets. All six are implemented. A renewed exact-file deletion approval succeeded; no manual deletion remains.
+- No Ontocurator merge or push is authorized. Keep its branches local. D6–D15 remain undecided later product questions, already prepared in the roadmap.
+- Preserve the reserved port-18080 project `ontocurator-t5-acceptance-ready`, its files and volumes. It was already stopped; do not restart, seed, migrate or replace it.
+- Preserve the primary checkout's untracked `.impeccable/critique/` directory. All implementation is in `.worktrees/phase0-implementation`, branch `feat/phase0-usability`.
+- German conversation; English files/commits; no co-author/generated-by trailers; no GitHub Actions.
 
 ## Implemented and reviewed
 
-- B0.1: explicit opt-in positional scroll coupling, reading-only; paragraph count is not represented as semantic alignment.
-- B0.2: one explicit document confirmation, stable decision keys, visible defaulted-axis warnings and navigation; separate Unresolved review decision with mandatory reviewer note. Current export copy truthfully says unresolved proposals are excluded until the flagged exporter lands.
-- D3: annotation notes, project settings, preservation of source notes in exports, and backend enforcement for genuinely new drafts. Existing open drafts retain prior enforcement provisionally pending P0-S.
-- User correction on 2026-10-18: three project modes are implemented: prohibited, allowed with required reason, allowed with optional reason. Required reason remains the default. Backend `240800c`, UI `1de4616`, migration 0009. Optional mode works for creation, clearing notes, last-mention removal, historical replacement and submission; profile evidence requirements still apply. D2 reviewer-note requirements are separate and unchanged.
-- B0.3: frozen per-reviewer pending re-anchor inputs, explicit re-create/dismiss actions, exact-version resolution links and immutable audit. Completion blocking awaits P0-R.
-- B0.4/D16: restricted general version browsing in independent mode, assigned translation-review access preserved, exact own history retained pending P0-A; smaller editor/admin usability cleanups.
-- Plans B0.1–B0.5 and compact D6–D15 questions exist. Stale `.worktrees/main-integration` operations path was corrected to the real demo configuration location.
+B0.1–B0.4 are implemented: opt-in reading-only positional scrolling; stable review keys; one document confirmation; defaulted-axis warnings; independent-mode access restrictions with exact own history; three spanless modes; notes and current-rule validation at every future submission; frozen re-anchor queues with required resolution; editor/admin cleanups.
 
-## Verification already completed
+Backend `873e466` and UI `0480fe2` complete flagged unresolved exports and the approved policies. Clinical axes and original provenance remain separate from `review_resolution`. Valid unresolved results are included with a reviewer/note flag. Historical missing notes receive explicit warnings. Invalid targets fail explicitly; flagged re-import is refused until storage preserves reviewer metadata. Independent review approved these changes and the subsequent fixture/catalog/smoke corrections.
 
-Full `scripts/check.sh` on `ad23b28` exited zero on 2026-10-18:
+Ontospan `738f3d43ca0896c9d146a15fb9538b938229368a` (format/package 1.2) was pushed with specific approval to `feat/review-resolution-format`, verified remotely and pinned in Ontocurator. Frozen 1.0/1.1 schemas remain unchanged; lossy Phenopacket conversion fails explicitly. No ontospan merge occurred.
 
-- 1,298 frontend tests across 121 files.
-- 2,156 backend tests; one POSIX permissions skip on Windows.
-- All 87 Playwright cases.
-- Ruff, formatting, mypy, frontend typecheck, OpenAPI/TypeScript drift, wheel lock/content checks.
-- Total 1,556 seconds. Evidence: ignored `phase0-check-9.log`.
+## Artifacts and verification
 
-The preceding run's sole failure was a historical migration fixture opening the current application while still at schema 0008. Test-only `ad23b28` retains its original 0007-to-0008 preservation assertions and upgrades to head before opening the current app. Focused reproduction and fix were verified, then the full gate passed. Do not reopen this resolved failure.
+All 31 embedded frontend paths/hashes match the fresh build. Current bundles are `index-Bh_N9xcP.js` and `index-ytX3jISo.css`; obsolete bundles were removed in `4688ebb`.
 
-The three-mode correction had 136 focused backend tests, 78 frontend tests, nine browser cases and independent Astra approval without actionable findings. One actual Settings screenshot was inspected and a bounded scan of the two changed TSX files found no issues. Do not repeat context gathering, visual scans, screenshots or full suites for this handoff/documentation alone.
+- Runtime source: `001c6729487eee532647f80aa6d0e3442019d1f7`.
+- Image: `sha256:9c42d4545a3c1cb4331b513b77160edfda3d78574a4fc849140454687167370a`.
+- Local image tag: `ontocurator-phase0:local`. OCI revision and packaged frontend hashes verified.
+- Disposable `container_check.py --smoke` exited 0; all contracts and the real login/annotation/submission/reload journey passed. Host smoke correction `06fa716` changes only the test; the image remains valid.
+- Full browser preflight: all 87 passed. Corrected integrated gate 12 exited 0: 1,305 frontend, 2,183 backend (one Windows skip), 87 browser passes; 1,863 seconds total.
+- Logs/reports/identity snapshots remain ignored under `.superpowers/sdd/2026-10-17-phase0-priorities/`. Do not delete or force-add that evidence.
 
-Fresh frontend build: `index-C5v_3iqZ.js` and `index-ytX3jISo.css`; assets remain in `frontend/dist`. `spanless-modes-web-manifest-comparison.json` records the differences from the embedded UI. The passing wheel check packaged the OLD embedded frontend. No updated release image or acceptance candidate has been built.
+## Current resource-aware work
 
-## Open decisions: ask clearly, do not infer
+The user requested more efficient local CI checks and RAM headroom for another process. This 16 GB host had roughly 2–3.4 GB free during the current run. Keep only one heavy runner at a time; do not stop unrelated processes or start additional builds. The complete gate remains sequential. A bounded harness change adds explicit partial-stage runs, early cheap contracts, useful failure/slow-test timings and a two-worker frontend default (explicit override available). Partial runs must never claim full verification. No result cache or additional PostgreSQL/browser workers are introduced.
 
-The user asked what was blocked and received explanations, then clarified D3 and accepted the three-mode design. They have not answered these remaining questions:
+The completed full gate used the pre-change harness. Validate the harness change with focused behavioral tests and static checks; preserve the full product evidence rather than rerunning unchanged product suites. The prepared replacement is installed only after the gate has exited; no executing shell script was overwritten.
 
-| ID | Decision needed | Recommendation to present |
-| --- | --- | --- |
-| P0-S | Should the selected project rule also apply to existing open drafts? | Enforce at their next submission, according to the selected mode; preserve completed submissions. Optional mode must not acquire a mandatory note. |
-| P0-A | May independent annotators read their own previous submissions? | Yes, through exact own-history access; general browsing remains restricted. |
-| P0-R | Must every frozen re-anchor item be re-created or dismissed before submission? | Yes, with a reason for dismissal and a count/jump to unfinished items. |
-| P0-U | How should unresolved proposals with unknown/obsolete terms or incomplete required clinical content be submitted/exported? | Require correction or rejection for new submissions; preserve historical data and make export failures explicit. This differs from a valid finding whose review is simply unresolved. |
+## Remaining completion work
 
-The master roadmap is the answer register. D6–D15 are later product questions; recommendations remain undecided. These do not block already decided Phase 0 work.
+1. Harness installation and independent review are complete. Actual `--only static` passed with 26 preflight tests and all static/type/API/wheel checks in 49 seconds. Preserve this evidence and the full product gate; no repeat is needed.
+2. Prepare the isolated candidate only after the full gate succeeds and the checkout is clean. Preferred project `ontocurator-t5-acceptance-phase0`, app port18081, PostgreSQL port15544, ignored directory `build/t5-acceptance/phase0-candidate`. Recheck identity/ports before startup. Use the verified immutable image; do not rebuild for host-test/docs-only changes.
+3. Seed the fresh candidate once with the existing seeder. Confirm health and open tasks without consuming them. Publish exact identity, private credential-file location and an executable role-specific checklist in `docs/operations/phase0-acceptance.md`.
+4. Update roadmap/verification/handoff to actual final status, compare the reserved demo identities, commit local documentation, and report the reviewable result. User acceptance, later D6–D15 choices and any Ontocurator merge/push remain separate.
 
-## Ontospan prerequisite and publication boundary
-
-Local commit `738f3d4` was created on 2026-10-17 at 17:26 MESZ. It adds optional `Annotation.review_resolution` in format/package 1.2.0: outcome `uncertain`, reviewer Actor, optional note for faithful historical data. Clinical axes and original provenance remain separate. Frozen 1.0/1.1 schemas and historical round trips are preserved. Phenopacket conversion explicitly refuses this metadata rather than silently losing it. Full upstream suite: 251 passed, one Windows symlink skip; static/schema/lock/wheel checks passed and independent review approved.
-
-The user has not approved pushing that branch. Ontocurator still pins remotely available `4105ec1259fc04d927d78258fcf4c99f8f014b6a` (format 1.1). Do not pin an unavailable remote commit or substitute a local checkout/moving branch. Once the specific publication is approved, push only the reviewed ontospan branch without merging; then implement B0.2 Task 4 with the immutable pin and updated lock. P0-U gates only its dependent invalid-target validation/materialization semantics.
-
-Task 4 still requires actual flagged export, included-flag counts, source preservation, legacy missing-note warnings, explicit refusal of flagged re-import until storage can preserve the metadata, and real downloaded-bundle/browser evidence. Do not promise this behavior before implementation.
-
-## Embedded UI and reserved demo
-
-- `http://127.0.0.1:18080` and project `ontocurator-t5-acceptance-ready` are reserved for the user. No saves, submissions, seeding, migrations, restart, rebuild or replacement there.
-- Its configuration is `build/t5-acceptance/demo-ready` in the primary checkout; do not open secrets or change identity files.
-- Automatic approval review previously rejected both checked-directory replacement of embedded assets and a bounded operation deleting only obsolete `assets/index-DSMB-AZ1.js` / `assets/index-vf_X9imy.css`, giving only `blocked by policy`. Neither executed. Explicit user approval is still pending. Do not retry through another interpreter or workaround.
-- After approval, update only the implementation worktree's embedded UI from the verified fresh build and verify the exact file/hash match. Never present old packaged assets as the new UI.
-- B0.5 defines the separate candidate: preferred app port 18081, PostgreSQL port 15544, project `ontocurator-t5-acceptance-phase0`, ignored output `build/t5-acceptance/phase0-candidate`. Check actual availability and identity first. Build a reproducible image only after prerequisites and final verification; record source SHA/image digest, run disposable container smoke, seed the separate fresh stack once, leave its acceptance tasks to the user.
-
-## Execution order on resume
-
-1. Revalidate the clean worktree and read this handoff plus the master plan. Do not rerun the passing gate merely to resume.
-2. Resolve the remaining questions and the two specific approvals with the user; explain their concrete effect. Continue any independently ready slice without waiting on unrelated decisions.
-3. Implement approved policy changes and B0.2 Task 4 in coherent bounded batches. Use at most two GPT-6.1-sol medium implementers, explicit file ownership, and a stable diff for independent Astra review. Preserve original agents' reports rather than restarting investigations.
-4. Run focused tests, fix actual issues, then one integrated local gate on the final candidate. Keep Vitest at `--maxWorkers=4 --minWorkers=1`; Docker must be running. Use Git Bash `C:/Users/jan-p/scoop/apps/git/current/bin/bash.exe`, not WSL bash.
-5. Prepare the isolated candidate only when dependency/assets/policy prerequisites permit. Ask before any merge or further push. Do not mark the overall goal complete while required slices or candidate remain missing.
-
-The user noted low test resource utilization. The backend and Playwright runners are serial; default PostgreSQL containers are process-local. Shared `ONTOCURATOR_TEST_PG_URL` uses a fixed template/role initialization and is unsafe for naive concurrent workers. No parallelism dependency/harness change has been made. Keep at most two heavy runners, no duplicate browser server on port 18765, and do not turn this observation into an unrequested infrastructure rewrite.
+The stored goal previously remained `blocked` despite resumed execution because the available goal API cannot set `active`. That stale status is not an approval blocker. Do not repeat completed approvals or implemented work because of it.
