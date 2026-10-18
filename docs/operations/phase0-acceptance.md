@@ -1,6 +1,8 @@
 # Phase 0 local acceptance candidate
 
-The separate candidate at **http://127.0.0.1:18081** includes the completed Phase 0 review fixes from pushed source `0e9271a`. Its image was refreshed while preserving the existing data, credentials, volumes and open acceptance tasks; it was not seeded again. It is stopped to preserve RAM. Start Docker Desktop and then use the commands below when ready. Manual user acceptance is still pending. The older T5 environment on port 18080 remains separate and unchanged.
+The separate candidate at **http://127.0.0.1:18081** includes the completed Phase 0 review fixes from pushed source `0e9271a`. Its image was refreshed while preserving existing data, credentials, volumes and acceptance tasks; it was not seeded again. It was subsequently started at the user's request and is running for guided manual acceptance. The older T5 environment on port 18080 remains stopped. For a later restart, start Docker Desktop and use the commands below.
+
+Manual acceptance is in progress. Follow the [running findings and session checkpoint](../superpowers/reviews/2026-10-18-phase0-manual-acceptance.md) before resuming; the user has already created and submitted annotations and reopened an assignment. Preserve those edits and collect feedback before implementing changes.
 
 ## Identity and credentials
 
