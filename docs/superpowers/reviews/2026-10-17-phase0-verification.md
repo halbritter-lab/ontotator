@@ -116,8 +116,10 @@ On 2026-10-18 the user requested more efficient checks while another process als
 
 The complete earlier gate took 1,556 seconds: backend 1,023, browser 412, frontend units 88. The intended gain is less repeated unrelated work and earlier detection of cheap failures, with lower frontend memory pressure; no measured whole-suite speedup is claimed. Independent review approved the harness after a regression-tested fix for container-smoke prerequisites. The script was installed only after gate 12 exited. Its actual `bash scripts/check.sh --only static` exited 0 in 49 seconds: Ruff, types, API/catalog drift, **26 preflight tests** and wheel lock/contents passed. The command correctly reported a partial gate. Evidence: `phase0-efficient-static.log`; red/green and review details remain in the execution ledger. The new harness is host tooling only; the verified runtime image is unchanged.
 
-## Remaining gates
+## Separate acceptance candidate completed
 
-- Prepare and seed the separate fresh acceptance candidate, then publish its actual identity and instructions. User acceptance and Ontocurator integration remain unperformed.
+Preparation used clean seed/tooling revision `87367d8bd963646d7b4ffd05f7c3f9a13bc5b8e1`, the verified runtime image above, project `ontocurator-t5-acceptance-phase0`, app port 18081 and PostgreSQL port 15544. The project/ports/volumes were fresh and distinct. Startup and seed both exited 0; seed evidence records six documents, two open translation-review tasks and one open annotation task. `/readyz` returned 200. No automated acceptance journey consumed those tasks.
 
-Detailed commands and red/green evidence remain in the ignored `.superpowers/sdd/2026-10-17-phase0-priorities/` directory. No manual asset deletion or Phase 0 policy answer remains pending.
+The user requested RAM headroom; after successful preparation and health checks the new candidate was stopped normally, retaining volumes, identity and credentials. It is ready to start from [the published instructions](../../operations/phase0-acceptance.md). The older reserved demo retains exactly its recorded container IDs, image IDs, stopped state and mount identities. No active test/preview containers remain at completion.
+
+Implementation, review, full product verification, harness verification and candidate preparation are complete. User acceptance and any Ontocurator merge/push remain unperformed. D6–D15 remain later product decisions. Detailed logs, red/green evidence and identity comparisons remain ignored in `.superpowers/sdd/2026-10-17-phase0-priorities/`; no manual asset deletion or Phase 0 policy answer remains pending.

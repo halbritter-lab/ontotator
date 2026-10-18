@@ -95,8 +95,8 @@ D15 must not silently reconfirm superseded defaults from [the old index](2026-10
 - [x] P0.6 implemented and independently reviewed: frozen inputs, exact-version resolution and audit, approved P0-R count/block/jump, persistence, isolation and replay assertions.
 - [x] P0.7 implemented and reviewed; editor/admin cleanups preserve approved own-history access.
 - [x] Embedded frontend refreshed and its 31-file hash manifest verified against the fresh build and packaged image.
-- [x] Final combined source gate12 exited0: 1,305 frontend, 2,183 backend (one Windows skip), 87 browser; 1,863 seconds.
-- [ ] Candidate preparation status recorded; merge/push approval requested only for a concrete reviewed result.
+- [x] Final combined source gate12 exited 0: 1,305 frontend, 2,183 backend (one Windows skip), 87 browser; 1,863 seconds.
+- [x] Separate candidate prepared, seeded and health-checked; initially stopped to preserve RAM. [Acceptance instructions](../../operations/phase0-acceptance.md) record its identity and open tasks. Ontocurator merge/push remains unperformed.
 
 Checked items above have implementation/review evidence; final integration and candidate readiness are tracked separately. If an external dependency publication or unanswered product policy blocks a subtask, record it precisely and continue independent authorized work.
 
@@ -121,6 +121,9 @@ The entries below record successive checkpoints; their pending statements are su
 
 P0-S/A/R/U are implemented and independently reviewed. Backend `873e466` and UI `0480fe2` cover flagged unresolved exports, current-rule submission validation and frozen re-anchor completion. The ontospan branch was published with specific approval and pinned to `738f3d43ca0896c9d146a15fb9538b938229368a`. Embedded frontend replacement is complete; all 31 paths/hashes match the fresh build, including removal of obsolete bundles in `4688ebb`. No manual deletion or policy answer remains for Phase 0.
 
-The local runtime image is built from `001c6729487eee532647f80aa6d0e3442019d1f7`; disposable container contracts and the corrected real browser smoke passed. The full corrected gate exited0 with 1,305 frontend, 2,183 backend (one Windows skip) and 87 browser passes. Consult the [verification record](../reviews/2026-10-17-phase0-verification.md) for final evidence and identities.
+The local runtime image is built from `001c6729487eee532647f80aa6d0e3442019d1f7`; disposable container contracts and the corrected real browser smoke passed. The full corrected gate exited 0 with 1,305 frontend, 2,183 backend (one Windows skip) and 87 browser passes. Consult the [verification record](../reviews/2026-10-17-phase0-verification.md) for final evidence and identities.
 
 The user also requested efficient local checks and RAM headroom for another process. Keep one heavy runner at a time. The bounded harness change adds explicit partial-stage execution, early cheap contract checks, failure/slow-test timings and a two-worker frontend default with a documented override. It does not cache success or treat a partial run as full verification. No GitHub Actions, extra PostgreSQL workers or browser parallelism are introduced.
+
+
+Phase 0 is ready for user acceptance. The separately prepared candidate passed startup/seed/readiness and is initially stopped under the RAM constraint. Full gate12 passed; the independently reviewed harness change `d9747af` also passed its actual static phase with 26 preflight tests. No new product suites were repeated for the host-only harness or documentation changes. D6–D15 remain later undecided questions; no Phase 1 implementation is implied.
