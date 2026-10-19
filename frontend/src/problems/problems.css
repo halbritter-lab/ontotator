@@ -1,0 +1,96 @@
+/* Problem reports: report text, history timeline, fact lists, badges. Tokens from styles/tokens.css only. */
+
+/* Quoted user content: line breaks preserved, reading serif at body size, no lang attribute. */
+.report-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-serif);
+  font-size: var(--size-base);
+  line-height: var(--leading-base);
+  margin: 0;
+}
+
+blockquote.report-text {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--border);
+}
+
+.report-quote-label {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.report-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.report-timeline-item {
+  display: grid;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border);
+}
+
+.report-timeline-sentence {
+  margin: 0;
+}
+
+.report-timeline-sentence time {
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  white-space: nowrap;
+}
+
+.report-draft > summary {
+  cursor: pointer;
+}
+
+.report-draft > * + * {
+  margin-top: var(--space-2);
+}
+
+/* Labelled facts ("Report", "Your task", ...): two columns, stacked below 700 px. */
+.report-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.report-facts > div {
+  display: contents;
+}
+
+.report-facts dt {
+  color: var(--text-muted);
+  font-weight: var(--weight-strong);
+}
+
+.report-facts dd {
+  margin: 0;
+}
+
+@media (max-width: 699px) {
+  .report-facts { grid-template-columns: 1fr; }
+  .report-facts dd + dt { margin-top: var(--space-2); }
+}
+
+/* Text plus icon, never colour alone. */
+.problem-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  white-space: nowrap;
+}
+
+.problem-badge svg {
+  flex: none;
+}
