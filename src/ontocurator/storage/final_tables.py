@@ -22,6 +22,8 @@ class FinalSelectionRow(Base):
     actor_id: Mapped[int] = mapped_column(ForeignKey(f"{SCHEMA}.users.id"))
     acknowledged_cause_ids: Mapped[list[Any]]
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    selected_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    adjudicator_not_annotator: Mapped[bool | None]
 
 
 class FinalSelectionEventRow(Base):
