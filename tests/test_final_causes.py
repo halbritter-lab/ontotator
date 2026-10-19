@@ -1,10 +1,32 @@
 """One cause derivation on the caller's connection (spec: Backend and API changes)."""
 
-from sqlalchemy import select
+import pytest
+from auth_harness import HARNESS
+from sqlalchemy import insert, select, update
+from test_annotation_versions import seed_submission
+from test_case_api import BASE, CORRECTED, TARGET
+from test_case_api import case_env as case_env
 
-from ontocurator.storage.tables import AssignmentRow
+from ontocurator.application.final_causes import (
+    ACKNOWLEDGEABLE_CODES,
+    corrects_selected_text,
+)
+from ontocurator.application.final_results import FinalResultService
+from ontocurator.application.problem_reports import ProblemReportService
+from ontocurator.application.submissions import SubmissionService
+from ontocurator.application.work_rounds import WorkRoundService
+from ontocurator.assignments.service import AssignmentService
+from ontocurator.authz.policy import Access
+from ontocurator.authz.scoped import ScopedRepository
+from ontocurator.domain.errors import RevisionConflict
+from ontocurator.domain.workspace import MutationEnvelope
+from ontocurator.storage.tables import AssignmentRow, DocumentRow, ProjectMembershipRow
 
-pytest_plugins = ("test_assignment_round_open_api", "test_translation_review_task")
+pytest_plugins = (
+    "test_assignment_round_open_api",
+    "test_translation_review_task",
+    "test_work_rounds",
+)
 
 
 def _report(client, row, legacy_rounds, request_id="report-1"):
@@ -96,3 +118,239 @@ def test_conn_scoped_reads_do_not_open_a_second_transaction(round_work, monkeypa
         repo.workflow_causes_in(conn, row.project_key, pid)
         assert conn.execute(select(AssignmentRow.id).limit(1)).first() is not None
     assert opened == []
+
+
+# --- Task 1.3: one cause derivation with the new cause rules ---------------- #
+
+
+def _select(env, document, sid, revision=0, acks=()):
+    response = env.lead.put(
+        f"{BASE}/final-selections",
+        json={
+            "document_id": document,
+            "submission_id": sid,
+            "expected_revision": revision,
+            "acknowledged_cause_ids": list(acks),
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _warnings(env, code):
+    state = env.lead.get(f"{BASE}/workflow-warnings").json()
+    return [w for w in state["warnings"] if w["code"] == code]
+
+
+def test_acknowledgeable_codes_are_the_five_selection_codes():
+    assert {
+        "SELECTED_ROUND_ABANDONED",
+        "SELECTED_ROUND_SUPERSEDED",
+        "SELECTED_RESULT_REVISED",
+        "SELECTED_TEXT_CORRECTED",
+        "SELECTED_NEWER_RESULT",
+    } == ACKNOWLEDGEABLE_CODES
+
+
+def test_submission_recorded_after_selection_raises_newer_result(case_env):
+    env = case_env
+    seed_submission(env, "alice", "first", document=TARGET)
+    _select(env, TARGET, "first")
+    assert _warnings(env, "SELECTED_NEWER_RESULT") == []
+    seed_submission(env, "alice", "later", document=CORRECTED)
+    newer = _warnings(env, "SELECTED_NEWER_RESULT")
+    assert [w["cause_id"] for w in newer] == ["SELECTED_NEWER_RESULT:later"]
+    assert newer[0]["document_id"] == CORRECTED
+
+
+def test_newer_result_is_acknowledgeable(case_env):
+    env = case_env
+    seed_submission(env, "alice", "first", document=TARGET)
+    _select(env, TARGET, "first")
+    seed_submission(env, "alice", "later", document=TARGET)
+    _select(env, TARGET, "first", revision=1, acks=["SELECTED_NEWER_RESULT:later"])
+    assert _warnings(env, "SELECTED_NEWER_RESULT") == []
+
+
+def test_text_correction_cause_id_carries_status_and_reraises_on_acceptance(case_env):
+    env = case_env
+    seed_submission(env, "alice", "german", document=TARGET)
+    _select(env, TARGET, "german")
+    first = _warnings(env, "SELECTED_TEXT_CORRECTED")
+    status = _status(env, CORRECTED)
+    assert [w["cause_id"] for w in first] == [
+        f"SELECTED_TEXT_CORRECTED:{TARGET}:{CORRECTED}:{status}"
+    ]
+    _select(env, TARGET, "german", revision=1, acks=[first[0]["cause_id"]])
+    assert _warnings(env, "SELECTED_TEXT_CORRECTED") == []
+    _set_status(env, CORRECTED, "accepted")
+    again = _warnings(env, "SELECTED_TEXT_CORRECTED")
+    assert [w["cause_id"] for w in again] == [
+        f"SELECTED_TEXT_CORRECTED:{TARGET}:{CORRECTED}:accepted"
+    ]
+
+
+def test_rejected_or_queried_correction_raises_no_text_cause(case_env):
+    env = case_env
+    seed_submission(env, "alice", "german", document=TARGET)
+    _select(env, TARGET, "german")
+    for decision in ("rejected", "query"):
+        _set_status(env, CORRECTED, "reviewed")
+        _add_review(env, CORRECTED, decision)
+        assert _warnings(env, "SELECTED_TEXT_CORRECTED") == []
+
+
+def test_accepted_corrected_parent_raises_no_text_cause():
+    # Open question 1: the accepted child raises its own cause.
+    assert not corrects_selected_text("reviewed", "accepted_corrected")
+    assert corrects_selected_text("accepted", "accepted_unchanged")
+    assert corrects_selected_text(None, None)
+    assert not corrects_selected_text("reviewed", "rejected")
+    assert not corrects_selected_text("accepted", "query")
+
+
+def _status(env, document):
+    with env.db.transaction() as conn:
+        return (
+            conn.execute(
+                select(DocumentRow.translation_status).where(
+                    DocumentRow.document_id == document
+                )
+            ).scalar_one()
+            or "native"
+        )
+
+
+def _set_status(env, document, status):
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(DocumentRow)
+            .where(DocumentRow.document_id == document)
+            .values(translation_status=status)
+        )
+
+
+def _add_review(env, document, decision):
+    from tests_support_reviews import insert_review
+
+    insert_review(env.db, "proj", document, decision)
+
+
+def _codes(state, code):
+    return [w for w in state["warnings"] if w["code"] == code]
+
+
+def test_round_cause_id_is_stable_across_hold_resume_and_reopen(rounds):
+    repo, access, actor, assignment, ontology = rounds
+    with repo.db.transaction() as conn:
+        conn.execute(
+            insert(ProjectMembershipRow).values(
+                project_id=repo._require_project(conn, "pkg-1"),
+                user_id=access.user_id,
+                role="lead",
+            )
+        )
+    lead = Access(
+        access.user_id,
+        access.pseudonym,
+        False,
+        {"pkg-1": frozenset({"lead", "annotator"})},
+    )
+    scoped = ScopedRepository(repo.db, lead, actor)
+    rounds_service = WorkRoundService(repo.db)
+    round_a = rounds_service.create(
+        lead, actor, assignment.id, request_id="initial", expected_workflow_revision=0
+    )
+    original = SubmissionService(scoped, ontology).submit(
+        round_a.workspace_key,
+        MutationEnvelope(
+            mutation_id="original",
+            expected_revision=0,
+            payload={"document_checked": True},
+        ),
+    )
+    document, submission = "doc-1", original.submission_id
+    service = FinalResultService(repo.db, actor, lead)
+    service.select("pkg-1", document, submission, 0, [])
+    current = AssignmentService(repo.db)._get
+    with repo.db.transaction() as conn:
+        revision = current(conn, assignment.id).workflow_revision
+    carried = rounds_service.create(
+        lead,
+        actor,
+        assignment.id,
+        request_id="carry",
+        expected_workflow_revision=revision,
+        kind="carry_forward",
+        source_submission_ids=[submission],
+    )
+    state = service.preflight("pkg-1")
+    ids = [
+        w["cause_id"]
+        for w in state["warnings"]
+        if w["code"] == "SELECTED_ROUND_SUPERSEDED"
+    ]
+    assert ids == [f"SELECTED_ROUND_SUPERSEDED:{round_a.round_id}"]
+    service.select("pkg-1", document, submission, 1, ids)
+    # ROUND_REVIEW_PENDING is not acknowledgeable: reaffirmation refuses it.
+    (pending,) = _codes(service.preflight("pkg-1"), "ROUND_REVIEW_PENDING")
+    with pytest.raises(RevisionConflict):
+        service.select("pkg-1", document, submission, 2, [pending["cause_id"]])
+
+    def no_superseded():
+        assert not [
+            w
+            for w in service.preflight("pkg-1")["warnings"]
+            if w["code"] == "SELECTED_ROUND_SUPERSEDED"
+        ]
+
+    no_superseded()
+    reports = ProblemReportService(repo.db)
+    with repo.db.transaction() as conn:
+        revision = current(conn, assignment.id).workflow_revision
+    report = reports.report(
+        lead,
+        actor,
+        assignment.id,
+        request_id="report",
+        expected_workflow_revision=revision,
+        reason="The text needs investigation",
+        round_id=carried.round_id,
+    )
+    no_superseded()
+    resolved = reports.act(
+        lead,
+        actor,
+        report.report_id,
+        request_id="resolve",
+        expected_revision=report.revision,
+        action="resolve",
+        reason="Resolved, keep the pause",
+    )
+    # TASK_PAUSED_WITHOUT_REPORT is not acknowledgeable either.
+    (orphan,) = _codes(service.preflight("pkg-1"), "TASK_PAUSED_WITHOUT_REPORT")
+    with pytest.raises(RevisionConflict):
+        service.select("pkg-1", document, submission, 2, [orphan["cause_id"]])
+    no_superseded()
+    reports.act(
+        lead,
+        actor,
+        report.report_id,
+        request_id="resume",
+        expected_revision=resolved.revision,
+        action="resume",
+        reason="Continue",
+        assignment_ids=[assignment.id],
+    )
+    assert _codes(service.preflight("pkg-1"), "TASK_PAUSED_WITHOUT_REPORT") == []
+    no_superseded()
+    SubmissionService(scoped, ontology).submit(
+        carried.workspace_key,
+        MutationEnvelope(
+            mutation_id="carried",
+            expected_revision=0,
+            payload={"document_checked": True},
+        ),
+    )
+    AssignmentService(repo.db).reopen(HARNESS, assignment.id, "again")
+    no_superseded()
