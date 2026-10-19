@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
-from sqlalchemy import func, insert, select, update
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy import Connection, func, insert, select, update
 
 from ontocurator.assignments.eligibility import require_annotation_gate
 from ontocurator.assignments.service import MODE_FOR_TASK, AssignmentService
@@ -601,7 +602,13 @@ class WorkRoundService:
 
 
 def validate_round_input_resolutions(repo: Repository, draft: Any) -> None:
-    """Every carry-forward input must resolve against this exact mutable draft."""
+    """Every carry-forward input must resolve against this exact mutable draft.
+
+    A dismissed input whose carried finding is still in the draft (any
+    version) is refused: dismissing removes that finding atomically, so this
+    catches drafts dismissed before that rule and findings re-created with the
+    carried ID.
+    """
     inputs = repo.get_round_input_inventory(draft.key.project_key, draft.key.round_id)
     by_id = {item["input_id"]: item for item in inputs}
     resolutions = {r.input_id: r for r in draft.round_input_resolutions}
@@ -610,8 +617,15 @@ def validate_round_input_resolutions(repo: Repository, draft: Any) -> None:
     ) != set(by_id):
         raise DomainError("ROUND_INPUTS_INCOMPLETE")
     snapshots = {(s.annotation.annotation_id, s.version): s for s in draft.annotations}
+    present = {s.annotation.annotation_id for s in draft.annotations}
     for iid, resolution in resolutions.items():
         if resolution.outcome == "dismissed":
+            carried_id = _carried_annotation_id(by_id[iid])
+            if carried_id is not None and carried_id in present:
+                raise DomainError(
+                    "ROUND_INPUT_CARRIED_FINDING_PRESENT",
+                    {"input_id": iid, "annotation_id": carried_id},
+                )
             continue
         ref = resolution.annotation_ref
         target = snapshots.get((ref.annotation_id, ref.version)) if ref else None
@@ -623,28 +637,71 @@ def validate_round_input_resolutions(repo: Repository, draft: Any) -> None:
             raise DomainError("ROUND_INPUT_RESOLUTION_STALE", {"input_id": iid})
 
 
+def _carried_annotation_id(item: dict[str, Any]) -> str | None:
+    """The ID of the finding an input carried into the round, if any."""
+    target = item.get("target_snapshot")
+    return str(target["annotation"]["annotation_id"]) if target else None
+
+
+class ResolveRoundInputCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    input_id: str
+    outcome: Literal["completed", "dismissed"]
+    annotation_ref: AnnotationRef | None = None
+    reason: str | None = None
+    remove_carried_finding: bool = False
+
+
+class ClearRoundInputCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    command: Literal["clear_round_input_resolution"]
+    input_id: str
+
+
+_CLEAR_COMMAND = "clear_round_input_resolution"
+
+
 class RoundInputResolutionService:
     def __init__(self, repo: Repository):
         self.repo = repo
 
+    def _carry_inputs(self, key: WorkspaceKey) -> dict[str, dict[str, Any]]:
+        """The inputs of the carry-forward round of ``key``, by ID."""
+        if (
+            key.round_id is None
+            or self.repo.get_work_round(key.project_key, key.round_id).kind
+            != "carry_forward"
+        ):
+            raise DomainError("ROUND_KIND_INVALID")
+        return {
+            i["input_id"]: i
+            for i in self.repo.get_round_input_inventory(key.project_key, key.round_id)
+        }
+
     def resolve(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
+        """Complete or dismiss one carried input.
+
+        Dismissing an input whose carried finding is still in the draft
+        requires ``remove_carried_finding``; the finding and its orphaned
+        evidence are then removed in the same mutation.
+
+        Raises:
+            DomainError: ``ROUND_KIND_INVALID``, ``ROUND_INPUT_INVALID``,
+                ``ROUND_INPUT_CARRIED_FINDING_PRESENT``,
+                ``ROUND_INPUT_RESOLUTION_STALE``.
+        """
+        from ontocurator.application.editing import remove_draft_annotation
         from ontocurator.domain.workspace import RoundInputResolution
 
-        resolution = RoundInputResolution.model_validate(envelope.payload)
+        command = ResolveRoundInputCommand.model_validate(envelope.payload)
+        if command.remove_carried_finding and command.outcome != "dismissed":
+            raise DomainError("ROUND_INPUT_INVALID", {"input_id": command.input_id})
+        resolution = RoundInputResolution(
+            **command.model_dump(exclude={"remove_carried_finding"})
+        )
 
         def operation(draft: Any) -> Any:
-            if (
-                key.round_id is None
-                or self.repo.get_work_round(key.project_key, key.round_id).kind
-                != "carry_forward"
-            ):
-                raise DomainError("ROUND_KIND_INVALID")
-            inputs = {
-                i["input_id"]: i
-                for i in self.repo.get_round_input_inventory(
-                    key.project_key, key.round_id
-                )
-            }
+            inputs = self._carry_inputs(key)
             if resolution.input_id not in inputs:
                 raise DomainError("ROUND_INPUT_INVALID")
             draft.round_input_resolutions = [
@@ -652,6 +709,20 @@ class RoundInputResolutionService:
                 for r in draft.round_input_resolutions
                 if r.input_id != resolution.input_id
             ] + [resolution]
+            if resolution.outcome == "dismissed":
+                carried_id = _carried_annotation_id(inputs[resolution.input_id])
+                if carried_id is not None and any(
+                    s.annotation.annotation_id == carried_id for s in draft.annotations
+                ):
+                    if not command.remove_carried_finding:
+                        raise DomainError(
+                            "ROUND_INPUT_CARRIED_FINDING_PRESENT",
+                            {
+                                "input_id": resolution.input_id,
+                                "annotation_id": carried_id,
+                            },
+                        )
+                    remove_draft_annotation(draft, carried_id)
             if resolution.outcome == "completed":
                 ref = resolution.annotation_ref
                 source = inputs[resolution.input_id]["source_snapshot"]["annotation"]
@@ -675,6 +746,162 @@ class RoundInputResolutionService:
         result = self.repo.run_mutation(key, envelope, operation)
         assert isinstance(result, Draft)
         return result
+
+    def clear(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
+        """Reset one carried input to unresolved before submission.
+
+        When the input's latest resolution is a dismissal that removed the
+        carried finding, that finding is put back exactly as it was at the
+        moment of the dismissal (same version, with its evidence), unless a
+        finding with its ID exists again. Checked layers are not changed.
+
+        Raises:
+            DomainError: ``ROUND_KIND_INVALID``, ``ROUND_INPUT_INVALID`` (unknown
+                or unresolved input), ``ROUND_NOT_EDITABLE``.
+        """
+        command = ClearRoundInputCommand.model_validate(envelope.payload)
+        restore: list[tuple[AnnotationSnapshot, list[EvidenceSnapshot]]] = []
+
+        def load(conn: Connection) -> None:
+            # Inside the mutation's transaction, after the draft lock.
+            restore.clear()
+            found = self._removed_finding(conn, key, command.input_id)
+            if found is not None:
+                restore.append(found)
+
+        def operation(draft: Any) -> Any:
+            inputs = self._carry_inputs(key)
+            if command.input_id not in inputs or not any(
+                r.input_id == command.input_id for r in draft.round_input_resolutions
+            ):
+                raise DomainError("ROUND_INPUT_INVALID", {"input_id": command.input_id})
+            draft.round_input_resolutions = [
+                r
+                for r in draft.round_input_resolutions
+                if r.input_id != command.input_id
+            ]
+            if restore:
+                finding, evidence = restore[0]
+                finding_id = finding.annotation.annotation_id
+                if not any(
+                    s.annotation.annotation_id == finding_id for s in draft.annotations
+                ):
+                    draft.annotations = [*draft.annotations, finding]
+                    known = {(e.mention.evidence_id, e.version) for e in draft.evidence}
+                    draft.evidence = [
+                        *draft.evidence,
+                        *(
+                            e
+                            for e in evidence
+                            if (e.mention.evidence_id, e.version) not in known
+                        ),
+                    ]
+            return draft
+
+        result = self.repo.run_mutation(key, envelope, operation, before_operation=load)
+        assert isinstance(result, Draft)
+        return result
+
+    def _removed_finding(
+        self, conn: Connection, key: WorkspaceKey, input_id: str
+    ) -> tuple[AnnotationSnapshot, list[EvidenceSnapshot]] | None:
+        """The carried finding the latest resolution of ``input_id`` removed.
+
+        ``None`` unless that resolution is a dismissal with
+        ``remove_carried_finding``. The finding is taken from the draft state
+        just before that dismissal (the round's initial content at revision 0)
+        and loaded from the content-addressed snapshot rows.
+        """
+        from ontocurator.domain.serialization import decode_snapshot
+        from ontocurator.storage.repository import DraftState
+        from ontocurator.storage.tables import (
+            AnnotationSnapshotRow,
+            EditEventRow,
+            EvidenceSnapshotRow,
+        )
+
+        if key.round_id is None:
+            return None
+        events = conn.execute(
+            self.repo._draft_events(key)
+            .where(
+                EditEventRow.kind == "edit",
+                EditEventRow.command["input_id"].astext == input_id,
+            )
+            .order_by(EditEventRow.id.desc())
+        ).all()
+        latest = next(
+            (
+                e
+                for e in events
+                if e.command.get("command") == _CLEAR_COMMAND
+                or ("outcome" in e.command and "command" not in e.command)
+            ),
+            None,
+        )
+        if (
+            latest is None
+            or latest.command.get("outcome") != "dismissed"
+            or latest.command.get("remove_carried_finding") is not True
+        ):
+            return None
+        item = next(
+            (
+                i
+                for i in self.repo.get_round_input_inventory(
+                    key.project_key, key.round_id
+                )
+                if i["input_id"] == input_id
+            ),
+            None,
+        )
+        carried_id = _carried_annotation_id(item) if item is not None else None
+        if item is None or carried_id is None:
+            return None
+        version: str | None = None
+        if latest.revision_before == 0:
+            version = str(item["target_snapshot"]["version"])
+        else:
+            before = conn.execute(
+                self.repo._draft_events(key)
+                .where(EditEventRow.revision_after == latest.revision_before)
+                .order_by(EditEventRow.id.desc())
+                .limit(1)
+            ).first()
+            if before is not None:
+                version = next(
+                    (
+                        v
+                        for i, v in DraftState.from_json(before.state).annotations
+                        if i == carried_id
+                    ),
+                    None,
+                )
+        if version is None:
+            return None
+        project_id = self.repo._require_project(conn, key.project_key)
+        payload = conn.execute(
+            select(AnnotationSnapshotRow.payload).where(
+                AnnotationSnapshotRow.project_id == project_id,
+                AnnotationSnapshotRow.annotation_id == carried_id,
+                AnnotationSnapshotRow.version == version,
+            )
+        ).scalar_one_or_none()
+        if payload is None:
+            return None
+        finding = decode_snapshot(payload)
+        evidence: list[EvidenceSnapshot] = []
+        for ref in finding.annotation.evidence_refs:
+            stored = conn.execute(
+                select(EvidenceSnapshotRow.payload).where(
+                    EvidenceSnapshotRow.project_id == project_id,
+                    EvidenceSnapshotRow.evidence_id == ref.evidence_id,
+                    EvidenceSnapshotRow.version == ref.version,
+                )
+            ).scalar_one_or_none()
+            if stored is not None:
+                evidence.append(EvidenceSnapshot.model_validate(stored))
+        return finding, evidence
 
 
 class MergeRoundInputsService:

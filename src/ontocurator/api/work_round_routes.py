@@ -154,6 +154,18 @@ def resolve_input(
     return RoundInputResolutionService(get_repo(request)).resolve(key, envelope)
 
 
+@router.post("/workspaces/{workspace_id}/round-input-resolutions/clear")
+def clear_input(
+    workspace_id: str,
+    envelope: MutationEnvelope,
+    request: Request,
+    principal: PrincipalDep,
+) -> Draft:
+    """Reset a carried input to unresolved; restores a finding its dismissal removed."""
+    key = own_key(principal, decode_workspace_id(workspace_id))
+    return RoundInputResolutionService(get_repo(request)).clear(key, envelope)
+
+
 class RoundSourceView(BaseModel):
     submission_id: str
     document_id: str

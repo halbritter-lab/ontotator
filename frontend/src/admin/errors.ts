@@ -50,6 +50,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   ROUND_ACTIVE: "This task already has unfinished work. Complete it or agree on a clean restart first.",
   ROUND_ALREADY_EXISTS: "This task already has a work round. Open it from the round history.",
   ROUND_INPUTS_INCOMPLETE: "Review every carried finding before submitting. Complete it or dismiss it with a reason.",
+  ROUND_INPUT_CARRIED_FINDING_PRESENT: "This carried finding is still on the text. Dismiss it from the finding itself so it is removed at the same time.",
   ROUND_INPUT_INVALID: "Choose the exact eligible submissions shown for this task.",
   ROUND_INPUT_RESOLUTION_STALE: "A finding changed after completion. Review and complete its current version again.",
   ROUND_INPUT_STALE: "A selected input has changed status. Reload the available submissions and choose again.",

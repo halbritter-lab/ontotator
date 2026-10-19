@@ -280,6 +280,30 @@ EditCommand = Annotated[
 _edit_adapter: TypeAdapter[EditCommand] = TypeAdapter(EditCommand)
 
 
+def remove_draft_annotation(draft: Draft, annotation_id: str) -> None:
+    """Remove a finding, replacement decisions naming it and orphaned evidence; unchecks its layer."""
+    target = next(
+        (a for a in draft.annotations if a.annotation.annotation_id == annotation_id),
+        None,
+    )
+    if target:
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != target.annotation.layer_id
+        ]
+    draft.annotations = [
+        a for a in draft.annotations if a.annotation.annotation_id != annotation_id
+    ]
+    draft.decisions = [
+        d
+        for d in draft.decisions
+        if not (d.replacement and d.replacement.annotation_id == annotation_id)
+    ]
+    active = {
+        r.evidence_id for a in draft.annotations for r in a.annotation.evidence_refs
+    }
+    draft.evidence = [e for e in draft.evidence if e.mention.evidence_id in active]
+
+
 class EditingService:
     """Coordinates command validation, mutation and atomic draft updates."""
 
@@ -1241,26 +1265,7 @@ class EditingService:
                     "REFERENCE_LAYER_READ_ONLY",
                     f"Annotation belongs to reference layer '{layer_id}'",
                 )
-            draft.checked_layer_ids = [
-                lid for lid in draft.checked_layer_ids if lid != layer_id
-            ]
-
-        draft.annotations = [
-            a
-            for a in draft.annotations
-            if a.annotation.annotation_id != cmd.annotation_id
-        ]
-        draft.decisions = [
-            d
-            for d in draft.decisions
-            if not (d.replacement and d.replacement.annotation_id == cmd.annotation_id)
-        ]
-        active_ev_ids = {
-            r.evidence_id for a in draft.annotations for r in a.annotation.evidence_refs
-        }
-        draft.evidence = [
-            e for e in draft.evidence if e.mention.evidence_id in active_ev_ids
-        ]
+        remove_draft_annotation(draft, cmd.annotation_id)
         return draft
 
     def _update_decision_replacements(

@@ -399,6 +399,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "WORKFLOW_REQUEST_CONFLICT": 409,
                     "ROUND_INPUT_STALE": 409,
                     "ROUND_INPUT_RESOLUTION_STALE": 409,
+                    "ROUND_INPUT_CARRIED_FINDING_PRESENT": 409,
                     "ROUND_NOT_EDITABLE": 409,
                     "ROUND_ACTIVE": 409,
                     "ROUND_ALREADY_EXISTS": 409,
