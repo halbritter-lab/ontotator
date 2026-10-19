@@ -433,6 +433,11 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     from ontocurator.api.work_round_routes import router as work_round_router
 
     app.include_router(work_round_router)
+    from ontocurator.api.assignment_submission_routes import (
+        router as assignment_submission_router,
+    )
+
+    app.include_router(assignment_submission_router)
     from ontocurator.api.problem_report_routes import router as problem_report_router
 
     app.include_router(problem_report_router)

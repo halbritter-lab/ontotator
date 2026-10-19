@@ -9,13 +9,20 @@ from sqlalchemy import select
 from ontocurator.api.encoded_routes import EncodedParameterRoute
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.variant_routes import _repo
+from ontocurator.application.round_reads import enrich_inputs
 from ontocurator.authz.visibility import current_access, require_case_text
 from ontocurator.authz.workflow import may_read_human_submission
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.documents import EvidenceSnapshot
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.reanchor_resolution import (
+    PendingReanchorRef,
+    ReanchorResolution,
+)
 from ontocurator.domain.review import ReviewDecision
-from ontocurator.domain.workspace import Submission
+from ontocurator.domain.work_rounds import RoundInputView
+from ontocurator.domain.workspace import RoundInputResolution, Submission
+from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import SubmissionRow
 from ontocurator.storage.workflow_tables import RoundSubmissionBindingRow
 
@@ -40,6 +47,30 @@ class SubmissionHistoryDetail(BaseModel):
     annotations: list[AnnotationSnapshot]
     evidence: list[EvidenceSnapshot]
     decisions: list[ReviewDecision]
+    checked_layer_ids: list[str] = []
+    document_checked: bool = False
+    reanchor_inputs: list[PendingReanchorRef] = []
+    reanchor_resolutions: list[ReanchorResolution] = []
+    round_inputs: list[RoundInputView] = []
+    round_input_resolutions: list[RoundInputResolution] = []
+
+
+def _carried_inputs(
+    repo: Repository, key: str, round_id: str | None
+) -> list[RoundInputView]:
+    """The carried inputs of a carry-forward round, read through the caller's scope.
+
+    A reader who may see the submission but not its round (no access rule is
+    widened here) gets no inputs instead of an error.
+    """
+    if round_id is None:
+        return []
+    try:
+        if repo.get_work_round(key, round_id).kind != "carry_forward":
+            return []
+        return enrich_inputs(repo, key, repo.get_round_input_inventory(key, round_id))
+    except DomainError:
+        return []
 
 
 def _history(
@@ -105,12 +136,19 @@ def _history(
             for s in submission.snapshots
             for e in s.evidence
         }
-        return SubmissionHistoryDetail(
-            summary=summaries[0],
-            annotations=submission.snapshots,
-            evidence=list(evidence.values()),
-            decisions=submission.decisions,
-        )
+    summary = summaries[0]
+    return SubmissionHistoryDetail(
+        summary=summary,
+        annotations=submission.snapshots,
+        evidence=list(evidence.values()),
+        decisions=submission.decisions,
+        checked_layer_ids=submission.checked_layer_ids,
+        document_checked=submission.document_checked,
+        reanchor_inputs=submission.reanchor_inputs,
+        reanchor_resolutions=submission.reanchor_resolutions,
+        round_inputs=_carried_inputs(repo, key, summary.round_id),
+        round_input_resolutions=submission.round_input_resolutions,
+    )
 
 
 @router.get(

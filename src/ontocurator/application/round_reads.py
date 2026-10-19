@@ -265,3 +265,88 @@ def enrich_sources(
             }
         )
     return result
+
+
+def assignment_submissions(
+    repo: Repository, project_key: str, assignment_id: int
+) -> list[dict[str, Any]]:
+    """Submissions bound to any round of the assignment, oldest recorded first.
+
+    The caller has authorized the assignment (owner or lead). Archived rounds of
+    the assignment count; a legacy ``last_submission_id`` without any round
+    binding is listed without a round.
+    """
+    from ontocurator.storage.tables import AssignmentRow
+
+    with repo.db.snapshot() as conn:
+        variants = {v.document_id: v for v in repo.list_variants(project_key)}
+        pid = repo._require_project(conn, project_key)
+        archived = repo._archived_rounds(conn, pid)
+        owners: dict[str, str | None] = {
+            r.submission_id: r.round_id
+            for r in conn.execute(
+                select(
+                    RoundSubmissionBindingRow.submission_id,
+                    RoundSubmissionBindingRow.round_id,
+                )
+                .join(
+                    WorkRoundRow,
+                    (WorkRoundRow.project_id == RoundSubmissionBindingRow.project_id)
+                    & (WorkRoundRow.round_id == RoundSubmissionBindingRow.round_id),
+                )
+                .where(
+                    RoundSubmissionBindingRow.project_id == pid,
+                    WorkRoundRow.assignment_id == assignment_id,
+                )
+            )
+        }
+        for rid, item in archived.items():
+            if item["round"].get("assignment_id") == assignment_id:
+                for sid in item.get("submission_ids", []):
+                    owners.setdefault(sid, rid)
+        legacy = conn.execute(
+            select(AssignmentRow.last_submission_id).where(
+                AssignmentRow.project_id == pid, AssignmentRow.id == assignment_id
+            )
+        ).scalar_one_or_none()
+        if legacy is not None and legacy not in owners:
+            bound = _round_of_submission(conn, pid, [legacy], archived)
+            if legacy not in bound:
+                owners[legacy] = None
+        if not owners:
+            return []
+        ordinals = _ordinals(conn, pid, [assignment_id], archived)
+        rows = conn.execute(
+            select(
+                SubmissionRow.submission_id,
+                SubmissionRow.document_id,
+                SubmissionRow.recorded_at,
+                func.coalesce(
+                    func.jsonb_array_length(SubmissionRow.payload["snapshots"]), 0
+                ).label("findings"),
+            )
+            .where(
+                SubmissionRow.project_id == pid,
+                SubmissionRow.submission_id.in_(sorted(owners)),
+            )
+            .order_by(SubmissionRow.recorded_at, SubmissionRow.submission_id)
+        ).all()
+    result = []
+    for row in rows:
+        variant = variants.get(row.document_id)
+        if variant is None:
+            continue
+        owner = owners[row.submission_id]
+        result.append(
+            {
+                "submission_id": row.submission_id,
+                "round_id": owner,
+                "round_ordinal": ordinals.get(owner) if owner is not None else None,
+                "recorded_at": row.recorded_at,
+                "finding_count": int(row.findings),
+                "document_id": row.document_id,
+                "language": variant.language,
+                "version": variant.version,
+            }
+        )
+    return result
