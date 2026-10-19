@@ -30,5 +30,10 @@ def service(env: Any, username: str = "leader") -> DocumentRowsService:
     return DocumentRowsService(env.db, Actor(user.id, f"user:{username}"), access)
 
 
-def rows_of(page: dict[str, Any]) -> list[dict[str, Any]]:
-    return page["rows"]
+def rows_of(page: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
+    """Rows of a page keyed by (case_id, language)."""
+    return {
+        (row["case_id"], row["language"]): row
+        for group in page["groups"]
+        for row in group["rows"]
+    }

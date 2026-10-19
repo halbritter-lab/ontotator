@@ -18,6 +18,8 @@ __all__ = [
     "ACKNOWLEDGEABLE",
     "CATEGORIES",
     "NOT_NEWER",
+    "PAGE_SIZE",
+    "TRANSLATION_CODES",
     "AssignmentFact",
     "BarCategory",
     "Chain",
@@ -29,6 +31,7 @@ __all__ = [
     "base_chain_name",
     "build_chains",
     "bulk_target",
+    "category_of",
     "missing_final_counts",
     "open_target",
     "prefix_matches",
@@ -59,8 +62,17 @@ ACKNOWLEDGEABLE = frozenset(
     }
 )
 NOT_NEWER = frozenset({"rejected", "query"})
+# Text groups per Documents page.
+PAGE_SIZE = 50
 
 TranslationIssue = Literal["automatic_check_failed", "rejected", "query"]
+# Documents-only issue code per translation issue of a chain's newest version.
+TRANSLATION_CODES: dict[TranslationIssue, str] = {
+    "automatic_check_failed": "TRANSLATION_CHECK_FAILED",
+    "rejected": "TRANSLATION_NOT_ACCEPTED",
+    "query": "TRANSLATION_NOT_ACCEPTED",
+}
+_REPORT_OR_PAUSE = frozenset({"OPEN_PROBLEM_REPORT", "TASK_PAUSED_WITHOUT_REPORT"})
 
 
 @dataclass(frozen=True)
@@ -218,15 +230,23 @@ def open_target(
     return latest.newest.document_id, "most_recent_root"
 
 
+def category_of(code: str) -> BarCategory | None:
+    """Bar category of an issue code; None marks a note."""
+    if code in _REPORT_OR_PAUSE:
+        return "report-or-pause"
+    if code in ACKNOWLEDGEABLE:
+        return "confirm-final"
+    if code in TRANSLATION_CODES.values():
+        return "translation"
+    if code == "MISSING_FINAL":
+        return "missing-final"
+    return None
+
+
 def bar_categories(
     codes: Iterable[str], *, translation_failed: bool, missing_final: bool
 ) -> set[BarCategory]:
-    present = set(codes)
-    result: set[BarCategory] = set()
-    if present & {"OPEN_PROBLEM_REPORT", "TASK_PAUSED_WITHOUT_REPORT"}:
-        result.add("report-or-pause")
-    if present & ACKNOWLEDGEABLE:
-        result.add("confirm-final")
+    result = {category for category in map(category_of, codes) if category}
     if translation_failed:
         result.add("translation")
     if missing_final:

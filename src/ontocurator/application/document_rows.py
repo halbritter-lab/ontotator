@@ -49,7 +49,7 @@ from ontocurator.storage.workflow_tables import (
     WorkRoundStateRow,
 )
 
-PAGE_SIZE = 50
+PAGE_SIZE = rules.PAGE_SIZE  # re-export for existing callers
 Decision = Literal[
     "all", "report-or-pause", "confirm-final", "translation", "missing-final"
 ]
