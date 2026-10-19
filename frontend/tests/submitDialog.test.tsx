@@ -102,7 +102,7 @@ describe("submit dialog open items", () => {
 
   it("goes to the carried finding: selects it, shows Details, scrolls to its mark and focuses Mark as checked", async () => {
     const { container } = setup();
-    fireEvent.click(screen.getByRole("button", { name: "List" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Findings/ }));
     expect(document.querySelector(".app-layout")!.className).toContain("mobile-pane-list");
     const dialog = await openDialog();
     fireEvent.click(goToButtons(dialog)[0]);

@@ -232,10 +232,6 @@
   margin-block: var(--space-3);
 }
 
-.round-input-panel ol { padding-inline-start: var(--space-5); }
-.work-round-actions ol { padding-inline-start: var(--space-5); }
-
-.round-input-panel li,
 .work-round-actions li {
   padding-block: var(--space-3);
   border-block-end: 1px solid var(--border);
@@ -246,8 +242,7 @@
   margin-block-start: var(--space-5);
 }
 
-.work-round-actions code,
-.round-input-panel code {
+.work-round-actions code {
   overflow-wrap: anywhere;
 }
 

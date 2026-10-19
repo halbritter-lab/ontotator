@@ -7,6 +7,8 @@ import { ExceptionPanel } from "../editor/carried/ExceptionPanel";
 import { CarriedRowExtras } from "../editor/carried/CarriedRowExtras";
 import { PlaceholderRow } from "../editor/carried/PlaceholderRow";
 import { CarriedProgress } from "../editor/carried/CarriedProgress";
+import { SidebarResizer } from "../editor/SidebarResizer";
+import { useSidebarWidth } from "../editor/sidebarWidth";
 import { RoundInputEvidenceDialog } from "../tasks/RoundInputEvidenceDialog";
 import { MergeInputs } from "../tasks/MergeInputs";
 import { ComparePane } from "../variants/ComparePane";
@@ -23,7 +25,7 @@ import type { Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
 import { Textarea } from "../ui/Textarea";
 import { Button } from "../ui/Button";
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   api,
   isSessionProblem,
@@ -330,6 +332,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [reloadSubmissionRules, setReloadSubmissionRules] = useState(false);
   const [mobilePane, setMobilePane] = useState<"list" | "text" | "details">("text");
+  const sidebarWidth = useSidebarWidth(versionContext?.username);
   // The ontology tree, docked under the annotation panel while a walk is open. One entry
   // is one walk; a new nonce starts a new one.
   const [treeWalk, setTreeWalk] = useState<{
@@ -2498,15 +2501,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             ? {projectKey:view.key.project_key,documentId:view.document.document_id,scope:JSON.stringify([versionIdentity,display.selection]),setId:refForKey(display.selection,versions.refs)!.id} : undefined} />
       </div> : <>
       <nav className="mobile-pane-tabs" aria-label="Select view">
-        {([ ["list", "List"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
+        {([ ["list", carried.openKeys.size > 0 ? `Findings, ${carried.openKeys.size} to check` : "Findings"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
           <button key={pane} type="button" aria-pressed={mobilePane === pane}
             onClick={() => setMobilePane(pane)}>{label}</button>
         ))}
       </nav>
       {/* Main Workspace Layout */}
-      <div className={`app-layout mobile-pane-${mobilePane}${treeWalk && !treeCollapsed ? " tree-open" : ""}`}>
+      <div className={`app-layout mobile-pane-${mobilePane}${treeWalk && !treeCollapsed ? " tree-open" : ""}`}
+        style={{ "--sidebar-width": `${sidebarWidth.width}px` } as CSSProperties}>
         {/* Left: Sidebar (Annotations & Review Targets) */}
-        <aside className="sidebar density-compact">
+        <aside className="sidebar density-compact" id="findings-column">
           {/* Multi-layer controls (rendered only if >1 layer) */}
           <LayerControls
             readOnly={readOnly}
@@ -2726,6 +2730,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           </section>}
 
         </aside>
+        <SidebarResizer width={sidebarWidth.width} limits={sidebarWidth.limits} controls="findings-column"
+          onChange={sidebarWidth.setWidth} onReset={sidebarWidth.reset} onCommit={sidebarWidth.commit} />
 
         {/* Center: Text View */}
         <TextPane
