@@ -1,3 +1,18 @@
 {
-  "buildPath": "code"
+  "buildPath": "code",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/styles/components.css"
+        ],
+        "createdAt": "2026-10-19T10:54:48.665Z",
+        "reason": "orchestrator: forced-colors fallback for the final-row marker (box-shadow is dropped in forced colors), specified by Documents plan Task 3.6"
+      }
+    ]
+  }
 }
