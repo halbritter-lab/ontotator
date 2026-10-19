@@ -1,5 +1,10 @@
 import { ReanchorPanel, currentReanchorResolution, reanchorKey, reanchorRef, useReanchorContext } from "../variants/ReanchorPanel";
-import { RoundInputPanel, currentRoundInputResolution } from "../tasks/RoundInputPanel";
+import { useCarriedReview } from "../editor/carried/useCarriedReview";
+import { nextUncheckedKey, type CarriedState, type SnapshotLike } from "../editor/carried/checkState";
+import { instructionLine, whatToCheckContext } from "../editor/carried/instructions";
+import { CarriedRowExtras } from "../editor/carried/CarriedRowExtras";
+import { PlaceholderRow } from "../editor/carried/PlaceholderRow";
+import { CarriedProgress } from "../editor/carried/CarriedProgress";
 import { RoundInputEvidenceDialog } from "../tasks/RoundInputEvidenceDialog";
 import { MergeInputs } from "../tasks/MergeInputs";
 import { ComparePane } from "../variants/ComparePane";
@@ -165,7 +170,13 @@ export interface CaseScreenProps {
   saveBeforeReportRef?: React.MutableRefObject<(() => Promise<void>) | null>;
   roundInputs?: readonly import("../api/client").RoundInputView[];
   roundKind?: import("../api/client").WorkRoundView["kind"];
+  /** Toolbar badge of a carry-forward round, e.g. "Round 3 · continued from Round 2". */
+  roundBadge?: string;
+  /** Full round identity, shown as the badge's title. */
+  roundTitle?: string;
 }
+
+const NO_ROUND_INPUTS: readonly import("../api/client").RoundInputView[] = [];
 
 export const CaseScreen: React.FC<CaseScreenProps> = ({
   view,
@@ -177,7 +188,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onSubmitted,
   annotatorName,
   leaveGuardRef,
-  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, held = false, holdReason, saveBeforeReportRef, roundInputs = [], roundKind,
+  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundBadge, roundTitle,
 }) => {
   const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, versionContext?.canBrowseVersions, workspaceId, view.key]);
   const [acceptedSubmission, setAcceptedSubmission] = useState<{ identity: string; value: Submission } | null>(null);
@@ -249,8 +260,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const pendingReanchorItems = view.key.mode === "review" ? view.pending_reanchor_items ?? [] : [];
   const unresolvedReanchorCount = pendingReanchorItems.filter(item =>
     !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? [])).length;
-  const carriedInputs = roundKind === "carry_forward" || (view.key.mode === "independent" && roundInputs.length) ? roundInputs : [];
-  const pendingCarriedCount = carriedInputs.filter(input => !currentRoundInputResolution(input, draft.round_input_resolutions ?? [], draft.annotations ?? [])).length;
+  const carriedInputs = roundKind === "carry_forward" || (view.key.mode === "independent" && roundInputs.length) ? roundInputs : NO_ROUND_INPUTS;
   const [originalRoundInput, setOriginalRoundInput] = useState<import("../api/client").RoundInputView | null>(null);
 
   const [layerSelection, setLayerSelection] = useState<LayerSelection>(() =>
@@ -261,6 +271,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  // A carried input without a finding on this text (placeholder row); exclusive with the others.
+  const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
+  useEffect(() => {
+    if (selectedAnnotationId || selectedTargetId || selectedSourceId) setSelectedInputId(null);
+  }, [selectedAnnotationId, selectedTargetId, selectedSourceId]);
   useEffect(() => {
     if (readOnly || (pendingEvidenceAdoption && selectedTargetId !== refKey(pendingEvidenceAdoption))) setPendingEvidenceAdoption(null);
   }, [readOnly, selectedTargetId, pendingEvidenceAdoption]);
@@ -523,6 +538,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const selectedListKey = selectedSourceId ? `source:${selectedSourceId}`
     : selectedTargetId ? `target:${selectedTargetId}`
     : selectedAnnotationId ? `annotation:${selectedAnnotationId}`
+    : selectedInputId ? `input:${selectedInputId}`
     : null;
   useEffect(() => {
     if (!selectedListKey) return;
@@ -884,25 +900,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     } catch(error) {reportError(error);}
   };
 
-  const resolveCarriedInput = async (input: import("../api/client").RoundInputView, outcome: "completed" | "dismissed", value: string) => {
-    await flushAnnotationNotes();
-    if (unsavedAnnotationNotes().length) throw new ValidationError("Save the annotation note before completing carried-finding review.");
-    assertWritable();
-    const mutationId = crypto.randomUUID();
-    let envelope: Parameters<typeof api.resolveRoundInput>[1] | undefined;
-    await queueRef.current.enqueue(async expectedRevision => {
-      assertWritable();
-      if (!envelope) {
-        const saved = outcome === "completed" ? latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === value) : undefined;
-        if (outcome === "completed" && !saved) throw new ValidationError("Select a current saved finding before completing this input.");
-        envelope = { mutation_id: mutationId, expected_revision: expectedRevision, payload: { input_id: input.input_id, outcome,
-          ...(saved ? { annotation_ref: { annotation_id: saved.annotation.annotation_id, version: saved.version } } : { reason: value }) } };
-      }
-      const updated = await api.resolveRoundInput(workspaceId, envelope).catch(assignmentFailure);
-      latestDraft.current = updated; setDraft(updated); return updated;
-    });
-  };
-
   const mergeInputs = async (inputIds: string[], outputId: string, note?: string) => {
     await flushAnnotationNotes();
     if (unsavedAnnotationNotes().length) throw new ValidationError("Save the annotation note before merging inputs.");
@@ -922,6 +919,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const handleDeselectAll = () => {
+    setSelectedInputId(null);
     setSelectedAnnotationId(null);
     setSelectedTargetId(null);
     setSelectedSourceId(null);
@@ -1075,6 +1073,83 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const saveableNotes = unsavedAnnotationNotes().some(([id]) => !invalid.has(id));
       if (annotationNoteSaves.current.size === 0 && !saveableNotes) return;
     }
+  };
+
+  // Carried review (carry-forward rounds): check states, writes and announcements.
+  const [carriedAnnouncement, setCarriedAnnouncement] = useState("");
+  const carriedTermText = (snapshot: SnapshotLike) =>
+    termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id) ?? snapshot.annotation.term_id;
+  const carried = useCarriedReview({
+    inputs: carriedInputs, draft, workspaceId, readOnly,
+    // The hook writes through this queue; keep the editor's read-only guard and the
+    // "assignment submitted elsewhere" handling of every other draft write.
+    queue: {
+      enqueue: operation => queueRef.current.enqueue(async expectedRevision => {
+        assertWritable();
+        const updated = await operation(expectedRevision).catch(assignmentFailure);
+        if (updated && "annotations" in (updated as object)) { latestDraft.current = updated as Draft; setDraft(updated as Draft); }
+        return updated;
+      }),
+      retry: () => queueRef.current.retry(),
+      getLastError: () => queueRef.current.getLastError(),
+    },
+    queueState,
+    flushNotes: flushAnnotationNotes,
+    hasUnsavedNotes: () => unsavedAnnotationNotes().length > 0,
+    onDraft: updated => {
+      if (updated.revision < latestDraft.current.revision) return;
+      latestDraft.current = updated; setDraft(updated);
+    },
+    announce: setCarriedAnnouncement,
+    termText: carriedTermText,
+  });
+  const carriedActive = carried.states.length > 0;
+  const pendingCarriedCount = carried.states.filter(state => state.unchecked).length;
+  /** Row order of the findings list: placeholder rows (input order), then the visible findings. */
+  const carriedListOrder = useMemo(() => [
+    ...carried.placeholders.map(state => `input:${state.input.input_id}`),
+    ...visibleAnnotations.map(snapshot => `annotation:${snapshot.annotation.annotation_id}`),
+  ], [carried.placeholders, visibleAnnotations]);
+  const carriedInstruction = (state: CarriedState): string | null => {
+    const where = state.home !== "placeholder" ? state.home
+      : state.missing === "deleted" ? "placeholder:deleted" as const : "placeholder:mapping_failed" as const;
+    // Only the instruction line is derived here; it does not use the text version.
+    return instructionLine(whatToCheckContext(state.input, { ...view.document, version: 0 }), state.variant, where);
+  };
+
+  /** Carried check state, meta and instruction lines of a finding row that shows carried inputs. */
+  const carriedExtras = (annotationId: string) => {
+    const states = carried.byHome.get(annotationId);
+    if (!states?.length) return null;
+    const own = states.find(state => state.home === "carried");
+    const shown = states.find(state => state.unchecked) ?? own ?? states[0];
+    const linked = own ? undefined : states.map(state => ({ term: carriedTermText(state.input.source_snapshot), sourceOrdinal: state.input.source_round_ordinal ?? null }));
+    return <CarriedRowExtras state={shown} sourceOrdinal={(own ?? shown).input.source_round_ordinal ?? null}
+      instruction={carriedInstruction(shown)} linked={linked} />;
+  };
+
+  /** The one selection entry point of the findings list: selects a row and clears every other selection. */
+  const selectListKey = (key: string | null) => {
+    cancelPending();
+    setSelectedTargetId(null); setSelectedSourceId(null); setSelectedAnnotationId(null); setSelectedInputId(null); setSelectedEvidenceId(null);
+    if (!key) return;
+    const separator = key.indexOf(":");
+    const kind = key.slice(0, separator), id = key.slice(separator + 1);
+    if (kind === "annotation") {
+      setSelectedAnnotationId(id);
+      setSelectedEvidenceId(latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === id)?.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+    } else if (kind === "input") setSelectedInputId(id);
+    else if (kind === "target") setSelectedTargetId(id);
+    else if (kind === "source") setSelectedSourceId(id);
+    setMobilePane("details");
+  };
+  /** Selects the next (1) or previous (-1) unchecked carried row, wrapping; false when none is open. */
+  const selectedInputState = selectedInputId ? carried.states.find(state => state.input.input_id === selectedInputId) : undefined;
+  const goToUnchecked = (direction: 1 | -1): boolean => {
+    const key = nextUncheckedKey(carriedListOrder, carried.openKeys, selectedListKey, direction);
+    if (!key) return false;
+    selectListKey(key);
+    return true;
   };
 
   useEffect(() => {
@@ -1949,7 +2024,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, { ...shortcutOptions, group: "Navigation", description: "Previous / next case" });
   useShortcut("Escape", () => {
     if (isAttachingMention) { setIsAttachingMention(false); return; }
-    if (!selectedAnnotationId && !selectedTargetId && !selectedSourceId) return false;
+    if (!selectedAnnotationId && !selectedTargetId && !selectedSourceId && !selectedInputId) return false;
     handleDeselectAll();
   }, { ...shortcutOptions, allowRepeat: true, group: "General", description: "Clear selection / cancel adding a mention" });
   useShortcut(["j", "k"], (event) => {
@@ -1980,6 +2055,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     requestReviewerNote(selectedTarget, true);
   }, { ...reviewShortcutOptions, description: "Mark selected proposal as unresolved (note required)" });
   useShortcut("0", () => { void handleReviewDecision({ outcome: null }); }, { ...reviewShortcutOptions, description: "Reset selected review decision to open" });
+  // Single-character bindings ignore Shift, so Shift+N reaches this handler too.
+  useShortcut("n", event => goToUnchecked(event.shiftKey ? -1 : 1) ? undefined : false,
+    { ...shortcutOptions, enabled: carriedActive && !display, group: "Carried findings", description: "Next unchecked carried finding" });
+  useShortcutHint(["Shift + N"], "Previous unchecked carried finding", { group: "Carried findings", enabled: carriedActive && !display });
   useShortcutHint(["Shift + arrows, then release Shift"], "Select text with the keyboard to create a mention");
   useShortcutHint(["←", "→", "Ctrl + ← / →"], "Move the focused mention edge (Tab to an edge handle of the selected annotation)");
 
@@ -2007,6 +2086,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   return (
     <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []} metadata={view.proposal_sets ?? []} allowPublicFetch={false}>
     <div ref={rootRef} className={compareOpen ? "case-comparing" : undefined} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div className="visually-hidden" aria-live="polite" data-carried-announcer>{carriedAnnouncement}</div>
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
         <div className="app-title">
@@ -2036,6 +2116,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <span className="case-label">Case: {view.document.document_id}</span>
           )}
           <span
+            title={roundKind === "carry_forward" ? roundTitle : undefined}
             className={`badge ${
               view.key.mode === "review"
                 ? "badge-review"
@@ -2044,7 +2125,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 : "badge-independent"
             }`}
           >
-            {roundKind === "consolidation" ? "Consolidation review" : roundKind === "carry_forward" ? "Review carried findings" : view.key.mode === "review"
+            {roundKind === "consolidation" ? "Consolidation review" : roundKind === "carry_forward" ? roundBadge ?? "Review carried findings" : view.key.mode === "review"
               ? "Review proposals"
               : view.key.mode === "assisted"
               ? "Assisted annotation"
@@ -2168,10 +2249,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
           <div className="sidebar-scroll" ref={sidebarScrollRef}>
             {!readOnly && roundKind === "consolidation" && <MergeInputs inputs={roundInputs} annotations={draft.annotations ?? []} labelFor={termLabel} onMerge={mergeInputs} />}
-            <RoundInputPanel inputs={carriedInputs} resolutions={draft.round_input_resolutions ?? []} annotations={draft.annotations ?? []} documentText={view.document.text} labelFor={termLabel}
-              onInspectOriginal={setOriginalRoundInput} onOpenFinding={id => { setSelectedTargetId(null); setSelectedSourceId(null); cancelPending(); setSelectedAnnotationId(id); setMobilePane("details"); }}
-              onComplete={readOnly ? undefined : (input, id) => resolveCarriedInput(input, "completed", id)}
-              onDismiss={readOnly ? undefined : (input, reason) => resolveCarriedInput(input, "dismissed", reason)} />
             <ReanchorPanel key={versionIdentity} items={pendingReanchorItems} labelFor={termLabel} onContext={reanchorContext.reveal}
               onOpenFinding={id => { setSelectedTargetId(null); setSelectedSourceId(null); cancelPending(); setSelectedAnnotationId(id); setMobilePane("details"); }}
               resolutions={draft.reanchor_resolutions} annotations={draft.annotations} busy={queueState === "saving"}
@@ -2302,7 +2379,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
             <div className="sidebar-section">
               <div className="sidebar-header sidebar-header--actions">
-                <span>Saved findings ({visibleAnnotations.length})</span>
+                <span>Findings ({visibleAnnotations.length})</span>
                 <Button
                   type="button"
                   variant="quiet" size="sm"
@@ -2314,7 +2391,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               </div>
               {spanlessBlockedReason && <p className="field-hint">{spanlessBlockedReason}</p>}
               {legacySubmissionHint && <p className="field-hint">{legacySubmissionHint}</p>}
+              {carriedActive && <CarriedProgress text={carried.progress} showNext={carried.openKeys.size > 0} onNext={() => { goToUnchecked(1); }} />}
               <ul className="doc-list">
+                {carried.placeholders.map(state => {
+                  const source = state.input.target_snapshot ?? state.input.source_snapshot;
+                  const linked = state.home === "linked" ? draft.annotations?.find(snapshot => snapshot.annotation.annotation_id === state.homeId) : undefined;
+                  const key = `input:${state.input.input_id}`;
+                  return <PlaceholderRow key={key} state={state}
+                    termLabel={<TermName termId={source.annotation.term_id} label={termLabel(source.annotation.layer_id, source.annotation.term_id)} />}
+                    termText={carriedTermText(source)} instruction={carriedInstruction(state)}
+                    selected={selectedInputId === state.input.input_id}
+                    linkedTo={linked ? carriedTermText(linked) : undefined}
+                    onActivate={() => { if (selectedInputId === state.input.input_id) handleDeselectAll(); else selectListKey(key); }} />;
+                })}
                 {visibleAnnotations.map((annSnap) => {
                   const isSelected =
                     annSnap.annotation.annotation_id === selectedAnnotationId;
@@ -2339,15 +2428,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           handleDeselectAll();
                           return;
                         }
-                        setSelectedTargetId(null);
-                        setSelectedSourceId(null);
-                        cancelPending();
-                        setSelectedAnnotationId(annSnap.annotation.annotation_id);
-                        setMobilePane("details");
-                        const firstEv = annSnap.annotation.evidence_refs?.[0]?.evidence_id;
-                        setSelectedEvidenceId(firstEv ?? null);
+                        selectListKey(`annotation:${annSnap.annotation.annotation_id}`);
                       }}
-                    />
+                    >
+                      {carriedExtras(annSnap.annotation.annotation_id)}
+                    </FindingRow>
                   );
                 })}
               </ul>
@@ -2451,6 +2536,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     else void createPendingAnnotation(candidate.term_id, searchId);
                   }} />}
                 <Button type="button" variant="secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</Button>
+              </div>
+            </section>
+          ) : selectedInputState ? (
+            <section className="detail-pane" aria-label="Carried finding">
+              <div className="detail-section">
+                <h2><TermName termId={selectedInputState.input.source_snapshot.annotation.term_id}
+                  label={termLabel(selectedInputState.input.source_snapshot.annotation.layer_id, selectedInputState.input.source_snapshot.annotation.term_id)} /></h2>
+                <p>Carried, not on this text.</p>
+                <Button type="button" variant="secondary" onClick={() => setOriginalRoundInput(carriedInputs.find(input => input.input_id === selectedInputState.input.input_id) ?? null)}>Show original evidence</Button>
               </div>
             </section>
           ) : view.key.mode === "review" && selectedTarget ? (
@@ -2639,11 +2733,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         onReviewEvidenceIssue={reviewEvidenceIssue}
         onReviewPendingReanchor={reviewPendingReanchor}
         onReviewCarried={() => {
-          setSubmitDialogOpen(false); setMobilePane("list");
+          setSubmitDialogOpen(false);
+          const key = nextUncheckedKey(carriedListOrder, carried.openKeys, null, 1);
+          if (!key) return;
+          selectListKey(key);
           requestAnimationFrame(() => {
-            const panel = sidebarScrollRef.current?.querySelector<HTMLElement>('.round-input-panel');
-            const disclosure = panel?.querySelector('details'); if (disclosure) disclosure.open = true;
-            panel?.querySelector<HTMLElement>('[data-round-pending="true"] select, [data-round-pending="true"] button[data-round-open]')?.focus();
+            Array.from(sidebarScrollRef.current?.querySelectorAll<HTMLElement>("[data-list-key]") ?? [])
+              .find(element => element.dataset.listKey === key)?.focus();
           });
         }}
         onReviewDefaulted={reviewDefaulted}

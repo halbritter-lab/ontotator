@@ -155,7 +155,7 @@ describe("continuous sidebar", () => {
     expect(scrollers.length).toBe(1);
     const scroller = scrollers[0];
 
-    for (const title of ["Review Proposals (2)", "Reference Annotations (1)", "Saved findings (1)"]) {
+    for (const title of ["Review Proposals (2)", "Reference Annotations (1)", "Findings (1)"]) {
       const header = Array.from(scroller.querySelectorAll(".sidebar-header"))
         .find((el) => el.textContent?.includes(title));
       expect(header, title).toBeDefined();
