@@ -15,6 +15,8 @@ export interface ComparePaneProps {
   projectKey: string; username: string; caseDetail: CaseDetail; leftDocumentId: string;
   leftText: string; leftElement: HTMLElement | null; leftContext: string; suspended?: boolean; editing?: boolean; onClose: () => void;
   toolbarHost?: HTMLElement | null;
+  /** Right side preselected by a deep link (`compare` of the case route); the reader can still change it. */
+  initialRight?: { documentId: string; refKey: string };
 }
 
 /** Only traverse explicitly readable, same-case lineage. No ID or status inference. */
@@ -34,12 +36,13 @@ function defaultComparison(detail: CaseDetail, documentId: string) {
   return { id: row ? documentId : null, source: !row };
 }
 
-export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, suspended = false, editing = false, onClose, toolbarHost }: ComparePaneProps): JSX.Element {
+export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, suspended = false, editing = false, onClose, toolbarHost, initialRight }: ComparePaneProps): JSX.Element {
   const couplingNoteId = useId();
   // User choices outlive left annotation changes; requests must still reauthorize in each context.
-  const choiceIdentity = useMemo(() => ({}), [projectKey, username, caseDetail.case_id, leftDocumentId]);
+  const choiceIdentity = useMemo(() => ({}), [projectKey, username, caseDetail.case_id, leftDocumentId, initialRight?.documentId, initialRight?.refKey]);
   const identity = useMemo(() => ({}), [choiceIdentity, caseDetail, leftContext]);
-  const initial = defaultComparison(caseDetail, leftDocumentId);
+  const preselected = initialRight && caseDetail.variants.some(row => row.document_id === initialRight.documentId) ? initialRight : undefined;
+  const initial = preselected ? { id: preselected.documentId, source: false } : defaultComparison(caseDetail, leftDocumentId);
   const [chosen, setChosen] = useState<{ identity: object; id: string } | null>(null);
   const manual = chosen?.identity === choiceIdentity;
   const selectedId = manual ? chosen.id : initial.id;
@@ -52,7 +55,10 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
   const [choice, setChoice] = useState<{ identity: object; key: string } | null>(null);
   const refs = current?.refs;
   const newest = refs?.reduce<VersionRef | null>((best, ref) => !best || Date.parse(ref.created_at) > Date.parse(best.created_at) ? ref : best, null);
+  // A deep-linked ref waits for the offered refs; one no longer offered falls back to Text only.
+  const linked = !manual && preselected ? (!refs ? preselected.refKey : refForKey(preselected.refKey, refs) ? preselected.refKey : null) : undefined;
   const selection = choice?.identity === selectionIdentity ? choice.key
+    : linked !== undefined ? linked ?? 'text'
     : !manual && !initial.source && newest ? refKey(newest) : 'text';
   const ref = refForKey(selection, refs ?? []);
   const payloadIdentity = useMemo(() => ({}), [contentIdentity, selection]);
@@ -113,6 +119,7 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
       onAnnotation={key => { if (key === 'text' || refForKey(key, refs ?? [])) setChoice({ identity: selectionIdentity, key }); }} />
     </div>
     {!initial.id && <InlineMessage tone="info">Original source is not available; choose a comparison text.</InlineMessage>}
+    {linked === null && choice?.identity !== selectionIdentity && <InlineMessage tone="info">The linked submission is not available to you.</InlineMessage>}
     {selectedId && !available && <InlineMessage tone="info">This comparison text is not available to you.</InlineMessage>}
     {!available && caseDetail.variants.some(row => row.document_id === leftDocumentId) && <Button onClick={() => select(leftDocumentId)}>Compare current text</Button>}
     {(current?.textError || current?.refsError || payloadError) ? <><ErrorNotice error={current?.textError || current?.refsError || payloadError} /><Button onClick={() => setRetry(value => value + 1)}>Retry comparison</Button></> : null}

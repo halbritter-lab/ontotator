@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../src/api/client';
 import { caseDetail, historical, ownRef } from './variantFixtures';
 import { refKey } from '../src/variants/versionState';
+import { routeHref } from '../src/app/router';
 
 beforeEach(() => {
   vi.spyOn(api, 'getWorkflowWarnings').mockResolvedValue({ project: 'pkg', selections: [], warnings: [], omissions: [], state_digest: 'a'.repeat(64) });
@@ -217,10 +218,63 @@ it('restricts ordinary annotators to text without generic browsing or forbidden 
   expect(screen.queryByText('Versions')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull();
   expect(api.listAnnotationVersions).not.toHaveBeenCalled();
-  mounted.rerender(<CaseViewer {...props} annotations={refKey(ownRef)} />);
+  mounted.rerender(<CaseViewer {...props} annotations={refKey({ kind: 'submission', id: ownRef.id })} />);
   await screen.findByText('This annotation version is not available to you.');
   expect(screen.queryByText(/Immutable target/)).toBeNull();
+  expect(api.listAnnotationVersions).not.toHaveBeenCalled();
   expect(api.getAnnotationVersion).not.toHaveBeenCalled();
+});
+
+it('lets an annotator open an old own submission from the history as an own ref, never as a submission ref', async () => {
+  const { CaseViewer } = await import('../src/variants/CaseViewer');
+  vi.mocked(api.listProjects).mockResolvedValue([{ project_key: 'pkg', roles: ['annotator'], can_manage: false } as any]);
+  vi.spyOn(api, 'listSubmissionHistory').mockResolvedValue([{ submission_id: ownRef.id, document_id: 'target', author_label: 'Reader A', created_at: '2026-10-16T00:00:00Z', mode: 'independent', round_id: null }]);
+  vi.spyOn(api, 'getSubmissionHistory').mockResolvedValue({ summary: { submission_id: ownRef.id, document_id: 'target', author_label: 'Reader A', created_at: '2026-10-16T00:00:00Z', mode: 'independent', round_id: null },
+    annotations: historical.annotations, evidence: [], decisions: [], checked_layer_ids: [], document_checked: false, reanchor_inputs: [], reanchor_resolutions: [], round_inputs: [], round_input_resolutions: [] });
+  const rows = vi.spyOn(api, 'getRowSubmissions');
+  const onNavigate = vi.fn();
+  const mounted = render(<CaseViewer {...props} onNavigate={onNavigate} />);
+  await screen.findByText(/Immutable target/);
+  fireEvent.click(screen.getByRole('button', { name: 'Submissions' }));
+  const table = await screen.findByRole('table', { name: 'Submission history' });
+  expect(within(table).queryByRole('columnheader', { name: 'Final' })).toBeNull();
+  fireEvent.click(within(table).getByRole('link'));
+  const route = onNavigate.mock.calls.at(-1)![0];
+  expect(route).toEqual({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'target', annotations: refKey(ownRef) });
+  mounted.rerender(<CaseViewer {...props} onNavigate={onNavigate} annotations={route.annotations} />);
+  await screen.findByText('HP:old');
+  expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'own', ownRef.id);
+  expect(api.getAnnotationVersion).not.toHaveBeenCalledWith('pkg', 'target', 'submission', expect.anything());
+  expect(rows).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull();
+});
+
+it('opens a deep-linked comparison with that right side and keeps annotations when it closes', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  const { CaseViewer } = await import('../src/variants/CaseViewer');
+  const linked = { ...ownRef, kind: 'submission' as const, id: 'sub-2', label: 'ann-0002 · submission' };
+  vi.mocked(api.listAnnotationVersions).mockResolvedValue([ownRef, linked]);
+  const onNavigate = vi.fn();
+  const documents = { decision: 'all', page: '2', open: [`${caseDetail.case_id}:de`] };
+  render(<CaseViewer {...props} onNavigate={onNavigate} annotations={refKey(ownRef)} compare={refKey(linked)} documents={documents} />);
+  const panel = await screen.findByRole('region', { name: 'Comparison' });
+  await waitFor(() => expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'submission', 'sub-2'));
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('target');
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Annotations').value).toBe(refKey(linked));
+  fireEvent.click(screen.getByRole('button', { name: 'Close comparison' }));
+  expect(onNavigate).toHaveBeenCalledWith({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'target', annotations: refKey(ownRef), documents });
+});
+
+it('restores the full documents query on the back link, including open rows, page and decision', async () => {
+  const { CaseViewer } = await import('../src/variants/CaseViewer');
+  const onNavigate = vi.fn();
+  const documents = { decision: 'confirm-final', page: '3', open: [`${caseDetail.case_id}:de`, 'other:en'], language: 'de' };
+  render(<CaseViewer {...props} onNavigate={onNavigate} documents={documents} />);
+  await screen.findByText('Immutable target 😃');
+  const back = screen.getByRole('link', { name: 'Back to Documents' });
+  expect(back.getAttribute('href')).toBe(routeHref({ name: 'projectDocuments', key: 'pkg', ...documents }));
+  fireEvent.click(back);
+  expect(onNavigate).toHaveBeenCalledWith({ name: 'projectDocuments', key: 'pkg', ...documents });
 });
 
 it('uses a collapsed native Versions disclosure for permitted browsing', async () => {

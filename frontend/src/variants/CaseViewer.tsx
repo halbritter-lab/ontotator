@@ -16,6 +16,8 @@ import { reviewLanguages } from '../admin/variantMetadata';
 
 export interface CaseViewerProps {
   projectKey: string; caseId: string; variant?: string; annotations?: string;
+  /** Ref key of a submission on the same text version: opens the comparison with that right side. */
+  compare?: string;
   username: string; onNavigate: (route: Route) => void;
   documents?: ProjectDocumentsQuery;
 }
@@ -62,13 +64,23 @@ export function VariantDetails({ detail, documentId }: { detail: CaseDetail; doc
   </details>;
 }
 
-export function CaseViewer({ projectKey, caseId, variant, annotations, username, onNavigate, documents }: CaseViewerProps): JSX.Element {
+/** Ref kind of a selection key ("own" for `["own", id]`), or null for text, draft and malformed keys. */
+function selectionKind(key: string): string | null {
+  try {
+    const tuple: unknown = JSON.parse(key);
+    return Array.isArray(tuple) && tuple.length === 2 && typeof tuple[0] === 'string' && typeof tuple[1] === 'string' ? tuple[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+export function CaseViewer({ projectKey, caseId, variant, annotations, compare, username, onNavigate, documents }: CaseViewerProps): JSX.Element {
   const access = useVersionAccess(projectKey, username);
   const finalResults = useFinalSelectionState(projectKey, username, access.canManage);
   const identity = useMemo(() => ({ username, projectKey, caseId }), [username, projectKey, caseId]);
   const [retry, setRetry] = useState(0);
   const [compareIdentity, setCompareIdentity] = useState<object | null>(null);
-  const compareOpen = access.allowed && compareIdentity === identity;
+  const compareOpen = access.allowed && (compareIdentity === identity || compare !== undefined);
   const [leftElement, setLeftElement] = useState<HTMLDivElement | null>(null);
   const [comparisonToolbar, setComparisonToolbar] = useState<HTMLDivElement | null>(null);
   const compareButton = useRef<HTMLButtonElement | null>(null);
@@ -83,14 +95,20 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
       leftElement?.focus();
     }
   }, [access.allowed]);
-  const closeComparison = () => { setCompareIdentity(null); };
+  const selection = annotations ?? 'text';
+  // Everyone may open their own submissions (the history's View links); browsing other refs needs browse access.
+  const ownSelection = selectionKind(selection) === 'own';
+  const readable = access.allowed || ownSelection;
   const [detailState, setDetail] = useState<{ identity: object; retry: number; value: CaseDetail } | null>(null);
   const [caseError, setCaseError] = useState<{ identity: object; error: unknown } | null>(null);
   const detail = detailState?.identity === identity ? detailState.value : null;
   const detailFresh = detailState?.identity === identity && detailState.retry === retry;
   const selectedId = variant !== undefined ? variant : detail ? pickVariant(detail, languagesOf(detail)[0] ?? '') : null;
   const current = detail?.variants.find(row => row.document_id === selectedId);
-  const selection = annotations ?? 'text';
+  const closeComparison = () => {
+    setCompareIdentity(null);
+    if (compare !== undefined) onNavigate({ name: 'projectCase', key: projectKey, caseId, ...(variant !== undefined ? { variant } : {}), ...(annotations !== undefined ? { annotations } : {}), ...(documents ? { documents } : {}) });
+  };
   const contentIdentity = useMemo(() => ({ identity, selectedId, retry, allowed: access.allowed, loading: access.loading }), [identity, selectedId, retry, access.allowed, access.loading]);
   const [textState, setText] = useState<{ identity: object; value: VariantText } | null>(null);
   const [refsState, setRefs] = useState<{ identity: object; value: VersionRef[] } | null>(null);
@@ -102,7 +120,7 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
   const [payload, setPayload] = useState<{ identity: object; value: AnnotationVersion } | null>(null);
   const [payloadError, setPayloadError] = useState<{ identity: object; error: unknown } | null>(null);
   const refs = refsState?.identity === contentIdentity ? refsState.value : null;
-  const ref = refs ? refForKey(selection, refs) : null;
+  const ref = refs ? refForKey(selection, access.allowed ? refs : refs.filter(row => row.kind === 'own')) : null;
   const snapshot = ref && payload?.identity === payloadIdentity ? payload.value : null;
   const labelFor = useTermLabels(projectKey, (snapshot?.annotations ?? []).map(row => ({ layer_id: row.annotation.layer_id, term_id: row.annotation.term_id })));
   useEffect(() => {
@@ -113,25 +131,30 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
     return () => { active = false; };
   }, [identity, retry]);
   useEffect(() => {
-    if (!current || access.loading || (!access.allowed && selection !== 'text')) return;
+    if (!current || access.loading || (!readable && selection !== 'text')) return;
     let active = true;
     setTextError(null); setRefsError(null);
     api.getVariantText(projectKey, current.document_id).then(value => { if (active) setText({ identity: contentIdentity, value }); }, error => { if (active) setTextError({ identity: contentIdentity, error }); });
-    if (access.allowed) api.listAnnotationVersions(projectKey, current.document_id).then(value => { if (active) setRefs({ identity: contentIdentity, value }); }, error => { if (active) setRefsError({ identity: contentIdentity, error }); });
+    if (readable) api.listAnnotationVersions(projectKey, current.document_id).then(value => { if (active) setRefs({ identity: contentIdentity, value }); }, error => { if (active) setRefsError({ identity: contentIdentity, error }); });
     return () => { active = false; };
-  }, [contentIdentity, current?.document_id, access.allowed, access.loading, selection]);
+  }, [contentIdentity, current?.document_id, access.allowed, access.loading, selection, readable]);
   useEffect(() => {
-    if (!access.allowed || !current || !ref) return;
+    if (!readable || !current || !ref) return;
     let active = true;
     api.getAnnotationVersion(projectKey, current.document_id, ref.kind, ref.id).then(value => { if (active) setPayload({ identity: payloadIdentity, value }); }, error => { if (active) setPayloadError({ identity: payloadIdentity, error }); });
     return () => { active = false; };
-  }, [payloadIdentity, ref?.kind, ref?.id, access.allowed]);
-  const move = (documentId: string, selected = 'text') => onNavigate({ name: 'projectCase', key: projectKey, caseId, variant: documentId, annotations: selected, ...(documents ? { documents } : {}) });
+  }, [payloadIdentity, ref?.kind, ref?.id, readable]);
+  // A deep-linked comparison stays open; its preselection only applies to its own text version.
+  const move = (documentId: string, selected = 'text') => {
+    if (compareOpen) setCompareIdentity(identity);
+    onNavigate({ name: 'projectCase', key: projectKey, caseId, variant: documentId, annotations: selected,
+      ...(compare !== undefined && documentId === current?.document_id ? { compare } : {}), ...(documents ? { documents } : {}) });
+  };
   const retryButton = <Button onClick={() => { if (access.error) access.retry(); setRetry(value => value + 1); }}>Retry</Button>;
   if (caseError?.identity === identity) return <>{caseError.error instanceof ApiError && caseError.error.status === 404
     ? <InlineMessage tone="info">This case is not available to you.</InlineMessage> : <ErrorNotice error={caseError.error} />}{retryButton}</>;
   if (access.loading) return <InlineMessage tone="info">Loading case...</InlineMessage>;
-  if (!access.allowed && selection !== 'text') return <InlineMessage tone="info">This annotation version is not available to you.</InlineMessage>;
+  if (!readable && selection !== 'text') return <InlineMessage tone="info">This annotation version is not available to you.</InlineMessage>;
   if (!detail) return <InlineMessage tone="info">Loading case...</InlineMessage>;
   if (!current) return <InlineMessage tone="info">This text version is not available to you.</InlineMessage>;
   const text = textState?.identity === contentIdentity ? textState.value : null;
@@ -145,7 +168,8 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
         event.preventDefault(); onNavigate({ name: 'projectDocuments', key: projectKey, ...documents });
       }}>Back to Documents</a>
       <h1>Text: {detail.case_id}</h1><span>{current.language} · v{current.version}</span><span className="badge">{variantDescription(current)}</span>
-      <SubmissionHistory projectKey={projectKey} documentId={current.document_id} username={username} selectionContext={access.canManage ? { caseId, language: current.language } : undefined} />
+      <SubmissionHistory projectKey={projectKey} caseId={caseId} documentId={current.document_id} language={current.language} version={current.version}
+        username={username} canManage={access.canManage} onNavigate={onNavigate} documents={documents} />
       {supported.map((task, index) => <a key={task.assignment_id} href={routeHref({ name: 'task', assignmentId: task.assignment_id })} className="btn btn-secondary"
         onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); onNavigate({ name: 'task', assignmentId: task.assignment_id }); }}>
         {supported.length === 1 ? 'Open my task' : `Open my ${task.task === 'annotate' ? 'annotation' : task.task === 'translation_review' ? 'translation review' : 'review'} task${supported.filter(row => row.task === task.task).length > 1 ? ` (${index + 1})` : ''}`}
@@ -167,6 +191,7 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
     {!!access.error && <><ErrorNotice error={access.error} />{retryButton}</>}
     {taskError?.identity === identity && <><ErrorNotice error={taskError.error} />{retryButton}</>}
     {refsError?.identity === contentIdentity && <><ErrorNotice error={refsError.error} />{retryButton}</>}
+    {!access.allowed && ref && <p className="case-own-submission">{ref.label}</p>}
     {refs && selection !== 'text' && !ref && <InlineMessage tone="info">This annotation version is not available to you.</InlineMessage>}
     {payloadFailed && <><ErrorNotice error={payloadError.error} />{retryButton}</>}
     <div className="comparison-reading">
@@ -186,7 +211,8 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, username,
       <ReadOnlyAnnotationView onTextElement={setLeftElement} key={JSON.stringify([username, projectKey, caseId, selectedId, selection, retry])} text={text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} proposalContext={ref?.kind === "proposals" && snapshot ? {projectKey,documentId:current.document_id,scope:JSON.stringify([username,projectKey,caseId,selectedId,selection,retry]),setId:ref.id} : undefined} />
     </> : <InlineMessage tone="info">Loading text...</InlineMessage>}
       {compareOpen && <ComparePane projectKey={projectKey} username={username} caseDetail={detail} leftDocumentId={current.document_id}
-        leftText={text?.text ?? ""} leftElement={text ? leftElement : null} suspended={!text || !detailFresh} leftContext={JSON.stringify([selectedId, selection, retry])} onClose={closeComparison} toolbarHost={comparisonToolbar} />}
+        leftText={text?.text ?? ""} leftElement={text ? leftElement : null} suspended={!text || !detailFresh} leftContext={JSON.stringify([selectedId, selection, retry])} onClose={closeComparison} toolbarHost={comparisonToolbar}
+        initialRight={compare !== undefined ? { documentId: current.document_id, refKey: compare } : undefined} />}
       </div>
   </section>;
 }

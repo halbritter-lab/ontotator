@@ -1,79 +1,82 @@
-import { FinalResultSelector } from "./FinalResultSelector";
 import { useEffect, useState } from 'react';
-import { api, type SubmissionHistoryDetail, type SubmissionHistorySummary, type VariantText } from '../api/client';
-import { Button, Dialog, InlineMessage } from '../ui';
+import { api, type FinalSelectionSummary, type RowRoundView, type RowSubmissionView, type SubmissionHistorySummary } from '../api/client';
+import type { ProjectDocumentsQuery, Route } from '../app/router';
 import { ErrorNotice } from '../admin/ErrorNotice';
-import { formatDateTime } from '../app/labels';
-import { useTermLabels } from '../editor/useTermLabels';
-import { ReadOnlyAnnotationView } from './ReadOnlyAnnotationView';
-import { ConsolidationLauncher } from './ConsolidationLauncher';
+import { SubmissionsTable } from '../documents/SubmissionsTable';
+import { Button, Dialog, InlineMessage } from '../ui';
+import { refKey } from './versionState';
 
-export interface SubmissionHistoryProps { projectKey: string; documentId: string; username: string; selectionContext?: { caseId: string; language: string } }
+export interface SubmissionHistoryProps {
+  projectKey: string; caseId: string; documentId: string; language: string;
+  /** Version of the current text; labels the own submissions of non-leads. */
+  version: number;
+  username: string;
+  /** Leads read every submission of the row with its Final marker; others only their own submissions. */
+  canManage: boolean;
+  onNavigate: (route: Route) => void;
+  /** Documents query kept on the View links (back link of the case viewer). */
+  documents?: ProjectDocumentsQuery;
+}
 
-/** No browsing-role gate: the server returns all lead-visible or only own submissions.
- * Identity keys discard protected data immediately on account/document replacement.
+interface HistoryData { rows: RowSubmissionView[]; rounds: RowRoundView[]; final: FinalSelectionSummary | null; parallel: boolean }
+
+/** Own submission from the per-document history (non-leads); the finding count comes from its detail. */
+function ownRow(row: SubmissionHistorySummary, version: number, findings: number): RowSubmissionView {
+  return {
+    submission_id: row.submission_id, document_id: row.document_id, version, chain_name: null, author_label: row.author_label,
+    is_me: true, recorded_at: row.created_at, mode: row.mode, kind: row.mode === 'review' ? 'review' : 'annotation',
+    round_id: row.round_id ?? null, round_ordinal: null, round_state: null, is_latest_in_round: null, finding_count: findings,
+  };
+}
+
+async function loadLead(projectKey: string, caseId: string, language: string): Promise<HistoryData> {
+  const [data, page] = await Promise.all([api.getRowSubmissions(projectKey, caseId, language), api.listDocumentRows(projectKey, { case: caseId, language })]);
+  const row = page.groups.flatMap(group => group.rows).find(item => item.case_id === caseId && item.language === language);
+  return { rows: data.submissions, rounds: data.rounds, final: row?.final ?? null, parallel: row?.parallel_roots ?? false };
+}
+
+async function loadOwn(projectKey: string, documentId: string, version: number): Promise<HistoryData> {
+  const summaries = (await api.listSubmissionHistory(projectKey, documentId)).filter(row => row.document_id === documentId);
+  const details = await Promise.all(summaries.map(row => api.getSubmissionHistory(projectKey, documentId, row.submission_id)));
+  return { rows: summaries.map((row, index) => ownRow(row, version, details[index].annotations.length)), rounds: [], final: null, parallel: false };
+}
+
+/**
+ * Read-only submission history of the case viewer: the Documents submissions table without
+ * selection or consolidation actions. View opens a submission in the viewer.
+ * Identity keys discard protected data immediately on account, document or role replacement.
  */
-export function SubmissionHistory({ projectKey, documentId, username, selectionContext }: SubmissionHistoryProps): JSX.Element {
-  const identity = JSON.stringify([projectKey, documentId, username]);
+export function SubmissionHistory({ projectKey, caseId, documentId, language, version, username, canManage, onNavigate, documents }: SubmissionHistoryProps): JSX.Element {
+  const identity = JSON.stringify([projectKey, caseId, documentId, language, version, username, canManage]);
   const [opened, setOpened] = useState<string | null>(null);
   const open = opened === identity;
   const [retry, setRetry] = useState(0);
   const requestIdentity = JSON.stringify([identity, retry]);
-  const [history, setHistory] = useState<{ identity: string; rows?: SubmissionHistorySummary[]; error?: unknown } | null>(null);
-  const [selected, setSelected] = useState<{ identity: string; id: string } | null>(null);
-  const selection = selected?.identity === requestIdentity ? selected.id : null;
-  const payloadIdentity = JSON.stringify([requestIdentity, selection]);
-  const [payload, setPayload] = useState<{ identity: string; detail?: SubmissionHistoryDetail; text?: VariantText; error?: unknown } | null>(null);
-  const currentHistory = open && history?.identity === requestIdentity ? history : null;
-  const current = open && payload?.identity === payloadIdentity ? payload : null;
-  const labelFor = useTermLabels(projectKey, (current?.detail?.annotations ?? []).map(row => ({ layer_id: row.annotation.layer_id, term_id: row.annotation.term_id })));
+  const [history, setHistory] = useState<{ identity: string; data?: HistoryData; error?: unknown } | null>(null);
+  const current = open && history?.identity === requestIdentity ? history : null;
   useEffect(() => {
     if (!open) return;
     let active = true;
-    api.listSubmissionHistory(projectKey, documentId).then(rows => {
-      if (active) setHistory({ identity: requestIdentity, rows: rows.filter(row => row.document_id === documentId) });
-    }, error => { if (active) setHistory({ identity: requestIdentity, error }); });
+    (canManage ? loadLead(projectKey, caseId, language) : loadOwn(projectKey, documentId, version)).then(
+      data => { if (active) setHistory({ identity: requestIdentity, data }); },
+      error => { if (active) setHistory({ identity: requestIdentity, error }); },
+    );
     return () => { active = false; };
   }, [open, requestIdentity]);
-  useEffect(() => {
-    if (!open || !selection || !currentHistory?.rows?.some(row => row.submission_id === selection)) return;
-    let active = true;
-    Promise.all([api.getSubmissionHistory(projectKey, documentId, selection), api.getVariantText(projectKey, documentId)]).then(([detail, text]) => {
-      if (active && detail.summary.document_id === documentId && detail.summary.submission_id === selection && text.document_id === documentId)
-        setPayload({ identity: payloadIdentity, detail, text });
-    }, error => { if (active) setPayload({ identity: payloadIdentity, error }); });
-    return () => { active = false; };
-  }, [open, payloadIdentity, currentHistory?.rows]);
+  const viewRoute = (row: RowSubmissionView): Route => ({
+    name: 'projectCase', key: projectKey, caseId, variant: row.document_id,
+    annotations: refKey({ kind: canManage ? 'submission' : 'own', id: row.submission_id }), ...(documents ? { documents } : {}),
+  });
+  const close = () => setOpened(null);
   return <>
     <Button size="sm" onClick={() => { setRetry(value => value + 1); setOpened(identity); }}>Submissions</Button>
-    <Dialog open={open} title="Submission history" size="lg" onClose={() => setOpened(null)} footer={<Button onClick={() => setOpened(null)}>Close</Button>}>
-      <p>Immutable annotation results for this text version. Historical results are read-only.</p>
-      {currentHistory?.error ? <><ErrorNotice error={currentHistory.error} /><Button onClick={() => setRetry(value => value + 1)}>Retry submissions</Button></>
-        : !currentHistory?.rows ? <InlineMessage tone="info">Loading submissions...</InlineMessage>
-        : <>{selectionContext && <FinalResultSelector key={`final-${identity}`} projectKey={projectKey} documentId={documentId} {...selectionContext} rows={currentHistory.rows} />}<p>{currentHistory.rows.length} submissions</p>
-          {currentHistory.rows.length === 0 && <p>No submitted annotation results are available.</p>}
-          {selectionContext && <ConsolidationLauncher key={`consolidation-${identity}`} projectKey={projectKey} documentId={documentId} username={username} language={selectionContext.language} rows={currentHistory.rows} />}
-          <ol className="submission-result-list">{currentHistory.rows.map(row => <li key={row.submission_id}>
-            <span>{row.author_label} · <time dateTime={row.created_at}>{formatDateTime(row.created_at)}</time> · {row.mode}</span>
-            {row.round_id && <span> · Round {row.round_id}</span>}{' '}
-            <Button size="sm" aria-label={`View submission ${row.submission_id}`} aria-pressed={selection === row.submission_id}
-              onClick={() => setSelected({ identity: requestIdentity, id: row.submission_id })}>View</Button>
-          </li>)}</ol>
-        </>}
-      {selection && !current && <InlineMessage tone="info">Loading historical result...</InlineMessage>}
-      {!!current?.error && <><ErrorNotice error={current.error} /><Button onClick={() => setRetry(value => value + 1)}>Retry submissions</Button></>}
-      {current?.detail && current.text && <section className="submission-result" aria-label="Historical annotation result">
-        <h2>Submitted result</h2>
-        <ReadOnlyAnnotationView text={current.text.text} annotations={current.detail.annotations} evidence={current.detail.evidence} labelFor={labelFor} />
-        <h3>Annotation notes</h3>
-        {current.detail.annotations.some(row => row.annotation.note) ? <ul>{current.detail.annotations.filter(row => row.annotation.note).map(row => <li key={row.annotation.annotation_id}>
-          <strong>{row.annotation.term_id}</strong><p className="historical-note">{row.annotation.note}</p>
-        </li>)}</ul> : <p>No annotation notes.</p>}
-        <h3>Review reasons</h3>
-        {current.detail.decisions.length ? <ul>{current.detail.decisions.map(row => <li key={row.decision_id}>
-          <strong>{row.target.annotation_id} · {row.outcome}</strong>{row.note && <p className="historical-note">{row.note}</p>}
-        </li>)}</ul> : <p>No review decisions.</p>}
-      </section>}
+    <Dialog open={open} title="Submission history" size="lg" onClose={close} footer={<Button onClick={close}>Close</Button>}>
+      <p>{canManage ? 'Submitted results of this text in all versions.' : 'Your submitted results for this text version.'} Results are read-only; choose a round to open it in the viewer.</p>
+      {current?.error ? <><ErrorNotice error={current.error} /><Button onClick={() => setRetry(value => value + 1)}>Retry submissions</Button></>
+        : !current?.data ? <InlineMessage tone="info">Loading submissions...</InlineMessage>
+        : <SubmissionsTable rows={current.data.rows} rounds={current.data.rounds} final={current.data.final} parallel={current.data.parallel}
+          showFinalColumn={canManage} language={language} viewRoute={viewRoute} label="Submission history"
+          onNavigate={route => { close(); onNavigate(route); }} />}
     </Dialog>
   </>;
 }

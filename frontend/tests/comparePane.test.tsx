@@ -208,3 +208,18 @@ it('restores coupling numbers after a late annotation payload replaces vendor ma
   expect(refreshed).not.toBe(marker);expect(refreshed.getAttribute('data-paragraph-number')).toBe('1');
   expect(mounted.container.querySelector('.text-container')!.textContent).toBe('Immutable source');
 });
+
+it('preselects a deep-linked right side and falls back to Text only when the ref is not offered', async () => {
+  const linked = { ...ownRef, kind: 'submission' as const, id: 'sub-2', label: 'ann-0002 · submission' };
+  vi.mocked(api.listAnnotationVersions).mockResolvedValue([ownRef, linked]);
+  const mounted = render(<ComparePane {...props} initialRight={{ documentId: 'target', refKey: refKey(linked) }} />);
+  await screen.findByText('HP:old');
+  expect(api.getVariantText).toHaveBeenCalledWith('pkg', 'target');
+  expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'submission', 'sub-2');
+  expect(api.getAnnotationVersion).toHaveBeenCalledTimes(1);
+  expect(screen.getByLabelText<HTMLSelectElement>('Annotations').value).toBe(refKey(linked));
+  mounted.rerender(<ComparePane {...props} initialRight={{ documentId: 'target', refKey: refKey({ kind: 'submission', id: 'gone' }) }} />);
+  await screen.findByText('The linked submission is not available to you.');
+  expect(screen.getByLabelText<HTMLSelectElement>('Annotations').value).toBe('text');
+  expect(api.getAnnotationVersion).not.toHaveBeenCalledWith('pkg', 'target', 'submission', 'gone');
+});
