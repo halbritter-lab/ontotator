@@ -3,8 +3,10 @@ import type { components } from '../src/api/generated';
 import { authenticatedRequest, importPackage, loginExisting, mentionWithOffsets, openCase, selectText, submitCase } from './helpers';
 import { problemReportScenario } from './problemReportHelpers';
 
-// Quick-fix acceptance (Q1 (B2), Q3, Q4, Q7). Not written here, as their UI was replaced:
-// Q1 (B1) by editor F8a (covered by editor F10), Q8 by editor F6b (RoundInputPanel deleted).
+// Quick-fix acceptance (Q1 (B1), Q1 (B2), Q3, Q4, Q7). Q1 (B1) targets the rewritten Work rounds and
+// original evidence dialogs of editor F8a (written by editor F10; editor-layout.spec.ts adds the
+// viewport checks). Q8 is obsolete: the round-input list it targeted was deleted with
+// RoundInputPanel (editor F6b) and its rule removed by editor F4b.
 // Q1 (B2) targets the problem dialog of problem-reports WP6 (written by problem-reports WP9e).
 
 type Assignment = components['schemas']['AssignmentView'];
@@ -72,6 +74,53 @@ test('Q7: focused resize handle shows a focus-ring ring without moving text', as
   const shot = test.info().outputPath('q7-handle-focus.png');
   await page.screenshot({ path: shot });
   await test.info().attach('q7-handle-focus', { path: shot, contentType: 'image/png' });
+});
+
+test('Q1 (B1): Work rounds and original evidence dialogs keep Close in a fixed footer', async ({ page }) => {
+  const response = await page.request.post('/__test_carry_forward__', { params: { scenario: 't5' }, timeout: 120_000 });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  const s = await response.json() as { assignment_id: number; username: string };
+  await loginExisting(page, s.username);
+  await page.goto(`/#/tasks/${s.assignment_id}`);
+  await expect(page.locator('.text-container')).toBeVisible();
+  /** Close is the last footer action, outside the scrolling body, below it and inside the viewport. */
+  const footerClose = async (dialog: ReturnType<Page['getByRole']>, name: string, trigger: ReturnType<Page['getByRole']>) => {
+    await expect(dialog).toBeVisible();
+    const footer = dialog.locator('.modal-actions');
+    await expect(footer.getByRole('button').last()).toHaveText(name);
+    const close = footer.getByRole('button', { name, exact: true });
+    await expect(close).toBeInViewport({ ratio: 1 });
+    const order = await dialog.evaluate(element => {
+      const body = element.querySelector('.ui-dialog-body')!;
+      const actions = element.querySelector('.modal-actions')!.getBoundingClientRect();
+      return { bodyBottom: body.getBoundingClientRect().bottom, footerTop: actions.top, inBody: !!element.querySelector('.ui-dialog-body .modal-actions'), overflow: getComputedStyle(body).overflowY };
+    });
+    expect(order.inBody).toBe(false);
+    expect(order.footerTop).toBeGreaterThanOrEqual(order.bodyBottom - 1);
+    expect(['auto', 'scroll']).toContain(order.overflow);
+    // The header close is a second way out; Close in the footer returns focus to the trigger.
+    await expect(dialog.locator('.ui-dialog-header').getByRole('button', { name: 'Close', exact: true })).toBeVisible();
+    await close.click();
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  };
+  for (const size of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size);
+    const roundsButton = page.getByRole('button', { name: 'Work rounds', exact: true });
+    await roundsButton.click();
+    const rounds = page.getByRole('dialog', { name: /^Work rounds · / });
+    await expect(rounds.getByRole('table', { name: 'Rounds' }).or(rounds.getByRole('list', { name: 'Rounds' }))).toBeVisible();
+    await footerClose(rounds, 'Close', roundsButton);
+    // Select the carried finding (from the list pane on narrow screens); Details shows its section.
+    const tabs = page.getByRole('navigation', { name: 'Select view' });
+    if (await tabs.isVisible()) await tabs.getByRole('button', { name: /^Findings/ }).click();
+    const seizure = page.locator('.sidebar [data-list-key^="annotation:"]').filter({ hasText: 'Seizure' });
+    if ((await seizure.getAttribute('aria-pressed')) !== 'true') await seizure.click();
+    else if (await tabs.isVisible()) await tabs.getByRole('button', { name: 'Details', exact: true }).click();
+    const show = page.getByRole('region', { name: 'Carried finding', exact: true }).getByRole('button', { name: 'Show original evidence', exact: true });
+    await show.click();
+    await footerClose(page.getByRole('dialog', { name: 'Original finding from Round 1', exact: true }), 'Close original evidence', show);
+  }
 });
 
 test('Q1 (B2): the problem dialog keeps New report and Close in a fixed footer', async ({ page }) => {

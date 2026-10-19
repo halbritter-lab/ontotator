@@ -1283,6 +1283,9 @@ if __name__ == "__main__":
         )
 
         register_problem_report_scenario_route(app)
+        from browser_carry_fixture import register_carry_forward_scenario_route
+
+        register_carry_forward_scenario_route(app)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:
