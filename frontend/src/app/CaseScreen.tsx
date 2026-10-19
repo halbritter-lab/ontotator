@@ -382,6 +382,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const rootRef = useRef<HTMLDivElement>(null);
+  // Narrow screens: the header and toolbar scroll away above the viewport-high workspace. Choosing
+  // a pane or opening the tree brings the workspace to the top, so the whole pane is in view.
+  // Above 700 px the wrapper has no box (display: contents) and nothing scrolls.
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const revealWorkspace = () => {
+    const workspace = workspaceRef.current;
+    if (workspace && getComputedStyle(workspace).display !== "contents") workspace.scrollIntoView?.({ block: "start" });
+  };
   useEffect(() => {
     if (versionContext?.canBrowseVersions) return;
     if (comparisonIdentity !== null) {
@@ -1657,6 +1665,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const handleShowInTree = () => {
     if (!treeAnnotation || !treeAnnotation.annotation.term_id) return;
     startTreeWalk(treeAnnotation, true);
+    revealWorkspace();
   };
 
   // "Use this term": the same set_term as a search selection, bound to the walk's event.
@@ -2522,11 +2531,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             ? {projectKey:view.key.project_key,documentId:view.document.document_id,scope:JSON.stringify([versionIdentity,display.selection]),setId:refForKey(display.selection,versions.refs)!.id} : undefined} />
       </div> : <>
       {/* Pane tabs and panes; on narrow screens one viewport-high block below the scrolling toolbar. */}
-      <div className="case-workspace">
+      <div ref={workspaceRef} className="case-workspace">
       <nav className="mobile-pane-tabs" aria-label="Select view">
         {([ ["list", carried.openKeys.size > 0 ? `Findings, ${carried.openKeys.size} to check` : "Findings"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
           <button key={pane} type="button" aria-pressed={mobilePane === pane}
-            onClick={() => setMobilePane(pane)}>{label}</button>
+            onClick={() => { setMobilePane(pane); revealWorkspace(); }}>{label}</button>
         ))}
       </nav>
       {/* Main Workspace Layout */}

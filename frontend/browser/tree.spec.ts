@@ -68,6 +68,15 @@ const expectSameBox = (actual: Box, expected: Box) => {
   }
 };
 
+/**
+ * At 700 px and below the header and case toolbar scroll away; the workspace (pane tabs and the
+ * open pane) is then exactly one viewport, at its top, and nothing below it overflows the page.
+ */
+const expectWorkspaceFillsViewport = async (page: Page, size: { width: number; height: number }) => {
+  expectSameBox(await box(page.locator(".case-workspace")), { x: 0, y: 0, ...size });
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBeTruthy();
+};
+
 /** What has the keyboard focus, as something two steps can be compared by. */
 const focused = (page: Page) =>
   page.evaluate(() => {
@@ -801,7 +810,8 @@ test.describe("ontology tree", () => {
     await expect(panel.getByRole("button", { name: "Close tree" })).toBeInViewport({ ratio: 1 });
     await expect(showInTree(page)).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-    expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBeTruthy();
+    // Narrow: header and toolbar scroll away; the workspace (pane tabs and pane) fills the viewport.
+    await expectWorkspaceFillsViewport(page, { width: 600, height: 800 });
 
     // The other panes are whole panes: the tree belongs to "Details" and waits there.
     await treeItem(page, STATUS_EPILEPTICUS).click();
@@ -862,7 +872,8 @@ test.describe("ontology tree", () => {
         expect(tree.height).toBeGreaterThanOrEqual(size.width <= 700 ? Math.min(300, availableHeight * 0.6) - 1 : 300);
         await expect(panel.getByRole("button", { name: "Use this term" })).toBeInViewport({ ratio: 1 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-        expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBeTruthy();
+        if (size.width <= 700) await expectWorkspaceFillsViewport(page, size);
+        else expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBeTruthy();
       });
     }
     expect(opens).toEqual([]);
