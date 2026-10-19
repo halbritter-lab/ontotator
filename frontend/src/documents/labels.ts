@@ -21,7 +21,7 @@ export function statusBadgeText(status: string | null | undefined, decision: Rev
   if (acceptedWithoutReview) return "Accepted without review";
   if (!status) return null;
   if (status === "reviewed" && decision === "rejected") return "Rejected in review";
-  if (status === "reviewed" && decision === "queried") return "Queried";
+  if (status === "reviewed" && decision === "query") return "Queried";
   return labelFor(translationStatusLabels, status);
 }
 

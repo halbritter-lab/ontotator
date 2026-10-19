@@ -16,7 +16,7 @@ describe("documents labels", () => {
   });
   it("status_badge_text", () => {
     expect(statusBadgeText("reviewed", "rejected", false)).toBe("Rejected in review");
-    expect(statusBadgeText("reviewed", "queried", false)).toBe("Queried");
+    expect(statusBadgeText("reviewed", "query", false)).toBe("Queried");
     expect(statusBadgeText("reviewed", "accepted", false)).toBe("Reviewed");
     expect(statusBadgeText("translated", null, true)).toBe("Accepted without review");
     expect(statusBadgeText("automatic_check_failed", null, false)).toBe("Check failed");
