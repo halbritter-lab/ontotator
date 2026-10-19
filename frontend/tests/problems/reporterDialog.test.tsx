@@ -329,3 +329,53 @@ describe("reporter dialog", () => {
     expect(screen.getByRole("dialog").textContent).not.toMatch(/Task 7|ann-0005/);
   });
 });
+
+describe("reporter confirm discard rule", () => {
+  async function openResumeWithText(text: string) {
+    setup({ reports: [report()], assignment: pausedTask() });
+    await screen.findByRole("button", { name: /Task paused/ });
+    fireEvent.click(entry());
+    fireEvent.click(await screen.findByRole("button", { name: "Resume my task…" }));
+    const group = screen.getByRole("group", { name: "Resume Task 4" });
+    const textarea = within(group).getByRole("textbox", { name: /Why can you continue\?/ });
+    fireEvent.change(textarea, { target: { value: text } });
+    return { group, textarea };
+  }
+  const discardQuestion = () => screen.queryByText("Discard your reason? Your text will be lost.");
+
+  it("asks before the footer Close drops typed confirmation text", async () => {
+    const { textarea } = await openResumeWithText("Clarified");
+    fireEvent.click(footer().getByRole("button", { name: "Close" }));
+    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+    expect(discardQuestion()).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Keep writing" }));
+    expect((textarea as HTMLTextAreaElement).value).toBe("Clarified");
+    expect(discardQuestion()).toBeNull();
+  });
+
+  it("asks before New report drops typed confirmation text", async () => {
+    const { textarea } = await openResumeWithText("Clarified");
+    fireEvent.click(footer().getByRole("button", { name: "New report" }));
+    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+    expect(discardQuestion()).toBeTruthy();
+    expect((textarea as HTMLTextAreaElement).value).toBe("Clarified");
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(screen.queryByRole("group", { name: "Resume Task 4" })).toBeNull();
+    fireEvent.click(footer().getByRole("button", { name: "New report" }));
+    expect(screen.getByRole("dialog", { name: "New problem report" })).toBeTruthy();
+  });
+
+  it("asks on Escape in the confirm textarea but discards on the explicit Cancel", async () => {
+    const { group, textarea } = await openResumeWithText("Clarified");
+    fireEvent.keyDown(textarea, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+    expect(discardQuestion()).toBeTruthy();
+    expect((textarea as HTMLTextAreaElement).value).toBe("Clarified");
+    fireEvent.click(screen.getByRole("button", { name: "Keep writing" }));
+    expect(discardQuestion()).toBeNull();
+    fireEvent.click(within(group).getByRole("button", { name: "Cancel" }));
+    expect(discardQuestion()).toBeNull();
+    expect(screen.queryByRole("group", { name: "Resume Task 4" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Problems with Task 4" })).toBeTruthy();
+  });
+});

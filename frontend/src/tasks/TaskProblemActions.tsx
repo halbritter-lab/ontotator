@@ -43,7 +43,7 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }
   const focusTarget = reports?.find(ownPauseActive)?.report_id ?? null;
   const listFocus = { get current() { return (focusTarget && headings.current.get(focusTarget)) || newReport.current; } } as RefObject<HTMLElement>;
 
-  // Escape / header Close: never while a write is busy; an open confirmation with text asks first.
+  // Escape / header and footer Close: never while a write is busy; an open confirmation with text asks first.
   const onListClose = busy ? undefined : () => {
     if (confirm?.reason.trim()) setConfirm({ ...confirm, askDiscard: true });
     else if (confirm) setConfirm(null);
@@ -78,8 +78,12 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }
       }}
       frame={({ body, footer, initialFocus, onClose }) => <Dialog open title="New problem report" size="md" initialFocus={initialFocus} onClose={onClose} footer={footer}>{body}</Dialog>} />}
     {open && view === "list" && <Dialog open title={`Problems with Task ${assignment.id}`} size="md" initialFocus={listFocus} onClose={onListClose} footer={<>
-      <Button ref={newReport} onClick={() => { setConfirm(null); setNotice(null); setView("form"); }}>New report</Button>
-      <Button variant="quiet" aria-disabled={busy || undefined} onClick={() => { if (!busy) close(); }}>Close</Button>
+      <Button ref={newReport} onClick={() => {
+        // Typed confirmation text asks to discard first, like Close and Escape.
+        if (confirm?.reason.trim()) { setConfirm({ ...confirm, askDiscard: true }); return; }
+        setConfirm(null); setNotice(null); setView("form");
+      }}>New report</Button>
+      <Button variant="quiet" aria-disabled={busy || undefined} onClick={() => onListClose?.()}>Close</Button>
     </>}>
       <div className="problem-task-status">
         <p>{`Your task: ${assignment.held ? "Paused" : "Active"}`}</p>
