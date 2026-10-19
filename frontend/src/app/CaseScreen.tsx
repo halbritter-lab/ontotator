@@ -58,6 +58,9 @@ import { SubmitCaseDialog } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
 import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
 import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
+import { fromSubmission } from "../editor/historicalSubmission";
+import { MySubmissions } from "../editor/MySubmissions";
+import { formatTime } from "./submissionLabels";
 import { axisOptionLabel, findingAxes } from "../editor/axisLabels";
 import { StatusBadge } from "../ui/StatusBadge";
 import { defaultedResults, resultSnapshots } from "../editor/decisionSemantics";
@@ -179,6 +182,8 @@ export interface CaseScreenProps {
   roundTitle?: string;
   /** Version of the open text (`WorkRoundView.document_version`), for the carried "What to check" lines. */
   documentVersion?: number | null;
+  /** `WorkRoundView.round_ordinal` of the open round; My submissions names it while it has no submission. */
+  roundOrdinal?: number | null;
 }
 
 const NO_ROUND_INPUTS: readonly import("../api/client").RoundInputView[] = [];
@@ -193,7 +198,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onSubmitted,
   annotatorName,
   leaveGuardRef,
-  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundBadge, roundTitle, documentVersion,
+  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundBadge, roundTitle, documentVersion, roundOrdinal,
 }) => {
   const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, versionContext?.canBrowseVersions, workspaceId, view.key]);
   const [acceptedSubmission, setAcceptedSubmission] = useState<{ identity: string; value: Submission } | null>(null);
@@ -2381,7 +2386,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <span className="case-label">Case: {view.document.document_id}</span>
           )}
           <span
-            title={roundKind === "carry_forward" ? roundTitle : undefined}
+            title={roundTitle}
             className={`badge ${
               view.key.mode === "review"
                 ? "badge-review"
@@ -2707,14 +2712,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </div>
           </div>
 
-          <section className="detail-section submission-history" aria-label="Submission history">
+          {versionContext?.assignmentId !== undefined ? <MySubmissions assignmentId={versionContext.assignmentId} projectKey={view.key.project_key}
+            currentRound={view.key.round_id && roundOrdinal ? { roundId: view.key.round_id, ordinal: roundOrdinal } : undefined}
+            documentId={view.document.document_id} documentText={view.document.text} termLabel={termLabel}
+            reloadKey={submissions.at(-1)?.submission_id} />
+          : <section className="detail-section submission-history" aria-label="Submission history">
             <h3>Submission history</h3>
             {submissions.length === 0 && <p>No previous submissions yet.</p>}
             {submissions.map((submission, index) => <Button type="button" variant="secondary" size="sm"
               key={submission.submission_id} onClick={() => setHistorySubmission(submission)}>
               {submissionHistoryLabel(submission.created_at, index + 1)}
             </Button>)}
-          </section>
+          </section>}
 
         </aside>
 
@@ -2954,10 +2963,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       </>}
       {comparison}
       </div>
-      {originalRoundInput && <RoundInputEvidenceDialog projectKey={view.key.project_key} input={originalRoundInput} onClose={() => setOriginalRoundInput(null)} labelFor={termLabel} />}
-      {historySubmission && <HistoricalSubmissionDialog submission={historySubmission}
-        heading={submissionHistoryLabel(historySubmission.created_at, submissions.findIndex(s => s.submission_id === historySubmission.submission_id) + 1)}
-        documentText={view.document.text} termLabel={termLabel} onClose={() => setHistorySubmission(null)} />}
+      {originalRoundInput && <RoundInputEvidenceDialog projectKey={view.key.project_key} input={originalRoundInput} onClose={() => setOriginalRoundInput(null)} labelFor={termLabel}
+        sourceName={originalRoundInput.source_round_ordinal ? roundName(originalRoundInput.source_round_ordinal) : undefined} />}
+      {historySubmission && <HistoricalSubmissionDialog view={fromSubmission(historySubmission,
+        // Assignment editors name the submission by its round, as My submissions does.
+        versionContext?.assignmentId !== undefined && roundOrdinal ? `Round ${roundOrdinal} · ${formatTime(historySubmission.created_at)}`
+          : submissionHistoryLabel(historySubmission.created_at, submissions.findIndex(s => s.submission_id === historySubmission.submission_id) + 1))}
+        documentText={view.document.text} currentDocumentId={view.document.document_id} projectKey={view.key.project_key}
+        termLabel={termLabel} onClose={() => setHistorySubmission(null)} />}
 
       {completedSubmission && <Dialog open title="Case submitted" heading="✓ Case successfully submitted!">
         <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>

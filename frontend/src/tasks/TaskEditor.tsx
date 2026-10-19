@@ -10,6 +10,7 @@ import { useVersionAccess } from "../variants/useVersionAccess";
 import { TranslationReviewScreen } from "../translation/TranslationReviewScreen";
 import { WorkRoundsDialog } from "./WorkRoundsDialog";
 import { TaskProblemActions } from "./TaskProblemActions";
+import { roundIdentity } from "../editor/rounds/roundLabels";
 
 interface TaskEditorProps {
   assignmentId: number;
@@ -138,6 +139,10 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     language: workspace.view.document.language, updated_at: assignment.updated_at,
     workflow_revision: assignment.workflow_revision, held: assignment.held, hold_reason: assignment.hold_reason,
   };
+  // Toolbar identity (spec section 7): short badge, full identity line as its title.
+  const roundBadge = roundInfo?.kind === "carry_forward" && roundInfo.round_ordinal
+    ? `Round ${roundInfo.round_ordinal} · continued from ${roundInfo.source_round_ordinal ? `Round ${roundInfo.source_round_ordinal}` : "an earlier submission"}` : undefined;
+  const roundTitle = roundInfo ? roundIdentity(roundInfo) : undefined;
   return <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}
     <CaseErrorBoundary key={`${workspace.workspace_id}:${revision}`} onBackToDashboard={back} backLabel="Back to my tasks" onReload={() => { void load(); }}>
@@ -146,7 +151,8 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         <TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
           setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
         }} /></>}
-      roundInputs={roundInputs} roundKind={roundInfo?.kind}
+      roundInputs={roundInputs} roundKind={roundInfo?.kind} roundBadge={roundBadge} roundTitle={roundTitle}
+      roundOrdinal={roundInfo?.round_ordinal} documentVersion={roundInfo?.document_version}
       held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
       versionContext={{ username: user.username, assignmentId, onNavigate, canBrowseVersions: versionAccess.allowed }}
       readOnly={workspace.read_only} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef}
@@ -157,7 +163,8 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         void loadTasks();
       }} />
   </CaseErrorBoundary>
-  {roundDialogOpen && <WorkRoundsDialog assignment={assignment} onClose={() => setRoundDialogOpen(false)} onOpen={openRound}
+  {roundDialogOpen && <WorkRoundsDialog assignment={assignment} currentRoundId={workspace.view.key.round_id ?? undefined}
+    documentLabel={{ textId: assignment.document_id, language: roundInfo?.document_language ?? workspace.view.document.language }} onClose={() => setRoundDialogOpen(false)} onOpen={openRound}
     onReload={() => { setRoundDialogOpen(false); void load(); }} onCreate={async request => {
       if (routeLeaveRef.current && !await routeLeaveRef.current()) return;
       const created = await api.startWorkRound(assignmentId, request);
