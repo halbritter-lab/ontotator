@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 from ontocurator import settings
 from ontocurator.api.admin_routes import router as admin_router
 from ontocurator.api.auth_routes import router as auth_router
+from ontocurator.api.document_row_routes import router as document_row_router
 from ontocurator.api.final_result_routes import router as final_result_router
 from ontocurator.api.health import ReadinessProbe
 from ontocurator.api.health import router as health_router
@@ -444,6 +445,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(admin_router)
     app.include_router(ontology_router)
     app.include_router(final_result_router)
+    app.include_router(document_row_router)
     app.include_router(translation_workflow_router)
     app.include_router(project_router)
     app.include_router(job_router)

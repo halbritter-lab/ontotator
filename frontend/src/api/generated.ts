@@ -674,6 +674,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/document-rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document Rows
+         * @description Documents rows grouped by text, with the decision bar (leads only).
+         */
+        get: operations["document_rows_api_v1_projects__key__document_rows_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/document-rows/{case_id}/{language}/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Row Submissions
+         * @description All submissions, rounds and open translation reviews of one row.
+         */
+        get: operations["row_submissions_api_v1_projects__key__document_rows__case_id___language__submissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/documents/{doc}/translation-correction-assignment": {
         parameters: {
             query?: never;
@@ -1856,6 +1896,16 @@ export interface components {
             /** Files[] */
             "files[]": string[];
         };
+        /** BulkTargetView */
+        BulkTargetView: {
+            /** Document Id */
+            document_id: string | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "checkbox" | "choose_in_versions";
+        };
         /** CaseDetail */
         CaseDetail: {
             /** Case Id */
@@ -1986,6 +2036,26 @@ export interface components {
             /** Csrf Token */
             csrf_token: string;
         };
+        /**
+         * DecisionBarView
+         * @description Rows per category; hyphenated categories map to underscore fields.
+         */
+        DecisionBarView: {
+            /** Total */
+            total: number;
+            /** Report Or Pause */
+            report_or_pause: number;
+            /** Confirm Final */
+            confirm_final: number;
+            /** Translation */
+            translation: number;
+            /** Missing Final */
+            missing_final: number;
+            /** No Final */
+            no_final: number;
+            /** Shown */
+            shown: number;
+        };
         /** DistributionContextView */
         DistributionContextView: {
             /** Document Ids */
@@ -2015,6 +2085,110 @@ export interface components {
             language: string;
             /** Text Sha256 */
             text_sha256: string;
+        };
+        /** DocumentGroupView */
+        DocumentGroupView: {
+            /** Case Id */
+            case_id: string;
+            /** Rows */
+            rows: components["schemas"]["DocumentRowView"][];
+            /** Language Count */
+            language_count: number;
+            /** Final Count */
+            final_count: number;
+            /** Issue Count */
+            issue_count: number;
+            /** Note Count */
+            note_count: number;
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Has Issue */
+            has_issue: boolean;
+        };
+        /** DocumentRowView */
+        DocumentRowView: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Is Source */
+            is_source: boolean;
+            /** Position */
+            position: number | null;
+            /** Versions */
+            versions: components["schemas"]["DocumentVersionView"][];
+            /** Parallel Roots */
+            parallel_roots: boolean;
+            /** Work */
+            work: components["schemas"]["WorkItemView"][];
+            final: components["schemas"]["FinalSelectionSummary"] | null;
+            /** Issues */
+            issues: components["schemas"]["RowItemView"][];
+            /** Notes */
+            notes: components["schemas"]["RowItemView"][];
+            missing_final: components["schemas"]["MissingFinalView"];
+            /** Categories */
+            categories: ("report-or-pause" | "confirm-final" | "translation" | "missing-final")[];
+            bulk: components["schemas"]["BulkTargetView"];
+            open: components["schemas"]["OpenTargetView"];
+            /** Own Open Assignment Id */
+            own_open_assignment_id: number | null;
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Pinned */
+            pinned: boolean;
+            /** Retained */
+            retained: boolean;
+            /** Matches Decision */
+            matches_decision: boolean;
+        };
+        /** DocumentRowsPage */
+        DocumentRowsPage: {
+            /** Groups */
+            groups: components["schemas"]["DocumentGroupView"][];
+            /** Page */
+            page: number;
+            /** Page Count */
+            page_count: number;
+            /** Group Count */
+            group_count: number;
+            bar: components["schemas"]["DecisionBarView"];
+            /** Case Found */
+            case_found: boolean;
+            /** Adjudicator Not Annotator */
+            adjudicator_not_annotator: boolean;
+        };
+        /** DocumentVersionView */
+        DocumentVersionView: {
+            /** Document Id */
+            document_id: string;
+            /** External Id */
+            external_id: string;
+            /** Version */
+            version: number;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "native" | "machine_translation" | "human_translation" | "correction";
+            /** Derived From */
+            derived_from: string | null;
+            /** Chain Id */
+            chain_id: string;
+            /** Chain Name */
+            chain_name: string;
+            /** Translation Status */
+            translation_status: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
+            /** Accepted Without Review */
+            accepted_without_review: boolean;
+            /** Latest Review Decision */
+            latest_review_decision: string | null;
+            /** Is Newest In Chain */
+            is_newest_in_chain: boolean;
+            /** Matches Filter */
+            matches_filter: boolean;
+            /** Last Activity At */
+            last_activity_at: string | null;
         };
         /**
          * Draft
@@ -2191,6 +2365,43 @@ export interface components {
             /** Acknowledged Cause Ids */
             acknowledged_cause_ids?: string[];
         };
+        /** FinalSelectionSummary */
+        FinalSelectionSummary: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Document Id */
+            document_id: string;
+            /** Submission Id */
+            submission_id: string;
+            /** Revision */
+            revision: number;
+            /** Selected At */
+            selected_at: string | null;
+            /** Updated At */
+            updated_at: string | null;
+            /** Selected By */
+            selected_by: string | null;
+            /** Kind */
+            kind: ("consolidation" | "carry_forward" | "annotation" | "review") | null;
+            /** Round Ordinal */
+            round_ordinal: number | null;
+            /** Author Label */
+            author_label: string | null;
+            /** Is Mine */
+            is_mine: boolean;
+            /** Version */
+            version: number | null;
+            /** Chain Name */
+            chain_name: string | null;
+            /** Recorded At */
+            recorded_at: string | null;
+            /** Is Newest Of Chain */
+            is_newest_of_chain: boolean;
+            /** Adjudicator Not Annotator */
+            adjudicator_not_annotator: boolean | null;
+        };
         /** FinalSelectionView */
         FinalSelectionView: {
             /** Case Id */
@@ -2203,6 +2414,14 @@ export interface components {
             submission_id: string;
             /** Revision */
             revision: number;
+            /** Selected At */
+            selected_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Selected By */
+            selected_by?: string | null;
+            /** Adjudicator Not Annotator */
+            adjudicator_not_annotator?: boolean | null;
         };
         /** FinalWarning */
         FinalWarning: {
@@ -2220,6 +2439,10 @@ export interface components {
             language: string;
             /** Document Id */
             document_id?: string | null;
+            /** Report Id */
+            report_id?: string | null;
+            /** Assignment Id */
+            assignment_id?: number | null;
             /** Reason */
             reason: string;
             /** Destination */
@@ -2477,6 +2700,13 @@ export interface components {
              */
             revoke_assignments: boolean;
         };
+        /** MissingFinalView */
+        MissingFinalView: {
+            /** Counts */
+            counts: boolean;
+            /** Reason */
+            reason: ("no_submission" | "work_open") | null;
+        };
         /**
          * MultilingualSearchPreferences
          * @description Personal defaults; temporary editor switches never change these.
@@ -2584,6 +2814,33 @@ export interface components {
              */
             status: "added" | "already_present";
             ontology: components["schemas"]["AdminOntology"];
+        };
+        /** OpenTargetView */
+        OpenTargetView: {
+            /** Document Id */
+            document_id: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "final" | "newest" | "most_recent_root";
+            /** Label */
+            label: string | null;
+        };
+        /** OpenTranslationReviewView */
+        OpenTranslationReviewView: {
+            /** Assignment Id */
+            assignment_id: number;
+            /** Document Id */
+            document_id: string;
+            /** Version */
+            version: number;
+            /** Chain Name */
+            chain_name: string | null;
+            /** Reviewer Label */
+            reviewer_label: string;
+            /** Is Me */
+            is_me: boolean;
         };
         /**
          * OpenWorkspaceRequest
@@ -2801,7 +3058,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "resume" | "resolve" | "extend_hold" | "restart";
+            action: "resume" | "resolve" | "extend_hold" | "restart" | "withdraw" | "reopen";
             /** Reason */
             reason: string;
             /** Assignment Ids */
@@ -2842,7 +3099,7 @@ export interface components {
              * State
              * @enum {string}
              */
-            state: "open" | "resolved";
+            state: "open" | "resolved" | "withdrawn";
             /** Revision */
             revision: number;
             /** Resolution */
@@ -3358,6 +3615,25 @@ export interface components {
             /** Code */
             code: string;
         };
+        /** ReportIssueView */
+        ReportIssueView: {
+            /** Report Id */
+            report_id: string;
+            /** Excerpt */
+            excerpt: string;
+            /** Reporter Label */
+            reporter_label: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Task State
+             * @enum {string}
+             */
+            task_state: "paused" | "resumed";
+        };
         /** ResolveSourceObligationRequest */
         ResolveSourceObligationRequest: {
             /** Expected Revision */
@@ -3480,6 +3756,16 @@ export interface components {
              * @enum {string}
              */
             mapping_status: "carried" | "needs_review";
+            /** Review Reason */
+            review_reason?: string | null;
+            /** Source Round Ordinal */
+            source_round_ordinal?: number | null;
+            /** Source Recorded At */
+            source_recorded_at?: string | null;
+            /** Source Language */
+            source_language?: string | null;
+            /** Source Version */
+            source_version?: number | null;
         };
         /** RoundSourceView */
         RoundSourceView: {
@@ -3495,6 +3781,120 @@ export interface components {
             created_at: string;
             /** Round Id */
             round_id?: string | null;
+            /** Round Ordinal */
+            round_ordinal?: number | null;
+            /** Recorded At */
+            recorded_at?: string | null;
+            /**
+             * Finding Count
+             * @default 0
+             */
+            finding_count: number;
+        };
+        /** RowItemView */
+        RowItemView: {
+            /** Code */
+            code: string;
+            /** Cause Id */
+            cause_id: string;
+            /** Cause Revision */
+            cause_revision: number;
+            /** Document Id */
+            document_id: string | null;
+            /** Category */
+            category: ("report-or-pause" | "confirm-final" | "translation" | "missing-final") | null;
+            /** Version */
+            version: number | null;
+            /** Review Decision */
+            review_decision: string | null;
+            report: components["schemas"]["ReportIssueView"] | null;
+            /** Report Id */
+            report_id: string | null;
+            /** Assignment Id */
+            assignment_id: number | null;
+            /** Author Label */
+            author_label: string | null;
+        };
+        /** RowRoundView */
+        RowRoundView: {
+            /** Round Id */
+            round_id: string;
+            /** Assignment Id */
+            assignment_id: number;
+            /** Predecessor Round Id */
+            predecessor_round_id: string | null;
+            /** Document Id */
+            document_id: string;
+            /** Version */
+            version: number;
+            /** Chain Name */
+            chain_name: string | null;
+            /** Kind */
+            kind: string;
+            /** Mode */
+            mode: string;
+            /** State */
+            state: string;
+            /** Author Label */
+            author_label: string;
+            /** Is Me */
+            is_me: boolean;
+            /** Round Ordinal */
+            round_ordinal: number | null;
+            /** Submitted */
+            submitted: boolean;
+        };
+        /** RowSubmissionView */
+        RowSubmissionView: {
+            /** Submission Id */
+            submission_id: string;
+            /** Document Id */
+            document_id: string;
+            /** Version */
+            version: number;
+            /** Chain Name */
+            chain_name: string | null;
+            /** Author Label */
+            author_label: string;
+            /** Is Me */
+            is_me: boolean;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "consolidation" | "carry_forward" | "annotation" | "review";
+            /** Round Id */
+            round_id: string | null;
+            /** Round Ordinal */
+            round_ordinal: number | null;
+            /** Round State */
+            round_state: string | null;
+            /** Is Latest In Round */
+            is_latest_in_round: boolean | null;
+            /** Finding Count */
+            finding_count: number;
+        };
+        /** RowSubmissions */
+        RowSubmissions: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Adjudicator Not Annotator */
+            adjudicator_not_annotator: boolean;
+            /** Submissions */
+            submissions: components["schemas"]["RowSubmissionView"][];
+            /** Rounds */
+            rounds: components["schemas"]["RowRoundView"][];
+            /** Open Translation Reviews */
+            open_translation_reviews: components["schemas"]["OpenTranslationReviewView"][];
         };
         /**
          * RuleViolation
@@ -4291,7 +4691,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "own" | "proposals" | "stage_result" | "release";
+            kind: "own" | "proposals" | "stage_result" | "release" | "submission";
             /** Id */
             id: string;
             /** Label */
@@ -4328,6 +4728,35 @@ export interface components {
             old_text: string;
             /** New Text */
             new_text: string;
+        };
+        /** WorkItemView */
+        WorkItemView: {
+            /** Assignment Id */
+            assignment_id: number;
+            /** Document Id */
+            document_id: string;
+            /** Version */
+            version: number;
+            /** Author Label */
+            author_label: string;
+            /** Is Me */
+            is_me: boolean;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review" | "translation_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "in_progress" | "submitted" | "reopened";
+            /** Held */
+            held: boolean;
+            /** Round Ordinal */
+            round_ordinal: number | null;
+            /** Round State */
+            round_state: string | null;
         };
         /** WorkRoundView */
         WorkRoundView: {
@@ -4366,6 +4795,30 @@ export interface components {
             workspace_key?: components["schemas"]["WorkspaceKey"] | null;
             /** Active */
             active: boolean;
+            /** Round Ordinal */
+            round_ordinal?: number | null;
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Submission Count
+             * @default 0
+             */
+            submission_count: number;
+            /** Latest Submission Recorded At */
+            latest_submission_recorded_at?: string | null;
+            /**
+             * Input Count
+             * @default 0
+             */
+            input_count: number;
+            /** Source Round Ordinal */
+            source_round_ordinal?: number | null;
+            /** Source Submission Recorded At */
+            source_submission_recorded_at?: string | null;
+            /** Document Language */
+            document_language?: string | null;
+            /** Document Version */
+            document_version?: number | null;
         };
         /**
          * WorkspaceKey
@@ -5861,6 +6314,81 @@ export interface operations {
                     "application/json": {
                         [key: string]: number;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    document_rows_api_v1_projects__key__document_rows_get: {
+        parameters: {
+            query?: {
+                language?: string | null;
+                status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
+                q?: string | null;
+                origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
+                translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
+                decision?: ("all" | "report-or-pause" | "confirm-final" | "translation" | "missing-final") | null;
+                final?: "missing" | null;
+                case?: string | null;
+                page?: number;
+                retain?: string[] | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRowsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    row_submissions_api_v1_projects__key__document_rows__case_id___language__submissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                case_id: string;
+                language: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RowSubmissions"];
                 };
             };
             /** @description Validation Error */

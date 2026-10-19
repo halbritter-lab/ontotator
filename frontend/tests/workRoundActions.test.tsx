@@ -9,8 +9,8 @@ import { assigned, workspaceFixture } from "./assignments";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const assignment = { ...assigned(workspaceFixture()).assignment, workflow_revision: 3 };
-const source = { submission_id: "exact-source", document_id: "old-document", language: "en", version: 1, created_at: "2026-10-18T12:00:00Z", round_id: null };
-const round: WorkRoundView = { round_id: "round-exact", project_key: "pkg", assignment_id: 1, document_id: "doc", annotator_id: "alice", kind: "carry_forward", mode: "independent", state: "submitted", workflow_revision: 3, input_manifest_sha256: "manifest", input_submission_ids: ["exact-source"], active: true };
+const source = { submission_id: "exact-source", document_id: "old-document", language: "en", version: 1, created_at: "2026-10-18T12:00:00Z", round_id: null, finding_count: 0 };
+const round: WorkRoundView = { round_id: "round-exact", project_key: "pkg", assignment_id: 1, document_id: "doc", annotator_id: "alice", kind: "carry_forward", mode: "independent", state: "submitted", workflow_revision: 3, input_manifest_sha256: "manifest", input_submission_ids: ["exact-source"], active: true, submission_count: 1, input_count: 1 };
 
 it("starts carry-forward from one deliberately selected immutable own submission", async () => {
   const create = vi.fn().mockResolvedValue(undefined);

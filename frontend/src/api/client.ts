@@ -28,6 +28,19 @@ export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
 export type FinalPreflight = components["schemas"]["FinalPreflight"];
 export type FinalSelectionView = components["schemas"]["FinalSelectionView"];
 export type FinalExportRequest = components["schemas"]["FinalExportRequest"];
+export type DocumentRowsPage = components["schemas"]["DocumentRowsPage"];
+export type DocumentRowView = components["schemas"]["DocumentRowView"];
+export type DocumentGroupView = components["schemas"]["DocumentGroupView"];
+export type DocumentVersionView = components["schemas"]["DocumentVersionView"];
+export type DecisionBarView = components["schemas"]["DecisionBarView"];
+export type RowItemView = components["schemas"]["RowItemView"];
+export type FinalSelectionSummary = components["schemas"]["FinalSelectionSummary"];
+export type RowSubmissions = components["schemas"]["RowSubmissions"];
+export type RowSubmissionView = components["schemas"]["RowSubmissionView"];
+export type RowRoundView = components["schemas"]["RowRoundView"];
+export type OpenTranslationReviewView = components["schemas"]["OpenTranslationReviewView"];
+/** Filters of the Documents read API; `retain` keys are "{case_id}:{language}". */
+export type DocumentRowsQuery = Omit<NonNullable<operations["document_rows_api_v1_projects__key__document_rows_get"]["parameters"]["query"]>, "retain"> & { retain?: readonly string[] };
 export type SubmissionHistorySummary = components['schemas']['SubmissionHistorySummary'];
 export type SubmissionHistoryDetail = components['schemas']['SubmissionHistoryDetail'];
 export type OpenWorkspaceRequest = components["schemas"]["OpenWorkspaceRequest"];
@@ -247,6 +260,21 @@ export class ApiClient {
     const query = new URLSearchParams();
     for (const [name, value] of Object.entries(filters)) if (value) query.set(name, value);
     return this.request<ProjectDocumentSummary[]>(`/api/v1/projects/${encodeURIComponent(key)}/documents${query.size ? `?${query}` : ""}`, { method: "GET" });
+  }
+
+  /** Lead-only Documents rows; empty filters are omitted, `retain` repeats. */
+  async listDocumentRows(key: string, filters: DocumentRowsQuery = {}): Promise<DocumentRowsPage> {
+    const query = new URLSearchParams();
+    for (const [name, value] of Object.entries(filters)) {
+      if (name === "retain") continue;
+      if (value !== undefined && value !== null && value !== "") query.set(name, String(value));
+    }
+    for (const item of filters.retain ?? []) query.append("retain", item);
+    return this.request<DocumentRowsPage>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows${query.size ? `?${query}` : ""}`, { method: "GET" });
+  }
+
+  async getRowSubmissions(key: string, caseId: string, language: string): Promise<RowSubmissions> {
+    return this.request<RowSubmissions>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/${encodeURIComponent(caseId)}/${encodeURIComponent(language)}/submissions`, { method: "GET" });
   }
 
 

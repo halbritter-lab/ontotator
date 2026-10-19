@@ -2212,6 +2212,302 @@
         }
       }
     },
+    "/api/v1/projects/{key}/document-rows": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Document Rows",
+        "description": "Documents rows grouped by text, with the decision bar (leads only).",
+        "operationId": "document_rows_api_v1_projects__key__document_rows_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "unassigned",
+                    "open",
+                    "in_progress",
+                    "submitted",
+                    "reopened",
+                    "held"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "native",
+                    "machine_translation",
+                    "human_translation",
+                    "correction"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "translation_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "translated",
+                    "automatic_check_failed",
+                    "ready_for_review",
+                    "reviewed",
+                    "accepted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "const": "accepted_without_review",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Translation Status"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "all",
+                    "report-or-pause",
+                    "confirm-final",
+                    "translation",
+                    "missing-final"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Decision"
+            }
+          },
+          {
+            "name": "final",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "missing",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Final"
+            }
+          },
+          {
+            "name": "case",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Case"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "retain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Retain"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRowsPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/document-rows/{case_id}/{language}/submissions": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Row Submissions",
+        "description": "All submissions, rounds and open translation reviews of one row.",
+        "operationId": "row_submissions_api_v1_projects__key__document_rows__case_id___language__submissions_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "language",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RowSubmissions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/documents/{doc}/translation-correction-assignment": {
       "post": {
         "tags": [
@@ -5295,6 +5591,36 @@
         ],
         "title": "Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post"
       },
+      "BulkTargetView": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "checkbox",
+              "choose_in_versions"
+            ],
+            "title": "Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "mode"
+        ],
+        "title": "BulkTargetView"
+      },
       "CaseDetail": {
         "properties": {
           "case_id": {
@@ -5648,6 +5974,51 @@
         "title": "CurrentUser",
         "description": "The logged-in user, as the editor shows it (index Q10)."
       },
+      "DecisionBarView": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "report_or_pause": {
+            "type": "integer",
+            "title": "Report Or Pause"
+          },
+          "confirm_final": {
+            "type": "integer",
+            "title": "Confirm Final"
+          },
+          "translation": {
+            "type": "integer",
+            "title": "Translation"
+          },
+          "missing_final": {
+            "type": "integer",
+            "title": "Missing Final"
+          },
+          "no_final": {
+            "type": "integer",
+            "title": "No Final"
+          },
+          "shown": {
+            "type": "integer",
+            "title": "Shown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "report_or_pause",
+          "confirm_final",
+          "translation",
+          "missing_final",
+          "no_final",
+          "shown"
+        ],
+        "title": "DecisionBarView",
+        "description": "Rows per category; hyphenated categories map to underscore fields."
+      },
       "DistributionContextView": {
         "properties": {
           "document_ids": {
@@ -5722,6 +6093,378 @@
         ],
         "title": "Document",
         "description": "Immutable document containing original text and UTF-8 byte SHA-256."
+      },
+      "DocumentGroupView": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRowView"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "language_count": {
+            "type": "integer",
+            "title": "Language Count"
+          },
+          "final_count": {
+            "type": "integer",
+            "title": "Final Count"
+          },
+          "issue_count": {
+            "type": "integer",
+            "title": "Issue Count"
+          },
+          "note_count": {
+            "type": "integer",
+            "title": "Note Count"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "has_issue": {
+            "type": "boolean",
+            "title": "Has Issue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "rows",
+          "language_count",
+          "final_count",
+          "issue_count",
+          "note_count",
+          "last_activity_at",
+          "has_issue"
+        ],
+        "title": "DocumentGroupView"
+      },
+      "DocumentRowView": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "is_source": {
+            "type": "boolean",
+            "title": "Is Source"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentVersionView"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "parallel_roots": {
+            "type": "boolean",
+            "title": "Parallel Roots"
+          },
+          "work": {
+            "items": {
+              "$ref": "#/components/schemas/WorkItemView"
+            },
+            "type": "array",
+            "title": "Work"
+          },
+          "final": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinalSelectionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/RowItemView"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/RowItemView"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "missing_final": {
+            "$ref": "#/components/schemas/MissingFinalView"
+          },
+          "categories": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "report-or-pause",
+                "confirm-final",
+                "translation",
+                "missing-final"
+              ]
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "bulk": {
+            "$ref": "#/components/schemas/BulkTargetView"
+          },
+          "open": {
+            "$ref": "#/components/schemas/OpenTargetView"
+          },
+          "own_open_assignment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Open Assignment Id"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned"
+          },
+          "retained": {
+            "type": "boolean",
+            "title": "Retained"
+          },
+          "matches_decision": {
+            "type": "boolean",
+            "title": "Matches Decision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "is_source",
+          "position",
+          "versions",
+          "parallel_roots",
+          "work",
+          "final",
+          "issues",
+          "notes",
+          "missing_final",
+          "categories",
+          "bulk",
+          "open",
+          "own_open_assignment_id",
+          "last_activity_at",
+          "pinned",
+          "retained",
+          "matches_decision"
+        ],
+        "title": "DocumentRowView"
+      },
+      "DocumentRowsPage": {
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentGroupView"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_count": {
+            "type": "integer",
+            "title": "Page Count"
+          },
+          "group_count": {
+            "type": "integer",
+            "title": "Group Count"
+          },
+          "bar": {
+            "$ref": "#/components/schemas/DecisionBarView"
+          },
+          "case_found": {
+            "type": "boolean",
+            "title": "Case Found"
+          },
+          "adjudicator_not_annotator": {
+            "type": "boolean",
+            "title": "Adjudicator Not Annotator"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "groups",
+          "page",
+          "page_count",
+          "group_count",
+          "bar",
+          "case_found",
+          "adjudicator_not_annotator"
+        ],
+        "title": "DocumentRowsPage"
+      },
+      "DocumentVersionView": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "native",
+              "machine_translation",
+              "human_translation",
+              "correction"
+            ],
+            "title": "Origin"
+          },
+          "derived_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived From"
+          },
+          "chain_id": {
+            "type": "string",
+            "title": "Chain Id"
+          },
+          "chain_name": {
+            "type": "string",
+            "title": "Chain Name"
+          },
+          "translation_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translated",
+                  "automatic_check_failed",
+                  "ready_for_review",
+                  "reviewed",
+                  "accepted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Status"
+          },
+          "accepted_without_review": {
+            "type": "boolean",
+            "title": "Accepted Without Review"
+          },
+          "latest_review_decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Review Decision"
+          },
+          "is_newest_in_chain": {
+            "type": "boolean",
+            "title": "Is Newest In Chain"
+          },
+          "matches_filter": {
+            "type": "boolean",
+            "title": "Matches Filter"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "external_id",
+          "version",
+          "origin",
+          "derived_from",
+          "chain_id",
+          "chain_name",
+          "translation_status",
+          "accepted_without_review",
+          "latest_review_decision",
+          "is_newest_in_chain",
+          "matches_filter",
+          "last_activity_at"
+        ],
+        "title": "DocumentVersionView"
       },
       "Draft": {
         "properties": {
@@ -6195,6 +6938,179 @@
         ],
         "title": "FinalSelectionRequest"
       },
+      "FinalSelectionSummary": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "selected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "selected_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected By"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "consolidation",
+                  "carry_forward",
+                  "annotation",
+                  "review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "author_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Label"
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "chain_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Name"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          },
+          "is_newest_of_chain": {
+            "type": "boolean",
+            "title": "Is Newest Of Chain"
+          },
+          "adjudicator_not_annotator": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjudicator Not Annotator"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "document_id",
+          "submission_id",
+          "revision",
+          "selected_at",
+          "updated_at",
+          "selected_by",
+          "kind",
+          "round_ordinal",
+          "author_label",
+          "is_mine",
+          "version",
+          "chain_name",
+          "recorded_at",
+          "is_newest_of_chain",
+          "adjudicator_not_annotator"
+        ],
+        "title": "FinalSelectionSummary"
+      },
       "FinalSelectionView": {
         "properties": {
           "case_id": {
@@ -6216,6 +7132,52 @@
           "revision": {
             "type": "integer",
             "title": "Revision"
+          },
+          "selected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "selected_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected By"
+          },
+          "adjudicator_not_annotator": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjudicator Not Annotator"
           }
         },
         "type": "object",
@@ -6271,6 +7233,28 @@
               }
             ],
             "title": "Document Id"
+          },
+          "report_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Id"
+          },
+          "assignment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
           },
           "reason": {
             "type": "string",
@@ -6783,6 +7767,36 @@
         ],
         "title": "MemberChange"
       },
+      "MissingFinalView": {
+        "properties": {
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_submission",
+                  "work_open"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "counts",
+          "reason"
+        ],
+        "title": "MissingFinalView"
+      },
       "MultilingualSearchPreferences": {
         "properties": {
           "enabled": {
@@ -7028,6 +8042,88 @@
           "ontology"
         ],
         "title": "OntologyUploadResult"
+      },
+      "OpenTargetView": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "final",
+              "newest",
+              "most_recent_root"
+            ],
+            "title": "Reason"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "reason",
+          "label"
+        ],
+        "title": "OpenTargetView"
+      },
+      "OpenTranslationReviewView": {
+        "properties": {
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "chain_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Name"
+          },
+          "reviewer_label": {
+            "type": "string",
+            "title": "Reviewer Label"
+          },
+          "is_me": {
+            "type": "boolean",
+            "title": "Is Me"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "document_id",
+          "version",
+          "chain_name",
+          "reviewer_label",
+          "is_me"
+        ],
+        "title": "OpenTranslationReviewView"
       },
       "OpenWorkspaceRequest": {
         "properties": {
@@ -7642,7 +8738,9 @@
               "resume",
               "resolve",
               "extend_hold",
-              "restart"
+              "restart",
+              "withdraw",
+              "reopen"
             ],
             "title": "Action"
           },
@@ -7771,7 +8869,8 @@
             "type": "string",
             "enum": [
               "open",
-              "resolved"
+              "resolved",
+              "withdrawn"
             ],
             "title": "State"
           },
@@ -9115,6 +10214,45 @@
         ],
         "title": "RefusedAssignment"
       },
+      "ReportIssueView": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          },
+          "excerpt": {
+            "type": "string",
+            "title": "Excerpt"
+          },
+          "reporter_label": {
+            "type": "string",
+            "title": "Reporter Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "task_state": {
+            "type": "string",
+            "enum": [
+              "paused",
+              "resumed"
+            ],
+            "title": "Task State"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "report_id",
+          "excerpt",
+          "reporter_label",
+          "created_at",
+          "task_state"
+        ],
+        "title": "ReportIssueView"
+      },
       "ResolveSourceObligationRequest": {
         "properties": {
           "expected_revision": {
@@ -9467,6 +10605,62 @@
               "needs_review"
             ],
             "title": "Mapping Status"
+          },
+          "review_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Reason"
+          },
+          "source_round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Round Ordinal"
+          },
+          "source_recorded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Recorded At"
+          },
+          "source_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Language"
+          },
+          "source_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Version"
           }
         },
         "additionalProperties": false,
@@ -9513,6 +10707,34 @@
               }
             ],
             "title": "Round Id"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          },
+          "finding_count": {
+            "type": "integer",
+            "title": "Finding Count",
+            "default": 0
           }
         },
         "type": "object",
@@ -9524,6 +10746,395 @@
           "created_at"
         ],
         "title": "RoundSourceView"
+      },
+      "RowItemView": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "cause_id": {
+            "type": "string",
+            "title": "Cause Id"
+          },
+          "cause_revision": {
+            "type": "integer",
+            "title": "Cause Revision"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "report-or-pause",
+                  "confirm-final",
+                  "translation",
+                  "missing-final"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "review_decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Decision"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportIssueView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Id"
+          },
+          "assignment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
+          },
+          "author_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "cause_id",
+          "cause_revision",
+          "document_id",
+          "category",
+          "version",
+          "review_decision",
+          "report",
+          "report_id",
+          "assignment_id",
+          "author_label"
+        ],
+        "title": "RowItemView"
+      },
+      "RowRoundView": {
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "title": "Round Id"
+          },
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "predecessor_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor Round Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "chain_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "author_label": {
+            "type": "string",
+            "title": "Author Label"
+          },
+          "is_me": {
+            "type": "boolean",
+            "title": "Is Me"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "submitted": {
+            "type": "boolean",
+            "title": "Submitted"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "round_id",
+          "assignment_id",
+          "predecessor_round_id",
+          "document_id",
+          "version",
+          "chain_name",
+          "kind",
+          "mode",
+          "state",
+          "author_label",
+          "is_me",
+          "round_ordinal",
+          "submitted"
+        ],
+        "title": "RowRoundView"
+      },
+      "RowSubmissionView": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "chain_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Name"
+          },
+          "author_label": {
+            "type": "string",
+            "title": "Author Label"
+          },
+          "is_me": {
+            "type": "boolean",
+            "title": "Is Me"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recorded At"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "consolidation",
+              "carry_forward",
+              "annotation",
+              "review"
+            ],
+            "title": "Kind"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "round_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round State"
+          },
+          "is_latest_in_round": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Latest In Round"
+          },
+          "finding_count": {
+            "type": "integer",
+            "title": "Finding Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "submission_id",
+          "document_id",
+          "version",
+          "chain_name",
+          "author_label",
+          "is_me",
+          "recorded_at",
+          "mode",
+          "kind",
+          "round_id",
+          "round_ordinal",
+          "round_state",
+          "is_latest_in_round",
+          "finding_count"
+        ],
+        "title": "RowSubmissionView"
+      },
+      "RowSubmissions": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "adjudicator_not_annotator": {
+            "type": "boolean",
+            "title": "Adjudicator Not Annotator"
+          },
+          "submissions": {
+            "items": {
+              "$ref": "#/components/schemas/RowSubmissionView"
+            },
+            "type": "array",
+            "title": "Submissions"
+          },
+          "rounds": {
+            "items": {
+              "$ref": "#/components/schemas/RowRoundView"
+            },
+            "type": "array",
+            "title": "Rounds"
+          },
+          "open_translation_reviews": {
+            "items": {
+              "$ref": "#/components/schemas/OpenTranslationReviewView"
+            },
+            "type": "array",
+            "title": "Open Translation Reviews"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "adjudicator_not_annotator",
+          "submissions",
+          "rounds",
+          "open_translation_reviews"
+        ],
+        "title": "RowSubmissions"
       },
       "RuleViolation": {
         "properties": {
@@ -11708,7 +13319,8 @@
               "own",
               "proposals",
               "stage_result",
-              "release"
+              "release",
+              "submission"
             ],
             "title": "Kind"
           },
@@ -11808,6 +13420,90 @@
           "new_text"
         ],
         "title": "WindowOpcodeView"
+      },
+      "WorkItemView": {
+        "properties": {
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "author_label": {
+            "type": "string",
+            "title": "Author Label"
+          },
+          "is_me": {
+            "type": "boolean",
+            "title": "Is Me"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review",
+              "translation_review"
+            ],
+            "title": "Task"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "in_progress",
+              "submitted",
+              "reopened"
+            ],
+            "title": "Status"
+          },
+          "held": {
+            "type": "boolean",
+            "title": "Held"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "round_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round State"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "document_id",
+          "version",
+          "author_label",
+          "is_me",
+          "task",
+          "status",
+          "held",
+          "round_ordinal",
+          "round_state"
+        ],
+        "title": "WorkItemView"
       },
       "WorkRoundView": {
         "properties": {
@@ -11917,6 +13613,96 @@
           "active": {
             "type": "boolean",
             "title": "Active"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "submission_count": {
+            "type": "integer",
+            "title": "Submission Count",
+            "default": 0
+          },
+          "latest_submission_recorded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Submission Recorded At"
+          },
+          "input_count": {
+            "type": "integer",
+            "title": "Input Count",
+            "default": 0
+          },
+          "source_round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Round Ordinal"
+          },
+          "source_submission_recorded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Submission Recorded At"
+          },
+          "document_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Language"
+          },
+          "document_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Version"
           }
         },
         "additionalProperties": false,

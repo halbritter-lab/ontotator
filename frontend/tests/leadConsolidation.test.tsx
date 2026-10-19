@@ -9,7 +9,7 @@ const rows = ['first', 'second'].map((submission_id, index) => ({ submission_id,
 const reviewerTask: AssignmentView = { ...assignment, id: 42, project_key: 'p', document_id: 'target', username: 'reviewer',
   display_name: 'Reviewer', pseudonym: 'R', task: 'review', workflow_revision: 7, status: 'submitted' };
 const round: WorkRoundView = { round_id: 'round-exact', project_key: 'p', assignment_id: 42, document_id: 'target', annotator_id: 'R',
-  kind: 'consolidation', mode: 'review', state: 'editable', workflow_revision: 8, input_manifest_sha256: 'a'.repeat(64), input_submission_ids: ['first', 'second'], active: true };
+  kind: 'consolidation', mode: 'review', state: 'editable', workflow_revision: 8, input_manifest_sha256: 'a'.repeat(64), input_submission_ids: ['first', 'second'], active: true, submission_count: 0, input_count: 2 };
 const props = { projectKey: 'p', documentId: 'target', language: 'de', username: 'lead', rows };
 beforeEach(() => {
   vi.spyOn(api, 'listMembers').mockResolvedValue([
