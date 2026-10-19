@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api, AuthError, type ProjectProgress } from "../src/api/client";
+import { api, AuthError, type DocumentRowsPage, type ProjectProgress } from "../src/api/client";
 import { ProgressPage } from "../src/admin/ProgressPage";
 const progress: ProjectProgress = {
   totals: { documents: 9, unassigned: 3, open: 12, in_progress: 4, submitted: 8, reopened: 2 },
@@ -17,7 +17,12 @@ const progress: ProjectProgress = {
     { document_id: "a-unassigned", language: "en", position: null, assignees: [] },
   ],
 };
-beforeEach(() => { vi.spyOn(api, "getProgress").mockResolvedValue(progress); });
+const rows = (total: number): DocumentRowsPage => ({ groups: [], page: 1, page_count: 1, group_count: 0, case_found: true, adjudicator_not_annotator: false,
+  bar: { total, report_or_pause: total, confirm_final: 0, translation: 0, missing_final: 0, no_final: 0, shown: 0 } } as unknown as DocumentRowsPage);
+beforeEach(() => {
+  vi.spyOn(api, "getProgress").mockResolvedValue(progress);
+  vi.spyOn(api, "listDocumentRows").mockResolvedValue(rows(3));
+});
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 it("renders server totals, stable people workload order and document order without mutating input", async () => {
   render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />);
@@ -56,4 +61,24 @@ it("shows no access on current server refusal and ignores an earlier project rep
   rerender(<ProgressPage projectKey="new" onNavigate={vi.fn()} />);
   await screen.findByText("You do not have access to this page.");
   await act(async () => { resolve(progress); }); expect(screen.queryByText("a-unassigned")).toBeNull();
+});
+it("links to all open decisions on Documents instead of listing final results and warnings", async () => {
+  const warnings = vi.spyOn(api, "getWorkflowWarnings");
+  const navigate = vi.fn(); render(<ProgressPage projectKey="p" onNavigate={navigate} />);
+  const link = await screen.findByRole("link", { name: "Needs your decision (3)" });
+  expect(link.getAttribute("href")).toBe("#/projects/p/documents?decision=all");
+  expect(api.listDocumentRows).toHaveBeenCalledWith("p", { decision: "all" });
+  expect(screen.queryByRole("region", { name: "Final results and open issues" })).toBeNull();
+  expect(screen.queryByText("Final results and open issues")).toBeNull();
+  expect(warnings).not.toHaveBeenCalled();
+  await screen.findByText("a-unassigned");
+  expect(screen.getAllByRole("link", { name: "Assign" })).toHaveLength(2);
+  fireEvent.click(link); expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", decision: "all" });
+});
+it("omits the decision link when the count cannot be loaded and refreshes it with progress", async () => {
+  vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new AuthError("Forbidden")).mockResolvedValue(rows(5));
+  render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />); await screen.findByText("a-unassigned");
+  expect(screen.queryByRole("link", { name: /Needs your decision/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
+  await screen.findByRole("link", { name: "Needs your decision (5)" });
 });

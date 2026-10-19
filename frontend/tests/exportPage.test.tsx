@@ -137,3 +137,16 @@ it("summarizes serializer errors and keeps raw diagnostics in a disclosure", asy
   expect(screen.getByText("Technical diagnostics").closest("details")?.open).toBe(false);
   expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
 });
+
+it("links each preflight warning and omission to its Documents row", async () => {
+  vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ project: "p/a", selections: [{ case_id: "GSC17", language: "de", document_id: "d", submission_id: "s", revision: 1 }],
+    warnings: [{ id: "held", code: "OPEN_PROBLEM_REPORT", cause_revision: 2, case_id: "GSC 17", language: "de", document_id: "old", reason: "Text wording needs review", destination: "#/tasks/7" }],
+    omissions: [{ case_id: "GSC18", language: "en" }], state_digest: "a".repeat(64) });
+  render(<ExportPage projectKey="p/a" currentUser={user} />);
+  fireEvent.click(screen.getByRole("button", { name: "Prepare final export" }));
+  await screen.findByText("Text wording needs review");
+  expect(screen.getByRole("link", { name: "Show GSC 17 · de" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=de&case=GSC+17");
+  expect(screen.getByRole("link", { name: "Show GSC18 · en" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=en&case=GSC18");
+  expect(screen.queryByRole("link", { name: "Review issue" })).toBeNull();
+  expect(screen.getByText(/Omitted without a final selection/)).toBeTruthy();
+});

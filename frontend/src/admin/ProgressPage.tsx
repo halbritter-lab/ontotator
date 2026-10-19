@@ -1,4 +1,3 @@
-import { ProjectDashboardPage } from "./ProjectDashboardPage";
 import { useEffect, useState } from "react";
 import { api, ApiError, type ProjectProgress } from "../api/client";
 import { routeHref, type Route } from "../app/router";
@@ -21,14 +20,17 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   const [status, setStatus] = useState("");
+  const [decisions, setDecisions] = useState<number | null>(null);
   useEffect(() => {
     let active = true;
-    setLoading(true); setError(undefined);
+    setLoading(true); setError(undefined); setDecisions(null);
     void api.getProgress(projectKey).then(value => {
       if (active) { setProgress(value); setLoading(false); }
     }, err => { if (active) { setProgress(null); setError(err); setLoading(false); } });
+    void api.listDocumentRows(projectKey, { decision: "all" }).then(page => { if (active) setDecisions(page.bar.total); }, () => {});
     return () => { active = false; };
   }, [projectKey, revision]);
+  const decisionRoute: Route = { name: "projectDocuments", key: projectKey, decision: "all" };
   const people = (progress?.people ?? []).map((person, index) => ({ person, index }))
     .sort((left, right) => (right.person.open + right.person.in_progress) - (left.person.open + left.person.in_progress) || left.index - right.index).map(item => item.person);
   const documents = (progress?.documents ?? []).filter(doc => !status || (status === "unassigned" ? !doc.assignees?.length : doc.assignees?.some(assignee => assignee.status === status)));
@@ -50,7 +52,11 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
     } },
   ];
   return <section>
-    <h1>Progress</h1><ProjectDashboardPage key={projectKey} projectKey={projectKey} />
+    <h1>Progress</h1>
+    {decisions !== null && <p><a href={routeHref(decisionRoute)} onClick={event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault(); onNavigate(decisionRoute);
+    }}>Needs your decision ({decisions})</a></p>}
     <Toolbar label="Progress actions"><Button disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh progress</Button></Toolbar>
     {loading && <p role="status">Loading progress …</p>}
     {error !== undefined && (error instanceof ApiError && [403, 404].includes(error.status) ? <InlineMessage tone="error">You do not have access to this page.</InlineMessage> : <ErrorNotice error={error} />)}

@@ -3,8 +3,21 @@ import { api, type FinalPreflight } from "../api/client";
 import { saveDownload } from "../api/download";
 import { Button, Checkbox, InlineMessage, Toolbar } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
-import { WorkflowWarnings } from "./ProjectDashboardPage";
+import { routeHref } from "../app/router";
 import { useJob } from "./useJob";
+
+function RowLink({ projectKey, caseId, language }: { projectKey: string; caseId: string; language: string }): JSX.Element {
+  return <a href={routeHref({ name: "projectDocuments", key: projectKey, case: caseId, language })}>Show {caseId} · {language}</a>;
+}
+function WorkflowWarnings({ projectKey, state }: { projectKey: string; state: FinalPreflight }): JSX.Element {
+  return <>
+    {state.warnings.length > 0
+      ? <ul className="final-warning-list">{state.warnings.map(warning => <li key={warning.id}><strong>{warning.case_id} · {warning.language}</strong><p>{warning.reason}</p><RowLink projectKey={projectKey} caseId={warning.case_id} language={warning.language} /></li>)}</ul>
+      : <p>No open workflow warnings.</p>}
+    {state.omissions.length > 0 && <><p>Omitted without a final selection:</p>
+      <ul className="final-warning-list" aria-label="Omitted without a final selection">{state.omissions.map(item => <li key={JSON.stringify([item.case_id, item.language])}><RowLink projectKey={projectKey} caseId={item.case_id} language={item.language} /></li>)}</ul></>}
+  </>;
+}
 
 export function FinalExportPanel({ projectKey, username }: { projectKey: string; username: string }): JSX.Element {
   return <FinalExportContent key={JSON.stringify([projectKey, username])} projectKey={projectKey} />;
@@ -93,7 +106,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
     {state && <section className="final-export-preflight" aria-labelledby="final-export-preflight-heading">
       <h3 id="final-export-preflight-heading" ref={heading} tabIndex={-1}>Export preflight</h3>
       <p>{state.selections.length} selected results · {state.warnings.length} warnings · {state.omissions.length} omitted</p>
-      <WorkflowWarnings state={state} />
+      <WorkflowWarnings projectKey={projectKey} state={state} />
       {state.warnings.length > 0 && <Checkbox ref={acknowledgement} id="final-export-ack" label="Export these selected results with the listed warnings and omissions" checked={accepted} disabled={creating} onChange={event => setAccepted(event.target.checked)} />}
       {!state.selections.length && <InlineMessage tone="warning"><span id="final-export-empty">Select at least one submitted result before exporting.</span></InlineMessage>}
       {blockedBy === "final-export-ack-hint" && <p id="final-export-ack-hint" className="field-hint">Confirm the warnings and omissions above to continue.</p>}
