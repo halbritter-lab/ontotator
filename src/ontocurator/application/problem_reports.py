@@ -14,6 +14,17 @@ from ontocurator.authz.policy import Access, Action, can, may_take
 from ontocurator.authz.visibility import current_access, require_document
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import AccessDenied, DomainError
+from ontocurator.domain.problem_reports import (
+    EventFact,
+    check_permission,
+    check_state,
+    next_resolution,
+    next_state,
+    withdrawable,
+)
+from ontocurator.domain.problem_reports import (
+    ReportAction as ReportAction,  # re-exported for api/problem_report_routes
+)
 from ontocurator.domain.work_rounds import WorkRoundView
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import Repository, _lock_id
@@ -34,8 +45,6 @@ from ontocurator.storage.workflow_tables import (
     WorkRoundStateRow,
 )
 
-ReportAction = Literal["resume", "resolve", "extend_hold", "restart"]
-
 
 class ProblemReportView(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -47,7 +56,7 @@ class ProblemReportView(BaseModel):
     round_id: str | None
     submission_id: str | None
     reason: str
-    state: Literal["open", "resolved"]
+    state: Literal["open", "resolved", "withdrawn"]
     revision: int
     resolution: str | None
     held_assignment_ids: list[int] = Field(default_factory=list)
@@ -230,20 +239,38 @@ class ProblemReportService:
         )
 
     def _release(
-        self, conn: Connection, report_id: str, assignment_ids: list[int], now: datetime
+        self,
+        conn: Connection,
+        report_id: str,
+        assignment_ids: list[int],
+        now: datetime,
+        *,
+        released_by: int,
+        release_action: str,
+        event_id: str,
     ) -> None:
+        # Only active holds: an earlier release record is never overwritten.
         ids = list(
             conn.execute(
-                select(TaskHoldRow.hold_id).where(
+                select(TaskHoldRow.hold_id)
+                .join(TaskHoldStateRow, TaskHoldStateRow.hold_id == TaskHoldRow.hold_id)
+                .where(
                     TaskHoldRow.report_id == report_id,
                     TaskHoldRow.assignment_id.in_(assignment_ids),
+                    TaskHoldStateRow.active.is_(True),
                 )
             ).scalars()
         )
         conn.execute(
             update(TaskHoldStateRow)
             .where(TaskHoldStateRow.hold_id.in_(ids))
-            .values(active=False)
+            .values(
+                active=False,
+                released_at=now,
+                released_by=released_by,
+                release_action=release_action,
+                release_event_id=event_id,
+            )
         )
         for aid in assignment_ids:
             remaining = conn.execute(
@@ -522,8 +549,9 @@ class ProblemReportService:
                 conn, access, actor, raw["assignment_id"]
             )
             lead = can(fresh, Action.MANAGE_ASSIGNMENTS, project)
-            if not lead and (raw["reporter_id"] != fresh.user_id or action != "resume"):
-                raise AccessDenied("NOT_ALLOWED")
+            check_permission(
+                action, lead=lead, reporter=raw["reporter_id"] == fresh.user_id
+            )
             replay = self._receipt(conn, pid, access, request_id, digest)
             if replay:
                 return replay
@@ -538,11 +566,23 @@ class ProblemReportService:
             )
             if state["revision"] != expected_revision:
                 raise DomainError("WORKFLOW_REVISION_CONFLICT")
-            if state["state"] == "resolved" and action != "resume":
-                raise DomainError(
-                    "WORKFLOW_REVISION_CONFLICT", {"reason": "REPORT_RESOLVED"}
+            facts = [
+                EventFact(r.actor_id, r.action)
+                for r in conn.execute(
+                    select(
+                        ProblemReportEventRow.actor_id, ProblemReportEventRow.action
+                    ).where(ProblemReportEventRow.report_id == report_id)
                 )
+            ]
+            check_state(
+                action,
+                state["state"],
+                withdrawable_now=withdrawable(
+                    state["state"], raw["reporter_id"], facts
+                ),
+            )
             now = datetime.now(UTC)
+            event_id = f"report-event-{uuid4().hex}"
             new_round = None
             abandoned_translation_draft = None
             if action == "extend_hold":
@@ -563,7 +603,15 @@ class ProblemReportService:
                     target = AssignmentService._locked(conn, aid)
                     if target["project_id"] != pid:
                         raise DomainError("ASSIGNMENT_NOT_FOUND")
-                self._release(conn, report_id, selected, now)
+                self._release(
+                    conn,
+                    report_id,
+                    selected,
+                    now,
+                    released_by=fresh.user_id,
+                    release_action=action,
+                    event_id=event_id,
+                )
                 if action == "restart":
                     if selected != [raw["assignment_id"]]:
                         raise DomainError("ROUND_KIND_INVALID")
@@ -584,22 +632,46 @@ class ProblemReportService:
                             kind="clean_restart",
                             reason=reason,
                         )
+            elif action == "withdraw":
+                own = raw["assignment_id"]
+                active_own = conn.execute(
+                    select(TaskHoldRow.hold_id)
+                    .join(
+                        TaskHoldStateRow,
+                        TaskHoldStateRow.hold_id == TaskHoldRow.hold_id,
+                    )
+                    .where(
+                        TaskHoldRow.report_id == report_id,
+                        TaskHoldRow.assignment_id == own,
+                        TaskHoldStateRow.active.is_(True),
+                    )
+                ).first()
+                selected = [own] if active_own else []
+                if selected:
+                    AssignmentService._locked(conn, own)
+                    self._release(
+                        conn,
+                        report_id,
+                        selected,
+                        now,
+                        released_by=fresh.user_id,
+                        release_action="withdraw",
+                        event_id=event_id,
+                    )
+            elif action == "reopen":
+                selected = []
             conn.execute(
                 update(ProblemReportStateRow)
                 .where(ProblemReportStateRow.report_id == report_id)
                 .values(
-                    state="resolved"
-                    if action in {"resolve", "restart"}
-                    else state["state"],
+                    state=next_state(action, state["state"]),
                     revision=expected_revision + 1,
-                    resolution=reason
-                    if action in {"resolve", "restart"}
-                    else state["resolution"],
+                    resolution=next_resolution(action, state["resolution"], reason),
                 )
             )
             conn.execute(
                 insert(ProblemReportEventRow).values(
-                    event_id=f"report-event-{uuid4().hex}",
+                    event_id=event_id,
                     project_id=pid,
                     report_id=report_id,
                     actor_id=fresh.user_id,

@@ -5,8 +5,10 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     UniqueConstraint,
     text,
 )
@@ -134,6 +136,9 @@ class ReviewObligationResolutionRow(Base):
 
 class ProblemReportRow(Base):
     __tablename__ = "problem_reports"
+    __table_args__ = (
+        Index("ix_problem_reports_project_assignment", "project_id", "assignment_id"),
+    )
     report_id: Mapped[str] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey(f"{SCHEMA}.projects.id")
@@ -152,6 +157,9 @@ class ProblemReportRow(Base):
 
 class ProblemReportStateRow(Base):
     __tablename__ = "problem_report_state"
+    __table_args__ = (
+        CheckConstraint("state IN ('open', 'resolved', 'withdrawn')", name="state"),
+    )
     report_id: Mapped[str] = mapped_column(
         ForeignKey(f"{SCHEMA}.problem_reports.report_id"), primary_key=True
     )
@@ -162,6 +170,10 @@ class ProblemReportStateRow(Base):
 
 class TaskHoldRow(Base):
     __tablename__ = "task_holds"
+    __table_args__ = (
+        Index("ix_task_holds_report", "report_id"),
+        Index("ix_task_holds_assignment", "assignment_id"),
+    )
     hold_id: Mapped[str] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey(f"{SCHEMA}.projects.id")
@@ -181,14 +193,39 @@ class TaskHoldRow(Base):
 
 class TaskHoldStateRow(Base):
     __tablename__ = "task_hold_state"
+    __table_args__ = (
+        CheckConstraint(
+            "(release_action IS NULL"
+            " OR release_action IN ('resume', 'restart', 'withdraw'))"
+            " AND (NOT active OR (released_at IS NULL AND release_event_id IS NULL))",
+            name="release",
+        ),
+    )
     hold_id: Mapped[str] = mapped_column(
         ForeignKey(f"{SCHEMA}.task_holds.hold_id"), primary_key=True
     )
     active: Mapped[bool]
+    released_at: Mapped[datetime | None]
+    released_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(f"{SCHEMA}.users.id")
+    )
+    release_action: Mapped[str | None]
+    # The event row is inserted after the release in the same transaction.
+    release_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            f"{SCHEMA}.problem_report_events.event_id",
+            name="fk_task_hold_state_release_event",
+            deferrable=True,
+            initially="DEFERRED",
+        )
+    )
 
 
 class ProblemReportEventRow(Base):
     __tablename__ = "problem_report_events"
+    __table_args__ = (
+        Index("ix_problem_report_events_report", "report_id", "created_at"),
+    )
     event_id: Mapped[str] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey(f"{SCHEMA}.projects.id")
