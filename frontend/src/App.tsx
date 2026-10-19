@@ -207,7 +207,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case 'projectProblemReport': {
       const canManage = !!projects.find(project => project.project_key === route.key)?.can_manage;
       content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
-        : canManage ? <ProblemReportDetail key={JSON.stringify([user.username, route.key, route.reportId])} projectKey={route.key} reportId={route.reportId} canManage={canManage} onNavigate={go} />
+        : canManage ? <ProblemReportDetail key={JSON.stringify([user.username, route.key, route.reportId])} projectKey={route.key} reportId={route.reportId} canManage={canManage} action={route.action} documents={route.documents} onNavigate={go} />
         : <NotFound noAccess onNavigate={go} />;
       break;
     }
