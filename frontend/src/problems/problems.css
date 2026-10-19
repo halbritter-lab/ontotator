@@ -94,3 +94,10 @@ blockquote.report-text {
 .problem-badge svg {
   flex: none;
 }
+
+/* Lead report page: one intent per block, stacked. */
+.toolbar.lead-decide { display: grid; gap: var(--space-3); align-items: start; }
+.lead-intent { display: grid; gap: var(--space-1); justify-items: start; }
+.lead-intent > div:empty { display: none; }
+.lead-intent-line { margin: 0; color: var(--text-muted); }
+.lead-holds { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }

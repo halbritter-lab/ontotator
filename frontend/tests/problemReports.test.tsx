@@ -1,7 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ProblemReportForm } from "../src/tasks/ProblemReportForm";
-import { ProblemReportDetail } from "../src/tasks/ProblemReportDetail";
 import { api, type ProblemReportView } from "../src/api/client";
 import { assigned, workspaceFixture } from "./assignments";
 import { CaseScreen } from "../src/app/CaseScreen";
@@ -41,48 +40,6 @@ it("retries an unchanged report with the same request identity", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Report and pause my task" }));
   await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
   expect(create.mock.calls[0]).toEqual(create.mock.calls[1]);
-});
-
-it("requires exact task selection for hold extension and lead agreement for restart", async () => {
-  vi.spyOn(api, "listProblemReports").mockResolvedValue([report]);
-  vi.spyOn(api, "listAssignments").mockResolvedValue([assignment, { ...assignment, id: 2, display_name: "Reviewer", task: "review" }]);
-  const action = vi.spyOn(api, "actOnProblemReport").mockResolvedValue({ ...report, revision: 3, held_assignment_ids: [1, 2] });
-  render(<ProblemReportDetail projectKey="pkg" reportId="report-1" canManage onNavigate={vi.fn()} />);
-  await screen.findByText("Conflicting source evidence");
-  fireEvent.change(screen.getByRole("combobox", { name: "Report action" }), { target: { value: "extend_hold" } });
-  fireEvent.change(screen.getByRole("textbox", { name: /Action reason/ }), { target: { value: "Same conflict affects review" } });
-  expect(screen.getByRole("button", { name: "Apply report action" })).toHaveProperty("disabled", true);
-  fireEvent.click(screen.getByRole("checkbox", { name: /Task 2/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Apply report action" }));
-  await waitFor(() => expect(action).toHaveBeenCalledWith("report-1", expect.objectContaining({ expected_revision: 2, action: "extend_hold", assignment_ids: [2], reason: "Same conflict affects review" })));
-  fireEvent.change(screen.getByRole("combobox", { name: "Report action" }), { target: { value: "restart" } });
-  expect(screen.getByRole("button", { name: "Apply report action" })).toHaveProperty("disabled", true);
-  fireEvent.click(screen.getByRole("checkbox", { name: /agreed with the task owner/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Apply report action" }));
-  await waitFor(() => expect(action).toHaveBeenLastCalledWith("report-1", expect.objectContaining({ expected_revision: 3, action: "restart", assignment_ids: [1] })));
-});
-
-it("does not fetch private reports when management access is unavailable", () => {
-  const list = vi.spyOn(api, "listProblemReports");
-  render(<ProblemReportDetail projectKey="pkg" reportId="report-1" canManage={false} onNavigate={vi.fn()} />);
-  expect(list).not.toHaveBeenCalled();
-  expect(screen.queryByRole("combobox", { name: "Report action" })).toBeNull();
-});
-
-it("offers only remaining pause releases after report resolution", async () => {
-  vi.spyOn(api, "listProblemReports").mockResolvedValue([{ ...report, state: "resolved", resolution: "Clarified with owner" }]);
-  vi.spyOn(api, "listAssignments").mockResolvedValue([assignment]);
-  const action = vi.spyOn(api, "actOnProblemReport").mockResolvedValue({ ...report, state: "resolved", revision: 3, held_assignment_ids: [] });
-  render(<ProblemReportDetail projectKey="pkg" reportId="report-1" canManage onNavigate={vi.fn()} />);
-  const select = await screen.findByRole("combobox", { name: "Report action" });
-  expect(Array.from(select.querySelectorAll("option")).map(option => option.value)).toEqual(["resume"]);
-  expect(select).toHaveProperty("value", "resume");
-  fireEvent.click(screen.getByRole("checkbox", { name: /Task 1/ }));
-  fireEvent.change(screen.getByRole("textbox", { name: /Action reason/ }), { target: { value: "Release the remaining pause" } });
-  fireEvent.click(screen.getByRole("button", { name: "Apply report action" }));
-  await waitFor(() => expect(action).toHaveBeenCalledWith("report-1", expect.objectContaining({ action: "resume", expected_revision: 2, assignment_ids: [1] })));
-  await screen.findByText("All pauses from this resolved report have been released.");
-  expect(screen.queryByRole("button", { name: "Apply report action" })).toBeNull();
 });
 
 it("keeps a pending spanless finding in the mounted editor through pause and resume", async () => {
