@@ -60,11 +60,29 @@ export type CarryAvailability =
   | { kind: "unknown" }
   | { kind: "none" };
 
-/** Whether "Continue from" is offered, and the reason derived from data when it is not. */
-export function carryAvailability(assignment: AssignmentView, rounds: readonly WorkRoundView[], sources: readonly RoundSourceView[]): CarryAvailability {
+const openRoundOf = (ordered: readonly WorkRoundView[]) => ordered.find(round => round.state === "editable" && round.active) ?? ordered.find(round => round.state === "editable");
+
+/**
+ * The open round that "Continue from" may replace if nothing was saved in it: an automatically
+ * created (ordinary) active round without a submission. Whether its draft is untouched (revision 0)
+ * is a separate fact the caller checks; null when there is no such round or no carry to offer.
+ */
+export function replaceableRoundCandidate(assignment: AssignmentView, rounds: readonly WorkRoundView[], sources: readonly RoundSourceView[]): WorkRoundView | null {
+  if (assignment.task !== "annotate" || assignment.held || !sources.length) return null;
+  const open = openRoundOf(orderedRounds(rounds));
+  return open && open.kind === "ordinary" && open.active && !open.submission_count && !open.latest_submission_id ? open : null;
+}
+
+/**
+ * Whether "Continue from" is offered, and the reason derived from data when it is not.
+ * `untouchedRoundId` names an open round confirmed to have no saved change (see
+ * `replaceableRoundCandidate`); such a round does not block, the carry replaces it.
+ */
+export function carryAvailability(assignment: AssignmentView, rounds: readonly WorkRoundView[], sources: readonly RoundSourceView[], untouchedRoundId?: string | null): CarryAvailability {
   if (assignment.task !== "annotate") return { kind: "none" };
   const ordered = orderedRounds(rounds);
-  const open = ordered.find(round => round.state === "editable" && round.active) ?? ordered.find(round => round.state === "editable");
+  const untouched = Boolean(untouchedRoundId) && replaceableRoundCandidate(assignment, rounds, sources)?.round_id === untouchedRoundId;
+  const open = untouched ? undefined : openRoundOf(ordered);
   const reason = carryUnavailableReason({ held: assignment.held, openRoundOrdinal: open?.round_ordinal ?? null, sourceCount: sources.length });
   if (reason === null) return { kind: "available" };
   if (!sources.length && !assignment.held && !open) {
@@ -85,13 +103,15 @@ export interface WorkRoundActionsProps {
   currentRoundId?: string;
   onOpen: (roundId: string) => Promise<void>;
   onReload: () => void;
+  /** An open round confirmed to have no saved change; "Continue from" replaces it. */
+  untouchedRoundId?: string | null;
 }
 
-export function WorkRoundActions({ assignment, rounds, sources, control, currentRoundId, onOpen, onReload }: WorkRoundActionsProps): JSX.Element {
+export function WorkRoundActions({ assignment, rounds, sources, control, currentRoundId, onOpen, onReload, untouchedRoundId }: WorkRoundActionsProps): JSX.Element {
   const narrow = useMediaQuery("(max-width: 700px)");
   const ordered = orderedRounds(rounds);
   const legendId = useId(), radioName = useId();
-  const availability = carryAvailability(assignment, rounds, sources);
+  const availability = carryAvailability(assignment, rounds, sources, untouchedRoundId);
   const selected = sources.find(value => value.submission_id === control.source);
   const name = (round: WorkRoundView) => `Round ${round.round_ordinal}`;
   const here = <span className="work-rounds__here" aria-current="true"><IconChevronRight className="work-rounds__here-icon" />You are here</span>;

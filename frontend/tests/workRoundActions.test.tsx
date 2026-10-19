@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { WorkRoundsDialog } from "../src/tasks/WorkRoundsDialog";
+import { carryAvailability, replaceableRoundCandidate } from "../src/tasks/WorkRoundActions";
 import { api, type WorkRoundView } from "../src/api/client";
 import { TaskEditor } from "../src/tasks/TaskEditor";
 import { historical } from "./variantFixtures";
@@ -103,4 +104,18 @@ it("refuses to display an original evidence text with the wrong immutable hash",
   render(<RoundInputEvidenceDialog projectKey="pkg" input={carriedInput()} onClose={vi.fn()} labelFor={() => null} />);
   await screen.findByText("The exact original evidence text is unavailable.");
   expect(document.querySelector('.text-container')).toBeNull();
+});
+
+it("does not let an untouched automatically created round block Continue from", () => {
+  const auto: WorkRoundView = { ...round, round_id: "round-auto", kind: "ordinary", state: "editable", active: true, submission_count: 0, input_count: 0, input_submission_ids: [], round_ordinal: 1 };
+  const annotate = { ...assignment, task: "annotate" as const, held: false };
+  expect(replaceableRoundCandidate(annotate, [auto], [source])?.round_id).toBe("round-auto");
+  expect(carryAvailability(annotate, [auto], [source], "round-auto")).toEqual({ kind: "available" });
+  // Same round after a saved change: the caller no longer confirms it untouched.
+  expect(carryAvailability(annotate, [auto], [source], null)).toEqual({ kind: "unavailable", reason: "You can continue from a submission once Round 1 is submitted. Round 1 is still open." });
+  // Only an automatically created round without a submission can be replaced.
+  expect(replaceableRoundCandidate(annotate, [{ ...auto, kind: "clean_restart" }], [source])).toBeNull();
+  expect(replaceableRoundCandidate(annotate, [{ ...auto, submission_count: 1 }], [source])).toBeNull();
+  expect(replaceableRoundCandidate({ ...annotate, held: true }, [auto], [source])).toBeNull();
+  expect(carryAvailability(annotate, [{ ...auto, kind: "clean_restart" }], [source], "round-auto").kind).toBe("unavailable");
 });

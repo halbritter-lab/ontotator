@@ -146,7 +146,10 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}
     <CaseErrorBoundary key={`${workspace.workspace_id}:${revision}`} onBackToDashboard={back} backLabel="Back to my tasks" onReload={() => { void load(); }}>
     <CaseScreen view={workspace.view} workspaceId={workspace.workspace_id} annotatorName={user.display_name}
-      taskActions={<><Button size="sm" onClick={() => setRoundDialogOpen(true)}>Work rounds</Button>
+      taskActions={<><Button size="sm" onClick={() => {
+        // Save pending edits first: the dialog tells an untouched round from one with saved work.
+        void (saveBeforeReportRef.current?.() ?? Promise.resolve()).catch(() => undefined).then(() => { if (active.current) setRoundDialogOpen(true); });
+      }}>Work rounds</Button>
         <TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
           setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
         }} /></>}

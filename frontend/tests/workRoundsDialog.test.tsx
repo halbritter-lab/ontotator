@@ -4,6 +4,7 @@ import { api, type AssignmentView, type RoundInputView, type RoundSourceView, ty
 import { WorkRoundsDialog } from "../src/tasks/WorkRoundsDialog";
 import { RoundInputEvidenceDialog } from "../src/tasks/RoundInputEvidenceDialog";
 import { historical } from "./variantFixtures";
+import { workspaceFixture } from "./assignments";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -85,7 +86,37 @@ describe("Work rounds dialog", () => {
     expect(onCreate.mock.calls[1][0]).toEqual(onCreate.mock.calls[0][0]);
   });
 
+  const openedAt = (revision: number) => { const opened = workspaceFixture(); return { ...opened, view: { ...opened.view, draft: { ...opened.view.draft, revision } } }; };
+  const autoRound = round({ round_id: "round-auto", round_ordinal: 1, kind: "ordinary", state: "editable", active: true, submission_count: 0 });
+  const otherText = { ...source, document_id: "old-text", round_id: "round-old", round_ordinal: 1 };
+
+  it("offers Continue from on an automatically created round with no saved change and replaces it", async () => {
+    const open = vi.spyOn(api, "openWorkRound").mockResolvedValue(openedAt(0));
+    const { onCreate } = renderDialog({ currentRoundId: "round-auto" }, { rounds: [autoRound], sources: [otherText] });
+    const group = await screen.findByRole("radiogroup", { name: "Continue from" });
+    expect(open).toHaveBeenCalledWith("round-auto");
+    expect(screen.queryByText(/is still open/)).toBeNull();
+    fireEvent.click(within(group).getByRole("radio", { name: /Round 1 submission/ }));
+    fireEvent.click(footer().getByRole("button", { name: "Continue from this submission" }));
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith({ request_id: expect.any(String), expected_workflow_revision: 5, kind: "carry_forward", source_submission_ids: ["sub-2"] }));
+  });
+
+  it("asks to submit first once anything is saved in the automatically created round", async () => {
+    vi.spyOn(api, "openWorkRound").mockResolvedValue(openedAt(1));
+    renderDialog({ currentRoundId: "round-auto" }, { rounds: [autoRound], sources: [otherText] });
+    expect(await screen.findByText("You can continue from a submission once Round 1 is submitted. Round 1 is still open.")).toBeDefined();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
+    expect(footer().queryByRole("button", { name: "Continue from this submission" })).toBeNull();
+  });
+
+  it("treats the round as saved work when its draft cannot be read", async () => {
+    vi.spyOn(api, "openWorkRound").mockRejectedValue(new Error("offline"));
+    renderDialog({ currentRoundId: "round-auto" }, { rounds: [autoRound], sources: [otherText] });
+    expect(await screen.findByText("You can continue from a submission once Round 1 is submitted. Round 1 is still open.")).toBeDefined();
+  });
+
   it("explains why no round can start: open round", async () => {
+    vi.spyOn(api, "openWorkRound").mockResolvedValue(openedAt(3));
     renderDialog({}, { rounds: [...rounds, round({ round_id: "round-3", round_ordinal: 3, state: "editable", active: true })] });
     expect(await screen.findByText("You can continue from a submission once Round 3 is submitted. Round 3 is still open.")).toBeDefined();
     expect(screen.queryByRole("radiogroup")).toBeNull();

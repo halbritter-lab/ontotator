@@ -227,7 +227,7 @@ test('corrected-text private carry preserves submitted history through a reporte
     const reportRows = await value<components['schemas']['ProblemReportView'][]>(page, `${root(s)}/problem-reports`);
     const report = reportRows.find(item => item.assignment_id === task.id)!;
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/problem-reports/${encodeURIComponent(report.report_id)}`);
-    await page.getByRole('toolbar', { name: 'Decide on this report', exact: true }).getByRole('button', { name: 'Agree empty restart…', exact: true }).click();
+    await page.getByRole('group', { name: 'Decide on this report', exact: true }).getByRole('button', { name: 'Agree empty restart…', exact: true }).click();
     const restart = page.getByRole('group', { name: `Agree empty restart of Task ${task.id}`, exact: true });
     await restart.getByLabel(/^I agreed this restart with /).check();
     await restart.getByLabel(/^Reason \(becomes the outcome/).fill('Agreed with the author: start a separate empty annotation round.');
