@@ -1,0 +1,215 @@
+/* Carried-finding inspector parts (spec sections 2, 3; Resolved 3 and 5). */
+
+.carried-section,
+.carried-checks {
+  display: grid;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.carried-section__title {
+  margin: 0;
+  font-size: var(--size-md);
+}
+
+.carried-subtitle {
+  margin: 0;
+  font-size: var(--size-sm);
+  font-weight: 600;
+}
+
+.carried-section__badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.carried-section__changed,
+.carried-origin,
+.carried-reason,
+.carried-hint,
+.carried-original__note,
+.carried-original__quote,
+.carried-note__full,
+.carried-error__text,
+.carried-chooser__empty {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.carried-origin,
+.carried-hint,
+.carried-checks__origin,
+.carried-checks__reason {
+  color: var(--text-muted);
+  font-size: max(12px, var(--size-sm));
+  overflow-wrap: anywhere;
+}
+
+.carried-note__full {
+  white-space: pre-wrap;
+}
+
+.carried-check-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--size-sm);
+}
+
+.carried-check-list dt {
+  font-weight: 600;
+}
+
+.carried-check-list dd {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.carried-actions,
+.carried-collapsed__actions,
+.carried-chooser__actions,
+.carried-error__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Inline chooser and confirmation take a full row below their trigger. */
+.carried-actions > .carried-chooser,
+.carried-actions > .carried-confirm {
+  flex-basis: 100%;
+}
+
+.carried-collapsed {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.carried-collapsed__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--size-sm);
+}
+
+.carried-collapsed__line svg {
+  flex: none;
+}
+
+.carried-original {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-sunken);
+  border-radius: var(--radius);
+  font-size: var(--size-sm);
+}
+
+.carried-original__term {
+  margin: 0;
+  font-weight: 600;
+}
+
+.carried-original__values {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carried-original > .btn {
+  justify-self: start;
+}
+
+.carried-chooser {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.carried-chooser__options {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.carried-chooser__legend {
+  padding: 0;
+  font-size: var(--size-sm);
+  font-weight: 600;
+}
+
+.carried-chooser__option {
+  display: grid;
+  gap: 2px;
+}
+
+/* Radio targets at least 24 px high. */
+.carried-chooser__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 24px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.carried-chooser__label input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 4px;
+}
+
+.carried-chooser__details {
+  padding-left: calc(24px + var(--space-2));
+  color: var(--text-muted);
+  font-size: max(12px, var(--size-sm));
+}
+
+.carried-chooser__details summary {
+  min-height: 24px;
+  cursor: pointer;
+}
+
+.carried-chooser__details code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.carried-checks__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carried-checks__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--size-sm);
+}
+
+.carried-checks__term {
+  font-weight: 600;
+}
+
+.carried-checks__reason {
+  flex-basis: 100%;
+}

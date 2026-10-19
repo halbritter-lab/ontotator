@@ -1,0 +1,216 @@
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Button } from "../../ui";
+import type { CarriedState } from "./checkState";
+import { CarriedStateBadge } from "./CarriedRowExtras";
+import {
+  blocksCheckActions, CarriedErrorNotice, CarriedFrame, DismissControl, OriginLine, PAUSED_SENTENCE,
+  type CarriedError, type CarriedReadOnly,
+} from "./CarriedSection";
+import "./carried-inspector.css";
+
+export interface LinkCandidate {
+  annotationId: string;
+  version: string;
+  /** Full option label, e.g. "Seizure · “Krampfanfälle werden …”" or "Seizure · no text span". */
+  label: string;
+  technicalId: string;
+}
+
+export interface ExceptionPanelProps {
+  state: CarriedState;
+  /** "Carried from Round 2" (`carriedFromLine`); the time is appended from `recordedAt`. */
+  origin: string;
+  recordedAt?: string | null;
+  /** Why no carried finding exists (`missingReason`). */
+  reason: string;
+  original: { term: ReactNode; values: { label: string; value: string }[]; note?: string; quote: string | null };
+  candidates: LinkCandidate[];
+  readOnly: CarriedReadOnly;
+  onMarkInText?: () => void;
+  onLink?: (annotationId: string) => Promise<void>;
+  onDismiss?: (reason: string) => Promise<void>;
+  onUndoDismissal?: () => Promise<void>;
+  onShowOriginal: () => void;
+  error?: CarriedError | null;
+}
+
+/** Inline chooser below "Link to an existing finding…": a radio group, never a select. */
+function LinkChooser({ candidates, blocked, onLink, onBusyChange }: {
+  candidates: LinkCandidate[];
+  blocked: boolean;
+  onLink: (annotationId: string) => Promise<void>;
+  onBusyChange: (busy: boolean) => void;
+}): JSX.Element {
+  const name = useId();
+  const legendId = `${name}-legend`;
+  const trigger = useRef<HTMLButtonElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const returnFocus = useRef(false);
+
+  useEffect(() => {
+    if (open) {
+      const first = body.current?.querySelector<HTMLElement>("input[type=radio], [data-chooser-empty]");
+      first?.focus();
+    } else if (returnFocus.current) {
+      returnFocus.current = false;
+      trigger.current?.focus();
+    }
+  }, [open]);
+
+  const cancel = () => { if (busy) return; returnFocus.current = true; setOpen(false); setSelected(null); };
+  const confirm = () => {
+    const choice = selected ?? candidates[0]?.annotationId ?? null;
+    if (busy || blocked || !choice) return;
+    setBusy(true);
+    onBusyChange(true);
+    onLink(choice).then(
+      () => { setBusy(false); onBusyChange(false); setOpen(false); setSelected(null); },
+      () => { setBusy(false); onBusyChange(false); },
+    );
+  };
+
+  return (
+    <>
+      <Button
+        ref={trigger}
+        aria-expanded={open}
+        aria-disabled={(blocked && !busy) || undefined}
+        onClick={() => { if (!blocked && !open) setOpen(true); }}
+      >
+        Link to an existing finding…
+      </Button>
+      {open && (
+        <div ref={body} className="carried-chooser">
+          {candidates.length === 0 ? (
+            <p data-chooser-empty="" tabIndex={-1} className="carried-chooser__empty">
+              No finding of this type exists on this text. Mark it in the text first.
+            </p>
+          ) : (
+            <fieldset className="carried-chooser__options" aria-labelledby={legendId}>
+              <legend id={legendId} className="carried-chooser__legend">Link to an existing finding</legend>
+              {candidates.map((candidate, index) => {
+                const id = `${name}-${index}`;
+                const checked = (selected ?? candidates[0].annotationId) === candidate.annotationId;
+                return (
+                  <div key={candidate.annotationId} className="carried-chooser__option">
+                    <label className="carried-chooser__label" htmlFor={id}>
+                      <input
+                        id={id}
+                        type="radio"
+                        name={name}
+                        value={candidate.annotationId}
+                        checked={checked}
+                        onChange={() => setSelected(candidate.annotationId)}
+                      />
+                      <span>{candidate.label}</span>
+                    </label>
+                    <details className="carried-chooser__details">
+                      <summary>Technical details</summary>
+                      <code>{candidate.technicalId}</code>
+                    </details>
+                  </div>
+                );
+              })}
+            </fieldset>
+          )}
+          <div className="carried-chooser__actions">
+            <Button size="sm" aria-disabled={busy || undefined} onClick={cancel}>Cancel</Button>
+            {candidates.length > 0 && (
+              <Button size="sm" variant="primary" loading={busy} aria-disabled={blocked || undefined} onClick={confirm}>
+                Link and mark as checked
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Inspector section of a carried input without a carried finding (spec section 3; Resolved 3). */
+export function ExceptionPanel({
+  state, origin, recordedAt, reason, original, candidates, readOnly, onMarkInText, onLink, onDismiss,
+  onUndoDismissal, onShowOriginal, error = null,
+}: ExceptionPanelProps): JSX.Element {
+  const [busy, setBusy] = useState<null | "link" | "dismiss" | "undo">(null);
+  const blocked = busy !== null || blocksCheckActions(error);
+  const dismissed = state.variant === "dismissed";
+
+  const undo = () => {
+    if (!onUndoDismissal || blocked) return;
+    setBusy("undo");
+    onUndoDismissal().then(() => setBusy(null), () => setBusy(null));
+  };
+  const linkChooser = onLink && (
+    <LinkChooser
+      candidates={candidates}
+      blocked={blocked && busy !== "link"}
+      onLink={onLink}
+      onBusyChange={value => setBusy(value ? "link" : null)}
+    />
+  );
+
+  return (
+    <CarriedFrame className="carried-exception">
+      <div className="carried-section__badge"><CarriedStateBadge variant={state.variant} /></div>
+      <p className="carried-origin"><OriginLine origin={origin} recordedAt={recordedAt} /></p>
+      {dismissed ? (
+        <>
+          {state.resolution?.reason && <p className="carried-reason">Dismissal reason: {state.resolution.reason}</p>}
+          <p className="carried-hint">Dismissed by You</p>
+        </>
+      ) : (
+        <p className="carried-reason">{reason}</p>
+      )}
+      <div className="carried-original">
+        <h4 className="carried-subtitle">Original</h4>
+        <p className="carried-original__term">{original.term}</p>
+        {original.values.length > 0 && (
+          <ul className="carried-original__values">
+            {original.values.map(value => <li key={value.label}>{`${value.label}: ${value.value}`}</li>)}
+          </ul>
+        )}
+        {original.note && <p className="carried-original__note">{original.note}</p>}
+        <p className="carried-original__quote">{original.quote ? `“${original.quote}”` : "No text span"}</p>
+        <Button variant="quiet" size="sm" onClick={onShowOriginal}>Show original evidence</Button>
+      </div>
+      {readOnly === "paused" && <p className="carried-hint">{PAUSED_SENTENCE}</p>}
+      {error && <CarriedErrorNotice error={error} />}
+      {!readOnly && dismissed && (
+        <div className="carried-actions">
+          {onUndoDismissal && (
+            <Button loading={busy === "undo"} aria-disabled={blocked || undefined} onClick={undo}>Undo dismissal</Button>
+          )}
+          {linkChooser}
+        </div>
+      )}
+      {!readOnly && !dismissed && (
+        <div className="carried-actions">
+          {state.unchecked && onMarkInText && (
+            <Button
+              variant="primary"
+              data-carried-primary=""
+              aria-disabled={blocked || undefined}
+              onClick={() => { if (!blocked) onMarkInText(); }}
+            >
+              Mark in text
+            </Button>
+          )}
+          {linkChooser}
+          {state.unchecked && onDismiss && (
+            <DismissControl
+              label="Dismiss with reason…"
+              dataDismiss
+              blocked={blocked && busy !== "dismiss"}
+              onDismiss={onDismiss}
+              onBusyChange={value => setBusy(value ? "dismiss" : null)}
+            />
+          )}
+        </div>
+      )}
+    </CarriedFrame>
+  );
+}
