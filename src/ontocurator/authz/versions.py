@@ -26,7 +26,7 @@ from ontocurator.storage.tables import (
 
 class VersionRef(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    kind: Literal["own", "proposals", "stage_result", "release"]
+    kind: Literal["own", "proposals", "stage_result", "release", "submission"]
     id: str
     label: str
     created_at: datetime
@@ -154,6 +154,28 @@ def visible_annotation_versions(
         )
         for row in own
     ]
+    if can(fresh, Action.EXPORT_ALL_WORK, key):
+        # Leads read every submission of the text (all authors) for the history table.
+        result.extend(
+            VersionRef(
+                kind="submission",
+                id=row.submission_id,
+                label=f"{row.annotator_id} · {row.recorded_at.isoformat()}",
+                created_at=row.recorded_at,
+            )
+            for row in conn.execute(
+                select(
+                    SubmissionRow.submission_id,
+                    SubmissionRow.annotator_id,
+                    SubmissionRow.recorded_at,
+                )
+                .where(
+                    SubmissionRow.project_id == project_id,
+                    SubmissionRow.document_id == document_id,
+                )
+                .order_by(SubmissionRow.recorded_at, SubmissionRow.submission_id)
+            )
+        )
     if can(fresh, Action.BROWSE_VERSIONS, key) and may_read_proposals(
         conn, fresh, project_id, key, document_id
     ):

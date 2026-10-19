@@ -37,6 +37,8 @@ class FinalWarning(BaseModel):
     case_id: str
     language: str
     document_id: str | None = None
+    report_id: str | None = None
+    assignment_id: int | None = None
     reason: str
     destination: str
 

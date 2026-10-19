@@ -389,84 +389,98 @@ class Repository:
         return manifest.workflow_history or {}
 
     def get_work_round(self, project_key: str, round_id: str) -> WorkRoundView:
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            return self.work_round_in(conn, project_key, project_id, round_id)
+
+    def work_round_in(
+        self, conn: Connection, project_key: str, project_id: int, round_id: str
+    ) -> WorkRoundView:
+        """The round on the caller's connection; the caller has authorized it."""
         from ontocurator.storage.tables import AssignmentRow
         from ontocurator.storage.workflow_tables import WorkRoundRow, WorkRoundStateRow
 
-        with self.db.transaction() as conn:
-            project_id = self._require_project(conn, project_key)
-            row = (
-                conn.execute(
-                    select(
-                        WorkRoundRow,
-                        WorkRoundStateRow.state,
-                        WorkRoundStateRow.latest_submission_id,
-                        AssignmentRow.active_round_id,
-                        AssignmentRow.workflow_revision,
-                    )
-                    .join(
-                        WorkRoundStateRow,
-                        WorkRoundStateRow.round_id == WorkRoundRow.round_id,
-                    )
-                    .join(AssignmentRow, AssignmentRow.id == WorkRoundRow.assignment_id)
-                    .where(
-                        WorkRoundRow.project_id == project_id,
-                        WorkRoundRow.round_id == round_id,
-                    )
+        row = (
+            conn.execute(
+                select(
+                    WorkRoundRow,
+                    WorkRoundStateRow.state,
+                    WorkRoundStateRow.latest_submission_id,
+                    AssignmentRow.active_round_id,
+                    AssignmentRow.workflow_revision,
                 )
-                .mappings()
-                .one_or_none()
-            )
-            if row is None:
-                archived = self._archived_rounds(conn, project_id).get(round_id)
-                if archived is None:
-                    raise DomainError("ROUND_NOT_FOUND")
-                view = WorkRoundView.model_validate(archived["round"])
-                return view.model_copy(
-                    update={"project_key": project_key, "active": False}
+                .join(
+                    WorkRoundStateRow,
+                    WorkRoundStateRow.round_id == WorkRoundRow.round_id,
                 )
-            return WorkRoundView(
-                round_id=row["round_id"],
-                project_key=project_key,
-                assignment_id=row["assignment_id"],
-                document_id=row["document_id"],
-                annotator_id=row["annotator_id"],
-                kind=row["kind"],
-                mode=row["mode"],
-                state=row["state"],
-                workflow_revision=row["workflow_revision"],
-                latest_submission_id=row["latest_submission_id"],
-                predecessor_round_id=row["predecessor_round_id"],
-                input_manifest_sha256=row["input_manifest_sha256"],
-                input_submission_ids=row["input_submission_ids"],
-                workspace_key=row["workspace_key"],
-                active=row["active_round_id"] == round_id,
+                .join(AssignmentRow, AssignmentRow.id == WorkRoundRow.assignment_id)
+                .where(
+                    WorkRoundRow.project_id == project_id,
+                    WorkRoundRow.round_id == round_id,
+                )
             )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            archived = self._archived_rounds(conn, project_id).get(round_id)
+            if archived is None:
+                raise DomainError("ROUND_NOT_FOUND")
+            view = WorkRoundView.model_validate(archived["round"])
+            return view.model_copy(update={"project_key": project_key, "active": False})
+        return WorkRoundView(
+            round_id=row["round_id"],
+            project_key=project_key,
+            assignment_id=row["assignment_id"],
+            document_id=row["document_id"],
+            annotator_id=row["annotator_id"],
+            kind=row["kind"],
+            mode=row["mode"],
+            state=row["state"],
+            workflow_revision=row["workflow_revision"],
+            latest_submission_id=row["latest_submission_id"],
+            predecessor_round_id=row["predecessor_round_id"],
+            input_manifest_sha256=row["input_manifest_sha256"],
+            input_submission_ids=row["input_submission_ids"],
+            workspace_key=row["workspace_key"],
+            active=row["active_round_id"] == round_id,
+        )
 
     def get_round_for_submission(
         self, project_key: str, submission_id: str
     ) -> WorkRoundView | None:
-        from ontocurator.storage.workflow_tables import RoundSubmissionBindingRow
-
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
-            round_id = conn.execute(
-                select(RoundSubmissionBindingRow.round_id).where(
-                    RoundSubmissionBindingRow.project_id == project_id,
-                    RoundSubmissionBindingRow.submission_id == submission_id,
-                )
-            ).scalar_one_or_none()
-            if round_id is None:
-                matches = [
-                    rid
-                    for rid, archived in self._archived_rounds(conn, project_id).items()
-                    if submission_id in archived["submission_ids"]
-                ]
-                if len(matches) > 1:
-                    raise DomainError("AMBIGUOUS_SUBMISSION_ORIGIN")
-                round_id = matches[0] if matches else None
-            return (
-                None if round_id is None else self.get_work_round(project_key, round_id)
+            return self.round_for_submission_in(
+                conn, project_key, project_id, submission_id
             )
+
+    def round_for_submission_in(
+        self, conn: Connection, project_key: str, project_id: int, submission_id: str
+    ) -> WorkRoundView | None:
+        """The submission's round on the caller's connection; caller has authorized it."""
+        from ontocurator.storage.workflow_tables import RoundSubmissionBindingRow
+
+        round_id = conn.execute(
+            select(RoundSubmissionBindingRow.round_id).where(
+                RoundSubmissionBindingRow.project_id == project_id,
+                RoundSubmissionBindingRow.submission_id == submission_id,
+            )
+        ).scalar_one_or_none()
+        if round_id is None:
+            matches = [
+                rid
+                for rid, archived in self._archived_rounds(conn, project_id).items()
+                if submission_id in archived["submission_ids"]
+            ]
+            if len(matches) > 1:
+                raise DomainError("AMBIGUOUS_SUBMISSION_ORIGIN")
+            round_id = matches[0] if matches else None
+        return (
+            None
+            if round_id is None
+            else self.work_round_in(conn, project_key, project_id, round_id)
+        )
 
     def get_round_input_inventory(
         self, project_key: str, round_id: str
@@ -496,106 +510,134 @@ class Repository:
             ]
 
     def list_workflow_causes(self, project_key: str) -> list[dict[str, Any]]:
-        from ontocurator.storage.workflow_tables import ReviewObligationResolutionRow
-
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
-            resolved = set(
-                conn.execute(
-                    select(ReviewObligationResolutionRow.cause_id).where(
-                        ReviewObligationResolutionRow.project_id == project_id,
-                    )
-                ).scalars()
-            )
-            result = [
-                cause.model_dump()
-                for cause in derive_source_obligations(
-                    project_key, self._variants(project_key), resolved
-                )
-            ]
-            from ontocurator.storage.tables import AssignmentRow
-            from ontocurator.storage.workflow_tables import (
-                ProblemReportRow,
-                ProblemReportStateRow,
-                TaskHoldRow,
-                TaskHoldStateRow,
-            )
+            return self.workflow_causes_in(conn, project_key, project_id)
 
-            reports = conn.execute(
-                select(
-                    ProblemReportRow.report_id,
-                    ProblemReportStateRow.revision,
-                    AssignmentRow.document_id,
-                    DocumentRow.case_id,
-                    DocumentRow.language,
+    def workflow_causes_in(
+        self, conn: Connection, project_key: str, project_id: int
+    ) -> list[dict[str, Any]]:
+        """Workflow causes on the caller's connection; the caller has authorized it.
+
+        An active hold whose report is not open becomes the derived cause
+        ``TASK_PAUSED_WITHOUT_REPORT`` with id ``TASK_PAUSED_WITHOUT_REPORT:{hold_id}``.
+        """
+        from ontocurator.storage.workflow_tables import ReviewObligationResolutionRow
+
+        resolved = set(
+            conn.execute(
+                select(ReviewObligationResolutionRow.cause_id).where(
+                    ReviewObligationResolutionRow.project_id == project_id,
                 )
-                .join(
-                    ProblemReportStateRow,
-                    ProblemReportStateRow.report_id == ProblemReportRow.report_id,
-                )
-                .join(AssignmentRow, AssignmentRow.id == ProblemReportRow.assignment_id)
-                .join(
-                    DocumentRow,
-                    and_(
-                        DocumentRow.project_id == AssignmentRow.project_id,
-                        DocumentRow.document_id == AssignmentRow.document_id,
-                    ),
-                )
-                .where(
-                    ProblemReportRow.project_id == project_id,
-                    ProblemReportStateRow.state == "open",
-                )
-            ).all()
-            for row in reports:
-                result.append(
-                    {
-                        "cause_id": row.report_id,
-                        "cause_revision": row.revision,
-                        "code": "OPEN_PROBLEM_REPORT",
-                        "case_id": row.case_id,
-                        "language": row.language,
-                        "document_id": row.document_id,
-                        "reason": "An open problem report needs a lead decision.",
-                        "destination": f"#/projects/{quote(project_key, safe='')}/problem-reports/{quote(row.report_id, safe='')}",
-                    }
-                )
-            holds = conn.execute(
-                select(
-                    TaskHoldRow.hold_id,
-                    TaskHoldRow.reason,
-                    TaskHoldRow.report_id,
-                    AssignmentRow.document_id,
-                    DocumentRow.case_id,
-                    DocumentRow.language,
-                )
-                .join(TaskHoldStateRow, TaskHoldStateRow.hold_id == TaskHoldRow.hold_id)
-                .join(AssignmentRow, AssignmentRow.id == TaskHoldRow.assignment_id)
-                .join(
-                    DocumentRow,
-                    and_(
-                        DocumentRow.project_id == AssignmentRow.project_id,
-                        DocumentRow.document_id == AssignmentRow.document_id,
-                    ),
-                )
-                .where(
-                    TaskHoldRow.project_id == project_id,
-                    TaskHoldStateRow.active.is_(True),
-                )
-            ).all()
-            for held in holds:
-                result.append(
-                    {
-                        "cause_id": held.hold_id,
-                        "cause_revision": 1,
-                        "code": "TASK_ON_HOLD",
-                        "case_id": held.case_id,
-                        "language": held.language,
-                        "document_id": held.document_id,
-                        "reason": held.reason,
-                        "destination": f"#/projects/{quote(project_key, safe='')}/problem-reports/{quote(held.report_id, safe='')}",
-                    }
-                )
-            return result
+            ).scalars()
+        )
+        # `_variants` opens `db.transaction()`, which joins the ambient
+        # transaction, so it runs on the caller's connection.
+        result = [
+            cause.model_dump()
+            for cause in derive_source_obligations(
+                project_key, self._variants(project_key), resolved
+            )
+        ]
+        from ontocurator.storage.tables import AssignmentRow
+        from ontocurator.storage.workflow_tables import (
+            ProblemReportRow,
+            ProblemReportStateRow,
+            TaskHoldRow,
+            TaskHoldStateRow,
+        )
+
+        reports = conn.execute(
+            select(
+                ProblemReportRow.report_id,
+                ProblemReportStateRow.revision,
+                AssignmentRow.document_id,
+                DocumentRow.case_id,
+                DocumentRow.language,
+            )
+            .join(
+                ProblemReportStateRow,
+                ProblemReportStateRow.report_id == ProblemReportRow.report_id,
+            )
+            .join(AssignmentRow, AssignmentRow.id == ProblemReportRow.assignment_id)
+            .join(
+                DocumentRow,
+                and_(
+                    DocumentRow.project_id == AssignmentRow.project_id,
+                    DocumentRow.document_id == AssignmentRow.document_id,
+                ),
+            )
+            .where(
+                ProblemReportRow.project_id == project_id,
+                ProblemReportStateRow.state == "open",
+            )
+        ).all()
+        for row in reports:
+            result.append(
+                {
+                    "cause_id": row.report_id,
+                    "cause_revision": row.revision,
+                    "code": "OPEN_PROBLEM_REPORT",
+                    "case_id": row.case_id,
+                    "language": row.language,
+                    "document_id": row.document_id,
+                    "report_id": row.report_id,
+                    "reason": "An open problem report needs a lead decision.",
+                    "destination": f"#/projects/{quote(project_key, safe='')}/problem-reports/{quote(row.report_id, safe='')}",
+                }
+            )
+        holds = conn.execute(
+            select(
+                TaskHoldRow.hold_id,
+                TaskHoldRow.reason,
+                TaskHoldRow.report_id,
+                TaskHoldRow.assignment_id,
+                ProblemReportStateRow.state.label("report_state"),
+                AssignmentRow.document_id,
+                DocumentRow.case_id,
+                DocumentRow.language,
+            )
+            .join(TaskHoldStateRow, TaskHoldStateRow.hold_id == TaskHoldRow.hold_id)
+            .join(
+                ProblemReportStateRow,
+                ProblemReportStateRow.report_id == TaskHoldRow.report_id,
+            )
+            .join(AssignmentRow, AssignmentRow.id == TaskHoldRow.assignment_id)
+            .join(
+                DocumentRow,
+                and_(
+                    DocumentRow.project_id == AssignmentRow.project_id,
+                    DocumentRow.document_id == AssignmentRow.document_id,
+                ),
+            )
+            .where(
+                TaskHoldRow.project_id == project_id,
+                TaskHoldStateRow.active.is_(True),
+            )
+        ).all()
+        for held in holds:
+            report_open = held.report_state == "open"
+            result.append(
+                {
+                    "cause_id": held.hold_id
+                    if report_open
+                    else f"TASK_PAUSED_WITHOUT_REPORT:{held.hold_id}",
+                    "cause_revision": 1,
+                    "code": "TASK_ON_HOLD"
+                    if report_open
+                    else "TASK_PAUSED_WITHOUT_REPORT",
+                    "case_id": held.case_id,
+                    "language": held.language,
+                    "document_id": held.document_id,
+                    "report_id": held.report_id,
+                    "assignment_id": held.assignment_id,
+                    "reason": held.reason
+                    if report_open
+                    else "This task is paused, but its report is resolved.",
+                    "destination": f"#/projects/{quote(project_key, safe='')}/problem-reports/{quote(held.report_id, safe='')}",
+                }
+            )
+        return result
 
     # --- projects ---------------------------------------------------------- #
 
@@ -2002,7 +2044,7 @@ class Repository:
     ) -> dict[str, Any]:
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
-            if kind == "own":
+            if kind in {"own", "submission"}:
                 payload = conn.execute(
                     select(SubmissionRow.payload).where(
                         SubmissionRow.project_id == project_id,

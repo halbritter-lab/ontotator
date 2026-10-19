@@ -318,3 +318,34 @@ def test_encoded_opaque_version_ids_keep_exact_identity(case_env, ident):
     assert [row["id"] for row in refs(env.alice, SOURCE)] == [ident]
     assert env.lead.get(url).status_code == 404
     assert env.alice.get(url + "%2Fmissing").status_code == 404
+
+
+def test_leads_see_every_submission_as_a_submission_ref_and_others_do_not(case_env):
+    env = case_env
+    seed_submission(env, "alice", "alice-1")
+    lead_refs = refs(env.lead, SOURCE)
+    assert any(r["kind"] == "submission" and r["id"] == "alice-1" for r in lead_refs)
+    fetched = env.lead.get(path(SOURCE, "annotation-versions/submission/alice-1"))
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["ref"]["kind"] == "submission"
+    for client in (env.alice, env.reviewer):
+        assert not any(r["kind"] == "submission" for r in refs(client, SOURCE))
+        assert (
+            client.get(
+                path(SOURCE, "annotation-versions/submission/alice-1")
+            ).status_code
+            == 404
+        )
+    # Non-lead history keeps its own path (review finding 8): the author opens an old
+    # submission through the `own` ref, without broadened permissions.
+    assert any(
+        r["kind"] == "own" and r["id"] == "alice-1" for r in refs(env.alice, SOURCE)
+    )
+    assert (
+        env.alice.get(path(SOURCE, "annotation-versions/own/alice-1")).status_code
+        == 200
+    )
+    assert (
+        env.reviewer.get(path(SOURCE, "annotation-versions/own/alice-1")).status_code
+        == 404
+    )
