@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkLabel, failedChecksTitle, formatReviewDate, languageName, translationStatusLabel } from "../src/translation/labels";
+import { checkExplanation, checkLabel, failedChecksTitle, unknownCheckExplanation, formatReviewDate, languageName, translationStatusLabel } from "../src/translation/labels";
 
 describe("translation review labels", () => {
   it("names known check codes and turns unknown codes into words", () => {
@@ -9,6 +9,12 @@ describe("translation review labels", () => {
     expect(checkLabel("")).toBe("Unnamed check");
     expect(checkLabel(undefined)).toBe("Unnamed check");
     expect(checkLabel("toString")).toBe("ToString");
+  });
+  it("explains known check codes and falls back for unknown ones", () => {
+    expect(checkExplanation("units_added")).toContain("unit of measurement");
+    expect(checkExplanation("numbers_changed")).toContain("numbers in the translation that differ");
+    expect(checkExplanation("glossary_miss")).toBe(unknownCheckExplanation);
+    expect(checkExplanation("toString")).toBe(unknownCheckExplanation);
   });
   it("counts failed checks in words", () => {
     expect(failedChecksTitle(1)).toBe("1 automatic check failed");

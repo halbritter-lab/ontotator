@@ -1,6 +1,7 @@
+import { useId } from "react";
 import type { TranslationReviewRecord } from "../api/client";
 import { InlineMessage, StatusBadge } from "../ui";
-import { categoryLabels, checkLabel, decisionConsequences, decisionLabels, failedChecksTitle, formatReviewDate, translationStatusLabel } from "./labels";
+import { categoryLabels, checkDeviationGuidance, checkExplanation, checkLabel, checkNoLocation, decisionConsequences, decisionLabels, failedChecksTitle, formatReviewDate, translationStatusLabel } from "./labels";
 import type { ClinicalCategory, ReviewDecisionCode } from "./reviewRules";
 
 type CheckRow = { code: string; passed: boolean; detail: string | null };
@@ -17,14 +18,24 @@ function checkRows(raw: readonly unknown[]): CheckRow[] {
  * position in the text, so failures are described, not linked.
  */
 export function ChecksSummary({ failed, all }: { failed: readonly unknown[]; all: readonly unknown[] | null }): JSX.Element {
+  const id = useId();
   const failures = checkRows(failed), every = checkRows(all ?? failed);
-  return <section className="translation-checks" aria-labelledby="translation-checks-heading">
-    <h2 id="translation-checks-heading" className="translation-section-title">Automatic translation checks</h2>
+  return <section className="translation-checks" aria-labelledby={`${id}-heading`}>
+    <h2 id={`${id}-heading`} className="translation-section-title">Automatic translation checks</h2>
     {failures.length > 0
       ? <InlineMessage tone="warning" title={failedChecksTitle(failures.length)}>
-          <ul className="translation-check-list">{failures.map((check, index) => <li key={index}>
-            {checkLabel(check.code)}{check.detail ? <span className="translation-check-detail">: {check.detail}</span> : null}
-          </li>)}</ul>
+          {failures.map((check, index) => <section key={index} className="translation-check" aria-labelledby={`${id}-check-${index}`}>
+            <h3 id={`${id}-check-${index}`}>{checkLabel(check.code)}</h3>
+            <dl className="translation-check-facts">
+              <div><dt>What it means</dt><dd>{checkExplanation(check.code)}</dd></div>
+              {check.detail && <div><dt>From the translation run</dt><dd><span className="translation-check-detail">“{check.detail}”</span></dd></div>}
+            </dl>
+            <p>{checkNoLocation}</p>
+            <dl className="translation-check-facts">
+              <div><dt>If the translation is right anyway</dt><dd>{checkDeviationGuidance}</dd></div>
+              {check.code && <div><dt>Technical code</dt><dd><code>{check.code}</code></dd></div>}
+            </dl>
+          </section>)}
         </InlineMessage>
       : <p className="translation-checks-calm">{every.length > 0 ? "All automatic checks passed." : "No automatic checks were recorded for this translation."}</p>}
     {every.length > 0 && <details className="translation-checks-all">
@@ -32,7 +43,7 @@ export function ChecksSummary({ failed, all }: { failed: readonly unknown[]; all
       <ul className="translation-check-list">{every.map((check, index) => <li key={index}>
         <StatusBadge tone={check.passed ? "success" : "warning"}>{check.passed ? "Passed" : "Failed"}</StatusBadge>{" "}
         {checkLabel(check.code)}{check.detail ? <span className="translation-check-detail">: {check.detail}</span> : null}
-        {check.code && <code className="translation-check-code">{check.code}</code>}
+        {check.code && <dl className="translation-check-code-line"><dt>Technical code</dt><dd><code className="translation-check-code">{check.code}</code></dd></dl>}
       </li>)}</ul>
     </details>}
   </section>;

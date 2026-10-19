@@ -157,3 +157,15 @@
 /* Reserve the number gutter in both editing and reading modes. */
 .translation-text, .translation-review .translation-diff,
 .translation-editor-mirror, .translation-editor-input { padding-inline-start: var(--space-6); }
+
+/* Failed automatic check blocks (spec section 9). */
+.translation-check { margin-top: var(--space-2); }
+.translation-check h3 { font-size: var(--size-md); margin: 0 0 var(--space-2); }
+.translation-check p { margin: 0 0 var(--space-2); }
+.translation-check-facts { margin: 0; }
+.translation-check-facts dt { font-weight: var(--weight-strong); }
+.translation-check-facts dd { margin: 0 0 var(--space-2); }
+.translation-check-code-line { display: flex; gap: var(--space-1); margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--size-xs); }
+.translation-check-code-line dt::after { content: ":"; }
+.translation-check-code-line dd { margin: 0; }
+.translation-check-code-line .translation-check-code { margin-left: 0; }

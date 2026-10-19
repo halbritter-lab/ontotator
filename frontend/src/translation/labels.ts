@@ -77,6 +77,19 @@ export function checkLabel(code: unknown): string {
   return Object.prototype.hasOwnProperty.call(checkLabels, value) ? checkLabels[value] : humanize(value);
 }
 
+/** Draft explanations; confirmed by the user before release (docs/superpowers/reviews/2026-10-19-translation-check-explanations-review.md). */
+export const checkExplanations: Readonly<Record<string, string>> = {
+  units_added: "The translation run's check found a unit of measurement in the translation that it did not find in the source.",
+  numbers_changed: "The translation run's check found numbers in the translation that differ from those in the source.",
+};
+export const unknownCheckExplanation = "The translation run reported this check as failed. Ontocurator has no description for it; ask the project lead what it checks.";
+export const checkNoLocation = "This check does not point to a text location. Compare the source and the translation yourself.";
+export const checkDeviationGuidance = "Choose Accepted unchanged and say in the rationale why the difference is correct. If it changes the clinical meaning, choose Query or Rejected with the category Number or unit.";
+
+export function checkExplanation(code: string): string {
+  return Object.hasOwn(checkExplanations, code) ? checkExplanations[code] : unknownCheckExplanation;
+}
+
 export function failedChecksTitle(count: number): string {
   return count === 1 ? "1 automatic check failed" : `${count} automatic checks failed`;
 }

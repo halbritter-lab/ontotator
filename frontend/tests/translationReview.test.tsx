@@ -266,7 +266,7 @@ it("uses only the workspace's comparison choices and shows passed inherited chec
   fireEvent.change(select, { target: { value: "comparison-2" } }); expect(screen.getByText("Second comparison")).toBeDefined();
   const all = screen.getByText("Show all checks").closest("details") as HTMLDetailsElement;
   expect(all.open).toBe(false);
-  expect(within(all).getAllByRole("listitem").map(item => item.textContent)).toEqual(["Failed Units added in translation: A unit changedunits_added", "Passed Numbersnumbers"]);
+  expect(within(all).getAllByRole("listitem").map(item => item.textContent)).toEqual(["Failed Units added in translation: A unit changedTechnical codeunits_added", "Passed NumbersTechnical codenumbers"]);
 });
 it("disposes an unmounted draft timer and ignores late workspace data after identity changes", async () => {
   const { unmount, save } = setup(); await edited(); unmount(); await clock(1600); expect(save).not.toHaveBeenCalled();
