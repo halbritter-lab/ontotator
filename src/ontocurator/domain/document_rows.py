@@ -1,0 +1,251 @@
+"""Pure rules of the lead's Documents table. A row is (case_id, language)."""
+
+from __future__ import annotations
+
+import unicodedata
+from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, Literal
+
+from ontocurator.domain.submission_labels import (
+    SubmissionKind,
+    round_ordinals,
+    submission_kind,
+)
+
+__all__ = [
+    "ACKNOWLEDGEABLE",
+    "CATEGORIES",
+    "NOT_NEWER",
+    "AssignmentFact",
+    "BarCategory",
+    "Chain",
+    "SubmissionKind",
+    "TranslationIssue",
+    "Version",
+    "bar_categories",
+    "bar_counts",
+    "base_chain_name",
+    "build_chains",
+    "bulk_target",
+    "missing_final_counts",
+    "open_target",
+    "prefix_matches",
+    "round_ordinals",
+    "submission_kind",
+    "translation_issue",
+    "version_label",
+]
+
+BarCategory = Literal[
+    "report-or-pause", "confirm-final", "translation", "missing-final"
+]
+CATEGORIES: tuple[BarCategory, ...] = (
+    "report-or-pause",
+    "confirm-final",
+    "translation",
+    "missing-final",
+)
+# Deliberate copy of final_causes.ACKNOWLEDGEABLE_CODES so domain/ stays free of
+# application imports; equality is asserted in tests/test_document_rows_facts.py.
+ACKNOWLEDGEABLE = frozenset(
+    {
+        "SELECTED_ROUND_ABANDONED",
+        "SELECTED_ROUND_SUPERSEDED",
+        "SELECTED_RESULT_REVISED",
+        "SELECTED_TEXT_CORRECTED",
+        "SELECTED_NEWER_RESULT",
+    }
+)
+NOT_NEWER = frozenset({"rejected", "query"})
+
+TranslationIssue = Literal["automatic_check_failed", "rejected", "query"]
+
+
+@dataclass(frozen=True)
+class Version:
+    document_id: str
+    case_id: str
+    language: str
+    external_id: str
+    version: int
+    origin: str
+    derived_from: str | None
+    translation: Mapping[str, Any] | None
+    translation_status: str | None
+    position: int | None
+    latest_decision: str | None = None
+
+    @property
+    def not_newer(self) -> bool:
+        """A correction whose latest review is rejected or queried is not newer."""
+        return (
+            self.origin == "correction"
+            and self.translation_status == "reviewed"
+            and self.latest_decision in NOT_NEWER
+        )
+
+
+@dataclass(frozen=True)
+class Chain:
+    root_id: str
+    name: str
+    versions: tuple[Version, ...]  # ascending version
+
+    @property
+    def root(self) -> Version:
+        return self.versions[0]
+
+    @property
+    def newest(self) -> Version:
+        return self.versions[-1]
+
+
+@dataclass(frozen=True)
+class AssignmentFact:
+    assignment_id: int
+    document_id: str
+    task: str
+    status: str
+    held: bool
+    revoked: bool
+    pseudonym: str
+    user_id: int
+    active_round_id: str | None
+
+
+def base_chain_name(root: Version) -> str:
+    if root.origin == "native":
+        return "Source"
+    if root.origin == "human_translation":
+        return "Human translation"
+    run = root.translation or {}
+    provider = str(run.get("provider") or "").strip()
+    model = str(run.get("model") or "").strip()
+    return f"{provider} {model}".strip() if provider else "Machine translation"
+
+
+def build_chains(versions: Sequence[Version]) -> list[Chain]:
+    by_id = {item.document_id: item for item in versions}
+
+    def root(item: Version) -> Version:
+        seen: set[str] = set()
+        while item.origin == "correction":
+            parent = item.derived_from
+            if item.document_id in seen or parent is None or parent not in by_id:
+                raise ValueError(f"Invalid correction ancestry for {item.document_id}")
+            seen.add(item.document_id)
+            item = by_id[parent]
+        return item
+
+    groups: dict[str, list[Version]] = {}
+    for item in versions:
+        groups.setdefault(root(item).document_id, []).append(item)
+    names = {rid: base_chain_name(by_id[rid]) for rid in groups}
+    counts = Counter(names.values())
+    chains = [
+        Chain(
+            rid,
+            names[rid]
+            if counts[names[rid]] == 1
+            else f"{names[rid]} · {by_id[rid].external_id}",
+            tuple(sorted(items, key=lambda x: x.version)),
+        )
+        for rid, items in groups.items()
+    ]
+    return sorted(
+        chains,
+        key=lambda c: (c.root.position is None, c.root.position or 0, c.root_id),
+    )
+
+
+def version_label(chain: Chain, version: Version, *, parallel: bool) -> str:
+    return f"{chain.name} v{version.version}" if parallel else f"v{version.version}"
+
+
+def missing_final_counts(
+    *, has_selection: bool, submission_count: int, assignments: Iterable[AssignmentFact]
+) -> bool:
+    """Missing final result rule: no selection, a submission, all work submitted."""
+    if has_selection or submission_count == 0:
+        return False
+    return all(
+        item.status == "submitted" and not item.held
+        for item in assignments
+        if not item.revoked
+    )
+
+
+def translation_issue(chain: Chain) -> TranslationIssue | None:
+    newest = chain.newest
+    if newest.translation_status == "automatic_check_failed":
+        return "automatic_check_failed"
+    if newest.translation_status == "reviewed":
+        if newest.latest_decision == "rejected":
+            return "rejected"
+        if newest.latest_decision == "query":
+            return "query"
+    return None
+
+
+def bulk_target(
+    chains: Sequence[Chain],
+) -> tuple[str | None, Literal["checkbox", "choose_in_versions"]]:
+    if len(chains) != 1:
+        return None, "choose_in_versions"
+    target = [item for item in chains[0].versions if not item.not_newer][-1]
+    if (
+        target.origin == "correction"
+        and target.translation_status == "ready_for_review"
+    ):
+        return None, "choose_in_versions"
+    return target.document_id, "checkbox"
+
+
+def open_target(
+    chains: Sequence[Chain], *, final_document_id: str | None
+) -> tuple[str, Literal["final", "newest", "most_recent_root"]]:
+    if final_document_id is not None:
+        return final_document_id, "final"
+    if len(chains) == 1:
+        return chains[0].newest.document_id, "newest"
+    # Open question 3: without a creation time the root with the highest position wins.
+    latest = max(
+        chains,
+        key=lambda c: (-1 if c.root.position is None else c.root.position, c.root_id),
+    )
+    return latest.newest.document_id, "most_recent_root"
+
+
+def bar_categories(
+    codes: Iterable[str], *, translation_failed: bool, missing_final: bool
+) -> set[BarCategory]:
+    present = set(codes)
+    result: set[BarCategory] = set()
+    if present & {"OPEN_PROBLEM_REPORT", "TASK_PAUSED_WITHOUT_REPORT"}:
+        result.add("report-or-pause")
+    if present & ACKNOWLEDGEABLE:
+        result.add("confirm-final")
+    if translation_failed:
+        result.add("translation")
+    if missing_final:
+        result.add("missing-final")
+    return result
+
+
+def bar_counts(rows: Iterable[set[BarCategory]]) -> dict[str, int]:
+    counts: dict[str, int] = {"total": 0, **{c: 0 for c in CATEGORIES}}
+    for categories in rows:
+        if categories:
+            counts["total"] += 1
+        for category in categories:
+            counts[category] += 1
+    return counts
+
+
+def prefix_matches(q: str, identifiers: Iterable[str]) -> bool:
+    prefix = unicodedata.normalize("NFKC", q)
+    return any(
+        unicodedata.normalize("NFKC", item).startswith(prefix) for item in identifiers
+    )
