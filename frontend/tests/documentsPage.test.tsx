@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api, type DocumentRowsPage, type ProjectDocumentSummary, type RowSubmissions } from "../src/api/client";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api, type DocumentRowView, type DocumentRowsPage, type ProjectDocumentSummary, type RowSubmissions } from "../src/api/client";
 import { DocumentsPage, type DocumentsPageProps } from "../src/admin/DocumentsPage";
-import { group, page, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, submissions, version } from "./documents/fixtures";
+import { recordDecision } from "../src/documents/visitState";
+import { group, page, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, submissions, version, work } from "./documents/fixtures";
 
 const { expandedProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[] }));
 vi.mock("../src/documents/ExpandedRow", async importOriginal => {
@@ -41,7 +42,7 @@ beforeEach(() => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listUploads").mockResolvedValue([]);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); });
 
 it("tells non-leads that Documents is for project leads without loading anything", () => {
   renderPage({ canManage: false });
@@ -92,7 +93,8 @@ it("offers the filters, pushes filter changes without page and announces the new
   mockRows(page([scenarioS1().group, scenarioS5().group]));
   view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} query={{ language: "de", decision: "all", status: "held" }} onNavigate={onNavigate} />);
   await waitFor(() => expect(live.textContent).toBe("2 texts shown"));
-  expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { language: "de", decision: "all", status: "held" });
+  // The first request of the new filter carries no retained rows (a filter change starts a new visit).
+  expect(api.listDocumentRows).toHaveBeenCalledWith("p", { language: "de", decision: "all", status: "held" });
 });
 
 it("selects every checkbox row of the page including collapsed groups and opens the dialogs with those versions", async () => {
@@ -219,4 +221,101 @@ it("renders cards on narrow viewports", async () => {
   const list = await screen.findByRole("list", { name: "Documents" });
   expect(within(list).getByRole("article")).toBeTruthy();
   expect(screen.queryByRole("table")).toBeNull();
+});
+
+describe("Resolved and Changed badges", () => {
+  let served: DocumentRowsPage;
+  const serve = (next: DocumentRowsPage) => { served = next; };
+  const refetch = async () => {
+    const calls = vi.mocked(api.listDocumentRows).mock.calls.length;
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
+  };
+  const lastRequest = () => vi.mocked(api.listDocumentRows).mock.calls.at(-1)?.[1];
+  const disclosure = (name: string) => screen.getByRole("button", { name: `Show submissions, ${name}` });
+
+  beforeEach(() => {
+    vi.mocked(api.listDocumentRows).mockImplementation(async () => structuredClone(served));
+    vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "x", language: "de", document_id: "d", submission_id: "s", revision: 2 });
+  });
+
+  /** case-0042 en waiting for a decision. */
+  const missing = (overrides: Partial<DocumentRowView> = {}) => row({
+    case_id: "case-0042", language: "en", versions: [version({ document_id: "case-0042-en" })],
+    categories: ["missing-final"], missing_final: { counts: true, reason: null }, ...overrides,
+  });
+
+  it("shows Resolved after the lead's own Keep, retains the row and collapses it once", async () => {
+    const s0 = scenarioS0();
+    const de = s0.group.rows[1];
+    serve(page([group("synthetic-accepted", [de])]));
+    vi.mocked(api.getRowSubmissions).mockImplementation(async (_key, caseId, language) => structuredClone(s0.submissions[rowKey(caseId, language)] ?? submissions(caseId, language)));
+    const { onNavigate } = renderPage({ query: { decision: "confirm-final", open: [rowKey("synthetic-accepted", "de")] } });
+    await waitFor(() => expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] }));
+    fireEvent.click(await screen.findByRole("button", { name: "Keep final result…" }));
+    const confirm = screen.getByRole("group", { name: "Keep final result" });
+    fireEvent.click(within(confirm).getByRole("checkbox", { name: "I reviewed these changes and keep this exact result" }));
+    serve(page([group("synthetic-accepted", [{ ...de, issues: [], categories: [], final: { ...de.final!, revision: 2 }, matches_decision: false, retained: true }])]));
+    fireEvent.click(within(confirm).getByRole("button", { name: "Keep as final" }));
+    await waitFor(() => expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("false"));
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", decision: "confirm-final" }, { replace: true });
+    expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] });
+    fireEvent.click(disclosure("synthetic-accepted · de"));
+    expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("true");
+    expect(await screen.findByText("Resolved")).toBeTruthy();
+    // A later refresh does not collapse the row again.
+    await refetch();
+    expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] });
+    expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("shows Changed: Work assigned when work was assigned elsewhere and keeps the row open", async () => {
+    serve(page([group("case-0042", [missing()])]));
+    renderPage({ query: { decision: "missing-final", open: [rowKey("case-0042", "en")] } });
+    await waitFor(() => expect(lastRequest()).toEqual({ decision: "missing-final", retain: ["case-0042:en"] }));
+    serve(page([group("case-0042", [missing({
+      categories: [], matches_decision: false, retained: true, missing_final: { counts: false, reason: "work_open" },
+      work: [work({ assignment_id: 9, document_id: "case-0042-en" })],
+    })])]));
+    await refetch();
+    expect(await screen.findByText("Changed: Work assigned")).toBeTruthy();
+    expect(screen.queryByText("Resolved")).toBeNull();
+    expect(disclosure("case-0042 · en").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("shows Changed: Task resumed for an external resume and Resolved for a resume recorded on the report page", async () => {
+    const held = missing({ categories: ["report-or-pause"], work: [work({ assignment_id: 7, document_id: "case-0042-en", held: true })] });
+    const resumed = { ...held, categories: [], matches_decision: false, retained: true, work: [work({ assignment_id: 7, document_id: "case-0042-en" })] };
+    serve(page([group("case-0042", [held])]));
+    const { unmount } = renderPage({ query: { decision: "report-or-pause", open: [rowKey("case-0042", "en")] } });
+    await waitFor(() => expect(lastRequest()).toEqual({ decision: "report-or-pause", retain: ["case-0042:en"] }));
+    serve(page([group("case-0042", [resumed])]));
+    await refetch();
+    expect(await screen.findByText("Changed: Task resumed")).toBeTruthy();
+    unmount();
+
+    // Back from the report page: the remount keeps the visit and sees the recorded resume.
+    recordDecision("p", "case-0042:en");
+    vi.mocked(api.listDocumentRows).mockClear();
+    renderPage({ query: { decision: "report-or-pause", open: [rowKey("case-0042", "en")] } });
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalled());
+    expect(vi.mocked(api.listDocumentRows).mock.calls[0][1]).toEqual({ decision: "report-or-pause", retain: ["case-0042:en"] });
+    await waitFor(() => expect(disclosure("case-0042 · en").getAttribute("aria-expanded")).toBe("false"));
+    fireEvent.click(disclosure("case-0042 · en"));
+    expect(await screen.findByText("Resolved")).toBeTruthy();
+  });
+
+  it("starts a new visit after a filter change and sends no retain without a decision filter", async () => {
+    serve(page([group("case-0042", [missing()])]));
+    const onNavigate = vi.fn();
+    const view = renderPage({ query: { decision: "missing-final" }, onNavigate });
+    await waitFor(() => expect(lastRequest()).toEqual({ decision: "missing-final", retain: ["case-0042:en"] }));
+    view.rerender(<DocumentsPage projectKey="p" canManage query={{ decision: "all" }} onNavigate={onNavigate} />);
+    await waitFor(() => expect(sessionStorage.getItem(`ontocurator:documents-visit:p:${JSON.stringify({ decision: "missing-final" })}`)).toBeNull());
+    expect(api.listDocumentRows).toHaveBeenCalledWith("p", { decision: "all" });
+    view.rerender(<DocumentsPage projectKey="p" canManage query={{}} onNavigate={onNavigate} />);
+    await waitFor(() => expect(lastRequest()).toEqual({}));
+    await refetch();
+    expect(lastRequest()).toEqual({});
+  });
 });

@@ -5,6 +5,7 @@ import { AuthGate } from "../src/app/AuthGate";
 import { api, ApiError, type AdminUser, type CreatedUser, type ProjectSummary } from "../src/api/client";
 import { testUser } from "./session";
 import { deferred, ontologies, settings } from "./projectFixtures";
+import { group, page, row, version } from "./documents/fixtures";
 
 const user = testUser("root", { username: "root", is_system_admin: true });
 const alex: AdminUser = { qualification: null, username: "alex", display_name: "Alex", email: null, pseudonym: "ann-alex", is_system_admin: false, active: true, languages: [], projects: [] };
@@ -56,15 +57,17 @@ it("keeps pending issuance and visible one-time code through shell/hash/logout u
 
 it("uses controlled document query routes and actual managed-project documents", async () => {
   window.history.replaceState(null, "", "#/projects/p%2Fkey/documents?language=de&status=invalid&q=ID&select=ID%20%2B%2F%C3%9F");
-  vi.spyOn(api, "listProjectDocuments").mockResolvedValue([{ document_id: "ID +/ß", language: "de", status: "not_started", position: null, text_length: 4 }] as never);
+  const documentRow = row({ case_id: "ID", language: "de", versions: [version({ document_id: "ID +/ß" })] });
+  vi.spyOn(api, "listDocumentRows").mockResolvedValue(page([group("ID", [documentRow])]));
+  vi.spyOn(api, "listProjectDocuments").mockResolvedValue([]);
+  vi.spyOn(api, "listCases").mockResolvedValue([]);
   render(<App user={user} />);
-  await screen.findByText("ID +/ß");
-  expect(api.listProjectDocuments).toHaveBeenLastCalledWith("p/key", { language: "de", status: undefined, q: "ID" });
-  expect(screen.getByLabelText("Select ID +/ß")).toHaveProperty("checked", true);
+  expect(await screen.findByLabelText("Select ID · de")).toHaveProperty("checked", true);
+  expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { language: "de", q: "ID" });
   expect(screen.getByRole("link", { name: "Documents" }).getAttribute("aria-current")).toBe("page");
   fireEvent.change(screen.getByLabelText("Status"), { target: { value: "open" } });
   await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?language=de&status=open&q=ID"));
-  await waitFor(() => expect(api.listProjectDocuments).toHaveBeenLastCalledWith("p/key", { language: "de", status: "open", q: "ID" }));
+  await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { language: "de", status: "open", q: "ID" }));
 });
 
 it("restores native history during reset issuance and acknowledged code, then permits Back and Forward after Close", async () => {

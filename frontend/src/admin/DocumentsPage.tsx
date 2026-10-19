@@ -17,7 +17,7 @@ import {
 import { formatDateTime, labelFor, plural } from "../app/labels";
 import { routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
-import { Button, Checkbox, Dialog, EmptyState, Select, TextInput, Toolbar, useMediaQuery } from "../ui";
+import { Button, Checkbox, Dialog, EmptyState, Select, StatusBadge, TextInput, Toolbar, useMediaQuery } from "../ui";
 import { DecisionBar } from "../documents/DecisionBar";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, groupName, initialExpandedGroups } from "../documents/DocumentsTable";
@@ -32,6 +32,7 @@ import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
 import { useDocumentRows } from "../documents/useDocumentRows";
 import { useRowSubmissions } from "../documents/useRowSubmissions";
+import { clearVisits, recordDecision, rememberShown, retainedKeys, rowBadges, type RowBadge } from "../documents/visitState";
 import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
 import { AssignDialog } from "./AssignDialog";
 import { DistributionDialog } from "./DistributionDialog";
@@ -126,7 +127,13 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const request = rowsQuery(query);
   const requestIdentity = JSON.stringify(request);
   const filterIdentity = JSON.stringify({ ...request, page: undefined, case: undefined });
-  const rows = useDocumentRows(projectKey, request);
+  // Visit state (Resolved / Changed badges) exists only under a decision filter; it is keyed by
+  // the whole request, so a filter or page change starts a new visit.
+  const decisionActive = request.decision !== undefined || request.final === "missing";
+  const [retainState, setRetainState] = useState<{ identity: string; keys: readonly string[] } | null>(null);
+  const retain = !decisionActive ? []
+    : retainState?.identity === requestIdentity ? retainState.keys : retainedKeys(projectKey, requestIdentity);
+  const rows = useDocumentRows(projectKey, retain.length ? { ...request, retain: [...retain] } : request);
   const page: DocumentRowsPage | null = rows.page;
 
   const [announcement, setAnnouncement] = useState("");
@@ -165,12 +172,20 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // Deep link `case` + `language`: that row is open until the lead collapses it.
   const deepKey = query.case && query.language ? `${query.case}:${query.language}` : null;
   const [collapsedDeepKey, setCollapsedDeepKey] = useState<string | null>(null);
+  // Rows collapsed automatically because they became Resolved (until the lead opens them again
+  // or the filter changes).
+  const [autoCollapsedState, setAutoCollapsedState] = useState<{ identity: string; keys: ReadonlySet<string> } | null>(null);
+  const autoCollapsed: ReadonlySet<string> = useMemo(
+    () => (autoCollapsedState?.identity === requestIdentity ? autoCollapsedState.keys : new Set()), [autoCollapsedState, requestIdentity]);
+  const setAutoCollapsed = (keys: ReadonlySet<string>) => setAutoCollapsedState({ identity: requestIdentity, keys });
   const openKeys = useMemo(() => {
     const keys = new Set(query.open ?? []);
     if (deepKey && collapsedDeepKey !== deepKey) keys.add(deepKey);
+    for (const key of autoCollapsed) keys.delete(key);
     return keys;
-  }, [query.open, deepKey, collapsedDeepKey]);
-  const viewQuery: ProjectDocumentsQuery = { ...query, ...(openKeys.size ? { open: [...openKeys] } : {}) };
+  }, [query.open, deepKey, collapsedDeepKey, autoCollapsed]);
+  const { open: _routeOpen, ...queryWithoutOpen } = query;
+  const viewQuery: ProjectDocumentsQuery = { ...queryWithoutOpen, ...(openKeys.size ? { open: [...openKeys] } : {}) };
 
   const documentsRoute = (patch: ProjectDocumentsQuery): Route => {
     const next: Route = { name: "projectDocuments", key: projectKey };
@@ -185,9 +200,38 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     if (next.has(key)) {
       next.delete(key);
       if (key === deepKey) setCollapsedDeepKey(key);
-    } else next.add(key);
+    } else {
+      next.add(key);
+      if (autoCollapsed.has(key)) setAutoCollapsed(new Set([...autoCollapsed].filter(item => item !== key)));
+    }
     onNavigate(documentsRoute({ open: [...next] }), { replace: true });
   };
+
+  // Visit state: a filter change clears the other visits of the project.
+  useEffect(() => { clearVisits(projectKey, requestIdentity); }, [projectKey, requestIdentity]);
+
+  // Remember the matching rows of each new page, retain them in later requests and badge the
+  // remembered rows that stopped matching; Resolved rows collapse once.
+  const [badgeState, setBadgeState] = useState<{ identity: string; badges: ReadonlyMap<string, RowBadge> } | null>(null);
+  const badges: ReadonlyMap<string, RowBadge> = badgeState?.identity === requestIdentity ? badgeState.badges : new Map();
+  useEffect(() => {
+    if (!page || !decisionActive) return;
+    const rowsShown = page.groups.flatMap(group => group.rows);
+    rememberShown(projectKey, requestIdentity, rowsShown);
+    const keys = retainedKeys(projectKey, requestIdentity);
+    if (keys.some(key => !retain.includes(key))) setRetainState({ identity: requestIdentity, keys });
+    const next = rowBadges(projectKey, requestIdentity, rowsShown);
+    const resolvedBefore = new Set([...badges].filter(([, badge]) => badge.tone === "success").map(([key]) => key));
+    const collapse = [...next].filter(([key, badge]) => badge.tone === "success" && !resolvedBefore.has(key) && openKeys.has(key)).map(([key]) => key);
+    setBadgeState({ identity: requestIdentity, badges: next });
+    if (collapse.length) {
+      setAutoCollapsed(new Set([...autoCollapsed, ...collapse]));
+      if (deepKey && collapse.includes(deepKey)) setCollapsedDeepKey(deepKey);
+      onNavigate(documentsRoute({ open: [...openKeys].filter(key => !collapse.includes(key)) }), { replace: true });
+    }
+    // Only a new page carries new row states.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   // Group expansion: initial rule per filter set, then the lead's own toggles.
   const [groupState, setGroupState] = useState<{ identity: string; groups: ReadonlySet<string> } | null>(null);
@@ -333,6 +377,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     setConfirm({ ...current, busy: true, failure: null });
     api.selectFinalResult(projectKey, selectionPayload(request)).then(() => {
       notifyFinalSelectionChanged(projectKey);
+      recordDecision(projectKey, request.rowKey);
       pendingSuccess.current = { request, before };
       setConfirm(value => (value?.request === request ? null : value));
       rows.reload();
@@ -392,8 +437,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   const renderExpanded = (row: DocumentRowView) => {
     const notice = rowNotice(row);
+    const badge = badges.get(rowKeyOf(row));
     const own = confirm?.request.rowKey === rowKeyOf(row) ? confirm : null;
     return <>
+      {badge && <p className="documents-row-notice"><StatusBadge tone={badge.tone}>{badge.text}</StatusBadge></p>}
       {notice && <p className="documents-row-notice">{notice}</p>}
       <ExpandedRowLoader row={row} refresh={page} projectKey={projectKey} query={viewQuery} onNavigate={route => onNavigate(route)}
         adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} onAnnounce={announce} textVersionTools={textVersionTools}

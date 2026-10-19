@@ -5,6 +5,7 @@ import { api, ApiError, type JobView, type ProjectProgress, type ProjectSummary 
 import * as downloads from "../src/api/download";
 import { testUser } from "./session";
 import { settings } from "./projectFixtures";
+import { group, page, row, version } from "./documents/fixtures";
 
 const user = testUser("lead", { username: "real-lead", is_system_admin: false });
 const project: ProjectSummary = { project_key: "p/key", name: "Research", description: null, roles: ["lead"], allowed_modes: ["independent"], document_count: 1, can_manage: true };
@@ -25,6 +26,8 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessio
 
 it("follows the real Progress Assign link to an encoded document selection through App", async () => {
   window.history.replaceState(null, "", "#/projects/p%2Fkey/progress");
+  vi.spyOn(api, "listDocumentRows").mockResolvedValue(page([group("case-1", [row({ case_id: "case-1", language: "de", versions: [version({ document_id: "ID +/#ß" })] })])]));
+  vi.spyOn(api, "listCases").mockResolvedValue([]);
   render(<App user={user} />);
   const table = await screen.findByRole("table", { name: "Progress documents" });
   expect(api.getProgress).toHaveBeenCalledWith("p/key");
@@ -32,9 +35,9 @@ it("follows the real Progress Assign link to an encoded document selection throu
   expect(assign.getAttribute("href")).toBe("#/projects/p%2Fkey/documents?select=ID+%2B%2F%23%C3%9F");
   fireEvent.click(assign);
   await screen.findByRole("heading", { name: "Documents" });
-  await waitFor(() => expect(screen.getByLabelText("Select ID +/#ß")).toHaveProperty("checked", true));
+  await waitFor(() => expect(screen.getByLabelText("Select case-1 · de")).toHaveProperty("checked", true));
   expect(window.location.hash).toBe(assign.getAttribute("href"));
-  expect(api.listProjectDocuments).toHaveBeenCalledWith("p/key", { language: undefined, status: undefined, q: undefined });
+  expect(api.listDocumentRows).toHaveBeenCalledWith("p/key", {});
   expect(screen.getByRole("link", { name: "Documents" }).getAttribute("aria-current")).toBe("page");
 });
 
