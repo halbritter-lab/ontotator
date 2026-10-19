@@ -22,12 +22,17 @@ it('waits for current project authority before mounting the exact encoded lead r
   expect((await screen.findByRole('region', { name: 'Authorized report detail' })).textContent).toBe('p/key · report/1 % · true');
 });
 
-it('does not mount a lead report surface for a project member without management authority', async () => {
+it('answers a project member without management authority with "Problem report not found" and a way to My tasks', async () => {
   window.history.replaceState(null, '', '#/projects/p%2Fkey/problem-reports/report-1');
   vi.spyOn(api, 'listProjects').mockResolvedValue([{ ...project, can_manage: false, roles: ['annotator'] }]);
+  vi.spyOn(api, 'listMyTasks').mockReturnValue(new Promise(() => {}));
   render(<App user={testUser('owner')} />);
-  await screen.findByRole('heading', { name: 'You do not have access to this page.' });
+  const heading = await screen.findByRole('heading', { name: 'Problem report not found' });
+  expect(screen.queryByRole('heading', { name: 'You do not have access to this page.' })).toBeNull();
   expect(screen.queryByRole('region', { name: 'Authorized report detail' })).toBeNull();
+  fireEvent.click(within(heading.parentElement!).getByRole('button', { name: 'My tasks' }));
+  await waitFor(() => expect(window.location.hash).toBe(routeHref({ name: 'tasks' })));
+  expect(screen.queryByRole('heading', { name: 'Problem report not found' })).toBeNull();
 });
 
 it('passes the documents query and the resume action from the route to the report detail', async () => {

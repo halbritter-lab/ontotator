@@ -208,7 +208,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       const canManage = !!projects.find(project => project.project_key === route.key)?.can_manage;
       content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
         : canManage ? <ProblemReportDetail key={JSON.stringify([user.username, route.key, route.reportId])} projectKey={route.key} reportId={route.reportId} canManage={canManage} action={route.action} documents={route.documents} onNavigate={go} />
-        : <NotFound noAccess onNavigate={go} />;
+        : <EmptyState title="Problem report not found" action={<Button onClick={() => go({ name: "tasks" })}>My tasks</Button>} />;
       break;
     }
     case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
