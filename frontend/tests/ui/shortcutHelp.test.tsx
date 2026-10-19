@@ -29,6 +29,6 @@ it("two_hosts_render_one_overlay_and_transfer_ownership", () => {
 });
 it("open_shortcut_help_opens_it_and_close_button_dismisses", () => {
   render(<ShortcutHelpHost />); act(openShortcutHelp);
-  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+  fireEvent.click(within(screen.getByRole("dialog").querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
   expect(screen.queryByRole("dialog")).toBeNull();
 });

@@ -46,9 +46,9 @@ describe("users administration", () => {
     expect(within(dialog).getByText(created.code)).toBeTruthy();
     expect(api.adminCreateUser).toHaveBeenCalledWith({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false });
     expect(await leave.current?.()).toBe(false);
-    expect((within(dialog).getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
     await userEvent.setup().click(within(dialog).getByLabelText("I have handed over or stored the code"));
-    await userEvent.setup().click(within(dialog).getByRole("button", { name: "Close" }));
+    await userEvent.setup().click(within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
     expect(screen.queryByText(created.code)).toBeNull(); expect(await leave.current?.()).toBe(true);
     expect(screen.getByText("Beatrice")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Refresh users" })); await load(); expect(screen.queryByText(created.code)).toBeNull();

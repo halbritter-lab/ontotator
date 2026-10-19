@@ -48,7 +48,7 @@ it("keeps pending issuance and visible one-time code through shell/hash/logout u
   fireEvent.click(within(dialog).getByLabelText("I have handed over or stored the code"));
   link("My tasks"); logout(); await act(async () => {});
   expect(window.location.hash).toBe("#/admin/users"); expect(onLogout).not.toHaveBeenCalled();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+  fireEvent.click(within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
   logout(); await waitFor(() => expect(onLogout).toHaveBeenCalledOnce());
   link("My tasks"); await screen.findByRole("heading", { name: "My tasks" });
   expect(screen.queryByText("setup-secret")).toBeNull();
@@ -86,7 +86,7 @@ it("restores native history during reset issuance and acknowledged code, then pe
   act(() => window.history.back());
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 70)); });
   expect(window.location.hash).toBe("#/admin/users"); expect(screen.getByText("reset-secret")).toBeTruthy();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+  fireEvent.click(within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
   act(() => window.history.back());
   await screen.findByRole("heading", { name: "My tasks" });
   act(() => window.history.forward());

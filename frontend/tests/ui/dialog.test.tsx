@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { StrictMode, createRef, useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import { ConfirmDialog } from "../../src/ui/ConfirmDialog";
 import { Dialog } from "../../src/ui/Dialog";
 import { useShortcut } from "../../src/ui/shortcuts";
 
@@ -68,7 +72,7 @@ it("backdrop_closes_only_when_enabled", () => {
   fireEvent.click(screen.getByRole("dialog").parentElement!);
   expect(close).not.toHaveBeenCalled();
   view.rerender(<Dialog open title="Edit" onClose={close} closeOnBackdrop><button>Inside</button></Dialog>);
-  fireEvent.click(screen.getByRole("button"));
+  fireEvent.click(screen.getByRole("button", { name: "Inside" }));
   expect(close).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("dialog").parentElement!);
   expect(close).toHaveBeenCalledOnce();
@@ -95,4 +99,36 @@ it("keeps_focus_in_an_empty_dialog", async () => {
   render(<Dialog open title="Wait">Waiting</Dialog>);
   await userEvent.setup().tab();
   expect(document.activeElement).toBe(screen.getByRole("dialog"));
+});
+it("renders_a_header_close_button_only_with_onClose", () => {
+  const close = vi.fn();
+  const { rerender } = render(<Dialog open title="T" onClose={close}><button>Body</button></Dialog>);
+  const button = screen.getByRole("button", { name: "Close" });
+  fireEvent.click(button); expect(close).toHaveBeenCalledOnce();
+  rerender(<Dialog open title="T"><button>Body</button></Dialog>);
+  expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+});
+it("initial_focus_skips_the_header_close_button", () => {
+  render(<Dialog open title="T" onClose={vi.fn()}><button>Body</button></Dialog>);
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Body" }));
+});
+it("focuses_the_dialog_when_the_body_has_nothing_focusable", () => {
+  render(<Dialog open title="T" onClose={vi.fn()}><p>Text</p></Dialog>);
+  expect(document.activeElement).toBe(screen.getByRole("dialog"));
+});
+it("header_close_is_first_in_tab_order_and_footer_is_outside_the_body", () => {
+  render(<Dialog open title="T" onClose={vi.fn()} footer={<button>Done</button>}><button>Body</button></Dialog>);
+  const dialog = screen.getByRole("dialog");
+  expect(dialog.querySelector(".ui-dialog-header button")).toBe(screen.getByRole("button", { name: "Close" }));
+  expect(screen.getByRole("button", { name: "Done" }).closest(".ui-dialog-body")).toBeNull();
+});
+it("busy_confirm_dialog_has_no_header_close", () => {
+  render(<ConfirmDialog open busy title="Delete" message={<p>m</p>} confirmLabel="Delete" onConfirm={vi.fn()} onCancel={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+});
+it("md_dialog_is_a_full_height_sheet_below_700px", () => {
+  const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../src/styles/components.css"), "utf8");
+  const block = css.match(/@media \(max-width: 699px\) \{\s*\.ui-dialog--md \{([^}]*)\}/);
+  expect(block?.[1]).toMatch(/height: calc\(100dvh - 2 \* var\(--space-4\)\)/);
+  expect(block?.[1]).toMatch(/max-width: none/);
 });

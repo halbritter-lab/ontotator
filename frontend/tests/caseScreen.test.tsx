@@ -893,7 +893,7 @@ describe("CaseScreen integration", () => {
     expect(within(firstDialog).getByText(/First historical note/).textContent).toBe("First historical note\n<em>literal</em>");
     expect(firstDialog.querySelector("em")).toBeNull();
     expect(within(firstDialog).queryByText("Current draft note")).toBeNull();
-    fireEvent.click(within(firstDialog).getByRole("button", { name: "Close" }));
+    fireEvent.click(within(firstDialog.querySelector(".ui-dialog-body") as HTMLElement).getByRole("button", { name: "Close" }));
     fireEvent.click(screen.getByRole("button", { name: "Submission 2 · 17 Oct 2026, 09:05" }));
     const dialog = screen.getByRole("dialog", { name: "Historical submission" });
     expect(within(dialog).getByText("Second historical note")).toBeDefined();
@@ -932,7 +932,7 @@ describe("CaseScreen integration", () => {
     expect(within(history).getByText("Exact submitted clinical note")).toBeDefined();
     expect(within(history).getByText("fresh-exact-submission")).toBeDefined();
     expect(within(history).queryByRole("textbox")).toBeNull();
-    fireEvent.click(within(history).getByRole("button", { name: "Close" }));
+    fireEvent.click(within(history.querySelector(".ui-dialog-body") as HTMLElement).getByRole("button", { name: "Close" }));
     expect(screen.getByRole("button", { name: /Finish & Submit Case/ })).toHaveProperty("disabled", true);
   });
 

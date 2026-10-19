@@ -201,7 +201,7 @@ it("shows ordered readonly reviewer snapshots, rationale and created variant", a
   expect(history.getByText("Created variant: actual-created-variant")).toBeTruthy();
   expect(history.queryByRole("textbox")).toBeNull();
   expect(history.queryByRole("button", { name: /Reopen|Submit/ })).toBeNull();
-  fireEvent.click(history.getByRole("button", { name: "Close" }));
+  fireEvent.click(within(screen.getByRole("dialog", { name: `Translation reviews: ${target.document_id}` }).querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
   expect(screen.queryByRole("dialog", { name: `Translation reviews: ${target.document_id}` })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: `Reviews for ${target.document_id}` }));
   const reopened = await screen.findByRole("dialog", { name: `Translation reviews: ${target.document_id}` });

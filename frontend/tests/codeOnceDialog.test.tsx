@@ -7,6 +7,9 @@ import { formatDateTime } from "../src/app/labels";
 
 const props = { open: true, kind: "setup" as const, code: "single-use-code-123", expires_at: "2026-10-16T12:30:00Z" };
 const acknowledgement = "I have handed over or stored the code";
+// The Dialog also renders a header "Close" icon button; these tests target the footer button.
+const footerClose = () => within(screen.getByRole("dialog").querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" });
+const headerClose = () => screen.getByRole("dialog").querySelector<HTMLButtonElement>("[data-dialog-close]")!;
 const deferred = () => {
   let resolve!: () => void;
   let reject!: (reason: unknown) => void;
@@ -34,9 +37,10 @@ describe("one-time code dialog", () => {
     const close = vi.fn();
     const user = userEvent.setup();
     render(<CodeOnceDialog {...props} onClose={close} />);
-    const button = screen.getByRole("button", { name: "Close" }) as HTMLButtonElement;
+    const button = footerClose() as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     await user.click(button);
+    await user.click(headerClose());
     await user.keyboard("{Escape}");
     fireEvent.click(screen.getByRole("dialog").parentElement!);
     expect(close).not.toHaveBeenCalled();
@@ -59,7 +63,7 @@ describe("one-time code dialog", () => {
     await user.click(checkbox);
     await user.keyboard("{Escape}");
     expect(close).not.toHaveBeenCalled();
-    expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((footerClose() as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("sends the exact code to the clipboard and confirms only after resolution", async () => {
@@ -76,7 +80,7 @@ describe("one-time code dialog", () => {
     await act(async () => { pending.resolve(); });
     expect(screen.getByRole("button", { name: "Copied" })).toBeDefined();
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
-    expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((footerClose() as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("keeps the code with a useful message when clipboard copying fails, and permits retry", async () => {
@@ -111,7 +115,7 @@ describe("one-time code dialog", () => {
     expect(screen.queryByText(props.code)).toBeNull();
     expect(screen.getByText("replacement-code")).toBeDefined();
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
-    expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((footerClose() as HTMLButtonElement).disabled).toBe(true);
     await act(async () => { pending.resolve(); });
     expect(screen.getByRole("button", { name: "Copy" }).getAttribute("aria-busy")).not.toBe("true");
     expect(screen.queryByRole("button", { name: "Copied" })).toBeNull();
@@ -153,11 +157,16 @@ describe("one-time code dialog", () => {
     await user.keyboard(" ");
     expect(document.activeElement).toBe(checkbox);
     await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
+    expect(document.activeElement).toBe(footerClose());
+    // The trap wraps to the header close button, which is first in tab order.
+    await user.tab();
+    expect(document.activeElement).toBe(headerClose());
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Copy" }));
     await user.tab({ shift: true });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
+    expect(document.activeElement).toBe(headerClose());
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(footerClose());
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByText(props.code)).toBeNull();

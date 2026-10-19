@@ -56,7 +56,7 @@ it("assigns only the selected document through real role-filtered controls and r
   await waitFor(() => expect(api.listProjectDocuments).toHaveBeenCalledTimes(2));
   expect(api.createAssignments).toHaveBeenCalledWith("p/key", { task: "annotate", confirm_language: false, rows: [{ document_id: "z/doc", username: "alice" }] });
   expect(api.listAssignments).toHaveBeenCalledTimes(2);
-  fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+  fireEvent.click(within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
   await screen.findByText("Open", { selector: ".assignee .status-pill" });
   expect(screen.getAllByTestId("document-row").map(row => within(row).getAllByRole("cell")[1].textContent)).toEqual(["z/doc", "a"]);
   expect(window.location.hash).toBe("#/projects/p%2Fkey/documents");

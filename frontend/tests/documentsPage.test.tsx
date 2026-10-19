@@ -57,7 +57,7 @@ it('decorates only the explicitly selected text/result and refreshes after a del
   fireEvent.change(screen.getByLabelText('Submitted result'), { target: { value: 'newer-result' } });
   fireEvent.click(screen.getByRole('button', { name: 'Replace final selection' }));
   await screen.findByText(/Selected: newer-result/);
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(within(screen.getByRole('dialog').querySelector('.modal-actions') as HTMLElement).getByRole('button', { name: 'Close' }));
   await waitFor(() => expect(within(version('newer')).queryByText('Selected final result')).toBeTruthy());
   expect(within(version('old')).queryByText('Selected final result')).toBeNull();
   expect(summary.textContent).toContain('newer · newer-result');

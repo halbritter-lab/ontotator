@@ -607,7 +607,7 @@ textarea.form-control {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  max-height: calc(100dvh - var(--space-6));
+  max-height: min(90vh, calc(100dvh - var(--space-6)));
   padding: var(--space-5);
   font-size: var(--size-md);
   line-height: var(--leading-md);
@@ -615,6 +615,12 @@ textarea.form-control {
 .ui-dialog--sm { max-width: 400px; }
 .ui-dialog--md { max-width: 540px; }
 .ui-dialog--lg { max-width: 760px; }
+/* Narrow viewports: a medium dialog becomes a full-height sheet; the footer stays fixed. */
+@media (max-width: 699px) {
+  .ui-dialog--md { width: calc(100vw - 2 * var(--space-4)); max-width: none; height: calc(100dvh - 2 * var(--space-4)); max-height: none; }
+}
+.ui-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); flex: none; }
+.ui-dialog-close { flex: none; margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0 0; min-width: 24px; min-height: 24px; }
 .ui-dialog-heading {
   margin: 0;
   font-size: var(--size-xl);
@@ -622,8 +628,9 @@ textarea.form-control {
   font-weight: var(--weight-strong);
   overflow-wrap: anywhere;
 }
-.ui-dialog-body { min-height: 0; overflow: auto; overflow-wrap: anywhere; }
+.ui-dialog-body { flex: 1 1 auto; min-height: 0; overflow: auto; overflow-wrap: anywhere; }
 .ui-dialog > .modal-actions {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;

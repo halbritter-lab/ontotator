@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
+import { IconButton } from "./IconButton";
+import { IconClose } from "./icons";
 import { useShortcut } from "./shortcuts";
 
 export interface DialogProps {
@@ -51,7 +53,9 @@ export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false,
     const focusInside = () => {
       if (!isActive(element)) return;
       const requested = requestedFocus.current?.current;
-      (requested && element.contains(requested) ? requested : focusableElements(element)[0] ?? element).focus();
+      // The header close button is reachable by Tab but never receives initial focus.
+      const candidates = focusableElements(element).filter((item) => !item.hasAttribute("data-dialog-close"));
+      (requested && element.contains(requested) ? requested : candidates[0] ?? element).focus();
     };
     focusInside();
     const containFocus = (event: FocusEvent) => {
@@ -81,7 +85,10 @@ export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false,
           else if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last!.focus(); }
           else if (!event.shiftKey && (document.activeElement === last || document.activeElement === event.currentTarget)) { event.preventDefault(); first.focus(); }
         }}>
-        <h2 className="ui-dialog-heading">{heading ?? title}</h2>
+        <div className="ui-dialog-header">
+          <h2 className="ui-dialog-heading">{heading ?? title}</h2>
+          {onClose && <IconButton className="ui-dialog-close" label="Close" icon={<IconClose />} variant="quiet" size="sm" data-dialog-close onClick={onClose} />}
+        </div>
         <div className="ui-dialog-body">{children}</div>
         {footer != null && <div className="modal-actions">{footer}</div>}
       </div>
