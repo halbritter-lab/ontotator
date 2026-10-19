@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.routes import get_access
 from ontocurator.application.problem_reports import (
+    PauseCandidate,
     ProblemReportService,
     ProblemReportView,
     ReportAction,
@@ -50,10 +51,32 @@ def report(
 
 @router.get("/projects/{key}/problem-reports")
 def reports(
-    key: str, request: Request, principal: PrincipalDep, document_id: str | None = None
+    key: str,
+    request: Request,
+    principal: PrincipalDep,
+    document_id: str | None = None,
+    assignment_id: int | None = None,
 ) -> list[ProblemReportView]:
     return ProblemReportService(request.app.state.repo.db).list(
-        get_access(request), key, document_id
+        get_access(request), key, document_id, assignment_id
+    )
+
+
+@router.get("/problem-reports/{report_id}")
+def get_report(
+    report_id: str, request: Request, principal: PrincipalDep
+) -> ProblemReportView:
+    return ProblemReportService(request.app.state.repo.db).get(
+        get_access(request), report_id
+    )
+
+
+@router.get("/problem-reports/{report_id}/pause-candidates")
+def pause_candidates(
+    report_id: str, request: Request, principal: PrincipalDep
+) -> list[PauseCandidate]:
+    return ProblemReportService(request.app.state.repo.db).pause_candidates(
+        get_access(request), report_id
     )
 
 

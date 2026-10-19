@@ -1,12 +1,38 @@
 """Problem reports and deliberate whole-task hold transitions."""
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ValidationError
 from sqlalchemy import Connection, RowMapping, func, insert, select, update
 
+# The view models live in problem_report_views; re-exported for routes and callers.
+from ontocurator.application.problem_report_views import (
+    AffectedTask as AffectedTask,
+)
+from ontocurator.application.problem_report_views import (
+    OtherActiveHold as OtherActiveHold,
+)
+from ontocurator.application.problem_report_views import (
+    PauseCandidate as PauseCandidate,
+)
+from ontocurator.application.problem_report_views import (
+    ProblemReportView as ProblemReportView,
+)
+from ontocurator.application.problem_report_views import (
+    ReportEventView as ReportEventView,
+)
+from ontocurator.application.problem_report_views import (
+    ReportHoldView as ReportHoldView,
+)
+from ontocurator.application.problem_report_views import (
+    ReportSubmissionRef as ReportSubmissionRef,
+)
+from ontocurator.application.problem_report_views import (
+    build_pause_candidates,
+    build_report_view,
+)
 from ontocurator.assignments.service import AssignmentService
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.auth.authority import lock_user_authority
@@ -46,24 +72,6 @@ from ontocurator.storage.workflow_tables import (
 )
 
 
-class ProblemReportView(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    report_id: str
-    project_key: str
-    assignment_id: int
-    document_id: str
-    reporter_id: int
-    round_id: str | None
-    submission_id: str | None
-    reason: str
-    state: Literal["open", "resolved", "withdrawn"]
-    revision: int
-    resolution: str | None
-    held_assignment_ids: list[int] = Field(default_factory=list)
-    events: list[dict[str, Any]] = Field(default_factory=list)
-    new_round: WorkRoundView | None = None
-
-
 class ProblemReportService:
     def __init__(self, db: Database) -> None:
         self.db = db
@@ -101,7 +109,8 @@ class ProblemReportService:
         access: Access,
         request_id: str,
         request_hash: str,
-    ) -> ProblemReportView | None:
+    ) -> dict[str, Any] | None:
+        """The stored response of a replayed command (the caller rebuilds the view)."""
         row = (
             conn.execute(
                 select(WorkflowCommandReceiptRow).where(
@@ -116,7 +125,7 @@ class ProblemReportService:
         if row:
             if row["request_hash"] != request_hash:
                 raise DomainError("WORKFLOW_REQUEST_CONFLICT")
-            return ProblemReportView.model_validate(row["response"])
+            return dict(row["response"])
         return None
 
     def _remember(
@@ -140,64 +149,44 @@ class ProblemReportService:
             )
         )
 
-    def _view(self, conn: Connection, report_id: str) -> ProblemReportView:
-        row = (
-            conn.execute(
-                select(
-                    ProblemReportRow,
-                    ProblemReportStateRow.state,
-                    ProblemReportStateRow.revision,
-                    ProblemReportStateRow.resolution,
-                    ProjectRow.project_key,
-                    AssignmentRow.document_id,
-                )
-                .join(
-                    ProblemReportStateRow,
-                    ProblemReportStateRow.report_id == ProblemReportRow.report_id,
-                )
-                .join(ProjectRow, ProjectRow.id == ProblemReportRow.project_id)
-                .join(AssignmentRow, AssignmentRow.id == ProblemReportRow.assignment_id)
-                .where(ProblemReportRow.report_id == report_id)
-            )
-            .mappings()
-            .one()
+    def _view(
+        self,
+        conn: Connection,
+        report_id: str,
+        access: Access,
+        project: str,
+        replayed: dict[str, Any] | None = None,
+    ) -> ProblemReportView:
+        """The report as ``access`` may see it (redacted for non-leads).
+
+        A replayed command returns its stored response when that response was
+        built by this read model for a viewer with no more rights than now (the
+        receipt belongs to the same user). Older receipts (raw event details) or
+        a viewer who lost the lead role get a freshly built, redacted view.
+        """
+        lead = can(access, Action.MANAGE_ASSIGNMENTS, project)
+        if replayed is not None:
+            try:
+                stored = ProblemReportView.model_validate(replayed)
+            except ValidationError:
+                stored = None
+            if (
+                stored is not None
+                and stored.viewer_label
+                and (lead or not stored.viewer_is_lead)
+            ):
+                return stored
+        new_round = (
+            WorkRoundView.model_validate(replayed["new_round"])
+            if replayed and replayed.get("new_round")
+            else None
         )
-        holds = list(
-            conn.execute(
-                select(TaskHoldRow.assignment_id)
-                .join(TaskHoldStateRow, TaskHoldStateRow.hold_id == TaskHoldRow.hold_id)
-                .where(
-                    TaskHoldRow.report_id == report_id,
-                    TaskHoldStateRow.active.is_(True),
-                )
-            ).scalars()
-        )
-        events = [
-            {
-                "action": r.action,
-                "details": r.details,
-                "created_at": r.created_at.isoformat(),
-            }
-            for r in conn.execute(
-                select(
-                    ProblemReportEventRow.action,
-                    ProblemReportEventRow.details,
-                    ProblemReportEventRow.created_at,
-                )
-                .where(ProblemReportEventRow.report_id == report_id)
-                .order_by(
-                    ProblemReportEventRow.created_at, ProblemReportEventRow.event_id
-                )
-            )
-        ]
-        return ProblemReportView(
-            **{
-                name: row[name]
-                for name in ProblemReportView.model_fields
-                if name in row
-            },
-            held_assignment_ids=sorted(set(holds)),
-            events=events,
+        return build_report_view(
+            conn,
+            report_id,
+            viewer_id=access.user_id,
+            viewer_is_lead=lead,
+            new_round=new_round,
         )
 
     def _hold(
@@ -327,7 +316,7 @@ class ProblemReportService:
                 raise AccessDenied("NOT_ALLOWED")
             replay = self._receipt(conn, pid, access, request_id, digest)
             if replay:
-                return replay
+                return self._view(conn, replay["report_id"], fresh, project, replay)
             if assignment["workflow_revision"] != expected_workflow_revision:
                 raise DomainError("WORKFLOW_REVISION_CONFLICT")
             if round_id != assignment["active_round_id"]:
@@ -413,7 +402,7 @@ class ProblemReportService:
                 details={"assignment_id": assignment_id},
                 at=now,
             )
-            result = self._view(conn, rid)
+            result = self._view(conn, rid, fresh, project)
             self._remember(conn, pid, access, request_id, digest, result, now)
             return result
 
@@ -534,6 +523,9 @@ class ProblemReportService:
             }
         )
         with self.db.transaction() as conn:
+            # Unreadable reports do not exist, exactly like unknown IDs (no
+            # existence oracle); lead/reporter permissions are checked below.
+            self._readable(conn, access, report_id)
             raw = (
                 conn.execute(
                     select(ProblemReportRow).where(
@@ -541,10 +533,8 @@ class ProblemReportService:
                     )
                 )
                 .mappings()
-                .one_or_none()
+                .one()
             )
-            if raw is None:
-                raise DomainError("REPORT_NOT_FOUND")
             project, pid, fresh, _assignment = self._prepare(
                 conn, access, actor, raw["assignment_id"]
             )
@@ -554,7 +544,7 @@ class ProblemReportService:
             )
             replay = self._receipt(conn, pid, access, request_id, digest)
             if replay:
-                return replay
+                return self._view(conn, report_id, fresh, project, replay)
             state = (
                 conn.execute(
                     select(ProblemReportStateRow)
@@ -699,14 +689,55 @@ class ProblemReportService:
                 details={"assignment_ids": selected},
                 at=now,
             )
-            result = self._view(conn, report_id)
+            result = self._view(conn, report_id, fresh, project)
             result.new_round = new_round
             self._remember(conn, pid, access, request_id, digest, result, now)
             return result
 
+    def _readable(
+        self, conn: Connection, access: Access, report_id: str
+    ) -> tuple[str, Access, bool]:
+        """Project key, fresh access and lead flag; unreadable reports do not exist."""
+        found = conn.execute(
+            select(ProjectRow.project_key, ProblemReportRow.reporter_id)
+            .join(ProjectRow, ProjectRow.id == ProblemReportRow.project_id)
+            .where(ProblemReportRow.report_id == report_id)
+        ).one_or_none()
+        if found is None:
+            raise DomainError("REPORT_NOT_FOUND")
+        project = found.project_key
+        pid = self.repo._require_project(conn, project)
+        fresh = current_access(conn, access, pid, project)
+        lead = can(fresh, Action.MANAGE_ASSIGNMENTS, project)
+        if not can(fresh, Action.VIEW_PROJECT, project) or not (
+            lead or found.reporter_id == fresh.user_id
+        ):
+            raise DomainError("REPORT_NOT_FOUND")
+        return project, fresh, lead
+
+    def get(self, access: Access, report_id: str) -> ProblemReportView:
+        with self.db.transaction() as conn:
+            project, fresh, _lead = self._readable(conn, access, report_id)
+            return self._view(conn, report_id, fresh, project)
+
+    def pause_candidates(self, access: Access, report_id: str) -> list[PauseCandidate]:
+        """Tasks a lead may pause for this report; reporters get REPORT_NOT_FOUND."""
+        with self.db.transaction() as conn:
+            _project, _fresh, lead = self._readable(conn, access, report_id)
+            if not lead:
+                raise DomainError("REPORT_NOT_FOUND")
+            return build_pause_candidates(conn, report_id)
+
     def list(
-        self, access: Access, project: str, document_id: str | None = None
+        self,
+        access: Access,
+        project: str,
+        document_id: str | None = None,
+        assignment_id: int | None = None,
     ) -> list[ProblemReportView]:
+        """Reports the viewer may read, newest first (reporters: only their own)."""
+        # TODO: N+1 - build_report_view runs ~8 queries per report; batch them
+        # if report lists grow large.
         with self.db.transaction() as conn:
             pid = self.repo._require_project(conn, project)
             fresh = current_access(conn, access, pid, project)
@@ -721,11 +752,14 @@ class ProblemReportService:
                 query = query.where(ProblemReportRow.reporter_id == fresh.user_id)
             if document_id is not None:
                 query = query.where(AssignmentRow.document_id == document_id)
+            if assignment_id is not None:
+                query = query.where(ProblemReportRow.assignment_id == assignment_id)
             return [
-                self._view(conn, rid)
+                self._view(conn, rid, fresh, project)
                 for rid in conn.execute(
                     query.order_by(
-                        ProblemReportRow.created_at, ProblemReportRow.report_id
+                        ProblemReportRow.created_at.desc(),
+                        ProblemReportRow.report_id.desc(),
                     )
                 ).scalars()
             ]

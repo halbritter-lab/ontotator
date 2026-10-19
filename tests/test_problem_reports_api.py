@@ -157,8 +157,7 @@ def test_translation_hold_and_agreed_restart_preserve_abandoned_draft(case_env):
     assert restarted.json()["new_round"]["kind"] == "clean_restart"
     event = restarted.json()["events"][-1]
     assert (
-        event["details"]["abandoned_translation_draft"]["text"]
-        == "Private unfinished correction"
+        event["abandoned_translation_draft"]["text"] == "Private unfinished correction"
     )
     opened = env.alice.get(url).json()
     assert opened["draft"]["text"] == original["text"]
