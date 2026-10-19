@@ -140,6 +140,8 @@ describe("design tokens", () => {
     expect(
       below(cross(["--mark-line", "--mark-selected"], ["--surface-raised", ...FILLS]), contrast, 3),
     ).toEqual([]);
+    // The resize-handle focus ring sits on the sheet and next to every mark fill (Q7).
+    expect(below(cross(["--focus-ring"], ["--surface-raised", ...FILLS]), contrast, 3)).toEqual([]);
   });
 
   /*

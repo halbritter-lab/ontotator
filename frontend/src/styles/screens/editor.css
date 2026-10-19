@@ -230,6 +230,9 @@
   margin-block: var(--space-3);
 }
 
+.round-input-panel ol { padding-inline-start: var(--space-5); }
+.work-round-actions ol { padding-inline-start: var(--space-5); }
+
 .round-input-panel li,
 .work-round-actions li {
   padding-block: var(--space-3);
@@ -630,7 +633,7 @@
 }
 
 .resize-handle:focus-visible::before {
-  box-shadow: 0 0 0 3px var(--accent-light);
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 4px var(--focus-ring);
 }
 
 .text-container.resizing {

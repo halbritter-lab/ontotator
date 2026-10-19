@@ -126,12 +126,6 @@
   transition: border-color 0.15s ease;
 }
 
-.form-control:focus,
-.form-select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-light);
-}
-
 /* Buttons */
 
 .btn {
