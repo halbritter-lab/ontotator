@@ -57,12 +57,14 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   expect(opened.view.draft.reanchor_inputs).toHaveLength(2);
   const writes=writesSince(page);
   await panel(page).locator(':scope > details > summary').click();
-  await page.getByRole('button',{name:/Finish & Submit Case/}).click();
+  await page.getByRole('button',{name:/^Finish & Submit/}).click();
   const blocked=page.getByRole('dialog',{name:'Submit case',exact:true});
-  await expect(blocked).toContainText('2 finding(s) after text correction must be re-created');
+  await expect(blocked).toContainText('2 finding(s) after text correction still pending');
+  await expect(blocked).toContainText('Re-create or dismiss 2 findings after text correction before submitting.');
   await blocked.getByLabel(/Entire text checked for further findings/).check();
   await expect(blocked.getByRole('button',{name:'Submit case',exact:true})).toBeDisabled();
-  await blocked.getByRole('button',{name:'Review pending findings after text correction'}).click();
+  // Each pending item has its own "Go to" action; the first leads to the first pending row.
+  await blocked.getByRole('button',{name:/^Go to /}).first().click();
   await expect(blocked).toBeHidden();
   await expect(rows.first().getByRole('button').first()).toBeFocused();
   expect(writes).toEqual([]);
@@ -116,7 +118,7 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   await expect(replacementDetails).toBeVisible();
   await expect(replacementDetails).toContainText(recreated.replacement!.annotation_id);
   await page.setViewportSize({width:600,height:900});
-  await page.getByRole('navigation',{name:'Select view'}).getByRole('button',{name:'List',exact:true}).click();
+  await page.getByRole('navigation',{name:'Select view'}).getByRole('button',{name:/^Findings/}).click();
   expect(await replacementDetails.evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true);
   await page.screenshot({path:test.info().outputPath('reanchor-resolved-narrow.png')});
   await page.setViewportSize({width:1280,height:900});

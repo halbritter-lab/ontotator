@@ -171,16 +171,16 @@ test('own history is genuinely submitted, read-only and return-to-draft preserve
   await expect(page.getByRole('dialog', { name: 'Submit case', exact: true })).toHaveCount(0);
   expect(writes).toEqual([]);
   await page.getByRole('button', { name: 'Back to my draft', exact: true }).click();
-  await expect(page.getByRole('button', { name: /Finish & Submit Case/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Finish & Submit/ })).toBeDisabled();
   await reopen(browser, s, s.assignments.alice);
   await page.reload();
-  await expect(page.getByRole('button', { name: /Finish & Submit Case/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Finish & Submit/ })).toBeEnabled();
   await expect(page.locator('.sidebar')).toContainText('HP:0001252');
   await openVersions(page);
   await page.getByLabel('Annotations', { exact: true }).selectOption(token(own!));
   await expect(page.locator('.readonly-annotations')).toContainText('HP:0001252');
   await page.getByRole('button', { name: 'Back to my draft', exact: true }).click();
-  await expect(page.getByRole('button', { name: /Finish & Submit Case/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Finish & Submit/ })).toBeEnabled();
   await expect(page.locator('.sidebar')).toContainText('HP:0001252');
   await expect(page.locator('.sidebar .badge-ai')).toHaveCount(0);
 });
@@ -352,11 +352,12 @@ test('restricted annotator completes exact assigned work and retains pending own
   expect(generalReads).toEqual([]);
   const own = await ownSubmission(page, s.assignments.bob);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Submission history', exact: true })).toBeVisible();
-  const historyLabel = await page.evaluate(createdAt => `Submission 1 · ${new Intl.DateTimeFormat('en-GB', {
-    dateStyle: 'medium', timeStyle: 'short',
-  }).format(new Date(createdAt))}`, own.created_at);
-  await page.getByRole('button', { name: historyLabel, exact: true }).click();
+  // The task's own read-only history ("My submissions") lists exactly this one submission.
+  const mine = page.getByRole('region', { name: 'My submissions', exact: true });
+  await expect(mine.getByRole('heading', { name: 'My submissions', exact: true })).toBeVisible();
+  const viewOwn = mine.getByRole('button', { name: /^View (Initial submission|Round \d+) · / });
+  await expect(viewOwn).toHaveCount(1);
+  await viewOwn.click();
   const history = page.getByRole('dialog', { name: 'Historical submission' });
   await history.getByText('Technical details', { exact: true }).click();
   await expect(history.getByText(own.submission_id, { exact: true })).toBeVisible();
@@ -369,7 +370,11 @@ test('restricted annotator completes exact assigned work and retains pending own
   const forbidden = await authenticatedRequest(page, documentPath(s, s.documents.target, 'annotation-versions/proposals/1'));
   expect(forbidden.status()).toBe(404);
   expect((await forbidden.json()).code).toBe('VERSION_NOT_FOUND');
+  // The own submission opens read-only in the case viewer; other annotation versions stay unavailable.
   await page.goto(viewerUrl(s, s.documents.target, token({ kind: 'own', id: own.submission_id } as VersionRef)));
+  await expect(page.getByRole('complementary', { name: 'Read-only annotations', exact: true })).toContainText('HP:0001252');
+  await expect(textSurface(page)).toHaveText(s.texts.target);
+  await page.goto(viewerUrl(s, s.documents.target, token({ kind: 'proposals', id: '1' } as VersionRef)));
   await expect(page.getByText('This annotation version is not available to you.', { exact: true })).toBeVisible();
   await expect(textSurface(page)).toHaveCount(0);
   await page.goto(viewerUrl(s, s.documents.source));

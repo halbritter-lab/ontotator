@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
 import { authenticatedRequest, loginExisting, selectText, submitCase } from './helpers';
 
@@ -27,6 +27,20 @@ async function assign(page: Page, s: Scenario, username: string) {
   });
   expect(response.refused).toEqual([]); return response.created[0];
 }
+/** The Work rounds dialog; its title names the text and language ("Work rounds · {text} · {language}"). */
+const workRounds = (page: Page) => page.getByRole('dialog', { name: /^Work rounds/ });
+/** Choose the exact submission to continue from (radio group "Continue from") and start the carry-forward round. */
+async function continueFrom(rounds: Locator, submissionId: string) {
+  await rounds.getByRole('radiogroup', { name: 'Continue from', exact: true }).locator(`input[type="radio"][value="${submissionId}"]`).check();
+  await rounds.getByRole('button', { name: 'Continue from this submission', exact: true }).click();
+}
+/** Sidebar progress of a carry-forward round ("0 of 1 checked", "All carried findings checked"). */
+const carriedProgress = (page: Page) => page.locator('.carried-progress__status');
+/** The View link of one exact submission in a Documents submissions table (its href carries the submission ref). */
+const viewSubmission = (page: Page, submissionId: string) => {
+  const ref = new URLSearchParams({ annotations: JSON.stringify(['submission', submissionId]) }).toString();
+  return page.locator(`a[aria-label^="View "][href*="${ref}"]`);
+};
 async function finding(page: Page, assignment: Assignment, note: string) {
   await page.goto(`/#/tasks/${assignment.id}`);
   await expect(page.locator('.text-container')).toBeVisible();
@@ -57,34 +71,48 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     const secondId = secondResult.assignment.last_submission_id!;
     await author.page.getByRole('dialog', { name: 'Case submitted' }).getByRole('button', { name: 'Stay in case', exact: true }).click();
     await author.page.getByRole('button', { name: 'Work rounds', exact: true }).click();
-    const rounds = author.page.getByRole('dialog', { name: 'Work rounds', exact: true });
-    await rounds.getByLabel('My submitted work to carry forward').selectOption(initialId);
+    const rounds = workRounds(author.page);
     const created = author.page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/assignments/${first.id}/rounds`));
-    await rounds.getByRole('button', { name: 'Start carry-forward round' }).click();
+    await continueFrom(rounds, initialId);
     const carry = await (await created).json() as Round;
     expect(carry.kind).toBe('carry_forward'); expect(carry.input_submission_ids).toEqual([initialId]);
-    await expect(author.page.getByRole('region', { name: 'Review carried findings' })).toContainText('1 pending');
+    await expect(carriedProgress(author.page)).toHaveText('0 of 1 checked');
     // An ordinary annotator has no proposal browsing; only this exact private input appears.
     const privateVersions = await value<components['schemas']['VersionRef'][]>(author.page, `${root(s)}/documents/${encodeURIComponent(s.documents.source)}/annotation-versions`);
     expect(privateVersions.map(version => ({ kind: version.kind, id: version.id }))).toEqual([{ kind: 'own', id: initialId }]);
     expect(privateVersions.some(version => version.id === secondId)).toBe(false);
-    await author.page.getByRole('button', { name: 'Inspect original evidence' }).click();
-    await expect(author.page.getByRole('dialog', { name: 'Original carried finding' })).toBeVisible();
-    await author.page.getByRole('dialog', { name: 'Original carried finding' }).getByRole('button', { name: /close/i }).click();
-    await author.page.getByRole('button', { name: 'Complete carried finding review' }).click();
-    await expect(author.page.getByRole('region', { name: 'Review carried findings' })).toContainText('0 pending');
+    await author.page.locator('.sidebar .doc-item').filter({ hasText: 'HP:0001252' }).click();
+    await author.page.getByRole('button', { name: 'Show original evidence', exact: true }).click();
+    const original = author.page.getByRole('dialog', { name: /^Original finding from/ });
+    await expect(original).toBeVisible();
+    await original.getByRole('button', { name: 'Close original evidence', exact: true }).click();
+    await expect(original).toHaveCount(0);
+    await author.page.getByRole('button', { name: 'Mark as checked', exact: true }).click();
+    await expect(carriedProgress(author.page)).toHaveText('All carried findings checked');
     await submitCase(author.page);
     const carried = await value<Opened>(author.page, `/api/v1/assignments/${first.id}/open`, 'POST');
     const carriedId = carried.assignment.last_submission_id!; expect(carriedId).not.toBe(initialId);
-    await page.goto(`/#/projects/${encodeURIComponent(s.project)}/cases/${encodeURIComponent(s.case_id)}?variant=${encodeURIComponent(s.documents.source)}`);
-    await page.getByRole('button', { name: 'Submissions', exact: true }).click();
-    const history = page.getByRole('dialog', { name: 'Submission history' });
-    await history.getByRole('button', { name: 'Consolidate results' }).click();
-    await history.getByRole('checkbox', { name: `Include submission ${carriedId}`, exact: true }).check();
-    await history.getByRole('checkbox', { name: `Include submission ${secondId}`, exact: true }).check();
-    await history.getByLabel('Consolidation reviewer').selectOption(s.users.consolidator);
+    // Consolidation and the final selection happen in the Documents row of this text and language.
+    const docs = await value<components['schemas']['ProjectDocumentSummary'][]>(page, `${root(s)}/documents`);
+    const language = docs.find(doc => doc.document_id === s.documents.source)!.language;
+    const openRow = async () => {
+      const disclosure = page.getByRole('button', { name: `Show submissions, ${s.case_id} · ${language}`, exact: true });
+      if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
+      await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+      const area = page.getByRole('region', { name: `${s.case_id} · ${language}`, exact: true });
+      await expect(area.getByRole('heading', { name: /^Submissions \(\d+\)$/, level: 3 })).toBeVisible();
+      return area;
+    };
+    await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
+    let area = await openRow();
+    await area.getByText('Start consolidation…', { exact: true }).click();
+    await area.getByRole('button', { name: 'Consolidate results', exact: true }).click();
+    const launcher = area.getByRole('region', { name: 'Consolidate submitted results', exact: true });
+    await launcher.getByRole('checkbox', { name: `Include submission ${carriedId}`, exact: true }).check();
+    await launcher.getByRole('checkbox', { name: `Include submission ${secondId}`, exact: true }).check();
+    await launcher.getByLabel('Consolidation reviewer').selectOption(s.users.consolidator);
     const launched = page.waitForResponse(r => r.request().method() === 'POST' && /\/assignments\/\d+\/rounds$/.test(r.url()));
-    await history.getByRole('button', { name: 'Start consolidation', exact: true }).click();
+    await launcher.getByRole('button', { name: 'Start consolidation', exact: true }).click();
     const consolidation = await (await launched).json() as Round;
     expect(consolidation.kind).toBe('consolidation'); expect(new Set(consolidation.input_submission_ids)).toEqual(new Set([carriedId, secondId]));
     await reviewer.page.goto(`/#/tasks/${consolidation.assignment_id}`);
@@ -99,12 +127,17 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await submitCase(reviewer.page);
     const consolidated = await value<Opened>(reviewer.page, `/api/v1/assignments/${consolidation.assignment_id}/open`, 'POST');
     const finalId = consolidated.assignment.last_submission_id!;
-    await page.reload(); await page.getByRole('button', { name: 'Submissions', exact: true }).click();
-    await history.getByLabel('Submitted result', { exact: true }).selectOption(finalId);
-    await history.getByRole('button', { name: 'Select final result', exact: true }).click();
-    await expect(history.getByRole('status').filter({ hasText: `Selected: ${finalId}` })).toBeVisible();
-    await history.getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(page.getByLabel('Selected final result', { exact: true })).toContainText(finalId);
+    await page.reload(); area = await openRow();
+    const submissions = area.getByRole('table', { name: `Submissions, ${s.case_id} · ${language}`, exact: true });
+    const finalRow = submissions.getByRole('row').filter({ has: viewSubmission(page, finalId) });
+    await expect(finalRow).toHaveCount(1);
+    await finalRow.getByRole('button', { name: 'Use as final…', exact: true }).click();
+    const use = page.getByRole('group', { name: 'Use as final result', exact: true });
+    const selecting = page.waitForResponse(r => r.request().method() !== 'GET' && /\/final/.test(new URL(r.url()).pathname));
+    await use.getByRole('button', { name: 'Use as final', exact: true }).click();
+    expect((await selecting).ok()).toBeTruthy();
+    await expect(use).toHaveCount(0);
+    await expect(finalRow.getByRole('cell').first()).toHaveText('Final');
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
     await page.getByRole('button', { name: 'Prepare final export', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Export preflight' })).toBeVisible();
@@ -171,36 +204,39 @@ test('corrected-text private carry preserves submitted history through a reporte
     expect(assigned.refused).toEqual([]); const task = assigned.created[0];
     await author.page.goto(`/#/tasks/${task.id}`);
     await author.page.getByRole('button', { name: 'Work rounds', exact: true }).click();
-    const rounds = author.page.getByRole('dialog', { name: 'Work rounds', exact: true });
-    await rounds.getByLabel('My submitted work to carry forward').selectOption(originalId);
+    const rounds = workRounds(author.page);
     const carryResponse = author.page.waitForResponse(response => response.request().method() === 'POST'
       && new URL(response.url()).pathname === `/api/v1/assignments/${task.id}/rounds`, { timeout: 60_000 });
-    await rounds.getByRole('button', { name: 'Start carry-forward round' }).click();
+    await continueFrom(rounds, originalId);
     const carried = await carryResponse;
     expect(carried.ok(), await carried.text()).toBeTruthy();
-    await expect(author.page.getByRole('region', { name: 'Review carried findings' })).toContainText('1 pending');
+    await expect(carriedProgress(author.page)).toHaveText('0 of 1 checked');
     await expect(author.page.locator('.text-container')).toContainText('Updated source: additional clinical detail.');
-    await author.page.getByRole('button', { name: 'Complete carried finding review' }).click();
-    await expect(author.page.getByRole('region', { name: 'Review carried findings' })).toContainText('0 pending');
+    await author.page.locator('.sidebar .doc-item').filter({ hasText: 'HP:0001252' }).click();
+    await author.page.getByRole('button', { name: 'Mark as checked', exact: true }).click();
+    await expect(carriedProgress(author.page)).toHaveText('All carried findings checked');
     await submitCase(author.page);
     const submitted = await value<Opened>(author.page, `/api/v1/assignments/${task.id}/open`, 'POST');
     const carriedId = submitted.assignment.last_submission_id!;
     await author.page.getByRole('dialog', { name: 'Case submitted' }).getByRole('button', { name: 'Stay in case', exact: true }).click();
-    await author.page.getByRole('button', { name: 'Report a problem', exact: true }).click();
-    const reports = author.page.getByRole('dialog', { name: 'Task problem reports', exact: true });
-    await reports.getByLabel('Problem description').fill('Review the corrected clinical context before continuing.');
-    await reports.getByRole('button', { name: 'Report and pause my task' }).click();
-    await expect(reports).toContainText('Task paused:');
+    await author.page.locator('button.problem-entry').click();
+    const form = author.page.getByRole('dialog', { name: 'New problem report', exact: true });
+    await form.getByRole('textbox', { name: /What is the problem\?/ }).fill('Review the corrected clinical context before continuing.');
+    await form.getByRole('button', { name: 'Report and pause my task', exact: true }).click();
+    await expect(author.page.getByText('Reported. Your task is paused until you or a project lead resume it.')).toBeVisible();
     const reportRows = await value<components['schemas']['ProblemReportView'][]>(page, `${root(s)}/problem-reports`);
     const report = reportRows.find(item => item.assignment_id === task.id)!;
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/problem-reports/${encodeURIComponent(report.report_id)}`);
-    await page.getByLabel('Report action').selectOption('restart');
-    await page.getByLabel('I have agreed with the task owner to start an empty round').check();
-    await page.getByLabel('Action reason').fill('Agreed with the author: start a separate empty annotation round.');
-    await page.getByRole('button', { name: 'Apply report action', exact: true }).click();
-    await expect(page.getByText('Empty round created. The task owner can open it from Work rounds.')).toBeVisible();
+    await page.getByRole('toolbar', { name: 'Decide on this report', exact: true }).getByRole('button', { name: 'Agree empty restart…', exact: true }).click();
+    const restart = page.getByRole('group', { name: `Agree empty restart of Task ${task.id}`, exact: true });
+    await restart.getByLabel(/^I agreed this restart with /).check();
+    await restart.getByLabel(/^Reason \(becomes the outcome/).fill('Agreed with the author: start a separate empty annotation round.');
+    const restarted = page.waitForResponse(r => r.request().method() === 'POST' && r.url().includes(`/problem-reports/${encodeURIComponent(report.report_id)}`));
+    await restart.getByRole('button', { name: 'Restart with empty round', exact: true }).click();
+    expect((await restarted).ok()).toBeTruthy();
+    await expect(page.getByText(new RegExp(`^Task ${task.id} restarted with `))).toBeVisible();
     await author.page.reload();
-    await expect(author.page.getByRole('button', { name: 'Report a problem', exact: true })).toBeVisible();
+    await expect(author.page.locator('button.problem-entry')).toBeVisible();
     await expect(author.page.locator('.sidebar .doc-item')).toHaveCount(0);
     const fresh = await value<Opened>(author.page, `/api/v1/assignments/${task.id}/open`, 'POST');
     expect(fresh.assignment.last_submission_id).toBeNull();

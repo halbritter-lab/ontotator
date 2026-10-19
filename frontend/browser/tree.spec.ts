@@ -808,7 +808,7 @@ test.describe("ontology tree", () => {
     await tabs.getByRole("button", { name: "Document" }).click();
     await expect(page.locator(".text-container")).toBeVisible();
     await expect(page.locator(".tree-host")).toBeHidden();
-    await tabs.getByRole("button", { name: "List" }).click();
+    await tabs.getByRole("button", { name: /^Findings/ }).click();
     await expect(ownAnnotations(page)).toBeVisible();
     await expect(page.locator(".tree-host")).toBeHidden();
     await tabs.getByRole("button", { name: "Details" }).click();

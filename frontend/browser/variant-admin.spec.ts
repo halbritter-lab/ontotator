@@ -65,11 +65,18 @@ async function finishedJob(page: Page, id: number): Promise<Job> {
   }, { timeout: 30_000 }).toMatch(/^(succeeded|failed)$/);
   expect(result!.status, result!.error ?? '').toBe('succeeded'); return result!;
 }
+/** The "Text versions" entry of one exact document in its expanded Documents row (text · language). */
 async function documentRow(page: Page, id: string) {
-  const version = page.locator('details.document-version').filter({ has: page.getByRole('checkbox', { name: `Select ${id}`, exact: true, includeHidden: true }) });
+  const project = decodeURIComponent(/#\/projects\/([^/?]+)\/documents/.exec(page.url())![1]);
+  const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
+  const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
+  const name = `${doc.case_id} · ${doc.language}`;
+  const disclosure = page.getByRole('button', { name: `Show submissions, ${name}`, exact: true });
+  if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
+  const versions = page.getByRole('region', { name, exact: true }).locator('details').filter({ has: page.locator('summary', { hasText: /^Text versions \(\d+\)$/ }) });
+  if (!await versions.evaluate(node => (node as HTMLDetailsElement).open)) await versions.locator(':scope > summary').click();
+  const version = versions.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
   await expect(version).toHaveCount(1);
-  if (!await version.evaluate(node => (node as HTMLDetailsElement).open)) await version.locator(':scope > summary').click();
-  await expect(version.getByTestId('document-row')).toBeVisible();
   return version;
 }
 
@@ -112,11 +119,15 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   const target = inventory.find(d => d.external_id === s.external_id && d.language === 'de')!;
   expect(target.accepted_without_review).toBe(true); expect(target.translation_status).toBe('accepted'); expect(target.status_reason).toBe(reason);
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0);
+  await page.locator('summary').filter({ hasText: /^More filters$/ }).click();
   await page.getByLabel('Origin', { exact: true }).selectOption('machine_translation');
   await page.getByLabel('Translation status', { exact: true }).selectOption('accepted');
   const row = await documentRow(page, target.document_id); await expect(row).toContainText('Accepted without review');
-  await expect(row.getByTitle(reason, { exact: true })).toBeVisible();
   expect(new URL(page.url()).hash).toContain('origin=machine_translation'); expect(new URL(page.url()).hash).toContain('translation_status=accepted');
+  // Text versions show the status; the recorded reason is read in the text's translation details.
+  await row.getByRole('link', { name: /^View text / }).click();
+  await page.getByText('Translation details', { exact: true }).click();
+  await expect(page.locator('.variant-details dt').filter({ hasText: /^Reason$/ }).locator('+ dd')).toHaveText(reason);
   const records = await authenticatedRequest(page, `${root(s)}/documents/${encodeURIComponent(target.document_id)}/translation-reviews`);
   expect(records.ok()).toBeTruthy(); expect(await records.json()).toEqual([]);
   await attach('real-upload-preview-and-commit', { project: s.project, public_bundle_sha256: s.sha256, upload_id: upload.id, plan_sha256: upload.plan_sha256, previewJob, commitJob: job, target });

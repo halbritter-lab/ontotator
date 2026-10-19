@@ -18,9 +18,11 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await page.locator('.sidebar [data-list-key^="target:"]').nth(1).click();
   await page.keyboard.press("2");
   await expect(page.locator('.sidebar [data-list-key^="target:"]').nth(1)).toContainText("Rejected");
-  await page.getByRole("button", { name: /Finish & Submit Case/i }).click();
-  await expect(page.getByText("1 annotation has defaulted axis values.")).toBeVisible();
-  await page.getByRole("button", { name: "Review defaulted annotations" }).click();
+  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
+  const submitDialog = page.getByRole("dialog", { name: "Submit case" });
+  await expect(submitDialog.getByText("1 annotation has defaulted axis values", { exact: true })).toBeVisible();
+  // The submit dialog lists each defaulted annotation with its own "Go to" action.
+  await submitDialog.getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Visibility for Hidden findings" })).toBeChecked();
   await expect(page.getByLabel("Proposal details")).toBeFocused();
   await expect(page.getByLabel("Proposal details").getByText("Defaulted", { exact: true })).toBeVisible();
@@ -29,8 +31,9 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
   await page.getByRole("button", { name: "Confirm Assertion value" }).click();
   await expect(page.getByText("Default value; confirm it or choose a value.")).toHaveCount(0);
-  await page.getByRole("button", { name: /Finish & Submit Case/i }).click();
-  await expect(page.getByRole("button", { name: "Review defaulted annotations" })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
+  await expect(submitDialog).toBeVisible();
+  await expect(submitDialog.getByText(/defaulted axis values/)).toHaveCount(0);
 });
 
 test("repeated outcome keys keep decisions and zero resets without losing the note", async ({ page }) => {
@@ -57,7 +60,7 @@ test("repeated outcome keys keep decisions and zero resets without losing the no
   await expect(note).toHaveValue("Preserve this note");
   await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", isComposing: true, bubbles: true })));
   await expect(proposal).toContainText("open");
-  await page.getByRole("button", { name: /Finish & Submit Case/i }).click();
+  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   await expect(page.getByRole("dialog", { name: "Submit case" })).toBeVisible();
   await page.keyboard.press("1"); await page.keyboard.press("Escape");
   await expect(proposal).toContainText("open");
@@ -85,7 +88,7 @@ test("unresolved notes are required, survive reload and block submission when lo
   await proposals.nth(1).click(); await page.keyboard.press("1");
   await expect(proposals.nth(1)).toContainText("Confirmed");
   await proposals.first().click(); await note.fill("  "); await proposals.nth(1).click();
-  await page.getByRole("button", { name: /Finish & Submit Case/ }).click();
+  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   await expect(page.getByRole("dialog", { name: "Submit case" })).toHaveCount(0);
   await expect(note).toBeFocused(); await expect(note).toHaveValue("  ");
   await expect(page.locator(".status-badge")).toHaveText("Reviewer note required – changes not saved");
@@ -196,7 +199,7 @@ test("new-draft spanless findings require a reason, retain it through search and
   await expect(page.getByRole("heading", { name: "Mentions (0)" })).toBeVisible();
   await expect(page.getByLabel("Reason for no text span")).toHaveValue("Evidence span is incidental; summary supports this finding");
   await page.getByLabel("Reason for no text span").fill("  ");
-  await page.getByRole("button", { name: /Finish & Submit Case/ }).click();
+  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   await expect(page.getByRole("dialog", { name: "Submit case" })).toHaveCount(0);
   await expect(page.getByLabel("Reason for no text span")).toHaveValue("  ");
 });
@@ -231,7 +234,7 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
   const changed = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: false });
   expect(changed.ok()).toBeTruthy();
   try {
-    await page.getByRole("button", { name: /Finish & Submit Case/ }).click();
+    await page.getByRole("button", { name: /^Finish & Submit/ }).click();
     const dialog = page.getByRole("dialog", { name: "Submit case", exact: true });
     await dialog.getByRole("checkbox").check(); await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
     await expect(page.getByText(/Submission failed:/)).toHaveCount(1);
@@ -239,10 +242,11 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
     await page.getByRole("button", { name: "Reload current rules", exact: true }).click();
     for (const width of [1440, 1024]) {
       await page.setViewportSize({ width, height: 1000 });
-      await page.getByRole("button", { name: /Finish & Submit Case/ }).click();
+      await page.getByRole("button", { name: /^Finish & Submit/ }).click();
       await expect(dialog).toBeVisible();
       await expect(dialog.getByText(/Use Add Mention to select supporting text/)).toBeVisible();
-      await dialog.getByRole("button", { name: /requires a text span/ }).click();
+      await expect(dialog).toContainText("This project requires a text span for findings.");
+      await dialog.getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
       await expect(page.getByRole("button", { name: "+ Add Mention", exact: true })).toBeFocused();
       await expect(page.getByLabel("Annotation note")).not.toHaveAttribute("required", "");
       const heading = page.locator(".sidebar-header--actions > span");
@@ -384,11 +388,12 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
     const prohibited = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: false });
     expect(prohibited.ok()).toBeTruthy();
     await annotator.reload();
-    await annotator.getByRole("button", { name: /Finish & Submit Case/ }).click();
+    await annotator.getByRole("button", { name: /^Finish & Submit/ }).click();
     const readiness = annotator.getByRole("dialog", { name: "Submit case" });
-    await expect(readiness.getByText("1 finding(s) need attention before submission.")).toBeVisible();
+    await expect(readiness.getByText("1 finding needs attention", { exact: true })).toBeVisible();
     await readiness.screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/submission-current-rules-repair.png" });
-    await readiness.getByRole("button", { name: /This project requires a text span for findings/ }).click();
+    await expect(readiness).toContainText("This project requires a text span for findings.");
+    await readiness.getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
     await expect(annotator.getByRole("button", { name: "+ Add Mention", exact: true })).toBeFocused();
     const optionalAgain = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true, require_spanless_note: false });
     expect(optionalAgain.ok()).toBeTruthy();

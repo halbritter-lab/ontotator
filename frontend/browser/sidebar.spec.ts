@@ -8,7 +8,7 @@ test("sidebar scrolls proposals and saved findings as one list with stable readi
 
   const scroller = page.locator(".sidebar .sidebar-scroll");
   const proposalsHeader = scroller.locator(".sidebar-header").filter({ hasText: "Review Proposals (30)" });
-  const curatedHeader = scroller.locator(".sidebar-header").filter({ hasText: "Saved findings (0)" });
+  const curatedHeader = scroller.locator(".sidebar-header").filter({ hasText: "Findings (0)" });
   await expect(proposalsHeader).toBeVisible();
   await expect(scroller.locator(".badge-ai")).toHaveCount(30);
 

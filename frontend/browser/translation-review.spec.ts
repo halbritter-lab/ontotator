@@ -59,12 +59,28 @@ async function leadContext(browser: Browser, s: Scenario) {
   const page = await context.newPage(); await loginExisting(page, s.users.lead);
   return { page, close: () => context.close() };
 }
+/** The "Text versions" entry of one exact document in its expanded Documents row (text · language). */
 async function documentRow(page: Page, id: string) {
-  const version = page.locator('details.document-version').filter({ has: page.getByRole('checkbox', { name: `Select ${id}`, exact: true, includeHidden: true }) });
+  const project = decodeURIComponent(/#\/projects\/([^/?]+)\/documents/.exec(page.url())![1]);
+  const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
+  const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
+  const name = `${doc.case_id} · ${doc.language}`;
+  const disclosure = page.getByRole('button', { name: `Show submissions, ${name}`, exact: true });
+  if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
+  const versions = page.getByRole('region', { name, exact: true }).locator('details').filter({ has: page.locator('summary', { hasText: /^Text versions \(\d+\)$/ }) });
+  if (!await versions.evaluate(node => (node as HTMLDetailsElement).open)) await versions.locator(':scope > summary').click();
+  const version = versions.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
   await expect(version).toHaveCount(1);
-  if (!await version.evaluate(node => (node as HTMLDetailsElement).open)) await version.locator(':scope > summary').click();
-  await expect(version.getByTestId('document-row')).toBeVisible();
   return version;
+}
+/** Select one exact document for assignment: the row checkbox, or its own checkbox in Text versions when the row has several. */
+async function selectForAssignment(page: Page, version: Locator, id: string) {
+  const own = version.getByRole('checkbox', { name: /for assignment$/ });
+  if (await own.count()) { await own.check(); return; }
+  const project = decodeURIComponent(/#\/projects\/([^/?]+)\/documents/.exec(page.url())![1]);
+  const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
+  const doc = docs.find(item => item.document_id === id)!;
+  await page.getByRole('table', { name: 'Documents', exact: true }).getByRole('checkbox', { name: `Select ${doc.case_id} · ${doc.language}`, exact: true }).check();
 }
 async function section(page: Page, name: string) {
   const details = page.locator('.shell-reading-navigation');
@@ -92,14 +108,14 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
     await lead.page.goto(documentsUrl(s));
     const row = await documentRow(lead.page, s.documents.target);
     await expect(row).toContainText('Ready for review');
-    await row.getByRole('checkbox', { name: `Select ${s.documents.target}`, exact: true }).check();
+    await selectForAssignment(lead.page, row, s.documents.target);
     await lead.page.getByRole('button', { name: 'Assign …', exact: true }).click();
     const dialog = lead.page.getByRole('dialog', { name: 'Assign documents', exact: true });
     await dialog.getByLabel('Task', { exact: true }).selectOption('translation_review');
     await dialog.getByRole('checkbox', { name: new RegExp(s.users.reviewer) }).check();
     await dialog.getByRole('button', { name: 'Assign', exact: true }).click();
     await expect(dialog).toContainText('Assignment request complete: 1 accepted; 0 refused.');
-    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await dialog.locator('.modal-actions').getByRole('button', { name: 'Close', exact: true }).click();
     const inventory = await (await authenticatedRequest(lead.page, `/api/v1/projects/${encodeURIComponent(s.project)}/assignments`)).json() as Assignment[];
     const assigned = inventory.filter(a => a.document_id === s.documents.target && a.username === s.users.reviewer && a.task === 'translation_review' && !a.revoked_at);
     expect(assigned).toHaveLength(1); assignmentId = assigned[0].id;
@@ -195,7 +211,11 @@ test('fresh failed checks remain visible and an independent edited Accepted unch
   const checks = page.getByRole('region', { name: 'Automatic translation checks', exact: true });
   await expect(checks).toContainText('1 automatic check failed');
   await expect(checks.locator('.notice')).toContainText('Units added in translation');
-  await expect(checks.locator('.notice')).not.toContainText('units_added');
+  // The readable label is the heading; the raw code appears only as the labelled technical code.
+  const failedCheck = checks.locator('.notice .translation-check');
+  await expect(failedCheck.getByRole('heading', { name: 'Units added in translation', exact: true })).toBeVisible();
+  await expect(failedCheck.getByRole('heading', { name: 'units_added' })).toHaveCount(0);
+  await expect(failedCheck.locator('dt').filter({ hasText: 'Technical code' }).locator('+ dd code')).toHaveText('units_added');
   await checks.getByText('Show all checks', { exact: true }).click();
   await expect(checks.locator('.translation-checks-all li').filter({ hasText: 'Numbers changed in translation' })).toContainText('Passed');
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });

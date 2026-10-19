@@ -78,9 +78,9 @@ export async function importPackage(page: Page, _scenario: string, projectKey: s
   await expect(page.locator("#project-select")).toHaveValue(projectKey);
 }
 
-/** "Finish & Submit Case", tick "Entire text checked" and confirm. */
+/** "Finish & Submit Case" (or "Finish & Submit · n open"), tick "Entire text checked" and confirm. */
 export async function submitCase(page: Page) {
-  await page.getByRole("button", { name: /Finish & Submit Case/i }).click();
+  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   const dialog = page.getByRole("dialog", { name: "Submit case" });
   await expect(dialog).toBeVisible();
   const submit = dialog.getByRole("button", { name: /^Submit case$/ });

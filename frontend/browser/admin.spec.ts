@@ -44,7 +44,8 @@ async function createUser(page: Page, username: string): Promise<Actor> {
   await expect(dialog).toBeVisible();
   const code = await dialog.locator("code").innerText();
   expect(code.length).toBeGreaterThan(0);
-  const close = dialog.getByRole("button", { name: "Close", exact: true });
+  // The header close is hidden until acknowledgement; the footer Close is the acknowledgement-gated action.
+  const close = dialog.locator(".modal-actions").getByRole("button", { name: "Close", exact: true });
   await expect(close).toBeDisabled();
   await dialog.getByRole("button", { name: "Copy", exact: true }).click();
   await expect(dialog.getByText("Copied to clipboard.", { exact: true })).toBeVisible();
@@ -115,14 +116,19 @@ async function selectProject(page: Page, key: string) {
   await expect(page.locator("#shell-project-panel")).toBeHidden();
 }
 
-async function openDocumentVersion(page: Page, documentId: string) {
-  const logicalText = page.getByRole("group", { name: `Text ${documentId}`, exact: true });
-  const version = logicalText.locator("details.document-version");
+/** Disclosure of the Documents row of one text in English ("Show submissions, {text} · en"). */
+const rowDisclosure = (page: Page, caseId: string) =>
+  page.getByRole("button", { name: `Show submissions, ${caseId} · en`, exact: true });
+
+/** Expand the Documents row of a text and open its "Text versions" list (one version per text here). */
+async function openTextVersions(page: Page, caseId: string) {
+  const disclosure = rowDisclosure(page, caseId);
+  if ((await disclosure.getAttribute("aria-expanded")) !== "true") await disclosure.click();
+  const area = page.getByRole("region", { name: `${caseId} · en`, exact: true });
+  await area.locator("summary").filter({ hasText: /^Text versions \(\d+\)$/ }).click();
+  const version = area.locator("li.text-version");
   await expect(version).toHaveCount(1);
-  await version.locator(":scope > summary").click();
-  const document = version.getByTestId("document-row");
-  await expect(document).toBeVisible();
-  return document;
+  return version;
 }
 
 async function importTwoDocuments(page: Page) {
@@ -138,15 +144,15 @@ async function importTwoDocuments(page: Page) {
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
   await expect(preview).toContainText("2 documents added");
   await expect(preview).toContainText("1 with normalized text");
-  await expect(page.getByTestId("document-row")).toHaveCount(0);
+  const rows = page.getByRole("button", { name: /^Show submissions, / });
+  await expect(rows).toHaveCount(0);
   await upload.getByRole("button", { name: "Import", exact: true }).click();
   await expect(upload.getByText("Imported 2 documents and 0 proposals.", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(upload).toHaveCount(0);
-  await expect(page.getByTestId("document-row")).toHaveCount(2);
-  await expect(page.getByRole("group", { name: "Text one", exact: true })).toBeVisible();
-  await expect(page.getByRole("group", { name: "Text two", exact: true })).toBeVisible();
-  for (const document of await page.getByTestId("document-row").all()) await expect(document).toBeHidden();
+  await expect(rows).toHaveCount(2);
+  // One row per text and language, both collapsed.
+  for (const caseId of ["one", "two"]) await expect(rowDisclosure(page, caseId)).toHaveAttribute("aria-expanded", "false");
 }
 
 async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
@@ -155,15 +161,14 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await selectProject(page, setup.key);
   await page.getByRole("link", { name: "Documents", exact: true }).click();
   await importTwoDocuments(page);
-  const document = await openDocumentVersion(page, "one");
-  await document.getByRole("checkbox", { name: "Select one", exact: true }).check();
+  await page.getByRole("table", { name: "Documents", exact: true }).getByRole("checkbox", { name: "Select one · en", exact: true }).check();
   await page.getByRole("button", { name: "Propose distribution …", exact: true }).click();
   const distribution = page.getByRole("dialog", { name: "Propose distribution", exact: true });
   await distribution.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(distribution.getByRole("combobox", { name: "one, slot 1", exact: true })).toHaveValue(setup.annotator.username);
   await distribution.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(distribution).toContainText("Assignment request complete: 1 accepted; 0 refused.");
-  await distribution.getByRole("button", { name: "Close", exact: true }).click();
+  await distribution.locator(".modal-actions").getByRole("button", { name: "Close", exact: true }).click();
   await logout(page);
   await redeemCode(page, setup.annotator);
   const tasks = page.getByTestId("task-row");
@@ -226,7 +231,7 @@ test.describe("Administration through real accounts and jobs", () => {
     await tasks.getByRole("link", { name: /^(Start|Continue|View)$/ }).click();
     await page.reload();
     await expect(page.getByText("Submitted. The project lead can reopen it for changes.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Finish & Submit Case/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Finish & Submit/ })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Add finding without a text span", exact: true })).toBeDisabled();
     await logout(page);
     await loginExisting(page, setup.lead);
@@ -239,7 +244,7 @@ test.describe("Administration through real accounts and jobs", () => {
     expect(submittedColumn).toBeGreaterThanOrEqual(0);
     await expect(row.getByRole("cell").nth(submittedColumn)).toHaveText("1");
     await page.getByRole("link", { name: "Documents", exact: true }).click();
-    const document = await openDocumentVersion(page, "one");
+    const document = await openTextVersions(page, "one");
     await document.locator('summary[aria-label^="Actions for "]').click();
     await document.getByRole("button", { name: "Reopen", exact: true }).click();
     const reopen = page.getByRole("dialog", { name: "Reopen one", exact: true });
