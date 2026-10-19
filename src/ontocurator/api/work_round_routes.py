@@ -36,6 +36,33 @@ from ontocurator.storage.workflow_tables import WorkRoundRow
 
 router = APIRouter(prefix="/api/v1", tags=["work-rounds"])
 
+# Refusals a scoped round read raises for a round the caller may not see.
+_HIDDEN = frozenset({"PROJECT_NOT_FOUND", "DOCUMENT_NOT_FOUND"})
+
+
+def _visible_round(repo: Repository, round_id: str) -> WorkRoundView:
+    """The round ``round_id`` if the caller may see it.
+
+    These routes name only the round, so every refusal (unknown id, foreign
+    project, invisible document, someone else's round) answers the same
+    ``ROUND_NOT_FOUND``: a real round id must not be distinguishable from an
+    unknown one, and the project key must not leak.
+    """
+    with repo.db.transaction() as conn:
+        project = conn.execute(
+            select(ProjectRow.project_key)
+            .join(WorkRoundRow, WorkRoundRow.project_id == ProjectRow.id)
+            .where(WorkRoundRow.round_id == round_id)
+        ).scalar_one_or_none()
+    if project is None:
+        raise DomainError("ROUND_NOT_FOUND")
+    try:
+        return repo.get_work_round(project, round_id)
+    except DomainError as exc:
+        if exc.code in _HIDDEN:
+            raise DomainError("ROUND_NOT_FOUND") from None
+        raise
+
 
 class CreateRoundRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -100,15 +127,7 @@ def open_round(
     round_id: str, request: Request, principal: PrincipalDep, ws_svc: WorkspaceSvcDep
 ) -> OpenWorkspaceResponse:
     repo = get_repo(request)
-    with repo.db.transaction() as conn:
-        project = conn.execute(
-            select(ProjectRow.project_key)
-            .join(WorkRoundRow, WorkRoundRow.project_id == ProjectRow.id)
-            .where(WorkRoundRow.round_id == round_id)
-        ).scalar_one_or_none()
-    if project is None:
-        raise DomainError("ROUND_NOT_FOUND")
-    item = repo.get_work_round(project, round_id)
+    item = _visible_round(repo, round_id)
     if item.workspace_key is None:
         raise DomainError("ROUND_KIND_INVALID")
     own_key(principal, item.workspace_key)
@@ -128,16 +147,11 @@ def round_inputs(
 ) -> list[RoundInputView]:
     repo = get_repo(request)
     # One snapshot: the inventory and its facts show one committed state.
-    with repo.db.snapshot() as conn:
-        project = conn.execute(
-            select(ProjectRow.project_key)
-            .join(WorkRoundRow, WorkRoundRow.project_id == ProjectRow.id)
-            .where(WorkRoundRow.round_id == round_id)
-        ).scalar_one_or_none()
-        if project is None:
-            raise DomainError("ROUND_NOT_FOUND")
-        # The scoped inventory read runs the owner-or-EXPORT_ALL_WORK check
-        # first; enrichment only looks up the submissions these items name.
+    with repo.db.snapshot():
+        # The visibility check answers every refusal alike; the scoped
+        # inventory read repeats the owner-or-EXPORT_ALL_WORK check, and
+        # enrichment only looks up the submissions these items name.
+        project = _visible_round(repo, round_id).project_key
         return enrich_inputs(
             repo, project, repo.get_round_input_inventory(project, round_id)
         )

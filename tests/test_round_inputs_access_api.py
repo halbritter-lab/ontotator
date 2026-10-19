@@ -1,4 +1,4 @@
-"""Who may read the carried inputs of a round (behaviour pinned, not changed)."""
+"""Who may read the carried inputs of a round, and that refusals leak nothing."""
 
 import pytest
 from auth_harness import logged_in
@@ -131,12 +131,50 @@ def test_outsider_is_refused(carried_round):
     app, _owner, carried = carried_round
     round_id = carried["round_id"]
     outsider = logged_in(app, "otto", assignments=[])
-    refused = _refusal(outsider.get(f"/api/v1/rounds/{round_id}/inputs"))
-    unknown = _refusal(outsider.get("/api/v1/rounds/no-such-round/inputs"))
-    # Pinned as found: both are 404 without item data, but the codes differ
-    # (the project lookup answers first). This is a pre-existing existence
-    # oracle (a real round id is distinguishable from an unknown one), tracked
-    # as a separate hardening item; equalizing the codes is an access change
-    # left to the user (editor plan B1, user decision 3).
-    assert refused == (404, "PROJECT_NOT_FOUND")
-    assert unknown == (404, "ROUND_NOT_FOUND")
+    refused = outsider.get(f"/api/v1/rounds/{round_id}/inputs")
+    unknown = outsider.get("/api/v1/rounds/no-such-round/inputs")
+    # No existence oracle: a real but foreign round answers exactly like an
+    # unknown round id (same status, same body; the project key stays hidden).
+    assert _refusal(refused) == (404, "ROUND_NOT_FOUND")
+    assert (refused.status_code, refused.json()) == (
+        unknown.status_code,
+        unknown.json(),
+    )
+    assert PROJECT not in refused.text
+
+
+def test_outsider_cannot_probe_rounds_by_opening(carried_round):
+    app, _owner, carried = carried_round
+    round_id = carried["round_id"]
+    outsider = logged_in(app, "otto", assignments=[])
+    refused = outsider.post(f"/api/v1/rounds/{round_id}/open")
+    unknown = outsider.post("/api/v1/rounds/no-such-round/open")
+    assert _refusal(refused) == (404, "ROUND_NOT_FOUND")
+    assert (refused.status_code, refused.json()) == (
+        unknown.status_code,
+        unknown.json(),
+    )
+    assert PROJECT not in refused.text
+
+
+def test_member_without_the_document_cannot_probe_rounds(carried_round):
+    app, _owner, carried = carried_round
+    round_id = carried["round_id"]
+    member = logged_in(app, "mia", projects={PROJECT: ["annotator"]}, assignments=[])
+    for response in (
+        member.get(f"/api/v1/rounds/{round_id}/inputs"),
+        member.post(f"/api/v1/rounds/{round_id}/open"),
+    ):
+        assert _refusal(response) == (404, "ROUND_NOT_FOUND")
+
+
+def test_member_gets_round_not_found_for_unknown_round(carried_round):
+    _app, owner, _carried = carried_round
+    assert _refusal(owner.get("/api/v1/rounds/no-such-round/inputs")) == (
+        404,
+        "ROUND_NOT_FOUND",
+    )
+    assert _refusal(owner.post("/api/v1/rounds/no-such-round/open")) == (
+        404,
+        "ROUND_NOT_FOUND",
+    )
