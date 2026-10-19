@@ -5,7 +5,7 @@ import { useFinalSelectionState } from '../variants/finalSelectionState';
 import { routeHref } from '../app/router';
 
 export function WorkflowWarnings({ state }: { state: FinalPreflight }): JSX.Element {
-  return <><ul>{state.warnings.map(warning => <li key={warning.id}><strong>{warning.case_id} · {warning.language}</strong><p>{warning.reason}</p><a href={warning.destination}>Review issue</a></li>)}</ul>
+  return <><ul className="final-warning-list">{state.warnings.map(warning => <li key={warning.id}><strong>{warning.case_id} · {warning.language}</strong><p>{warning.reason}</p><a href={warning.destination}>Review issue</a></li>)}</ul>
     {state.warnings.length === 0 && <p>No open workflow warnings.</p>}
     {state.omissions.length > 0 && <p>Omitted without a final selection: {state.omissions.map(item => `${item.case_id} (${item.language})`).join(", ")}</p>}</>;
 }

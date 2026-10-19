@@ -106,10 +106,10 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await history.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(page.getByLabel('Selected final result', { exact: true })).toContainText(finalId);
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
-    await page.getByRole('button', { name: 'Review final export', exact: true }).click();
+    await page.getByRole('button', { name: 'Prepare final export', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Export preflight' })).toBeVisible();
     const create = page.getByRole('button', { name: 'Create final export', exact: true });
-    await expect(create).toBeDisabled();
+    await expect(create).toHaveAttribute('aria-disabled', 'true');
     await page.getByLabel('Export these selected results with the listed warnings and omissions').check();
     const exportResponse = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/exports/final'));
     await create.click(); expect((await exportResponse).ok()).toBeTruthy();

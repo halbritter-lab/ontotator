@@ -740,6 +740,10 @@ ul.shell-project-list { list-style: none; padding: 0; margin: 0; }
 .submission-result > .readonly-annotation-view { min-height: 24rem; max-height: 65vh; }
 .historical-note { white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* Export preflight: each warning's link sits closer to its own reason than to the next item. */
+.final-warning-list > li { padding-block: var(--space-2); border-block-end: 1px solid var(--border); }
+.final-warning-list > li > p { margin: 0 0 var(--space-1); }
+
 /* Label-over-number readout for a few totals; still a <dl>. */
 .stat-row { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); margin-top: var(--space-3); font-variant-numeric: tabular-nums; }
 .stat-row > div { display: flex; flex-direction: column; gap: var(--space-1); }
