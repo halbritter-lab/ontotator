@@ -19,7 +19,7 @@ Shared primitives are owned by Documents (U1 `Button` busy state, `InlineConfirm
 
 ## Global rules (apply to every WP of every plan)
 
-1. **No commits, no pushes** unless the user says so. Each WP reports its "Commit point" for later. No AI attribution lines anywhere.
+1. **Commit in sensible steps, never push** unless the user says so (decision 2026-10-19). Step 0 before wave 1: commit the pre-existing uncommitted implementation changes of this worktree as one baseline commit ("feat: phase 0 acceptance remediation baseline"), after a quick check that the existing test suites pass (report failures to the user instead of committing broken state). After that, the orchestrator commits each WP (or a small group of WPs of the same wave) once its review/fix loop is done, using the WP's commit-point text and staging only that WP's owned files (`git add <owned files>`, never `git add -A`). Subagents never commit themselves. No AI attribution lines anywhere (no Co-Authored-By, no "Generated with").
 2. **Preserve uncommitted work.** The worktree holds many uncommitted changes. Never `git reset`, `git checkout -- <file>`, `git stash`, `git clean`, and never overwrite a file you do not own. Edit on top of the working tree.
 3. **Shell.** All plan commands are written for the Bash tool (Git Bash), run from the worktree root (`cd /c/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation && …`). `rg` is not installed in Git Bash; use `grep -rnE`.
 4. **Exclusive file ownership.** A file is written by exactly one WP at a time across all plans. A WP writes only its "Owns" list; if it needs anything else, it stops and reports. Separate hunks in one file never justify running two owners in parallel. Test files count.
@@ -176,7 +176,7 @@ The orchestrating session (main session or a coordinator agent) dispatches one W
 2. This file's "Global rules" (copy them or link this file) and the WP's wave row (prerequisites, which sibling WPs run at the same time and which files they own).
 3. The prerequisite checks to run first (the `grep`/`test` commands in the WP or in its plan's prerequisite table) and "stop and report if one fails".
 4. Its lane: heavy or light; for L+ "run the full Vitest suite only when the orchestrator confirms a free heavy slot".
-5. The required hand-back: changed files (must be a subset of "Owns"), commands run with exit status and summary, the WP's done checklist ticked item by item, skipped parts with "obsolete (replaced by …)", deviations from the plan, and the commit point text. No commits.
+5. The required hand-back: changed files (must be a subset of "Owns"), commands run with exit status and summary, the WP's done checklist ticked item by item, skipped parts with "obsolete (replaced by …)", deviations from the plan, and the commit point text. Subagents do not commit; the orchestrator commits after review.
 
 Model and effort: implementation agents at the plan's default; the fix agent after a review at effort **medium**.
 
@@ -191,13 +191,13 @@ Model and effort: implementation agents at the plan's default; the fix agent aft
 
    Small WPs (size S, single owned area) may skip the external review if their checks are green.
 3. **One fix agent** (effort medium) applies verified findings within the same owned files, reruns the WP's verification, and reports. No second review round unless a P0/P1 remains.
-4. Mark the WP done in the orchestration notes (wave, WP, result, commit point). Then release its files for the next owner.
+4. Commit the WP (owned files only, commit-point text as message), mark it done in the orchestration notes (wave, WP, result, commit SHA), then release its files for the next owner.
 
 ## User checkpoints
 
 - **Check-code explanation texts** (editor F3 writes `docs/superpowers/reviews/2026-10-19-translation-check-explanations-review.md`): the user confirms each text before release. E-F11 lists unconfirmed codes; this does not block implementation.
 - **Optional pauses between waves.** Natural review points: after wave 6 (Documents backend and contracts done, quick fixes C/D/E/F/B/G done), after wave 12 (Documents page complete, quick-fix browser check), after wave 17 (Documents complete with its full gate), and after wave 22 (all plans gated).
-- **Commits.** Nothing is committed until the user asks; each WP's commit point is collected for that moment.
+- **Commits.** Baseline commit before wave 1, then one commit per reviewed WP (or small same-wave group). No push until the user asks.
 
 ## Open items needing user input
 
