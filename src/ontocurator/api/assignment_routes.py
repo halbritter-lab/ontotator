@@ -33,8 +33,21 @@ from ontocurator.authz.policy import Action, Task, can
 from ontocurator.authz.visibility import qualifying_assignment
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.storage.tables import AssignmentRow, UserRow
+from ontocurator.storage.workflow_tables import (
+    ProblemReportRow,
+    TaskHoldRow,
+    TaskHoldStateRow,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["assignments"])
+
+
+class ActiveHoldView(BaseModel):
+    """An active pause on the owner's task; other people's reports stay unnamed."""
+
+    reason: str
+    created_at: datetime
+    own_report_id: str | None
 
 
 class AssignmentView(BaseModel):
@@ -57,6 +70,7 @@ class AssignmentView(BaseModel):
     workflow_revision: int = 0
     held: bool = False
     hold_reason: str | None = None
+    active_holds: list[ActiveHoldView] = Field(default_factory=list)
 
 
 class AssignmentOpenRequest(BaseModel):
@@ -164,9 +178,18 @@ def _service(request: Request) -> AssignmentService:
     return AssignmentService(request.app.state.repo.db)
 
 
-def _views(request: Request, assignments: list[Assignment]) -> list[AssignmentView]:
+def _views(
+    request: Request, assignments: list[Assignment], owner_id: int | None = None
+) -> list[AssignmentView]:
+    """Assignment views; ``owner_id`` adds active pauses to that user's own rows."""
     if not assignments:
         return []
+    owned = (
+        {row.id for row in assignments if row.user_id == owner_id}
+        if owner_id is not None
+        else set()
+    )
+    holds: dict[int, list[ActiveHoldView]] = {}
     with request.app.state.repo.db.transaction() as conn:
         names = dict(
             conn.execute(
@@ -175,8 +198,40 @@ def _views(request: Request, assignments: list[Assignment]) -> list[AssignmentVi
                 )
             ).all()
         )
+        if owned:
+            rows = conn.execute(
+                select(
+                    TaskHoldRow.assignment_id,
+                    TaskHoldRow.reason,
+                    TaskHoldRow.created_at,
+                    ProblemReportRow.report_id,
+                    ProblemReportRow.reporter_id,
+                )
+                .join(TaskHoldStateRow, TaskHoldStateRow.hold_id == TaskHoldRow.hold_id)
+                .join(
+                    ProblemReportRow,
+                    ProblemReportRow.report_id == TaskHoldRow.report_id,
+                )
+                .where(
+                    TaskHoldRow.assignment_id.in_(owned),
+                    TaskHoldStateRow.active.is_(True),
+                )
+                .order_by(TaskHoldRow.created_at, TaskHoldRow.hold_id)
+            ).all()
+            for assignment_id, reason, created_at, report_id, reporter_id in rows:
+                holds.setdefault(assignment_id, []).append(
+                    ActiveHoldView(
+                        reason=reason,
+                        created_at=created_at,
+                        own_report_id=report_id if reporter_id == owner_id else None,
+                    )
+                )
     return [
-        AssignmentView(**asdict(row), display_name=names[row.user_id])
+        AssignmentView(
+            **asdict(row),
+            display_name=names[row.user_id],
+            active_holds=holds.get(row.id, []),
+        )
         for row in assignments
     ]
 
@@ -308,7 +363,9 @@ def assignment_metadata(
     assignment_id: int, request: Request, principal: PrincipalDep
 ) -> AssignmentView:
     return _views(
-        request, [_owned_assignment(request, principal.user_id, assignment_id)]
+        request,
+        [_owned_assignment(request, principal.user_id, assignment_id)],
+        owner_id=principal.user_id,
     )[0]
 
 
@@ -333,7 +390,7 @@ def open_assignment(
             workspace_id=response.workspace_id,
             view=response.view,
             read_only=response.read_only,
-            assignment=_views(request, [assignment])[0],
+            assignment=_views(request, [assignment], owner_id=principal.user_id)[0],
         )
     response = open_workspace(
         OpenWorkspaceRequest(
@@ -355,7 +412,7 @@ def open_assignment(
         workspace_id=response.workspace_id,
         view=response.view,
         read_only=response.read_only,
-        assignment=_views(request, [assignment])[0],
+        assignment=_views(request, [assignment], owner_id=principal.user_id)[0],
     )
 
 
