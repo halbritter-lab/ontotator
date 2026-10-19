@@ -144,3 +144,16 @@ describe("cells", () => {
     expect(within(card).getByRole("link", { name: `Open ${longId} · de` })).toBeTruthy();
   });
 });
+
+describe("row badge", () => {
+  it("shows the visit badge next to the heading of a collapsed card without changing its name", () => {
+    renderCards(scenarioS0().page, { rowBadge: entry => (entry.language === "de" ? <span className="badge">Changed: Work assigned</span> : null) });
+    const card = cardOf("synthetic-accepted · de");
+    expect(within(card).getByRole("button", { name: "Show submissions, synthetic-accepted · de" }).getAttribute("aria-expanded")).toBe("false");
+    const heading = within(card).getByRole("heading", { name: "synthetic-accepted · de" });
+    const badge = within(card).getByText("Changed: Work assigned");
+    expect(heading.contains(badge)).toBe(false);
+    expect(badge.closest(".document-card-head")).toBe(heading.parentElement);
+    expect(cardOf("synthetic-accepted · en").textContent).not.toContain("Changed");
+  });
+});

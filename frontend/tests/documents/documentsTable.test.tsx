@@ -227,3 +227,17 @@ describe("initialExpandedGroups", () => {
     expect([...initialExpandedGroups(view)]).toEqual(["case-0108"]);
   });
 });
+
+describe("row badge", () => {
+  it("shows the visit badge next to the row header of a collapsed row, outside the row's names", () => {
+    const s0 = scenarioS0();
+    renderTable(s0.page, { rowBadge: entry => (entry.language === "de" ? <span className="badge">Resolved</span> : null) });
+    const disclosure = screen.getByRole("button", { name: "Show submissions, synthetic-accepted · de" });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    const header = disclosure.closest("th")!;
+    expect(within(header).getByText("Resolved")).toBeTruthy();
+    expect(disclosure.textContent).not.toContain("Resolved");
+    expect(screen.getByRole("link", { name: "Open synthetic-accepted · de" })).toBeTruthy();
+    expect(rowOf("synthetic-accepted · en").textContent).not.toContain("Resolved");
+  });
+});

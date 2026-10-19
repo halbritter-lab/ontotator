@@ -48,6 +48,8 @@ export interface DocumentsTableProps {
   onToggleSelect: (documentId: string, checked: boolean) => void;
   /** Expanded content of an open row (built by the page). */
   renderExpanded?: (row: DocumentRowView) => ReactNode;
+  /** Visit badge of a row, shown next to its row header (also while collapsed). */
+  rowBadge?: (row: DocumentRowView) => ReactNode;
   /** Header of the Select column (e.g. "Select all"); defaults to a visually hidden "Select". */
   selectHeader?: ReactNode;
   onNavigate?: (route: Route) => void;
@@ -57,7 +59,7 @@ export interface DocumentsTableProps {
 
 export function DocumentsTable({
   page, projectKey, query, expandedGroups, onToggleGroup, onToggleRow, selected, onToggleSelect,
-  renderExpanded, selectHeader, onNavigate, busy, empty,
+  renderExpanded, rowBadge, selectHeader, onNavigate, busy, empty,
 }: DocumentsTableProps): JSX.Element {
   const baseId = useId();
   const open = useMemo(() => new Set(query.open ?? []), [query.open]);
@@ -93,6 +95,7 @@ export function DocumentsTable({
           controls={isOpen(row) && renderExpanded ? ids.get(rowKeyOf(row))?.region : undefined}
           onToggleRow={onToggleRow}
           onNavigate={onNavigate}
+          badge={rowBadge?.(row)}
         />
       ),
     },

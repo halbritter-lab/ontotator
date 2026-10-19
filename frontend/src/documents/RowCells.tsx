@@ -241,10 +241,12 @@ export interface RowHeaderCellProps {
   controls?: string;
   onToggleRow: (key: string) => void;
   onNavigate?: (route: Route) => void;
+  /** Visit badge ("Resolved" / "Changed: …") shown next to the disclosure, outside its name. */
+  badge?: ReactNode;
 }
 
-/** Disclosure, language code, "Open" and "Open my task". */
-export function RowHeaderCell({ row, projectKey, query, expanded, controls, onToggleRow, onNavigate }: RowHeaderCellProps): JSX.Element {
+/** Disclosure, language code, visit badge, "Open" and "Open my task". */
+export function RowHeaderCell({ row, projectKey, query, expanded, controls, onToggleRow, onNavigate, badge }: RowHeaderCellProps): JSX.Element {
   const descriptionId = useId();
   const name = rowName(row);
   const documents = Object.keys(query).length ? { documents: query } : {};
@@ -263,6 +265,7 @@ export function RowHeaderCell({ row, projectKey, query, expanded, controls, onTo
         <IconChevronRight className="disclosure-chevron" />
         <span className="documents-language">{row.language}</span>
       </button>
+      {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
       <RouteLink route={openRoute} onNavigate={onNavigate} className="documents-open" aria-label={`Open ${name}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
       {description && <span id={descriptionId} className="visually-hidden">{description}</span>}
       {row.own_open_assignment_id != null && (

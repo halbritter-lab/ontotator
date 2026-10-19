@@ -437,10 +437,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   const renderExpanded = (row: DocumentRowView) => {
     const notice = rowNotice(row);
-    const badge = badges.get(rowKeyOf(row));
     const own = confirm?.request.rowKey === rowKeyOf(row) ? confirm : null;
     return <>
-      {badge && <p className="documents-row-notice"><StatusBadge tone={badge.tone}>{badge.text}</StatusBadge></p>}
       {notice && <p className="documents-row-notice">{notice}</p>}
       <ExpandedRowLoader row={row} refresh={page} projectKey={projectKey} query={viewQuery} onNavigate={route => onNavigate(route)}
         adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} onAnnounce={announce} textVersionTools={textVersionTools}
@@ -449,6 +447,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         keepConfirm={own?.request.kind === "keep" ? confirmElement(own) : undefined}
         confirmBusy={confirm?.busy ?? false} />
     </>;
+  };
+
+  const rowBadge = (row: DocumentRowView) => {
+    const badge = badges.get(rowKeyOf(row));
+    return badge && <StatusBadge tone={badge.tone}>{badge.text}</StatusBadge>;
   };
 
   const languages = [...new Set([...(settings?.languages ?? []), ...pageRows.map(row => row.language), ...(query.language ? [query.language] : [])])];
@@ -473,10 +476,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       body = <EmptyState title="No documents">Try another filter or upload documents to this project.</EmptyState>;
     } else if (narrow) {
       body = <DocumentCards page={page} projectKey={projectKey} query={viewQuery} onToggleRow={toggleRow} selected={selected}
-        onToggleSelect={toggleSelect} renderExpanded={renderExpanded} onNavigate={navigateLink} busy={rows.loading} />;
+        onToggleSelect={toggleSelect} renderExpanded={renderExpanded} rowBadge={rowBadge} onNavigate={navigateLink} busy={rows.loading} />;
     } else {
       body = <DocumentsTable page={page} projectKey={projectKey} query={viewQuery} expandedGroups={expandedGroups} onToggleGroup={toggleGroup}
-        onToggleRow={toggleRow} selected={selected} onToggleSelect={toggleSelect} renderExpanded={renderExpanded} onNavigate={navigateLink} busy={rows.loading} />;
+        onToggleRow={toggleRow} selected={selected} onToggleSelect={toggleSelect} renderExpanded={renderExpanded} rowBadge={rowBadge} onNavigate={navigateLink} busy={rows.loading} />;
     }
     content = <>
       <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} />

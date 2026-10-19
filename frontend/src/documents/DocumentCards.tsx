@@ -31,6 +31,8 @@ export interface DocumentCardsProps {
   onToggleSelect: (documentId: string, checked: boolean) => void;
   /** Expanded content of an open row (built by the page); stacks inside the card. */
   renderExpanded?: (row: DocumentRowView) => ReactNode;
+  /** Visit badge of a row, shown next to the card heading (also while collapsed). */
+  rowBadge?: (row: DocumentRowView) => ReactNode;
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
@@ -41,7 +43,7 @@ interface DocumentCardProps extends Omit<DocumentCardsProps, "page" | "busy" | "
   expanded: boolean;
 }
 
-function DocumentCard({ row, projectKey, query, expanded, onToggleRow, selected, onToggleSelect, renderExpanded, onNavigate }: DocumentCardProps): JSX.Element {
+function DocumentCard({ row, projectKey, query, expanded, onToggleRow, selected, onToggleSelect, renderExpanded, rowBadge, onNavigate }: DocumentCardProps): JSX.Element {
   const baseId = useId();
   const headingId = `${baseId}-heading`;
   const regionId = `${baseId}-expanded`;
@@ -51,6 +53,7 @@ function DocumentCard({ row, projectKey, query, expanded, onToggleRow, selected,
   const openRoute: Route = { name: "projectCase", key: projectKey, caseId: row.case_id, variant: row.open.document_id, ...documents };
   const description = row.open.reason === "most_recent_root" && row.open.label ? `Opens ${row.open.label}, the most recent translation` : null;
   const showRegion = expanded && renderExpanded != null;
+  const badge = rowBadge?.(row);
 
   return (
     <article className="document-card" aria-labelledby={headingId}>
@@ -60,6 +63,7 @@ function DocumentCard({ row, projectKey, query, expanded, onToggleRow, selected,
           <span aria-hidden="true"><ShortId value={row.case_id} />{` · ${row.language}`}</span>
           <span className="visually-hidden">{name}</span>
         </h3>
+        {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
         <IssuesCell row={row} />
       </div>
       <div className="document-card-line"><VersionCell row={row} expanded={expanded} /></div>

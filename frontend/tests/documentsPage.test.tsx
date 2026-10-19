@@ -260,9 +260,12 @@ describe("Resolved and Changed badges", () => {
     await waitFor(() => expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("false"));
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", decision: "confirm-final" }, { replace: true });
     expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] });
+    // The badge is on the collapsed row itself, next to its row header.
+    expect(within(disclosure("synthetic-accepted · de").closest("th")!).getByText("Resolved")).toBeTruthy();
     fireEvent.click(disclosure("synthetic-accepted · de"));
     expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("true");
-    expect(await screen.findByText("Resolved")).toBeTruthy();
+    // Shown once, not repeated in the expanded content.
+    expect(screen.getAllByText("Resolved")).toHaveLength(1);
     // A later refresh does not collapse the row again.
     await refetch();
     expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] });
@@ -301,8 +304,7 @@ describe("Resolved and Changed badges", () => {
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalled());
     expect(vi.mocked(api.listDocumentRows).mock.calls[0][1]).toEqual({ decision: "report-or-pause", retain: ["case-0042:en"] });
     await waitFor(() => expect(disclosure("case-0042 · en").getAttribute("aria-expanded")).toBe("false"));
-    fireEvent.click(disclosure("case-0042 · en"));
-    expect(await screen.findByText("Resolved")).toBeTruthy();
+    expect(within(disclosure("case-0042 · en").closest("th")!).getByText("Resolved")).toBeTruthy();
   });
 
   it("starts a new visit after a filter change and sends no retain without a decision filter", async () => {
