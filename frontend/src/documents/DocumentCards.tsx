@@ -8,10 +8,11 @@ import type { DocumentRowView, DocumentRowsPage } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import { IconChevronRight } from "../ui/icons";
 import {
+  documentsRowId,
   FinalCell,
   IssuesCell,
   LastActivityCell,
-  RouteLink,
+  RowOpenLinks,
   SelectCell,
   ShortId,
   VersionCell,
@@ -29,8 +30,8 @@ export interface DocumentCardsProps {
   /** Selected bulk document IDs. */
   selected: ReadonlySet<string>;
   onToggleSelect: (documentId: string, checked: boolean) => void;
-  /** Expanded content of an open row (built by the page); stacks inside the card. */
-  renderExpanded?: (row: DocumentRowView) => ReactNode;
+  /** Expanded content of an open row (built by the page); stacks inside the card, with `layout: "list"` for Submissions. */
+  renderExpanded?: (row: DocumentRowView, options: { layout: "list" }) => ReactNode;
   /** Visit badge of a row, shown next to the card heading (also while collapsed). */
   rowBadge?: (row: DocumentRowView) => ReactNode;
   onNavigate?: (route: Route) => void;
@@ -47,11 +48,7 @@ function DocumentCard({ row, projectKey, query, expanded, onToggleRow, selected,
   const baseId = useId();
   const headingId = `${baseId}-heading`;
   const regionId = `${baseId}-expanded`;
-  const descriptionId = `${baseId}-open-description`;
   const name = rowName(row);
-  const documents = Object.keys(query).length ? { documents: query } : {};
-  const openRoute: Route = { name: "projectCase", key: projectKey, caseId: row.case_id, variant: row.open.document_id, ...documents };
-  const description = row.open.reason === "most_recent_root" && row.open.label ? `Opens ${row.open.label}, the most recent translation` : null;
   const showRegion = expanded && renderExpanded != null;
   const badge = rowBadge?.(row);
 
@@ -73,13 +70,10 @@ function DocumentCard({ row, projectKey, query, expanded, onToggleRow, selected,
         <span className="document-card-activity"><LastActivityCell iso={row.last_activity_at} /></span>
       </div>
       <div className="document-card-line document-card-actions">
-        <RouteLink route={openRoute} onNavigate={onNavigate} className="documents-open" aria-label={`Open ${name}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
-        {description && <span id={descriptionId} className="visually-hidden">{description}</span>}
-        {row.own_open_assignment_id != null && (
-          <RouteLink route={{ name: "task", assignmentId: row.own_open_assignment_id }} onNavigate={onNavigate} className="documents-open-task">Open my task</RouteLink>
-        )}
+        <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
         <button
           type="button"
+          id={documentsRowId(row.case_id, row.language, "disclosure")}
           className="document-card-toggle"
           aria-expanded={expanded}
           aria-controls={showRegion ? regionId : undefined}
@@ -90,7 +84,7 @@ function DocumentCard({ row, projectKey, query, expanded, onToggleRow, selected,
           Show submissions
         </button>
       </div>
-      {showRegion && <div id={regionId} className="document-card-expanded">{renderExpanded(row)}</div>}
+      {showRegion && <div id={regionId} className="document-card-expanded">{renderExpanded(row, { layout: "list" })}</div>}
     </article>
   );
 }

@@ -1,9 +1,13 @@
-import { useId, useState, type MouseEvent, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import type { FinalSelectionSummary, RowRoundView, RowSubmissionView } from "../api/client";
 import { routeHref, type Route } from "../app/router";
 import { kindLabels, personLabel, submissionLabel, formatTime, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
+import { plural } from "../app/labels";
 import { Button, DataTable, StatusBadge, type Column } from "../ui";
+import { isPlainClick } from "./RowCells";
+
+export { isPlainClick };
 
 /** Rows beyond this collapse to the newest ones plus "Show all (n)"; the Final row stays visible. */
 export const SUBMISSIONS_COLLAPSED_LIMIT = 10;
@@ -37,10 +41,13 @@ export interface SubmissionsTableProps {
   label?: string;
   /** Reference time for the current-year rule (tests). */
   now?: Date;
-}
-
-export function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
-  return event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
+  /**
+   * "table" (default): the columns. "list" for narrow cards: two-line items (label and Final badge;
+   * findings and actions), an inline confirmation as a block below its item.
+   */
+  layout?: "table" | "list";
+  /** DOM id of the Final row's View link (stable focus target). */
+  finalLinkId?: string;
 }
 
 /** "Round n", "Initial submission" without a round, or the kind for rounds without an ordinal (consolidation). */
@@ -86,6 +93,7 @@ export function pendingRounds(rounds: readonly RowRoundView[]): RowRoundView[] {
  */
 export function SubmissionsTable({
   rows, rounds, final = null, parallel, showFinalColumn, language, actions, renderConfirm, viewRoute, onNavigate, label = "Submissions", now,
+  layout = "table", finalLinkId,
 }: SubmissionsTableProps): JSX.Element {
   const id = useId();
   const [showAll, setShowAll] = useState(false);
@@ -104,18 +112,18 @@ export function SubmissionsTable({
   const labelOf = (row: RowSubmissionView) => rowSubmissionLabel(row, language, parallel, { now, seconds: needsSeconds(row) });
   const labelId = (row: RowSubmissionView) => `${id}-label-${sorted.indexOf(row)}`;
 
-  const roundCellContent = (row: RowSubmissionView) => {
-    const text = [roundName(row), ...roundSuffixes(row, rows)].join(" · ");
+  const viewLink = (row: RowSubmissionView, text: string) => {
     const destination = viewRoute(row);
     const hidden = <span id={labelId(row)} hidden>{labelOf(row)}</span>;
     if (!destination) return <>{text}{hidden}</>;
     return <>
-      <a href={routeHref(destination)} aria-label={`View ${labelOf(row)}`} onClick={event => {
+      <a id={isFinal(row) ? finalLinkId : undefined} href={routeHref(destination)} aria-label={`View ${labelOf(row)}`} onClick={event => {
         if (!onNavigate || !isPlainClick(event)) return;
         event.preventDefault(); onNavigate(destination);
       }}>{text}</a>{hidden}
     </>;
   };
+  const roundCellContent = (row: RowSubmissionView) => viewLink(row, [roundName(row), ...roundSuffixes(row, rows)].join(" · "));
 
   const columns: Column<RowSubmissionView>[] = [
     ...(showFinalColumn ? [{ id: "final", header: "Final", cell: (row: RowSubmissionView) => isFinal(row) ? <StatusBadge tone="success">Final</StatusBadge> : null }] : []),
@@ -128,6 +136,39 @@ export function SubmissionsTable({
     ...(actions ? [{ id: "actions", header: "Actions", cell: (row: RowSubmissionView) => <div className="submission-actions">{actions(row, { labelId: labelId(row), label: labelOf(row), isFinal: isFinal(row) })}</div> }] : []),
   ];
   const pending = pendingRounds(rounds);
+  const pendingList = pending.length > 0 && <ul className="submissions-pending">
+    {pending.map(round => <li key={round.round_id}>{`${roundName({ round_ordinal: round.round_ordinal, round_id: round.round_id, kind: round.kind })} · ${personLabel(round.author_label, round.is_me)} · in progress, not submitted yet`}</li>)}
+  </ul>;
+  const showAllButton = collapsed && <Button size="sm" variant="quiet" onClick={() => setShowAll(true)}>Show all ({sorted.length})</Button>;
+
+  if (layout === "list") {
+    return <div className="submissions-table submissions-list-layout">
+      {visible.length === 0 ? <p className="cell-secondary">No submissions yet.</p>
+        : <ul className="submissions-list" aria-label={label}>
+          {visible.map(row => {
+            const confirm = renderConfirm?.(row) ?? null;
+            // Consolidations name their kind once ("Consolidation", not "Consolidation · Consolidation").
+            const parts = [kindLabels[row.kind], roundName(row), ...roundSuffixes(row, rows), personLabel(row.author_label, row.is_me),
+              showVersion ? submissionVersion(row.version, row.chain_name, parallel) : ""];
+            const text = parts.filter((part, index) => part && parts.indexOf(part) === index).join(" · ");
+            return <li key={row.submission_id} className={isFinal(row) ? "submissions-list-item final-row" : "submissions-list-item"}>
+                <div className="submissions-list-line">
+                  <span className="submissions-list-label">{viewLink(row, text)}</span>
+                  {" "}<Time iso={row.recorded_at} now={now} seconds={needsSeconds(row)} />
+                  {showFinalColumn && isFinal(row) && <> <StatusBadge tone="success">Final</StatusBadge></>}
+                </div>
+                <div className="submissions-list-line">
+                  <span className="submissions-list-findings">{plural(row.finding_count, "finding")}</span>
+                  {actions && <div className="submission-actions">{actions(row, { labelId: labelId(row), label: labelOf(row), isFinal: isFinal(row) })}</div>}
+                </div>
+                {confirm != null && <div className="submissions-list-confirm">{confirm}</div>}
+              </li>;
+          })}
+        </ul>}
+      {showAllButton}
+      {pendingList}
+    </div>;
+  }
 
   return <div className="submissions-table">
     <DataTable
@@ -139,9 +180,7 @@ export function SubmissionsTable({
       renderExpanded={renderConfirm}
       empty="No submissions yet."
     />
-    {collapsed && <Button size="sm" variant="quiet" onClick={() => setShowAll(true)}>Show all ({sorted.length})</Button>}
-    {pending.length > 0 && <ul className="submissions-pending">
-      {pending.map(round => <li key={round.round_id}>{`${roundName({ round_ordinal: round.round_ordinal, round_id: round.round_id, kind: round.kind })} · ${personLabel(round.author_label, round.is_me)} · in progress, not submitted yet`}</li>)}
-    </ul>}
+    {showAllButton}
+    {pendingList}
   </div>;
 }

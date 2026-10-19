@@ -10,6 +10,7 @@ import { plural } from "../app/labels";
 import { DataTable, type Column, type DataTableGroup } from "../ui/DataTable";
 import { IconChevronRight } from "../ui/icons";
 import {
+  documentsGroupId,
   FinalCell,
   IssuesCell,
   LastActivityCell,
@@ -123,6 +124,7 @@ export function DocumentsTable({
         <span className="documents-group-header">
           <button
             type="button"
+            id={documentsGroupId(group.case_id)}
             className="documents-group-toggle target-min"
             aria-expanded={expanded}
             aria-controls={controls || undefined}

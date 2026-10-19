@@ -4,6 +4,7 @@
  */
 import { useId, type MouseEvent, type ReactNode } from "react";
 import type { DocumentRowView, DocumentVersionView, FinalSelectionSummary } from "../api/client";
+import { kindLabels, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { IconCheck, IconChevronRight } from "../ui/icons";
@@ -67,8 +68,22 @@ export function ShortId({ value, max = ID_DISPLAY_MAX }: { value: string; max?: 
   return <span className="documents-id" title={value}>{short}</span>;
 }
 
-function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
+/** A plain left click (no modifier): in-app navigation; anything else keeps the browser default. */
+export function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
   return event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
+}
+
+/** Parts of a Documents row with a stable DOM id (focus targets). */
+export type DocumentsRowPart = "disclosure" | "final-view";
+
+/** Stable id of a part of the row `{case}:{language}`, e.g. its disclosure or the Final row's View link. */
+export function documentsRowId(caseId: string, language: string, part: DocumentsRowPart): string {
+  return `documents-row-${encodeURIComponent(caseId)}-${encodeURIComponent(language)}-${part}`;
+}
+
+/** Stable id of a text group's header disclosure. */
+export function documentsGroupId(caseId: string): string {
+  return `documents-group-${encodeURIComponent(caseId)}-toggle`;
 }
 
 /** A link with a real `href`; plain left clicks go through `onNavigate` when given. */
@@ -166,18 +181,32 @@ export function WorkCell({ row }: { row: DocumentRowView }): JSX.Element {
   );
 }
 
-/** "Annotation · Round 2 · ann-0004 · 18 Oct, 10:00 · v1": no language; the marker follows when needed. */
-export function finalLabel(row: DocumentRowView, final: FinalSelectionSummary): string {
-  const kind = final.kind ?? "annotation";
+export interface FinalLabelOptions {
+  /** Full submission label with language and version (confirmations); default is the Final column form. */
+  withLanguage?: boolean;
+}
+
+/**
+ * Label of a final result from its summary, the one fallback for every place without the loaded
+ * submission. Final column: "Annotation · Round 2 · ann-0004 · 18 Oct, 10:00 · v1" (no language;
+ * the version marker follows when needed). `withLanguage`: "Annotation · Round 2 · ann-0004 · de v1 · 18 Oct, 10:00".
+ * Without `recorded_at` the time is omitted, never invented; an unknown author reads "Unknown".
+ */
+export function finalLabel(row: DocumentRowView, final: FinalSelectionSummary, options: FinalLabelOptions = {}): string {
+  const withLanguage = options.withLanguage ?? false;
+  const kind = (final.kind ?? "annotation") as SubmissionKind;
   const author = final.author_label ?? "Unknown";
-  const base = final.recorded_at
-    ? submissionLabel({ kind, ordinal: final.round_ordinal, author, isMe: final.is_mine, language: final.language, version: null, recordedAt: final.recorded_at }, { withLanguage: false })
-    : [kind === "consolidation" ? null : final.round_ordinal == null ? "Initial submission" : `Round ${final.round_ordinal}`, personLabel(author, final.is_mine)]
-      .filter(Boolean).join(" · ");
-  const needsMarker = final.version != null && (!final.is_newest_of_chain || row.parallel_roots);
-  if (!needsMarker) return base;
+  const language = final.language || row.language;
   const chain = final.chain_name ?? versionOf(row, final.document_id)?.chain_name ?? "";
-  return `${base} · ${versionName(final.version!, chain, row.parallel_roots)}`;
+  const version = final.version != null ? versionName(final.version, chain, row.parallel_roots) : null;
+  // The Final column appends the version only as a marker (older version or parallel roots).
+  const marker = !withLanguage && final.version != null && (!final.is_newest_of_chain || row.parallel_roots) ? version : null;
+  const labelVersion = withLanguage ? version : null;
+  const base = final.recorded_at
+    ? submissionLabel({ kind, ordinal: final.round_ordinal, author, isMe: final.is_mine, language, version: labelVersion, recordedAt: final.recorded_at }, { withLanguage })
+    : [kindLabels[kind] ?? kind, kind === "consolidation" ? null : final.round_ordinal == null ? "Initial submission" : `Round ${final.round_ordinal}`,
+      personLabel(author, final.is_mine), withLanguage ? [language, labelVersion].filter(Boolean).join(" ") : null].filter(Boolean).join(" · ");
+  return marker ? `${base} · ${marker}` : base;
 }
 
 export function FinalCell({ row }: { row: DocumentRowView }): JSX.Element {
@@ -231,6 +260,33 @@ export function SelectCell({ row, selected, onToggleSelect }: SelectCellProps): 
   );
 }
 
+/** The row's "Open" destination and, for parallel translations, which one it opens. */
+export function openLink(row: DocumentRowView, projectKey: string, query: ProjectDocumentsQuery): { route: Route; description: string | null } {
+  const documents = Object.keys(query).length ? { documents: query } : {};
+  return {
+    route: { name: "projectCase", key: projectKey, caseId: row.case_id, variant: row.open.document_id, ...documents },
+    description: row.open.reason === "most_recent_root" && row.open.label ? `Opens ${row.open.label}, the most recent translation` : null,
+  };
+}
+
+/** "Open" (with its description) and "Open my task" of a row; shared by the table and the cards. */
+export function RowOpenLinks({ row, projectKey, query, onNavigate }: {
+  row: DocumentRowView;
+  projectKey: string;
+  query: ProjectDocumentsQuery;
+  onNavigate?: (route: Route) => void;
+}): JSX.Element {
+  const descriptionId = useId();
+  const { route, description } = openLink(row, projectKey, query);
+  return <>
+    <RouteLink route={route} onNavigate={onNavigate} className="documents-open" aria-label={`Open ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
+    {description && <span id={descriptionId} className="visually-hidden">{description}</span>}
+    {row.own_open_assignment_id != null && (
+      <RouteLink route={{ name: "task", assignmentId: row.own_open_assignment_id }} onNavigate={onNavigate} className="documents-open-task">Open my task</RouteLink>
+    )}
+  </>;
+}
+
 export interface RowHeaderCellProps {
   row: DocumentRowView;
   projectKey: string;
@@ -247,30 +303,22 @@ export interface RowHeaderCellProps {
 
 /** Disclosure, language code, visit badge, "Open" and "Open my task". */
 export function RowHeaderCell({ row, projectKey, query, expanded, controls, onToggleRow, onNavigate, badge }: RowHeaderCellProps): JSX.Element {
-  const descriptionId = useId();
-  const name = rowName(row);
-  const documents = Object.keys(query).length ? { documents: query } : {};
-  const openRoute: Route = { name: "projectCase", key: projectKey, caseId: row.case_id, variant: row.open.document_id, ...documents };
-  const description = row.open.reason === "most_recent_root" && row.open.label ? `Opens ${row.open.label}, the most recent translation` : null;
   return (
     <span className="documents-row-header">
       <button
         type="button"
+        id={documentsRowId(row.case_id, row.language, "disclosure")}
         className="documents-disclosure target-min"
         aria-expanded={expanded}
         aria-controls={controls}
-        aria-label={`Show submissions, ${name}`}
+        aria-label={`Show submissions, ${rowName(row)}`}
         onClick={() => onToggleRow(rowKeyOf(row))}
       >
         <IconChevronRight className="disclosure-chevron" />
         <span className="documents-language">{row.language}</span>
       </button>
       {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
-      <RouteLink route={openRoute} onNavigate={onNavigate} className="documents-open" aria-label={`Open ${name}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
-      {description && <span id={descriptionId} className="visually-hidden">{description}</span>}
-      {row.own_open_assignment_id != null && (
-        <RouteLink route={{ name: "task", assignmentId: row.own_open_assignment_id }} onNavigate={onNavigate} className="documents-open-task">Open my task</RouteLink>
-      )}
+      <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
     </span>
   );
 }

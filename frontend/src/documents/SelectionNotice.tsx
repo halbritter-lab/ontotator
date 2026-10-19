@@ -18,7 +18,8 @@ export const ACKNOWLEDGEABLE_CODES: ReadonlySet<string> = new Set([
 /** Reason shown when the project keeps adjudication separate and the final result is the lead's own. */
 export const OWN_RESULT_REASON = "This project keeps adjudication separate from annotation. Another lead must choose this result.";
 
-const NOT_ACCEPTED_DECISIONS: Readonly<Record<string, string>> = { rejected: "rejected", query: "queried", queried: "queried" };
+/** Stored review decisions (`translation_reviews.decision`) that did not accept a correction. */
+const NOT_ACCEPTED_DECISIONS: Readonly<Record<string, string>> = { rejected: "rejected", query: "queried" };
 
 /** Acknowledgeable cause items of a row, in server order. */
 export function acknowledgeableItems(row: DocumentRowView): RowItemView[] {

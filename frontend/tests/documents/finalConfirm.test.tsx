@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type RowSubmissions } from "../../src/api/client";
 import { DocumentsPage, type DocumentsPageProps } from "../../src/admin/DocumentsPage";
 import type { ProjectDocumentsQuery } from "../../src/app/router";
-import { barChanges, failureOf, successMessage } from "../../src/documents/FinalConfirm";
+import { barChanges, currentFinalLabel, failureOf, successMessage } from "../../src/documents/FinalConfirm";
 import { rowSubmissionLabel } from "../../src/documents/SubmissionsTable";
 import { FINAL_SELECTION_CHANGED } from "../../src/variants/finalSelectionState";
 import { bar, final, group, item, page, row, rowKey, scenarioS0, scenarioS1, submission, submissions, version, work } from "./fixtures";
@@ -270,4 +270,41 @@ it("maps errors, success messages and bar changes", () => {
   const base = { rowKey: "c:de", caseId: "c", language: "de", documentId: "d", submissionId: "s", expectedRevision: 1, causeIds: [], triggerId: "t", label: "L", oldLabel: null, stillOpen: null, roundNote: null, own: false, causeLines: [] };
   expect(successMessage({ ...base, kind: "use", waiting: [] })).toBe("L is now the final result.");
   expect(successMessage({ ...base, kind: "keep", waiting: [] })).toBe("Kept L.");
+});
+
+it("reports a save whose reload failed and keeps the shown rows with Could not refresh", async () => {
+  const { s1, page: initial } = openRow();
+  serve(initial, s1.submissions);
+  renderPage({ open: [rowKey("case-0042", "en")] });
+  fireEvent.click((await screen.findAllByRole("button", { name: "Use as final…" }))[0]);
+  const label = rowSubmissionLabel(s1.submissions[rowKey("case-0042", "en")].submissions[0], "en", false);
+  vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new Error("offline"));
+  fireEvent.click(within(confirmGroup("Use as final result")).getByRole("button", { name: "Use as final" }));
+  await waitFor(() => expect(liveRegion().textContent).toBe(`${label} is now the final result. The list could not be refreshed.`));
+  const notice = document.querySelector(".documents-success") as HTMLElement;
+  expect(notice.textContent).toContain(`${label} is now the final result.`);
+  await waitFor(() => expect(document.activeElement).toBe(notice));
+  expect(screen.getByRole("alert").textContent).toContain("Could not refresh");
+  expect(screen.getByRole("table", { name: "Documents" })).toBeTruthy();
+});
+
+it("announces a confirmation whose row vanished and moves focus to the page heading", async () => {
+  const s0 = scenarioS0();
+  const [en, de] = s0.group.rows;
+  serve(page([group("synthetic-accepted", [en, de])]), s0.submissions);
+  renderPage({ open: [rowKey("synthetic-accepted", "de")] });
+  fireEvent.click(await screen.findByRole("button", { name: "Keep final result…" }));
+  const box = within(confirmGroup("Keep final result")).getByRole("checkbox");
+  box.focus();
+  serve(page([group("synthetic-accepted", [en])]));
+  await refetch();
+  await waitFor(() => expect(screen.queryByRole("group", { name: "Keep final result" })).toBeNull());
+  await waitFor(() => expect(liveRegion().textContent).toBe("synthetic-accepted · de is no longer shown. The confirmation was closed."));
+  expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Documents" }));
+});
+
+it("labels a final result without a recorded time without inventing one", () => {
+  const target = row({ case_id: "c", language: "de", versions: [version({ document_id: "c-de" })],
+    final: final({ case_id: "c", language: "de", document_id: "c-de", submission_id: "s1", recorded_at: null, selected_at: "2026-10-18T10:05:00Z", updated_at: "2026-10-18T10:05:00Z" }) });
+  expect(currentFinalLabel(target, null)).toBe("Annotation · Round 1 · ann-0001 · de v1");
 });

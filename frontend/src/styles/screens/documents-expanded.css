@@ -21,6 +21,14 @@
 
 .submissions-table { display: grid; gap: var(--space-2); min-width: 0; }
 .submissions-table .submission-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* Narrow cards: Submissions as two-line items; an inline confirmation is a block below its item */
+.submissions-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.submissions-list-item { display: grid; gap: var(--space-1); padding: var(--space-2) 0; border-top: 1px solid var(--border); min-width: 0; }
+.submissions-list-item:first-child { border-top: 0; padding-top: 0; }
+.submissions-list-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+.submissions-list-label { font-weight: var(--weight-strong); }
+.submissions-list-findings { color: var(--text-muted); }
+.submissions-list-confirm { margin-top: var(--space-2); }
 .submissions-pending > li { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .compare-chooser { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-2); }
 .compare-chooser .form-group { margin-bottom: 0; }

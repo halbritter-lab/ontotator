@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   api,
   type AssignmentView,
@@ -17,17 +17,17 @@ import {
 import { formatDateTime, labelFor, plural } from "../app/labels";
 import { routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
-import { Button, Checkbox, Dialog, EmptyState, Select, StatusBadge, TextInput, Toolbar, useMediaQuery } from "../ui";
+import { Button, Checkbox, Dialog, EmptyState, InlineMessage, Select, StatusBadge, TextInput, Toolbar, useMediaQuery } from "../ui";
 import { DecisionBar } from "../documents/DecisionBar";
 import { DocumentCards } from "../documents/DocumentCards";
-import { DocumentsTable, groupName, initialExpandedGroups } from "../documents/DocumentsTable";
+import { DocumentsTable, initialExpandedGroups } from "../documents/DocumentsTable";
 import { ExpandedRow, submissionsHeadingId, type ExpandedRowProps, type SelectFinalRequest } from "../documents/ExpandedRow";
 import {
   barChanges, failureOf, FinalConfirm, keepRequest, selectionPayload, selectRequest, successMessage,
   type FinalConfirmFailure, type FinalConfirmRequest,
 } from "../documents/FinalConfirm";
 import { acknowledgeableItems, type KeepRequest } from "../documents/SelectionNotice";
-import { RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
+import { documentsGroupId, documentsRowId, isPlainClick, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
 import { useDocumentRows } from "../documents/useDocumentRows";
@@ -62,6 +62,8 @@ const TRANSLATION_STATUS_OPTIONS: readonly (readonly [string, string])[] = [
 ];
 const DECISIONS = new Set(["all", "report-or-pause", "confirm-final", "translation", "missing-final"]);
 const DOCUMENT_FIELDS = ["language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final", "page"] as const;
+/** The ID filter applies this long after the last keystroke (or at once on Enter and blur). */
+export const ID_FILTER_DELAY_MS = 300;
 const SKELETON_HEADERS = ["Select", "Text · language", "Text version(s)", "Work", "Final result", "Issues", "Last activity"];
 
 /** The Documents fields of a route (the page receives the whole route as `query`). */
@@ -91,6 +93,29 @@ export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
 const caseOfKey = (key: string): string => key.slice(0, Math.max(0, key.lastIndexOf(":")));
 const languageOfKey = (key: string): string => key.slice(key.lastIndexOf(":") + 1);
 const nameOfKey = (key: string): string => `${caseOfKey(key)} · ${languageOfKey(key)}`;
+const rowElement = (key: string, part: "disclosure" | "final-view"): HTMLElement | null =>
+  document.getElementById(documentsRowId(caseOfKey(key), languageOfKey(key), part));
+
+/** Document IDs a bulk selection may hold on this page: bulk rows and every version of "Choose in Text versions" rows. */
+function selectableIds(rows: readonly DocumentRowView[]): Set<string> {
+  const result = new Set<string>();
+  for (const row of rows) {
+    if (row.bulk.document_id != null) result.add(row.bulk.document_id);
+    if (row.bulk.mode === "choose_in_versions") for (const version of row.versions) result.add(version.document_id);
+  }
+  return result;
+}
+
+const removedSelections = (count: number): string => `${plural(count, "selection")} removed because the text changed.`;
+
+/** Previous / Next; at either end an `aria-disabled` link that stays focusable (focus survives the page change). */
+function PagingLink({ route, onNavigate, children }: { route: Route | null; onNavigate: (route: Route) => void; children: ReactNode }): JSX.Element {
+  if (!route) return <a role="link" aria-disabled="true" tabIndex={0}>{children}</a>;
+  return <a href={routeHref(route)} onClick={event => {
+    if (!isPlainClick(event)) return;
+    event.preventDefault(); onNavigate(route);
+  }}>{children}</a>;
+}
 
 /** The open final-result confirmation; `revision` and `causes` are the row's state at open. */
 interface ConfirmState {
@@ -101,7 +126,7 @@ interface ConfirmState {
   failure: FinalConfirmFailure | null;
 }
 
-type FocusTarget = { kind: "selected" | "kept" | "row"; rowKey: string };
+type FocusTarget = { kind: "selected" | "kept" | "row"; rowKey: string } | { kind: "notice" };
 
 /** The row's acknowledgeable cause ids as a comparable set. */
 const causeSet = (row: DocumentRowView): string => acknowledgeableItems(row).map(item => item.cause_id).sort().join("\n");
@@ -121,23 +146,31 @@ export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
 
 function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTranslationStatus = false, currentUser }: DocumentsPageProps): JSX.Element {
   const ids = useId();
-  const rootRef = useRef<HTMLElement>(null);
   const narrow = useMediaQuery(NARROW_DOCUMENTS_QUERY);
   const query = documentsQuery(route);
   const request = rowsQuery(query);
   const requestIdentity = JSON.stringify(request);
   const filterIdentity = JSON.stringify({ ...request, page: undefined, case: undefined });
   // Visit state (Resolved / Changed badges) exists only under a decision filter; it is keyed by
-  // the whole request, so a filter or page change starts a new visit.
+  // the filters without page and case, so paging keeps the badges and a filter change starts a new visit.
   const decisionActive = request.decision !== undefined || request.final === "missing";
   const [retainState, setRetainState] = useState<{ identity: string; keys: readonly string[] } | null>(null);
   const retain = !decisionActive ? []
-    : retainState?.identity === requestIdentity ? retainState.keys : retainedKeys(projectKey, requestIdentity);
+    : retainState?.identity === filterIdentity ? retainState.keys : retainedKeys(projectKey, filterIdentity);
   const rows = useDocumentRows(projectKey, retain.length ? { ...request, retain: [...retain] } : request);
   const page: DocumentRowsPage | null = rows.page;
 
+  // Live region: a repeated message is cleared first and set again on the next tick so it is re-announced.
   const [announcement, setAnnouncement] = useState("");
-  const announce = (message: string) => setAnnouncement(message);
+  const announced = useRef("");
+  const announceTimer = useRef<number | undefined>(undefined);
+  const announce = (message: string) => {
+    window.clearTimeout(announceTimer.current);
+    if (message !== announced.current) { announced.current = message; setAnnouncement(message); return; }
+    setAnnouncement("");
+    announceTimer.current = window.setTimeout(() => setAnnouncement(message), 0);
+  };
+  useEffect(() => () => window.clearTimeout(announceTimer.current), []);
 
   // Page data for upload and assignment tools (the rows endpoint does not carry it).
   const [revision, setRevision] = useState(0);
@@ -195,6 +228,33 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     return next;
   };
   const changeFilter = (patch: ProjectDocumentsQuery) => onNavigate(documentsRoute({ ...patch, page: undefined, select: undefined }));
+
+  // ID filter: typed locally, applied after a pause, on Enter or on blur (one push, not one per keystroke).
+  const [idText, setIdText] = useState(query.q ?? "");
+  const sentId = useRef(query.q);
+  const idTimer = useRef<number | undefined>(undefined);
+  const latestFilter = useRef({ changeFilter });
+  latestFilter.current = { changeFilter };
+  useEffect(() => {
+    // An outside change (Clear filters, history) replaces the typed text; our own push does not.
+    if (query.q === sentId.current) return;
+    sentId.current = query.q;
+    setIdText(query.q ?? "");
+  }, [query.q]);
+  useEffect(() => () => window.clearTimeout(idTimer.current), []);
+  const applyId = (value: string) => {
+    window.clearTimeout(idTimer.current);
+    const next = value || undefined;
+    // Already sent (or already the route's value): nothing to push.
+    if (next === (sentId.current || undefined)) return;
+    sentId.current = next;
+    latestFilter.current.changeFilter({ q: next });
+  };
+  const typeId = (value: string) => {
+    setIdText(value);
+    window.clearTimeout(idTimer.current);
+    idTimer.current = window.setTimeout(() => applyId(value), ID_FILTER_DELAY_MS);
+  };
   const toggleRow = (key: string) => {
     const next = new Set(openKeys);
     if (next.has(key)) {
@@ -208,22 +268,22 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   };
 
   // Visit state: a filter change clears the other visits of the project.
-  useEffect(() => { clearVisits(projectKey, requestIdentity); }, [projectKey, requestIdentity]);
+  useEffect(() => { clearVisits(projectKey, filterIdentity); }, [projectKey, filterIdentity]);
 
   // Remember the matching rows of each new page, retain them in later requests and badge the
   // remembered rows that stopped matching; Resolved rows collapse once.
   const [badgeState, setBadgeState] = useState<{ identity: string; badges: ReadonlyMap<string, RowBadge> } | null>(null);
-  const badges: ReadonlyMap<string, RowBadge> = badgeState?.identity === requestIdentity ? badgeState.badges : new Map();
+  const badges: ReadonlyMap<string, RowBadge> = badgeState?.identity === filterIdentity ? badgeState.badges : new Map();
   useEffect(() => {
     if (!page || !decisionActive) return;
     const rowsShown = page.groups.flatMap(group => group.rows);
-    rememberShown(projectKey, requestIdentity, rowsShown);
-    const keys = retainedKeys(projectKey, requestIdentity);
-    if (keys.some(key => !retain.includes(key))) setRetainState({ identity: requestIdentity, keys });
-    const next = rowBadges(projectKey, requestIdentity, rowsShown);
+    rememberShown(projectKey, filterIdentity, rowsShown);
+    const keys = retainedKeys(projectKey, filterIdentity);
+    if (keys.some(key => !retain.includes(key))) setRetainState({ identity: filterIdentity, keys });
+    const next = rowBadges(projectKey, filterIdentity, rowsShown);
     const resolvedBefore = new Set([...badges].filter(([, badge]) => badge.tone === "success").map(([key]) => key));
     const collapse = [...next].filter(([key, badge]) => badge.tone === "success" && !resolvedBefore.has(key) && openKeys.has(key)).map(([key]) => key);
-    setBadgeState({ identity: requestIdentity, badges: next });
+    setBadgeState({ identity: filterIdentity, badges: next });
     if (collapse.length) {
       setAutoCollapsed(new Set([...autoCollapsed, ...collapse]));
       if (deepKey && collapse.includes(deepKey)) setCollapsedDeepKey(deepKey);
@@ -263,6 +323,17 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     if (checked) next.add(documentId); else next.delete(documentId);
     setSelected(next);
   };
+  // A refetch of the same request drops selected IDs the page no longer offers (the text changed).
+  useEffect(() => {
+    if (!page || selection?.identity !== requestIdentity) return;
+    const valid = selectableIds(pageRows);
+    const kept = [...selection.ids].filter(id => valid.has(id));
+    if (kept.length === selection.ids.size) return;
+    setSelected(new Set(kept));
+    announce(removedSelections(selection.ids.size - kept.length));
+    // Only a new page can make a selected ID stale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
   const selectable = pageRows.filter(row => row.bulk.mode === "checkbox" && row.bulk.document_id != null);
   const skipped = pageRows.length - selectable.length;
   const allSelected = selectable.length > 0 && selectable.every(row => selected.has(row.bulk.document_id!));
@@ -277,12 +348,32 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const currentIdentity = useRef(requestIdentity);
   currentIdentity.current = requestIdentity;
   const visibleDialog = dialog?.identity === requestIdentity ? dialog : null;
-  const selectedDocuments = inventory ? inventory.documents.filter(document => selected.has(document.document_id)) : [];
   const assignReasonId = `${ids}-assign-reason`;
   const assignReason = !selected.size ? "Select text versions first." : !inventory ? "Loading assignment data…" : null;
-  const openDialog = (kind: "manual" | "distribution") => {
-    if (assignReason) { announce(assignReason); return; }
-    setDialog({ kind, documents: selectedDocuments, identity: requestIdentity });
+  // The dialog gets every selected ID: an ID missing from the inventory (a version created since it
+  // loaded) refetches the documents first; IDs that still do not exist leave the selection.
+  const openDialog = async (kind: "manual" | "distribution") => {
+    if (assignReason || !inventory) { if (assignReason) announce(assignReason); return; }
+    const identity = requestIdentity;
+    const wanted = new Set(selected);
+    let documents = inventory.documents;
+    if ([...wanted].some(id => !documents.some(document => document.document_id === id))) {
+      try {
+        documents = await api.listProjectDocuments(projectKey);
+      } catch (failure) {
+        setInventoryError(failure);
+        return;
+      }
+      setInventory(current => (current ? { ...current, documents } : current));
+      if (currentIdentity.current !== identity) return;
+    }
+    const chosen = documents.filter(document => wanted.has(document.document_id));
+    if (chosen.length < wanted.size) {
+      setSelection({ identity, ids: new Set(chosen.map(document => document.document_id)) });
+      announce(removedSelections(wanted.size - chosen.length));
+      if (!chosen.length) return;
+    }
+    setDialog({ kind, documents: chosen, identity });
   };
   const refreshAll = () => { rows.reload(); setRevision(value => value + 1); };
   const changedFor = (identity: string) => { if (currentIdentity.current === identity) refreshAll(); };
@@ -311,28 +402,28 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // Deep link: focus the named row header (or the group header) once its data is shown.
   const focusedDeepLink = useRef<string | null>(null);
   useEffect(() => {
-    if (!page || !query.case || !page.case_found) return;
+    if (!page || rows.stale || !query.case || !page.case_found) return;
     const identity = JSON.stringify([query.case, query.language ?? null]);
     if (focusedDeepLink.current === identity) return;
     focusedDeepLink.current = identity;
-    const group = page.groups.find(item => item.case_id === query.case);
-    const labels = [
-      ...(query.language ? [`Show submissions, ${query.case} · ${query.language}`] : []),
-      ...(group ? [groupName(group)] : []),
+    const caseId = query.case;
+    const group = page.groups.find(item => item.case_id === caseId);
+    const candidates = [
+      ...(query.language ? [documentsRowId(caseId, query.language, "disclosure")] : []),
+      documentsGroupId(caseId),
+      ...(group?.rows.map(item => documentsRowId(item.case_id, item.language, "disclosure")) ?? []),
     ];
-    const buttons = [...(rootRef.current?.querySelectorAll<HTMLButtonElement>("button[aria-label]") ?? [])];
-    const target = labels.map(label => buttons.find(button => button.getAttribute("aria-label") === label)).find(Boolean)
-      ?? buttons.find(button => button.getAttribute("aria-label")?.startsWith(`Show submissions, ${query.case} · `));
+    const target = candidates.map(id => document.getElementById(id)).find(Boolean);
     if (!target) return;
     target.scrollIntoView?.({ block: "center" });
     target.focus();
-  }, [page, query.case, query.language]);
+  }, [page, rows.stale, query.case, query.language]);
 
   const rowNotice = (row: DocumentRowView): string | null => {
     const named = row.pinned || rowKeyOf(row) === deepKey;
     if (!named) return null;
-    if (query.decision && !row.matches_decision) return "This no longer needs your decision.";
-    if (!query.decision && rowKeyOf(row) === deepKey && !row.final && !row.missing_final.counts) {
+    if (request.decision && !row.matches_decision) return "This no longer needs your decision.";
+    if (!request.decision && rowKeyOf(row) === deepKey && !row.final && !row.missing_final.counts) {
       return `No final result. Not counted as a decision yet: ${row.missing_final.reason === "work_open" ? `work still open: ${workText(row.work)}` : "no submission"}.`;
     }
     return null;
@@ -345,10 +436,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const successRef = useRef<HTMLDivElement>(null);
   const pendingSuccess = useRef<{ request: FinalConfirmRequest; before: DocumentRowsPage } | null>(null);
   const [focusTarget, setFocusTarget] = useState<FocusTarget | null>(null);
+  /** Container of the open confirmation ("is focus inside the confirmation?"). */
+  const confirmBox = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
-  const rowDisclosure = (key: string) => [...(rootRef.current?.querySelectorAll<HTMLButtonElement>("button[aria-label]") ?? [])]
-    .find(button => button.getAttribute("aria-label") === `Show submissions, ${nameOfKey(key)}`);
-  const restoreFocus = (request: FinalConfirmRequest) => (document.getElementById(request.triggerId) ?? rowDisclosure(request.rowKey))?.focus();
+  const restoreFocus = (request: FinalConfirmRequest) => (document.getElementById(request.triggerId) ?? rowElement(request.rowKey, "disclosure"))?.focus();
   const openConfirm = (request: FinalConfirmRequest, row: DocumentRowView) => {
     const current = confirmRef.current;
     if (current?.busy || current?.request.triggerId === request.triggerId) return;
@@ -393,34 +485,53 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     const pending = pendingSuccess.current;
     if (pending && page !== pending.before) {
       pendingSuccess.current = null;
-      const { request } = pending;
-      const text = [successMessage(request), barChanges(pending.before.bar, page.bar)].filter(Boolean).join(" ");
-      const next = query.decision ? pageRows.find(row => rowKeyOf(row) !== request.rowKey && row.matches_decision && row.categories.length > 0) : undefined;
+      const saved = pending.request;
+      const text = [successMessage(saved), barChanges(pending.before.bar, page.bar)].filter(Boolean).join(" ");
+      const next = request.decision ? pageRows.find(row => rowKeyOf(row) !== saved.rowKey && row.matches_decision && row.categories.length > 0) : undefined;
       announce(next ? `${text} Next decision: ${rowName(next)}.` : text);
       setSuccess({ text, next: next ? rowKeyOf(next) : null });
-      setFocusTarget({ kind: request.kind === "keep" ? "kept" : "selected", rowKey: request.rowKey });
+      setFocusTarget({ kind: saved.kind === "keep" ? "kept" : "selected", rowKey: saved.rowKey });
     }
     const current = confirmRef.current;
     if (!current || current.busy || current.failure) return;
     const row = pageRows.find(item => rowKeyOf(item) === current.request.rowKey);
     if (row && (row.final?.revision ?? 0) === current.revision && causeSet(row) === current.causes) return;
-    const inside = document.activeElement?.closest(".final-confirm") != null;
+    // The confirmation is still in the DOM unless its row vanished; then focus already fell to the body.
+    const active = document.activeElement;
+    const inside = (confirmBox.current?.contains(active) ?? false) || active == null || active === document.body;
     setConfirm(null);
-    if (!row) return;
+    if (!row) {
+      if (inside) headingRef.current?.focus();
+      announce(`${nameOfKey(current.request.rowKey)} is no longer shown. The confirmation was closed.`);
+      return;
+    }
     if (inside) restoreFocus(current.request);
     announce("The final result or its warnings changed. The confirmation was closed.");
     // Only a new page can change the confirmation's row.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
+  // A save whose reload failed: report it without the bar changes and say the list is not current.
+  useEffect(() => {
+    const pending = pendingSuccess.current;
+    if (rows.error == null || !pending) return;
+    pendingSuccess.current = null;
+    const text = `${successMessage(pending.request)} The list could not be refreshed.`;
+    announce(text);
+    setSuccess({ text, next: null });
+    setFocusTarget({ kind: "notice" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.error]);
+
   // Focus after a success (new Final row's View link, or the Submissions heading after Keep) or "Next decision".
   useEffect(() => {
     if (!focusTarget) return;
     setFocusTarget(null);
-    if (focusTarget.kind === "row") { rowDisclosure(focusTarget.rowKey)?.focus(); return; }
-    const heading = document.getElementById(submissionsHeadingId(caseOfKey(focusTarget.rowKey), languageOfKey(focusTarget.rowKey)));
-    const target = focusTarget.kind === "kept" ? heading
-      : heading?.closest(".expanded-row")?.querySelector<HTMLElement>("tr.final-row a[aria-label^='View ']");
+    if (focusTarget.kind === "notice") { successRef.current?.focus(); return; }
+    if (focusTarget.kind === "row") { rowElement(focusTarget.rowKey, "disclosure")?.focus(); return; }
+    const target = focusTarget.kind === "kept"
+      ? document.getElementById(submissionsHeadingId(caseOfKey(focusTarget.rowKey), languageOfKey(focusTarget.rowKey)))
+      : rowElement(focusTarget.rowKey, "final-view");
     (target ?? successRef.current)?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusTarget]);
@@ -432,10 +543,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     setFocusTarget({ kind: "row", rowKey: key });
   };
 
-  const confirmElement = (state: ConfirmState) => <FinalConfirm key={state.request.triggerId} request={state.request} busy={state.busy}
+  const confirmElement = (state: ConfirmState) => <FinalConfirm key={state.request.triggerId} ref={confirmBox} request={state.request} busy={state.busy}
     failure={state.failure} onConfirm={submitConfirm} onCancel={cancelConfirm} onReview={reviewAgain} />;
 
-  const renderExpanded = (row: DocumentRowView) => {
+  const renderExpanded = (row: DocumentRowView, options?: { layout: "table" | "list" }) => {
     const notice = rowNotice(row);
     const own = confirm?.request.rowKey === rowKeyOf(row) ? confirm : null;
     return <>
@@ -445,7 +556,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         onOpenConfirm={request => openConfirm(request, row)}
         renderConfirm={submission => (own && own.request.kind !== "keep" && own.request.submissionId === submission.submission_id ? confirmElement(own) : null)}
         keepConfirm={own?.request.kind === "keep" ? confirmElement(own) : undefined}
-        confirmBusy={confirm?.busy ?? false} />
+        confirmBusy={confirm?.busy ?? false} layout={options?.layout} />
     </>;
   };
 
@@ -481,19 +592,21 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       body = <DocumentsTable page={page} projectKey={projectKey} query={viewQuery} expandedGroups={expandedGroups} onToggleGroup={toggleGroup}
         onToggleRow={toggleRow} selected={selected} onToggleSelect={toggleSelect} renderExpanded={renderExpanded} rowBadge={rowBadge} onNavigate={navigateLink} busy={rows.loading} />;
     }
+    // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
+      {rows.error != null && <InlineMessage tone="error">Could not refresh · <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
       <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} />
       {body}
-      {page.page_count > 1 && <nav className="documents-paging" aria-label="Pages">
-        {page.page > 1 && <RouteLink route={documentsRoute({ page: page.page - 1 > 1 ? String(page.page - 1) : undefined })} onNavigate={navigateLink}>Previous</RouteLink>}
+      {page.page_count > 1 && <nav className="documents-paging" aria-label="Pages" aria-busy={rows.stale || undefined}>
+        <PagingLink route={page.page > 1 ? documentsRoute({ page: page.page - 1 > 1 ? String(page.page - 1) : undefined }) : null} onNavigate={navigateLink}>Previous</PagingLink>
         <span>Page {page.page} of {page.page_count}</span>
-        {page.page < page.page_count && <RouteLink route={documentsRoute({ page: String(page.page + 1) })} onNavigate={navigateLink}>Next</RouteLink>}
+        <PagingLink route={page.page < page.page_count ? documentsRoute({ page: String(page.page + 1) }) : null} onNavigate={navigateLink}>Next</PagingLink>
       </nav>}
     </>;
   }
 
-  return <section className="documents-page" ref={rootRef}>
-    <h1>Documents</h1>
+  return <section className="documents-page">
+    <h1 ref={headingRef} tabIndex={-1}>Documents</h1>
     <Toolbar label="Document filters" className="filter-bar documents-filters">
       <Select id="documents-language" label="Language" value={query.language ?? ""} onChange={event => changeFilter({ language: event.target.value || undefined })}>
         <option value="">All languages</option>{languages.map(value => <option key={value} value={value}>{value}</option>)}
@@ -501,7 +614,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       <Select id="documents-status" label="Status" value={status} onChange={event => changeFilter({ status: event.target.value || undefined })}>
         <option value="">All statuses</option>{STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </Select>
-      <TextInput id="documents-prefix" label="ID" value={query.q ?? ""} onChange={event => changeFilter({ q: event.target.value || undefined })} />
+      <TextInput id="documents-prefix" label="ID" value={idText} onChange={event => typeId(event.target.value)} onBlur={() => applyId(idText)}
+        onKeyDown={event => { if (event.key === "Enter") applyId(idText); }} />
       <details className="documents-more-filters" open={origin !== "" || translationStatus !== "" ? true : undefined}>
         <summary>More filters</summary>
         <div className="documents-more-filters-body">
@@ -530,7 +644,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       <div className="notice-content">
         {success.text}
         {success.next && <> <a href={routeHref(nextDecisionRoute(success.next))} onClick={event => {
-          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          if (!isPlainClick(event)) return;
           event.preventDefault(); goToRow(success.next!);
         }}>Next decision: {nameOfKey(success.next)}</a></>}
       </div>
@@ -568,6 +682,7 @@ interface ExpandedRowLoaderProps {
   adjudicatorNotAnnotator: boolean;
   onAnnounce: (message: string) => void;
   textVersionTools?: TextVersionsTools;
+  layout?: ExpandedRowProps["layout"];
   /** Opens a final-result confirmation built from this row and its loaded submissions. */
   onOpenConfirm: (request: FinalConfirmRequest) => void;
   renderConfirm: ExpandedRowProps["renderConfirm"];

@@ -1,12 +1,11 @@
-import { useId, useState } from "react";
+import { forwardRef, useId, useState } from "react";
 import { ApiError, type DecisionBarView, type DocumentRowView, type FinalSelectionSummary, type RowSubmissionView, type RowSubmissions } from "../api/client";
 import type { components } from "../api/generated";
-import { submissionLabel, type SubmissionKind } from "../app/submissionLabels";
 import { Checkbox, InlineConfirm, type InlineConfirmOutcome } from "../ui";
 import { decisionCategoryLabels, workText } from "./labels";
-import { rowKeyOf } from "./RowCells";
+import { finalLabel, rowKeyOf } from "./RowCells";
 import { causeLines, OWN_RESULT_REASON, waitingLines } from "./SelectionNotice";
-import { rowSubmissionLabel, submissionVersion } from "./SubmissionsTable";
+import { rowSubmissionLabel } from "./SubmissionsTable";
 
 export type FinalConfirmKind = "use" | "replace" | "keep";
 
@@ -57,20 +56,12 @@ function stillOpenText(row: DocumentRowView): string | null {
   return row.work.some(isOpenWork) ? workText(row.work) : null;
 }
 
-/** Label of the row's current final result; the submission row when loaded, else the summary. */
-export function finalLabel(row: DocumentRowView, data: RowSubmissions | null): string {
+/** Label of the row's current final result: the submission row when loaded, else the shared summary label. */
+export function currentFinalLabel(row: DocumentRowView, data: RowSubmissions | null): string {
   const final = row.final as FinalSelectionSummary;
   const loaded = data?.submissions.find(item => item.submission_id === final.submission_id);
   if (loaded) return rowSubmissionLabel(loaded, row.language, row.parallel_roots);
-  return submissionLabel({
-    kind: (final.kind ?? "annotation") as SubmissionKind,
-    ordinal: final.round_ordinal,
-    author: final.author_label ?? "",
-    isMe: final.is_mine,
-    language: row.language,
-    version: final.version != null ? submissionVersion(final.version, final.chain_name, row.parallel_roots) : null,
-    recordedAt: final.recorded_at ?? final.selected_at ?? final.updated_at ?? new Date().toISOString(),
-  });
+  return finalLabel(row, final, { withLanguage: true });
 }
 
 /** Use (no final yet) or Replace (another submission is final) for one submission. */
@@ -86,7 +77,7 @@ export function selectRequest(row: DocumentRowView, data: RowSubmissions | null,
     causeIds: [],
     triggerId,
     label: rowSubmissionLabel(submission, row.language, row.parallel_roots),
-    oldLabel: replace ? finalLabel(row, data) : null,
+    oldLabel: replace ? currentFinalLabel(row, data) : null,
     stillOpen: stillOpenText(row),
     roundNote: state === "abandoned" || state === "superseded" ? state : null,
     own: submission.is_me,
@@ -108,7 +99,7 @@ export function keepRequest(row: DocumentRowView, data: RowSubmissions | null, c
     expectedRevision: final.revision,
     causeIds: [...causeIds],
     triggerId,
-    label: finalLabel(row, data),
+    label: currentFinalLabel(row, data),
     oldLabel: null,
     stillOpen: null,
     roundNote: null,
@@ -173,8 +164,8 @@ export interface FinalConfirmProps {
   onReview: () => void;
 }
 
-/** The inline Use / Replace / Keep confirmation of the Documents page. */
-export function FinalConfirm({ request, busy, failure, onConfirm, onCancel, onReview }: FinalConfirmProps): JSX.Element {
+/** The inline Use / Replace / Keep confirmation of the Documents page; the ref is its container (focus checks). */
+export const FinalConfirm = forwardRef<HTMLDivElement, FinalConfirmProps>(function FinalConfirm({ request, busy, failure, onConfirm, onCancel, onReview }, ref) {
   const id = useId();
   const [checked, setChecked] = useState(false);
   const [needsCheck, setNeedsCheck] = useState(false);
@@ -208,7 +199,7 @@ export function FinalConfirm({ request, busy, failure, onConfirm, onCancel, onRe
       : failure.kind === "error" ? { kind: "error", onRetry: onConfirm }
         : { kind: "session" };
 
-  return <div className="final-confirm">
+  return <div ref={ref} className="final-confirm">
     <InlineConfirm
       title={title}
       message={message}
@@ -229,4 +220,4 @@ export function FinalConfirm({ request, busy, failure, onConfirm, onCancel, onRe
       </>}
     </InlineConfirm>
   </div>;
-}
+});

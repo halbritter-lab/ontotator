@@ -5,28 +5,37 @@ import { api, type DocumentRowsPage, type DocumentRowsQuery } from "../api/clien
 export const DOCUMENT_ROWS_REFRESH_MS = 60_000;
 
 export interface DocumentRowsState {
-  /** The shown page; kept while a refetch with the same filters loads, null after an error. */
+  /**
+   * The shown page. Kept while any refetch loads (after a filter or page change it is the previous
+   * request's page, see `stale`) and after a failed refetch of the same request; null only before
+   * the first page of a request arrived or after that first load failed.
+   */
   page: DocumentRowsPage | null;
+  /** The last request failed; with a page it was a background refetch ("Could not refresh"). */
   error: unknown | null;
   loading: boolean;
+  /** The shown page belongs to an earlier request (other filters or page) while the new one loads. */
+  stale: boolean;
   /** Refetch now (after an own action); the shown page stays until the response arrives. */
   reload: () => void;
   /** Same as `reload`; named for the error state's "Retry". */
   retry: () => void;
 }
 
-interface Snapshot { page: DocumentRowsPage | null; error: unknown | null; loading: boolean }
+interface Snapshot { page: DocumentRowsPage | null; error: unknown | null; loading: boolean; stale: boolean }
 
 const withoutRetain = ({ retain: _retain, ...rest }: DocumentRowsQuery): DocumentRowsQuery => rest;
 
 /**
  * Documents rows with stale-response discard: only the latest request may update state.
  * Refetches on window focus, every 60 s and on `reload()`. `query.retain` (from the visit
- * state) is sent with every request; a change of only the retained keys keeps the shown page.
+ * state) is sent with every request; a change of only the retained keys is not a new request.
+ * A new request keeps the previous page (marked `stale`) until its response arrives; a failed
+ * refetch of the same request keeps the page and sets `error`.
  */
 export function useDocumentRows(projectKey: string, query: DocumentRowsQuery): DocumentRowsState {
   const generation = useRef(0);
-  const [state, setState] = useState<Snapshot>({ page: null, error: null, loading: true });
+  const [state, setState] = useState<Snapshot>({ page: null, error: null, loading: true, stale: false });
   const identity = JSON.stringify([projectKey, query]);
   const filters = JSON.stringify([projectKey, withoutRetain(query)]);
   const latest = useRef({ projectKey, query });
@@ -38,21 +47,26 @@ export function useDocumentRows(projectKey: string, query: DocumentRowsQuery): D
     const { projectKey: key, query: request } = latest.current;
     setState(previous => ({ ...previous, loading: true }));
     api.listDocumentRows(key, request).then(
-      page => { if (current === generation.current) setState({ page, error: null, loading: false }); },
-      error => { if (current === generation.current) setState({ page: null, error, loading: false }); },
+      page => { if (current === generation.current) setState({ page, error: null, loading: false, stale: false }); },
+      error => {
+        if (current !== generation.current) return;
+        // A page of an earlier request must not stand in for the failed one.
+        setState(previous => (previous.stale ? { page: null, error, loading: false, stale: false } : { ...previous, error, loading: false }));
+      },
     );
     // `identity` is the dependency: a new query (by value) gives a new loader.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity]);
 
   useEffect(() => {
-    if (shownFilters.current !== filters) setState({ page: null, error: null, loading: true });
+    if (shownFilters.current !== null && shownFilters.current !== filters) {
+      setState(previous => ({ ...previous, error: null, loading: true, stale: previous.page !== null }));
+    }
     shownFilters.current = filters;
     load();
     // `filters` is derived from the same render as `load`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
-
   useEffect(() => {
     const onFocus = () => load();
     window.addEventListener("focus", onFocus);

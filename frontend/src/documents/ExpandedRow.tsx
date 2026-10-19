@@ -8,8 +8,9 @@ import { ConsolidationLauncher } from "../variants/ConsolidationLauncher";
 import { refKey } from "../variants/versionState";
 import { versionName } from "./labels";
 import { ACKNOWLEDGEABLE_CODES, OWN_RESULT_REASON, SelectionNotice, type KeepRequest } from "./SelectionNotice";
-import { isPlainClick, SubmissionsTable, type SubmissionActionContext } from "./SubmissionsTable";
-import { normalizedDecision, TextVersions, type TextVersionsTools } from "./TextVersions";
+import { documentsRowId, isPlainClick } from "./RowCells";
+import { SubmissionsTable, type SubmissionActionContext } from "./SubmissionsTable";
+import { TextVersions, type TextVersionsTools } from "./TextVersions";
 import type { RowSubmissionsState } from "./useRowSubmissions";
 
 /** Report excerpts are cut to this many characters. */
@@ -54,6 +55,8 @@ export interface ExpandedRowProps {
   onAnnounce?: (message: string) => void;
   /** Page data for the Text versions actions; without it Text versions is read-only. */
   textVersionTools?: TextVersionsTools;
+  /** "list" in narrow cards: Submissions as two-line items instead of the table. */
+  layout?: "table" | "list";
   now?: Date;
 }
 
@@ -73,7 +76,7 @@ function toHistorySummary(row: RowSubmissionView): SubmissionHistorySummary {
 /** Expanded content of one Documents row: Issues, Submissions (n) and More. */
 export function ExpandedRow({
   row, projectKey, query, submissions, onNavigate, id, labelledBy, adjudicatorNotAnnotator = false,
-  onSelectFinal, onKeep, renderConfirm, keepConfirm, confirmBusy = false, onAnnounce, textVersionTools, now,
+  onSelectFinal, onKeep, renderConfirm, keepConfirm, confirmBusy = false, onAnnounce, textVersionTools, layout = "table", now,
 }: ExpandedRowProps): JSX.Element {
   const ownId = useId();
   const labelId = `${ownId}-label`;
@@ -126,7 +129,7 @@ export function ExpandedRow({
       case "TRANSLATION_CHECK_FAILED":
         return <>{name} failed the automatic translation check. {textVersionsButton}</>;
       case "TRANSLATION_NOT_ACCEPTED":
-        return <>{name} was {normalizedDecision(item.review_decision) === "queried" ? "queried" : "rejected"} in review. {textVersionsButton}</>;
+        return <>{name} was {item.review_decision === "query" ? "queried" : "rejected"} in review. {textVersionsButton}</>;
       case "REVIEWER_NEEDED":
         return <>{name} needs a translation reviewer. {textVersionsButton}</>;
       case "SOURCE_UPDATE_UNREVIEWED":
@@ -205,7 +208,7 @@ export function ExpandedRow({
       <ul className="expanded-row-issues">{issueLines.map(({ item, content }) => <li key={item.cause_id}>{content}</li>)}</ul>
     </div>}
     <div className="expanded-row-section">
-      <h3 id={headingId} tabIndex={-1}>Submissions ({rows.length})</h3>
+      <h3 id={headingId} tabIndex={-1}>{data ? `Submissions (${rows.length})` : "Submissions"}</h3>
       {submissions.error != null && !data
         ? <InlineMessage tone="error">Could not load submissions. <Button size="sm" onClick={submissions.retry}>Retry</Button></InlineMessage>
         : <>
@@ -214,7 +217,8 @@ export function ExpandedRow({
             <SelectionNotice row={row} data={data} adjudicatorNotAnnotator={adjudicatorNotAnnotator} onKeep={onKeep} keepConfirm={keepConfirm}
               unavailable={unavailable} onAnnounce={onAnnounce} now={now} />
             <SubmissionsTable rows={rows} rounds={data.rounds} final={final} parallel={row.parallel_roots} showFinalColumn language={row.language}
-              actions={actions} renderConfirm={renderConfirm} onNavigate={onNavigate} now={now}
+              actions={actions} renderConfirm={renderConfirm} onNavigate={onNavigate} now={now} layout={layout}
+              finalLinkId={documentsRowId(row.case_id, row.language, "final-view")}
               label={`Submissions, ${row.case_id} · ${row.language}`}
               viewRoute={submission => caseRoute(submission.document_id, submissionRef(submission.submission_id))} />
           </>}

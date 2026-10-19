@@ -1,8 +1,9 @@
-import { useId, type MouseEvent } from "react";
+import { useId } from "react";
 import type { DecisionBarView } from "../api/client";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { IconWarning } from "../ui/icons";
 import { decisionCategoryLabels, type DecisionCategory } from "./labels";
+import { isPlainClick } from "./RowCells";
 
 export interface DecisionBarProps {
   bar: DecisionBarView;
@@ -33,10 +34,6 @@ function documentsRoute(projectKey: string, query: ProjectDocumentsQuery, patch:
   Object.assign(merged, patch);
   for (const [name, value] of Object.entries(merged)) if (value !== undefined) Object.assign(route, { [name]: value });
   return route;
-}
-
-function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
-  return event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
 }
 
 /**

@@ -286,16 +286,16 @@ it("lists text versions with origin, status, chain name, work and per-version ch
   const { onNavigate } = renderRow(target, data, { textVersionTools: tools });
   const list = screen.getByText("Text versions (2)").closest("details")!.querySelector(".text-versions") as HTMLElement;
   const items = within(list).getAllByRole("listitem").filter(entry => entry.classList.contains("text-version"));
-  expect(items[0].querySelector(".text-version-head")!.textContent).toBe("Select Provider A v1 for assignmentProvider A v1Machine translationAcceptedProvider A");
+  expect(items[0].querySelector(".text-version-head")!.textContent).toBe("Select Provider A v1 of case-0305 · fr for assignmentProvider A v1Machine translationAcceptedProvider A");
   expect(within(items[0]).getByText("ann-0001 · Annotation · In progress")).toBeTruthy();
-  const boxA = within(items[0]).getByRole("checkbox", { name: "Select Provider A v1 for assignment" }) as HTMLInputElement;
-  const boxB = within(items[1]).getByRole("checkbox", { name: "Select Provider B v1 for assignment" }) as HTMLInputElement;
+  const boxA = within(items[0]).getByRole("checkbox", { name: "Select Provider A v1 of case-0305 · fr for assignment" }) as HTMLInputElement;
+  const boxB = within(items[1]).getByRole("checkbox", { name: "Select Provider B v1 of case-0305 · fr for assignment" }) as HTMLInputElement;
   expect([boxA.checked, boxB.checked]).toEqual([false, true]);
   fireEvent.click(boxA);
   expect(onToggleBulk).toHaveBeenCalledWith("case-0305-fr-a");
   fireEvent.click(within(items[0]).getByRole("button", { name: "Translation reviews for Provider A v1" }));
   expect(tools.onShowTranslationReviews).toHaveBeenCalledWith("case-0305-fr-a");
-  fireEvent.click(within(items[1]).getByRole("link", { name: "View text Provider B v1" }));
+  fireEvent.click(within(items[1]).getByRole("link", { name: "View text Provider B v1 of case-0305 · fr" }));
   expect(onNavigate).toHaveBeenCalledWith({ name: "projectCase", key: "p", caseId: "case-0305", variant: "case-0305-fr-b", documents: query });
 });
 
@@ -306,4 +306,40 @@ it("shows the review decision in a text version badge", () => {
   const list = screen.getByText("Text versions (2)").closest("details")!;
   expect(within(list).getByText("Correction of v1")).toBeTruthy();
   expect(within(list).getByText("Rejected in review").closest(".status-pill")!.className).toContain("status-pill--warning");
+});
+
+it("shows a queried version as Queried (stored decision \"query\"), not Reviewed", () => {
+  const v1 = version({ document_id: "c-de", chain_name: "DeepL", origin: "machine_translation", translation_status: "accepted", is_newest_in_chain: false });
+  const v2 = version({ document_id: "c-de-v2", chain_id: "c-de", chain_name: "DeepL", version: 2, origin: "correction", derived_from: "c-de", translation_status: "reviewed", latest_review_decision: "query" });
+  renderRow(chainRow({ versions: [v1, v2], final: null }), chainData());
+  const list = screen.getByText("Text versions (2)").closest("details")!;
+  expect(within(list).queryByText("Reviewed")).toBeNull();
+  expect(within(list).getByText("Queried").closest(".status-pill")!.className).toContain("status-pill--warning");
+});
+
+it("names the Submissions heading without a count until the submissions are loaded", () => {
+  const { target } = scenarioRow(scenarioS1(), "en");
+  render(<ExpandedRow row={target} projectKey="p" query={query} submissions={state(null, { loading: true })} onNavigate={vi.fn()} now={now} />);
+  expect(screen.getByRole("heading", { level: 3, name: "Submissions" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: /^Submissions \(/ })).toBeNull();
+});
+
+it("renders Submissions as two-line list items with the confirmation below its item in the list layout", () => {
+  const { target, data } = scenarioRow(scenarioS1(), "en");
+  const chosen = data.submissions[1];
+  renderRow(target, data, { layout: "list", renderConfirm: entry => (entry.submission_id === chosen.submission_id ? <p>Confirm here</p> : null) });
+  expect(screen.queryByRole("table")).toBeNull();
+  const list = screen.getByRole("list", { name: `Submissions, ${target.case_id} · en` });
+  const items = within(list).getAllByRole("listitem");
+  expect(items).toHaveLength(data.submissions.length);
+  expect(items[0].classList.contains("final-row")).toBe(true);
+  expect(within(items[0]).getByText("Final")).toBeTruthy();
+  expect(items[0].querySelector("a")!.id).toBe("documents-row-case-0042-en-final-view");
+  const lines = items[1].querySelectorAll(".submissions-list-line");
+  expect(lines).toHaveLength(2);
+  expect(within(lines[0] as HTMLElement).getByRole("link", { name: /^View / })).toBeTruthy();
+  expect(lines[1].textContent).toContain(`${chosen.finding_count} finding`);
+  expect(within(lines[1] as HTMLElement).getByRole("button", { name: "Replace…" })).toBeTruthy();
+  expect(items[1].querySelector(".submissions-list-confirm")!.textContent).toBe("Confirm here");
+  expect(items[0].querySelector(".submissions-list-confirm")).toBeNull();
 });

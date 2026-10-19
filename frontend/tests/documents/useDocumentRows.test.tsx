@@ -94,14 +94,48 @@ it("sends retain on every refetch and keeps the page while only retained keys ch
   expect(result.current.page).toBe(shown);
 });
 
-it("clears the shown page when a filter other than retain changes", async () => {
+it("keeps the previous page marked stale while another filter or page loads", async () => {
   const shown = page([scenarioS0().group]);
-  vi.mocked(api.listDocumentRows).mockResolvedValueOnce(shown).mockReturnValueOnce(new Promise(() => undefined));
+  const next = deferred<DocumentRowsPage>();
+  vi.mocked(api.listDocumentRows).mockResolvedValueOnce(shown).mockReturnValueOnce(next.promise);
+  const { result, rerender } = renderHook(({ query }: { query: DocumentRowsQuery }) => useDocumentRows("p", query), { initialProps: { query: { decision: "all" } } });
+  await waitFor(() => expect(result.current.page).toBe(shown));
+  expect(result.current.stale).toBe(false);
+  rerender({ query: { decision: "translation" } });
+  expect(result.current.loading).toBe(true);
+  expect(result.current.page).toBe(shown);
+  expect(result.current.stale).toBe(true);
+  const fresh = page([scenarioS1().group]);
+  await act(async () => { next.resolve(fresh); });
+  expect(result.current.page).toBe(fresh);
+  expect(result.current.stale).toBe(false);
+});
+
+it("keeps the shown page and sets the error when a background refetch fails", async () => {
+  const shown = page([scenarioS0().group]);
+  const failure = new Error("offline");
+  vi.mocked(api.listDocumentRows).mockResolvedValueOnce(shown).mockRejectedValueOnce(failure).mockResolvedValueOnce(shown);
+  const { result } = renderHook(() => useDocumentRows("p", {}));
+  await waitFor(() => expect(result.current.page).toBe(shown));
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  await waitFor(() => expect(result.current.error).toBe(failure));
+  expect(result.current.page).toBe(shown);
+  expect(result.current.loading).toBe(false);
+  await act(async () => { result.current.retry(); });
+  await waitFor(() => expect(result.current.error).toBeNull());
+  expect(result.current.page).toBe(shown);
+});
+
+it("drops the previous page when the first load of another filter fails", async () => {
+  const shown = page([scenarioS0().group]);
+  const failure = new Error("offline");
+  vi.mocked(api.listDocumentRows).mockResolvedValueOnce(shown).mockRejectedValueOnce(failure);
   const { result, rerender } = renderHook(({ query }: { query: DocumentRowsQuery }) => useDocumentRows("p", query), { initialProps: { query: { decision: "all" } } });
   await waitFor(() => expect(result.current.page).toBe(shown));
   rerender({ query: { decision: "translation" } });
-  expect(result.current.loading).toBe(true);
+  await waitFor(() => expect(result.current.error).toBe(failure));
   expect(result.current.page).toBeNull();
+  expect(result.current.stale).toBe(false);
 });
 
 it("does not refetch when an equal query object is passed again", async () => {

@@ -56,6 +56,8 @@
 .documents-row-notice { margin: 0 0 var(--space-3); color: var(--text-muted); }
 .documents-paging { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-4); }
 .documents-paging a { display: inline-block; min-height: 24px; white-space: nowrap; }
+.documents-paging a[aria-disabled="true"] { color: var(--text-muted); text-decoration: none; cursor: default; }
+.documents-paging[aria-busy="true"] > span { color: var(--text-muted); }
 
 /* Skeleton rows while the first page loads */
 .documents-skeleton-bar { display: block; height: 0.75em; max-width: 8rem; border-radius: var(--radius-sm); background: var(--surface-sunken); }
@@ -68,4 +70,5 @@
   .documents-table .documents-group--issue > th { box-shadow: none; border-left: 3px solid CanvasText; }
   .decision-bar-segment[aria-current] { border-bottom-color: LinkText; }
   .documents-skeleton-bar { background: GrayText; }
+  .documents-paging a[aria-disabled="true"] { color: GrayText; }
 }

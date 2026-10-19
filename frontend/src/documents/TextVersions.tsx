@@ -8,7 +8,7 @@ import { Button, Checkbox, StatusBadge, type StatusTone } from "../ui";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { originLabels } from "../admin/variantMetadata";
 import { statusBadgeText, versionName } from "./labels";
-import { isPlainClick } from "./SubmissionsTable";
+import { isPlainClick, rowName } from "./RowCells";
 
 /** Page-level data the version actions need; without it Text versions is read-only. */
 export interface TextVersionsTools {
@@ -27,15 +27,10 @@ export interface TextVersionsTools {
   onToggleBulk?: (documentId: string) => void;
 }
 
-/** Review decisions are stored as `rejected` / `query`; the badge helper expects `queried`. */
-export function normalizedDecision(decision: string | null): string | null {
-  return decision === "query" ? "queried" : decision;
-}
-
 function badgeTone(version: DocumentVersionView): StatusTone {
   if (version.accepted_without_review || version.translation_status === "accepted") return "success";
   if (version.translation_status === "automatic_check_failed") return "warning";
-  if (version.translation_status === "reviewed" && ["rejected", "query", "queried"].includes(version.latest_review_decision ?? "")) return "warning";
+  if (version.translation_status === "reviewed" && ["rejected", "query"].includes(version.latest_review_decision ?? "")) return "warning";
   return "info";
 }
 
@@ -63,10 +58,11 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
   return <ul ref={ref} className="text-versions">
     {row.versions.map(version => {
       const name = versionName(version.version, version.chain_name, row.parallel_roots);
-      const badge = statusBadgeText(version.translation_status, normalizedDecision(version.latest_review_decision), version.accepted_without_review);
+      const badge = statusBadgeText(version.translation_status, version.latest_review_decision, version.accepted_without_review);
       const view: Route = { name: "projectCase", key: projectKey, caseId: row.case_id, variant: version.document_id, ...documents };
       const work = row.work.filter(item => item.document_id === version.document_id);
       const variant = tools?.variants.get(version.document_id);
+      const fullName = `${name} of ${rowName(row)}`;
       const checkboxId = `text-version-select-${encodeURIComponent(version.document_id)}`;
       let actions: ReactNode = null;
       if (tools) {
@@ -77,7 +73,7 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
       }
       return <li key={version.document_id} className="text-version">
         <div className="text-version-head">
-          {chooseInVersions && tools?.onToggleBulk && <Checkbox id={checkboxId} label={<span className="visually-hidden">Select {name} for assignment</span>}
+          {chooseInVersions && tools?.onToggleBulk && <Checkbox id={checkboxId} label={<span className="visually-hidden">Select {fullName} for assignment</span>}
             checked={tools.bulkSelected?.has(version.document_id) ?? false} onChange={() => tools.onToggleBulk?.(version.document_id)} />}
           <span className="text-version-name">{name}</span>
           <span className="text-version-origin">{originText(version, row)}</span>
@@ -96,7 +92,7 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
           })}
         </ul>}
         <div className="text-version-actions">
-          <a href={routeHref(view)} aria-label={`View text ${name}`} onClick={event => {
+          <a href={routeHref(view)} aria-label={`View text ${fullName}`} onClick={event => {
             if (!isPlainClick(event)) return;
             event.preventDefault(); onNavigate(view);
           }}>View text</a>

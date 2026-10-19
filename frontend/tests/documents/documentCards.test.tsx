@@ -93,6 +93,9 @@ describe("structure", () => {
     expect(card.lastElementChild).toBe(region);
     expect(region.textContent).toBe("content");
     expect(renderExpanded).toHaveBeenCalledTimes(1);
+    // Narrow cards ask for the list layout of Submissions.
+    expect(renderExpanded).toHaveBeenCalledWith(expect.objectContaining({ case_id: "synthetic-accepted", language: "de" }), { layout: "list" });
+    expect(toggle.id).toBe("documents-row-synthetic-accepted-de-disclosure");
     expect(within(cardOf("synthetic-accepted · en")).getByRole("button", { name: /Show submissions/ }).getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
     expect(onToggleRow).toHaveBeenCalledWith("synthetic-accepted:de");

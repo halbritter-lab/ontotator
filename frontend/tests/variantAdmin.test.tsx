@@ -61,6 +61,7 @@ it("shows the server-owned override label and sends controlled filters without r
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { origin: "machine_translation", translation_status: "accepted" });
   const prefix = screen.getByLabelText("ID"); prefix.focus();
   fireEvent.change(prefix, { target: { value: "abc" } });
+  fireEvent.keyDown(prefix, { key: "Enter" });
   expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({ origin: "machine_translation", translation_status: "accepted", q: "abc" }));
   view.rerender(<DocumentsPage projectKey="p" canManage query={{ q: "abc", origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
   await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });

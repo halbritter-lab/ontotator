@@ -86,7 +86,10 @@ it("offers the filters, pushes filter changes without page and announces the new
   expect(Array.from((within(more).getByLabelText("Translation status") as HTMLSelectElement).options).map(option => option.textContent)).toContain("Accepted without review");
   fireEvent.change(screen.getByLabelText("Status"), { target: { value: "held" } });
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", decision: "all", status: "held" });
+  // The ID filter applies on Enter (or after a pause, or on blur), not on every keystroke.
   fireEvent.change(screen.getByLabelText("ID"), { target: { value: "case-+/" } });
+  expect(onNavigate).not.toHaveBeenLastCalledWith(expect.objectContaining({ q: "case-+/" }));
+  fireEvent.keyDown(screen.getByLabelText("ID"), { key: "Enter" });
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", decision: "all", q: "case-+/" });
   const live = document.querySelector("p[aria-live='polite']")!;
   expect(live.textContent).toBe("");
@@ -125,8 +128,73 @@ it("adds per-version checkboxes from Text versions to the bulk selection", async
   mockRows(s4.page, s4.submissions);
   renderPage({ query: { open: [rowKey("case-0305", "fr")] } });
   expect(await screen.findByText("Choose in Text versions")).toBeTruthy();
-  fireEvent.click(await screen.findByLabelText("Select Provider A v1 for assignment"));
+  fireEvent.click(await screen.findByLabelText("Select Provider A v1 of case-0305 · fr for assignment"));
   expect(screen.getByText("1 selected")).toBeTruthy();
+});
+
+it("applies the ID filter once after a pause in typing", async () => {
+  mockRows(scenarioS1().page);
+  const { onNavigate } = renderPage();
+  await screen.findByRole("heading", { name: "Needs your decision" });
+  const input = screen.getByLabelText("ID");
+  for (const value of ["c", "ca", "cas"]) fireEvent.change(input, { target: { value } });
+  expect(onNavigate).not.toHaveBeenCalled();
+  await waitFor(() => expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", q: "cas" }));
+  expect(onNavigate).toHaveBeenCalledTimes(1);
+  fireEvent.blur(input);
+  expect(onNavigate).toHaveBeenCalledTimes(1);
+});
+
+it("re-announces a repeated message in the live region", async () => {
+  mockRows(scenarioS1().page);
+  renderPage();
+  await screen.findByRole("heading", { name: "Needs your decision" });
+  const live = document.querySelector("p[aria-live='polite']")!;
+  fireEvent.click(screen.getByRole("button", { name: "Assign …" }));
+  expect(live.textContent).toBe("Select text versions first.");
+  fireEvent.click(screen.getByRole("button", { name: "Assign …" }));
+  expect(live.textContent).toBe("");
+  await waitFor(() => expect(live.textContent).toBe("Select text versions first."));
+});
+
+it("keeps the rows and shows Could not refresh when a background refetch fails", async () => {
+  mockRows(scenarioS1().page);
+  renderPage();
+  await screen.findByRole("table", { name: "Documents" });
+  vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new Error("offline"));
+  act(() => { window.dispatchEvent(new Event("focus")); });
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Could not refresh");
+  expect(screen.getByRole("table", { name: "Documents" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Needs your decision" })).toBeTruthy();
+  fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+});
+
+it("drops selected versions that the refreshed page no longer offers and announces it", async () => {
+  const s1 = scenarioS1();
+  mockRows(s1.page);
+  renderPage();
+  fireEvent.click(await screen.findByLabelText("Select case-0042 · en"));
+  expect(screen.getByText("1 selected")).toBeTruthy();
+  const en = s1.group.rows[0];
+  const replaced = { ...en, versions: [version({ document_id: "case-0042-en-v2" })], bulk: { mode: "checkbox" as const, document_id: "case-0042-en-v2" } };
+  mockRows(page([group("case-0042", [replaced])]));
+  act(() => { window.dispatchEvent(new Event("focus")); });
+  await waitFor(() => expect(screen.getByText("0 selected")).toBeTruthy());
+  expect(document.querySelector("p[aria-live='polite']")!.textContent).toBe("1 selection removed because the text changed.");
+});
+
+it("refetches the documents before opening the dialog when a selected version is not in the inventory", async () => {
+  mockRows(scenarioS1().page);
+  vi.mocked(api.listProjectDocuments).mockResolvedValueOnce([]).mockResolvedValue([summary("case-0042-en", "en")]);
+  renderPage();
+  fireEvent.click(await screen.findByLabelText("Select case-0042 · en"));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Assign …" }).getAttribute("aria-disabled")).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: "Assign …" }));
+  const dialog = await screen.findByRole("dialog", { name: "Assign documents" });
+  expect(within(dialog).getByText("1 document selected.")).toBeTruthy();
+  expect(api.listProjectDocuments).toHaveBeenCalledTimes(2);
 });
 
 it("pages with Previous and Next links", async () => {
@@ -137,6 +205,41 @@ it("pages with Previous and Next links", async () => {
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en", page: "3" });
   fireEvent.click(screen.getByRole("link", { name: "Previous" }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en" });
+});
+
+it("keeps the page busy with focus on the paging link while the next page loads, and disables the end link", async () => {
+  const onNavigate = vi.fn();
+  mockRows(page([scenarioS1().group], { page: 2, page_count: 3 }));
+  const view = renderPage({ query: { page: "2" }, onNavigate });
+  await screen.findByText("Page 2 of 3");
+  const next = screen.getByRole("link", { name: "Next" });
+  next.focus();
+  let resolve!: (value: DocumentRowsPage) => void;
+  vi.mocked(api.listDocumentRows).mockImplementation(() => new Promise(done => { resolve = done; }));
+  view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} query={{ page: "3" }} onNavigate={onNavigate} />);
+  // The previous page stays, busy; no skeleton replaces the bar and paging.
+  expect(screen.getByRole("table", { name: "Documents" }).getAttribute("aria-busy")).toBe("true");
+  expect(document.querySelector(".documents-skeleton")).toBeNull();
+  expect(screen.getByText("Page 2 of 3")).toBeTruthy();
+  expect(document.activeElement).toBe(next);
+  await act(async () => { resolve(page([scenarioS1().group], { page: 3, page_count: 3 })); });
+  await screen.findByText("Page 3 of 3");
+  expect(document.activeElement).toBe(next);
+  expect(next.getAttribute("aria-disabled")).toBe("true");
+  expect(next.hasAttribute("href")).toBe(false);
+  fireEvent.click(next);
+  expect(onNavigate).not.toHaveBeenCalled();
+  expect(screen.getByRole("link", { name: "Previous" }).getAttribute("aria-disabled")).toBeNull();
+});
+
+it("renders Submissions of an open card as a list, not the table", async () => {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+  const s1 = scenarioS1();
+  mockRows(s1.page, s1.submissions);
+  renderPage({ query: { open: [rowKey("case-0042", "en")] } });
+  expect(await screen.findByRole("list", { name: "Submissions, case-0042 · en" })).toBeTruthy();
+  expect(screen.queryByRole("table")).toBeNull();
+  expect(expandedProps.at(-1)?.layout).toBe("list");
 });
 
 it("expands and focuses a deep-linked row that no longer needs a decision", async () => {
@@ -305,6 +408,16 @@ describe("Resolved and Changed badges", () => {
     expect(vi.mocked(api.listDocumentRows).mock.calls[0][1]).toEqual({ decision: "report-or-pause", retain: ["case-0042:en"] });
     await waitFor(() => expect(disclosure("case-0042 · en").getAttribute("aria-expanded")).toBe("false"));
     expect(within(disclosure("case-0042 · en").closest("th")!).getByText("Resolved")).toBeTruthy();
+  });
+
+  it("keeps the visit (retained rows and badges) when paging under the same filters", async () => {
+    serve(page([group("case-0042", [missing()])], { page_count: 2 }));
+    const onNavigate = vi.fn();
+    const view = renderPage({ query: { decision: "missing-final" }, onNavigate });
+    await waitFor(() => expect(lastRequest()).toEqual({ decision: "missing-final", retain: ["case-0042:en"] }));
+    view.rerender(<DocumentsPage projectKey="p" canManage query={{ decision: "missing-final", page: "2" }} onNavigate={onNavigate} />);
+    await waitFor(() => expect(lastRequest()).toEqual({ decision: "missing-final", page: 2, retain: ["case-0042:en"] }));
+    expect(sessionStorage.getItem(`ontocurator:documents-visit:p:${JSON.stringify({ decision: "missing-final" })}`)).not.toBeNull();
   });
 
   it("starts a new visit after a filter change and sends no retain without a decision filter", async () => {
