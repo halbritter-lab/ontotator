@@ -101,3 +101,6 @@ blockquote.report-text {
 .lead-intent > div:empty { display: none; }
 .lead-intent-line { margin: 0; color: var(--text-muted); }
 .lead-holds { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+@media (max-width: 699px) {
+  .lead-intent { justify-items: stretch; }
+}
