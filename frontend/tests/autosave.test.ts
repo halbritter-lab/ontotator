@@ -96,6 +96,16 @@ describe("createMutationQueue", () => {
     expect(p2).toBeDefined();
   });
 
+  it.each(["ROUND_INPUT_RESOLUTION_STALE", "ROUND_INPUT_CARRIED_FINDING_PRESENT"])("treats a refused carried-review command (%s) as rejected, not as a stale draft", async (code) => {
+    const queue = createMutationQueue({ initialRevision: 2 });
+    const refused = queue.enqueue(vi.fn().mockRejectedValue(new ConflictError("Refused", code)));
+    await expect(refused).rejects.toThrow(ConflictError);
+    expect(queue.getState()).not.toBe("conflict");
+    const followup = vi.fn().mockResolvedValue({ revision: 3 });
+    await queue.enqueue(followup);
+    expect(followup).toHaveBeenCalledOnce();
+  });
+
   it("allows setting confirmed revision externally when resetting or synchronizing", () => {
     const queue = createMutationQueue({
       initialRevision: 5,
