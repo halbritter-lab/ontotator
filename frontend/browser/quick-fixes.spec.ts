@@ -1,10 +1,11 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
 import { authenticatedRequest, importPackage, loginExisting, mentionWithOffsets, openCase, selectText, submitCase } from './helpers';
+import { problemReportScenario } from './problemReportHelpers';
 
-// Quick-fix acceptance (Q3, Q4, Q7). Not written here, as their UI was replaced:
-// Q1 (B1) by editor F8a (covered by editor F10), Q1 (B2) by problem-reports WP6 (CR-3, covered by
-// problem-reports WP9), Q8 by editor F6b (RoundInputPanel deleted).
+// Quick-fix acceptance (Q1 (B2), Q3, Q4, Q7). Not written here, as their UI was replaced:
+// Q1 (B1) by editor F8a (covered by editor F10), Q8 by editor F6b (RoundInputPanel deleted).
+// Q1 (B2) targets the problem dialog of problem-reports WP6 (written by problem-reports WP9e).
 
 type Assignment = components['schemas']['AssignmentView'];
 type Scenario = { project: string; case_id: string; assignment_id: number; documents: { source: string; target: string }; users: { lead: string; reviewer: string; other: string; consolidator: string } };
@@ -71,6 +72,48 @@ test('Q7: focused resize handle shows a focus-ring ring without moving text', as
   const shot = test.info().outputPath('q7-handle-focus.png');
   await page.screenshot({ path: shot });
   await test.info().attach('q7-handle-focus', { path: shot, contentType: 'image/png' });
+});
+
+test('Q1 (B2): the problem dialog keeps New report and Close in a fixed footer', async ({ page }) => {
+  const s = await problemReportScenario(page, 'base');
+  const task = s.tasks.reporter;
+  await loginExisting(page, s.users.reporter);
+  await page.goto(`/#/tasks/${task}`);
+  await expect(page.locator('.text-container')).toBeVisible();
+  const entry = page.getByRole('button', { name: /^Report problem/ });
+  // No report yet: the entry opens the new report form directly.
+  await entry.click();
+  const form = page.getByRole('dialog', { name: 'New problem report', exact: true });
+  await form.getByRole('textbox', { name: /What is the problem\?/ }).fill('The German text misses a sentence.');
+  await form.locator('.modal-actions').getByRole('button', { name: 'Report and pause my task', exact: true }).click();
+  const reports = page.getByRole('dialog', { name: `Problems with Task ${task}`, exact: true });
+  await expect(reports).toBeVisible();
+  await reports.locator('.modal-actions').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(reports).toBeHidden();
+  for (const size of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size);
+    await entry.click();
+    await expect(reports).toBeVisible();
+    const footer = reports.locator('.modal-actions');
+    await expect(footer.getByRole('button')).toHaveText(['New report', 'Close']);
+    const close = footer.getByRole('button', { name: 'Close', exact: true });
+    await expect(close).toBeEnabled();
+    // The footer sits below the scrolling body and stays inside the viewport.
+    await expect(close).toBeInViewport({ ratio: 1 });
+    const box = (await close.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(size.height);
+    expect(box.x + box.width).toBeLessThanOrEqual(size.width);
+    const order = await reports.evaluate(dialog => {
+      const body = dialog.querySelector('.ui-dialog-body')!.getBoundingClientRect();
+      const actions = dialog.querySelector('.modal-actions')!.getBoundingClientRect();
+      return { bodyBottom: body.bottom, footerTop: actions.top, inBody: !!dialog.querySelector('.ui-dialog-body .modal-actions') };
+    });
+    expect(order.inBody).toBe(false);
+    expect(order.footerTop).toBeGreaterThanOrEqual(order.bodyBottom - 1);
+    await close.click();
+    await expect(reports).toBeHidden();
+    await expect(entry).toBeFocused();
+  }
 });
 
 test('Q3: project picker closes on select, Escape, outside click and Tab-out; arrows and ctrl-click do not navigate', async ({ page, context }) => {

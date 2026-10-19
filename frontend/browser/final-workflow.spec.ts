@@ -219,11 +219,11 @@ test('corrected-text private carry preserves submitted history through a reporte
     const submitted = await value<Opened>(author.page, `/api/v1/assignments/${task.id}/open`, 'POST');
     const carriedId = submitted.assignment.last_submission_id!;
     await author.page.getByRole('dialog', { name: 'Case submitted' }).getByRole('button', { name: 'Stay in case', exact: true }).click();
-    await author.page.locator('button.problem-entry').click();
+    await author.page.getByRole('button', { name: /^Report problem/ }).click();
     const form = author.page.getByRole('dialog', { name: 'New problem report', exact: true });
     await form.getByRole('textbox', { name: /What is the problem\?/ }).fill('Review the corrected clinical context before continuing.');
     await form.getByRole('button', { name: 'Report and pause my task', exact: true }).click();
-    await expect(author.page.getByText('Reported. Your task is paused until you or a project lead resume it.')).toBeVisible();
+    await expect(author.page.getByRole('dialog', { name: `Problems with Task ${task.id}`, exact: true })).toContainText('Reported. Your task is paused until you or a project lead resume it.');
     const reportRows = await value<components['schemas']['ProblemReportView'][]>(page, `${root(s)}/problem-reports`);
     const report = reportRows.find(item => item.assignment_id === task.id)!;
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/problem-reports/${encodeURIComponent(report.report_id)}`);
