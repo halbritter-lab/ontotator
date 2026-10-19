@@ -1,5 +1,7 @@
 """Round navigation and exact-input transitions."""
 
+from datetime import datetime
+
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -13,6 +15,11 @@ from ontocurator.api.routes import (
     get_access,
     get_repo,
 )
+from ontocurator.application.round_reads import (
+    enrich_inputs,
+    enrich_rounds,
+    enrich_sources,
+)
 from ontocurator.application.work_rounds import (
     RoundInputResolutionService,
     WorkRoundService,
@@ -23,6 +30,7 @@ from ontocurator.authz.policy import Action, can
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.work_rounds import RoundInputView, RoundKind, WorkRoundView
 from ontocurator.domain.workspace import Draft, MutationEnvelope
+from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import ProjectRow
 from ontocurator.storage.workflow_tables import WorkRoundRow
 
@@ -45,12 +53,21 @@ def create_round(
     request: Request,
     principal: PrincipalDep,
 ) -> WorkRoundView:
-    return WorkRoundService(request.app.state.repo.db).create(
+    created = WorkRoundService(request.app.state.repo.db).create(
         get_access(request),
         Actor.user(principal.user_id, principal.username),
         assignment_id,
         **body.model_dump(),
     )
+    # The service authorized the caller for this round; re-read it unscoped and
+    # enrich it in one snapshot so the answer shows one committed state.
+    repo = get_repo(request)
+    with repo.db.snapshot():
+        stored = Repository(repo.db).get_work_round(
+            created.project_key, created.round_id
+        )
+        [view] = enrich_rounds(repo, created.project_key, [stored])
+    return view
 
 
 @router.get("/assignments/{assignment_id}/rounds")
@@ -58,7 +75,8 @@ def list_rounds(
     assignment_id: int, request: Request, principal: PrincipalDep
 ) -> list[WorkRoundView]:
     repo = get_repo(request)
-    with repo.db.transaction() as conn:
+    # One snapshot: the round views and their facts show one committed state.
+    with repo.db.snapshot() as conn:
         assignment = AssignmentService._get(conn, assignment_id)
         if assignment.user_id != principal.user_id and not can(
             get_access(request), Action.MANAGE_ASSIGNMENTS, assignment.project_key
@@ -73,7 +91,8 @@ def list_rounds(
             .scalars()
             .all()
         )
-        return [repo.get_work_round(assignment.project_key, rid) for rid in ids]
+        views = [repo.get_work_round(assignment.project_key, rid) for rid in ids]
+        return enrich_rounds(repo, assignment.project_key, views)
 
 
 @router.post("/rounds/{round_id}/open")
@@ -108,18 +127,20 @@ def round_inputs(
     round_id: str, request: Request, principal: PrincipalDep
 ) -> list[RoundInputView]:
     repo = get_repo(request)
-    with repo.db.transaction() as conn:
+    # One snapshot: the inventory and its facts show one committed state.
+    with repo.db.snapshot() as conn:
         project = conn.execute(
             select(ProjectRow.project_key)
             .join(WorkRoundRow, WorkRoundRow.project_id == ProjectRow.id)
             .where(WorkRoundRow.round_id == round_id)
         ).scalar_one_or_none()
-    if project is None:
-        raise DomainError("ROUND_NOT_FOUND")
-    return [
-        RoundInputView.model_validate(item)
-        for item in repo.get_round_input_inventory(project, round_id)
-    ]
+        if project is None:
+            raise DomainError("ROUND_NOT_FOUND")
+        # The scoped inventory read runs the owner-or-EXPORT_ALL_WORK check
+        # first; enrichment only looks up the submissions these items name.
+        return enrich_inputs(
+            repo, project, repo.get_round_input_inventory(project, round_id)
+        )
 
 
 @router.post("/workspaces/{workspace_id}/round-input-resolutions")
@@ -138,8 +159,11 @@ class RoundSourceView(BaseModel):
     document_id: str
     language: str
     version: int
-    created_at: str
+    created_at: str  # client-supplied; kept for compatibility, use recorded_at
     round_id: str | None = None
+    round_ordinal: int | None = None
+    recorded_at: datetime | None = None
+    finding_count: int = 0
 
 
 @router.get("/assignments/{assignment_id}/round-sources")
@@ -147,11 +171,11 @@ def round_sources(
     assignment_id: int, request: Request, principal: PrincipalDep
 ) -> list[RoundSourceView]:
     from ontocurator.authz.visibility import current_access, require_document
-    from ontocurator.storage.repository import Repository
     from ontocurator.storage.tables import AssignmentRow
 
     repo = Repository(request.app.state.repo.db)
-    with repo.db.transaction() as conn:
+    # One snapshot: the sources and their facts show one committed state.
+    with repo.db.snapshot() as conn:
         assignment = AssignmentService._get(conn, assignment_id)
         pid = repo._require_project(conn, assignment.project_key)
         fresh = current_access(conn, get_access(request), pid, assignment.project_key)
@@ -222,9 +246,15 @@ def round_sources(
                     round_id=item.round_id if item else None,
                 )
             )
-        return sorted(
-            result, key=lambda item: (item.version, item.submission_id), reverse=True
+        facts = enrich_sources(
+            repo, assignment.project_key, [r.submission_id for r in result]
         )
+    result = [
+        item.model_copy(update=fact) for item, fact in zip(result, facts, strict=True)
+    ]
+    return sorted(
+        result, key=lambda item: (item.version, item.submission_id), reverse=True
+    )
 
 
 @router.post("/workspaces/{workspace_id}/merge-inputs")

@@ -12,7 +12,7 @@ import pytest
 from auth_harness import PASSWORD, ensure_user, logged_in, upload_package
 from layered_fixtures import make_layered_package
 from pg_harness import database_for, database_url_for
-from sqlalchemy import select
+from sqlalchemy import Connection, select
 
 from ontocurator.api.app import create_app
 from ontocurator.auth.accounts import AccountService
@@ -105,6 +105,18 @@ def test_a_member_sees_only_their_projects(db: Database) -> None:
     assert error.value.code == "PROJECT_NOT_FOUND"
 
 
+def _on_connection(
+    call: Callable[[Any, Connection], object],
+) -> Callable[[Any], object]:
+    """A connection-scoped read, run on a connection the test opens."""
+
+    def run(repo: Any) -> object:
+        with repo.db.transaction() as conn:
+            return call(repo, conn)
+
+    return run
+
+
 # One call per overridden method, each naming project B.
 CALLS: dict[str, Callable[[Repository], object]] = {
     "import_package": lambda r: r.import_package(_package("B")),
@@ -119,6 +131,12 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     "get_round_for_submission": lambda r: r.get_round_for_submission("B", "s"),
     "get_round_input_inventory": lambda r: r.get_round_input_inventory("B", "r"),
     "list_workflow_causes": lambda r: r.list_workflow_causes("B"),
+    # Connection-scoped reads: the project id is never used, the key is refused.
+    "work_round_in": _on_connection(lambda r, c: r.work_round_in(c, "B", 0, "r")),
+    "round_for_submission_in": _on_connection(
+        lambda r, c: r.round_for_submission_in(c, "B", 0, "s")
+    ),
+    "workflow_causes_in": _on_connection(lambda r, c: r.workflow_causes_in(c, "B", 0)),
     "edit_log": lambda r: r.edit_log("B"),
     "add_documents_and_proposals": lambda r: r.add_documents_and_proposals(
         "B", [], [], source_sha256="0" * 64

@@ -46,7 +46,11 @@ from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.variants import VariantInfo
-from ontocurator.domain.work_rounds import WorkRoundView, derive_source_obligations
+from ontocurator.domain.work_rounds import (
+    RoundInputView,
+    WorkRoundView,
+    derive_source_obligations,
+)
 from ontocurator.domain.workspace import (
     Draft,
     MutationEnvelope,
@@ -3753,11 +3757,20 @@ class Repository:
                     WorkRoundRow.project_id == project_id
                 )
             ).scalars():
+                # The archived format predates the read-only facts; leave them
+                # out so older readers (extra="forbid") still accept it.
                 workflow_history[rid] = {
                     "round": self.get_work_round(project_key, rid).model_dump(
-                        mode="json"
+                        mode="json", exclude=set(WorkRoundView.NOT_ARCHIVED)
                     ),
-                    "inputs": self.get_round_input_inventory(project_key, rid),
+                    "inputs": [
+                        {
+                            k: v
+                            for k, v in item.items()
+                            if k not in RoundInputView.NOT_ARCHIVED
+                        }
+                        for item in self.get_round_input_inventory(project_key, rid)
+                    ],
                     "submission_ids": list(
                         conn.execute(
                             select(RoundSubmissionBindingRow.submission_id).where(

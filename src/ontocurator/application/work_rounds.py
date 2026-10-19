@@ -14,7 +14,7 @@ from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.auth.authority import lock_user_authority
 from ontocurator.authz.policy import Access, Action, can, may_take
 from ontocurator.authz.visibility import current_access, require_document
-from ontocurator.domain.annotations import AnnotationRef, snapshot
+from ontocurator.domain.annotations import AnnotationRef, AnnotationSnapshot, snapshot
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
     EvidenceMention,
@@ -23,7 +23,12 @@ from ontocurator.domain.documents import (
     Segment,
 )
 from ontocurator.domain.errors import AccessDenied, DomainError
-from ontocurator.domain.reanchor import Carried, reanchor_annotation, text_map
+from ontocurator.domain.reanchor import (
+    Carried,
+    NeedsReview,
+    reanchor_annotation,
+    text_map,
+)
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import encode_snapshot
@@ -39,6 +44,36 @@ from ontocurator.storage.workflow_tables import (
     WorkRoundRow,
     WorkRoundStateRow,
 )
+
+
+def _input_payload(
+    iid: str,
+    sid: str,
+    original: AnnotationSnapshot,
+    target: AnnotationSnapshot | None,
+    mapped: Carried | NeedsReview,
+) -> dict[str, Any]:
+    """The stored payload of one frozen round input.
+
+    ``review_reason`` names why a carried finding could not be re-anchored; it
+    is stored for new rounds only (older payloads have no such key).
+    """
+    return {
+        "input_id": iid,
+        "source_submission_id": sid,
+        "source_ref": {
+            "annotation_id": original.annotation.annotation_id,
+            "version": original.version,
+        },
+        "source_snapshot": encode_snapshot(original),
+        "target_snapshot": encode_snapshot(target) if target else None,
+        "mapping_status": "carried" if target else "needs_review",
+        "review_reason": (
+            mapped.reason
+            if target is None and isinstance(mapped, NeedsReview)
+            else None
+        ),
+    }
 
 
 class WorkRoundService:
@@ -430,21 +465,7 @@ class WorkRoundService:
                             },
                         )
                         target = snapshot(annotation, evidence, document, profile)
-                    inputs.append(
-                        {
-                            "input_id": iid,
-                            "source_submission_id": sid,
-                            "source_ref": {
-                                "annotation_id": original.annotation.annotation_id,
-                                "version": original.version,
-                            },
-                            "source_snapshot": encode_snapshot(original),
-                            "target_snapshot": encode_snapshot(target)
-                            if target
-                            else None,
-                            "mapping_status": "carried" if target else "needs_review",
-                        }
-                    )
+                    inputs.append(_input_payload(iid, sid, original, target, mapped))
             targets = ReviewTargetSet.create(
                 [
                     AnnotationRef(

@@ -157,6 +157,28 @@ class ScopedRepository(Repository):
             raise AccessDenied("NOT_ALLOWED")
         return super().list_workflow_causes(project_key)
 
+    # The connection-scoped reads below leave item checks to their caller (who
+    # authorized the item first); the project check is still made here.
+    def work_round_in(
+        self, conn: Connection, project_key: str, project_id: int, round_id: str
+    ) -> WorkRoundView:
+        self._visible(project_key)
+        return super().work_round_in(conn, project_key, project_id, round_id)
+
+    def round_for_submission_in(
+        self, conn: Connection, project_key: str, project_id: int, submission_id: str
+    ) -> WorkRoundView | None:
+        self._visible(project_key)
+        return super().round_for_submission_in(
+            conn, project_key, project_id, submission_id
+        )
+
+    def workflow_causes_in(
+        self, conn: Connection, project_key: str, project_id: int
+    ) -> list[dict[str, Any]]:
+        self._visible(project_key)
+        return super().workflow_causes_in(conn, project_key, project_id)
+
     def workspace_assignment(self, key: WorkspaceKey) -> Assignment:
         """The workspace's current authorized assignment, with storage encapsulated."""
         self._visible(key.project_key)

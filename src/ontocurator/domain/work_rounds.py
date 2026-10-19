@@ -1,7 +1,8 @@
 """Explicit attempts and private immutable human inputs, independent of proposal sets."""
 
 from collections.abc import Iterable
-from typing import Any, Literal
+from datetime import datetime
+from typing import Any, ClassVar, Literal
 from urllib.parse import quote
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -29,6 +30,25 @@ class RoundInputView(BaseModel):
     source_snapshot: AnnotationSnapshot
     target_snapshot: AnnotationSnapshot | None
     mapping_status: Literal["carried", "needs_review"]
+    # Read-only facts; stored payloads of older rounds carry none of these.
+    # ``review_reason`` is stored for new rounds; the others are API-only.
+    review_reason: str | None = None
+    source_round_ordinal: int | None = None
+    source_recorded_at: datetime | None = None
+    source_language: str | None = None
+    source_version: int | None = None
+
+    # Keys package archives leave out, so older readers (extra="forbid") still
+    # accept archived workflow history.
+    NOT_ARCHIVED: ClassVar[frozenset[str]] = frozenset(
+        {
+            "review_reason",
+            "source_round_ordinal",
+            "source_recorded_at",
+            "source_language",
+            "source_version",
+        }
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -59,6 +79,32 @@ class WorkRoundView(BaseModel):
     input_submission_ids: list[str] = Field(default_factory=list)
     workspace_key: WorkspaceKey | None = None
     active: bool
+    # Read-only facts filled by ``application.round_reads`` for API answers.
+    round_ordinal: int | None = None
+    created_at: datetime | None = None
+    submission_count: int = 0
+    latest_submission_recorded_at: datetime | None = None
+    input_count: int = 0
+    source_round_ordinal: int | None = None
+    source_submission_recorded_at: datetime | None = None
+    document_language: str | None = None
+    document_version: int | None = None
+
+    # The API-only facts above; package archives leave them out, so older
+    # readers (extra="forbid") still accept archived workflow history.
+    NOT_ARCHIVED: ClassVar[frozenset[str]] = frozenset(
+        {
+            "round_ordinal",
+            "created_at",
+            "submission_count",
+            "latest_submission_recorded_at",
+            "input_count",
+            "source_round_ordinal",
+            "source_submission_recorded_at",
+            "document_language",
+            "document_version",
+        }
+    )
 
 
 class SourceReviewObligation(BaseModel):
