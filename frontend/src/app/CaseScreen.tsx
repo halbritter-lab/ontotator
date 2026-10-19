@@ -15,7 +15,6 @@ import type { AnnotationVersion } from "../api/client";
 import type { Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
 import { Textarea } from "../ui/Textarea";
-import { Checkbox } from "../ui/Checkbox";
 import { Button } from "../ui/Button";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -47,7 +46,11 @@ import {
 } from "../editor/autosave";
 import { newEvidenceId } from "../editor/ids";
 import { submissionHistoryLabel } from "../editor/submissionHistoryLabel";
-import { axisOptionLabel, findingAxes } from "../editor/axisLabels";
+import { FindingRow } from "../editor/FindingRow";
+import { SubmitCaseDialog } from "../editor/SubmitCaseDialog";
+import { SubmitControl } from "../editor/SubmitControl";
+import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
+import { findingAxes } from "../editor/axisLabels";
 import { StatusBadge } from "../ui/StatusBadge";
 import { defaultedResults, resultSnapshots } from "../editor/decisionSemantics";
 import { LayerControls } from "../editor/LayerControls";
@@ -2097,17 +2100,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </Button>
           )}
 
-          <Button
-            type="button"
-            variant="primary" size="sm"
-            onClick={handleSubmitWorkspace}
+          <SubmitControl
+            onSubmit={() => { void handleSubmitWorkspace(); }}
             disabled={readOnly || submitPending}
-            aria-busy={submitPending}
-            title={submitPending ? "Saving changes before submitting" : "Finish and submit case"}
-          >
-            <IconCheck />
-            Finish & Submit Case
-          </Button>
+            pending={submitPending}
+          />
         </div>
       </Toolbar>
 
@@ -2321,21 +2318,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 {visibleAnnotations.map((annSnap) => {
                   const isSelected =
                     annSnap.annotation.annotation_id === selectedAnnotationId;
-                  const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
-                  const termId = annSnap.annotation.term_id;
                   const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
                   const findingLayer = view.layers?.find((l) => l.layer_id === annSnap.annotation.layer_id);
                   const axes = findingAxes(axesValues, findingLayer?.annotation_types.find(type => type.type_id === annSnap.annotation.type_id)?.axes ?? view.axes_config);
                   const layerName = findingLayer?.label;
 
                   return (
-                    <li
+                    <FindingRow
                       key={annSnap.annotation.annotation_id}
-                      data-list-key={`annotation:${annSnap.annotation.annotation_id}`}
-                      className={`doc-item ${isSelected ? "selected" : ""}`}
-                      role="button" tabIndex={0} aria-pressed={isSelected}
-                      onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } }}
-                      onClick={() => {
+                      snapshot={annSnap}
+                      selected={isSelected}
+                      termLabel={termLabel}
+                      layerName={layerName}
+                      showLayer={(view.layers ?? []).length > 1}
+                      axes={axes}
+                      defaulted={defaultedKeys.has(refKey({ annotation_id: annSnap.annotation.annotation_id, version: annSnap.version }))}
+                      proposal={proposalFor(annSnap, view.available_inputs ?? [])}
+                      onActivate={() => {
                         if (selectedAnnotationId === annSnap.annotation.annotation_id) {
                           handleDeselectAll();
                           return;
@@ -2348,24 +2347,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         const firstEv = annSnap.annotation.evidence_refs?.[0]?.evidence_id;
                         setSelectedEvidenceId(firstEv ?? null);
                       }}
-                    >
-                      <div className="doc-id doc-row">
-                        <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
-                        {defaultedKeys.has(refKey({ annotation_id: annSnap.annotation.annotation_id, version: annSnap.version })) && <StatusBadge tone="warning">Defaulted axes</StatusBadge>}
-                        {layerName && (view.layers ?? []).length > 1 && (
-                          <span className="decision-tag decision-tag--open">{layerName}</span>
-                        )}
-                      </div>
-                      <div className="doc-meta">
-                        {evCount === 0 ? "Spanless" : `${evCount} mention(s)`}
-                        {" "}<AiBadge provenance={annSnap.annotation.provenance} source={proposalFor(annSnap, view.available_inputs ?? [])} />
-                      </div>
-                      {axes.length > 0 && <dl className="finding-axis-summary" aria-label="Clinical context">
-                        {axes.map(axis => <div key={axis.id} title={`${axis.label}: ${axisOptionLabel(axis.value)}${annSnap.annotation.axes_defaulted?.includes(axis.id) ? " (defaulted)" : ""}`}>
-                          <dt>{axis.label}: </dt><dd>{axisOptionLabel(axis.value)}{annSnap.annotation.axes_defaulted?.includes(axis.id) && " (defaulted)"}</dd>
-                        </div>)}
-                      </dl>}
-                    </li>
+                    />
                   );
                 })}
               </ul>
@@ -2590,51 +2572,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       {comparison}
       </div>
       {originalRoundInput && <RoundInputEvidenceDialog projectKey={view.key.project_key} input={originalRoundInput} onClose={() => setOriginalRoundInput(null)} labelFor={termLabel} />}
-      {historySubmission && <Dialog open title="Historical submission" heading={submissionHistoryLabel(historySubmission.created_at, submissions.findIndex(s => s.submission_id === historySubmission.submission_id) + 1)} onClose={() => setHistorySubmission(null)}>
-        <details className="technical-details"><summary>Technical details</summary>
-          <p>Submission ID: <code>{historySubmission.submission_id}</code></p>
-          <p>Timestamp: {historySubmission.created_at}</p>
-        </details>
-        <p>
-          Verified layers:{" "}
-          {historySubmission.checked_layer_ids && historySubmission.checked_layer_ids.length > 0
-            ? historySubmission.checked_layer_ids.join(", ")
-            : (historySubmission.document_checked ? "Document verified" : "None")}
-        </p>
-        {historySubmission.snapshots.map(snap => {
-          const axesVal = snap.annotation.axes_values ?? (snap.annotation as any).axes?.values;
-          return (
-            <div key={refKey({annotation_id:snap.annotation.annotation_id,version:snap.version})}>
-              <strong><TermName termId={snap.annotation.term_id} label={termLabel(snap.annotation.layer_id, snap.annotation.term_id)} /></strong>
-              <p>
-                {axesVal && Object.keys(axesVal).length > 0
-                  ? Object.entries(axesVal)
-                      .map(([k, v]) => `${k}: ${v ?? "Not specified"}`)
-                      .join(" · ")
-                  : "No axes"}
-              </p>
-              {snap.evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
-                {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
-              </p>)}
-              <p className="annotation-note-history"><strong>Annotation note: </strong><span>{snap.annotation.note || "No annotation note."}</span></p>
-            </div>
-          );
-        })}
-        {historySubmission.decisions.map(decision => <p className="annotation-note-history" key={refKey(decision.target)}>
-          {decision.target.annotation_id} ({decision.target.version}): {decision.outcome === "uncertain" ? "Unresolved" : decision.outcome} · Reviewer note: {decision.note || "No reviewer note."}
-        </p>)}
-        {(historySubmission.reanchor_inputs ?? []).length > 0 && <section aria-label="Re-anchor review history">
-          <h3>Findings reviewed after text correction</h3>
-          {(historySubmission.reanchor_inputs ?? []).map(item=>{
-            const resolution=(historySubmission.reanchor_resolutions ?? []).find(value=>reanchorKey(value.item)===reanchorKey(item));
-            return <p key={reanchorKey(item)}>{item.source_ref.annotation_id} ({item.source_ref.version}): {resolution ?
-              `${resolution.outcome === "dismissed" ? "Dismissed" : "Re-created"} by ${resolution.reviewer_id}${resolution.reason ? `: ${resolution.reason}` : ""}${resolution.replacement ? ` · Replacement: ${resolution.replacement.annotation_id} (${resolution.replacement.version})` : ""}` : "Pending"}</p>;
-          })}
-        </section>}
-        <Button type="button" variant="secondary" onClick={() => setHistorySubmission(null)}>
-          Close
-        </Button>
-      </Dialog>}
+      {historySubmission && <HistoricalSubmissionDialog submission={historySubmission}
+        heading={submissionHistoryLabel(historySubmission.created_at, submissions.findIndex(s => s.submission_id === historySubmission.submission_id) + 1)}
+        documentText={view.document.text} termLabel={termLabel} onClose={() => setHistorySubmission(null)} />}
 
       {completedSubmission && <Dialog open title="Case submitted" heading="✓ Case successfully submitted!">
         <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>
@@ -2672,87 +2612,44 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         </div>
       </Dialog>}
 
-      <Dialog open={submitDialogOpen} title="Submit case" heading={<>Submit case {view.document.document_id}?</>} onClose={() => setSubmitDialogOpen(false)}>
-        <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
-          {view.key.mode === "review" ? (
-            <li>
-              {completionResults.length} annotation(s) will be submitted
-              ({confirmedCount} confirmed proposal(s), {(draft.decisions ?? []).filter(d => d.outcome === "uncertain").length} unresolved with reviewer flags, {(draft.annotations ?? []).length} saved findings)
-            </li>
-          ) : (
-            <li>{(draft.annotations ?? []).length} annotation(s) in this case</li>
-          )}
-          {view.key.mode === "review" && (
-            <li>
-              {reviewTargets.length - openReviewTargets.length} of {reviewTargets.length} review proposal(s) decided
-              {openReviewTargets.length > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargets.length} still open</strong>}
-            </li>
-          )}
-          {pendingReanchorItems.length > 0 && <li>{unresolvedReanchorCount} finding(s) after text correction still pending</li>}
-
-        </ul>
-        {submissionIssues.length > 0 && <InlineMessage tone="error">
-          <p>{submissionIssues.length} finding(s) need attention before submission.</p>
-          <ul>{submissionIssues.map(({snapshot, reason, remedy, focus}) => <li key={refKey({ annotation_id: snapshot.annotation.annotation_id, version: snapshot.version })}>
-            <Button variant="quiet" onClick={() => reviewEvidenceIssue(snapshot, focus)}><TermName termId={snapshot.annotation.term_id ?? snapshot.annotation.annotation_id} label={termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id ?? snapshot.annotation.annotation_id)} />: {reason}</Button><p>{remedy}</p>
-          </li>)}</ul>
-        </InlineMessage>}
-        {unresolvedReanchorCount > 0 && <InlineMessage tone="error">
-          <p>{unresolvedReanchorCount} finding(s) after text correction must be re-created or dismissed with a reason.</p>
-          <Button onClick={reviewPendingReanchor}>Review pending findings after text correction</Button>
-        </InlineMessage>}
-        {pendingCarriedCount > 0 && <InlineMessage tone="error">
-          <p>{pendingCarriedCount} carried finding(s) still need review before submission.</p>
-          <Button onClick={() => {
-            setSubmitDialogOpen(false); setMobilePane("list");
-            requestAnimationFrame(() => {
-              const panel = sidebarScrollRef.current?.querySelector<HTMLElement>('.round-input-panel');
-              const disclosure = panel?.querySelector('details'); if (disclosure) disclosure.open = true;
-              panel?.querySelector<HTMLElement>('[data-round-pending="true"] select, [data-round-pending="true"] button[data-round-open]')?.focus();
-            });
-          }}>Review carried findings</Button>
-        </InlineMessage>}
-        {defaulted.length > 0 && <InlineMessage tone="warning">
-          <p>{defaulted.length} {defaulted.length === 1 ? "annotation has" : "annotations have"} defaulted axis values.</p>
-          <Button onClick={reviewDefaulted}>Review defaulted annotations</Button>
-        </InlineMessage>}
-        {axisWarning && <InlineMessage tone="warning" title="Review unconfirmed clinical values">
-          <p>These values have not been explicitly confirmed. Continuing records acknowledgement of this warning; it keeps the clinical values and their defaulted status unchanged.</p>
-          <ul>{axisWarning.warnings.map(({ annotationId, axis }) => {
-            const snapshot = completionResults.find(value => value.annotation.annotation_id === annotationId);
-            const definition = view.layers?.find(layer => layer.layer_id === snapshot?.annotation.layer_id)?.annotation_types.find(type => type.type_id === snapshot?.annotation.type_id)?.axes?.find(value => value.id === axis);
-            return <li key={`${annotationId}/${axis}`}>{snapshot ? termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id) ?? snapshot.annotation.term_id : annotationId}: {definition?.label ?? axis} = {axisOptionLabel(snapshot?.annotation.axes_values?.[axis])}</li>;
-          })}</ul>
-          <Checkbox id="submit-axis-warning" label="Submit with these unconfirmed values" checked={axisWarningAcknowledged} disabled={queueState === "saving"} onChange={event => setAxisWarningAcknowledged(event.target.checked)} />
-        </InlineMessage>}
-        <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
-          <input
-            type="checkbox"
-            checked={textCheckedConfirmed}
-            onChange={(e) => setTextCheckedConfirmed(e.target.checked)}
-          />
-          <span>Entire text checked for further findings</span>
-        </label>
-        {view.key.mode === "review" && openReviewTargets.length > 0 && (
-          <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
-            Decide every review proposal before submitting.
-          </p>
-        )}
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <Button
-            type="button"
-            variant="primary"
-            loading={queueState === "saving"}
-            disabled={readOnly || !textCheckedConfirmed || (axisWarning !== null && !axisWarningAcknowledged) || submissionIssues.length > 0 || unresolvedReanchorCount > 0 || pendingCarriedCount > 0 || (view.key.mode === "review" && openReviewTargets.length > 0)}
-            onClick={() => { void confirmSubmit(); }}
-          >
-            {axisWarning ? "Continue and submit" : "Submit case"}
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => setSubmitDialogOpen(false)}>
-            Cancel
-          </Button>
-        </div>
-      </Dialog>
+      <SubmitCaseDialog
+        open={submitDialogOpen}
+        documentId={view.document.document_id}
+        reviewMode={view.key.mode === "review"}
+        completionResults={completionResults}
+        confirmedCount={confirmedCount}
+        unresolvedDecisionCount={(draft.decisions ?? []).filter(d => d.outcome === "uncertain").length}
+        savedFindingsCount={(draft.annotations ?? []).length}
+        reviewTargetCount={reviewTargets.length}
+        openReviewTargetCount={openReviewTargets.length}
+        pendingReanchorCount={pendingReanchorItems.length}
+        unresolvedReanchorCount={unresolvedReanchorCount}
+        pendingCarriedCount={pendingCarriedCount}
+        defaultedCount={defaulted.length}
+        submissionIssues={submissionIssues}
+        axisWarning={axisWarning}
+        axisWarningAcknowledged={axisWarningAcknowledged}
+        textChecked={textCheckedConfirmed}
+        saving={queueState === "saving"}
+        readOnly={readOnly}
+        layers={view.layers}
+        termLabel={termLabel}
+        setTextChecked={setTextCheckedConfirmed}
+        setAxisWarningAcknowledged={setAxisWarningAcknowledged}
+        onReviewEvidenceIssue={reviewEvidenceIssue}
+        onReviewPendingReanchor={reviewPendingReanchor}
+        onReviewCarried={() => {
+          setSubmitDialogOpen(false); setMobilePane("list");
+          requestAnimationFrame(() => {
+            const panel = sidebarScrollRef.current?.querySelector<HTMLElement>('.round-input-panel');
+            const disclosure = panel?.querySelector('details'); if (disclosure) disclosure.open = true;
+            panel?.querySelector<HTMLElement>('[data-round-pending="true"] select, [data-round-pending="true"] button[data-round-open]')?.focus();
+          });
+        }}
+        onReviewDefaulted={reviewDefaulted}
+        onConfirm={() => { void confirmSubmit(); }}
+        onCancel={() => setSubmitDialogOpen(false)}
+      />
 
       {pendingAdoption && <Dialog open title="Reason for no text span" onClose={() => setPendingAdoption(null)}>
         <p>The editable copy needs a reason because this proposal has no text span.</p>
