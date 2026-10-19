@@ -14,6 +14,7 @@ from ontocurator.application.workflow_warnings import state_digest
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
 from ontocurator.exchange.final_content import thaw_content
+from ontocurator.exchange.final_export_guide import guide_files
 from ontocurator.jobs.queue import Job, JobContext
 from ontocurator.storage.final_tables import ExportSelectionSnapshotRow
 
@@ -145,6 +146,14 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         files["provenance.t1.zip"] = ctx.db.blobs.path(
             provenance["sha256"]
         ).read_bytes()
+    files.update(
+        guide_files(
+            payload,
+            snapshot_id=row["snapshot_id"],
+            snapshot_sha256=row["sha256"],
+            snapshot_created_at=row["created_at"],
+        )
+    )
     receipt = {
         "format": "ontocurator-final-export/v1",
         "snapshot_id": row["snapshot_id"],

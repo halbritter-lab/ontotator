@@ -298,6 +298,20 @@ class FinalResultService:
                         "created_at": resolution["created_at"].isoformat(),
                     }
                 )
+            recorded_at = {
+                sid: at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                for sid, at in conn.execute(
+                    select(
+                        SubmissionRow.submission_id, SubmissionRow.recorded_at
+                    ).where(
+                        SubmissionRow.project_id == pid,
+                        SubmissionRow.submission_id.in_(closure_ids),
+                    )
+                ).all()
+            }
+            project_name = conn.execute(
+                select(ProjectRow.name).where(ProjectRow.id == pid)
+            ).scalar_one()
             payload = {
                 "format": "ontocurator-final-selection/v1",
                 "project": key,
@@ -308,6 +322,8 @@ class FinalResultService:
                 "round_inputs": round_inputs,
                 "round_kinds": round_kinds,
                 "selected_submission_ids": selected_ids,
+                "project_name": project_name,
+                "submission_recorded_at": recorded_at,
             }
             sid = str(uuid4())
             digest = state_digest(payload)
