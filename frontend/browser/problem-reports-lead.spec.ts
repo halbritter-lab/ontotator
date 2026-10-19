@@ -1,0 +1,392 @@
+/**
+ * Problem reports: lead and restart scenarios (plan "Problem reports" WP9c; spec "Lead flow",
+ * "Testing > Browser", resolved questions 2 and 3).
+ *
+ * Every test builds a fresh project through ``POST /__test_problem_reports__``. The lead works in the
+ * test's page; reporters file their reports through their own API session (the reporter flow itself is
+ * covered by problem-reports-reporter.spec.ts) and, in the translation scenario, open their editor in
+ * their own browser context. Person labels come from the fixture (``labels.*``), never hard-coded.
+ */
+import { expect, request as playwrightRequest, test, type APIRequestContext, type Browser, type Locator, type Page } from "@playwright/test";
+import type { components } from "../src/api/generated";
+import { authenticatedRequest, loginExisting, TEST_PASSWORD } from "./helpers";
+import { problemReportScenario, type ProblemReportScenario } from "./problemReportHelpers";
+
+type Assignment = components["schemas"]["AssignmentView"];
+type ProblemReport = components["schemas"]["ProblemReportView"];
+type DocumentRowsPage = components["schemas"]["DocumentRowsPage"];
+
+test.setTimeout(180_000);
+test.use({ actionTimeout: 15_000 });
+
+const REPORT_TEXT = "The German text misses the sentence about the muscle tone.";
+const OTHER_REPORT_TEXT = "The heading of the second paragraph is cut off.";
+
+const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const requestId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+/** Another user's API session (own cookie jar and CSRF token). */
+async function session(username: string) {
+  const baseURL = test.info().project.use.baseURL!;
+  const context: APIRequestContext = await playwrightRequest.newContext({ baseURL });
+  const login = await context.post("/api/v1/auth/login", { data: { username, password: TEST_PASSWORD }, headers: { Origin: baseURL } });
+  expect(login.ok(), await login.text()).toBeTruthy();
+  const call = async <T>(path: string, method = "GET", data?: unknown): Promise<T> => {
+    const me = await context.get("/api/v1/auth/me");
+    expect(me.ok()).toBeTruthy();
+    const { csrf_token } = (await me.json()) as { csrf_token: string };
+    const response = await context.fetch(path, { method, data, headers: { Origin: baseURL, ...(method === "GET" ? {} : { "X-CSRF-Token": csrf_token }) } });
+    expect(response.ok(), `${method} ${path}: ${await response.text()}`).toBeTruthy();
+    return (await response.json()) as T;
+  };
+  return { call, close: () => context.dispose() };
+}
+
+/** File a report on ``task`` as its owner ``username`` (pauses the task); returns the report. */
+async function fileReport(username: string, task: number, text = REPORT_TEXT): Promise<ProblemReport> {
+  const owner = await session(username);
+  try {
+    const assignment = await owner.call<Assignment>(`/api/v1/assignments/${task}`);
+    return await owner.call<ProblemReport>(`/api/v1/assignments/${task}/problem-reports`, "POST", {
+      request_id: requestId("report"),
+      expected_workflow_revision: assignment.workflow_revision,
+      round_id: assignment.active_round_id ?? null,
+      reason: text,
+    });
+  } finally {
+    await owner.close();
+  }
+}
+
+/** Another person's browser window (own cookie jar), logged in. */
+async function actor(browser: Browser, username: string) {
+  const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+  const page = await context.newPage();
+  await loginExisting(page, username);
+  return { page, close: () => context.close() };
+}
+
+const reportUrl = (s: ProblemReportScenario, reportId: string, query = "") =>
+  `/#/projects/${encodeURIComponent(s.project)}/problem-reports/${encodeURIComponent(reportId)}${query}`;
+const documentsUrl = (s: ProblemReportScenario, query = "") => `/#/projects/${encodeURIComponent(s.project)}/documents${query}`;
+
+/** Open the lead page of ``report`` and wait for its text. */
+async function openLeadPage(page: Page, s: ProblemReportScenario, report: ProblemReport, text = REPORT_TEXT) {
+  await page.goto(reportUrl(s, report.report_id));
+  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.locator(".report-text").first()).toHaveText(text);
+}
+
+async function openDocuments(page: Page, s: ProblemReportScenario, query = "") {
+  await page.goto(documentsUrl(s, query));
+  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+}
+
+/** Sorted ``name=value`` pairs of the hash query (order-independent comparison). */
+function hashQueryOf(url: string): string[] {
+  const hash = new URL(url).hash;
+  const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+  return [...new URLSearchParams(query).entries()].map(([name, value]) => `${name}=${value}`).sort();
+}
+
+const detail = (page: Page) => page.locator(".problem-report-detail");
+/** The ``<dd>`` of fact ``term`` ("Report" / "Paused tasks" / "Final result") on the lead page. */
+const fact = (page: Page, term: string) =>
+  detail(page).locator(".report-facts > div").filter({ has: page.locator("dt", { hasText: new RegExp(`^${term}$`) }) }).locator("dd");
+const decide = (page: Page) => page.getByRole("group", { name: "Decide on this report", exact: true });
+const group = (scope: Locator | Page, title: string) => scope.getByRole("group", { name: title, exact: true });
+const outcome = (page: Page) => page.locator(".lead-outcome");
+const history = (page: Page) => page.getByRole("region", { name: "History", exact: true });
+
+/** Open intent ``intent`` in Decide and return its confirmation (heading focused). */
+async function openIntent(page: Page, intent: string | RegExp, title: string): Promise<Locator> {
+  await decide(page).getByRole("button", { name: intent }).click();
+  const box = group(page, title);
+  await expect(box.getByRole("heading", { name: title })).toBeFocused();
+  return box;
+}
+
+const restartTitle = (task: number) => `Agree empty restart of Task ${task}`;
+
+/** Fill and send the restart confirmation (agreement + reason). */
+async function confirmRestart(box: Locator, reporter: string, reason: string) {
+  await box.getByRole("checkbox", { name: new RegExp(`^I agreed this restart with ${esc(reporter)}( \\(required\\))?$`) }).check();
+  await box.getByRole("textbox", { name: new RegExp(`^Reason \\(becomes the outcome ${esc(reporter)} sees\\)`) }).fill(reason);
+  await box.getByRole("button", { name: "Restart with empty round", exact: true }).click();
+}
+
+/** Documents table helpers (same accessible names as the Documents specs). */
+const table = (page: Page) => page.getByRole("table", { name: "Documents", exact: true });
+const disclosure = (page: Page, caseId: string, language: string) =>
+  page.getByRole("button", { name: `Show submissions, ${caseId} · ${language}`, exact: true });
+const languageRow = (page: Page, caseId: string, language: string): Locator =>
+  table(page).getByRole("row").filter({ has: disclosure(page, caseId, language) });
+const region = (page: Page, caseId: string, language: string) => page.getByRole("region", { name: `${caseId} · ${language}`, exact: true });
+
+async function expand(page: Page, caseId: string, language: string): Promise<Locator> {
+  const button = disclosure(page, caseId, language);
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+  await expect(button).toHaveAttribute("aria-expanded", "true");
+  const area = region(page, caseId, language);
+  await expect(area.getByRole("heading", { name: /^Submissions( \(\d+\))?$/, level: 3 })).toBeVisible();
+  await expect(area.getByText("Loading submissions…")).toHaveCount(0);
+  return area;
+}
+
+/** The final result's submission id of the reporter's row (A de), read by the lead. */
+async function finalSubmissionOf(page: Page, s: ProblemReportScenario): Promise<string | null> {
+  const response = await authenticatedRequest(page,
+    `/api/v1/projects/${encodeURIComponent(s.project)}/document-rows?${new URLSearchParams({ case: s.case_ids.a, language: "de" })}`);
+  expect(response.ok(), await response.text()).toBeTruthy();
+  const rows = ((await response.json()) as DocumentRowsPage).groups.flatMap(g => g.rows).filter(r => r.case_id === s.case_ids.a && r.language === "de");
+  expect(rows).toHaveLength(1);
+  return rows[0].final?.submission_id ?? null;
+}
+
+test("close while paused: Documents shows the orphaned pause, Resume task releases it, the report stays findable as Closed", async ({ page }) => {
+  const s = await problemReportScenario(page, "base");
+  const task = s.tasks.reporter;
+  const caseId = s.case_ids.a;
+  const report = await fileReport(s.users.reporter, task);
+  await loginExisting(page, s.users.lead);
+  await openLeadPage(page, s, report);
+
+  // Close while the reporter's task is paused: the pause stays.
+  await expect(fact(page, "Paused tasks")).toContainText(`Task ${task} · ${s.labels.reporter}`);
+  const close = await openIntent(page, "Close report (pauses stay)", "Close report");
+  await expect(close).toContainText(`Task ${task} stays paused. Release it separately with Release pause.`);
+  await close.getByRole("textbox", { name: new RegExp(`^Outcome for ${esc(s.labels.reporter)}`) }).fill("Source corrected; continue later.");
+  await close.getByRole("button", { name: "Close report", exact: true }).click();
+  await expect(outcome(page)).toContainText(`Report closed. Task ${task} is still paused by this report; release it when work can continue.`);
+  await expect(fact(page, "Report")).toContainText(`Closed by ${s.labels.lead}`);
+  await expect(page.locator(".lead-summary")).toHaveText("1 task is paused by this report. The report is closed; release the pause when work can continue.");
+
+  // Documents: the row needs a decision as "Problem report or paused task".
+  await openDocuments(page, s, "?decision=report-or-pause");
+  const row = languageRow(page, caseId, "de");
+  await expect(row).toBeVisible();
+  await expect(row.locator(".documents-issues")).toHaveAttribute("aria-label", /problem report or paused task 1/);
+  const area = await expand(page, caseId, "de");
+  const orphan = area.getByRole("listitem").filter({ hasText: `${s.labels.reporter}'s task is paused, but its report is resolved.` });
+  await expect(orphan).toBeVisible();
+  await orphan.getByRole("link", { name: "Resume task", exact: true }).click();
+
+  // The report page opens "Release pause" with the reporter's task preselected; nothing was sent yet.
+  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  const release = group(page, "Release pause");
+  await expect(release).toBeVisible();
+  await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task} · `) })).toBeChecked();
+  await expect(fact(page, "Paused tasks")).toContainText("Paused");
+  await release.getByRole("textbox", { name: /^Reason/ }).fill("Source corrected; continue the annotation.");
+  await release.getByRole("button", { name: "Release pause", exact: true }).click();
+  await expect(outcome(page)).toContainText(`Released the pause on Task ${task} (${s.labels.reporter}). The report is still closed.`);
+  await expect(page.locator(".lead-summary")).toHaveText("Nothing left to decide.");
+
+  // Back in Documents: the row is decided, has no problem issue, and the report is listed as Closed.
+  await page.getByRole("link", { name: "Back to Documents" }).first().click();
+  await expect(page).toHaveURL(/decision=report-or-pause/);
+  await expect(languageRow(page, caseId, "de").locator(".documents-row-badge")).toHaveText("Resolved");
+  await openDocuments(page, s);
+  const plain = languageRow(page, caseId, "de");
+  await expect(plain).toBeVisible();
+  const issues = plain.locator(".documents-issues");
+  if (await issues.count()) await expect(issues).not.toHaveAttribute("aria-label", /problem report/);
+  const expanded = await expand(page, caseId, "de");
+  await expect(expanded.getByText(/task is paused, but its report is resolved/)).toHaveCount(0);
+  await expect(expanded.getByRole("link", { name: "Resume task" })).toHaveCount(0);
+  const reports = expanded.locator("details.expanded-row-more").filter({ has: page.locator("summary", { hasText: /^Problem reports \(1\)$/ }) });
+  await reports.locator("summary").click();
+  const listed = reports.getByRole("listitem");
+  await expect(listed).toHaveCount(1);
+  await expect(listed).toContainText(REPORT_TEXT);
+  await expect(listed).toContainText("Report: Closed");
+  await expect(listed).toContainText("Paused tasks: 0");
+  await expect(listed.getByRole("link", { name: "Open report", exact: true })).toHaveAttribute("href", new RegExp(`/problem-reports/${esc(report.report_id)}`));
+});
+
+test("restart is refused while another report pauses the task, succeeds after that pause is released; the final result stays", async ({ page }) => {
+  const s = await problemReportScenario(page, "final");
+  const task = s.tasks.reporter;
+  const final = s.final!;
+  const report = await fileReport(s.users.reporter, task);
+  await loginExisting(page, s.users.lead);
+  expect(await finalSubmissionOf(page, s)).toBe(final.submission_id);
+  await openLeadPage(page, s, report);
+
+  const finalLine = fact(page, "Final result");
+  for (const part of final.label_parts) await expect(finalLine).toContainText(part);
+  await expect(finalLine).not.toContainText("None");
+  await expect(finalLine).toContainText("Actions on this page never change it.");
+
+  // Meanwhile the reporter files a second report: it pauses the same task.
+  const other = await fileReport(s.users.reporter, task, OTHER_REPORT_TEXT);
+
+  // This page still offers the restart; the server refuses it.
+  let restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
+  const finalStays = restart.getByRole("listitem").filter({ hasText: /^Final result stays: / });
+  for (const part of final.label_parts) await expect(finalStays).toContainText(part);
+  await expect(finalStays).not.toContainText("None");
+  await confirmRestart(restart, s.labels.reporter, "Agreed with the reporter: start over.");
+  await expect(restart).toContainText(`Task ${task} is also paused by another report. Nothing changed. Release that pause first.`);
+  await expect(outcome(page)).toHaveCount(0);
+  await expect(fact(page, "Report")).toHaveText("Open");
+  await expect(fact(page, "Paused tasks")).toContainText("Also paused by another report");
+  await expect(decide(page).getByRole("button", { name: "Agree empty restart…" })).toHaveAttribute("aria-disabled", "true");
+  await expect(decide(page)).toContainText(`Unavailable: Task ${task} is also paused by another report. Release that pause first.`);
+
+  // "Open report" leads to the other report; release its pause there.
+  await restart.getByRole("link", { name: "Open report", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page.locator(".report-text").first()).toHaveText(OTHER_REPORT_TEXT);
+  const release = await openIntent(page, "Release pause…", "Release pause");
+  await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task} · `) })).toBeChecked();
+  await expect(release).toContainText("Also paused by another report: stays paused");
+  await release.getByRole("textbox", { name: /^Reason/ }).fill("Second report can wait; the restart goes first.");
+  await release.getByRole("button", { name: "Release pause", exact: true }).click();
+  await expect(outcome(page)).toContainText(`Released the pause on Task ${task} (${s.labels.reporter}). The report is still open. Task ${task} is still paused by another report.`);
+  expect(other.report_id).not.toBe(report.report_id);
+
+  // Back on the first report: the restart now succeeds and the final result is unchanged.
+  await openLeadPage(page, s, report);
+  await expect(fact(page, "Paused tasks")).not.toContainText("Also paused by another report");
+  restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
+  for (const part of final.label_parts) await expect(restart.getByRole("listitem").filter({ hasText: /^Final result stays: / })).toContainText(part);
+  await confirmRestart(restart, s.labels.reporter, "Agreed with the reporter: start over.");
+  await expect(outcome(page)).toContainText(/^Task \d+ restarted with an empty Round \d+\. Round \d+ is kept in the history\. Report closed\. The final result did not change\./);
+  await expect(outcome(page)).toContainText(`Task ${task} restarted`);
+  await expect(fact(page, "Report")).toContainText(`Closed by ${s.labels.lead}`);
+  for (const part of final.label_parts) await expect(fact(page, "Final result")).toContainText(part);
+  await expect(fact(page, "Final result")).not.toContainText("None");
+  expect(await finalSubmissionOf(page, s)).toBe(final.submission_id);
+});
+
+test("restart, reopen, restart again: the second confirmation and the history name the actual rounds", async ({ page }) => {
+  const s = await problemReportScenario(page, "base");
+  const task = s.tasks.reporter;
+  const report = await fileReport(s.users.reporter, task);
+  const n = report.round_ordinal!;
+  expect(n).toBeGreaterThanOrEqual(1);
+  await loginExisting(page, s.users.lead);
+  await openLeadPage(page, s, report);
+  await expect(page.locator(".problem-report-identity")).toContainText(`Round ${n}`);
+
+  // First restart: the reported round is the current one.
+  let restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
+  await expect(restart).toContainText(`Round ${n} is abandoned and kept; Round ${n + 1} starts empty.`);
+  await confirmRestart(restart, s.labels.reporter, "First restart agreed.");
+  await expect(outcome(page)).toContainText(`Task ${task} restarted with an empty Round ${n + 1}. Round ${n} is kept in the history. Report closed. The final result did not change.`);
+
+  // Reopen: nothing is paused again.
+  const reopen = await openIntent(page, "Reopen report…", "Reopen report");
+  await reopen.getByRole("textbox", { name: /^Reason/ }).fill("The new round shows the same problem.");
+  await reopen.getByRole("button", { name: "Reopen report", exact: true }).click();
+  await expect(outcome(page)).toContainText("Report reopened. No task was paused again.");
+  await expect(fact(page, "Report")).toHaveText("Open");
+  await expect(fact(page, "Paused tasks")).toContainText("None paused now");
+
+  // Second restart: names the round the first restart created, not the reported one.
+  await expect(page.locator(".problem-report-identity")).toContainText(`Round ${n}`);
+  restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
+  await expect(restart).toContainText(`Round ${n + 1} is abandoned and kept; Round ${n + 2} starts empty.`);
+  await expect(restart).not.toContainText(`Round ${n} is abandoned`);
+  await confirmRestart(restart, s.labels.reporter, "Second restart agreed.");
+  await expect(outcome(page)).toContainText(`Task ${task} restarted with an empty Round ${n + 2}. Round ${n + 1} is kept in the history. Report closed. The final result did not change.`);
+
+  // History: both restarts with their actual abandoned rounds, and the reopen in between.
+  const items = history(page).locator(".report-timeline-sentence");
+  const restarts = items.filter({ hasText: `agreed an empty restart of Task ${task}.` });
+  await expect(restarts).toHaveCount(2);
+  await expect(restarts.nth(0)).toContainText(`Round ${n} abandoned and kept; Round ${n + 1} started empty. Report closed.`);
+  await expect(restarts.nth(1)).toContainText(`Round ${n + 1} abandoned and kept; Round ${n + 2} started empty. Report closed.`);
+  await expect(items.filter({ hasText: "reopened the report." })).toHaveCount(1);
+  await expect(history(page)).toContainText("First restart agreed.");
+  await expect(history(page)).toContainText("Second restart agreed.");
+});
+
+test("restart of a translation review keeps the old draft in the history; the reporter's editor starts fresh", async ({ page, browser }) => {
+  const s = await problemReportScenario(page, "translation");
+  const task = s.tasks.reporter;
+  const translation = s.translation!;
+  expect(translation.assignment_id).toBe(task);
+  const report = await fileReport(s.users.reporter, task);
+  await loginExisting(page, s.users.lead);
+  await openLeadPage(page, s, report);
+  await expect(page.locator(".problem-report-identity")).toContainText("Translation review");
+
+  const restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
+  await expect(restart).toContainText("The current translation draft is kept in the report history; the text and form start fresh.");
+  await confirmRestart(restart, s.labels.reporter, "Agreed: review the translation again from scratch.");
+  await expect(outcome(page)).toContainText(`Task ${task} restarted with`);
+  await expect(outcome(page)).toContainText("Report closed. The final result did not change.");
+
+  // The history keeps the archived draft text and form values behind a disclosure.
+  const draft = history(page).locator("details.report-draft");
+  await expect(draft).toHaveCount(1);
+  const summary = draft.locator("summary");
+  await expect(summary).toHaveText("Translation draft kept from before the restart");
+  await summary.click();
+  await expect(draft).toHaveAttribute("open", "");
+  await expect(draft.locator(":scope > p.report-text")).toHaveText(translation.draft_text);
+  const formFact = (term: string) => draft.locator(".report-facts > div").filter({ has: page.locator("dt", { hasText: new RegExp(`^${term}$`) }) }).locator("dd");
+  await expect(formFact("decision")).toHaveText(String(translation.form.decision));
+  await expect(formFact("rationale")).toHaveText(String(translation.form.rationale));
+  await expect(formFact("clinical change")).toHaveText(String(translation.form.clinical_change));
+
+  // The reporter's editor opens with a fresh draft: the document text, no decision, no rationale.
+  const reporter = await actor(browser, s.users.reporter);
+  try {
+    await reporter.page.goto(`/#/tasks/${task}`);
+    const target = reporter.page.getByRole("textbox", { name: "Translation (de)", exact: true });
+    await expect(target).toBeVisible();
+    const fresh = await target.inputValue();
+    expect(fresh.length).toBeGreaterThan(0);
+    expect(fresh).not.toBe(translation.draft_text);
+    expect(translation.draft_text.startsWith(fresh)).toBeTruthy();
+    await expect(reporter.page.getByText(/^Task paused: /)).toHaveCount(0);
+    await expect(reporter.page.getByRole("radio", { name: "Accepted with corrections", exact: true })).not.toBeChecked();
+    const rationale = reporter.page.getByRole("textbox", { name: "Rationale", exact: true });
+    if (await rationale.count()) await expect(rationale).toHaveValue("");
+  } finally {
+    await reporter.close();
+  }
+});
+
+test("the back link restores the full Documents query (decision, open, page)", async ({ page }) => {
+  const s = await problemReportScenario(page, "base");
+  const caseId = s.case_ids.a;
+  const report = await fileReport(s.users.reporter, s.tasks.reporter);
+  await loginExisting(page, s.users.lead);
+
+  // From Documents: decision filter and an expanded row, then the report and back.
+  const open = `${caseId}:de`;
+  await openDocuments(page, s, `?decision=report-or-pause&open=${encodeURIComponent(open)}`);
+  const area = await expand(page, caseId, "de");
+  const query = hashQueryOf(page.url());
+  expect(query).toEqual(["decision=report-or-pause", `open=${open}`]);
+  await area.getByRole("link", { name: "Open report", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/problem-reports/${esc(report.report_id)}\\?`));
+  const back = page.getByRole("link", { name: "Back to Documents" }).first();
+  await back.click();
+  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  expect(hashQueryOf(page.url())).toEqual(query);
+  await expect(disclosure(page, caseId, "de")).toHaveAttribute("aria-expanded", "true");
+
+  // A deep link carrying a page number keeps it too.
+  await page.goto(reportUrl(s, report.report_id,
+    `?${new URLSearchParams([["documents_decision", "report-or-pause"], ["documents_open", open], ["documents_page", "2"]])}`));
+  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  const deepBack = page.getByRole("link", { name: "Back to Documents" }).first();
+  await expect(deepBack).toHaveAttribute("href", /decision=report-or-pause/);
+  await expect(deepBack).toHaveAttribute("href", /page=2/);
+  await deepBack.click();
+  await expect(page).toHaveURL(/\/documents\?/);
+  expect(hashQueryOf(page.url())).toEqual(["decision=report-or-pause", `open=${open}`, "page=2"]);
+
+  // Without a Documents query the back link falls back to the report's text and language.
+  await page.goto(reportUrl(s, report.report_id));
+  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  await page.getByRole("link", { name: "Back to Documents" }).first().click();
+  await expect(page).toHaveURL(/\/documents\?/);
+  expect(hashQueryOf(page.url())).toEqual([`case=${caseId}`, "language=de"]);
+});
