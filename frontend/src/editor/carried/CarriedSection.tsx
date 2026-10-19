@@ -95,10 +95,12 @@ export function DismissControl({ label, blocked, onDismiss, onBusyChange, dataDi
 
   const setBusyBoth = (value: boolean) => { setBusy(value); onBusyChange?.(value); };
   const close = () => { returnFocus.current = true; setOpen(false); setReason(""); setMissing(false); };
+  const empty = !reason.trim();
+  const showMissing = () => { setMissing(true); field.current?.focus(); };
   const confirm = () => {
     if (busy) return;
     const text = reason.trim();
-    if (!text) { setMissing(true); field.current?.focus(); return; }
+    if (!text) { showMissing(); return; }
     setBusyBoth(true);
     onDismiss(text).then(
       () => { setBusyBoth(false); setOpen(false); setReason(""); setMissing(false); },
@@ -128,6 +130,9 @@ export function DismissControl({ label, blocked, onDismiss, onBusyChange, dataDi
             busy={busy}
             onConfirm={confirm}
             onCancel={close}
+            // Empty reason: the button stays focusable but unavailable; activation names the missing reason.
+            confirmUnavailable={empty ? { reasonId: missing ? `${fieldId}-error` : undefined } : null}
+            onConfirmUnavailable={showMissing}
           >
             <Textarea
               ref={field}

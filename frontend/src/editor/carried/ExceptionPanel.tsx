@@ -32,6 +32,8 @@ export interface ExceptionPanelProps {
   onUndoDismissal?: () => Promise<void>;
   onShowOriginal: () => void;
   error?: CarriedError | null;
+  /** "Retry" of a network error: retries the queued write. */
+  onRetry?: () => void;
 }
 
 /** Inline chooser below "Link to an existing finding…": a radio group, never a select. */
@@ -133,7 +135,7 @@ function LinkChooser({ candidates, blocked, onLink, onBusyChange }: {
 /** Inspector section of a carried input without a carried finding (spec section 3; Resolved 3). */
 export function ExceptionPanel({
   state, origin, recordedAt, reason, original, candidates, readOnly, onMarkInText, onLink, onDismiss,
-  onUndoDismissal, onShowOriginal, error = null,
+  onUndoDismissal, onShowOriginal, error = null, onRetry,
 }: ExceptionPanelProps): JSX.Element {
   const [busy, setBusy] = useState<null | "link" | "dismiss" | "undo">(null);
   const blocked = busy !== null || blocksCheckActions(error);
@@ -178,7 +180,7 @@ export function ExceptionPanel({
         <Button variant="quiet" size="sm" onClick={onShowOriginal}>Show original evidence</Button>
       </div>
       {readOnly === "paused" && <p className="carried-hint">{PAUSED_SENTENCE}</p>}
-      {error && <CarriedErrorNotice error={error} />}
+      {error && <CarriedErrorNotice error={error} onRetry={onRetry} />}
       {!readOnly && dismissed && (
         <div className="carried-actions">
           {onUndoDismissal && (

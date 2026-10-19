@@ -54,6 +54,8 @@ export interface AnnotationPanelProps {
   onAttachMention: (segments: CodepointSegment[]) => void;
   onDetachMention: (evidenceId: string) => void;
   onDeleteAnnotation: (annotationId: string) => void;
+  /** Text of the delete confirmation; defaults to "Delete this annotation and all its mentions?". */
+  deleteConfirmMessage?: string;
   onSetIntent: (intent: "new_mention" | "extend_mention") => void;
   /** Document text, used to quote mention snippets. */
   documentText?: string;
@@ -94,6 +96,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   onConfirmAxis,
   onDetachMention,
   onDeleteAnnotation,
+  deleteConfirmMessage = "Delete this annotation and all its mentions?",
   onSetIntent,
   documentText = "",
   isAttachingMention = false,
@@ -400,7 +403,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
       <div className="detail-section" style={{ marginTop: "auto" }}>
         {confirmDelete ? (
           <div role="group" aria-label="Confirm deletion" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: "0.85rem" }}>Delete this annotation and all its mentions?</span>
+            <span style={{ fontSize: "0.85rem" }}>{deleteConfirmMessage}</span>
             <div style={{ display: "flex", gap: 6 }}>
               <Button
                 type="button"
