@@ -81,9 +81,7 @@ class ReviewService:
 
         available = {
             (a.annotation.annotation_id, a.version): a
-            for a in self.repo.list_annotations_for_document(
-                key.project_key, key.document_id
-            )
+            for a in self.repo.workspace_input_snapshots(key)
         }
         target_snap = available.get((cmd.target.annotation_id, cmd.target.version))
         task_profile = self.repo.get_task_profile(key.project_key)

@@ -143,7 +143,12 @@ from ontocurator.exchange.final_export_guide import (
 
 def _doc(doc_id, language, variant=None):
     return {
-        "document": {"document_id": doc_id, "text": "x", "language": language, "text_sha256": "h"},
+        "document": {
+            "document_id": doc_id,
+            "text": "x",
+            "language": language,
+            "text_sha256": "h",
+        },
         "source_text_sha256": "s",
         "variant": variant,
     }
@@ -151,9 +156,17 @@ def _doc(doc_id, language, variant=None):
 
 def _variant(doc_id, case_id, language, version, origin):
     return {
-        "document_id": doc_id, "case_id": case_id, "external_id": case_id, "language": language,
-        "version": version, "origin": origin, "derived_from": None, "translation": None,
-        "translation_status": None, "status_reason": None, "text_sha256": "h",
+        "document_id": doc_id,
+        "case_id": case_id,
+        "external_id": case_id,
+        "language": language,
+        "version": version,
+        "origin": origin,
+        "derived_from": None,
+        "translation": None,
+        "translation_status": None,
+        "status_reason": None,
+        "text_sha256": "h",
     }
 
 
@@ -171,19 +184,49 @@ def payload(**extra):
         "project_name": "T5 acceptance",
         "state": {
             "selections": [
-                {"case_id": "case-µ", "language": "de", "document_id": "de/v1", "submission_id": "final", "revision": 1},
+                {
+                    "case_id": "case-µ",
+                    "language": "de",
+                    "document_id": "de/v1",
+                    "submission_id": "final",
+                    "revision": 1,
+                },
             ],
             "warnings": [
-                {"id": "w2", "code": "SELECTED_ROUND_SUPERSEDED", "case_id": "case-µ", "language": "de", "reason": "The selected result belongs to an earlier work round. Review the selection."},
-                {"id": "w1", "code": "OPEN_PROBLEM_REPORT", "case_id": "case-µ", "language": "de", "reason": "An open problem report needs a lead decision."},
-                {"id": "w3", "code": "MISSING_FINAL_SELECTION", "case_id": "case, two", "language": "en", "reason": "No final result selected."},
+                {
+                    "id": "w2",
+                    "code": "SELECTED_ROUND_SUPERSEDED",
+                    "case_id": "case-µ",
+                    "language": "de",
+                    "reason": "The selected result belongs to an earlier work round. Review the selection.",
+                },
+                {
+                    "id": "w1",
+                    "code": "OPEN_PROBLEM_REPORT",
+                    "case_id": "case-µ",
+                    "language": "de",
+                    "reason": "An open problem report needs a lead decision.",
+                },
+                {
+                    "id": "w3",
+                    "code": "MISSING_FINAL_SELECTION",
+                    "case_id": "case, two",
+                    "language": "en",
+                    "reason": "No final result selected.",
+                },
             ],
             "omissions": [{"case_id": "case, two", "language": "en"}],
         },
         "content": {
             "documents": {
-                "en/v1": _doc("en/v1", "en", _variant("en/v1", "case-µ", "en", 1, "native")),
-                "de/v1": _doc("de/v1", "de", _variant("de/v1", "case-µ", "de", 1, "machine_translation")),
+                "en/v1": _doc(
+                    "en/v1", "en", _variant("en/v1", "case-µ", "en", 1, "native")
+                ),
+                "de/v1": _doc(
+                    "de/v1",
+                    "de",
+                    _variant("de/v1", "case-µ", "de", 1, "machine_translation"),
+                ),
             },
             "submissions": [
                 _sub("earlier", "de/v1", author="reader-0002"),
@@ -192,7 +235,10 @@ def payload(**extra):
         },
         "round_kinds": {"final": "consolidation", "earlier": "ordinary"},
         "selected_submission_ids": ["final"],
-        "submission_recorded_at": {"final": "2026-10-19T08:40:00.000000Z", "earlier": "2026-10-18T22:57:00.000000Z"},
+        "submission_recorded_at": {
+            "final": "2026-10-19T08:40:00.000000Z",
+            "earlier": "2026-10-18T22:57:00.000000Z",
+        },
         **extra,
     }
 
@@ -214,15 +260,29 @@ def test_index_has_one_row_per_selection_omission_and_provenance_in_order():
         ("case-µ", "de", "provenance"),
     ]
     omitted, selected, provenance = table
-    assert omitted["document_id"] == omitted["submission_id"] == omitted["bundle_entry"] == ""
+    assert (
+        omitted["document_id"]
+        == omitted["submission_id"]
+        == omitted["bundle_entry"]
+        == ""
+    )
     assert omitted["warning_codes"] == "MISSING_FINAL_SELECTION"
     assert selected == {
-        "row_type": "selected", "case_id": "case-µ", "language": "de", "document_id": "de/v1",
-        "text_version": "1", "text_origin": "machine_translation", "submission_id": "final",
-        "submission_kind": "consolidation", "author": "reader-0001",
-        "submitted_at": "2026-10-19T08:40:00.000000Z", "findings": "3",
-        "archive_file": "selected.t1.zip", "bundle_entry": "documents/00000.json",
-        "annotation_set_id": "submission-final", "source_text_line": "2",
+        "row_type": "selected",
+        "case_id": "case-µ",
+        "language": "de",
+        "document_id": "de/v1",
+        "text_version": "1",
+        "text_origin": "machine_translation",
+        "submission_id": "final",
+        "submission_kind": "consolidation",
+        "author": "reader-0001",
+        "submitted_at": "2026-10-19T08:40:00.000000Z",
+        "findings": "3",
+        "archive_file": "selected.t1.zip",
+        "bundle_entry": "documents/00000.json",
+        "annotation_set_id": "submission-final",
+        "source_text_line": "2",
         "warning_codes": "OPEN_PROBLEM_REPORT;SELECTED_ROUND_SUPERSEDED",
     }
     assert provenance["archive_file"] == "provenance.t1.zip"
@@ -236,25 +296,38 @@ def test_submission_kind_falls_back_to_mode():
     data["content"]["submissions"][0]["origin_key"]["mode"] = "review"
     data["round_kinds"] = {"earlier": "carry_forward"}
     table = rows(build_index_csv(data, ["final"], ["earlier"]))
-    assert {r["submission_id"]: r["submission_kind"] for r in table if r["submission_id"]} == {
-        "final": "annotation", "earlier": "carry_forward",
+    assert {
+        r["submission_id"]: r["submission_kind"] for r in table if r["submission_id"]
+    } == {
+        "final": "annotation",
+        "earlier": "carry_forward",
     }
     data["round_kinds"] = {}
     table = rows(build_index_csv(data, ["final"], ["earlier"]))
-    assert {r["submission_id"]: r["submission_kind"] for r in table if r["submission_id"]}["earlier"] == "review"
+    assert {
+        r["submission_id"]: r["submission_kind"] for r in table if r["submission_id"]
+    }["earlier"] == "review"
 
 
 def test_old_snapshots_without_recorded_time_leave_submitted_at_empty():
     data = payload()
     del data["submission_recorded_at"]
-    assert {r["submitted_at"] for r in rows(build_index_csv(data, ["final"], ["earlier"]))} == {""}
+    assert {
+        r["submitted_at"] for r in rows(build_index_csv(data, ["final"], ["earlier"]))
+    } == {""}
 
 
 AT = datetime(2026, 10, 19, 8, 42, 17, tzinfo=UTC)
 
 
 def test_readme_lists_everything_in_plain_text():
-    text = build_readme(payload(), snapshot_id="snap-1", snapshot_sha256="ab" * 32, snapshot_created_at=AT, provenance_ids=["earlier"]).decode("utf-8")
+    text = build_readme(
+        payload(),
+        snapshot_id="snap-1",
+        snapshot_sha256="ab" * 32,
+        snapshot_created_at=AT,
+        provenance_ids=["earlier"],
+    ).decode("utf-8")
     assert "\r" not in text and not text.startswith("\ufeff")
     assert text.startswith("Ontocurator final export\n========================\n")
     for line in [
@@ -280,15 +353,28 @@ def test_readme_says_none_and_hides_provenance_when_empty():
     data = payload()
     data["state"]["warnings"] = []
     data["state"]["omissions"] = []
-    text = build_readme(data, snapshot_id="s", snapshot_sha256="0" * 64, snapshot_created_at=AT, provenance_ids=[]).decode()
-    assert "Warnings acknowledged at export\n-------------------------------\nNone.\n" in text
+    text = build_readme(
+        data,
+        snapshot_id="s",
+        snapshot_sha256="0" * 64,
+        snapshot_created_at=AT,
+        provenance_ids=[],
+    ).decode()
+    assert (
+        "Warnings acknowledged at export\n-------------------------------\nNone.\n"
+        in text
+    )
     assert "Omitted\n-------\nNone.\n" in text
     assert "provenance.t1.zip" not in text
 
 
 def test_guide_files_are_deterministic_and_follow_content_order():
-    first = guide_files(payload(), snapshot_id="s", snapshot_sha256="0" * 64, snapshot_created_at=AT)
-    second = guide_files(payload(), snapshot_id="s", snapshot_sha256="0" * 64, snapshot_created_at=AT)
+    first = guide_files(
+        payload(), snapshot_id="s", snapshot_sha256="0" * 64, snapshot_created_at=AT
+    )
+    second = guide_files(
+        payload(), snapshot_id="s", snapshot_sha256="0" * 64, snapshot_created_at=AT
+    )
     assert first == second
     assert set(first) == {"README.txt", "index.csv"}
     selected = [r for r in rows(first["index.csv"]) if r["row_type"] == "selected"]
@@ -298,7 +384,13 @@ def test_guide_files_are_deterministic_and_follow_content_order():
 def test_project_name_falls_back_to_key():
     data = payload()
     del data["project_name"]
-    text = build_readme(data, snapshot_id="s", snapshot_sha256="0" * 64, snapshot_created_at=AT, provenance_ids=[]).decode()
+    text = build_readme(
+        data,
+        snapshot_id="s",
+        snapshot_sha256="0" * 64,
+        snapshot_created_at=AT,
+        provenance_ids=[],
+    ).decode()
     assert "Project:          t5\n" in text
 ```
 
@@ -351,7 +443,9 @@ def bundle_entry(index: int) -> str:
     return f"documents/{index:05d}.json"
 
 
-def submission_kind(submission: Mapping[str, Any], round_kinds: Mapping[str, str]) -> str:
+def submission_kind(
+    submission: Mapping[str, Any], round_kinds: Mapping[str, str]
+) -> str:
     kind = round_kinds.get(submission["submission_id"])
     if kind in {"consolidation", "carry_forward"}:
         return kind
@@ -361,7 +455,9 @@ def submission_kind(submission: Mapping[str, Any], round_kinds: Mapping[str, str
 def _warning_codes(payload: Mapping[str, Any]) -> dict[tuple[str, str], list[str]]:
     codes: dict[tuple[str, str], set[str]] = {}
     for warning in payload["state"]["warnings"]:
-        codes.setdefault((warning["case_id"], warning["language"]), set()).add(warning["code"])
+        codes.setdefault((warning["case_id"], warning["language"]), set()).add(
+            warning["code"]
+        )
     return {key: sorted(values) for key, values in codes.items()}
 
 
@@ -383,7 +479,13 @@ def build_index_csv(
         return ";".join(codes.get((case_id, language), []))
 
     def submission_row(
-        row_type: str, case_id: str, language: str, document_id: str, sid: str, archive: str, index: int
+        row_type: str,
+        case_id: str,
+        language: str,
+        document_id: str,
+        sid: str,
+        archive: str,
+        index: int,
     ) -> dict[str, str]:
         sub = submissions[sid]
         variant = documents[document_id]["variant"] or {}
@@ -412,8 +514,13 @@ def build_index_csv(
         sid = selection["submission_id"]
         table.append(
             submission_row(
-                "selected", selection["case_id"], selection["language"],
-                selection["document_id"], sid, "selected.t1.zip", selected_index[sid],
+                "selected",
+                selection["case_id"],
+                selection["language"],
+                selection["document_id"],
+                sid,
+                "selected.t1.zip",
+                selected_index[sid],
             )
         )
     for omission in payload["state"]["omissions"]:
@@ -432,9 +539,24 @@ def build_index_csv(
         case_id = variant["case_id"] if variant else document_id
         language = variant["language"] if variant else entry["document"]["language"]
         table.append(
-            submission_row("provenance", case_id, language, document_id, sid, "provenance.t1.zip", index)
+            submission_row(
+                "provenance",
+                case_id,
+                language,
+                document_id,
+                sid,
+                "provenance.t1.zip",
+                index,
+            )
         )
-    table.sort(key=lambda r: (r["case_id"], r["language"], _ROW_ORDER[r["row_type"]], r["submission_id"]))
+    table.sort(
+        key=lambda r: (
+            r["case_id"],
+            r["language"],
+            _ROW_ORDER[r["row_type"]],
+            r["submission_id"],
+        )
+    )
     out = io.StringIO(newline="")
     writer = csv.DictWriter(out, fieldnames=INDEX_COLUMNS)
     writer.writeheader()
@@ -447,11 +569,15 @@ def _heading(title: str, rule: str = "-") -> list[str]:
 
 
 def _wrap(text: str, first: str = "", rest: str = "") -> list[str]:
-    return textwrap.wrap(text, width=_WIDTH, initial_indent=first, subsequent_indent=rest)
+    return textwrap.wrap(
+        text, width=_WIDTH, initial_indent=first, subsequent_indent=rest
+    )
 
 
 def _utc(value: datetime) -> str:
-    moment = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    moment = (
+        value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    )
     return moment.strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
@@ -498,32 +624,41 @@ def build_readme(
         "                    this README and index.csv.",
         "",
         *_heading("How to read it"),
-        *_wrap('Start with index.csv. Rows with row_type "selected" are the final results.', "- ", "  "),
+        *_wrap(
+            'Start with index.csv. Rows with row_type "selected" are the final results.',
+            "- ",
+            "  ",
+        ),
         *_wrap(
             "A T1 bundle is a ZIP with manifest.json and documents/NNNNN.json, one file "
             'per submission. index.csv names the file in "bundle_entry".',
-            "- ", "  ",
+            "- ",
+            "  ",
         ),
         *_wrap(
             "Text positions are Unicode code points into the text of the matching line "
             'of source-texts.jsonl (column "source_text_line").',
-            "- ", "  ",
+            "- ",
+            "  ",
         ),
         *_wrap("Author labels are pseudonyms.", "- ", "  "),
         *_wrap(
-            'submitted_at is the time the server recorded the submission, in UTC. '
+            "submitted_at is the time the server recorded the submission, in UTC. "
             "It is empty for exports prepared before this column existed.",
-            "- ", "  ",
+            "- ",
+            "  ",
         ),
         *_wrap(
             '"provenance" rows are earlier submissions referenced by carried or merged '
             "findings, not final results.",
-            "- ", "  ",
+            "- ",
+            "  ",
         ),
         *_wrap(
             "Names inside the bundles (bundle_id, set ids, field names) follow the "
             "ontospan format and are kept unchanged on purpose.",
-            "- ", "  ",
+            "- ",
+            "  ",
         ),
         "",
         *_heading("Omitted"),
@@ -612,7 +747,11 @@ def _export(env):
     seed_submission(env, "alice", "original")
     selected = env.lead.put(
         f"{BASE}/final-selections",
-        json={"document_id": SOURCE, "submission_id": "original", "expected_revision": 0},
+        json={
+            "document_id": SOURCE,
+            "submission_id": "original",
+            "expected_revision": 0,
+        },
     )
     assert selected.status_code == 200, selected.text
     state = env.lead.post(f"{BASE}/exports/final/preflight").json()
@@ -622,14 +761,17 @@ def _export(env):
             "request_id": "guide-1",
             "state_digest": state["state_digest"],
             "acknowledged_warnings": [
-                {"id": w["id"], "cause_revision": w["cause_revision"]} for w in state["warnings"]
+                {"id": w["id"], "cause_revision": w["cause_revision"]}
+                for w in state["warnings"]
             ],
             "accepted_omissions": state["omissions"],
         },
     )
     assert queued.status_code == 200, queued.text
     job_id = queued.json()["job_id"]
-    result = env.app.state.jobs.run(env.app.state.jobs.claim(job_id, "guide-test"), "guide-test")
+    result = env.app.state.jobs.run(
+        env.app.state.jobs.claim(job_id, "guide-test"), "guide-test"
+    )
     assert result.status == "succeeded", result.error
     downloaded = env.lead.get(f"/api/v1/jobs/{job_id}/download")
     assert downloaded.status_code == 200, downloaded.text
@@ -639,15 +781,27 @@ def _export(env):
 def test_archive_contains_hashed_readme_and_index(case_env):
     state, archive = _export(case_env)
     names = set(archive.namelist())
-    assert {"selected.t1.zip", "source-texts.jsonl", "receipt.json", "README.txt", "index.csv"} <= names
+    assert {
+        "selected.t1.zip",
+        "source-texts.jsonl",
+        "receipt.json",
+        "README.txt",
+        "index.csv",
+    } <= names
     receipt = json.loads(archive.read("receipt.json"))
     assert receipt["format"] == "ontocurator-final-export/v1"
     assert set(receipt["files"]) == names - {"receipt.json"}
     for name, digest in receipt["files"].items():
         assert hashlib.sha256(archive.read(name)).hexdigest() == digest, name
-    table = list(csv.DictReader(io.StringIO(archive.read("index.csv").decode("utf-8-sig"), newline="")))
+    table = list(
+        csv.DictReader(
+            io.StringIO(archive.read("index.csv").decode("utf-8-sig"), newline="")
+        )
+    )
     assert len(table) == (
-        len(state["selections"]) + len(state["omissions"]) + len(receipt["provenance_only_submission_ids"])
+        len(state["selections"])
+        + len(state["omissions"])
+        + len(receipt["provenance_only_submission_ids"])
     )
     selected_rows = [row for row in table if row["row_type"] == "selected"]
     assert [row["submission_id"] for row in selected_rows] == ["original"]
@@ -655,7 +809,9 @@ def test_archive_contains_hashed_readme_and_index(case_env):
     with zipfile.ZipFile(io.BytesIO(archive.read("selected.t1.zip"))) as bundle:
         for row in selected_rows:
             unit = json.loads(bundle.read(row["bundle_entry"]))
-            assert unit["annotation_set"]["annotation_set_id"] == row["annotation_set_id"]
+            assert (
+                unit["annotation_set"]["annotation_set_id"] == row["annotation_set_id"]
+            )
     readme = archive.read("README.txt").decode("utf-8")
     assert readme.startswith("Ontocurator final export\n")
     assert f"Snapshot ID:      {receipt['snapshot_id']}" in readme
@@ -665,11 +821,15 @@ def test_guide_files_are_a_pure_function_of_the_stored_snapshot(case_env):
     _state, archive = _export(case_env)
     receipt = json.loads(archive.read("receipt.json"))
     with case_env.db.transaction() as conn:
-        row = conn.execute(
-            select(ExportSelectionSnapshotRow).where(
-                ExportSelectionSnapshotRow.snapshot_id == receipt["snapshot_id"]
+        row = (
+            conn.execute(
+                select(ExportSelectionSnapshotRow).where(
+                    ExportSelectionSnapshotRow.snapshot_id == receipt["snapshot_id"]
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
     assert "project_name" in row["payload"]
     assert set(row["payload"]["submission_recorded_at"]) == {"original"}
     again = guide_files(

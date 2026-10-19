@@ -12,7 +12,7 @@ const seizure = (page: Page) => page.locator(".candidate-card").filter({ hasText
 
 // Use a package not captured by earlier specs. Add the translation before its
 // first case opens; captured packages retain their own search resources.
-test("translations: add a file, search in German, switch the language off, selection survives a reload", async ({ page }) => {
+test("translations: German search overrides reset on reload while saved personal defaults persist", async ({ page }) => {
   // The administrator adds the file on the server (D5); the page shows it after a reload.
   const added = await page.request.post("/__test_translation__?name=hp-de.babelon.tsv");
   expect(added.ok()).toBeTruthy();
@@ -21,6 +21,9 @@ test("translations: add a file, search in German, switch the language off, selec
 
   await openCase(page);
   await startSearch(page, "Krampfanfall");
+  await page.getByRole("button", { name: "Search languages: EN", exact: true }).click();
+  await page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" }).check();
+  await page.keyboard.press("Escape");
   await expect(page.locator(".candidate-card").first()).toContainText("Seizure");
   await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
 
@@ -41,7 +44,12 @@ test("translations: add a file, search in German, switch the language off, selec
   await page.keyboard.press("Escape");
   await expect(list).toHaveCount(0);
 
-  // A fresh page: the selection comes back from the workspace preferences.
+  // An editor switch is temporary: re-enable German before testing its reset.
+  await page.getByRole("button", { name: "Search languages: EN", exact: true }).click();
+  await page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" }).check();
+  await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
+  await page.keyboard.press("Escape");
+  // A fresh page restores English plus the English document's language.
   await page.goto("about:blank");
   await page.goto(`${LAUNCH_URL}#/?project=translation-fixture`);
   await expect(page.locator("#project-select")).toHaveValue("translation-fixture");
@@ -54,4 +62,17 @@ test("translations: add a file, search in German, switch the language off, selec
   await page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" }).check();
   await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
   await expect(page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" })).toBeChecked();
+  await page.keyboard.press("Escape");
+
+  // Explicit personal defaults persist across reloads and exact task openings.
+  await page.goto(`${LAUNCH_URL}#/me`);
+  const preferences = page.getByRole("form", { name: "Search preferences", exact: true });
+  await preferences.getByLabel("Preferred search languages", { exact: true }).fill("de");
+  await preferences.getByLabel("Preferred search languages", { exact: true }).press("Enter");
+  await preferences.getByRole("button", { name: "Save search preferences", exact: true }).click();
+  await expect(preferences).toContainText("Search preferences saved.");
+  await page.goto("about:blank"); await page.goto(`${LAUNCH_URL}#/?project=translation-fixture`);
+  await openCase(page); await startSearch(page, "Krampfanfall");
+  await expect(page.getByRole("button", { name: "Search languages: EN, DE", exact: true })).toBeVisible();
+  await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
 });

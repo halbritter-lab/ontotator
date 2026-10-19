@@ -33,6 +33,23 @@ def set_rules(repo, project, **values):
         )
 
 
+def submit_acknowledging_optional_axes(repo, key, envelope):
+    """Spanless scenarios intentionally retain unspecified optional clinical axes."""
+    service = SubmissionService(repo)
+    with pytest.raises(DomainError) as warning:
+        service.submit(key, envelope)
+    assert warning.value.code == "AXIS_CONFIRMATION_WARNING"
+    acknowledged = envelope.model_copy(
+        update={
+            "payload": {
+                **envelope.payload,
+                "warning_acknowledgement": warning.value.details["acknowledgement"],
+            }
+        }
+    )
+    return service.submit(key, acknowledged)
+
+
 def test_submission_is_refused_with_annotation_ids_and_draft_stays_editable(app_client):
     client, _ = app_client
     uploaded = upload_package(
@@ -445,7 +462,8 @@ def test_legacy_draft_keeps_edit_marker_but_submits_under_current_spanless_polic
     assert repo.get_submissions_for_workspace(key) == []
 
     set_rules(repo, "pkg-1", allow_spanless_findings=True, require_spanless_note=False)
-    submitted = SubmissionService(repo).submit(
+    submitted = submit_acknowledging_optional_axes(
+        repo,
         key,
         MutationEnvelope(
             mutation_id="legacy-submit-optional",
@@ -647,7 +665,8 @@ def test_new_draft_restores_historical_snapshot_without_rewriting_then_requires_
         repo.get_submissions_for_workspace(key)[0].snapshots[0].version
         == historical.version
     )
-    SubmissionService(repo).submit(
+    submit_acknowledging_optional_axes(
+        repo,
         key,
         MutationEnvelope(
             mutation_id="valid-submit",
@@ -825,7 +844,8 @@ def test_optional_spanless_reason_create_edit_clear_detach_and_submit(
             "note": "Preserved optional reason",
         },
     )
-    submitted = SubmissionService(repo).submit(
+    submitted = submit_acknowledging_optional_axes(
+        repo,
         view.key,
         MutationEnvelope(
             mutation_id="submit",

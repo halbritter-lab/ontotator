@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -27,6 +27,15 @@ from ontocurator.ontology.service import OntologyService
 from ontocurator.storage.repository import Repository
 
 
+class AxisWarningAcknowledgement(BaseModel):
+    """Conscious acceptance of one exact draft and project policy warning state."""
+
+    model_config = ConfigDict(extra="forbid")
+    draft_revision: int
+    policy_revision: int
+    warning_digest: str
+
+
 class SubmitCommand(BaseModel):
     """Command requesting completion and submission of a workspace."""
 
@@ -35,6 +44,7 @@ class SubmitCommand(BaseModel):
     command: str = "submit_workspace"
     document_checked: bool = False
     checked_layer_ids: list[str] | None = None
+    warning_acknowledgement: AxisWarningAcknowledgement | None = None
 
 
 def validate_annotation_completion(
@@ -282,9 +292,7 @@ class SubmissionService:
         if key.mode == "review":
             members = {
                 (a.annotation.annotation_id, a.version): a
-                for a in self.repo.list_annotations_for_document(
-                    key.project_key, key.document_id
-                )
+                for a in self.repo.workspace_input_snapshots(key)
             }
             current = {
                 (a.annotation.annotation_id, a.version): a for a in draft.annotations
@@ -363,11 +371,12 @@ class SubmissionService:
                     )
                     if evidence is not None:
                         evidence_by_id[identity] = evidence
+        rules = self.repo.get_project_rules(key.project_key)
         violations = rule_violations(
             deduped_snaps,
             evidence_by_id,
             task_profile,
-            self.repo.get_project_rules(key.project_key),
+            rules,
             at_submission=True,
             enforce_spanless=True,
         )
@@ -377,6 +386,50 @@ class SubmissionService:
                 {"violations": [asdict(violation) for violation in violations]},
             )
 
+        if not rules.require_chosen_axes:
+            warnings = [
+                asdict(violation)
+                for violation in rule_violations(
+                    deduped_snaps,
+                    evidence_by_id,
+                    task_profile,
+                    replace(rules, require_chosen_axes=True),
+                    at_submission=True,
+                )
+                if violation.rule == "axis_not_chosen"
+            ]
+            if warnings:
+                acknowledgement = AxisWarningAcknowledgement(
+                    draft_revision=draft.revision,
+                    policy_revision=rules.annotation_policy_revision,
+                    warning_digest=canonical_hash(
+                        {
+                            "workspace": key.model_dump(),
+                            "snapshots": sorted(s.version for s in deduped_snaps),
+                            "warnings": warnings,
+                        }
+                    ),
+                )
+                if cmd.warning_acknowledgement != acknowledgement:
+                    raise DomainError(
+                        "AXIS_CONFIRMATION_WARNING",
+                        {
+                            "warnings": warnings,
+                            "acknowledgement": acknowledgement.model_dump(),
+                        },
+                    )
+
+        round_view = (
+            self.repo.get_work_round(key.project_key, key.round_id)
+            if key.round_id is not None
+            else None
+        )
+        if round_view is not None and round_view.kind == "carry_forward":
+            from ontocurator.application.work_rounds import (
+                validate_round_input_resolutions,
+            )
+
+            validate_round_input_resolutions(self.repo, draft)
         canonical_content = {
             "key": key.model_dump(),
             "scope": submission_scope.model_dump(),
@@ -393,10 +446,23 @@ class SubmissionService:
                 resolution.model_dump(mode="json")
                 for resolution in draft.reanchor_resolutions
             ]
+        if round_view is not None:
+            canonical_content["input_manifest_sha256"] = (
+                round_view.input_manifest_sha256
+            )
+            canonical_content["round_input_resolutions"] = [
+                r.model_dump(mode="json") for r in draft.round_input_resolutions
+            ]
         sub_id = f"sub-{canonical_hash(canonical_content)[:16]}"
 
         return Submission(
-            format_version="ontocurator-submission/v2",
+            format_version="ontocurator-submission/v3"
+            if round_view
+            else "ontocurator-submission/v2",
+            input_manifest_sha256=round_view.input_manifest_sha256
+            if round_view
+            else None,
+            round_input_resolutions=list(draft.round_input_resolutions),
             submission_id=sub_id,
             origin_key=origin_key,
             scope=submission_scope,

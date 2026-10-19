@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from sqlalchemy import (
     Connection,
@@ -46,6 +46,7 @@ from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.variants import VariantInfo
+from ontocurator.domain.work_rounds import WorkRoundView, derive_source_obligations
 from ontocurator.domain.workspace import (
     Draft,
     MutationEnvelope,
@@ -110,9 +111,39 @@ def _key_str(key: WorkspaceKey) -> str:
         key.scope_id,
         key.target_set_id,
     ]
+    if key.round_id is not None:
+        return "wk3|" + "|".join(
+            quote(part, safe="") for part in [*parts, key.round_id]
+        )
     if not any(":" in part for part in parts):
         return ":".join(parts)
     return _ESCAPED_KEY_PREFIX + "|".join(quote(part, safe="") for part in parts)
+
+
+def _decode_key_str(value: str) -> WorkspaceKey:
+    """Decode the storage identity; never reconstruct a v3 key from legacy columns."""
+    fields = (
+        "project_key",
+        "document_id",
+        "annotator_id",
+        "mode",
+        "scope_id",
+        "target_set_id",
+    )
+    if value.startswith("wk3|") and len(value.split("|")) == 8:
+        parts = [unquote(part) for part in value.split("|")[1:]]
+        return WorkspaceKey.model_validate(
+            dict(zip(fields, parts[:6], strict=True))
+            | {"format_version": "ontocurator-workspace-key/v3", "round_id": parts[6]}
+        )
+    parts = (
+        [unquote(part) for part in value.split("|")[1:]]
+        if value.startswith(_ESCAPED_KEY_PREFIX)
+        else value.split(":")
+    )
+    if len(parts) != 6:
+        raise DomainError("INVALID_WORKSPACE_KEY")
+    return WorkspaceKey.model_validate(dict(zip(fields, parts, strict=True)))
 
 
 def _same_tree_walk(stored: SearchEventRecord, incoming: SearchEventRecord) -> bool:
@@ -145,7 +176,7 @@ def _local_import_key(
             "project_key": project_key,
             "scope_id": build_scope(profile, origin.mode).scope_id,
             "target_set_id": "targets-0"
-            if origin.mode == "independent"
+            if origin.mode == "independent" and origin.round_id is None
             else origin.target_set_id,
         }
     )
@@ -154,6 +185,8 @@ def _local_import_key(
 def _workspace_aliases(key: WorkspaceKey) -> tuple[str, ...]:
     """Both historical empty-target and API-default independent bindings."""
     keys = {_key_str(key)}
+    if key.round_id is not None:
+        return (_key_str(key),)
     if key.mode == "independent":
         for target_id in ("targets-0", ReviewTargetSet.create([]).target_set_id):
             keys.add(_key_str(key.model_copy(update={"target_set_id": target_id})))
@@ -199,6 +232,7 @@ class DraftState:
     checked_layer_ids: tuple[str, ...] = ()
     reanchor_inputs: tuple[dict[str, Any], ...] = ()
     reanchor_resolutions: tuple[dict[str, Any], ...] = ()
+    round_input_resolutions: tuple[dict[str, Any], ...] = ()
 
     @classmethod
     def of(cls, draft: Draft) -> DraftState:
@@ -213,6 +247,9 @@ class DraftState:
             ),
             decisions=tuple(d.model_dump(mode="json") for d in draft.decisions),
             checked_layer_ids=tuple(draft.checked_layer_ids),
+            round_input_resolutions=tuple(
+                r.model_dump(mode="json") for r in draft.round_input_resolutions
+            ),
             reanchor_inputs=tuple(
                 item.model_dump(mode="json") for item in draft.reanchor_inputs
             ),
@@ -230,6 +267,7 @@ class DraftState:
             checked_layer_ids=tuple(stored["checked_layer_ids"]),
             reanchor_inputs=tuple(stored.get("reanchor_inputs", [])),
             reanchor_resolutions=tuple(stored.get("reanchor_resolutions", [])),
+            round_input_resolutions=tuple(stored.get("round_input_resolutions", [])),
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -238,6 +276,11 @@ class DraftState:
             "evidence": [list(pair) for pair in self.evidence],
             "decisions": list(self.decisions),
             "checked_layer_ids": list(self.checked_layer_ids),
+            **(
+                {"round_input_resolutions": list(self.round_input_resolutions)}
+                if self.round_input_resolutions
+                else {}
+            ),
             **(
                 {
                     "reanchor_inputs": list(self.reanchor_inputs),
@@ -302,6 +345,257 @@ class Repository:
 
     def __init__(self, db: Database) -> None:
         self.db = db
+
+    def workspace_input_snapshots(self, key: WorkspaceKey) -> list[AnnotationSnapshot]:
+        """Only frozen human inputs for a round; legacy proposal selection stays intact."""
+        if key.round_id is None:
+            return self.list_annotations_for_document(key.project_key, key.document_id)
+        round_view = self.get_work_round(key.project_key, key.round_id)
+        if round_view.workspace_key != key:
+            raise DomainError("ROUND_KEY_MISMATCH")
+        inputs = self.get_round_input_inventory(key.project_key, key.round_id)
+        if round_view.input_submission_ids:
+            return [
+                decode_snapshot(item["target_snapshot"])
+                for item in inputs
+                if item["target_snapshot"] is not None
+            ]
+        if round_view.kind == "clean_restart" or key.mode == "independent":
+            return []
+        with self.db.transaction() as conn:
+            row = self._draft_row(
+                conn, self._require_project(conn, key.project_key), _key_str(key)
+            )
+            if row is None:
+                raise DomainError("ROUND_NOT_FOUND")
+            targets = ReviewTargetSet.model_validate(row.targets)
+        allowed = {(ref.annotation_id, ref.version) for ref in targets.targets}
+        return [
+            snap
+            for snap in self.list_annotations_for_document(
+                key.project_key, key.document_id
+            )
+            if (snap.annotation.annotation_id, snap.version) in allowed
+        ]
+
+    def _archived_rounds(
+        self, conn: Connection, project_id: int
+    ) -> dict[str, dict[str, Any]]:
+        manifest = PackageManifest.model_validate(
+            conn.execute(
+                select(ProjectRow.manifest).where(ProjectRow.id == project_id)
+            ).scalar_one()
+        )
+        return manifest.workflow_history or {}
+
+    def get_work_round(self, project_key: str, round_id: str) -> WorkRoundView:
+        from ontocurator.storage.tables import AssignmentRow
+        from ontocurator.storage.workflow_tables import WorkRoundRow, WorkRoundStateRow
+
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            row = (
+                conn.execute(
+                    select(
+                        WorkRoundRow,
+                        WorkRoundStateRow.state,
+                        WorkRoundStateRow.latest_submission_id,
+                        AssignmentRow.active_round_id,
+                        AssignmentRow.workflow_revision,
+                    )
+                    .join(
+                        WorkRoundStateRow,
+                        WorkRoundStateRow.round_id == WorkRoundRow.round_id,
+                    )
+                    .join(AssignmentRow, AssignmentRow.id == WorkRoundRow.assignment_id)
+                    .where(
+                        WorkRoundRow.project_id == project_id,
+                        WorkRoundRow.round_id == round_id,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if row is None:
+                archived = self._archived_rounds(conn, project_id).get(round_id)
+                if archived is None:
+                    raise DomainError("ROUND_NOT_FOUND")
+                view = WorkRoundView.model_validate(archived["round"])
+                return view.model_copy(
+                    update={"project_key": project_key, "active": False}
+                )
+            return WorkRoundView(
+                round_id=row["round_id"],
+                project_key=project_key,
+                assignment_id=row["assignment_id"],
+                document_id=row["document_id"],
+                annotator_id=row["annotator_id"],
+                kind=row["kind"],
+                mode=row["mode"],
+                state=row["state"],
+                workflow_revision=row["workflow_revision"],
+                latest_submission_id=row["latest_submission_id"],
+                predecessor_round_id=row["predecessor_round_id"],
+                input_manifest_sha256=row["input_manifest_sha256"],
+                input_submission_ids=row["input_submission_ids"],
+                workspace_key=row["workspace_key"],
+                active=row["active_round_id"] == round_id,
+            )
+
+    def get_round_for_submission(
+        self, project_key: str, submission_id: str
+    ) -> WorkRoundView | None:
+        from ontocurator.storage.workflow_tables import RoundSubmissionBindingRow
+
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            round_id = conn.execute(
+                select(RoundSubmissionBindingRow.round_id).where(
+                    RoundSubmissionBindingRow.project_id == project_id,
+                    RoundSubmissionBindingRow.submission_id == submission_id,
+                )
+            ).scalar_one_or_none()
+            if round_id is None:
+                matches = [
+                    rid
+                    for rid, archived in self._archived_rounds(conn, project_id).items()
+                    if submission_id in archived["submission_ids"]
+                ]
+                if len(matches) > 1:
+                    raise DomainError("AMBIGUOUS_SUBMISSION_ORIGIN")
+                round_id = matches[0] if matches else None
+            return (
+                None if round_id is None else self.get_work_round(project_key, round_id)
+            )
+
+    def get_round_input_inventory(
+        self, project_key: str, round_id: str
+    ) -> list[dict[str, Any]]:
+        from ontocurator.storage.workflow_tables import RoundInputRow
+
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            archived = self._archived_rounds(conn, project_id).get(round_id)
+            if archived is not None:
+                return list(archived["inputs"])
+            self.get_work_round(project_key, round_id)
+            return [
+                dict(row.payload)
+                | {
+                    "input_id": row.input_id,
+                    "source_submission_id": row.source_submission_id,
+                }
+                for row in conn.execute(
+                    select(RoundInputRow)
+                    .where(
+                        RoundInputRow.project_id == project_id,
+                        RoundInputRow.round_id == round_id,
+                    )
+                    .order_by(RoundInputRow.position)
+                )
+            ]
+
+    def list_workflow_causes(self, project_key: str) -> list[dict[str, Any]]:
+        from ontocurator.storage.workflow_tables import ReviewObligationResolutionRow
+
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            resolved = set(
+                conn.execute(
+                    select(ReviewObligationResolutionRow.cause_id).where(
+                        ReviewObligationResolutionRow.project_id == project_id,
+                    )
+                ).scalars()
+            )
+            result = [
+                cause.model_dump()
+                for cause in derive_source_obligations(
+                    project_key, self._variants(project_key), resolved
+                )
+            ]
+            from ontocurator.storage.tables import AssignmentRow
+            from ontocurator.storage.workflow_tables import (
+                ProblemReportRow,
+                ProblemReportStateRow,
+                TaskHoldRow,
+                TaskHoldStateRow,
+            )
+
+            reports = conn.execute(
+                select(
+                    ProblemReportRow.report_id,
+                    ProblemReportStateRow.revision,
+                    AssignmentRow.document_id,
+                    DocumentRow.case_id,
+                    DocumentRow.language,
+                )
+                .join(
+                    ProblemReportStateRow,
+                    ProblemReportStateRow.report_id == ProblemReportRow.report_id,
+                )
+                .join(AssignmentRow, AssignmentRow.id == ProblemReportRow.assignment_id)
+                .join(
+                    DocumentRow,
+                    and_(
+                        DocumentRow.project_id == AssignmentRow.project_id,
+                        DocumentRow.document_id == AssignmentRow.document_id,
+                    ),
+                )
+                .where(
+                    ProblemReportRow.project_id == project_id,
+                    ProblemReportStateRow.state == "open",
+                )
+            ).all()
+            for row in reports:
+                result.append(
+                    {
+                        "cause_id": row.report_id,
+                        "cause_revision": row.revision,
+                        "code": "OPEN_PROBLEM_REPORT",
+                        "case_id": row.case_id,
+                        "language": row.language,
+                        "document_id": row.document_id,
+                        "reason": "An open problem report needs a lead decision.",
+                        "destination": f"#/projects/{quote(project_key, safe='')}/problem-reports/{quote(row.report_id, safe='')}",
+                    }
+                )
+            holds = conn.execute(
+                select(
+                    TaskHoldRow.hold_id,
+                    TaskHoldRow.reason,
+                    TaskHoldRow.report_id,
+                    AssignmentRow.document_id,
+                    DocumentRow.case_id,
+                    DocumentRow.language,
+                )
+                .join(TaskHoldStateRow, TaskHoldStateRow.hold_id == TaskHoldRow.hold_id)
+                .join(AssignmentRow, AssignmentRow.id == TaskHoldRow.assignment_id)
+                .join(
+                    DocumentRow,
+                    and_(
+                        DocumentRow.project_id == AssignmentRow.project_id,
+                        DocumentRow.document_id == AssignmentRow.document_id,
+                    ),
+                )
+                .where(
+                    TaskHoldRow.project_id == project_id,
+                    TaskHoldStateRow.active.is_(True),
+                )
+            ).all()
+            for held in holds:
+                result.append(
+                    {
+                        "cause_id": held.hold_id,
+                        "cause_revision": 1,
+                        "code": "TASK_ON_HOLD",
+                        "case_id": held.case_id,
+                        "language": held.language,
+                        "document_id": held.document_id,
+                        "reason": held.reason,
+                        "destination": f"#/projects/{quote(project_key, safe='')}/problem-reports/{quote(held.report_id, safe='')}",
+                    }
+                )
+            return result
 
     # --- projects ---------------------------------------------------------- #
 
@@ -440,20 +734,30 @@ class Repository:
         self._insert_snapshots(
             conn, project_id, package.annotations.values(), package.evidence.values()
         )
-        if package.annotations:
+        proposal_annotations = (
+            package.manifest.proposal_annotation_refs
+            if package.manifest.format_version == "ontocurator-work-package/v3"
+            else list(package.annotations)
+        )
+        proposal_evidence = (
+            package.manifest.proposal_evidence_refs
+            if package.manifest.format_version == "ontocurator-work-package/v3"
+            else list(package.evidence)
+        )
+        if proposal_annotations:
             conn.execute(
                 insert(ProposalAnnotationRow),
                 [
                     {"project_id": project_id, "annotation_id": a, "version": v}
-                    for a, v in package.annotations
+                    for a, v in proposal_annotations
                 ],
             )
-        if package.evidence:
+        if proposal_evidence:
             conn.execute(
                 insert(ProposalEvidenceRow),
                 [
                     {"project_id": project_id, "evidence_id": e, "version": v}
-                    for e, v in package.evidence
+                    for e, v in proposal_evidence
                 ],
             )
         for submission in package.submissions.values():
@@ -604,8 +908,18 @@ class Repository:
         if (
             stored_docs
             != {d.document_id: d.text_sha256 for d in package.documents.values()}
-            or stored_annotations != set(package.annotations)
-            or stored_evidence != set(package.evidence)
+            or stored_annotations
+            != set(
+                package.manifest.proposal_annotation_refs
+                if package.manifest.proposal_annotation_refs is not None
+                else package.annotations
+            )
+            or stored_evidence
+            != set(
+                package.manifest.proposal_evidence_refs
+                if package.manifest.proposal_evidence_refs is not None
+                else package.evidence
+            )
             or stored_events != {e.event_id for e in package.search_events}
             or not set(package.submissions) <= bound_submissions
         ):
@@ -1066,7 +1380,25 @@ class Repository:
         Per document, annotator and mode only the latest submission is kept:
         the latest revision of each origin, then the one recorded last.
         """
-        with self.db.snapshot() as conn:
+        return self._t1_export_content(project_key)
+
+    def t1_export_content_exact(
+        self, project_key: str, submission_ids: Sequence[str]
+    ) -> ProjectExport:
+        """Resolve exact immutable selections without a latest-result substitution."""
+        return self._t1_export_content(
+            project_key, tuple(dict.fromkeys(submission_ids))
+        )
+
+    def _t1_export_content(
+        self, project_key: str, submission_ids: tuple[str, ...] | None = None
+    ) -> ProjectExport:
+        context = (
+            self.db.transaction()
+            if submission_ids is not None and self.db.in_transaction()
+            else self.db.snapshot()
+        )
+        with context as conn:
             project = conn.execute(
                 select(
                     ProjectRow.id,
@@ -1101,16 +1433,21 @@ class Repository:
                     ).where(DocumentRow.project_id == project.id)
                 )
             }
-            submission_rows = conn.execute(
-                select(
-                    SubmissionRow.document_id,
-                    SubmissionRow.annotator_id,
-                    SubmissionRow.mode,
-                    SubmissionRow.recorded_at,
-                    SubmissionRow.payload,
+            submission_query = select(
+                SubmissionRow.document_id,
+                SubmissionRow.annotator_id,
+                SubmissionRow.mode,
+                SubmissionRow.recorded_at,
+                SubmissionRow.payload,
+            ).where(SubmissionRow.project_id == project.id)
+            if submission_ids is not None:
+                submission_query = submission_query.where(
+                    SubmissionRow.submission_id.in_(submission_ids)
                 )
-                .where(SubmissionRow.project_id == project.id)
-                .order_by(SubmissionRow.recorded_at, SubmissionRow.submission_id)
+            submission_rows = conn.execute(
+                submission_query.order_by(
+                    SubmissionRow.recorded_at, SubmissionRow.submission_id
+                )
             ).all()
             proposal_payloads = conn.execute(
                 select(AnnotationSnapshotRow.payload, ProposalAnnotationRow.notes)
@@ -1147,13 +1484,24 @@ class Repository:
             groups.setdefault((row.document_id, row.annotator_id, row.mode), []).append(
                 submission
             )
-        submissions = [
-            max(
-                latest_submissions(group),
-                key=lambda s: (recorded[s.submission_id], s.draft_revision),
-            )
-            for _key, group in sorted(groups.items())
-        ]
+        submissions = (
+            [
+                max(
+                    latest_submissions(group),
+                    key=lambda s: (recorded[s.submission_id], s.draft_revision),
+                )
+                for _key, group in sorted(groups.items())
+            ]
+            if submission_ids is None
+            else [Submission.model_validate(row.payload) for row in submission_rows]
+        )
+        if submission_ids is not None:
+            by_id = {item.submission_id: item for item in submissions}
+            if set(by_id) != set(submission_ids):
+                raise DomainError(
+                    "SUBMISSION_NOT_FOUND", "An exact export input is unavailable"
+                )
+            submissions = [by_id[identity] for identity in submission_ids]
         proposals: dict[tuple[str, str], AnnotationSnapshot] = {}
         proposal_notes: dict[tuple[str, str], list[str]] = {}
         for payload, notes in proposal_payloads:
@@ -1161,6 +1509,16 @@ class Repository:
             ref = (snap.annotation.annotation_id, snap.version)
             proposals[ref] = snap
             proposal_notes[ref] = list(notes)
+        for submission in submissions:
+            if submission.origin_key.round_id is not None:
+                for item in self.get_round_input_inventory(
+                    project_key, submission.origin_key.round_id
+                ):
+                    if item["target_snapshot"] is not None:
+                        alias = decode_snapshot(item["target_snapshot"])
+                        proposals[(alias.annotation.annotation_id, alias.version)] = (
+                            alias
+                        )
         return ProjectExport(
             profile=TaskProfile.model_validate(project.task_profile),
             pins=pins,
@@ -1295,6 +1653,8 @@ class Repository:
                     ProjectRow.require_spanless_note,
                     ProjectRow.require_chosen_axes,
                     ProjectRow.hidden_axis_values,
+                    ProjectRow.creation_defaults,
+                    ProjectRow.annotation_policy_revision,
                 ).where(ProjectRow.project_key == project_key)
             ).one_or_none()
         if row is None:
@@ -1828,6 +2188,7 @@ class Repository:
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
             drafts = select(
+                DraftRow.draft_key,
                 DraftRow.document_id,
                 DraftRow.mode,
                 DraftRow.scope_id,
@@ -1851,14 +2212,7 @@ class Repository:
             payloads = conn.execute(submissions).scalars().all()
         keys: dict[str, WorkspaceKey] = {}
         for row in draft_rows:
-            key = WorkspaceKey(
-                project_key=project_key,
-                document_id=row.document_id,
-                annotator_id=annotator_id,
-                mode=row.mode,
-                scope_id=row.scope_id,
-                target_set_id=row.target_set_id,
-            )
+            key = _decode_key_str(row.draft_key)
             keys[_key_str(key)] = key
         for payload in payloads:
             origin = WorkspaceKey.model_validate(payload["origin_key"])
@@ -1885,6 +2239,7 @@ class Repository:
                 DraftRow.spanless_policy_version,
                 DraftRow.reanchor_inputs,
                 DraftRow.reanchor_resolutions,
+                DraftRow.round_input_resolutions,
                 DraftRow.reanchor_inputs_initialized_at,
                 DraftRow.targets,
             ).where(DraftRow.project_id == project_id, DraftRow.draft_key == key_string)
@@ -1903,6 +2258,7 @@ class Repository:
         """
         with self.db.transaction() as conn:
             self._before_workspace_locks(conn, key)
+            self._lock_round_assignment(conn, key)
             self._lock_draft(conn, key)
             self._before_open_draft(conn, key)
             draft = self._open_draft(conn, key, targets)
@@ -1913,7 +2269,7 @@ class Repository:
     ) -> Draft:
         """Initialize only at open, under the same lock as draft creation."""
         key = draft.key
-        if key.mode != "review":
+        if key.mode != "review" or key.round_id is not None:
             if selected:
                 raise DomainError("INVALID_REANCHOR_ITEM")
             return draft
@@ -2124,6 +2480,120 @@ class Repository:
                     return source, content_valid
             raise DomainError("INVALID_REANCHOR_ITEM")
 
+    def _lock_round_assignment(self, conn: Connection, key: WorkspaceKey) -> None:
+        from ontocurator.storage.tables import AssignmentRow
+        from ontocurator.storage.workflow_tables import (
+            RoundWorkspaceBindingRow,
+            WorkRoundRow,
+        )
+
+        pid = self._require_project(conn, key.project_key)
+        row = conn.execute(
+            select(AssignmentRow.id)
+            .join(WorkRoundRow, WorkRoundRow.assignment_id == AssignmentRow.id)
+            .join(
+                RoundWorkspaceBindingRow,
+                RoundWorkspaceBindingRow.round_id == WorkRoundRow.round_id,
+            )
+            .where(
+                RoundWorkspaceBindingRow.project_id == pid,
+                RoundWorkspaceBindingRow.workspace_key == _key_str(key),
+            )
+            .with_for_update(of=AssignmentRow, key_share=True)
+        ).first()
+        if key.round_id is not None and row is None:
+            raise DomainError("ROUND_NOT_FOUND")
+
+    def _check_round_mutation(
+        self, conn: Connection, key: WorkspaceKey, *, allow_submitted: bool = False
+    ) -> None:
+        from ontocurator.storage.tables import AssignmentRow
+        from ontocurator.storage.workflow_tables import (
+            RoundWorkspaceBindingRow,
+            WorkRoundRow,
+            WorkRoundStateRow,
+        )
+
+        pid = self._require_project(conn, key.project_key)
+        row = conn.execute(
+            select(
+                WorkRoundRow.round_id,
+                WorkRoundStateRow.state,
+                AssignmentRow.active_round_id,
+            )
+            .join(
+                WorkRoundStateRow, WorkRoundStateRow.round_id == WorkRoundRow.round_id
+            )
+            .join(AssignmentRow, AssignmentRow.id == WorkRoundRow.assignment_id)
+            .join(
+                RoundWorkspaceBindingRow,
+                RoundWorkspaceBindingRow.round_id == WorkRoundRow.round_id,
+            )
+            .where(
+                RoundWorkspaceBindingRow.project_id == pid,
+                RoundWorkspaceBindingRow.workspace_key == _key_str(key),
+            )
+        ).first()
+        permitted_states = (
+            {"editable", "submitted"} if allow_submitted else {"editable"}
+        )
+        if row is not None and (
+            row.round_id != row.active_round_id or row.state not in permitted_states
+        ):
+            raise DomainError("ROUND_NOT_EDITABLE")
+        if key.round_id is not None and (row is None or row.round_id != key.round_id):
+            raise DomainError("ROUND_KEY_MISMATCH")
+        if row is None:
+            from ontocurator.assignments.service import TASK_FOR_MODE
+
+            active = conn.execute(
+                select(AssignmentRow.active_round_id)
+                .join(UserRow, UserRow.id == AssignmentRow.user_id)
+                .where(
+                    AssignmentRow.project_id == pid,
+                    AssignmentRow.document_id == key.document_id,
+                    UserRow.pseudonym == key.annotator_id,
+                    AssignmentRow.task == TASK_FOR_MODE[key.mode],
+                    AssignmentRow.revoked_at.is_(None),
+                )
+            ).scalar_one_or_none()
+            if active is not None:
+                raise DomainError("ROUND_KEY_MISMATCH")
+
+    def _advance_round(
+        self, conn: Connection, key: WorkspaceKey, result: Draft | Submission
+    ) -> None:
+        from ontocurator.storage.workflow_tables import (
+            RoundSubmissionBindingRow,
+            RoundWorkspaceBindingRow,
+            WorkRoundStateRow,
+        )
+
+        if not isinstance(result, Submission):
+            return
+        pid = self._require_project(conn, key.project_key)
+        rid = conn.execute(
+            select(RoundWorkspaceBindingRow.round_id).where(
+                RoundWorkspaceBindingRow.project_id == pid,
+                RoundWorkspaceBindingRow.workspace_key == _key_str(key),
+            )
+        ).scalar_one_or_none()
+        if rid is not None:
+            conn.execute(
+                insert(RoundSubmissionBindingRow).values(
+                    project_id=pid, round_id=rid, submission_id=result.submission_id
+                )
+            )
+            conn.execute(
+                update(WorkRoundStateRow)
+                .where(WorkRoundStateRow.round_id == rid)
+                .values(
+                    state="submitted",
+                    latest_submission_id=result.submission_id,
+                    revision=WorkRoundStateRow.revision + 1,
+                )
+            )
+
     def _before_workspace_locks(self, conn: Connection, key: WorkspaceKey) -> None:
         """Keep a contextual principal stable before any draft/assignment lock."""
         principal = current_principal.get()
@@ -2171,8 +2641,21 @@ class Repository:
     def _before_new_mutation(self, conn: Connection, key: WorkspaceKey) -> None:
         """Request-specific gate, after successful replay/revision checks."""
         if current_principal.get() is not None:
+            from ontocurator.application.workflow_guards import require_task_writable
             from ontocurator.assignments.eligibility import require_annotation_gate
+            from ontocurator.assignments.service import TASK_FOR_MODE, AssignmentService
 
+            principal = current_principal.get()
+            assert principal is not None
+            assignment = AssignmentService.active_for(
+                conn,
+                self._require_project(conn, key.project_key),
+                key.document_id,
+                principal.user_id,
+                TASK_FOR_MODE[key.mode],
+            )
+            if assignment is not None:
+                require_task_writable(conn, assignment.id)
             require_annotation_gate(
                 conn, self._require_project(conn, key.project_key), key.document_id
             )
@@ -2293,6 +2776,7 @@ class Repository:
             spanless_policy_version=row.spanless_policy_version,
             reanchor_inputs=row.reanchor_inputs,
             reanchor_resolutions=row.reanchor_resolutions,
+            round_input_resolutions=row.round_input_resolutions,
             reanchor_inputs_initialized_at=(
                 row.reanchor_inputs_initialized_at.isoformat()
                 if row.reanchor_inputs_initialized_at is not None
@@ -2335,6 +2819,17 @@ class Repository:
             return  # created by a concurrent request; the caller reads it
         submissions = self._submissions_for_workspace(conn, project_id, key)
         if not submissions:
+            if key.round_id is not None and key.mode == "independent":
+                seeds = self.workspace_input_snapshots(key)
+                # An ordinary independent attempt never sees proposal seeds.
+                if (
+                    self.get_work_round(key.project_key, key.round_id).kind
+                    != "carry_forward"
+                ):
+                    seeds = []
+                evidence = [ev for annotation in seeds for ev in annotation.evidence]
+                self._insert_snapshots(conn, project_id, seeds, evidence)
+                self._write_draft_content(conn, draft_id, seeds, evidence, [])
             return
         current = latest_submissions(submissions)
         if len(current) != 1:
@@ -2387,6 +2882,9 @@ class Repository:
                 targets=latest.targets.model_dump(mode="json"),
                 revision=latest.draft_revision,
                 checked_layer_ids=list(latest.checked_layer_ids),
+                round_input_resolutions=[
+                    r.model_dump(mode="json") for r in latest.round_input_resolutions
+                ],
             )
         )
 
@@ -2510,6 +3008,7 @@ class Repository:
             if before_operation is not None:
                 before_operation(conn)
             self._before_new_mutation(conn, key)
+            self._check_round_mutation(conn, key)
             draft = self._open_draft(conn, key, None)
             # Taken before the operation, which may change the draft in place.
             state_before = DraftState.of(draft)
@@ -2528,6 +3027,10 @@ class Repository:
                     .values(
                         revision=new_revision,
                         checked_layer_ids=list(result.checked_layer_ids),
+                        round_input_resolutions=[
+                            r.model_dump(mode="json")
+                            for r in result.round_input_resolutions
+                        ],
                         reanchor_inputs=[
                             r.model_dump(mode="json") for r in result.reanchor_inputs
                         ],
@@ -2601,6 +3104,7 @@ class Repository:
                 response = _submission_payload(result)
             else:
                 raise ValueError(f"Unsupported operation return type: {type(result)}")
+            self._advance_round(conn, key, result)
             self._after_new_mutation(conn, key, result, now)
             conn.execute(
                 insert(MutationReceiptRow).values(
@@ -2764,18 +3268,30 @@ class Repository:
                 )
             draft_rows = conn.execute(drafts).all()
             submission_rows = conn.execute(submissions).all()
+            from ontocurator.storage.tables import AssignmentRow
+            from ontocurator.storage.workflow_tables import WorkRoundRow
+
+            active_keys = {
+                row.document_id: WorkspaceKey.model_validate(row.workspace_key)
+                for row in conn.execute(
+                    select(WorkRoundRow.document_id, WorkRoundRow.workspace_key)
+                    .join(
+                        AssignmentRow,
+                        AssignmentRow.active_round_id == WorkRoundRow.round_id,
+                    )
+                    .where(
+                        WorkRoundRow.project_id == project_id,
+                        WorkRoundRow.annotator_id == annotator_id,
+                        WorkRoundRow.mode == mode,
+                        AssignmentRow.revoked_at.is_(None),
+                    )
+                )
+            }
 
         rows_by_key = {row.draft_key: row for row in draft_rows}
         keys: dict[str, WorkspaceKey] = {}
         for row in draft_rows:
-            key = WorkspaceKey(
-                project_key=project_key,
-                document_id=row.document_id,
-                annotator_id=annotator_id,
-                mode=row.mode,
-                scope_id=row.scope_id,
-                target_set_id=row.target_set_id,
-            )
+            key = _decode_key_str(row.draft_key)
             keys[_key_str(key)] = key
         submissions_by_key: dict[str, list[Submission]] = {}
         for stored in submission_rows:
@@ -2789,6 +3305,12 @@ class Repository:
             )
             keys.setdefault(_key_str(key), key)
 
+        keys = {
+            identity: key
+            for identity, key in keys.items()
+            if key.document_id not in active_keys
+            or identity in _workspace_aliases(active_keys[key.document_id])
+        }
         by_document: dict[str, list[WorkspaceKey]] = {}
         for key in sorted(
             keys.values(),
@@ -3178,6 +3700,48 @@ class Repository:
                 else None
             )
             stored_files = self.get_embedded_files(project_key)
+            from ontocurator.storage.workflow_tables import (
+                RoundSubmissionBindingRow,
+                WorkRoundRow,
+            )
+
+            workflow_history = dict(manifest.workflow_history or {})
+            for rid in conn.execute(
+                select(WorkRoundRow.round_id).where(
+                    WorkRoundRow.project_id == project_id
+                )
+            ).scalars():
+                workflow_history[rid] = {
+                    "round": self.get_work_round(project_key, rid).model_dump(
+                        mode="json"
+                    ),
+                    "inputs": self.get_round_input_inventory(project_key, rid),
+                    "submission_ids": list(
+                        conn.execute(
+                            select(RoundSubmissionBindingRow.submission_id).where(
+                                RoundSubmissionBindingRow.project_id == project_id,
+                                RoundSubmissionBindingRow.round_id == rid,
+                            )
+                        ).scalars()
+                    ),
+                }
+            proposal_annotation_refs = [
+                tuple(row)
+                for row in conn.execute(
+                    select(
+                        ProposalAnnotationRow.annotation_id,
+                        ProposalAnnotationRow.version,
+                    ).where(ProposalAnnotationRow.project_id == project_id)
+                )
+            ]
+            proposal_evidence_refs = [
+                tuple(row)
+                for row in conn.execute(
+                    select(
+                        ProposalEvidenceRow.evidence_id, ProposalEvidenceRow.version
+                    ).where(ProposalEvidenceRow.project_id == project_id)
+                )
+            ]
         if conditions is not None:
             manifest = manifest.model_copy(update={"search_conditions": conditions})
         annotations: dict[tuple[str, str], AnnotationSnapshot] = {}
@@ -3192,6 +3756,30 @@ class Repository:
             s.submission_id: s
             for s in (Submission.model_validate(p) for p in submission_payloads)
         }
+        for submission in submissions.values():
+            for snap in submission.snapshots:
+                annotations[(snap.annotation.annotation_id, snap.version)] = snap
+                for ev in snap.evidence:
+                    evidence[(ev.mention.evidence_id, ev.version)] = ev
+        for archived in workflow_history.values():
+            for item in archived["inputs"]:
+                for snapshot_field in ("source_snapshot", "target_snapshot"):
+                    if item[snapshot_field] is not None:
+                        snap = decode_snapshot(item[snapshot_field])
+                        annotations[(snap.annotation.annotation_id, snap.version)] = (
+                            snap
+                        )
+                        for ev in snap.evidence:
+                            evidence[(ev.mention.evidence_id, ev.version)] = ev
+        if submissions or workflow_history:
+            manifest = manifest.model_copy(
+                update={
+                    "format_version": "ontocurator-work-package/v3",
+                    "workflow_history": workflow_history,
+                    "proposal_annotation_refs": proposal_annotation_refs,
+                    "proposal_evidence_refs": proposal_evidence_refs,
+                }
+            )
         declared = {
             item.resource_path
             for condition in manifest.search_conditions or []

@@ -68,7 +68,8 @@ def test_independent_trimmed_profile_roundtrip_restores_own_submission(tmp_path)
                 layer_id="target-layer",
                 type_id="phenotype",
                 term_id="HP:0001252",
-                axes_values={},
+                axes_values={"assertion": "present"},
+                chosen_axis_ids=["assertion"],
             ).model_dump(),
         ),
     )

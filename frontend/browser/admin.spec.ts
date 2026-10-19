@@ -108,6 +108,23 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   return { key, lead, annotator };
 }
 
+async function selectProject(page: Page, key: string) {
+  await page.locator(".shell-project-selector > summary").click();
+  await page.getByLabel("Current project", { exact: true }).selectOption(key);
+  await expect(page).toHaveURL(new RegExp(`#/projects/${key}/documents$`));
+  await page.locator(".shell-project-selector > summary").click();
+}
+
+async function openDocumentVersion(page: Page, documentId: string) {
+  const logicalText = page.getByRole("group", { name: `Text ${documentId}`, exact: true });
+  const version = logicalText.locator("details.document-version");
+  await expect(version).toHaveCount(1);
+  await version.locator(":scope > summary").click();
+  const document = version.getByTestId("document-row");
+  await expect(document).toBeVisible();
+  return document;
+}
+
 async function importTwoDocuments(page: Page) {
   await page.getByRole("button", { name: "Upload documents", exact: true }).click();
   const upload = page.getByRole("dialog", { name: "Upload documents", exact: true });
@@ -127,16 +144,19 @@ async function importTwoDocuments(page: Page) {
   await page.keyboard.press("Escape");
   await expect(upload).toHaveCount(0);
   await expect(page.getByTestId("document-row")).toHaveCount(2);
-  await expect(page.getByRole("table", { name: "Documents", exact: true })).toContainText("one");
-  await expect(page.getByRole("table", { name: "Documents", exact: true })).toContainText("two");
+  await expect(page.getByRole("group", { name: "Text one", exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Text two", exact: true })).toBeVisible();
+  for (const document of await page.getByTestId("document-row").all()) await expect(document).toBeHidden();
 }
 
 async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await logout(page);
   await redeemCode(page, setup.lead);
+  await selectProject(page, setup.key);
   await page.getByRole("link", { name: "Documents", exact: true }).click();
   await importTwoDocuments(page);
-  await page.getByRole("checkbox", { name: "Select one", exact: true }).check();
+  const document = await openDocumentVersion(page, "one");
+  await document.getByRole("checkbox", { name: "Select one", exact: true }).check();
   await page.getByRole("button", { name: "Propose distribution …", exact: true }).click();
   const distribution = page.getByRole("dialog", { name: "Propose distribution", exact: true });
   await distribution.getByRole("button", { name: "Propose", exact: true }).click();
@@ -189,6 +209,7 @@ test.describe("Administration through real accounts and jobs", () => {
       if (new URL(request.url()).pathname.startsWith("/api/v1/admin/")) adminRequests.push(request.url());
     });
     await redeemCode(page, setup.lead);
+    await selectProject(page, setup.key);
     await page.getByRole("link", { name: "Documents", exact: true }).click();
     await importTwoDocuments(page);
     expect(adminRequests).toEqual([]);
@@ -209,6 +230,7 @@ test.describe("Administration through real accounts and jobs", () => {
     await expect(page.getByRole("button", { name: "Add finding without a text span", exact: true })).toBeDisabled();
     await logout(page);
     await loginExisting(page, setup.lead);
+    await selectProject(page, setup.key);
     await page.getByRole("link", { name: "Progress", exact: true }).click();
     const people = page.getByRole("table", { name: "People", exact: true });
     const row = people.getByRole("row").filter({ hasText: setup.annotator.username });
@@ -217,8 +239,8 @@ test.describe("Administration through real accounts and jobs", () => {
     expect(submittedColumn).toBeGreaterThanOrEqual(0);
     await expect(row.getByRole("cell").nth(submittedColumn)).toHaveText("1");
     await page.getByRole("link", { name: "Documents", exact: true }).click();
-    const document = page.getByTestId("document-row").filter({ has: page.getByRole("cell", { name: "one", exact: true }) });
-    await document.locator("summary").click();
+    const document = await openDocumentVersion(page, "one");
+    await document.locator('summary[aria-label^="Actions for "]').click();
     await document.getByRole("button", { name: "Reopen", exact: true }).click();
     const reopen = page.getByRole("dialog", { name: "Reopen one", exact: true });
     await reopen.getByLabel("Reason (optional)").fill("Check this finding again.");
@@ -238,6 +260,7 @@ test.describe("Administration through real accounts and jobs", () => {
       .getByRole("button", { name: "Back to my tasks", exact: true }).click();
     await logout(page);
     await loginExisting(page, setup.lead);
+    await selectProject(page, setup.key);
     await page.getByRole("link", { name: "Export", exact: true }).click();
     const bundle = page.getByRole("region", { name: "Annotation results", exact: true });
     await bundle.getByRole("button", { name: "Create export", exact: true }).click();

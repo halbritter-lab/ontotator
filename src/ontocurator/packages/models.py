@@ -121,10 +121,20 @@ class PackageManifest(BaseModel):
 
     package_id: str
     format_version: Literal[
+        "ontocurator-work-package/v3",
         "ontocurator-work-package/v2",
         "ontocurator-work-package/v1",
         "hpo-editor-work-package/v1",
     ] = "ontocurator-work-package/v2"
+    workflow_history: dict[str, dict[str, Any]] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    proposal_annotation_refs: list[tuple[str, str]] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    proposal_evidence_refs: list[tuple[str, str]] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     document_order: list[str] = Field(default_factory=list)
     task_profile: TaskProfile | None = None
     task_profile_sha256: str | None = None
@@ -139,6 +149,30 @@ class PackageManifest(BaseModel):
     search_conditions: list[SearchCondition] | None = Field(
         default=None, max_length=128
     )
+
+    @model_validator(mode="after")
+    def validate_workflow_version(self) -> "PackageManifest":
+        if self.format_version == "ontocurator-work-package/v3":
+            if (
+                self.workflow_history is None
+                or self.proposal_annotation_refs is None
+                or self.proposal_evidence_refs is None
+            ):
+                raise ValueError(
+                    "V3 packages require explicit workflow and proposal inventories"
+                )
+        elif any(
+            value is not None
+            for value in (
+                self.workflow_history,
+                self.proposal_annotation_refs,
+                self.proposal_evidence_refs,
+            )
+        ):
+            raise ValueError(
+                "Legacy package envelopes cannot contain v3 workflow metadata"
+            )
+        return self
 
     def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         data = super().model_dump(*args, **kwargs)
@@ -162,3 +196,53 @@ class ValidatedPackage(BaseModel):
     submissions: dict[str, Submission] = Field(default_factory=dict)
     search_events: list[SearchEventRecord] = Field(default_factory=list)
     embedded_files: dict[str, bytes] = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="after")
+    def validate_workflow_inventory(self) -> "ValidatedPackage":
+        if self.manifest.format_version != "ontocurator-work-package/v3":
+            return self
+        from ontocurator.domain.work_rounds import RoundInputView, WorkRoundView
+
+        if not set(self.manifest.proposal_annotation_refs or []) <= set(
+            self.annotations
+        ) or not set(self.manifest.proposal_evidence_refs or []) <= set(self.evidence):
+            raise ValueError("Proposal inventories reference missing exact snapshots")
+        for rid, archived in (self.manifest.workflow_history or {}).items():
+            view = WorkRoundView.model_validate(archived["round"])
+            if view.round_id != rid or not set(archived["submission_ids"]) <= set(
+                self.submissions
+            ):
+                raise ValueError(
+                    "Invalid archived round identity or submission closure"
+                )
+            if not set(view.input_submission_ids) <= set(self.submissions):
+                raise ValueError("Missing frozen human source submission")
+            seen = set()
+            for raw in archived["inputs"]:
+                item = RoundInputView.model_validate(raw)
+                if (
+                    item.input_id in seen
+                    or item.source_submission_id not in view.input_submission_ids
+                ):
+                    raise ValueError("Ambiguous frozen round input")
+                seen.add(item.input_id)
+                source = self.submissions[item.source_submission_id]
+                if not any(
+                    s == item.source_snapshot
+                    and (s.annotation.annotation_id, s.version)
+                    == (item.source_ref.annotation_id, item.source_ref.version)
+                    for s in source.snapshots
+                ):
+                    raise ValueError(
+                        "Frozen round source does not match owning submission"
+                    )
+                for snap in [item.source_snapshot, item.target_snapshot]:
+                    if (
+                        snap is not None
+                        and self.annotations.get(
+                            (snap.annotation.annotation_id, snap.version)
+                        )
+                        != snap
+                    ):
+                        raise ValueError("Missing exact round snapshot closure")
+        return self

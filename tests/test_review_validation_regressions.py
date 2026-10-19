@@ -347,12 +347,28 @@ def test_confirmed_clinical_uncertainty_does_not_require_reviewer_note(tmp_path)
             payload=DecisionCommand(target=target, outcome="confirmed").model_dump(),
         ),
     )
-    submission = SubmissionService(repo).submit(
+    envelope = MutationEnvelope(
+        mutation_id="submit", expected_revision=1, payload={"document_checked": True}
+    )
+    service = SubmissionService(repo)
+    # Clinical uncertainty is already explicit. The other unchosen axes now
+    # require a separate warning acknowledgement, never a reviewer note.
+    with pytest.raises(DomainError, match="AXIS_CONFIRMATION_WARNING") as warning:
+        service.submit(key, envelope)
+    assert {item["detail"]["axis"] for item in warning.value.details["warnings"]} == {
+        "experiencer",
+        "temporality",
+    }
+    assert repo.open_draft(key).revision == 1
+    submission = service.submit(
         key,
-        MutationEnvelope(
-            mutation_id="submit",
-            expected_revision=1,
-            payload={"document_checked": True},
+        envelope.model_copy(
+            update={
+                "payload": {
+                    **envelope.payload,
+                    "warning_acknowledgement": warning.value.details["acknowledgement"],
+                }
+            }
         ),
     )
     assert submission.decisions[0].note is None

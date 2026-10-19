@@ -3,7 +3,7 @@ import { vi } from "vitest";
 import { api, type AssignmentWorkspace, type TaskSummary, type OpenWorkspaceResponse } from "../src/api/client";
 
 export function taskOf(view: OpenWorkspaceResponse["view"], id = 1): TaskSummary {
-  return { assignment_id: id, project_key: view.key.project_key, project_name: view.key.project_key,
+  return { assignment_id: id, workflow_revision: 0, held: false, project_key: view.key.project_key, project_name: view.key.project_key,
     document_id: view.document.document_id, language: view.document.language, task: view.key.mode === "review" ? "review" : "annotate",
     status: "open", updated_at: "2026-10-14T12:00:00Z" };
 }
@@ -11,7 +11,7 @@ export function taskOf(view: OpenWorkspaceResponse["view"], id = 1): TaskSummary
 /** Add the actual assignment-open envelope to an existing workspace fixture. */
 export function assigned(response: OpenWorkspaceResponse, id = 1): AssignmentWorkspace {
   const task = taskOf(response.view, id);
-  return { ...response, assignment: { id, project_key: task.project_key, document_id: task.document_id,
+  return { ...response, assignment: { id, workflow_revision: 0, held: false, project_key: task.project_key, document_id: task.document_id,
     user_id: 1, display_name: "Test user", username: "test-user", pseudonym: response.view.key.annotator_id, task: task.task,
     status: response.read_only ? "submitted" : "open", created_at: task.updated_at, updated_at: task.updated_at,
     revoked_at: null, last_submission_id: null } };
@@ -33,6 +33,6 @@ export function workspaceFixture(documentId = "doc", mode: "independent" | "revi
       default_type_id: "default", annotation_types: [{ type_id: "default", label: "Finding", axes: [], evidence_policy: "optional" }] },
       { layer_id: "reference", label: "Reference", ontology_id: "hp", default_type_id: "default", access: "reference", default_visible: true, annotation_types: [] }],
     checked_layer_ids: [], available_inputs: [], submissions: [], term_statuses: {},
-    allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "custom", axes_config: [], axes_config_sha256: "axes",
+    require_chosen_axes: false, annotation_policy_revision: 1, allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "custom", axes_config: [], axes_config_sha256: "axes",
   } };
 }

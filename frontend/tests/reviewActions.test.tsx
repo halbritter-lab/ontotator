@@ -3,6 +3,30 @@ import { describe, expect, it, vi } from "vitest";
 import { ReviewActions, type TargetProposal } from "../src/editor/ReviewActions";
 
 describe("ReviewActions", () => {
+  it("explains the immutable default rule conflict without changing an unresolved decision", () => {
+    const decide = vi.fn();
+    render(<ReviewActions target={{ ...sampleTarget, axes_values: { experiencer: "patient" }, axes_defaulted: ["experiencer"] }} requireChosenAxes
+      currentDecision={{ decision_id: "d", target: { annotation_id: "prop-1", version: "v-prop-1" }, outcome: "uncertain", reviewer_id: "r", note: "Specialist input needed" }} draftAnnotations={[]} onDecide={decide} />);
+    expect(screen.getByRole("alert").textContent).toContain("still block submission");
+    expect(screen.queryByRole("button", { name: /Confirm Experiencer/ })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Reviewer note" })).toHaveProperty("value", "Specialist input needed");
+    expect(decide).not.toHaveBeenCalled();
+  });
+  it("keeps unresolved intent separate from a confirmed decision until explicitly saved", () => {
+    vi.useFakeTimers();
+    try {
+      const decide = vi.fn();
+      render(<ReviewActions target={sampleTarget} currentDecision={{ decision_id: "d", target: { annotation_id: "prop-1", version: "v-prop-1" }, outcome: "confirmed", reviewer_id: "r", note: "Saved" }} draftAnnotations={[]} onDecide={decide} />);
+      fireEvent.click(screen.getByRole("button", { name: /^Unresolved/ }));
+      const note = screen.getByRole("textbox", { name: "Reviewer note" });
+      fireEvent.change(note, { target: { value: "Needs specialist review" } });
+      act(() => { vi.advanceTimersByTime(1000); }); fireEvent.blur(note);
+      expect(decide).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
+      expect(decide).toHaveBeenCalledTimes(1);
+      expect(decide).toHaveBeenCalledWith({ outcome: "uncertain", replacement: undefined, note: "Needs specialist review" });
+    } finally { vi.useRealTimers(); }
+  });
   const sampleTarget: TargetProposal = {
     annotation_id: "prop-1",
     version: "v-prop-1",
@@ -144,7 +168,10 @@ describe("ReviewActions", () => {
         currentDecision={{ decision_id: "decision", target: { annotation_id: "prop-1", version: "v-prop-1" },
           outcome, reviewer_id: "reviewer", note: "Keep this note" } as any} />);
       const button = screen.getByRole("button", { name: new RegExp(`^${label}`) });
-      fireEvent.click(button); fireEvent.click(button);
+      fireEvent.click(button);
+      if (outcome === "uncertain") fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
+      fireEvent.click(button);
+      if (outcome === "uncertain") fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
       expect(onDecide.mock.calls.map(([payload]) => payload)).toEqual([
         { outcome, replacement: undefined, note: "Keep this note" },
         { outcome, replacement: undefined, note: "Keep this note" },
@@ -230,7 +257,7 @@ describe("ReviewActions", () => {
     expect(input.getAttribute("aria-invalid")).toBe("true"); expect(input.hasAttribute("required")).toBe(true);
     expect(screen.getByRole("alert").textContent).toContain("reviewer note is required");
     fireEvent.change(input, { target: { value: "  Need specialist input  " } });
-    fireEvent.click(screen.getByRole("button", { name: /Unresolved/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
     expect(decide).toHaveBeenCalledWith({ outcome: "uncertain", replacement: undefined, note: "Need specialist input" });
     expect(screen.getByText("A reviewer decision, separate from clinical uncertainty. A note is required.")).toBeDefined();
     expect(screen.getByText("Unresolved proposals are included in exports with a separate reviewer flag and note. Clinical axis values are unchanged.")).toBeDefined();

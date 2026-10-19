@@ -1,3 +1,4 @@
+import { FinalExportPanel } from "./FinalExportPanel";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type CurrentUser, type ExportKind } from "../api/client";
 import { saveDownload } from "../api/download";
@@ -41,7 +42,7 @@ function ExportFailure({ result, error }: { result: Record<string, unknown> | nu
   const details = record(failure?.details);
   const cause = record(details?.cause);
   if (failure?.code !== "EXPORT_UNRESOLVED_INVALID" || !details || typeof cause?.code !== "string") {
-    return <InlineMessage tone="error">{error || "The export failed without further details."}</InlineMessage>;
+    return <InlineMessage tone="error"><p>Export could not be created. Open diagnostics for the technical details.</p><details><summary>Technical diagnostics</summary><pre>{error || "The export failed without further details."}</pre></details></InlineMessage>;
   }
   const causeDetails = record(cause.details);
   return <InlineMessage tone="error">
@@ -56,13 +57,13 @@ function ExportFailure({ result, error }: { result: Record<string, unknown> | nu
 }
 
 export function ExportPage({ projectKey, currentUser }: ExportPageProps): JSX.Element {
-  return <section><h1>Export</h1>{definitions.map((definition, index) => {
+  return <section><h1>Export</h1><FinalExportPanel projectKey={projectKey} username={currentUser.username} /><h2>Research and individual exports</h2>{definitions.map((definition) => {
     const storageKey = `ontocurator:export:${JSON.stringify([currentUser.username, projectKey, definition.kind])}`;
-    return <ExportCard key={storageKey} projectKey={projectKey} storageKey={storageKey} lead={index === 0} {...definition} />;
+    return <ExportCard key={storageKey} projectKey={projectKey} storageKey={storageKey} lead={false} {...definition} />;
   })}</section>;
 }
 
-// One primary action per view: only the first (lead) export card carries it.
+// The final export above is the primary action; research exports stay secondary.
 function ExportCard({ projectKey, storageKey, kind, title, format, description, lead }: { projectKey: string; storageKey: string; kind: CardKind; title: string; format: string; description: string; lead: boolean }): JSX.Element {
   const [remembered] = useState(() => readRemembered(storageKey));
   const [jobId, setJobId] = useState<number | null>(remembered.id);

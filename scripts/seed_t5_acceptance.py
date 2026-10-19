@@ -48,7 +48,13 @@ def digest(path: Path) -> str:
 
 
 def configuration(
-    *, project: str, image: str, source_sha: str, app_port: int, pg_port: int
+    *,
+    project: str,
+    image: str,
+    source_sha: str,
+    app_port: int,
+    pg_port: int,
+    snapshot_sha256: str | None = None,
 ) -> dict[str, Any]:
     if not re.fullmatch(r"ontocurator-t5-acceptance(?:-[a-z0-9][a-z0-9-]*)?", project):
         raise ValueError("Use a dedicated ontocurator-t5-acceptance[-suffix] project")
@@ -56,12 +62,16 @@ def configuration(
         raise ValueError("An immutable local sha256 image ID is required")
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
         raise ValueError("The final image's full source revision is required")
+    if snapshot_sha256 is not None and not re.fullmatch(
+        r"[0-9a-f]{64}", snapshot_sha256
+    ):
+        raise ValueError("The source snapshot must be an exact SHA-256 digest")
     if (
         any(not 1024 <= port <= 65535 for port in (app_port, pg_port))
         or app_port == pg_port
     ):
         raise ValueError("Use distinct unprivileged app and PostgreSQL ports")
-    return dict(
+    result = dict(
         project=project,
         image=image,
         source_sha=source_sha,
@@ -69,6 +79,52 @@ def configuration(
         pg_port=pg_port,
         host=f"http://127.0.0.1:{app_port}",
     )
+    if snapshot_sha256 is not None:
+        result["snapshot_sha256"] = snapshot_sha256
+    return result
+
+
+def source_tree_manifest(root: Path = ROOT) -> list[tuple[str, str | None]]:
+    """Hash tracked and unignored source bytes, including uncommitted changes.
+
+    Runtime directories/secrets excluded by Git stay outside this identity. Full
+    candidate inputs have their own manifest pin. No file contents are printed.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "-c", "-o", "--exclude-standard", "-z"],
+        cwd=root,
+        capture_output=True,
+        check=True,
+    )
+    rows = []
+    for name in sorted(set(result.stdout.decode("utf-8").split("\0")) - {""}):
+        path = root / name
+        if not path.resolve().is_relative_to(root.resolve()):
+            raise ValueError("Source snapshot cannot follow links outside the checkout")
+        rows.append((name, digest(path) if path.is_file() else None))
+    return rows
+
+
+def source_tree_digest(root: Path = ROOT) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            source_tree_manifest(root), ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+
+
+def require_image_identity(cfg: dict[str, Any], image: dict[str, Any]) -> None:
+    labels = image["Config"].get("Labels") or {}
+    if labels.get("org.opencontainers.image.revision") != cfg["source_sha"]:
+        raise ValueError("Frozen image revision label differs from supplied source")
+    if (
+        cfg.get("snapshot_sha256")
+        and labels.get("org.opencontainers.image.source-snapshot-sha256")
+        != cfg["snapshot_sha256"]
+    ):
+        raise ValueError(
+            "Frozen image source snapshot differs from the prepared candidate"
+        )
 
 
 def output_path(root: Path, output: Path, *, existing: bool = False) -> Path:
@@ -196,27 +252,60 @@ class Api:
         return json.loads(data) if data else None
 
 
-def verify_inputs() -> dict[str, Any]:
+def verify_inputs(inputs: Path = INPUTS) -> dict[str, Any]:
     manifest: dict[str, Any] = json.loads(
-        (INPUTS / "manifest.json").read_text(encoding="utf-8")
+        (inputs / "manifest.json").read_text(encoding="utf-8")
     )
+    required = {"hp.json", "profile.json", "demo.zip", "cases.json"}
+    translations = manifest.get("translations", [])
+    if manifest.get("input_kind") == "full-hpo/v1":
+        if (
+            not isinstance(translations, list)
+            or not translations
+            or any(
+                not isinstance(name, str)
+                or not re.fullmatch(r"hp-[a-z]{2}\.(babelon|synonyms)\.tsv", name)
+                for name in translations
+            )
+            or len(set(translations)) != len(translations)
+        ):
+            raise ValueError("Full HPO input manifest has invalid translations")
+        required |= set(translations)
+    elif translations:
+        raise ValueError("Public four-file input manifest cannot include translations")
+    if set(manifest["sha256"]) != required:
+        raise ValueError("Public acceptance input manifest is incomplete")
     for name, expected in manifest["sha256"].items():
         if (
-            name not in {"hp.json", "profile.json", "demo.zip", "cases.json"}
-            or digest(INPUTS / name) != expected
+            not re.fullmatch(r"[0-9a-f]{64}", expected)
+            or digest(inputs / name) != expected
         ):
             raise ValueError("Public acceptance input hash mismatch")
-    if set(manifest["sha256"]) != {"hp.json", "profile.json", "demo.zip", "cases.json"}:
-        raise ValueError("Public acceptance input manifest is incomplete")
     return manifest
 
 
-def prepare(cfg: dict[str, Any], directory: Path) -> None:
-    verify_inputs()
+def prepare(cfg: dict[str, Any], directory: Path, inputs: Path = INPUTS) -> None:
+    inputs = inputs.resolve()
+    verify_inputs(inputs)
     directory = output_path(ROOT, directory)
-    if checked(["git", "status", "--porcelain"], env=dict(os.environ)).strip():
+    if cfg.get("snapshot_sha256"):
+        if source_tree_digest() != cfg["snapshot_sha256"]:
+            raise ValueError(
+                "Source snapshot changed; freeze the exact candidate again"
+            )
+        if (
+            checked(["git", "rev-parse", "HEAD"], env=dict(os.environ)).strip()
+            != cfg["source_sha"]
+        ):
+            raise ValueError("Candidate base revision differs from the checkout")
+    elif checked(["git", "status", "--porcelain"], env=dict(os.environ)).strip():
         raise ValueError("Freeze a clean seed source before preparation")
     directory.mkdir(parents=True)
+    if cfg.get("snapshot_sha256"):
+        write_private(
+            directory / "source-snapshot.json",
+            {"sha256": cfg["snapshot_sha256"], "files": source_tree_manifest()},
+        )
     token = directory / "unused-build-token"
     token.touch(mode=0o600)
     override = directory / "image.override.json"
@@ -238,7 +327,8 @@ def prepare(cfg: dict[str, Any], directory: Path) -> None:
         environment=environment,
         base_sha256=digest(ROOT / "docker-compose.dev.yml"),
         seed_sha256=digest(Path(__file__)),
-        manifest_sha256=digest(INPUTS / "manifest.json"),
+        inputs=str(inputs),
+        manifest_sha256=digest(inputs / "manifest.json"),
         seed_source=checked(["git", "rev-parse", "HEAD"], env=dict(os.environ)).strip(),
     )
     write_private(directory / "identity.json", record)
@@ -318,10 +408,7 @@ class Stack:
         image = json.loads(
             checked(["docker", "image", "inspect", cfg["image"]], env=self.env)
         )[0]
-        if (image["Config"].get("Labels") or {}).get(
-            "org.opencontainers.image.revision"
-        ) != cfg["source_sha"]:
-            raise ValueError("Frozen image revision label differs from supplied source")
+        require_image_identity(cfg, image)
         mounts = {}
         for name, port, target, destination in [
             ("app", cfg["app_port"], "8000/tcp", "/data"),
@@ -370,8 +457,12 @@ def load_prepared(directory: Path) -> dict[str, Any]:
         **{
             key: cfg[key]
             for key in ("project", "image", "source_sha", "app_port", "pg_port")
-        }
+        },
+        snapshot_sha256=cfg.get("snapshot_sha256"),
     )
+    inputs = Path(cfg.get("inputs", INPUTS)).resolve()
+    if cfg.get("snapshot_sha256") and source_tree_digest() != cfg["snapshot_sha256"]:
+        raise ValueError("Prepared source snapshot changed; prepare a fresh candidate")
     if (
         cfg["directory"] != str(directory)
         or cfg["host"] != f"http://127.0.0.1:{cfg['app_port']}"
@@ -386,12 +477,12 @@ def load_prepared(directory: Path) -> dict[str, Any]:
     if (
         cfg["base_sha256"] != digest(ROOT / "docker-compose.dev.yml")
         or cfg["seed_sha256"] != digest(Path(__file__))
-        or cfg["manifest_sha256"] != digest(INPUTS / "manifest.json")
+        or cfg["manifest_sha256"] != digest(inputs / "manifest.json")
     ):
         raise ValueError(
             "Prepared source/input identities changed; prepare a fresh run"
         )
-    verify_inputs()
+    verify_inputs(inputs)
     expected = {
         "services": {name: {"image": cfg["image"]} for name in ("app", "migrate")}
     }
@@ -429,6 +520,7 @@ def assign(api: Api, document: str, username: str, task: str) -> dict[str, Any]:
 def seed(directory: Path) -> None:
     cfg = load_prepared(directory)
     directory = Path(cfg["directory"])
+    inputs = Path(cfg.get("inputs", INPUTS))
     if any(
         (directory / name).exists()
         for name in ("seed-started.json", "credentials.json", "seed-result.json")
@@ -474,10 +566,23 @@ def seed(directory: Path) -> None:
             "-c",
             "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())",
             f"/tmp/t5-acceptance-{name}",
-            data=(INPUTS / name).read_bytes(),
+            data=(inputs / name).read_bytes(),
         )
-    manifest = verify_inputs()
+    manifest = verify_inputs(inputs)
     stack.cli("ontologies", "add", "/tmp/t5-acceptance-hp.json")
+    for name in manifest.get("translations", []):
+        destination = f"/tmp/{name}"
+        stack.compose(
+            "exec",
+            "-T",
+            "app",
+            "python",
+            "-c",
+            "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())",
+            destination,
+            data=(inputs / name).read_bytes(),
+        )
+        stack.cli("ontologies", "add", destination)
     stack.cli(
         "projects",
         "create",
@@ -542,7 +647,7 @@ def seed(directory: Path) -> None:
     documents = lead.request("GET", f"/api/v1/projects/{PROJECT_KEY}/documents")
     if len(documents) != 6:
         raise RuntimeError("Real import did not produce the six expected variants")
-    cases = json.loads((INPUTS / "cases.json").read_text(encoding="utf-8"))
+    cases = json.loads((inputs / "cases.json").read_text(encoding="utf-8"))
     by_external = {
         (row["external_id"], row["language"]): row["document_id"] for row in documents
     }
@@ -640,6 +745,11 @@ def main() -> int:
     )
     setup.add_argument("--app-port", required=True, type=int)
     setup.add_argument("--pg-port", required=True, type=int)
+    setup.add_argument("--inputs-dir", type=Path, default=INPUTS)
+    setup.add_argument(
+        "--snapshot-sha256",
+        help="Explicit dirty source identity; requires matching OCI source-snapshot-sha256 image label",
+    )
     for command in (
         setup,
         commands.add_parser(
@@ -657,8 +767,10 @@ def main() -> int:
                     source_sha=args.source_sha,
                     app_port=args.app_port,
                     pg_port=args.pg_port,
+                    snapshot_sha256=args.snapshot_sha256,
                 ),
                 args.output_dir,
+                args.inputs_dir,
             )
         else:
             seed(args.output_dir)

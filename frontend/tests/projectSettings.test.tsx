@@ -71,6 +71,38 @@ describe("project creation", () => {
 });
 
 describe("project settings sections", () => {
+  it("jumps to rules with scoped save feedback beside the first control and secondary values collapsed", async () => {
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const navigation = await screen.findByRole("navigation", { name: "Settings sections" });
+    fireEvent.click(within(navigation).getByRole("button", { name: "Annotation rules" }));
+    const form = screen.getByRole("form", { name: "Rules" });
+    expect(document.activeElement).toBe(form);
+    const save = within(form).getByRole("button", { name: "Save rules" });
+    const control = within(form).getByRole("combobox", { name: "Findings without a text span" });
+    expect(save.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.change(control, { target: { value: "optional" } });
+    expect(within(form).getByRole("status").compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const disclosure = within(form).getByText("Hidden axis values").closest("details")!;
+    expect(disclosure.open).toBe(false);
+    fireEvent.click(within(navigation).getByRole("button", { name: "General" }));
+    fireEvent.click(within(navigation).getByRole("button", { name: "Annotation rules" }));
+    expect(control).toHaveProperty("value", "optional");
+    expect(api.updateProjectSettings).not.toHaveBeenCalled();
+  });
+  it("saves profile-keyed creation defaults without saving another section's rule changes", async () => {
+    const updated = { ...settings, creation_defaults: { findings: { phenotype: { assertion: "present" } } }, annotation_policy_revision: 2 };
+    vi.mocked(api.updateProjectSettings).mockResolvedValue(updated);
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const preset = await screen.findByRole("combobox", { name: "Default Assertion (Findings / Phenotype)" });
+    expect(preset).toHaveProperty("value", "");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Every axis must be chosen before submission" }));
+    fireEvent.change(preset, { target: { value: "present" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save creation defaults" }));
+    await screen.findByText("Creation defaults saved.");
+    expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { creation_defaults: { findings: { phenotype: { assertion: "present" } } } });
+    expect(screen.getByRole("checkbox", { name: "Every axis must be chosen before submission" })).toHaveProperty("checked", true);
+    expect(screen.getByRole("combobox", { name: "Default Certainty (Findings / Later type)" })).toHaveProperty("value", "");
+  });
   it("saves only one section and preserves another section's unsaved draft", async () => {
     render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
     fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: "New name" } });
@@ -141,6 +173,8 @@ describe("project settings sections", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save guideline" }));
     expect(await screen.findByRole("alert")).toBeDefined();
     expect((screen.getByLabelText("Guideline URL") as HTMLInputElement).value).toBe("https://example.test/guide");
+    expect(within(screen.getByRole("form", { name: "Guideline" })).getByRole("status").textContent).toContain("Unsaved changes");
+    expect(screen.queryByText("Guideline saved.")).toBeNull();
   });
 
   it("ignores stale project loads and discards responses after unmount", async () => {
@@ -210,7 +244,7 @@ describe("project settings sections", () => {
     // A late draft event must survive even while normal UI controls are disabled.
     fireEvent.change(screen.getByLabelText("Allowed roots for HP"), { target: { value: "HP:3" } });
     await act(async () => { pending.resolve(settings); });
-    await screen.findByText("Pins saved.");
+    await screen.findByText("Pins saved. Newer changes remain unsaved.");
     expect((screen.getByLabelText("Allowed roots for HP") as HTMLInputElement).value).toBe("HP:3");
     expect(api.updatePins).toHaveBeenCalledWith(settings.project_key, [{ ontology_id: "HP", sha256: settings.pins[0].sha256, allowed_roots: ["HP:2"], t1_profile: settings.pins[0].t1_profile }]);
   });

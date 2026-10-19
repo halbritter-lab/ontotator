@@ -36,7 +36,7 @@ it("keeps the SAME focused prefix input while actual App navigation controls eve
 });
 
 it("assigns only the selected document through real role-filtered controls and refreshes actual inventories", async () => {
-  const assignedDocument = { ...documents[0], assignees: [{ assignment_id: 3, username: "alice", pseudonym: "A", task: "annotate" as const, status: "open" as const }] };
+  const assignedDocument = { ...documents[0], assignees: [{ assignment_id: 3, workflow_revision: 0, held: false, username: "alice", pseudonym: "A", task: "annotate" as const, status: "open" as const }] };
   vi.mocked(api.listProjectDocuments).mockResolvedValueOnce(documents).mockResolvedValue([assignedDocument, documents[1]]);
   vi.mocked(api.listAssignments).mockResolvedValueOnce([]).mockResolvedValue([assignment]);
   vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [assignment], refused: [] });
@@ -65,7 +65,7 @@ it("assigns only the selected document through real role-filtered controls and r
 it("reopens the submitted assignee from its real row menu and reloads the assignment status", async () => {
   const submitted = { ...assignment, status: "submitted" as const };
   const reopened = { ...assignment, status: "reopened" as const };
-  const doc = (status: "submitted" | "reopened") => ({ ...documents[0], assignees: [{ assignment_id: 3, username: "alice", pseudonym: "A", task: "annotate" as const, status }] });
+  const doc = (status: "submitted" | "reopened") => ({ ...documents[0], assignees: [{ assignment_id: 3, workflow_revision: 0, held: false, username: "alice", pseudonym: "A", task: "annotate" as const, status }] });
   vi.mocked(api.listProjectDocuments).mockResolvedValueOnce([doc("submitted")]).mockResolvedValue([doc("reopened")]);
   vi.mocked(api.listAssignments).mockResolvedValueOnce([submitted]).mockResolvedValue([reopened]);
   vi.spyOn(api, "reopenAssignment").mockResolvedValue(reopened);

@@ -59,8 +59,12 @@ async function leadContext(browser: Browser, s: Scenario) {
   const page = await context.newPage(); await loginExisting(page, s.users.lead);
   return { page, close: () => context.close() };
 }
-function documentRow(page: Page, id: string) {
-  return page.getByTestId('document-row').filter({ has: page.getByRole('cell', { name: id, exact: true }) });
+async function documentRow(page: Page, id: string) {
+  const version = page.locator('details.document-version').filter({ has: page.getByRole('checkbox', { name: `Select ${id}`, exact: true, includeHidden: true }) });
+  await expect(version).toHaveCount(1);
+  if (!await version.evaluate(node => (node as HTMLDetailsElement).open)) await version.locator(':scope > summary').click();
+  await expect(version.getByTestId('document-row')).toBeVisible();
+  return version;
 }
 async function section(page: Page, name: string) {
   const details = page.locator('.shell-reading-navigation');
@@ -86,7 +90,7 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
     const roles = await (await authenticatedRequest(lead.page, '/api/v1/projects')).json() as { project_key: string; roles: string[] }[];
     expect(roles.find(p => p.project_key === s.project)?.roles).toEqual(['lead']);
     await lead.page.goto(documentsUrl(s));
-    const row = documentRow(lead.page, s.documents.target);
+    const row = await documentRow(lead.page, s.documents.target);
     await expect(row).toContainText('Ready for review');
     await row.getByRole('checkbox', { name: `Select ${s.documents.target}`, exact: true }).check();
     await lead.page.getByRole('button', { name: 'Assign …', exact: true }).click();
@@ -170,8 +174,8 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   const reopenedLead = await leadContext(browser, s);
   try {
     await reopenedLead.page.goto(documentsUrl(s));
-    const original = documentRow(reopenedLead.page, s.documents.target);
-    await expect(original).toContainText('Reviewed'); await expect(documentRow(reopenedLead.page, created.document_id)).toContainText('Accepted');
+    const original = await documentRow(reopenedLead.page, s.documents.target);
+    await expect(original).toContainText('Reviewed'); await expect(await documentRow(reopenedLead.page, created.document_id)).toContainText('Accepted');
     await original.getByText('Assignment actions', { exact: true }).click();
     await original.getByRole('button', { name: 'Reopen', exact: true }).click();
     const dialog = reopenedLead.page.getByRole('dialog', { name: `Reopen ${s.documents.target}`, exact: true });
@@ -280,7 +284,7 @@ for (const actor of ['reviewer', 'other'] as const) test(`expired review session
     expect(savedResponse.request().postDataJSON()).toEqual({ expected_revision: before.draft.revision, text, form: { decision: 'accepted_corrected', clinical_change: false } });
     await saved(page, s.assignment_id!, text, 'accepted_corrected');
   } else {
-    await expect(page.getByRole('heading', { name: 'This task is no longer assigned to you.', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/#\/$/); await expect(page.getByRole('heading', { name: 'My tasks', exact: true })).toBeVisible();
     await expect(target(page)).toHaveCount(0); await expect(page.locator('[data-session-owner]')).toHaveCount(0);
     const denied = await authenticatedRequest(page, `/api/v1/translation-reviews/${s.assignment_id}`); expect(denied.status()).toBe(404);
   }

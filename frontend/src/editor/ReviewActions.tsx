@@ -8,6 +8,8 @@ import type { components } from "../api/generated";
 import { TermName } from "./TermName";
 import { AiBadge } from "./AiBadge";
 import { IconCheck, IconClose, IconPencil, IconQuestion, IconUndo, IconWarning } from "../ui/icons";
+import { axisOptionLabel, findingAxes } from "./axisLabels";
+import type { AxisDefinition } from "./AnnotationPanel";
 
 export type ReviewDecision = components["schemas"]["ReviewDecision"];
 export type ReviewDecisionOutcome = "confirmed" | "rejected" | "changed" | "uncertain";
@@ -60,6 +62,11 @@ export interface ReviewActionsProps {
   noteSaveDelayMs?: number;
   /** Parent requests note validation/focus after an unresolved keyboard action. */
   requireNote?: boolean;
+  draftUnresolved?: boolean;
+  busy?: boolean;
+  axesConfig?: AxisDefinition[];
+  requireChosenAxes?: boolean;
+  onDraftUnresolved?: () => void;
 }
 
 type NoteSaveSession = {
@@ -68,6 +75,7 @@ type NoteSaveSession = {
   decision: ReviewDecision | null;
   decide: ReviewActionsProps["onDecide"];
   readOnly: boolean;
+  drafting: boolean;
 };
 
 function cancelNoteSave(session: NoteSaveSession) {
@@ -78,7 +86,7 @@ function cancelNoteSave(session: NoteSaveSession) {
 function saveNote(session: NoteSaveSession) {
   cancelNoteSave(session);
   const { note, decision, decide, readOnly } = session;
-  if (readOnly || !decision) return;
+  if (readOnly || session.drafting || !decision) return;
   const normalized = note.trim() || undefined;
   if (decision.outcome === "uncertain" && !normalized) return;
   if ((decision.note ?? undefined) === normalized) return;
@@ -103,6 +111,11 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   onNoteChange,
   noteSaveDelayMs = 800,
   requireNote = false,
+  draftUnresolved = false,
+  busy = false,
+  axesConfig,
+  requireChosenAxes = false,
+  onDraftUnresolved,
 }) => {
   const targetIdentity = JSON.stringify([target.annotation_id, target.version]);
   const [localNote, setLocalNote] = useState({ targetIdentity, value: currentDecision?.note ?? "" });
@@ -110,16 +123,20 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   const note = controlledNote ?? (localNote.targetIdentity === targetIdentity ? localNote.value : currentDecision?.note ?? "");
   const noteInput = useRef<HTMLTextAreaElement>(null);
   const noteId = useId();
-  const needsNote = requireNote || attemptedUnresolved === targetIdentity || currentDecision?.outcome === "uncertain";
+  const drafting = draftUnresolved || attemptedUnresolved === targetIdentity;
+  const needsNote = requireNote || drafting || currentDecision?.outcome === "uncertain";
   const noteInvalid = !readOnly && needsNote && !note.trim();
   // Each exact target owns its save session. A delayed callback/unmount can only
   // save that target through its original parent callback, even after re-selection.
-  const noteSession = useMemo<NoteSaveSession>(() => ({ timer: null, note: "", decision: null, decide: onDecide, readOnly }), [targetIdentity]);
-  Object.assign(noteSession, { note, decision: currentDecision, decide: onDecide, readOnly });
+  const noteSession = useMemo<NoteSaveSession>(() => ({ timer: null, note: "", decision: null, decide: onDecide, readOnly, drafting: false }), [targetIdentity]);
+  Object.assign(noteSession, { note, decision: currentDecision, decide: onDecide, readOnly, drafting });
   useEffect(() => () => { if (noteSession.timer) saveNote(noteSession); }, [noteSession]);
   useEffect(() => {
-    if (requireNote && !readOnly && !note.trim()) noteInput.current?.focus();
+    if (requireNote && !readOnly) { cancelNoteSave(noteSession); noteInput.current?.focus(); }
   }, [requireNote, readOnly, targetIdentity]);
+  useEffect(() => {
+    if (currentDecision?.outcome === "uncertain" && currentDecision.note === note.trim()) setAttemptedUnresolved(null);
+  }, [currentDecision]);
 
   const handleNoteChange = (value: string) => {
     if (readOnly) return;
@@ -127,7 +144,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
     if (onNoteChange) onNoteChange(value);
     else setLocalNote({ targetIdentity, value });
     cancelNoteSave(noteSession);
-    if (currentDecision && noteSaveDelayMs > 0 && !(currentDecision.outcome === "uncertain" && !value.trim())) {
+    if (!drafting && currentDecision && noteSaveDelayMs > 0 && !(currentDecision.outcome === "uncertain" && !value.trim())) {
       noteSession.timer = setTimeout(() => saveNote(noteSession), noteSaveDelayMs);
     }
   };
@@ -135,8 +152,10 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   const handleOutcomeClick = (outcome: ReviewDecisionOutcome) => {
     if (readOnly) return;
     cancelNoteSave(noteSession);
-    if (outcome === "uncertain" && !note.trim()) {
+    if (outcome === "uncertain") {
+      noteSession.drafting = true;
       setAttemptedUnresolved(targetIdentity);
+      onDraftUnresolved?.();
       noteInput.current?.focus();
       return;
     }
@@ -183,14 +202,14 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <dl className="axis-list">
           {(() => {
             const rawAxes = target.axes_values ?? (target.axes && "values" in target.axes ? (target.axes as any).values : target.axes) ?? {};
-            const entries = Object.entries(rawAxes);
+            const entries = findingAxes(rawAxes, axesConfig);
             if (entries.length === 0) {
               return <dd className="axis-list__empty">No axes defined</dd>;
             }
-            return entries.map(([k, v]) => (
-              <React.Fragment key={k}>
-                <dt>{k}</dt>
-                <dd>{typeof v === "string" ? v : (v !== null && v !== undefined ? String(v) : "Not specified")} {target.axes_defaulted?.includes(k) && <span className="badge">Defaulted</span>}</dd>
+            return entries.map(({ id, label, value }) => (
+              <React.Fragment key={id}>
+                <dt>{label}</dt>
+                <dd>{axisOptionLabel(value)} {target.axes_defaulted?.includes(id) && <span className="badge">Defaulted</span>}</dd>
               </React.Fragment>
             ));
           })()}
@@ -204,7 +223,11 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </details>
       </div>
       <ProposalSource source={source} />
-      {!!target.axes_defaulted?.length && <p className="field-hint">To confirm or change defaulted values, use Edit &amp; Replace, choose “Reset decision and edit copy” if asked, then use Confirm for each axis in the copy.</p>}
+      {!!target.axes_defaulted?.length && <div className="field-hint">
+        <p>This proposal is immutable. Its defaulted values cannot be confirmed directly. An Unresolved decision and its reviewer note keep the original clinical values.</p>
+        {requireChosenAxes && <p role="alert">This project requires every axis to be chosen. Defaulted values on this immutable proposal still block submission. Ask the project lead to resolve this rule conflict, or make a clinically justified replacement decision.</p>}
+        <p>Edit &amp; Replace is a separate review decision: it creates an editable copy and replaces the existing decision. Use it only when you intend to replace the proposal.</p>
+      </div>}
       {/* Origin Info */}
       <div className="review-actions__origin">
         {target.provenance ? (
@@ -344,11 +367,19 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <Textarea rows={3} id={noteId} ref={noteInput} label="Reviewer note" aria-label="Reviewer note"
           required={needsNote} readOnly={readOnly} value={note}
           error={noteInvalid ? "A reviewer note is required for an unresolved decision." : undefined}
-          hint={!noteInvalid && !currentDecision && note.trim() ? "The note is saved together with the next decision."
+          hint={drafting ? "The reason is saved only with Save decision." : !noteInvalid && !currentDecision && note.trim() ? "The note is saved together with the next decision."
             : !noteInvalid && currentDecision && (currentDecision.note ?? "") !== note.trim()
               ? "Unsaved note – saved automatically when you leave the field." : undefined}
           onChange={e => handleNoteChange(e.target.value)} onBlur={() => saveNote(noteSession)}
  />
+        {drafting && <div className="review-actions__row">
+          <p role="status">Unresolved decision not saved. Enter a reason, then save the decision.</p>
+          <Button disabled={readOnly || busy || !note.trim()} onClick={() => {
+            cancelNoteSave(noteSession);
+            if (!note.trim()) return;
+            onDecide({ outcome: "uncertain", replacement: undefined, note: note.trim() });
+          }}>Save decision</Button>
+        </div>}
       </div>
     </div>
   );

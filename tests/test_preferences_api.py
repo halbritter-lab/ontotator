@@ -15,6 +15,7 @@ from ontocurator.config import AppConfig
 
 URL = "/api/v1/preferences"
 EMPTY_PREFERENCES = {
+    "multilingual_search": None,
     "last_annotator_id": None,
     "mode_by_package": {},
     "search_languages_by_annotator": {},
@@ -109,3 +110,22 @@ def test_preferences_need_a_session(app: FastAPI) -> None:
 
     assert response.status_code == 401
     assert response.json()["code"] == "NOT_AUTHENTICATED"
+
+
+def test_search_preferences_keep_explicit_disabled_automation():
+    from ontocurator.application.preferences import PreferencesUpdate
+    from ontocurator.auth.preferences import _from_stored
+
+    change = PreferencesUpdate.model_validate(
+        {
+            "multilingual_search": {
+                "enabled": False,
+                "preferred_languages": ["de"],
+                "automatic_document_language": False,
+            }
+        }
+    )
+    stored = _from_stored(change.model_dump(exclude_unset=True))
+    assert stored.multilingual_search.enabled is False
+    assert stored.multilingual_search.automatic_document_language is False
+    assert stored.multilingual_search.preferred_languages == ["de"]

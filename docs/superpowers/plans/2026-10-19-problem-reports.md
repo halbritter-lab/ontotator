@@ -317,7 +317,9 @@ def check_state(action: str, state: str, *, withdrawable_now: bool) -> None:
             raise _conflict("REPORT_OPEN")
         return
     if state in CLOSED_STATES and action != "resume":
-        raise _conflict("REPORT_RESOLVED" if state == "resolved" else "REPORT_WITHDRAWN")
+        raise _conflict(
+            "REPORT_RESOLVED" if state == "resolved" else "REPORT_WITHDRAWN"
+        )
     if action == "withdraw" and not withdrawable_now:
         raise _conflict("REPORT_LEAD_ACTED")
 
@@ -361,39 +363,64 @@ S = "ontocurator"
 
 
 def _seed(conn) -> None:
-    conn.execute(text(
-        f"INSERT INTO {S}.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) "
-        "VALUES ('p', 'p', '{}', 'm', '{}', 't')"
-    ))
+    conn.execute(
+        text(
+            f"INSERT INTO {S}.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) "
+            "VALUES ('p', 'p', '{}', 'm', '{}', 't')"
+        )
+    )
     for name, pseudonym in (("rep", "ann-0004"), ("lead", "lead-0002")):
-        conn.execute(text(
-            f"INSERT INTO {S}.users (username, display_name, pseudonym) VALUES (:u, :u, :p)"
-        ), {"u": name, "p": pseudonym})
-    conn.execute(text(
-        f"INSERT INTO {S}.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
-        f"SELECT id, 'd', 'de', 'x', 'c', 'd', 1, 'native', NULL, NULL, 'h' FROM {S}.projects"
-    ))
-    conn.execute(text(
-        f"INSERT INTO {S}.assignments (project_id, document_id, user_id, task) "
-        f"SELECT p.id, 'd', u.id, 'annotate' FROM {S}.projects p, {S}.users u WHERE u.username = 'rep'"
-    ))
-    ids = "(SELECT id FROM {S}.projects), (SELECT id FROM {S}.assignments), (SELECT id FROM {S}.users WHERE username = 'rep')".format(S=S)
-    conn.execute(text(
-        f"INSERT INTO {S}.problem_reports (report_id, project_id, assignment_id, reporter_id, reason, created_at) "
-        f"VALUES ('r1', {ids}, 'broken', '2026-10-19T01:00:00Z')"
-    ))
-    conn.execute(text(f"INSERT INTO {S}.problem_report_state (report_id, state, revision) VALUES ('r1', 'open', 3)"))
+        conn.execute(
+            text(
+                f"INSERT INTO {S}.users (username, display_name, pseudonym) VALUES (:u, :u, :p)"
+            ),
+            {"u": name, "p": pseudonym},
+        )
+    conn.execute(
+        text(
+            f"INSERT INTO {S}.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
+            f"SELECT id, 'd', 'de', 'x', 'c', 'd', 1, 'native', NULL, NULL, 'h' FROM {S}.projects"
+        )
+    )
+    conn.execute(
+        text(
+            f"INSERT INTO {S}.assignments (project_id, document_id, user_id, task) "
+            f"SELECT p.id, 'd', u.id, 'annotate' FROM {S}.projects p, {S}.users u WHERE u.username = 'rep'"
+        )
+    )
+    ids = "(SELECT id FROM {S}.projects), (SELECT id FROM {S}.assignments), (SELECT id FROM {S}.users WHERE username = 'rep')".format(
+        S=S
+    )
+    conn.execute(
+        text(
+            f"INSERT INTO {S}.problem_reports (report_id, project_id, assignment_id, reporter_id, reason, created_at) "
+            f"VALUES ('r1', {ids}, 'broken', '2026-10-19T01:00:00Z')"
+        )
+    )
+    conn.execute(
+        text(
+            f"INSERT INTO {S}.problem_report_state (report_id, state, revision) VALUES ('r1', 'open', 3)"
+        )
+    )
     for hold, at in (("h1", "2026-10-19T01:00:00Z"), ("h2", "2026-10-19T03:00:00Z")):
-        conn.execute(text(
-            f"INSERT INTO {S}.task_holds (hold_id, project_id, assignment_id, report_id, reason, created_by, created_at) "
-            f"SELECT '{hold}', a.project_id, a.id, 'r1', 'broken', a.user_id, '{at}' FROM {S}.assignments a"
-        ))
-        conn.execute(text(f"INSERT INTO {S}.task_hold_state (hold_id, active) VALUES ('{hold}', false)"))
-    conn.execute(text(
-        f"INSERT INTO {S}.problem_report_events (event_id, project_id, report_id, actor_id, action, details, created_at) "
-        f"SELECT 'e1', a.project_id, 'r1', u.id, 'resume', jsonb_build_object('reason', 'upsi', 'assignment_ids', jsonb_build_array(a.id)), '2026-10-19T02:00:00Z' "
-        f"FROM {S}.assignments a, {S}.users u WHERE u.username = 'lead'"
-    ))
+        conn.execute(
+            text(
+                f"INSERT INTO {S}.task_holds (hold_id, project_id, assignment_id, report_id, reason, created_by, created_at) "
+                f"SELECT '{hold}', a.project_id, a.id, 'r1', 'broken', a.user_id, '{at}' FROM {S}.assignments a"
+            )
+        )
+        conn.execute(
+            text(
+                f"INSERT INTO {S}.task_hold_state (hold_id, active) VALUES ('{hold}', false)"
+            )
+        )
+    conn.execute(
+        text(
+            f"INSERT INTO {S}.problem_report_events (event_id, project_id, report_id, actor_id, action, details, created_at) "
+            f"SELECT 'e1', a.project_id, 'r1', u.id, 'resume', jsonb_build_object('reason', 'upsi', 'assignment_ids', jsonb_build_array(a.id)), '2026-10-19T02:00:00Z' "
+            f"FROM {S}.assignments a, {S}.users u WHERE u.username = 'lead'"
+        )
+    )
 
 
 def test_0015_backfills_matching_releases_and_leaves_unmatched_null(tmp_path):
@@ -406,14 +433,24 @@ def test_0015_backfills_matching_releases_and_leaves_unmatched_null(tmp_path):
     with engine.begin() as conn:
         rows = {
             r.hold_id: r
-            for r in conn.execute(text(
-                f"SELECT s.hold_id, s.release_action, s.release_event_id, u.username AS by "
-                f"FROM {S}.task_hold_state s LEFT JOIN {S}.users u ON u.id = s.released_by"
-            ))
+            for r in conn.execute(
+                text(
+                    f"SELECT s.hold_id, s.release_action, s.release_event_id, u.username AS by "
+                    f"FROM {S}.task_hold_state s LEFT JOIN {S}.users u ON u.id = s.released_by"
+                )
+            )
         }
-    assert (rows["h1"].release_action, rows["h1"].release_event_id, rows["h1"].by) == ("resume", "e1", "lead")
+    assert (rows["h1"].release_action, rows["h1"].release_event_id, rows["h1"].by) == (
+        "resume",
+        "e1",
+        "lead",
+    )
     # h2 was created after e1: no matching event, so "no record".
-    assert (rows["h2"].release_action, rows["h2"].release_event_id, rows["h2"].by) == (None, None, None)
+    assert (rows["h2"].release_action, rows["h2"].release_event_id, rows["h2"].by) == (
+        None,
+        None,
+        None,
+    )
 
 
 def test_0015_rejects_unknown_report_states(tmp_path):
@@ -468,10 +505,22 @@ WHERE s.hold_id = m.hold_id
 
 
 def upgrade() -> None:
-    op.add_column("task_hold_state", sa.Column("released_at", sa.DateTime(timezone=True)), schema=SCHEMA)
-    op.add_column("task_hold_state", sa.Column("released_by", sa.BigInteger(), sa.ForeignKey(f"{SCHEMA}.users.id")), schema=SCHEMA)
-    op.add_column("task_hold_state", sa.Column("release_action", sa.Text()), schema=SCHEMA)
-    op.add_column("task_hold_state", sa.Column("release_event_id", sa.Text()), schema=SCHEMA)
+    op.add_column(
+        "task_hold_state",
+        sa.Column("released_at", sa.DateTime(timezone=True)),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "task_hold_state",
+        sa.Column("released_by", sa.BigInteger(), sa.ForeignKey(f"{SCHEMA}.users.id")),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "task_hold_state", sa.Column("release_action", sa.Text()), schema=SCHEMA
+    )
+    op.add_column(
+        "task_hold_state", sa.Column("release_event_id", sa.Text()), schema=SCHEMA
+    )
     # The event row is inserted after the release in the same transaction.
     op.create_foreign_key(
         "fk_task_hold_state_release_event",
@@ -498,10 +547,22 @@ def upgrade() -> None:
         " AND (NOT active OR (released_at IS NULL AND release_event_id IS NULL))",
         schema=SCHEMA,
     )
-    op.create_index("ix_problem_reports_project_assignment", "problem_reports", ["project_id", "assignment_id"], schema=SCHEMA)
+    op.create_index(
+        "ix_problem_reports_project_assignment",
+        "problem_reports",
+        ["project_id", "assignment_id"],
+        schema=SCHEMA,
+    )
     op.create_index("ix_task_holds_report", "task_holds", ["report_id"], schema=SCHEMA)
-    op.create_index("ix_task_holds_assignment", "task_holds", ["assignment_id"], schema=SCHEMA)
-    op.create_index("ix_problem_report_events_report", "problem_report_events", ["report_id", "created_at"], schema=SCHEMA)
+    op.create_index(
+        "ix_task_holds_assignment", "task_holds", ["assignment_id"], schema=SCHEMA
+    )
+    op.create_index(
+        "ix_problem_report_events_report",
+        "problem_report_events",
+        ["report_id", "created_at"],
+        schema=SCHEMA,
+    )
 
 
 def downgrade() -> None:
@@ -533,22 +594,45 @@ from ontocurator.assignments.service import AssignmentService
 def team(round_work):
     app, lead, lead_task, _service, _rounds = round_work
     key = lead_task.project_key
-    bob = logged_in(app, "bob", pseudonym="ann-0004", projects={key: ["annotator"]}, assignments=[(key, "doc-1", "annotate")])
-    carol = logged_in(app, "carol", pseudonym="ann-0005", projects={key: ["annotator"]}, assignments=[(key, "doc-other", "annotate")])
+    bob = logged_in(
+        app,
+        "bob",
+        pseudonym="ann-0004",
+        projects={key: ["annotator"]},
+        assignments=[(key, "doc-1", "annotate")],
+    )
+    carol = logged_in(
+        app,
+        "carol",
+        pseudonym="ann-0005",
+        projects={key: ["annotator"]},
+        assignments=[(key, "doc-other", "annotate")],
+    )
     service = AssignmentService(app.state.repo.db)
     return SimpleNamespace(
-        app=app, key=key, lead=lead, lead_task=lead_task,
-        bob=bob, bob_task=service.list(key, user="bob")[0],
-        carol=carol, carol_task=service.list(key, user="carol")[0],
+        app=app,
+        key=key,
+        lead=lead,
+        lead_task=lead_task,
+        bob=bob,
+        bob_task=service.list(key, user="bob")[0],
+        carol=carol,
+        carol_task=service.list(key, user="carol")[0],
     )
 
 
-def report(client, task_id: int, reason: str = "Text is cut off after paragraph 2", request_id: str | None = None) -> dict[str, Any]:
+def report(
+    client,
+    task_id: int,
+    reason: str = "Text is cut off after paragraph 2",
+    request_id: str | None = None,
+) -> dict[str, Any]:
     current = client.get(f"/api/v1/assignments/{task_id}").json()
     response = client.post(
         f"/api/v1/assignments/{task_id}/problem-reports",
         json={
-            "request_id": request_id or f"report-{task_id}-{current['workflow_revision']}",
+            "request_id": request_id
+            or f"report-{task_id}-{current['workflow_revision']}",
             "expected_workflow_revision": current["workflow_revision"],
             "round_id": current["active_round_id"],
             "reason": reason,
@@ -558,7 +642,17 @@ def report(client, task_id: int, reason: str = "Text is cut off after paragraph 
     return response.json()
 
 
-def act(client, report_id: str, revision: int, action: str, reason: str | None = None, ids: list[int] | None = None, *, status: int = 200, request_id: str | None = None):
+def act(
+    client,
+    report_id: str,
+    revision: int,
+    action: str,
+    reason: str | None = None,
+    ids: list[int] | None = None,
+    *,
+    status: int = 200,
+    request_id: str | None = None,
+):
     response = client.post(
         f"/api/v1/problem-reports/{report_id}/actions",
         json={
@@ -600,7 +694,14 @@ def _hold_states(app, report_id):
         return [
             dict(r)
             for r in conn.execute(
-                select(TaskHoldRow.assignment_id, TaskHoldStateRow.active, TaskHoldStateRow.release_action, TaskHoldStateRow.release_event_id, TaskHoldStateRow.released_by, TaskHoldStateRow.released_at)
+                select(
+                    TaskHoldRow.assignment_id,
+                    TaskHoldStateRow.active,
+                    TaskHoldStateRow.release_action,
+                    TaskHoldStateRow.release_event_id,
+                    TaskHoldStateRow.released_by,
+                    TaskHoldStateRow.released_at,
+                )
                 .join(TaskHoldStateRow, TaskHoldStateRow.hold_id == TaskHoldRow.hold_id)
                 .where(TaskHoldRow.report_id == report_id)
                 .order_by(TaskHoldRow.created_at)
@@ -610,7 +711,9 @@ def _hold_states(app, report_id):
 
 def test_reporter_withdraws_untouched_report_and_only_own_pause_is_released(team):
     created = report(team.bob, team.bob_task.id)
-    withdrawn = act(team.bob, created["report_id"], 1, "withdraw", "Reported by mistake")
+    withdrawn = act(
+        team.bob, created["report_id"], 1, "withdraw", "Reported by mistake"
+    )
     assert withdrawn["state"] == "withdrawn" and withdrawn["resolution"] is None
     assert held(team.app, team.bob_task.id) == (False, None)
     [state] = _hold_states(team.app, created["report_id"])
@@ -631,8 +734,17 @@ def test_withdraw_is_refused_after_any_lead_action_and_for_non_reporters(team):
     created = report(team.bob, team.bob_task.id)
     denied = act(team.lead, created["report_id"], 1, "withdraw", "Not mine", status=403)
     assert denied["code"] == "NOT_ALLOWED"
-    act(team.lead, created["report_id"], 1, "extend_hold", "Pause too", [team.carol_task.id])
-    refused = act(team.bob, created["report_id"], 2, "withdraw", "By mistake", status=409)
+    act(
+        team.lead,
+        created["report_id"],
+        1,
+        "extend_hold",
+        "Pause too",
+        [team.carol_task.id],
+    )
+    refused = act(
+        team.bob, created["report_id"], 2, "withdraw", "By mistake", status=409
+    )
     assert refused["details"] == {"reason": "REPORT_LEAD_ACTED"}
 
 
@@ -642,21 +754,38 @@ def test_lead_reopens_closed_and_withdrawn_reports_without_pausing_again(team):
     reopened = act(team.lead, created["report_id"], 2, "reopen", "Still a problem")
     assert reopened["state"] == "open" and reopened["held_assignment_ids"] == []
     assert held(team.app, team.bob_task.id) == (False, None)
-    assert act(team.bob, created["report_id"], 3, "withdraw", "Again", status=409)["details"] == {"reason": "REPORT_LEAD_ACTED"}
+    assert act(team.bob, created["report_id"], 3, "withdraw", "Again", status=409)[
+        "details"
+    ] == {"reason": "REPORT_LEAD_ACTED"}
     act(team.lead, created["report_id"], 3, "resolve", "Fixed the source text")
     again = act(team.lead, created["report_id"], 4, "reopen", "Came back")
     assert again["state"] == "open" and again["resolution"] is None
-    assert act(team.lead, created["report_id"], 5, "reopen", "Twice", status=409)["details"] == {"reason": "REPORT_OPEN"}
-    assert act(team.bob, created["report_id"], 5, "reopen", "Me", status=403)["code"] == "NOT_ALLOWED"
+    assert act(team.lead, created["report_id"], 5, "reopen", "Twice", status=409)[
+        "details"
+    ] == {"reason": "REPORT_OPEN"}
+    assert (
+        act(team.bob, created["report_id"], 5, "reopen", "Me", status=403)["code"]
+        == "NOT_ALLOWED"
+    )
 
 
 def test_closed_and_withdrawn_reports_accept_only_resume_and_reopen(team):
     created = report(team.bob, team.bob_task.id)
     act(team.lead, created["report_id"], 1, "resolve", "Outcome")
     for action in ("resolve", "extend_hold", "restart"):
-        refused = act(team.lead, created["report_id"], 2, action, "x", [team.carol_task.id], status=409)
+        refused = act(
+            team.lead,
+            created["report_id"],
+            2,
+            action,
+            "x",
+            [team.carol_task.id],
+            status=409,
+        )
         assert refused["details"] == {"reason": "REPORT_RESOLVED"}
-    resumed = act(team.lead, created["report_id"], 2, "resume", "Continue", [team.bob_task.id])
+    resumed = act(
+        team.lead, created["report_id"], 2, "resume", "Continue", [team.bob_task.id]
+    )
     assert resumed["state"] == "resolved"
     [state] = _hold_states(team.app, created["report_id"])
     assert state["release_action"] == "resume" and state["released_by"] is not None
@@ -665,10 +794,21 @@ def test_closed_and_withdrawn_reports_accept_only_resume_and_reopen(team):
 def test_release_from_one_report_never_lifts_another_reports_pause(team):
     first = report(team.bob, team.bob_task.id, "First problem")
     second = report(team.carol, team.carol_task.id, "Second problem")
-    act(team.lead, second["report_id"], 1, "extend_hold", "Hold Bob as well", [team.bob_task.id])
+    act(
+        team.lead,
+        second["report_id"],
+        1,
+        "extend_hold",
+        "Hold Bob as well",
+        [team.bob_task.id],
+    )
     act(team.lead, first["report_id"], 1, "resume", "First is fine", [team.bob_task.id])
     assert held(team.app, team.bob_task.id) == (True, "Hold Bob as well")
-    assert any(s["active"] for s in _hold_states(team.app, second["report_id"]) if s["assignment_id"] == team.bob_task.id)
+    assert any(
+        s["active"]
+        for s in _hold_states(team.app, second["report_id"])
+        if s["assignment_id"] == team.bob_task.id
+    )
     # Report-level actions never touch any hold.
     act(team.lead, first["report_id"], 2, "resolve", "Done")
     act(team.lead, first["report_id"], 3, "reopen", "Not done")
@@ -678,21 +818,39 @@ def test_release_from_one_report_never_lifts_another_reports_pause(team):
 def test_restart_is_atomic_when_another_report_pauses_the_task(team):
     first = report(team.bob, team.bob_task.id, "First problem")
     second = report(team.carol, team.carol_task.id, "Second problem")
-    act(team.lead, second["report_id"], 1, "extend_hold", "Hold Bob", [team.bob_task.id])
-    refused = act(team.lead, first["report_id"], 1, "restart", "Agreed", [team.bob_task.id], status=409)
+    act(
+        team.lead, second["report_id"], 1, "extend_hold", "Hold Bob", [team.bob_task.id]
+    )
+    refused = act(
+        team.lead,
+        first["report_id"],
+        1,
+        "restart",
+        "Agreed",
+        [team.bob_task.id],
+        status=409,
+    )
     assert refused["code"] == "TASK_HELD"
     assert held(team.app, team.bob_task.id)[0] is True
     assert all(s["active"] for s in _hold_states(team.app, first["report_id"]))
     act(team.lead, second["report_id"], 2, "resume", "Released", [team.bob_task.id])
-    restarted = act(team.lead, first["report_id"], 1, "restart", "Agreed", [team.bob_task.id])
+    restarted = act(
+        team.lead, first["report_id"], 1, "restart", "Agreed", [team.bob_task.id]
+    )
     assert restarted["state"] == "resolved" and restarted["new_round"] is not None
-    assert [s["release_action"] for s in _hold_states(team.app, first["report_id"])] == ["restart"]
+    assert [
+        s["release_action"] for s in _hold_states(team.app, first["report_id"])
+    ] == ["restart"]
 
 
 def test_replayed_withdraw_returns_the_same_result(team):
     created = report(team.bob, team.bob_task.id)
-    one = act(team.bob, created["report_id"], 1, "withdraw", "By mistake", request_id="w-1")
-    two = act(team.bob, created["report_id"], 1, "withdraw", "By mistake", request_id="w-1")
+    one = act(
+        team.bob, created["report_id"], 1, "withdraw", "By mistake", request_id="w-1"
+    )
+    two = act(
+        team.bob, created["report_id"], 1, "withdraw", "By mistake", request_id="w-1"
+    )
     assert one == two
 ```
 
@@ -829,7 +987,9 @@ class ReportEventView(BaseModel):
     reason: str | None = None
     round_id: str | None = None
     round_ordinal: int | None = None
-    abandoned_round_id: str | None = None  # restart: predecessor of round_id (the round actually abandoned)
+    abandoned_round_id: str | None = (
+        None  # restart: predecessor of round_id (the round actually abandoned)
+    )
     abandoned_round_ordinal: int | None = None
     abandoned_translation_draft: dict[str, Any] | None = None
     affected: list[AffectedTask] = Field(default_factory=list)  # leads only
@@ -856,7 +1016,9 @@ class ReportHoldView(BaseModel):
     released_by_label: str | None = None
     release_action: Literal["resume", "restart", "withdraw"] | None = None
     release_event_id: str | None = None
-    other_active_holds: list[OtherActiveHold] = Field(default_factory=list)  # leads only
+    other_active_holds: list[OtherActiveHold] = Field(
+        default_factory=list
+    )  # leads only
 
 
 class ReportSubmissionRef(BaseModel):
@@ -911,12 +1073,21 @@ pytest_plugins = ("test_assignment_round_open_api", "problem_report_team")
 def test_lead_view_has_identity_labels_and_release_records(team):
     created = report(team.bob, team.bob_task.id, "Text is cut off\nsecond line")
     act(team.bob, created["report_id"], 1, "resume", "upsi", [team.bob_task.id])
-    act(team.lead, created["report_id"], 2, "extend_hold", "Wait for new source", [team.carol_task.id])
+    act(
+        team.lead,
+        created["report_id"],
+        2,
+        "extend_hold",
+        "Wait for new source",
+        [team.carol_task.id],
+    )
     act(team.lead, created["report_id"], 3, "resolve", "Source fixed")
     view = team.lead.get(f"/api/v1/problem-reports/{created['report_id']}").json()
     assert view["reporter_label"] == "ann-0004" and view["created_at"]
     assert view["case_id"] and view["language"] and view["task"] == "annotate"
-    assert view["state"] == "resolved" and view["state_changed_by_label"] == "own-reviewer"
+    assert (
+        view["state"] == "resolved" and view["state_changed_by_label"] == "own-reviewer"
+    )
     assert view["viewer_is_lead"] is True and view["withdrawable"] is False
     own, other = sorted(view["holds"], key=lambda h: h["created_at"])
     assert own["owner_label"] == "ann-0004" and own["active"] is False
@@ -924,29 +1095,48 @@ def test_lead_view_has_identity_labels_and_release_records(team):
     assert other["owner_label"] == "ann-0005" and other["active"] is True
     assert [e["action"] for e in view["events"]] == ["resume", "extend_hold", "resolve"]
     assert view["events"][1]["affected"][0]["owner_label"] == "ann-0005"
-    assert view["events"][0]["actor_label"] == "ann-0004" and view["events"][0]["reason"] == "upsi"
+    assert (
+        view["events"][0]["actor_label"] == "ann-0004"
+        and view["events"][0]["reason"] == "upsi"
+    )
 
 
 def test_restarts_name_the_round_actually_abandoned_not_the_reported_round(team):
     created = report(team.bob, team.bob_task.id)
-    filed = team.lead.get(f"/api/v1/problem-reports/{created['report_id']}").json()["round_ordinal"]
+    filed = team.lead.get(f"/api/v1/problem-reports/{created['report_id']}").json()[
+        "round_ordinal"
+    ]
     act(team.lead, created["report_id"], 1, "restart", "Agreed", [team.bob_task.id])
     act(team.lead, created["report_id"], 2, "reopen", "Still broken")
-    act(team.lead, created["report_id"], 3, "restart", "Agreed again", [team.bob_task.id])
+    act(
+        team.lead,
+        created["report_id"],
+        3,
+        "restart",
+        "Agreed again",
+        [team.bob_task.id],
+    )
     view = team.lead.get(f"/api/v1/problem-reports/{created['report_id']}").json()
     restarts = [e for e in view["events"] if e["action"] == "restart"]
     # The second restart acts on an old report: it abandons the restarted round, not the reported one.
-    assert [(e["abandoned_round_ordinal"], e["round_ordinal"]) for e in restarts] == [(filed, filed + 1), (filed + 1, filed + 2)]
+    assert [(e["abandoned_round_ordinal"], e["round_ordinal"]) for e in restarts] == [
+        (filed, filed + 1),
+        (filed + 1, filed + 2),
+    ]
     assert view["round_ordinal"] == filed
     assert view["current_round_ordinal"] == filed + 2
     mine = team.bob.get(f"/api/v1/problem-reports/{created['report_id']}").json()
-    assert [e["abandoned_round_ordinal"] for e in mine["events"] if e["action"] == "restart"] == [filed, filed + 1]
+    assert [
+        e["abandoned_round_ordinal"] for e in mine["events"] if e["action"] == "restart"
+    ] == [filed, filed + 1]
 
 
 def test_other_active_holds_name_the_other_report_for_leads(team):
     first = report(team.bob, team.bob_task.id)
     second = report(team.carol, team.carol_task.id)
-    act(team.lead, second["report_id"], 1, "extend_hold", "Hold Bob", [team.bob_task.id])
+    act(
+        team.lead, second["report_id"], 1, "extend_hold", "Hold Bob", [team.bob_task.id]
+    )
     view = team.lead.get(f"/api/v1/problem-reports/{first['report_id']}").json()
     [hold] = view["holds"]
     assert hold["other_active_holds"] == [{"report_id": second["report_id"]}]
@@ -956,18 +1146,34 @@ def test_assignment_filter_returns_newest_first(team):
     one = report(team.bob, team.bob_task.id, "One", request_id="r-one")
     act(team.bob, one["report_id"], 1, "resume", "ok", [team.bob_task.id])
     two = report(team.bob, team.bob_task.id, "Two", request_id="r-two")
-    listed = team.bob.get(f"/api/v1/projects/{team.key}/problem-reports", params={"assignment_id": team.bob_task.id}).json()
+    listed = team.bob.get(
+        f"/api/v1/projects/{team.key}/problem-reports",
+        params={"assignment_id": team.bob_task.id},
+    ).json()
     assert [r["report_id"] for r in listed] == [two["report_id"], one["report_id"]]
-    assert team.bob.get(f"/api/v1/projects/{team.key}/problem-reports", params={"assignment_id": team.carol_task.id}).json() == []
+    assert (
+        team.bob.get(
+            f"/api/v1/projects/{team.key}/problem-reports",
+            params={"assignment_id": team.carol_task.id},
+        ).json()
+        == []
+    )
 
 
 def test_pause_candidates_for_leads_only(team):
     created = report(team.bob, team.bob_task.id)
-    rows = team.lead.get(f"/api/v1/problem-reports/{created['report_id']}/pause-candidates").json()
+    rows = team.lead.get(
+        f"/api/v1/problem-reports/{created['report_id']}/pause-candidates"
+    ).json()
     bob = next(r for r in rows if r["assignment_id"] == team.bob_task.id)
     assert bob["reporter_task"] and bob["paused_by_this_report"] and bob["same_text"]
     assert rows[0]["same_text"] is True
-    assert team.bob.get(f"/api/v1/problem-reports/{created['report_id']}/pause-candidates").status_code == 404
+    assert (
+        team.bob.get(
+            f"/api/v1/problem-reports/{created['report_id']}/pause-candidates"
+        ).status_code
+        == 404
+    )
 ```
 
 (`own-reviewer` is the pseudonym of the lead `alice` in `round_work`.) In the restart test, if `filed` is `None` (the fixture task has no active round yet), open Bob's first round the way `round_work` does for the lead before reporting; do not weaken the assertions.
@@ -989,7 +1195,10 @@ SECRET = "Lead-only reason for Carol"
 def _all_reporter_payloads(team, report_id):
     yield team.bob.get(f"/api/v1/problem-reports/{report_id}").json()
     yield team.bob.get(f"/api/v1/projects/{team.key}/problem-reports").json()
-    yield team.bob.get(f"/api/v1/projects/{team.key}/problem-reports", params={"assignment_id": team.bob_task.id}).json()
+    yield team.bob.get(
+        f"/api/v1/projects/{team.key}/problem-reports",
+        params={"assignment_id": team.bob_task.id},
+    ).json()
 
 
 def _task_ids(value):
@@ -1017,7 +1226,14 @@ def _assert_blind(team, payload):
 def test_reporter_view_hides_lead_pauses_on_other_tasks_entirely(team):
     created = report(team.bob, team.bob_task.id)
     act(team.lead, created["report_id"], 1, "extend_hold", SECRET, [team.carol_task.id])
-    act(team.lead, created["report_id"], 2, "resume", "Carol may go on", [team.carol_task.id])
+    act(
+        team.lead,
+        created["report_id"],
+        2,
+        "resume",
+        "Carol may go on",
+        [team.carol_task.id],
+    )
     for payload in _all_reporter_payloads(team, created["report_id"]):
         _assert_blind(team, payload)
     view = team.bob.get(f"/api/v1/problem-reports/{created['report_id']}").json()
@@ -1028,20 +1244,58 @@ def test_reporter_view_hides_lead_pauses_on_other_tasks_entirely(team):
 
 def test_reporter_sees_a_mixed_event_without_the_other_task(team):
     created = report(team.bob, team.bob_task.id)
-    act(team.lead, created["report_id"], 1, "resume", "Both continue", [team.bob_task.id])
-    act(team.lead, created["report_id"], 2, "extend_hold", SECRET, [team.bob_task.id, team.carol_task.id])
+    act(
+        team.lead,
+        created["report_id"],
+        1,
+        "resume",
+        "Both continue",
+        [team.bob_task.id],
+    )
+    act(
+        team.lead,
+        created["report_id"],
+        2,
+        "extend_hold",
+        SECRET,
+        [team.bob_task.id, team.carol_task.id],
+    )
     view = team.bob.get(f"/api/v1/problem-reports/{created['report_id']}").json()
     paused = view["events"][-1]
-    assert paused["action"] == "extend_hold" and paused["own_task"] is True and paused["affected"] == []
+    assert (
+        paused["action"] == "extend_hold"
+        and paused["own_task"] is True
+        and paused["affected"] == []
+    )
     # The reason is shown to Bob as an affected owner, but Carol is never named.
-    _assert_blind(team, {k: v for k, v in view.items() if k != "events"} | {"events": [{**e, "reason": None} for e in view["events"]]})
+    _assert_blind(
+        team,
+        {k: v for k, v in view.items() if k != "events"}
+        | {"events": [{**e, "reason": None} for e in view["events"]]},
+    )
 
 
 def test_replayed_reporter_action_is_redacted_too(team):
     created = report(team.bob, team.bob_task.id)
     act(team.lead, created["report_id"], 1, "extend_hold", SECRET, [team.carol_task.id])
-    first = act(team.bob, created["report_id"], 2, "resume", "upsi", [team.bob_task.id], request_id="same")
-    again = act(team.bob, created["report_id"], 2, "resume", "upsi", [team.bob_task.id], request_id="same")
+    first = act(
+        team.bob,
+        created["report_id"],
+        2,
+        "resume",
+        "upsi",
+        [team.bob_task.id],
+        request_id="same",
+    )
+    again = act(
+        team.bob,
+        created["report_id"],
+        2,
+        "resume",
+        "upsi",
+        [team.bob_task.id],
+        request_id="same",
+    )
     _assert_blind(team, first)
     _assert_blind(team, again)
 
@@ -1050,7 +1304,10 @@ def test_unrelated_annotator_gets_report_not_found_for_existing_and_unknown_ids(
     created = report(team.bob, team.bob_task.id)
     for report_id in (created["report_id"], "report-does-not-exist"):
         response = team.carol.get(f"/api/v1/problem-reports/{report_id}")
-        assert response.status_code == 404 and response.json()["code"] == "REPORT_NOT_FOUND"
+        assert (
+            response.status_code == 404
+            and response.json()["code"] == "REPORT_NOT_FOUND"
+        )
     assert team.carol.get(f"/api/v1/projects/{team.key}/problem-reports").json() == []
 ```
 
@@ -1060,18 +1317,34 @@ def test_unrelated_annotator_gets_report_not_found_for_existing_and_unknown_ids(
 
 ```python
 @router.get("/projects/{key}/problem-reports")
-def reports(key: str, request: Request, principal: PrincipalDep, document_id: str | None = None, assignment_id: int | None = None) -> list[ProblemReportView]:
-    return ProblemReportService(request.app.state.repo.db).list(get_access(request), key, document_id, assignment_id)
+def reports(
+    key: str,
+    request: Request,
+    principal: PrincipalDep,
+    document_id: str | None = None,
+    assignment_id: int | None = None,
+) -> list[ProblemReportView]:
+    return ProblemReportService(request.app.state.repo.db).list(
+        get_access(request), key, document_id, assignment_id
+    )
 
 
 @router.get("/problem-reports/{report_id}")
-def get_report(report_id: str, request: Request, principal: PrincipalDep) -> ProblemReportView:
-    return ProblemReportService(request.app.state.repo.db).get(get_access(request), report_id)
+def get_report(
+    report_id: str, request: Request, principal: PrincipalDep
+) -> ProblemReportView:
+    return ProblemReportService(request.app.state.repo.db).get(
+        get_access(request), report_id
+    )
 
 
 @router.get("/problem-reports/{report_id}/pause-candidates")
-def pause_candidates(report_id: str, request: Request, principal: PrincipalDep) -> list[PauseCandidate]:
-    return ProblemReportService(request.app.state.repo.db).pause_candidates(get_access(request), report_id)
+def pause_candidates(
+    report_id: str, request: Request, principal: PrincipalDep
+) -> list[PauseCandidate]:
+    return ProblemReportService(request.app.state.repo.db).pause_candidates(
+        get_access(request), report_id
+    )
 ```
 
 - [ ] If `tests/test_problem_reports_api.py` or `tests/test_problem_reports.py` read `events[...]["details"]`, change them to the new fields (`reason`, `abandoned_translation_draft`, `round_id`). Do not weaken any other assertion.
@@ -1108,10 +1381,20 @@ pytest_plugins = ("test_assignment_round_open_api", "problem_report_team")
 def test_owner_sees_own_report_pause_and_lead_pause_without_other_report_id(team):
     own = report(team.bob, team.bob_task.id, "My problem")
     other = report(team.carol, team.carol_task.id, "Carol problem")
-    act(team.lead, other["report_id"], 1, "extend_hold", "Wait for source", [team.bob_task.id])
+    act(
+        team.lead,
+        other["report_id"],
+        1,
+        "extend_hold",
+        "Wait for source",
+        [team.bob_task.id],
+    )
     view = team.bob.get(f"/api/v1/assignments/{team.bob_task.id}").json()
     holds = sorted(view["active_holds"], key=lambda h: h["created_at"])
-    assert [(h["reason"], h["own_report_id"]) for h in holds] == [("My problem", own["report_id"]), ("Wait for source", None)]
+    assert [(h["reason"], h["own_report_id"]) for h in holds] == [
+        ("My problem", own["report_id"]),
+        ("Wait for source", None),
+    ]
     assert other["report_id"] not in str(view)
 
 

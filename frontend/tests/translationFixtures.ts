@@ -15,7 +15,7 @@ export function reviewWorkspace(changes: Partial<ReviewWorkspace> = {}): ReviewW
     translation_status: "reviewed" as const, status_reason: null, text_sha256: "sha" };
   const ancestor = { ...variant, document_id: "translation-v1", version: 1, origin: "machine_translation" as const,
     derived_from: "source", translation: { provider: "Example MT", model: "Model 1", run_id: "run-1" } };
-  return { assignment: { id: 17, project_key: "proj", document_id: "target", user_id: 1, username: "alice",
+  return { assignment: { id: 17, workflow_revision: 0, held: false, project_key: "proj", document_id: "target", user_id: 1, username: "alice",
     pseudonym: "R", task: "translation_review", status: "in_progress", created_at: at, updated_at: at,
     revoked_at: null, last_submission_id: null, external_id: "EN 1/7" },
     variant, translation_ancestor: ancestor, text: "Übersetzt.",

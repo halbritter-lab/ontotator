@@ -5,6 +5,28 @@ import { ReanchorPanel, pendingDiffParts } from '../src/variants/ReanchorPanel';
 import { historical } from './variantFixtures';
 
 afterEach(cleanup);
+it('shows whole changed words after validating the exact server character windows', () => {
+  const before = 'Krampfanfälle', after = 'Epileptische Anfälle';
+  const mounted = render(<ReanchorPanel items={[item({ old_context: { start: 0, end: before.length, text: before }, new_context: { start: 0, end: after.length, text: after }, diff: [
+    { op: 'replace', old_start: 0, old_end: 8, new_start: 0, new_end: 15, old_text: 'Krampfan', new_text: 'Epileptische An' },
+    { op: 'equal', old_start: 8, old_end: before.length, new_start: 15, new_end: after.length, old_text: 'fälle', new_text: 'fälle' },
+  ] })]} labelFor={() => null} onContext={() => {}} />);
+  expect(mounted.container.querySelector('del')?.textContent).toBe(before);
+  expect(mounted.container.querySelector('ins')?.textContent).toBe(after);
+});
+it.each([
+  ['same same old same', 'same same new same'],
+  ['\u00b5 \ud83d\ude00 old\nsecond paragraph', '\u00b5 \ud83d\ude00 new\nsecond paragraph'],
+])('preserves exact repeated and Unicode display windows: %s', (before, after) => {
+  const oldEnd = Array.from(before).length, newEnd = Array.from(after).length;
+  const mounted = render(<ReanchorPanel items={[item({ old_context: { start: 0, end: oldEnd, text: before }, new_context: { start: 0, end: newEnd, text: after }, diff: [
+    { op: 'replace', old_start: 0, old_end: oldEnd, new_start: 0, new_end: newEnd, old_text: before, new_text: after },
+  ] })]} labelFor={() => null} onContext={() => {}} />);
+  const parts = [...mounted.container.querySelectorAll('[data-diff-op]')];
+  expect(parts.filter(part => part.getAttribute('data-diff-op') !== 'insert').map(part => part.textContent).join('')).toBe(before);
+  expect(parts.filter(part => part.getAttribute('data-diff-op') !== 'delete').map(part => part.textContent).join('')).toBe(after);
+  expect(mounted.container.querySelector('[data-paragraph-offset="0"]')).not.toBeNull();
+});
 it('keeps current context and clinical axes visible while old context and exact replacement stay expandable', () => {
   const pending=item({axes_values:{assertion:'absent',temporality:'historical',experiencer:'patient'},axes_defaulted:['experiencer']});
   const mounted=render(<ReanchorPanel items={[pending]} labelFor={()=>null} onContext={()=>{}}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
@@ -56,6 +57,7 @@ class CreateAnnotationCommand(BaseModel):
     type_id: str | None = None
     search_event_id: str | None = None
     axes_values: dict[str, str | None] = Field(default_factory=dict)
+    chosen_axis_ids: list[str] | None = None
     evidence_id: str | None = None
     segments: list[Segment] = Field(default_factory=list)
     note: str | None = None
@@ -520,6 +522,7 @@ class EditingService:
                 profile,
                 scope,
                 services,
+                apply_creation_defaults=False,
             )
             own = next(
                 a
@@ -635,9 +638,7 @@ class EditingService:
         """Resolve the exact source before inheriting immutable provenance."""
         if not cmd.source_annotation_id or not cmd.source_version:
             return None
-        for source in self.repo.list_annotations_for_document(
-            draft.key.project_key, doc.document_id
-        ):
+        for source in self.repo.workspace_input_snapshots(draft.key):
             if (
                 source.annotation.annotation_id == cmd.source_annotation_id
                 and source.version == cmd.source_version
@@ -674,6 +675,8 @@ class EditingService:
         profile: TaskProfile,
         scope: TaskScope,
         services: dict[str, OntologyService | Exception],
+        *,
+        apply_creation_defaults: bool = True,
     ) -> Draft:
         target_layer = cmd.layer_id
         if target_layer is None:
@@ -733,8 +736,31 @@ class EditingService:
                 f"Annotation '{cmd.annotation_id}' already exists in current draft",
             )
 
+        values = dict(cmd.axes_values)
+        presets: Mapping[str, str] = {}
+        if source is None and apply_creation_defaults:
+            rules = self.repo.get_project_rules(draft.key.project_key)
+            presets = rules.creation_defaults.get(target_layer, {}).get(target_type, {})
+            values = {**presets, **values}
+        chosen_axis_ids = (
+            set(cmd.chosen_axis_ids)
+            if cmd.chosen_axis_ids is not None
+            else {
+                axis
+                for axis, value in cmd.axes_values.items()
+                if value not in (None, "") and value != presets.get(axis)
+            }
+        )
+        axis_ids = {axis.id for axis in type_def.axes}
+        if any(
+            axis not in axis_ids or cmd.axes_values.get(axis) in (None, "")
+            for axis in chosen_axis_ids
+        ):
+            raise DomainError(
+                "INVALID_AXES", "Only supplied nonempty axes can be confirmed"
+            )
         try:
-            validate_axes(cmd.axes_values, type_def.axes, complete=False)
+            validate_axes(values, type_def.axes, complete=False)
         except ValueError as exc:
             raise DomainError("INVALID_AXES", str(exc)) from exc
 
@@ -774,7 +800,7 @@ class EditingService:
             layer_id=target_layer,
             type_id=target_type,
             term_id=term_id,
-            axes_values=cmd.axes_values,
+            axes_values=values,
             axes_defaulted=[
                 axis
                 for axis in source.annotation.axes_defaulted
@@ -782,7 +808,11 @@ class EditingService:
                 and cmd.axes_values.get(axis) == source.annotation.axes_values.get(axis)
             ]
             if source is not None
-            else [],
+            else [
+                axis
+                for axis, value in values.items()
+                if value not in (None, "") and axis not in chosen_axis_ids
+            ],
             evidence_refs=evidence_refs,
             note=(cmd.note.strip() or None) if cmd.note is not None else None,
             provenance=prov,

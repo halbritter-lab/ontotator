@@ -1,5 +1,7 @@
 """DB-free guards for the host-only local acceptance seed adapter."""
 
+import hashlib
+import json
 import runpy
 import subprocess
 from pathlib import Path
@@ -113,6 +115,138 @@ def test_public_input_manifest_matches_byte_stable_shipped_inputs(seed):
     assert manifest["documents"] == 6
     assert manifest["tool_proposals"] == 6
     assert manifest["writer_git"] == "4105ec1259fc04d927d78258fcf4c99f8f014b6a"
+
+
+def test_full_input_set_requires_its_separate_manifest_and_hashes_every_translation(
+    seed, tmp_path
+):
+    names = ["hp.json", "profile.json", "demo.zip", "cases.json", "hp-de.babelon.tsv"]
+    for name in names:
+        (tmp_path / name).write_bytes(name.encode())
+    manifest = {
+        "input_kind": "full-hpo/v1",
+        "translations": ["hp-de.babelon.tsv"],
+        "sha256": {name: hashlib.sha256(name.encode()).hexdigest() for name in names},
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    assert seed["verify_inputs"](tmp_path)["translations"] == ["hp-de.babelon.tsv"]
+    (tmp_path / "hp-de.babelon.tsv").write_bytes(b"changed")
+    with pytest.raises(ValueError, match="hash mismatch"):
+        seed["verify_inputs"](tmp_path)
+
+
+def test_original_four_file_manifest_cannot_be_relaxed_by_adding_translations(
+    seed, tmp_path
+):
+    manifest = {
+        "translations": ["hp-de.babelon.tsv"],
+        "sha256": {"hp-de.babelon.tsv": "a" * 64},
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError):
+        seed["verify_inputs"](tmp_path)
+
+
+def test_full_input_manifest_rejects_traversal_and_unlisted_files(seed, tmp_path):
+    for names in [["../hp-de.babelon.tsv"], ["hp-dtp.babelon.tsv"]]:
+        (tmp_path / "manifest.json").write_text(
+            json.dumps(
+                {"input_kind": "full-hpo/v1", "translations": names, "sha256": {}}
+            )
+        )
+        with pytest.raises(ValueError):
+            seed["verify_inputs"](tmp_path)
+
+
+def test_dirty_snapshot_digest_identifies_actual_source_bytes_without_ignored_runtime(
+    seed, tmp_path
+):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("private-runtime/\n")
+    (tmp_path / "source.py").write_text("first")
+    before = seed["source_tree_digest"](tmp_path)
+    (tmp_path / "private-runtime").mkdir()
+    (tmp_path / "private-runtime" / "credentials.json").write_text("private")
+    assert seed["source_tree_digest"](tmp_path) == before
+    (tmp_path / "source.py").write_text("second")
+    assert seed["source_tree_digest"](tmp_path) != before
+
+
+def test_snapshot_identity_is_explicit_and_requires_a_sha256(seed):
+    cfg = config(seed, snapshot_sha256="c" * 64)
+    assert cfg["snapshot_sha256"] == "c" * 64
+    with pytest.raises(ValueError):
+        config(seed, snapshot_sha256="main")
+
+
+def test_candidate_image_requires_both_base_revision_and_exact_dirty_snapshot(seed):
+    cfg = config(seed, snapshot_sha256="c" * 64)
+    image = {
+        "Config": {
+            "Labels": {
+                "org.opencontainers.image.revision": cfg["source_sha"],
+                "org.opencontainers.image.source-snapshot-sha256": cfg[
+                    "snapshot_sha256"
+                ],
+            }
+        }
+    }
+    seed["require_image_identity"](cfg, image)
+    image["Config"]["Labels"]["org.opencontainers.image.source-snapshot-sha256"] = (
+        "d" * 64
+    )
+    with pytest.raises(ValueError, match="snapshot"):
+        seed["require_image_identity"](cfg, image)
+
+
+def test_full_hpo_builder_regenerates_bundle_profile_and_translation_inventory_offline(
+    seed, tmp_path
+):
+    import shutil
+
+    import ontospan
+
+    builder = runpy.run_path(str(SCRIPT.with_name("prepare_full_hpo_acceptance.py")))
+    source = tmp_path / "sources"
+    source.mkdir()
+    fixtures = SCRIPT.parents[1] / "tests/fixtures"
+    (source / "hp.json").write_bytes((fixtures / "hp.json").read_bytes() + b"\n")
+    for name in ["hp-de.babelon.tsv", "hp-es.babelon.tsv"]:
+        shutil.copyfile(fixtures / name, source / name)
+
+    def descriptor(name):
+        return {"filename": name, "sha256": seed["digest"](source / name)}
+
+    manifest = {
+        "schema": "ontocurator-full-hpo-sources/v1",
+        "release": "2026-06-23",
+        "ontology": descriptor("hp.json"),
+        "translations": [
+            descriptor("hp-de.babelon.tsv"),
+            descriptor("hp-es.babelon.tsv"),
+        ],
+    }
+    source_manifest = tmp_path / "source-manifest.json"
+    source_manifest.write_text(json.dumps(manifest))
+    output = tmp_path / "new-inputs"
+    builder["prepare_inputs"](source, output, source_manifest)
+    generated = seed["verify_inputs"](output)
+    profile = json.loads((output / "profile.json").read_text())
+    assert profile["profile_id"] == "t5-full-hpo-acceptance/v1"
+    assert profile["ontologies"][0]["sha256"] == descriptor("hp.json")["sha256"]
+    _, units = ontospan.read_bundle(output / "demo.zip")
+    assert len(units) == 6
+    assert all(
+        layer.ontology.sha256 == descriptor("hp.json")["sha256"]
+        for unit in units
+        for layer in unit.annotation_set.layers
+    )
+    assert generated["translations"] == ["hp-de.babelon.tsv", "hp-es.babelon.tsv"]
+    assert (output / "demo.zip").read_bytes() != (
+        SCRIPT.parents[1] / "examples/t5-acceptance/demo.zip"
+    ).read_bytes()
+    with pytest.raises(ValueError, match="exists"):
+        builder["prepare_inputs"](source, output, source_manifest)
 
 
 def test_compose_adapter_keeps_explicit_identity_and_overrides_ambient_ports(

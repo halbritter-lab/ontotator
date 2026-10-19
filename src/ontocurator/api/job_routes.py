@@ -21,11 +21,13 @@ router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 
 EXPORT_ACTIONS = {
     "t1": Action.EXPORT_ALL_WORK,
+    "final": Action.EXPORT_ALL_WORK,
     "edit_log": Action.EXPORT_EDIT_LOG,
     "translation-reviews": Action.EXPORT_ALL_WORK,
 }
 EXPORT_KINDS = {
     "t1_export": ("t1", "zip", "application/zip"),
+    "final_t1_export": ("final", "zip", "application/zip"),
     "edit_log_export": ("edit_log", "jsonl", "application/x-ndjson"),
     "translation_review_export": (
         "translation-reviews",

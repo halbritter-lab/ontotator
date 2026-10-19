@@ -165,7 +165,12 @@ def test_full_package_review_and_export_lifecycle(app_client):
         "layer_id": "hpo-layer",
         "type_id": "phenotype",
         "term_id": "HP:0001252",
-        "axes": {"assertion": "present"},
+        "axes": {
+            "assertion": "present",
+            "experiencer": "patient",
+            "temporality": "current",
+        },
+        "chosen_axis_ids": ["assertion", "experiencer", "temporality"],
         "evidence_id": "ev-hypo",
         "segments": [{"start": 30, "end": 44}],
     }
@@ -262,6 +267,12 @@ def test_document_list_with_position_and_status(app_client):
                 "layer_id": "hpo-layer",
                 "type_id": "phenotype",
                 "term_id": "HP:0001250",
+                "axes": {
+                    "assertion": "present",
+                    "experiencer": "patient",
+                    "temporality": "current",
+                },
+                "chosen_axis_ids": ["assertion", "experiencer", "temporality"],
             },
         },
     )
@@ -293,7 +304,7 @@ def test_document_list_with_position_and_status(app_client):
             },
         },
     )
-    client.post(
+    submitted = client.post(
         f"/api/v1/workspaces/{ws_id}/submit",
         json={
             "mutation_id": "m3",
@@ -301,6 +312,7 @@ def test_document_list_with_position_and_status(app_client):
             "payload": {"document_checked": True, "checked_layer_ids": ["hpo-layer"]},
         },
     )
+    assert submitted.status_code == 200, submitted.text
 
     # Now doc-beta is completed for Alice
     res = client.get(

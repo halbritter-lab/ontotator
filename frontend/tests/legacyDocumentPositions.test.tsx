@@ -25,7 +25,7 @@ function server(mode: WorkspaceMode = "independent") {
     allowed_modes: [mode], document_count: ids.length, can_manage: false,
   }]);
   window.history.replaceState(null, "", "#/");
-  const tasks = documents.map((document, index) => Object.freeze({ ...document, assignment_id: 100 + index,
+  const tasks = documents.map((document, index) => Object.freeze({ ...document, assignment_id: 100 + index, workflow_revision: 0, held: false,
     project_key: "pkg", project_name: "Synthetic cases", task: mode === "review" ? "review" as const : "annotate" as const,
     status: "open" as const, updated_at: "2026-10-14T12:00:00Z" }));
   Object.freeze(tasks);
@@ -33,7 +33,7 @@ function server(mode: WorkspaceMode = "independent") {
   vi.spyOn(api, "getAssignmentMetadata").mockImplementation(async assignmentId => {
     const task = tasks.find(row => row.assignment_id === assignmentId);
     if (!task) throw new Error("Unassigned fixture ID");
-    return { id: task.assignment_id, project_key: task.project_key, document_id: task.document_id, task: task.task,
+    return { id: task.assignment_id, workflow_revision: 0, held: false, project_key: task.project_key, document_id: task.document_id, task: task.task,
       user_id: 1, username: "ann-0007", pseudonym: "ann-0007", display_name: "Test user", status: task.status,
       created_at: task.updated_at, updated_at: task.updated_at, revoked_at: null, last_submission_id: null };
   });
@@ -50,7 +50,7 @@ function server(mode: WorkspaceMode = "independent") {
         layers: [{ layer_id: "phenotype", label: "Phenotype", ontology_id: "hp", access: "editable", default_visible: true, default_type_id: "default",
           annotation_types: [{ type_id: "default", label: "Phenotype", axes: [], evidence_policy: "optional" }] }],
         ontologies: [{ ontology_id: "hp", label: "HPO", release: "r", sha256: "s", format: "obo-graph-json" }],
-        checked_layer_ids: [], available_inputs: [], submissions: [], term_statuses: {}, allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "custom", axes_config: [], axes_config_sha256: "axes",
+        checked_layer_ids: [], available_inputs: [], submissions: [], term_statuses: {}, require_chosen_axes: false, annotation_policy_revision: 1, allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "custom", axes_config: [], axes_config_sha256: "axes",
       },
     } as OpenWorkspaceResponse, assignmentId);
   });

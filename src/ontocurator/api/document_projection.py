@@ -21,6 +21,7 @@ from ontocurator.domain.workspace import WorkspaceKey, WorkspaceMode
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import (
     Repository,
+    _decode_key_str,
     _key_str,
     _local_import_key,
     _workspace_aliases,
@@ -38,7 +39,9 @@ from ontocurator.storage.tables import (
 
 AssignmentStatus = Literal["open", "in_progress", "submitted", "reopened"]
 DocumentStatus = Literal["not_started", "in_progress", "completed"]
-AssignmentFilter = Literal["unassigned", "open", "in_progress", "submitted", "reopened"]
+AssignmentFilter = Literal[
+    "unassigned", "open", "in_progress", "submitted", "reopened", "held"
+]
 
 
 class Assignee(BaseModel):
@@ -47,6 +50,10 @@ class Assignee(BaseModel):
     pseudonym: str
     task: Task
     status: AssignmentStatus
+    active_round_id: str | None = None
+    workflow_revision: int = 0
+    held: bool = False
+    hold_reason: str | None = None
 
 
 class ProjectDocumentSummary(BaseModel):
@@ -115,14 +122,7 @@ def _legacy_statuses(
     keys: dict[str, WorkspaceKey] = {}
     by_draft = {row.draft_key: row for row in drafts}
     for row in drafts:
-        workspace = WorkspaceKey(
-            project_key=key,
-            document_id=row.document_id,
-            annotator_id=annotator,
-            mode=mode,
-            scope_id=row.scope_id,
-            target_set_id=row.target_set_id,
-        )
+        workspace = _decode_key_str(row.draft_key)
         keys[_key_str(workspace)] = workspace
     # A distinct submission ID at the same full origin/revision is always a
     # conflicting immutable record, including a superseded revision.
@@ -139,6 +139,28 @@ def _legacy_statuses(
         else:
             workspace = origin
         keys.setdefault(_key_str(workspace), workspace)
+    from ontocurator.storage.workflow_tables import WorkRoundRow
+
+    active_keys = {
+        row.document_id: WorkspaceKey.model_validate(row.workspace_key)
+        for row in conn.execute(
+            select(WorkRoundRow.document_id, WorkRoundRow.workspace_key)
+            .join(AssignmentRow, AssignmentRow.active_round_id == WorkRoundRow.round_id)
+            .where(
+                WorkRoundRow.project_id == project_id,
+                WorkRoundRow.document_id.in_(documents),
+                WorkRoundRow.annotator_id == annotator,
+                WorkRoundRow.mode == mode,
+                AssignmentRow.revoked_at.is_(None),
+            )
+        )
+    }
+    keys = {
+        identity: workspace
+        for identity, workspace in keys.items()
+        if workspace.document_id not in active_keys
+        or identity in _workspace_aliases(active_keys[workspace.document_id])
+    }
     statuses: dict[str, DocumentStatus] = {}
     for workspace in sorted(
         keys.values(),
@@ -250,7 +272,11 @@ def project_documents(
             query = query.where(
                 ~assignments
                 if status == "unassigned"
-                else assignments.where(AssignmentRow.status == status)
+                else assignments.where(
+                    AssignmentRow.held.is_(True)
+                    if status == "held"
+                    else AssignmentRow.status == status
+                )
             )
         rows = conn.execute(
             query.order_by(DocumentRow.position.nulls_last(), DocumentRow.document_id)
@@ -292,6 +318,10 @@ def project_documents(
                     AssignmentRow.id.label("assignment_id"),
                     AssignmentRow.task,
                     AssignmentRow.status,
+                    AssignmentRow.active_round_id,
+                    AssignmentRow.workflow_revision,
+                    AssignmentRow.held,
+                    AssignmentRow.hold_reason,
                     UserRow.username,
                     UserRow.pseudonym,
                 )

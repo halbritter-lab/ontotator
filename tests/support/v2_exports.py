@@ -109,7 +109,9 @@ class ExportService:
             task_profile_sha256=profile_hash(profile),
             search_conditions=conditions,
             origin_package_id=package_id,
-            origin_manifest_hash=canonical_hash(orig_pkg.manifest.model_dump()),
+            origin_manifest_hash=canonical_hash(
+                self.repo.get_manifest(package_id).model_dump()
+            ),
         )
         return ValidatedPackage(
             manifest=manifest,
@@ -260,7 +262,9 @@ class ExportService:
             task_profile_sha256=profile_hash(task_profile),
             search_conditions=conditions,
             origin_package_id=key.project_key,
-            origin_manifest_hash=canonical_hash(orig_pkg.manifest.model_dump()),
+            origin_manifest_hash=canonical_hash(
+                self.repo.get_manifest(key.project_key).model_dump()
+            ),
         )
 
         return ValidatedPackage(

@@ -65,8 +65,12 @@ async function finishedJob(page: Page, id: number): Promise<Job> {
   }, { timeout: 30_000 }).toMatch(/^(succeeded|failed)$/);
   expect(result!.status, result!.error ?? '').toBe('succeeded'); return result!;
 }
-function documentRow(page: Page, id: string) {
-  return page.getByTestId('document-row').filter({ has: page.getByRole('cell', { name: id, exact: true }) });
+async function documentRow(page: Page, id: string) {
+  const version = page.locator('details.document-version').filter({ has: page.getByRole('checkbox', { name: `Select ${id}`, exact: true, includeHidden: true }) });
+  await expect(version).toHaveCount(1);
+  if (!await version.evaluate(node => (node as HTMLDetailsElement).open)) await version.locator(':scope > summary').click();
+  await expect(version.getByTestId('document-row')).toBeVisible();
+  return version;
 }
 
 test('ordinary lead imports an explicit reasoned override with the real preview SHA and authoritative accepted-without-review flag', async ({ page }) => {
@@ -110,7 +114,7 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0);
   await page.getByLabel('Origin', { exact: true }).selectOption('machine_translation');
   await page.getByLabel('Translation status', { exact: true }).selectOption('accepted');
-  const row = documentRow(page, target.document_id); await expect(row).toContainText('Accepted without review');
+  const row = await documentRow(page, target.document_id); await expect(row).toContainText('Accepted without review');
   await expect(row.getByTitle(reason, { exact: true })).toBeVisible();
   expect(new URL(page.url()).hash).toContain('origin=machine_translation'); expect(new URL(page.url()).hash).toContain('translation_status=accepted');
   const records = await authenticatedRequest(page, `${root(s)}/documents/${encodeURIComponent(target.document_id)}/translation-reviews`);

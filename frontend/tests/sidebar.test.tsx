@@ -84,7 +84,7 @@ const reviewView = (annotations: any[] = []): WorkspaceView => {
     available_inputs: inputs,
     submissions: [],
     term_statuses: {},
-    allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
+    require_chosen_axes: false, annotation_policy_revision: 1, allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
     axes_config: [{ id: "assertion", label: "Assertion", options: ["present", "absent", "uncertain"], allow_empty: true }],
     axes_config_sha256: "sha-axes",
     draft: {
@@ -155,7 +155,7 @@ describe("continuous sidebar", () => {
     expect(scrollers.length).toBe(1);
     const scroller = scrollers[0];
 
-    for (const title of ["Review Proposals (2)", "Reference Annotations (1)", "Curated Annotations (1)"]) {
+    for (const title of ["Review Proposals (2)", "Reference Annotations (1)", "Saved findings (1)"]) {
       const header = Array.from(scroller.querySelectorAll(".sidebar-header"))
         .find((el) => el.textContent?.includes(title));
       expect(header, title).toBeDefined();

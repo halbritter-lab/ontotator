@@ -129,3 +129,11 @@ it("explains included reviewer flags, omitted rejections and historical missing-
   expect(card().getByText(/old-result \(original-version\) has no reviewer note/)).toBeTruthy();
   expect(card().queryByText(/excludes unresolved/)).toBeNull();
 });
+it("summarizes serializer errors and keeps raw diagnostics in a disclosure", async () => {
+  sessionStorage.setItem(storageKey(), "11");
+  vi.mocked(api.getJob).mockResolvedValue({ ...job(11, "t1_export", "failed"), error: "T1_INVALID: {'source_ref_syntax': 'internal'}" });
+  render(<ExportPage projectKey="p" currentUser={user} />);
+  await screen.findByText("Export could not be created. Open diagnostics for the technical details.");
+  expect(screen.getByText("Technical diagnostics").closest("details")?.open).toBe(false);
+  expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
+});

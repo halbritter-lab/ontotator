@@ -92,11 +92,16 @@ def check_variant_assignable(
     variant: VariantInfo,
     task: Task,
     lookup: Callable[[str], VariantInfo | None],
+    *,
+    allow_accepted_translation_review: bool = False,
 ) -> frozenset[str]:
     """New allocations only; existing exact retries/reopen bypass this rule."""
     context = translation_context(variant, lookup)
     if task == "translation_review":
-        if context is None or variant.translation_status == "accepted":
+        if context is None or (
+            variant.translation_status == "accepted"
+            and not allow_accepted_translation_review
+        ):
             raise DomainError(
                 "NOT_A_TRANSLATION",
                 {

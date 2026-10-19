@@ -753,9 +753,11 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
         unequal: bool = False,
         merge_split: bool = False,
         manager: bool = False,
+        workflow: bool = False,
+        source_update: bool = False,
     ) -> dict[str, object]:
         from t1_builders import bundle as variant_bundle
-        from t1_builders import native_unit, translation_unit
+        from t1_builders import correction_unit, native_unit, translation_unit
 
         from ontocurator.assignments.service import AssignmentService
 
@@ -791,6 +793,8 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
                     paragraphs[3][900:],
                 ]
             )
+        if workflow:
+            source_text = "Hypotonia. " + source_text
         source = native_unit(external_id, "en", source_text, case_id=case_id)
         target = translation_unit(
             external_id,
@@ -813,10 +817,18 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
             provider="Review fixture alternative",
             run_id="review failed run /2",
         )
+        imported_units = [source, target, failed]
+        if source_update:
+            imported_units.append(
+                correction_unit(
+                    source,
+                    source_text + "\n\nUpdated source: additional clinical detail.",
+                )
+            )
         with tempfile.TemporaryDirectory() as folder:
             imported = run_fixture_import(
                 app,
-                variant_bundle(Path(folder), [source, target, failed]),
+                variant_bundle(Path(folder), imported_units),
                 key,
             )
         if imported.status != "succeeded":
@@ -844,6 +856,8 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
         ]
         if manager:
             roles.extend([("manager", "lead"), ("historian", "annotator")])
+        if workflow:
+            roles.append(("consolidator", "adjudicator"))
         for name, role in roles:
             username = f"{key}-{name}"
             issued = accounts.create_user(Actor.cli(), username, username)

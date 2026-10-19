@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { api, ApiError, type Profile } from "../src/api/client";
 import { MyTasks } from "../src/tasks/MyTasks";
@@ -8,6 +8,7 @@ import { TaskEditor } from "../src/tasks/TaskEditor";
 import { AuthGate } from "../src/app/AuthGate";
 import { reviewWorkspace } from "./translationFixtures";
 import { testUser } from "./session";
+beforeEach(() => { vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); api.setCsrfToken(null); window.history.replaceState(null, "", "#/"); });
 const profile: Profile = { username: "alice", display_name: "Alice", pseudonym: "R", email: null, orcid: null, orcid_consent: false, languages: ["en", "de"], qualification: null };
 
@@ -47,7 +48,7 @@ it("discards late task metadata after changing user and assignment", async () =>
   expect(review).not.toHaveBeenCalled(); expect(annotation).not.toHaveBeenCalled();
 });
 it("labels translation tasks with actual source/target languages and external identity", async () => {
-  vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 17, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "submitted", updated_at: "2026-10-16T12:00:00Z" }]);
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 17, workflow_revision: 0, held: false, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "submitted", updated_at: "2026-10-16T12:00:00Z" }]);
   render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
   expect(await screen.findByText("Translation review (en to de)")).toBeDefined();
   expect(screen.getByText("EN 1/7")).toBeDefined();
@@ -178,8 +179,9 @@ it.each(["alice", "bob"])("uses the real AuthGate after an expired translation s
     expect(JSON.parse(writes[1].body as string)).toEqual({ expected_revision: 6, text: "Unsaved Alice text", form: {} });
     expect(metadata).toHaveBeenCalledTimes(1); expect(open).toHaveBeenCalledTimes(1);
   } else {
-    await screen.findByText("This task is no longer assigned to you.");
+    await screen.findByRole('heading', { name: 'My tasks' });
+    expect(window.location.hash).toBe('#/');
     expect(screen.queryByDisplayValue("Unsaved Alice text")).toBeNull();
-    expect(writes).toHaveLength(1); expect(metadata).toHaveBeenCalledTimes(2); expect(open).toHaveBeenCalledTimes(1);
+    expect(writes).toHaveLength(1); expect(metadata).toHaveBeenCalledTimes(1); expect(open).toHaveBeenCalledTimes(1);
   }
 });

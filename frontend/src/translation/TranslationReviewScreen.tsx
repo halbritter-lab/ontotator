@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
-import { api, ApiError, type ReviewWorkspace, type TranslationReviewRecord } from "../api/client";
+import { api, ApiError, type ReviewWorkspace, type TranslationReviewRecord, type SourceObligationView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
 import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconChevronLeft, IconRetry, InlineMessage, Select, StatusBadge, type StatusTone } from "../ui";
@@ -9,6 +9,8 @@ import { useCoupledScroll } from "../variants/useCoupledScroll";
 import { createDraftSaver, type DraftSaver } from "./draftSaver";
 import { DiffView, TextView } from "./DiffView";
 import { TranslationEditor } from "./TranslationEditor";
+import { SourceObligationReview } from './SourceObligationReview';
+import { notifyFinalSelectionChanged } from '../variants/finalSelectionState';
 import { ChecksSummary, ReviewSummary, SubmitSummary } from "./ReviewParts";
 import { ReviewForm } from "./ReviewForm";
 import { categoryLabels, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName } from "./labels";
@@ -18,6 +20,10 @@ export interface TranslationReviewScreenProps {
   assignmentId: number; username: string; onNavigate: (route: Route) => void;
   routeLeaveRef: MutableRefObject<RouteLeaveGuard | null>;
   leaveGuardRef: MutableRefObject<((proceed: () => void) => void) | null>;
+  reportActions?: ReactNode;
+  held?: boolean;
+  holdReason?: string | null;
+  saveBeforeReportRef?: MutableRefObject<(() => Promise<void>) | null>;
 }
 type RawDraft = { text: string; form: Record<string, unknown> };
 const has = (object: object, key: string): boolean => Object.prototype.hasOwnProperty.call(object, key);
@@ -59,6 +65,8 @@ export function TranslationReviewScreen(props: TranslationReviewScreenProps): JS
 }
 
 function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreenProps & { workspace: ReviewWorkspace; onReload: () => void }): JSX.Element {
+  const immutableReadOnly = workspace.read_only && (!workspace.assignment.held || workspace.assignment.status === "submitted" || workspace.submitted_record !== null);
+  const held = props.held ?? workspace.assignment.held;
   const [draft, setDraft] = useState<RawDraft>(() => ({ text: workspace.draft.text, form: structuredClone(workspace.draft.form) }));
   const draftRef = useRef(draft); draftRef.current = draft;
   const saver = useRef<DraftSaver<RawDraft> | null>(null);
@@ -73,8 +81,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const decisionHeading = useRef<HTMLHeadingElement | null>(null), submitReason = useRef<HTMLDivElement | null>(null);
   const [comparisonId, setComparisonId] = useState(workspace.comparisons[0]?.variant.document_id ?? "");
   const [sourceElement, setSourceElement] = useState<HTMLDivElement | null>(null), [targetElement, setTargetElement] = useState<HTMLDivElement | null>(null), [comparisonElement, setComparisonElement] = useState<HTMLDivElement | null>(null);
-  const record = submitted ?? (workspace.read_only ? workspace.submitted_record : null);
-  const readOnly = workspace.read_only || submitted !== null; readOnlyRef.current = readOnly;
+  const record = submitted ?? (immutableReadOnly ? workspace.submitted_record : null);
+  const readOnly = immutableReadOnly || submitted !== null || held; readOnlyRef.current = readOnly;
   const text = record?.proposed_text ?? draft.text, rawForm = record ? recordForm(record) : draft.form;
   const form = typedForm(rawForm), issues = form ? checkReview(form, workspace.text, text) : [];
   const comparison = workspace.comparisons.find(row => row.variant.document_id === comparisonId);
@@ -100,7 +108,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
 
   useEffect(() => {
     alive.current = true;
-    if (!workspace.read_only) {
+    if (!immutableReadOnly) {
       const instance = createDraftSaver<RawDraft>({ initialRevision: workspace.draft.revision,
         save: async (value, expected_revision) => {
           if (!alive.current || readOnlyRef.current) throw new Error("This review is read-only.");
@@ -116,6 +124,12 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     if (instance) { await instance.flush(); if (instance.hasUnsavedChanges) throw new Error("Changes are not saved."); }
     return alive.current;
   }
+  useEffect(() => {
+    if (!props.saveBeforeReportRef) return;
+    const save = async () => { await flush(); };
+    props.saveBeforeReportRef.current = save;
+    return () => { if (props.saveBeforeReportRef?.current === save) props.saveBeforeReportRef.current = null; };
+  });
   const closeLeave = (allowed: boolean) => {
     const request = pendingLeave.current; pendingLeave.current = null; setLeave(null); leavePromise.current = null;
     if (allowed) { departing.current = true; readOnlyRef.current = true; operation.current = true; setBusy(true); saver.current?.dispose(); saver.current = null; }
@@ -155,11 +169,11 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     };
   }, [props.routeLeaveRef, props.leaveGuardRef]);
   useEffect(() => {
-    if (workspace.read_only) return;
+    if (immutableReadOnly) return;
     const warn = (event: BeforeUnloadEvent) => { if (saver.current?.hasUnsavedChanges) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [workspace.read_only]);
+  }, [immutableReadOnly]);
   const edit = (next: RawDraft) => {
     if (readOnlyRef.current || operation.current) return;
     draftRef.current = next; setDraft(next); saver.current?.update(next); setServerIssues([]);
@@ -174,25 +188,32 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const saveState = saver.current?.state ?? "saved";
   const canSubmit = !readOnly && !busy && form !== null && issues.length === 0 && nonblank(qualification)
     && saveState === "saved" && !saver.current?.hasUnsavedChanges;
-  const submit = async () => {
+  const submit = async (cause?: SourceObligationView): Promise<boolean> => {
     const currentForm = typedForm(draftRef.current.form);
-    if (operation.current || readOnlyRef.current || !currentForm || checkReview(currentForm, workspace.text, draftRef.current.text).length || !nonblank(qualification)) return;
+    if (operation.current || readOnlyRef.current || !currentForm || checkReview(currentForm, workspace.text, draftRef.current.text).length || !nonblank(qualification)
+      || (cause && !['accepted_unchanged', 'accepted_corrected'].includes(currentForm.decision))) return false;
     operation.current = true; setBusy(true); setError(null); setServerIssues([]);
     try {
-      if (!await flush()) return;
+      if (!await flush()) return false;
       const revision = saver.current?.revision ?? workspace.draft.revision;
-      const value = await api.submitTranslationReview(props.assignmentId, revision);
-      if (!alive.current) return;
+      const value = cause ? await api.resolveSourceObligation(props.assignmentId, cause.cause_id, {
+        expected_revision: revision, translation_text_sha256: cause.translation_text_sha256,
+        old_source_text_sha256: cause.old_source_text_sha256, new_source_text_sha256: cause.new_source_text_sha256,
+      }) : await api.submitTranslationReview(props.assignmentId, revision);
+      if (!alive.current) return false;
       readOnlyRef.current = true; saver.current?.dispose(); saver.current = null; setSubmitted(value); setConfirming(false);
       await loadCreated(value);
+      notifyFinalSelectionChanged(workspace.assignment.project_key);
+      return true;
     } catch (failure) {
-      if (!alive.current) return;
+      if (!alive.current) return false;
       setError(failure);
       if (failure instanceof ApiError && failure.code === "REVIEW_INVALID" && typeof failure.details === "object" && Array.isArray(failure.details.issues)) setServerIssues(failure.details.issues.filter((value): value is string => typeof value === "string"));
       if (failure instanceof ApiError && failure.code === "QUALIFICATION_REQUIRED") {
         setQualification(null);
         try { const profile = await api.getProfile(); if (alive.current) setQualification(profile.qualification ?? null); } catch { /* Keep the refusal and current input visible. */ }
       }
+      return false;
     } finally { if (alive.current) { operation.current = false; setBusy(false); setConfirming(false); } }
   };
   /** Submitting is immutable, so it always goes through a confirmation. */
@@ -225,14 +246,16 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const paragraphNote = (left: number, right: number) => <p className="translation-toolbar-note">Paragraphs differ ({left} / {right}); scrolling is approximate.</p>;
 
   return <section className="translation-review" aria-label="Translation review">
+    {held && <InlineMessage tone="warning">Task paused: {props.holdReason ?? workspace.assignment.hold_reason ?? "A project problem needs attention."} Your local translation and review input are kept.</InlineMessage>}
     <Button className="translation-skip" onClick={focusDecision}>Skip to decision</Button>
     <div className="translation-review-header density-compact">
       <div className="translation-review-bar">
         {navigateLink({ name: "tasks" }, <><IconChevronLeft /> Back to my tasks</>, "translation-back")}
         <div className="translation-review-tools">
+          {props.reportActions}
           <span role="status" className="translation-save-status"><StatusBadge tone={statusTone}>{status}</StatusBadge></span>
-          {!readOnly && <Button variant="quiet" size="sm" icon={<IconRetry />} onClick={() => { void reload(); }}
-            title="Load the latest saved state of this review. Unsaved edits are saved first; if that fails, you choose whether to discard them.">Reload from server</Button>}
+          <Button variant="quiet" size="sm" icon={<IconRetry />} onClick={() => { void reload(); }}
+            title="Load the latest saved state of this review. Unsaved edits are saved first; if that fails, you choose whether to discard them.">Reload from server</Button>
         </div>
       </div>
       <h1>{workspace.variant.external_id}</h1>
@@ -288,10 +311,14 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
       <aside className="translation-decision density-compact" aria-labelledby="translation-decision-heading">
         <div className="translation-decision-body">
           <h2 id="translation-decision-heading" className="translation-section-title" ref={decisionHeading} tabIndex={-1}>Your review</h2>
+          <SourceObligationReview assignmentId={props.assignmentId} username={props.username} documentId={workspace.variant.document_id}
+            translationText={text} canResolve={canSubmit && !!form && ['accepted_unchanged', 'accepted_corrected'].includes(form.decision)}
+            busy={busy} readOnly={readOnly} error={error} onResolve={submit} />
           {submitted && <InlineMessage tone="success" title="Review submitted"><p>{decisionOutcomes[submitted.decision]}</p>
             {createdVersion !== null && <p>A corrected version v{createdVersion} was created.</p>}
             {submitted.created_variant_id && createdVersion === null && <Button size="sm" onClick={() => { void loadCreated(submitted); }}>Retry corrected version metadata</Button>}</InlineMessage>}
           {record ? <ReviewSummary record={record} heading="Submitted review" />
+            : held ? <><InlineMessage tone="info">This task is paused. Your review choices are kept.</InlineMessage><ReviewForm value={visualForm(rawForm)} issues={[]} readOnly onChange={() => {}} /></>
             : readOnly ? <InlineMessage tone="info">This review can no longer be edited.</InlineMessage>
             : <>
               {decision(rawForm.decision) && !form && <InlineMessage tone="error">The review form contains unsupported values. Update the affected fields before submitting.</InlineMessage>}

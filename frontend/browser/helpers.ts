@@ -87,7 +87,18 @@ export async function submitCase(page: Page) {
   await expect(submit).toBeDisabled();
   await dialog.getByLabel(/Entire text checked for further findings/i).check();
   await submit.click();
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Case successfully submitted/i);
+  const completed = page.getByRole("dialog", { name: "Case submitted" });
+  const acknowledgement = dialog.getByRole("checkbox", { name: "Submit with these unconfirmed values" });
+  await expect(acknowledgement.or(completed)).toBeVisible();
+  if (await acknowledgement.isVisible()) {
+    await expect(dialog).toContainText("keeps the clinical values and their defaulted status unchanged");
+    const continueSubmit = dialog.getByRole("button", { name: "Continue and submit", exact: true });
+    await expect(continueSubmit).toBeDisabled();
+    await acknowledgement.check();
+    await expect(continueSubmit).toBeEnabled();
+    await continueSubmit.click();
+  }
+  await expect(completed).toContainText(/Case successfully submitted/i);
 }
 
 /** Select document text by UTF-16 offsets and fire the mouseup the editor listens to. */

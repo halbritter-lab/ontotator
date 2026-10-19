@@ -5,6 +5,12 @@ import { SearchManager } from "../src/editor/searchState";
 import type { AnnotationSnapshot, ApiClient, AxisDefinition } from "../src/api/client";
 
 describe("Dynamic Axes and Non-HPO UI", () => {
+  it("uses the same option labels in large selects and radio groups", () => {
+    render(<AnnotationPanel annotation={sampleAnnotation} allEvidence={{}} workspaceKey={{ project_key: "p", document_id: "d", annotator_id: "u", mode: "independent", scope_id: "s", target_set_id: "t" }}
+      searchManager={mockSearchManager} selectedEvidenceId={null} axesConfig={[{ id: "experiencer", label: "Experiencer", allow_empty: true, options: ["patient", "other", "family", "donor", "unknown"] }]}
+      onSelectEvidence={vi.fn()} onUpdateTerm={vi.fn()} onUpdateAxes={vi.fn()} onAttachMention={vi.fn()} onDetachMention={vi.fn()} onDeleteAnnotation={vi.fn()} onSetIntent={vi.fn()} />);
+    expect(screen.getByRole("option", { name: "Other person" })).toHaveProperty("value", "other");
+  });
   const mockSearchManager = new SearchManager({
     searchOntology: vi.fn(),
   } as unknown as ApiClient);

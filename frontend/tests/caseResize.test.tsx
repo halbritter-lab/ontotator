@@ -50,7 +50,7 @@ const makeView = (mode: "independent" | "review", annotations: any[], inputs: an
     available_inputs: inputs,
     submissions: [],
     term_statuses: {},
-    allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
+    require_chosen_axes: false, annotation_policy_revision: 1, allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
     axes_config: [{ id: "assertion", label: "Assertion", options: ["present", "absent"], allow_empty: true }],
     axes_config_sha256: "sha-axes",
     draft: {

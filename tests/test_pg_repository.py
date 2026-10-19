@@ -675,7 +675,18 @@ def test_an_export_contains_proposals_drafts_history_and_events(
 
     exported = repo.export_package("pkg-a")
 
-    assert exported.manifest == package.manifest
+    assert exported.manifest.format_version == "ontocurator-work-package/v3"
+    assert exported.manifest.workflow_history == {}
+    assert set(exported.manifest.proposal_annotation_refs) == set(package.annotations)
+    assert set(exported.manifest.proposal_evidence_refs) == set(package.evidence)
+    assert exported.manifest.model_dump(
+        exclude={
+            "format_version",
+            "workflow_history",
+            "proposal_annotation_refs",
+            "proposal_evidence_refs",
+        }
+    ) == package.manifest.model_dump(exclude={"format_version"})
     assert exported.documents == package.documents
     assert exported.annotations == package.annotations
     assert exported.evidence == package.evidence

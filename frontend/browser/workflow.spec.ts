@@ -70,7 +70,7 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
   await openCase(page, { task: "review" });
   await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
   await page.locator(".doc-item").filter({ hasText: "HP:0001252" }).click();
-  await expect(page.getByLabel(/Proposal details/i)).toContainText("present");
+  await expect(page.getByLabel(/Proposal details/i).getByText("Present", { exact: true })).toBeVisible();
   await expect(page.getByLabel(/Proposal details/i)).toContainText("Hypotonia");
   await page.getByRole("button", { name: /Confirm/i }).first().click();
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");

@@ -903,7 +903,12 @@ def _annotate(client, annotator: str, document_id: str, term_id: str) -> str:  #
             "annotation_id": f"ann-{annotator}",
             "layer_id": "hpo-layer",
             "term_id": term_id,
-            "axes": {"assertion": "present"},
+            "axes": {
+                "assertion": "present",
+                "experiencer": "patient",
+                "temporality": "current",
+            },
+            "chosen_axis_ids": ["assertion", "experiencer", "temporality"],
         },
         {"command": "check_layer", "layer_id": "hpo-layer", "checked": True},
     ]

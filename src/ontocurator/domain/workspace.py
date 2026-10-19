@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
-from ontocurator.domain.annotations import AnnotationSnapshot
+from ontocurator.domain.annotations import AnnotationRef, AnnotationSnapshot
 from ontocurator.domain.documents import EvidenceSnapshot
 from ontocurator.domain.reanchor_resolution import (
     PendingReanchorRef,
@@ -25,6 +25,39 @@ class WorkspaceKey(BaseModel):
     mode: WorkspaceMode
     scope_id: str = ""
     target_set_id: str
+    # A paired discriminator, omitted entirely from historical key serialization.
+    format_version: Literal["ontocurator-workspace-key/v3"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    round_id: str | None = Field(
+        default=None, min_length=1, exclude_if=lambda value: value is None
+    )
+
+    @model_validator(mode="after")
+    def require_complete_round_identity(self) -> "WorkspaceKey":
+        if (self.format_version is None) != (self.round_id is None):
+            raise ValueError(
+                "Versioned workspace identity requires both format_version and round_id"
+            )
+        return self
+
+
+class RoundInputResolution(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    input_id: str
+    outcome: Literal["completed", "dismissed"]
+    annotation_ref: AnnotationRef | None = None
+    reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> "RoundInputResolution":
+        if self.outcome == "completed" and self.annotation_ref is None:
+            raise ValueError("Completed input requires an exact output finding")
+        if self.outcome == "dismissed" and (
+            self.annotation_ref is not None or not (self.reason or "").strip()
+        ):
+            raise ValueError("Dismissal requires a reason and no output finding")
+        return self
 
 
 class Draft(BaseModel):
@@ -43,6 +76,9 @@ class Draft(BaseModel):
     decisions: list[ReviewDecision] = Field(default_factory=list)
     reanchor_inputs: list[PendingReanchorRef] = Field(default_factory=list)
     reanchor_resolutions: list[ReanchorResolution] = Field(default_factory=list)
+    round_input_resolutions: list[RoundInputResolution] = Field(
+        default_factory=list, exclude_if=lambda v: not v
+    )
     checked_layer_ids: list[str] = Field(default_factory=list)
 
     @property
@@ -87,6 +123,9 @@ class Submission(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     format_version: str = "ontocurator-submission/v2"
+    input_manifest_sha256: str | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     submission_id: str
     origin_key: WorkspaceKey
     scope: TaskScope | None = None
@@ -96,9 +135,26 @@ class Submission(BaseModel):
     decisions: list[ReviewDecision]
     reanchor_inputs: list[PendingReanchorRef] = Field(default_factory=list)
     reanchor_resolutions: list[ReanchorResolution] = Field(default_factory=list)
+    round_input_resolutions: list[RoundInputResolution] = Field(
+        default_factory=list, exclude_if=lambda v: not v
+    )
     checked_layer_ids: list[str] = Field(default_factory=list)
     document_checked: bool = True
     created_at: str
+
+    @model_validator(mode="after")
+    def validate_round_envelope(self) -> "Submission":
+        if self.origin_key.round_id is not None:
+            if (
+                self.format_version != "ontocurator-submission/v3"
+                or not self.input_manifest_sha256
+            ):
+                raise ValueError(
+                    "Round submissions require the v3 envelope and frozen input digest"
+                )
+        elif self.input_manifest_sha256 is not None or self.round_input_resolutions:
+            raise ValueError("Legacy submissions cannot carry round metadata")
+        return self
 
     @model_validator(mode="before")
     @classmethod

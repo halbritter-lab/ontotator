@@ -25,6 +25,7 @@ from ontocurator.authz.memberships import MembershipService
 from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
+from ontocurator.exchange.final_export import final_t1_export
 from ontocurator.exchange.reanchor_job import reanchor
 from ontocurator.exchange.review_export import translation_review_export
 from ontocurator.exchange.t1 import (
@@ -35,6 +36,7 @@ from ontocurator.exchange.t1 import (
 from ontocurator.exchange.uploads import upload_commit, upload_preview
 from ontocurator.jobs.queue import Handler, Job, JobContext, StructuredJobError
 from ontocurator.storage.database import Database
+from ontocurator.storage.repository import ProjectExport
 from ontocurator.storage.tables import JobRow, ProjectRow, StoredFileRow, UserRow
 
 # How many ontospan issues a failed job names in its error.
@@ -177,7 +179,54 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     db = ctx.db
     project = job.payload["project"]
     actor, access = requester(db, job)
-    content = ScopedRepository(db, access, actor).t1_export_content(project)
+    from ontocurator.exchange.human_inputs import human_input_closure
+
+    repo = ScopedRepository(db, access, actor)
+    with db.snapshot():
+        content = repo.t1_export_content(project)
+        latest_ids = [sub.submission_id for sub in content.submissions]
+        closure, inputs, kinds = human_input_closure(repo, project, latest_ids)
+        if set(closure) != set(latest_ids):
+            content = repo.t1_export_content_exact(project, closure)
+    submissions = {sub.submission_id: sub for sub in content.submissions}
+    overrides: dict[str, str] = {}
+    for entries in inputs.values():
+        for entry in entries:
+            source = submissions[entry["source_submission_id"]]
+            source_key = source.origin_key
+            overrides[f"input-{entry['input_id']}"] = ontospan.annotation_ref(
+                f"{project}:{source_key.annotator_id}:{source_key.mode}:{source.submission_id}",
+                entry["source_ref"]["annotation_id"],
+            )
+            overrides[f"round-input:{entry['input_id']}"] = overrides[
+                f"input-{entry['input_id']}"
+            ]
+    result = serialize_t1_content(
+        db,
+        actor,
+        project,
+        content,
+        job.id,
+        source_ref_overrides=overrides,
+        round_kinds=kinds,
+    )
+    result["provenance_only_submission_ids"] = sorted(set(closure) - set(latest_ids))
+    return result
+
+
+def serialize_t1_content(
+    db: Database,
+    actor: Actor,
+    project: str,
+    content: ProjectExport,
+    job_id: int,
+    *,
+    final_snapshot_id: str | None = None,
+    final_bundle_kind: str = "selected",
+    source_ref_overrides: Mapping[str, str] | None = None,
+    round_kinds: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Serialize exactly the supplied immutable input selection."""
     if not content.submissions:
         raise DomainError("EXPORT_EMPTY", f"Project '{project}' has no submissions.")
     layers = layers_for(content.profile, content.pins)
@@ -260,7 +309,12 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             layers,
             content.proposals,
             proposal_notes=content.proposal_notes,
-            set_id=f"{project}:{key.annotator_id}:{key.mode}:{submission.submission_id}",
+            source_ref_overrides=source_ref_overrides,
+            set_id=(
+                f"submission-{submission.submission_id}"
+                if final_snapshot_id
+                else f"{project}:{key.annotator_id}:{key.mode}:{submission.submission_id}"
+            ),
             source_text_sha256=stored.source_text_sha256,
             guideline_ref=content.guideline_ref,
             variant=stored.variant,
@@ -268,6 +322,20 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             single_native_case=stored.variant is None
             or case_sizes[stored.variant.case_id] == 1,
         )
+        kind = (round_kinds or {}).get(submission.submission_id)
+        if kind in {"consolidation", "carry_forward"}:
+            unit = unit.model_copy(
+                update={
+                    "annotation_set": unit.annotation_set.model_copy(
+                        update={
+                            "set_kind": "stage_result"
+                            if kind == "consolidation"
+                            else "individual",
+                            "stage": kind,
+                        }
+                    )
+                }
+            )
         units.append(unit)
         for name in counts:
             counts[name] += unit_counts[name]  # type: ignore[literal-required]
@@ -275,7 +343,11 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     # the same pinned ontologies as import before storing an export artifact.
     _validate(units, ontologies)
     now = datetime.now(UTC).replace(microsecond=0)
-    bundle_id = f"{project}-{now:%Y%m%dT%H%M%SZ}"
+    bundle_id = (
+        f"{final_bundle_kind}-{final_snapshot_id}"
+        if final_snapshot_id
+        else f"{project}-{now:%Y%m%dT%H%M%SZ}"
+    )
     contributors = [
         ontospan.Contributor(actor_id=pseudonym, name=name, orcid=orcid)
         for pseudonym, name, orcid in content.contributors
@@ -301,7 +373,7 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
         "counts": dict(counts),
         "warnings": legacy_warnings,
     }
-    _audit(db, actor, "project.export", project, {**result, "job_id": job.id})
+    _audit(db, actor, "project.export", project, {**result, "job_id": job_id})
     return result
 
 
@@ -331,6 +403,7 @@ HANDLERS: dict[str, Handler] = {
     "upload_commit": upload_commit,
     "t1_import": t1_import,
     "t1_export": t1_export,
+    "final_t1_export": final_t1_export,
     "edit_log_export": edit_log_export,
     "translation_review_export": translation_review_export,
 }

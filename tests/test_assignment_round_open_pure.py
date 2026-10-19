@@ -35,7 +35,10 @@ def client(monkeypatch):
         routes.AssignmentService,
         "_get",
         lambda *_: SimpleNamespace(
-            project_key="server-project", document_id="server-doc", task="review"
+            project_key="server-project",
+            document_id="server-doc",
+            task="review",
+            active_round_id=None,
         ),
     )
     calls = []

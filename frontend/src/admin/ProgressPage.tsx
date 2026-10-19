@@ -1,3 +1,4 @@
+import { ProjectDashboardPage } from "./ProjectDashboardPage";
 import { useEffect, useState } from "react";
 import { api, ApiError, type ProjectProgress } from "../api/client";
 import { routeHref, type Route } from "../app/router";
@@ -49,7 +50,7 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
     } },
   ];
   return <section>
-    <h1>Progress</h1>
+    <h1>Progress</h1><ProjectDashboardPage key={projectKey} projectKey={projectKey} />
     <Toolbar label="Progress actions"><Button disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh progress</Button></Toolbar>
     {loading && <p role="status">Loading progress …</p>}
     {error !== undefined && (error instanceof ApiError && [403, 404].includes(error.status) ? <InlineMessage tone="error">You do not have access to this page.</InlineMessage> : <ErrorNotice error={error} />)}

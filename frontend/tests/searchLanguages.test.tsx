@@ -54,7 +54,7 @@ describe("search language selection", () => {
 });
 
 describe("useSearchLanguages", () => {
-  it("offers the loaded languages of the ontology, all active by default", async () => {
+  it("offers loaded languages with English-only fallback without a document language", async () => {
     const client = clientWith();
     const { result } = renderHook(() => useSearchLanguages(client, "JPL", "study"));
 
@@ -64,7 +64,7 @@ describe("useSearchLanguages", () => {
       { language: "de", termCount: 3412 },
       { language: "es", termCount: 18201 },
     ]);
-    expect(control.active).toEqual(["de", "es"]);
+    expect(control.active).toEqual([]);
     expect(client.listPackageOntologies).toHaveBeenCalledWith("study");
   });
 
@@ -89,26 +89,22 @@ describe("useSearchLanguages", () => {
 
     const nobody = renderHook(() => useSearchLanguages(client, "NEW", "study"));
     await waitFor(() => expect(nobody.result.current("abc123")).toBeDefined());
-    expect(nobody.result.current("abc123")!.active).toEqual(["de", "es"]);
+    expect(nobody.result.current("abc123")!.active).toEqual([]);
   });
 
-  it("stores a change for this annotator only and applies it at once", async () => {
+  it("applies temporary changes without changing personal defaults", async () => {
     const client = clientWith({ JPL: ["es", "fr"], AB: ["de"] });
     const { result } = renderHook(() => useSearchLanguages(client, "JPL", "study"));
     await waitFor(() => expect(result.current("abc123")?.active).toEqual(["es"]));
 
     act(() => result.current("abc123")!.onToggle("de"));
     expect(result.current("abc123")!.active).toEqual(["de", "es"]);
-    expect(client.updatePreferences).toHaveBeenLastCalledWith({
-      search_languages_by_annotator: { JPL: ["de", "es", "fr"] },
-    });
+    expect(client.updatePreferences).not.toHaveBeenCalled();
 
     act(() => result.current("abc123")!.onToggle("es"));
     expect(result.current("abc123")!.active).toEqual(["de"]);
-    expect(client.updatePreferences).toHaveBeenLastCalledWith({
-      search_languages_by_annotator: { JPL: ["de", "fr"] },
-    });
-    expect(client.updatePreferences).toHaveBeenCalledTimes(2);
+    expect(client.updatePreferences).not.toHaveBeenCalled();
+    expect(client.updatePreferences).not.toHaveBeenCalled();
   });
 
   it("stays silent when the server cannot be asked", async () => {
@@ -227,4 +223,35 @@ describe("SearchLanguageButton", () => {
     expect(screen.queryByRole("group")).toBeNull();
     expect(document.activeElement).toBe(button);
   });
+});
+it("keeps durable automation disabled and treats search toggles as temporary", async () => {
+  const client = clientWith();
+  (client.getPreferences as ReturnType<typeof vi.fn>).mockResolvedValue({ multilingual_search: { enabled: false, preferred_languages: ["de"], automatic_document_language: false } });
+  const { result } = renderHook(() => useSearchLanguages(client, "JPL", "study", "de"));
+  await waitFor(() => expect(result.current("abc123")).toBeDefined());
+  expect(result.current("abc123")!.active).toEqual([]);
+  act(() => result.current("abc123")!.onToggle("de"));
+  expect(result.current("abc123")!.active).toEqual(["de"]);
+  expect(client.updatePreferences).not.toHaveBeenCalled();
+});
+it("activates only an available document language on first use and restores defaults on the next text", async () => {
+  const client = clientWith();
+  const { result, rerender } = renderHook(({ language }) => useSearchLanguages(client, "JPL", "study", language), { initialProps: { language: "de" } });
+  await waitFor(() => expect(result.current("abc123")?.active).toEqual(["de"]));
+  act(() => result.current("abc123")!.onToggle("es"));
+  expect(result.current("abc123")!.active).toEqual(["de", "es"]);
+  rerender({ language: "fr" });
+  await waitFor(() => expect(result.current("abc123")?.active).toEqual([]));
+  expect(client.updatePreferences).not.toHaveBeenCalled();
+});
+
+
+it("discloses saved languages unavailable for the pinned ontology without erasing them", async () => {
+  const client = clientWith({ JPL: ["fr", "de"] });
+  const hook = renderHook(() => useSearchLanguages(client, "JPL", "study"));
+  await waitFor(() => expect(hook.result.current("abc123")?.unavailable).toEqual(["fr"]));
+  render(<SearchLanguageButton control={hook.result.current("abc123")!} />);
+  fireEvent.click(screen.getByRole("button", { name: "Search languages: EN, DE" }));
+  expect(screen.getByText(/Unavailable for this ontology: FR/)).toBeTruthy();
+  expect(client.updatePreferences).not.toHaveBeenCalled();
 });

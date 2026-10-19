@@ -6,7 +6,7 @@ import { api, ApiError, AuthError, type Profile } from "../src/api/client";
 import { ProfilePage } from "../src/me/ProfilePage";
 
 const profile: Profile = { qualification: null, username: "long-username-123", pseudonym: "ann-0042", display_name: "Alex", email: "alex@example.org", orcid: "0000-0002-1825-0097", orcid_consent: true, languages: ["en"] };
-beforeEach(() => { vi.spyOn(api, "getProfile").mockResolvedValue(profile); });
+beforeEach(() => { vi.spyOn(api, "getProfile").mockResolvedValue(profile); vi.spyOn(api, "getPreferences").mockResolvedValue({}); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const loaded = async () => { await screen.findByText("ann-0042"); };
 const passwordForm = () => screen.getByRole("form", { name: "Change password" });
@@ -176,4 +176,14 @@ describe("ProfilePage component", () => {
     await act(async () => finish({ ...profile, display_name: "Changed" }));
     expect(onSaved).not.toHaveBeenCalled();
   });
+});
+it("saves multilingual preferences explicitly and preserves disabled automation", async () => {
+  vi.spyOn(api, "getPreferences").mockResolvedValue({ multilingual_search: { enabled: true, preferred_languages: ["de"], automatic_document_language: false } });
+  const save = vi.spyOn(api, "updatePreferences").mockImplementation(async change => change as never);
+  render(<ProfilePage />); await loaded();
+  const form = await screen.findByRole("form", { name: "Search preferences" });
+  expect((within(form).getByLabelText("Automatically include the document language") as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(within(form).getByLabelText("Search translated names"));
+  fireEvent.click(within(form).getByRole("button", { name: "Save search preferences" }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith({ multilingual_search: { enabled: false, preferred_languages: ["de"], automatic_document_language: false } }));
 });

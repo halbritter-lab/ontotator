@@ -19,7 +19,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(n
 
 describe("role-based shell", () => {
   it("keeps reading navigation in a keyboard-accessible disclosure without a permanent sidebar", async () => {
-    const state = props({ user: { ...user, is_system_admin: true }, projects: [project("managed", true)], route: { name: "task", assignmentId: 42 } });
+    const state = props({ user: { ...user, is_system_admin: true }, projects: [project("managed", true)], route: { name: "task", assignmentId: 42 }, taskProject: "managed" });
     render(<Shell {...state} />);
     expect(document.querySelector<HTMLDetailsElement>(".shell-reading-navigation")?.open).toBe(false);
     expect(screen.getByRole("main").parentElement?.querySelector(":scope > .app-nav")).toBeNull();
@@ -58,19 +58,29 @@ describe("role-based shell", () => {
     expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
   });
 
-  it("groups links for managed projects and distinguishes equal project names by key", () => {
-    render(<Shell {...props({ projects: [project("first", true), project("hidden", false), project("second / α", true)] })} />);
-    expect(screen.queryByText(/hidden/)).toBeNull();
-    for (const key of ["first", "second / α"]) {
-      const group = screen.getByRole("region", { name: `Research (${key})` });
-      const links = within(group).getAllByRole("link");
-      expect(links.map((link) => link.textContent)).toEqual(["Settings", "Documents", "Progress", "Export"]);
-      expect(links.map((link) => link.getAttribute("href"))).toEqual(["settings", "documents", "progress", "export"].map((page) => `#/projects/${encodeURIComponent(key)}/${page}`));
-    }
+  it("searches authorized projects and shows sections only for the current project", () => {
+    const state = props({ projects: [project("first", true), project("reader", false), project("second / α", true)], route: { name: "projectDocuments", key: "first" } });
+    render(<Shell {...state} />);
+    expect(screen.getAllByRole("link", { name: "Documents" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Documents" }).getAttribute("href")).toBe("#/projects/first/documents");
+    expect(screen.getByText("Project key: first")).toBeTruthy();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Find project" }), { target: { value: "second" } });
+    expect(screen.queryByRole("option", { name: /first/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Current project"), { target: { value: "second / α" } });
+    expect(state.onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "second / α" });
+    expect(screen.queryByText("unauthorized")).toBeNull();
+  });
+
+  it("never silently chooses the first project and uses an authorized task's project", () => {
+    const state = props({ projects: [project("first", true), project("second", true)] });
+    const { rerender } = render(<Shell {...state} />);
+    expect(screen.queryByRole("link", { name: "Documents" })).toBeNull();
+    rerender(<Shell {...state} route={{ name: "task", assignmentId: 42 }} taskProject="second" />);
+    expect(screen.getByRole("link", { name: "Documents" }).getAttribute("href")).toBe("#/projects/second/documents");
   });
 
   it("delegates ordinary navigation without changing the active hash or calling logout", () => {
-    const state = props({ projects: [project("first", true)] });
+    const state = props({ projects: [project("first", true)], route: { name: "projectDocuments", key: "first" } });
     render(<Shell {...state} />);
     const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
     fireEvent(screen.getByRole("link", { name: "Documents" }), event);
@@ -126,7 +136,7 @@ describe("role-based shell", () => {
     expect(links[0].getAttribute("aria-current")).toBe("page");
     rerender(<Shell {...state} route={{ name: "projectDocuments", key: "second", status: "open" }} />);
     expect(screen.getAllByRole("link").filter((link) => link.getAttribute("aria-current") === "page")).toHaveLength(1);
-    expect(screen.getByRole("region", { name: "Research (second)" }).querySelector('[aria-current="page"]')?.textContent).toBe("Documents");
+    expect(screen.getByRole("region", { name: "Current project sections" }).querySelector('[aria-current="page"]')?.textContent).toBe("Documents");
   });
 
   it("marks the tasks page current even with its project filter", () => {

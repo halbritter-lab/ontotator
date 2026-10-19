@@ -266,6 +266,17 @@ def test_exact_match_on_a_german_name_reports_its_language() -> None:
     assert result.displayed_ids.count("HP:0001252") == 1
 
 
+def test_offline_translated_aliases_keep_the_same_canonical_hpo_identity() -> None:
+    service = _service(DE, ES)
+    for query, language in [("Muskelhypotonie", "de"), ("Hipotonía", "es")]:
+        hit = _search(service, query).candidates[0]
+        assert (hit.term_id, hit.label, hit.match_language) == (
+            "HP:0001252",
+            "Hypotonia",
+            language,
+        )
+
+
 def test_exact_match_on_a_translated_name_ignores_case_and_accents() -> None:
     service = _service(DE, ES)
 

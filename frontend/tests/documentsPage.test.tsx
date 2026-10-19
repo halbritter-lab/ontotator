@@ -1,18 +1,101 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api } from "../src/api/client";
 import { DocumentsPage } from "../src/admin/DocumentsPage";
+import { variant } from './variantFixtures';
+import userEvent from '@testing-library/user-event';
 const documents = [
   { document_id: "z-first", language: "en", status: "not_started", position: 9, text_length: 4, assignees: [{ assignment_id: 1, username: "private-user", pseudonym: "Reader A", task: "annotate", status: "open" }] },
   { document_id: "a-second", language: "de", status: "in_progress", position: 23, text_length: 6, assignees: [] },
 ];
 beforeEach(() => {
+  vi.spyOn(api, 'getWorkflowWarnings').mockResolvedValue({ project: 'p', selections: [], warnings: [], omissions: [], state_digest: 'a'.repeat(64) });
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue(documents as never);
   vi.spyOn(api, "getProjectSettings").mockResolvedValue({ languages: ["en", "de"] } as never);
   vi.spyOn(api, "listUploads").mockResolvedValue([]);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+it('keeps accepted-without-review status and its reason available in the collapsed version summary', async () => {
+  const accepted = variant('accepted', { case_id: 'GSC17', origin: 'machine_translation', language: 'de', translation_status: 'accepted' });
+  const reason = 'Lead checked the source and accepted the original translation.';
+  vi.mocked(api.listCases).mockResolvedValue([{ case_id: 'GSC17', variants: [accepted] }]);
+  vi.mocked(api.listProjectDocuments).mockResolvedValue([{ ...accepted, accepted_without_review: true, status_reason: reason, status: 'unassigned', position: 1, text_length: 10, assignees: [] }] as never);
+  render(<DocumentsPage projectKey="p" query={{}} onNavigate={vi.fn()} />);
+  await screen.findByRole('group', { name: 'Text GSC17' });
+  const version = screen.getByLabelText('Select accepted').closest('details') as HTMLDetailsElement;
+  expect(version.open).toBe(false);
+  expect(within(version.querySelector('summary')!).getByTitle(reason).textContent).toContain('Accepted without review');
+});
+it('decorates only the explicitly selected text/result and refreshes after a deliberate replacement', async () => {
+  const old = variant('old', { case_id: 'GSC17', origin: 'native', language: 'de', derived_from: null });
+  const newer = variant('newer', { case_id: 'GSC17', origin: 'correction', derived_from: 'old', version: 2 });
+  vi.mocked(api.listCases).mockResolvedValue([{ case_id: 'GSC17', variants: [old, newer] }]);
+  vi.mocked(api.listProjectDocuments).mockResolvedValue([old, newer].map((row, index) => ({ ...row, status: 'submitted', position: index + 1, text_length: 10, assignees: [] })) as never);
+  const selected = { case_id: 'GSC17', language: 'de', document_id: 'old', submission_id: 'older-result', revision: 2 };
+  vi.mocked(api.getWorkflowWarnings).mockResolvedValue({ project: 'p', selections: [selected], warnings: [], omissions: [], state_digest: 'a'.repeat(64) });
+  vi.spyOn(api, 'listSubmissionHistory').mockResolvedValue([{ submission_id: 'newer-result', document_id: 'newer', author_label: 'Reader A', created_at: '2026-10-18T12:00:00Z', mode: 'independent' }]);
+  vi.spyOn(api, 'selectFinalResult').mockImplementation(async () => {
+    const next = { ...selected, document_id: 'newer', submission_id: 'newer-result', revision: 3 };
+    vi.mocked(api.getWorkflowWarnings).mockResolvedValue({ project: 'p', selections: [next], warnings: [], omissions: [], state_digest: 'b'.repeat(64) });
+    return next;
+  });
+  render(<DocumentsPage projectKey="p" query={{}} currentUser={{ username: 'lead' }} onNavigate={vi.fn()} />);
+  await screen.findByText('Selected final result');
+  const language = screen.getByRole('group', { name: 'Language de for GSC17' });
+  const summary = language.querySelector('summary')!;
+  expect(summary.textContent).toContain('2 text versions');
+  expect(summary.textContent).toContain('old · older-result');
+  expect([...language.querySelectorAll<HTMLDetailsElement>('.document-version')].every(details => !details.open)).toBe(true);
+  expect(within(language).getAllByRole('button', { name: 'Submissions' }).every(button => !(button.closest('details') as HTMLDetailsElement).open)).toBe(true);
+  const version = (id: string) => screen.getByLabelText(`Select ${id}`).closest('[data-testid="document-row"]') as HTMLElement;
+  expect(within(version('old')).getByText('Selected final result')).toBeTruthy();
+  expect(within(version('newer')).queryByText('Selected final result')).toBeNull();
+  fireEvent.click(version('newer').closest('details')!.querySelector('summary')!);
+  fireEvent.click(within(version('newer')).getByRole('button', { name: 'Submissions' }));
+  await screen.findByText(/Selected: older-result/);
+  fireEvent.change(screen.getByLabelText('Submitted result'), { target: { value: 'newer-result' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Replace final selection' }));
+  await screen.findByText(/Selected: newer-result/);
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(within(version('newer')).queryByText('Selected final result')).toBeTruthy());
+  expect(within(version('old')).queryByText('Selected final result')).toBeNull();
+  expect(summary.textContent).toContain('newer · newer-result');
+});
+it('shows one logical text with language and correction branches and selects only filtered exact document IDs', async () => {
+  const old = variant('old', { case_id: 'GSC17', origin: 'native', language: 'de', derived_from: null });
+  const corrected = variant('corrected', { case_id: 'GSC17', origin: 'correction', derived_from: 'old', version: 2 });
+  vi.mocked(api.listCases).mockResolvedValue([{ case_id: 'GSC17', variants: [old, corrected] }]);
+  vi.mocked(api.listProjectDocuments).mockResolvedValue([{ ...corrected, status: 'submitted', position: 1, text_length: 10, assignees: [] }] as never);
+  const onNavigate = vi.fn();
+  render(<DocumentsPage projectKey="p" query={{ language: 'de', status: 'submitted' }} onNavigate={onNavigate} />);
+  await screen.findByRole('group', { name: 'Text GSC17' });
+  expect(screen.getAllByText('GSC17')).toHaveLength(1);
+  const logicalText = screen.getByRole('group', { name: 'Text GSC17' }) as HTMLDetailsElement;
+  const summary = logicalText.querySelector('summary')!;
+  summary.focus();
+  await userEvent.setup().keyboard('{Enter}');
+  expect(logicalText.open).toBe(false);
+  await userEvent.setup().keyboard('{Enter}');
+  expect(logicalText.open).toBe(true);
+  expect(screen.getByText('Earlier version outside current filters')).toBeTruthy();
+  expect(screen.queryByLabelText('Select old')).toBeNull();
+  fireEvent.click(screen.getByLabelText('Select all visible'));
+  expect(screen.getByText('1 selected')).toBeTruthy();
+  expect(screen.getByLabelText('Select corrected')).toHaveProperty('checked', true);
+  fireEvent.click(screen.getByLabelText('Select corrected').closest('details')!.querySelector('summary')!);
+  fireEvent.click(screen.getByRole('link', { name: 'View text corrected' }));
+  expect(onNavigate).toHaveBeenCalledWith({ name: 'projectCase', key: 'p', caseId: 'GSC17', variant: 'corrected', documents: { language: 'de', status: 'submitted' } });
+});
+it('keeps exact filtered document rows usable when the case inventory is unavailable', async () => {
+  vi.mocked(api.listCases).mockRejectedValue(new Error('Version metadata unavailable'));
+  render(<DocumentsPage projectKey="p" query={{}} onNavigate={vi.fn()} />);
+  await screen.findByText('Version metadata unavailable');
+  await screen.findByText('z-first');
+  expect(screen.getAllByTestId('document-row')).toHaveLength(2);
+  fireEvent.click(screen.getByLabelText('Select all visible'));
+  expect(screen.getByText('2 selected')).toBeTruthy();
+});
 it("uses controlled URL filters, preserves server order and shows actual assignment metadata", async () => {
   const navigate = vi.fn();
   render(<DocumentsPage projectKey="p" query={{ language: "en", status: "open", q: "z" }} onNavigate={navigate} />);

@@ -110,7 +110,7 @@ const baseView = (): WorkspaceView => ({
   available_inputs: [],
   submissions: [],
   term_statuses: {},
-  allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
+  require_chosen_axes: false, annotation_policy_revision: 1, allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
   axes_config: [
     { id: "assertion", label: "Vorhandensein (Assertion)", options: ["present", "absent", "uncertain"], allow_empty: true },
   ],
@@ -200,7 +200,7 @@ it("reviews separate versions and exposes original clinical axes and evidence", 
  const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...view.draft, revision: 1 });
  const rendered = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:1"));
- expect(screen.getByText("absent")).toBeDefined();
+ expect(within(screen.getByLabelText("Proposal details")).getByText("Absent")).toBeDefined();
  expect(rendered.container.querySelector('.run--marked')!.textContent).toBe("alpha");
  fireEvent.click(screen.getByText("HP:2"));
  fireEvent.click(screen.getByRole("button", { name: /Reject|Verwerfen/i }));

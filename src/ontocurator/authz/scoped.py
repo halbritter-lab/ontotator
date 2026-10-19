@@ -43,6 +43,7 @@ from ontocurator.domain.project_rules import ProjectRules
 from ontocurator.domain.reanchor_resolution import PendingReanchorRef, ReanchorItem
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.variants import VariantInfo
+from ontocurator.domain.work_rounds import WorkRoundView
 from ontocurator.domain.workspace import (
     Draft,
     MutationEnvelope,
@@ -119,6 +120,43 @@ class ScopedRepository(Repository):
             project_id = self._require_project(conn, project_key)
             return visible_documents(conn, self.access, project_id, project_key)
 
+    def workspace_input_snapshots(self, key: WorkspaceKey) -> list[AnnotationSnapshot]:
+        self._document(key.project_key, key.document_id)
+        if key.round_id is not None:
+            self.get_work_round(key.project_key, key.round_id)
+        return super().workspace_input_snapshots(key)
+
+    def get_work_round(self, project_key: str, round_id: str) -> WorkRoundView:
+        self._visible(project_key)
+        result = super().get_work_round(project_key, round_id)
+        self._document(project_key, result.document_id)
+        if (
+            not can(self.access, Action.EXPORT_ALL_WORK, project_key)
+            and result.annotator_id != self.access.pseudonym
+        ):
+            raise DomainError("ROUND_NOT_FOUND")
+        return result
+
+    def get_round_for_submission(
+        self, project_key: str, submission_id: str
+    ) -> WorkRoundView | None:
+        self._visible(project_key)
+        if not can(self.access, Action.EXPORT_ALL_WORK, project_key):
+            self.get_submission(submission_id, project_key)
+        return super().get_round_for_submission(project_key, submission_id)
+
+    def get_round_input_inventory(
+        self, project_key: str, round_id: str
+    ) -> list[dict[str, Any]]:
+        self.get_work_round(project_key, round_id)
+        return super().get_round_input_inventory(project_key, round_id)
+
+    def list_workflow_causes(self, project_key: str) -> list[dict[str, Any]]:
+        self._visible(project_key)
+        if not can(self.access, Action.VIEW_PROGRESS, project_key):
+            raise AccessDenied("NOT_ALLOWED")
+        return super().list_workflow_causes(project_key)
+
     def workspace_assignment(self, key: WorkspaceKey) -> Assignment:
         """The workspace's current authorized assignment, with storage encapsulated."""
         self._visible(key.project_key)
@@ -158,7 +196,12 @@ class ScopedRepository(Repository):
         lock_user_authority(conn, self.access.user_id)
         # Revocation uses project EXCLUSIVE, so this assignment stays valid
         # through commit without a global command mutex.
-        self.require_workable(conn, key)
+        assignment = self.require_workable(conn, key)
+        conn.execute(
+            select(AssignmentRow.id)
+            .where(AssignmentRow.id == assignment.id)
+            .with_for_update(key_share=True)
+        ).one()
 
     def _before_open_draft(self, conn: Connection, key: WorkspaceKey) -> None:
         assignment = self.require_workable(conn, key)
@@ -175,6 +218,9 @@ class ScopedRepository(Repository):
 
     def _before_new_mutation(self, conn: Connection, key: WorkspaceKey) -> None:
         assignment = self.require_workable(conn, key, mutation=True)
+        from ontocurator.application.workflow_guards import require_task_writable
+
+        require_task_writable(conn, assignment.id)
         conn.execute(
             select(AssignmentRow.id)
             .where(AssignmentRow.id == assignment.id)
@@ -537,7 +583,19 @@ class ScopedRepository(Repository):
                 )
             ).scalar_one_or_none()
             if owner is not None:
-                require_document(conn, self.access, project_id, project_key, owner)
+                require_case_text(conn, self.access, project_id, project_key, owner)
+            from ontocurator.authz.workflow import may_read_snapshot
+
+            if owner is not None and not may_read_snapshot(
+                conn,
+                self.access,
+                project_id,
+                project_key,
+                "annotation",
+                annotation_id,
+                version,
+            ):
+                raise DomainError("ANNOTATION_NOT_FOUND")
         return super().get_annotation_snapshot(annotation_id, version, project_key)
 
     def get_evidence_snapshot(
@@ -556,7 +614,19 @@ class ScopedRepository(Repository):
                 )
             ).scalar_one_or_none()
             if owner is not None:
-                require_document(conn, self.access, project_id, project_key, owner)
+                require_case_text(conn, self.access, project_id, project_key, owner)
+            from ontocurator.authz.workflow import may_read_snapshot
+
+            if owner is not None and not may_read_snapshot(
+                conn,
+                self.access,
+                project_id,
+                project_key,
+                "evidence",
+                evidence_id,
+                version,
+            ):
+                raise DomainError("EVIDENCE_NOT_FOUND")
         return super().get_evidence_snapshot(evidence_id, version, project_key)
 
     def list_annotations_for_document(
@@ -699,6 +769,10 @@ class ScopedRepository(Repository):
         return docs if visibility.all else docs & visibility.document_ids
 
     def get_submissions_for_workspace(self, key: WorkspaceKey) -> list[Submission]:
+        if key.annotator_id != self.access.pseudonym and not can(
+            self.access, Action.EXPORT_ALL_WORK, key.project_key
+        ):
+            raise AccessDenied("NOT_ALLOWED")
         self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().get_submissions_for_workspace(key)
@@ -706,9 +780,21 @@ class ScopedRepository(Repository):
     def get_submissions_for_document(
         self, project_key: str, document_id: str
     ) -> list[Submission]:
-        self._document(project_key, document_id)
         self._visible(project_key)
-        return super().get_submissions_for_document(project_key, document_id)
+        from ontocurator.authz.workflow import may_read_human_submission
+
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            require_case_text(conn, self.access, project_id, project_key, document_id)
+            return [
+                submission
+                for submission in super().get_submissions_for_document(
+                    project_key, document_id
+                )
+                if may_read_human_submission(
+                    conn, self.access, project_id, project_key, submission.submission_id
+                )
+            ]
 
     def get_submission(
         self, submission_id: str, project_key: str | None = None
@@ -725,16 +811,32 @@ class ScopedRepository(Repository):
                 )
             ).scalar_one_or_none()
             if owner is not None:
-                require_document(conn, self.access, project_id, project_key, owner)
+                require_case_text(conn, self.access, project_id, project_key, owner)
+            from ontocurator.authz.workflow import may_read_human_submission
+
+            if owner is not None and not may_read_human_submission(
+                conn, self.access, project_id, project_key, submission_id
+            ):
+                raise DomainError("SUBMISSION_NOT_FOUND")
         return super().get_submission(submission_id, project_key)
 
     # --- search events ------------------------------------------------------ #
+
+    def _before_search_provenance(self, conn: Connection, key: WorkspaceKey) -> None:
+        """Record browsing without reopening or changing submitted clinical work."""
+        from ontocurator.application.workflow_guards import require_task_writable
+
+        self._lock_round_assignment(conn, key)
+        self._check_round_mutation(conn, key, allow_submitted=True)
+        assignment = self.require_workable(conn, key)
+        require_task_writable(conn, assignment.id)
 
     def save_search_event(self, event: SearchEventRecord) -> None:
         self._document(event.workspace_key.project_key, event.workspace_key.document_id)
         self._visible(event.workspace_key.project_key)
         with self.db.transaction() as conn:
             self._before_workspace_locks(conn, event.workspace_key)
+            self._before_search_provenance(conn, event.workspace_key)
             require_annotation_gate(
                 conn,
                 self._require_project(conn, event.workspace_key.project_key),
@@ -751,15 +853,21 @@ class ScopedRepository(Repository):
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
             owner = conn.execute(
-                select(
-                    SearchEventRow.payload["workspace_key"]["document_id"].astext
-                ).where(
+                select(SearchEventRow.payload["workspace_key"]).where(
                     SearchEventRow.project_id == project_id,
                     SearchEventRow.event_id == event_id,
                 )
             ).scalar_one_or_none()
             if owner is not None:
-                require_document(conn, self.access, project_id, project_key, owner)
+                workspace = WorkspaceKey.model_validate(owner)
+                fresh = current_access(conn, self.access, project_id, project_key)
+                if workspace.annotator_id != fresh.pseudonym and not can(
+                    fresh, Action.EXPORT_ALL_WORK, project_key
+                ):
+                    return None
+                require_document(
+                    conn, fresh, project_id, project_key, workspace.document_id
+                )
         return super().get_search_event(event_id, project_key)
 
     def append_search_event_candidates(
@@ -776,6 +884,7 @@ class ScopedRepository(Repository):
         self._document(workspace_key.project_key, workspace_key.document_id)
         with self.db.transaction() as conn:
             self._before_workspace_locks(conn, workspace_key)
+            self._before_search_provenance(conn, workspace_key)
             require_annotation_gate(
                 conn,
                 self._require_project(conn, workspace_key.project_key),
@@ -808,6 +917,10 @@ class ScopedRepository(Repository):
     def get_search_events_for_workspace(
         self, key: WorkspaceKey
     ) -> list[SearchEventRecord]:
+        if key.annotator_id != self.access.pseudonym and not can(
+            self.access, Action.EXPORT_ALL_WORK, key.project_key
+        ):
+            raise AccessDenied("NOT_ALLOWED")
         self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().get_search_events_for_workspace(key)
@@ -830,6 +943,14 @@ class ScopedRepository(Repository):
             raise AccessDenied("NOT_ALLOWED", "You may not export this project.")
         return super().t1_export_content(project_key)
 
+    def t1_export_content_exact(
+        self, project_key: str, submission_ids: Sequence[str]
+    ) -> ProjectExport:
+        self._visible(project_key)
+        if not can(self.access, Action.EXPORT_ALL_WORK, project_key):
+            raise AccessDenied("NOT_ALLOWED", "You may not export this project.")
+        return super().t1_export_content_exact(project_key, submission_ids)
+
     def edit_log(self, project_key: str) -> list[dict[str, Any]]:
         self._visible(project_key)
         if not can(self.access, Action.EXPORT_EDIT_LOG, project_key):
@@ -841,11 +962,19 @@ class ScopedRepository(Repository):
     # --- edit log ----------------------------------------------------------- #
 
     def edit_events(self, key: WorkspaceKey) -> list[EditEvent]:
+        if key.annotator_id != self.access.pseudonym and not can(
+            self.access, Action.EXPORT_ALL_WORK, key.project_key
+        ):
+            raise AccessDenied("NOT_ALLOWED")
         self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().edit_events(key)
 
     def draft_state_at(self, key: WorkspaceKey, revision: int) -> DraftState:
+        if key.annotator_id != self.access.pseudonym and not can(
+            self.access, Action.EXPORT_ALL_WORK, key.project_key
+        ):
+            raise AccessDenied("NOT_ALLOWED")
         self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().draft_state_at(key, revision)

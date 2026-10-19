@@ -170,7 +170,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     submissions: [],
     available_inputs: [],
     term_statuses: {},
-    allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
+    require_chosen_axes: false, annotation_policy_revision: 1, allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
     axes_config: [
       { id: "assertion", label: "Vorhandensein (Assertion)", options: ["present", "absent", "uncertain"], allow_empty: true },
       { id: "experiencer", label: "Betroffene Person (Experiencer)", options: ["patient", "other"], allow_empty: true },
@@ -276,7 +276,8 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     expect(document.activeElement).toBe(note);
     expect(note.getAttribute("aria-invalid")).toBe("true");
     fireEvent.change(note, { target: { value: "Clinical interpretation needs specialist review" } });
-    fireEvent.click(screen.getByRole("button", { name: /Unresolved/i }));
+    expect(recordDecisionSpy).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
     await waitFor(() => {
       expect(recordDecisionSpy).toHaveBeenCalledWith(
         "ws-e2e-token",

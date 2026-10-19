@@ -72,6 +72,11 @@ class WorkspaceView(BaseModel):
     enforce_spanless_rules: bool = False
     allow_spanless_findings: bool = True
     require_spanless_note: bool = True
+    require_chosen_axes: bool = False
+    creation_defaults: dict[str, dict[str, dict[str, str]]] = Field(
+        default_factory=dict
+    )
+    annotation_policy_revision: int = 1
     axes_definition: str = "editor-axes/v1"
     axes_config: list[AxisDefinition] = Field(default_factory=list)
     axes_config_sha256: str = ""
@@ -204,6 +209,7 @@ class WorkspaceService:
         """Open or initialize a workspace view."""
         if (
             key.mode == "review"
+            and key.round_id is None
             and targets is not None
             and pending_proposal_set_ids is None
         ):
@@ -230,9 +236,19 @@ class WorkspaceService:
 
         term_statuses: dict[str, Literal["valid", "obsolete", "unknown"]] = {}
 
-        if key.mode == "independent":
+        if key.round_id is not None:
+            round_view = self.repo.get_work_round(key.project_key, key.round_id)
+            if round_view.workspace_key != key:
+                raise DomainError("ROUND_KEY_MISMATCH")
+            effective_targets = self.repo.open_draft(key).targets
+            available_inputs = (
+                self.repo.workspace_input_snapshots(key)
+                if key.mode != "independent"
+                else []
+            )
+        elif key.mode == "independent":
             effective_targets = ReviewTargetSet.create([])
-            available_inputs: list[AnnotationSnapshot] = []
+            available_inputs = []
         elif key.mode == "assisted":
             effective_targets = ReviewTargetSet.create([])
             all_inputs = self.repo.list_annotations_for_document(
@@ -380,6 +396,12 @@ class WorkspaceService:
             enforce_spanless_rules=draft.spanless_policy_version == 1,
             allow_spanless_findings=rules.allow_spanless_findings,
             require_spanless_note=rules.require_spanless_note,
+            require_chosen_axes=rules.require_chosen_axes,
+            creation_defaults={
+                layer: {kind: dict(values) for kind, values in kinds.items()}
+                for layer, kinds in rules.creation_defaults.items()
+            },
+            annotation_policy_revision=rules.annotation_policy_revision,
             key=key,
             document=doc,
             draft=draft,

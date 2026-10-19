@@ -453,6 +453,12 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
                 "command": "create_annotation",
                 "annotation_id": "owned",
                 "term_id": "HP:0001250",
+                "axes_values": {
+                    "assertion": "present",
+                    "experiencer": "patient",
+                    "temporality": "current",
+                },
+                "chosen_axis_ids": ["assertion", "experiencer", "temporality"],
                 "layer_id": "hpo-layer",
                 "evidence_id": "owned-evidence",
                 "segments": [{"start": 0, "end": 5}],
@@ -480,14 +486,16 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
         ).status_code
         == 200
     )
-    submission = client.post(
+    submitted_response = client.post(
         f"/api/v1/workspaces/{opened['workspace_id']}/submit",
         json={
             "mutation_id": "submit-for-visibility",
             "expected_revision": 2,
             "payload": {"document_checked": True, "command": "submit_workspace"},
         },
-    ).json()
+    )
+    assert submitted_response.status_code == 200, submitted_response.text
+    submission = submitted_response.json()
     with app.state.repo.db.transaction() as conn:
         project_id = conn.execute(
             select(ProjectRow.id).where(ProjectRow.project_key == PROJECT)
@@ -531,6 +539,7 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
         ),
         "proposal_metadata": lambda: repo.proposal_metadata(PROJECT, "doc-alpha"),
         "workspace_proposal_sets": lambda: repo.workspace_proposal_sets(key, []),
+        "workspace_input_snapshots": lambda: repo.workspace_input_snapshots(key),
         "workspace_reanchor_items": lambda: repo.workspace_reanchor_items(
             Draft(key=key, targets=ReviewTargetSet.create([]), revision=0)
         ),
@@ -616,7 +625,15 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
     watch(scoped_module, "visible_annotation_versions")
     watch(versions_module, "require_case_text")
     watch(versions_module, "may_read_proposals")
-    case_methods = {"get_variant", "get_variant_text", "get_reanchor_items"}
+    case_methods = {
+        "get_variant",
+        "get_variant_text",
+        "get_reanchor_items",
+        "get_annotation_snapshot",
+        "get_evidence_snapshot",
+        "get_submission",
+        "get_submissions_for_document",
+    }
     for name, invoke in calls.items():
         seen.clear()
         code = (

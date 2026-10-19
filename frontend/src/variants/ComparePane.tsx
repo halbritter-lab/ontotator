@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api, type AnnotationVersion, type CaseDetail, type VariantText, type VersionRef } from '../api/client';
 import { ErrorNotice } from '../admin/ErrorNotice';
 import { useTermLabels } from '../editor/useTermLabels';
@@ -13,6 +14,7 @@ import { ReadOnlyAnnotationView } from './ReadOnlyAnnotationView';
 export interface ComparePaneProps {
   projectKey: string; username: string; caseDetail: CaseDetail; leftDocumentId: string;
   leftText: string; leftElement: HTMLElement | null; leftContext: string; suspended?: boolean; editing?: boolean; onClose: () => void;
+  toolbarHost?: HTMLElement | null;
 }
 
 /** Only traverse explicitly readable, same-case lineage. No ID or status inference. */
@@ -32,7 +34,8 @@ function defaultComparison(detail: CaseDetail, documentId: string) {
   return { id: row ? documentId : null, source: !row };
 }
 
-export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, suspended = false, editing = false, onClose }: ComparePaneProps): JSX.Element {
+export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, suspended = false, editing = false, onClose, toolbarHost }: ComparePaneProps): JSX.Element {
+  const couplingNoteId = useId();
   // User choices outlive left annotation changes; requests must still reauthorize in each context.
   const choiceIdentity = useMemo(() => ({}), [projectKey, username, caseDetail.case_id, leftDocumentId]);
   const identity = useMemo(() => ({}), [choiceIdentity, caseDetail, leftContext]);
@@ -90,21 +93,28 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
     return () => { active = false; };
   }, [payloadIdentity, ref?.kind, ref?.id]);
   const select = (id: string) => { if (caseDetail.variants.some(row => row.document_id === id)) setChosen({ identity: choiceIdentity, id }); };
-  return <section className="compare-pane" aria-label="Comparison">
-    <div className="compare-controls">
-    <div className="compare-toolbar density-compact"><h2>Compare</h2>
-      <label><input type="checkbox" checked={coupled} disabled={editing || suspended || !pairing.available} aria-describedby={couplingUnavailable ? 'compare-coupling-note' : undefined} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} /> Couple scrolling</label>
+  const globalControls = <div className="comparison-global-controls">
+    <div className="compare-toolbar density-compact" role="toolbar" aria-label="Comparison controls"><h2>Compare</h2>
+      <label><input type="checkbox" checked={coupled} disabled={editing || suspended || !pairing.available} aria-describedby={couplingUnavailable ? couplingNoteId : undefined} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} /> Couple scrolling</label>
       <IconButton label="Close comparison" icon={<IconClose />} onClick={onClose} />
     </div>
-    {couplingUnavailable && <p id="compare-coupling-note">{couplingUnavailable}</p>}
+    {couplingUnavailable && <p id={couplingNoteId}>{couplingUnavailable}</p>}
     {coupled && <><p>Paragraphs are paired by position, not by meaning</p><p role="status" aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${pair.paneId === 'left' ? 'Current text' : 'Comparison'} paragraph ${pair.paragraph + 1}`).join(' ↔ ')}</p></>}
-    {!initial.id && <InlineMessage tone="info">Original source is not available; choose a comparison text.</InlineMessage>}
-    {selectedId && !available && <InlineMessage tone="info">This comparison text is not available to you.</InlineMessage>}
-    {!available && caseDetail.variants.some(row => row.document_id === leftDocumentId) && <Button onClick={() => select(leftDocumentId)}>Compare current text</Button>}
+    {current?.text && leftStarts.length !== rightStarts.length && <InlineMessage tone="info">Paragraphs differ ({leftStarts.length} / {rightStarts.length}); scrolling is approximate.</InlineMessage>}
+  </div>;
+  return <section className="compare-pane" aria-label="Comparison">
+    {toolbarHost ? createPortal(globalControls, toolbarHost) : null}
+    <div className="compare-controls">
+    {toolbarHost === undefined && globalControls}
+    <div role="group" aria-label="Comparison text identity" className="comparison-pane-identity">
+    {toolbarHost !== undefined && <h2 className="comparison-pane-title">Comparison text</h2>}
     <VariantSelectors caseDetail={caseDetail} currentDocumentId={selectedId ?? ''} annotationOptions={annotationOptions(refs ?? [], false)} selectedAnnotation={selection}
       onLanguage={language => { const id = pickVariant(caseDetail, language); if (id) select(id); }} onVersion={select}
       onAnnotation={key => { if (key === 'text' || refForKey(key, refs ?? [])) setChoice({ identity: selectionIdentity, key }); }} />
-    {current?.text && leftStarts.length !== rightStarts.length && <InlineMessage tone="info">Paragraphs differ ({leftStarts.length} / {rightStarts.length}); scrolling is approximate.</InlineMessage>}
+    </div>
+    {!initial.id && <InlineMessage tone="info">Original source is not available; choose a comparison text.</InlineMessage>}
+    {selectedId && !available && <InlineMessage tone="info">This comparison text is not available to you.</InlineMessage>}
+    {!available && caseDetail.variants.some(row => row.document_id === leftDocumentId) && <Button onClick={() => select(leftDocumentId)}>Compare current text</Button>}
     {(current?.textError || current?.refsError || payloadError) ? <><ErrorNotice error={current?.textError || current?.refsError || payloadError} /><Button onClick={() => setRetry(value => value + 1)}>Retry comparison</Button></> : null}
     {ref && !snapshot && !payloadError && <InlineMessage tone="info">Loading comparison annotations...</InlineMessage>}
     </div>

@@ -17,7 +17,19 @@ class QueryResults:
         self.rows = iter(rows)
 
     def execute(self, statement):
-        return SimpleNamespace(all=lambda: next(self.rows))
+        rows = next(self.rows)
+        return QueryResult(rows)
+
+
+class QueryResult:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def all(self):
+        return self.rows
+
+    def __iter__(self):
+        return iter(self.rows)
 
 
 class MemoryTransaction:
@@ -75,6 +87,7 @@ def test_metadata_status_matches_canonical_round_traversal(monkeypatch, conflict
                 )
                 for submission in submissions
             ],
+            [],  # This regression exercises legacy work without an active-round binding.
         ]
     )
     old = Repository(MemoryTransaction(old_conn))
@@ -91,6 +104,7 @@ def test_metadata_status_matches_canonical_round_traversal(monkeypatch, conflict
                 )
                 for submission in submissions
             ],
+            [],
         ]
     )
 

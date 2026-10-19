@@ -77,6 +77,7 @@ it('retains a failed re-creation, then resolves only the exact saved replacement
     const payload=envelope.payload as {annotation_id:string;term_id:string;segments:{start:number;end:number}[]};
     const annotation=structuredClone(historical.annotations[0]);annotation.version='saved-version';
     Object.assign(annotation.annotation,{annotation_id:payload.annotation_id,term_id:payload.term_id});
+    annotation.annotation.provenance.source_refs=[`${pending.source_ref.annotation_id}:${pending.source_ref.version}`];
     stored={...stored,revision:1,annotations:[annotation]};return stored;
   });
   const resolve=vi.spyOn(api,'resolveReanchor').mockImplementation(async(_id,envelope)=>{
@@ -89,6 +90,10 @@ it('retains a failed re-creation, then resolves only the exact saved replacement
   await screen.findByText('Cannot save this finding');expect(resolve).not.toHaveBeenCalled();
   expect(screen.getByRole('heading',{name:'Re-create finding on corrected text'})).toBeTruthy();
   fireEvent.click(screen.getByRole('button',{name:'Save re-created finding'}));
+  await screen.findByRole('button',{name:'Complete text-change review'});
+  expect(resolve).not.toHaveBeenCalled();
+  expect(screen.getByText('1 pending · 0 resolved')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'Complete text-change review'}));
   await screen.findByText('Re-created');
   expect(apply).toHaveBeenLastCalledWith('w',expect.objectContaining({payload:expect.objectContaining({command:'recreate_reanchor',item:{proposal_set_id:pending.proposal_set_id,source_ref:pending.source_ref},term_id:'HP:1',layer_id:'phenotype',segments:[{start:2,end:6}]})}));
   expect(resolve).toHaveBeenCalledWith('w',expect.objectContaining({expected_revision:1,payload:expect.objectContaining({outcome:'recreated',replacement:{annotation_id:stored.annotations![0].annotation.annotation_id,version:'saved-version'}})}));
@@ -113,18 +118,20 @@ it('reuses a saved edited finding and explicitly pins its current version withou
   await screen.findByText('1 pending · 0 resolved');
   expect(screen.getByText('1 pending · 0 resolved')).toBeTruthy();
   fireEvent.click(screen.getByRole('button',{name:'Re-create here'}));
-  fireEvent.click(await screen.findByRole('button',{name:'Resolve with this finding'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Complete text-change review'}));
   await screen.findByText('Link failed');expect(apply).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole('button',{name:'Resolve with this finding'}));
+  fireEvent.click(screen.getByRole('button',{name:'Complete text-change review'}));
   await screen.findByText('0 pending · 1 resolved');
   expect(resolve).toHaveBeenLastCalledWith('w',expect.objectContaining({payload:{item:{proposal_set_id:4,source_ref:pending.source_ref},outcome:'recreated',replacement:{annotation_id:copy.annotation.annotation_id,version:'edited-version'}}}));
   expect(apply).toHaveBeenCalledTimes(1);
 });
 it('retains the saved replacement after a resolution failure and retries linking without a duplicate create',async()=>{
-  const {view}=editableReanchor();let saved=structuredClone(view.draft);
+  const {view,pending}=editableReanchor();let saved=structuredClone(view.draft);
   const apply=vi.spyOn(api,'applyCommand').mockImplementation(async(_id,envelope)=>{
     const payload=envelope.payload as {annotation_id:string};const copy=structuredClone(historical.annotations[0]);
-    copy.annotation.annotation_id=payload.annotation_id;copy.version='saved-version';saved={...saved,revision:1,annotations:[copy]};return saved;
+    copy.annotation.annotation_id=payload.annotation_id;copy.version='saved-version';
+    copy.annotation.provenance.source_refs=[`${pending.source_ref.annotation_id}:${pending.source_ref.version}`];
+    saved={...saved,revision:1,annotations:[copy]};return saved;
   });
   const resolve=vi.spyOn(api,'resolveReanchor').mockRejectedValueOnce(new ValidationError('Resolution failed')).mockImplementation(async(_id,envelope)=>{
     const payload=envelope.payload as NonNullable<Draft['reanchor_resolutions']>[number];
@@ -133,8 +140,9 @@ it('retains the saved replacement after a resolution failure and retries linking
   render(<CaseScreen view={view} workspaceId="w" onClose={()=>{}}/>);
   fireEvent.click(screen.getByRole('button',{name:'Re-create here'}));await screen.findByText(/Select supporting text to re-create HP:1/);selectCurrentText();
   fireEvent.click(await screen.findByRole('button',{name:'Save re-created finding'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Complete text-change review'}));
   await screen.findByText('Resolution failed');expect(apply).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole('button',{name:'Resolve saved finding'}));
+  fireEvent.click(screen.getByRole('button',{name:'Complete text-change review'}));
   await screen.findByText('0 pending · 1 resolved');expect(apply).toHaveBeenCalledTimes(1);expect(resolve).toHaveBeenCalledTimes(2);
 });
 it('does not select an arbitrary replacement when multiple exact-source copies exist',async()=>{
@@ -144,8 +152,8 @@ it('does not select an arbitrary replacement when multiple exact-source copies e
   view.draft.annotations=[first,second];const apply=vi.spyOn(api,'applyCommand'),resolve=vi.spyOn(api,'resolveReanchor');
   render(<CaseScreen view={view} workspaceId="w" onClose={()=>{}}/>);
   fireEvent.click(screen.getByRole('button',{name:'Re-create here'}));
-  await screen.findByText('Select the replacement finding in the annotation list, then choose Resolve with this finding.');
-  expect(screen.queryByRole('button',{name:'Resolve with this finding'})).toBeNull();
+  await screen.findByText('Select the replacement finding in the findings list, then choose Complete text-change review.');
+  expect(screen.queryByRole('button',{name:'Complete text-change review'})).toBeNull();
   expect(screen.queryByRole('heading',{name:'Re-create finding on corrected text'})).toBeNull();
   expect(apply).not.toHaveBeenCalled();expect(resolve).not.toHaveBeenCalled();
 });

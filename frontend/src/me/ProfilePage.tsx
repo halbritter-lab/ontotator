@@ -1,3 +1,4 @@
+import { SearchPreferencesSection } from "./SearchPreferencesSection";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, type OwnProfilePatch, type Profile } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
@@ -42,6 +43,7 @@ function passwordProblem(username: string, next: string, repeat: string): string
 }
 
 export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePageProps): JSX.Element {
+  const [searchDirty, setSearchDirty] = useState(false);
   const [model, setModel] = useState<{ baseline: Profile; draft: Profile } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>();
@@ -55,7 +57,7 @@ export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePa
   const alive = useRef(false);
   const [leaving, setLeaving] = useState<{ resolve?: (allowed: boolean) => void; proceed?: () => void } | null>(null);
   const pendingLeave = useRef<typeof leaving>(null);
-  const dirty = !!model && Object.keys(profileChanges(model.baseline, model.draft)).length > 0;
+  const dirty = searchDirty || (!!model && Object.keys(profileChanges(model.baseline, model.draft)).length > 0);
   const latest = useRef({ dirty, busy, save: async (): Promise<boolean> => false });
   const closeLeave = (allowed: boolean) => {
     const request = pendingLeave.current; pendingLeave.current = null; setLeaving(null);
@@ -179,6 +181,7 @@ export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePa
         <Button type="submit" variant="primary" disabled={!!busy} loading={busy === "profile"}>Save</Button>
       </form>
     </section>
+    <SearchPreferencesSection pseudonym={model.baseline.pseudonym} onDirty={setSearchDirty} />
     <section className="detail-section">
       <h2>Change password</h2>
       <form aria-label="Change password" onSubmit={(event) => { event.preventDefault(); void changePassword(); }}>
@@ -194,10 +197,10 @@ export function ProfilePage({ onSaved, routeLeaveRef, leaveGuardRef }: ProfilePa
       </form>
     </section>
     {leaving && <Dialog open title="Unsaved profile changes" onClose={busy ? undefined : () => closeLeave(false)}>
-      <p>Your profile changes have not been saved.</p>
+      <p>Your profile changes have not been saved.</p>{searchDirty && <p>Cancel and save Search preferences before leaving, or discard changes.</p>}
       <Button disabled={!!busy} onClick={() => closeLeave(false)}>Cancel</Button>
       <Button disabled={!!busy} variant="danger" onClick={() => closeLeave(true)}>{leaving.proceed ? "Discard and log out" : "Discard changes and leave"}</Button>
-      <Button loading={busy === "profile"} onClick={() => { void latest.current.save().then(ok => { if (ok && alive.current) closeLeave(true); }); }}>{leaving.proceed ? "Save and log out" : "Save and leave"}</Button>
+      <Button disabled={searchDirty} loading={busy === "profile"} onClick={() => { void latest.current.save().then(ok => { if (ok && alive.current) closeLeave(true); }); }}>{leaving.proceed ? "Save and log out" : "Save and leave"}</Button>
     </Dialog>}
   </div>;
 }

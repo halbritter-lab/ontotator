@@ -36,6 +36,10 @@ class ProjectRules:
     )
     allow_spanless_findings: bool = True
     require_spanless_note: bool = True
+    creation_defaults: Mapping[str, Mapping[str, Mapping[str, str]]] = field(
+        default_factory=dict
+    )
+    annotation_policy_revision: int = 1
 
     @classmethod
     def of(cls, row: _ProjectSettings) -> Self:
@@ -44,6 +48,8 @@ class ProjectRules:
             allow_spanless_findings=row.allow_spanless_findings,
             require_spanless_note=row.require_spanless_note,
             require_chosen_axes=row.require_chosen_axes,
+            creation_defaults=getattr(row, "creation_defaults", {}),
+            annotation_policy_revision=getattr(row, "annotation_policy_revision", 1),
             hidden_axis_values={
                 layer: {axis: frozenset(values) for axis, values in axes.items()}
                 for layer, axes in row.hidden_axis_values.items()

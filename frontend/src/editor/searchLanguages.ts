@@ -13,6 +13,8 @@ export interface SearchLanguageControl {
   options: SearchLanguageOption[];
   /** The loaded languages this annotator searches in. */
   active: string[];
+  /** Requested preferences unavailable for this exact ontology pin. */
+  unavailable?: string[];
   onToggle: (language: string) => void;
 }
 
@@ -45,6 +47,8 @@ export function useSearchLanguages(
   client: LanguageClient,
   annotatorId: string,
   projectKey: string,
+  documentLanguage?: string,
+  documentId?: string,
 ): (ontologySha256: string | null | undefined) => SearchLanguageControl | undefined {
   const [ontologies, setOntologies] = useState<OntologyInfo[]>([]);
   const [stored, setStored] = useState<string[] | undefined>(undefined);
@@ -54,6 +58,8 @@ export function useSearchLanguages(
   useEffect(() => {
     let cancelled = false;
     setOntologies([]);
+    storedRef.current = [];
+    setStored([]);
     client.listPackageOntologies(projectKey).then(
       (list) => {
         if (!cancelled) setOntologies(list ?? []);
@@ -63,7 +69,13 @@ export function useSearchLanguages(
     client.getPreferences().then(
       (prefs) => {
         if (cancelled) return;
-        storedRef.current = prefs?.search_languages_by_annotator?.[annotatorId];
+        const personal = prefs?.multilingual_search;
+        const legacy = prefs?.search_languages_by_annotator?.[annotatorId];
+        // Existing explicit choices remain intact. First use searches English
+        // plus the document language, with automatic activation opt-in/off durable.
+        storedRef.current = personal
+          ? personal.enabled ? [...new Set([...(personal.preferred_languages ?? []), ...(personal.automatic_document_language && documentLanguage ? [documentLanguage] : [])])] : []
+          : legacy ?? (documentLanguage ? [documentLanguage] : []);
         setStored(storedRef.current);
       },
       () => undefined,
@@ -71,27 +83,29 @@ export function useSearchLanguages(
     return () => {
       cancelled = true;
     };
-  }, [client, annotatorId, projectKey]);
+  }, [client, annotatorId, projectKey, documentLanguage, documentId]);
 
   return useCallback(
     (ontologySha256) => {
       const sha = ontologySha256?.toLowerCase();
       const ontology = sha ? ontologies.find((item) => item.sha256.toLowerCase() === sha) : undefined;
+      if (!ontology) return undefined;
       const options = (ontology?.translations ?? [])
         .map((item) => ({ language: item.language, termCount: item.term_count }))
         .sort((a, b) => a.language.localeCompare(b.language));
-      if (options.length === 0) return undefined;
       const loaded = options.map((option) => option.language);
+      const unavailable = (stored ?? []).filter(code => code !== "en" && !loaded.includes(code));
+      if (options.length === 0 && unavailable.length === 0) return undefined;
       return {
         options,
         active: activeLanguages(loaded, stored),
+        unavailable,
         onToggle: (language: string) => {
           const next = toggledSelection(loaded, storedRef.current, language);
           storedRef.current = next;
           setStored(next);
-          void client
-            .updatePreferences({ search_languages_by_annotator: { [annotatorId]: next } })
-            .catch(() => undefined);
+          // This is an ad-hoc override for this document. Personal defaults
+          // are saved explicitly in Profile and are never overwritten here.
         },
       };
     },

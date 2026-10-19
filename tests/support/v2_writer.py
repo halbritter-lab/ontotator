@@ -101,7 +101,11 @@ def _prepare_package_payloads(
 
     manifest_updates: dict[str, Any] = {
         "file_hashes": file_hashes,
-        "format_version": "ontocurator-work-package/v2",
+        "format_version": (
+            "ontocurator-work-package/v3"
+            if package.manifest.format_version == "ontocurator-work-package/v3"
+            else "ontocurator-work-package/v2"
+        ),
         "document_order": doc_order,
     }
     if package.manifest.task_profile is not None:

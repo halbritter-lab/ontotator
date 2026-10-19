@@ -69,12 +69,15 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
     { id: "project", header: "Project", cell: task => projectLabel(task.project_name, task.project_key) },
     { id: "language", header: "Language", cell: task => task.language },
     { id: "task", header: "Task", cell: task => taskDescription(task) },
-    { id: "status", header: "Status", cell: task => <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge> },
+    { id: "status", header: "Status", cell: task => <>
+      <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>
+      {task.held && <><StatusBadge tone="warning">Paused</StatusBadge><p>{task.hold_reason ?? "A project problem needs attention."}</p></>}
+    </> },
     { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{formatDateTime(task.updated_at)}</time> },
     { id: "open", header: "Action", cell: task => <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate({ name: "task", assignmentId: task.assignment_id });
-    }}>{taskActionLabels[task.status]}</a> },
+    }}>{task.held ? "View paused task" : taskActionLabels[task.status]}</a> },
   ];
   const empty = <EmptyState title="No documents are assigned to you yet." action={managed.length > 0 &&
     <Toolbar label="Assignment actions">{managed.map(item => {
@@ -98,7 +101,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
         <option value={allProjectsValue}>All projects</option>
         {[...options].map(([key, name]) => <option key={key} value={key}>{name}</option>)}
       </Select>
-      <p role="group" aria-label="Task counts">Open: {filtered.filter(task => task.status === "open" || task.status === "reopened").length} · In progress: {filtered.filter(task => task.status === "in_progress").length} · Submitted: {filtered.filter(task => task.status === "submitted").length}</p>
+      <p role="group" aria-label="Task counts">Open: {filtered.filter(task => task.status === "open" || task.status === "reopened").length} · In progress: {filtered.filter(task => task.status === "in_progress").length} · Submitted: {filtered.filter(task => task.status === "submitted").length} · Paused: {filtered.filter(task => task.held).length}</p>
       {filtered.length === 0 ? empty : <DataTable label="My tasks" className="data-table--pin-end" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${task.document_id}` })} />}
     </>}
   </section>;

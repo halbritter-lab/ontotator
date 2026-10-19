@@ -25,8 +25,23 @@ export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
 export type EditorProposal = components["schemas"]["EditorProposal"];
 export type ProposalSetView = components["schemas"]["ProposalSetView"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
+export type FinalPreflight = components["schemas"]["FinalPreflight"];
+export type FinalSelectionView = components["schemas"]["FinalSelectionView"];
+export type FinalExportRequest = components["schemas"]["FinalExportRequest"];
+export type SubmissionHistorySummary = components['schemas']['SubmissionHistorySummary'];
+export type SubmissionHistoryDetail = components['schemas']['SubmissionHistoryDetail'];
 export type OpenWorkspaceRequest = components["schemas"]["OpenWorkspaceRequest"];
 export type OpenWorkspaceResponse = components["schemas"]["OpenWorkspaceResponse"];
+export type WorkRoundView = components["schemas"]["WorkRoundView"];
+export type RoundInputView = components["schemas"]["RoundInputView"];
+export type RoundSourceView = components["schemas"]["RoundSourceView"];
+export type SourceObligationView = components["schemas"]["SourceObligationView"];
+export type CorrectionAssignmentRequest = components["schemas"]["CorrectionAssignmentRequest"];
+export type ResolveSourceObligationRequest = components["schemas"]["ResolveSourceObligationRequest"];
+export type ProblemReportRequest = components["schemas"]["ProblemReportRequest"];
+export type ProblemActionRequest = components["schemas"]["ProblemActionRequest"];
+export type ProblemReportView = components["schemas"]["ProblemReportView"];
+export type CreateRoundRequest = components["schemas"]["CreateRoundRequest"];
 export type MutationEnvelope = components["schemas"]["MutationEnvelope"];
 export type Draft = components["schemas"]["Draft"];
 export type Submission = components["schemas"]["Submission"];
@@ -338,6 +353,27 @@ export class ApiClient {
     return this.request<VersionRef[]>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/annotation-versions${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
 
+  async finalExportPreflight(projectKey: string): Promise<FinalPreflight> {
+    return this.request<FinalPreflight>(`/api/v1/projects/${encodeURIComponent(projectKey)}/exports/final/preflight`, { method: "POST" });
+  }
+  async getWorkflowWarnings(projectKey: string): Promise<FinalPreflight> {
+    return this.request<FinalPreflight>(`/api/v1/projects/${encodeURIComponent(projectKey)}/workflow-warnings`, { method: "GET" });
+  }
+  async selectFinalResult(projectKey: string, payload: components["schemas"]["FinalSelectionRequest"]): Promise<FinalSelectionView> {
+    return this.request<FinalSelectionView>(`/api/v1/projects/${encodeURIComponent(projectKey)}/final-selections`, { method: "PUT", body: JSON.stringify(payload) });
+  }
+  async startFinalExport(projectKey: string, payload: FinalExportRequest): Promise<{ job_id: number }> {
+    return this.request<{ job_id: number }>(`/api/v1/projects/${encodeURIComponent(projectKey)}/exports/final`, { method: "POST", body: JSON.stringify(payload) });
+  }
+
+  async listSubmissionHistory(projectKey: string, documentId: string): Promise<SubmissionHistorySummary[]> {
+    return this.request<SubmissionHistorySummary[]>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/submissions`, { method: 'GET' });
+  }
+
+  async getSubmissionHistory(projectKey: string, documentId: string, submissionId: string): Promise<SubmissionHistoryDetail> {
+    return this.request<SubmissionHistoryDetail>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/submissions/${encodeURIComponent(submissionId)}`, { method: 'GET' });
+  }
+
   async getAnnotationVersion(projectKey: string, documentId: string, kind: VersionRef["kind"], id: string): Promise<AnnotationVersion> {
     return this.request<AnnotationVersion>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/annotation-versions/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, { method: "GET" });
   }
@@ -628,6 +664,59 @@ export class ApiClient {
         method: "GET",
       }
     );
+  }
+
+  async startWorkRound(assignmentId: number, body: CreateRoundRequest): Promise<WorkRoundView> {
+    return this.request(`/api/v1/assignments/${assignmentId}/rounds`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async listWorkRounds(assignmentId: number): Promise<WorkRoundView[]> {
+    return this.request(`/api/v1/assignments/${assignmentId}/rounds`, { method: "GET" });
+  }
+
+  async listRoundInputs(roundId: string): Promise<RoundInputView[]> {
+    return this.request(`/api/v1/rounds/${encodeURIComponent(roundId)}/inputs`, { method: "GET" });
+  }
+
+  async listRoundSources(assignmentId: number): Promise<RoundSourceView[]> {
+    return this.request(`/api/v1/assignments/${assignmentId}/round-sources`, { method: "GET" });
+  }
+
+  async assignTranslationCorrection(projectKey: string, documentId: string, body: CorrectionAssignmentRequest): Promise<AssignmentView> {
+    return this.request(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/translation-correction-assignment`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async listSourceObligations(assignmentId: number): Promise<SourceObligationView[]> {
+    return this.request(`/api/v1/translation-reviews/${assignmentId}/source-obligations`, { method: "GET" });
+  }
+
+  async createProblemReport(assignmentId: number, body: ProblemReportRequest): Promise<ProblemReportView> {
+    return this.request(`/api/v1/assignments/${assignmentId}/problem-reports`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async listProblemReports(projectKey: string, documentId?: string): Promise<ProblemReportView[]> {
+    const query = documentId === undefined ? "" : `?${new URLSearchParams({ document_id: documentId })}`;
+    return this.request(`/api/v1/projects/${encodeURIComponent(projectKey)}/problem-reports${query}`, { method: "GET" });
+  }
+
+  async actOnProblemReport(reportId: string, body: ProblemActionRequest): Promise<ProblemReportView> {
+    return this.request(`/api/v1/problem-reports/${encodeURIComponent(reportId)}/actions`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async resolveSourceObligation(assignmentId: number, causeId: string, body: ResolveSourceObligationRequest): Promise<TranslationReviewRecord> {
+    return this.request(`/api/v1/translation-reviews/${assignmentId}/source-obligations/${encodeURIComponent(causeId)}/resolve`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async openWorkRound(roundId: string): Promise<OpenWorkspaceResponse> {
+    return this.request(`/api/v1/rounds/${encodeURIComponent(roundId)}/open`, { method: "POST" });
+  }
+
+  async resolveRoundInput(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/round-input-resolutions`, { method: "POST", body: JSON.stringify(envelope) });
+  }
+
+  async mergeRoundInputs(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/merge-inputs`, { method: "POST", body: JSON.stringify(envelope) });
   }
 
   async searchOntology(req: SearchRequest, signal?: AbortSignal): Promise<SearchResult> {

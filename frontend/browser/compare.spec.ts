@@ -37,12 +37,15 @@ const path = (s: Scenario, doc: string, suffix: string) =>
 const caseUrl = (s: Scenario, doc = s.documents.target) =>
   `/#/projects/${encodeURIComponent(s.project)}/cases/${encodeURIComponent(s.case_id)}?${new URLSearchParams({ variant: doc, annotations: 'text' })}`;
 const comparison = (page: Page) => page.getByRole('region', { name: 'Comparison', exact: true });
+const comparisonControls = (page: Page) => page.getByRole('toolbar', { name: 'Comparison controls', exact: true });
+const comparisonStatus = (page: Page) => page.locator('.comparison-global-controls');
 const rightText = (page: Page) => comparison(page).locator('.text-container');
 const viewerLeft = (page: Page) => page.locator('.comparison-reading > .readonly-annotation-view .text-container');
 const editorLeft = (page: Page) => page.locator('.app-layout > .center-pane .text-container');
 
 async function openVersions(page: Page) {
-  const disclosure = page.locator('.case-version-controls').first();
+  const disclosure = page.locator('details.case-version-controls, details.comparison-identity-choices');
+  await expect(disclosure).toHaveCount(1);
   await expect(disclosure).toBeVisible();
   if (!await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) {
     await disclosure.locator(':scope > summary').focus();
@@ -170,9 +173,9 @@ test('real wrapping pairs equal-count paragraphs in both directions without chan
   const leftHeight = await markerOffset(left, 2) - await markerOffset(left, 1);
   const rightHeight = await markerOffset(right, 2) - await markerOffset(right, 1);
   expect(Math.abs(leftHeight - rightHeight)).toBeGreaterThan(20);
-  await expect(comparison(page).getByLabel('Couple scrolling')).not.toBeChecked();
-  await comparison(page).getByLabel('Couple scrolling').check();
-  await expect(page.getByText('Paragraphs are paired by position, not by meaning', {exact:true})).toBeVisible();
+  await expect(comparisonControls(page).getByLabel('Couple scrolling')).not.toBeChecked();
+  await comparisonControls(page).getByLabel('Couple scrolling').check();
+  await expect(comparisonStatus(page).getByText('Paragraphs are paired by position, not by meaning', {exact:true})).toBeVisible();
   await scrollParagraph(left, 3); await align(right, 3);
   await afterEchoWindow(page);
   await scrollParagraph(right, 6); await align(left, 6);
@@ -181,7 +184,7 @@ test('real wrapping pairs equal-count paragraphs in both directions without chan
   expect(Math.abs(await left.evaluate(element => element.scrollTop) - stable)).toBeLessThanOrEqual(2);
   await exactText(left, s.texts.target); await exactText(right, s.texts.source);
   // A correction compares with the original English source, not its German predecessor.
-  await comparison(page).getByRole('button', { name: 'Close comparison', exact: true }).click();
+  await comparisonControls(page).getByRole('button', { name: 'Close comparison', exact: true }).click();
   await openViewer(page, s, s.documents.corrected); await openComparison(page, s);
 });
 
@@ -193,19 +196,19 @@ test('unequal counts map proportionally, toggle off and below1100 suspend coupli
   await pane.getByLabel('Language', { exact: true }).selectOption('de');
   await pane.getByLabel('Text version', { exact: true }).selectOption(s.documents.other);
   await expect(right.locator('[data-paragraph]')).toHaveCount(9);
-  await expect(pane.getByText('Paragraphs differ (13 / 9); scrolling is approximate.', { exact: true })).toBeVisible();
-  await pane.getByLabel('Couple scrolling').check();
+  await expect(comparisonStatus(page).getByText('Paragraphs differ (13 / 9); scrolling is approximate.', { exact: true })).toBeVisible();
+  await comparisonControls(page).getByLabel('Couple scrolling').check();
   await scrollParagraph(left, 6); await align(right, 4);
   await afterEchoWindow(page); await scrollParagraph(right, 3); await align(left, 5);
-  await pane.getByLabel('Couple scrolling', { exact: true }).uncheck();
+  await comparisonControls(page).getByLabel('Couple scrolling', { exact: true }).uncheck();
   const before = await right.evaluate(element => element.scrollTop);
   await scrollParagraph(left, 2);
   expect(Math.abs(await right.evaluate(element => element.scrollTop) - before)).toBeLessThanOrEqual(1);
-  await pane.getByLabel('Couple scrolling', { exact: true }).check();
+  await comparisonControls(page).getByLabel('Couple scrolling', { exact: true }).check();
   await page.setViewportSize({ width: 1024, height: 768 });
-  await expect(pane.getByLabel('Couple scrolling', { exact: true })).toBeDisabled();
-  await expect(pane.getByLabel('Couple scrolling', { exact: true })).not.toBeChecked();
-  await expect(pane.getByText(/Widen the window/)).toBeVisible();
+  await expect(comparisonControls(page).getByLabel('Couple scrolling', { exact: true })).toBeDisabled();
+  await expect(comparisonControls(page).getByLabel('Couple scrolling', { exact: true })).not.toBeChecked();
+  await expect(comparisonStatus(page).getByText(/Widen the window/)).toBeVisible();
   const uncoupled = await right.evaluate(element => element.scrollTop);
   await scrollParagraph(left, 4);
   expect(Math.abs(await right.evaluate(element => element.scrollTop) - uncoupled)).toBeLessThanOrEqual(1);
@@ -213,8 +216,8 @@ test('unequal counts map proportionally, toggle off and below1100 suspend coupli
   const boxes = await Promise.all([left.boundingBox(), right.boundingBox()]);
   expect(boxes[0]!.x).toBeCloseTo(boxes[1]!.x, 0); expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y + boxes[0]!.height);
   await page.setViewportSize({ width: 1280, height: 720 });
-  await expect(pane.getByLabel('Couple scrolling', { exact: true })).toBeEnabled();
-  await expect(pane.getByLabel('Couple scrolling', { exact: true })).toBeChecked();
+  await expect(comparisonControls(page).getByLabel('Couple scrolling', { exact: true })).toBeEnabled();
+  await expect(comparisonControls(page).getByLabel('Couple scrolling', { exact: true })).toBeChecked();
   await scrollParagraph(left, 6); await align(right, 4);
 });
 
@@ -278,7 +281,7 @@ test('open editor has two equal reading surfaces and reachable lower controls; c
     const control = page.locator(selector); await control.scrollIntoViewIfNeeded(); await expect(control).toBeInViewport({ ratio: 0.2 });
     const rect = await control.boundingBox(); expect(rect!.width).toBeGreaterThanOrEqual(300);
   }
-  await comparison(page).getByRole('button', { name: 'Close comparison', exact: true }).click();
+  await comparisonControls(page).getByRole('button', { name: 'Close comparison', exact: true }).click();
   await expect(comparison(page)).toHaveCount(0); await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeFocused();
   expect(await editorLeft(page).evaluate((element, previous) => element === previous, original)).toBe(true);
   const text = await page.locator('.app-layout > .center-pane').boundingBox();
@@ -378,7 +381,7 @@ test('manual right variant/ref/coupling survive real left retry, then current ex
   await pane.getByLabel('Text version', { exact: true }).selectOption(s.documents.target);
   await pane.getByLabel('Annotations', { exact: true }).selectOption(refToken(own));
   await expect(pane.locator('.readonly-annotations')).toContainText('HP:0001252');
-  await pane.getByLabel('Couple scrolling', { exact: true }).uncheck();
+  await comparisonControls(page).getByLabel('Couple scrolling', { exact: true }).uncheck();
   const owner = await pane.elementHandle();
   await page.unroute('**/api/v1/me/tasks');
   let release!: () => void; const paused = new Promise<void>(resolve => { release = resolve; });
@@ -394,7 +397,7 @@ test('manual right variant/ref/coupling survive real left retry, then current ex
   } finally { release(); await done; await page.unroute(pattern); }
   await expect(pane.locator('.readonly-annotations')).toContainText('HP:0001252');
   await expect(pane.getByLabel('Annotations', { exact: true })).toHaveValue(refToken(own));
-  await expect(pane.getByLabel('Couple scrolling', { exact: true })).not.toBeChecked();
+  await expect(comparisonControls(page).getByLabel('Couple scrolling', { exact: true })).not.toBeChecked();
   await manage(browser, s, s.assignments.alice, 'revoke');
   await pane.getByLabel('Annotations', { exact: true }).selectOption('text');
   const denied = page.waitForResponse(response => response.request().method() === 'GET' && response.url().includes('/annotation-versions/own/') && response.status() === 404);
@@ -420,7 +423,7 @@ for (const width of [800, 600]) test(`comparison stacks with reachable independe
     const rect = await select.boundingBox(); expect(rect!.x).toBeGreaterThanOrEqual(0); expect(rect!.x + rect!.width).toBeLessThanOrEqual(width + 1);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-  await comparison(page).getByRole('button', { name: 'Close comparison', exact: true }).click();
+  await comparisonControls(page).getByRole('button', { name: 'Close comparison', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeFocused(); await expect(comparison(page)).toHaveCount(0);
 });
 
@@ -429,10 +432,10 @@ test('equal-count merged and split paragraphs show positional partners and conti
   const response=await page.request.post('/__test_variants__?comparison=true&merge_split=true');
   expect(response.ok()).toBeTruthy(); const s=await response.json() as Scenario;
   await loginExisting(page,s.users.lead); await openViewer(page,s); await openComparison(page,s);
-  const left=viewerLeft(page),right=rightText(page),box=comparison(page).getByLabel('Couple scrolling');
+  const left=viewerLeft(page),right=rightText(page),box=comparisonControls(page).getByLabel('Couple scrolling');
   await expect(box).not.toBeChecked(); const before=await left.evaluate(el=>el.scrollHeight);
   await box.focus(); await page.keyboard.press('Space');
-  await expect(page.getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toBeVisible();
+  await expect(comparisonStatus(page).getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toBeVisible();
   expect(await left.evaluate(el=>el.scrollHeight)).toBe(before);
   for(const fraction of [0.25,0.5,0.75]) {
     await left.dispatchEvent('wheel');
@@ -443,7 +446,7 @@ test('equal-count merged and split paragraphs show positional partners and conti
     await expect.poll(()=>right.evaluate(el=>{const rows=el.querySelectorAll('[data-paragraph]'); const top=(i:number)=>el.scrollTop+rows[i].getBoundingClientRect().top-el.getBoundingClientRect().top-el.clientTop; return (el.scrollTop-top(1))/(top(2)-top(1));})).toBeCloseTo(fraction,2);
     await right.dispatchEvent('scroll'); await page.waitForTimeout(180); await right.dispatchEvent('scroll');
     expect(await left.evaluate(el=>el.scrollTop)).toBe(position);
-    await expect(page.getByLabel('Paragraph pairing')).toHaveText('Current text paragraph 2 ↔ Comparison paragraph 2');
+    await expect(comparisonStatus(page).getByLabel('Paragraph pairing')).toHaveText('Current text paragraph 2 ↔ Comparison paragraph 2');
   }
   await expect(left.locator('[data-paragraph-number="2"]')).toHaveAttribute('data-coupled-active','true');
   await expect(right.locator('[data-paragraph-number="2"]')).toHaveAttribute('data-coupled-active','true');

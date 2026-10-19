@@ -24,6 +24,7 @@ describe("hash route parsing and links", () => {
     { name: "projectDocuments", key: "study-a" },
     { name: "projectProgress", key: "study-a" },
     { name: "projectExport", key: "study-a" },
+    { name: "projectProblemReport", key: "study/a %", reportId: "report/1 %é" },
     { name: "notFound", hash: "#/missing-page" },
     { name: "projectDocuments", key: "study", language: "de", status: "in_progress", q: "doc prefix", select: "doc/1 % α" },
     { name: "projectDocuments", key: "study", language: "", status: "", q: "", select: "" },
@@ -48,6 +49,7 @@ describe("hash route parsing and links", () => {
     expect(routeHref({ name: "projectDocuments", key: "a" })).toBe("#/projects/a/documents");
     expect(routeHref({ name: "projectProgress", key: "a" })).toBe("#/projects/a/progress");
     expect(routeHref({ name: "projectExport", key: "a" })).toBe("#/projects/a/export");
+    expect(routeHref({ name: "projectProblemReport", key: "a", reportId: "report-42" })).toBe("#/projects/a/problem-reports/report-42");
   });
 
   it.each(["study-a", "a b", "100%", "a/b", "%2F", "日本語 α", "a?b#c+d&x=y"])("round trips encoded project/document IDs %j", (id) => {

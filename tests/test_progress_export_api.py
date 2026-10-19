@@ -170,6 +170,10 @@ def test_progress_counts_per_document_and_person(project):
             "pseudonym": "blind-lead",
             "task": "review",
             "status": "submitted",
+            "active_round_id": None,
+            "workflow_revision": 0,
+            "held": False,
+            "hold_reason": None,
         },
         {
             "assignment_id": opened,
@@ -177,6 +181,10 @@ def test_progress_counts_per_document_and_person(project):
             "pseudonym": "blind-worker",
             "task": "annotate",
             "status": "open",
+            "active_round_id": None,
+            "workflow_revision": 0,
+            "held": False,
+            "hold_reason": None,
         },
     ]
     assert data["documents"][1]["assignees"] == []

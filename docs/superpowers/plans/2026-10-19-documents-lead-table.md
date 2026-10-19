@@ -431,8 +431,7 @@ def test_resolved_report_with_kept_hold_becomes_task_paused_without_report(
     assert orphan["assignment_id"] == row.id
     _act(client, report, 2, "resume", [row.id])
     assert not any(
-        c["code"] == "TASK_PAUSED_WITHOUT_REPORT"
-        for c in _causes(app, row.project_key)
+        c["code"] == "TASK_PAUSED_WITHOUT_REPORT" for c in _causes(app, row.project_key)
     )
 
 
@@ -468,17 +467,18 @@ In `storage/repository.py`:
 1. Split `get_work_round` into a conn-scoped core and keep the public method:
 
 ```python
-    def get_work_round(self, project_key: str, round_id: str) -> WorkRoundView:
-        with self.db.transaction() as conn:
-            project_id = self._require_project(conn, project_key)
-            return self.work_round_in(conn, project_key, project_id, round_id)
+def get_work_round(self, project_key: str, round_id: str) -> WorkRoundView:
+    with self.db.transaction() as conn:
+        project_id = self._require_project(conn, project_key)
+        return self.work_round_in(conn, project_key, project_id, round_id)
 
-    def work_round_in(
-        self, conn: Connection, project_key: str, project_id: int, round_id: str
-    ) -> WorkRoundView:
-        """The round on the caller's connection; the caller has authorized it."""
-        # body of the former get_work_round from `row = (` to the final return,
-        # unchanged, using the given conn and project_id
+
+def work_round_in(
+    self, conn: Connection, project_key: str, project_id: int, round_id: str
+) -> WorkRoundView:
+    """The round on the caller's connection; the caller has authorized it."""
+    # body of the former get_work_round from `row = (` to the final return,
+    # unchanged, using the given conn and project_id
 ```
 
 2. Same split for `get_round_for_submission` into `round_for_submission_in(conn, project_key, project_id, submission_id)`, which calls `self.work_round_in(...)` instead of `self.get_work_round(...)`.
@@ -488,28 +488,26 @@ In `storage/repository.py`:
    - Extend the holds query with `TaskHoldRow.assignment_id` and `ProblemReportStateRow.state.label("report_state")` (join `ProblemReportStateRow.report_id == TaskHoldRow.report_id`), then:
 
 ```python
-            for held in holds:
-                report_open = held.report_state == "open"
-                result.append(
-                    {
-                        "cause_id": held.hold_id
-                        if report_open
-                        else f"TASK_PAUSED_WITHOUT_REPORT:{held.hold_id}",
-                        "cause_revision": 1,
-                        "code": "TASK_ON_HOLD"
-                        if report_open
-                        else "TASK_PAUSED_WITHOUT_REPORT",
-                        "case_id": held.case_id,
-                        "language": held.language,
-                        "document_id": held.document_id,
-                        "report_id": held.report_id,
-                        "assignment_id": held.assignment_id,
-                        "reason": held.reason
-                        if report_open
-                        else "This task is paused, but its report is resolved.",
-                        "destination": f"#/projects/{quote(project_key, safe='')}/problem-reports/{quote(held.report_id, safe='')}",
-                    }
-                )
+for held in holds:
+    report_open = held.report_state == "open"
+    result.append(
+        {
+            "cause_id": held.hold_id
+            if report_open
+            else f"TASK_PAUSED_WITHOUT_REPORT:{held.hold_id}",
+            "cause_revision": 1,
+            "code": "TASK_ON_HOLD" if report_open else "TASK_PAUSED_WITHOUT_REPORT",
+            "case_id": held.case_id,
+            "language": held.language,
+            "document_id": held.document_id,
+            "report_id": held.report_id,
+            "assignment_id": held.assignment_id,
+            "reason": held.reason
+            if report_open
+            else "This task is paused, but its report is resolved.",
+            "destination": f"#/projects/{quote(project_key, safe='')}/problem-reports/{quote(held.report_id, safe='')}",
+        }
+    )
 ```
 
    `self._variants(project_key)` inside it joins the ambient transaction (`Database.transaction` joins), so it already runs on `conn`; leave it.
@@ -555,29 +553,52 @@ ACKS = [
 
 
 def _seed_project(conn, key, first_event_at):
-    pid = conn.execute(text(
-        "INSERT INTO ontocurator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) "
-        "VALUES (:k, :k, '{}', 'm', '{}', 't') RETURNING id"
-    ), {"k": key}).scalar_one()
+    pid = conn.execute(
+        text(
+            "INSERT INTO ontocurator.projects (project_key, name, manifest, manifest_sha256, task_profile, task_profile_sha256) "
+            "VALUES (:k, :k, '{}', 'm', '{}', 't') RETURNING id"
+        ),
+        {"k": key},
+    ).scalar_one()
     # Valid root first: documents.derived_from has a (project_id, document_id) foreign key.
-    conn.execute(text(
-        "INSERT INTO ontocurator.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
-        "VALUES (:pid, 'doc/v1', 'de', 'x', 'c', 'doc', 1, 'machine_translation', NULL, 'accepted', 'h1')"
-    ), {"pid": pid})
-    conn.execute(text(
-        "INSERT INTO ontocurator.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
-        "VALUES (:pid, 'doc/v2', 'de', 'y', 'c', 'doc', 2, 'correction', 'doc/v1', 'ready_for_review', 'h2')"
-    ), {"pid": pid})
-    payload = {"case_id": "c", "language": "de", "document_id": "doc/v1", "submission_id": "sub-1"}
-    for at in (first_event_at, "2026-10-18T12:00:00Z"):  # second event = reaffirmation of the same choice
-        conn.execute(text(
-            "INSERT INTO ontocurator.final_selection_events (project_id, payload, created_at) "
-            "VALUES (:pid, CAST(:payload AS jsonb), :at)"
-        ), {"pid": pid, "payload": json.dumps(payload), "at": at})
-    conn.execute(text(
-        "INSERT INTO ontocurator.final_selections (project_id, case_id, language, document_id, submission_id, revision, actor_id, acknowledged_cause_ids, updated_at) "
-        "SELECT :pid, 'c', 'de', 'doc/v1', 'sub-1', 2, u.id, CAST(:acks AS jsonb), '2026-10-18T12:00:00Z' FROM ontocurator.users u"
-    ), {"pid": pid, "acks": json.dumps(ACKS)})
+    conn.execute(
+        text(
+            "INSERT INTO ontocurator.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
+            "VALUES (:pid, 'doc/v1', 'de', 'x', 'c', 'doc', 1, 'machine_translation', NULL, 'accepted', 'h1')"
+        ),
+        {"pid": pid},
+    )
+    conn.execute(
+        text(
+            "INSERT INTO ontocurator.documents (project_id, document_id, language, text, case_id, external_id, version, origin, derived_from, translation_status, text_sha256) "
+            "VALUES (:pid, 'doc/v2', 'de', 'y', 'c', 'doc', 2, 'correction', 'doc/v1', 'ready_for_review', 'h2')"
+        ),
+        {"pid": pid},
+    )
+    payload = {
+        "case_id": "c",
+        "language": "de",
+        "document_id": "doc/v1",
+        "submission_id": "sub-1",
+    }
+    for at in (
+        first_event_at,
+        "2026-10-18T12:00:00Z",
+    ):  # second event = reaffirmation of the same choice
+        conn.execute(
+            text(
+                "INSERT INTO ontocurator.final_selection_events (project_id, payload, created_at) "
+                "VALUES (:pid, CAST(:payload AS jsonb), :at)"
+            ),
+            {"pid": pid, "payload": json.dumps(payload), "at": at},
+        )
+    conn.execute(
+        text(
+            "INSERT INTO ontocurator.final_selections (project_id, case_id, language, document_id, submission_id, revision, actor_id, acknowledged_cause_ids, updated_at) "
+            "SELECT :pid, 'c', 'de', 'doc/v1', 'sub-1', 2, u.id, CAST(:acks AS jsonb), '2026-10-18T12:00:00Z' FROM ontocurator.users u"
+        ),
+        {"pid": pid, "acks": json.dumps(ACKS)},
+    )
     return pid
 
 
@@ -586,44 +607,62 @@ def test_0014_backfills_selected_at_per_project_and_rewrites_only_round_acks(tmp
     upgrade(url, "0013")
     engine = create_engine(url)
     with engine.begin() as conn:
-        conn.execute(text(
-            "INSERT INTO ontocurator.users (username, display_name, pseudonym) VALUES ('lead', 'Lead', 'lead-0001')"
-        ))
+        conn.execute(
+            text(
+                "INSERT INTO ontocurator.users (username, display_name, pseudonym) VALUES ('lead', 'Lead', 'lead-0001')"
+            )
+        )
         # Identical document ids in two projects; only the project's own events count.
         first = _seed_project(conn, "p1", "2026-10-18T10:00:00Z")
         second = _seed_project(conn, "p2", "2026-10-18T09:00:00Z")
-        before_events = conn.execute(text(
-            "SELECT id, payload FROM ontocurator.final_selection_events ORDER BY id")).all()
-        before_rows = conn.execute(text(
-            "SELECT project_id, case_id, language, document_id, submission_id, revision, actor_id, updated_at "
-            "FROM ontocurator.final_selections ORDER BY project_id")).all()
+        before_events = conn.execute(
+            text(
+                "SELECT id, payload FROM ontocurator.final_selection_events ORDER BY id"
+            )
+        ).all()
+        before_rows = conn.execute(
+            text(
+                "SELECT project_id, case_id, language, document_id, submission_id, revision, actor_id, updated_at "
+                "FROM ontocurator.final_selections ORDER BY project_id"
+            )
+        ).all()
     upgrade(url, "0014")
     with engine.begin() as conn:
         rows = {
             row.project_id: row
-            for row in conn.execute(text(
-                "SELECT project_id, selected_at, adjudicator_not_annotator, acknowledged_cause_ids FROM ontocurator.final_selections"
-            ))
+            for row in conn.execute(
+                text(
+                    "SELECT project_id, selected_at, adjudicator_not_annotator, acknowledged_cause_ids FROM ontocurator.final_selections"
+                )
+            )
         }
-        after_events = conn.execute(text(
-            "SELECT id, payload FROM ontocurator.final_selection_events ORDER BY id")).all()
-        after_rows = conn.execute(text(
-            "SELECT project_id, case_id, language, document_id, submission_id, revision, actor_id, updated_at "
-            "FROM ontocurator.final_selections ORDER BY project_id")).all()
+        after_events = conn.execute(
+            text(
+                "SELECT id, payload FROM ontocurator.final_selection_events ORDER BY id"
+            )
+        ).all()
+        after_rows = conn.execute(
+            text(
+                "SELECT project_id, case_id, language, document_id, submission_id, revision, actor_id, updated_at "
+                "FROM ontocurator.final_selections ORDER BY project_id"
+            )
+        ).all()
     assert rows[first].selected_at.isoformat().startswith("2026-10-18T10:00:00")
     assert rows[second].selected_at.isoformat().startswith("2026-10-18T09:00:00")
     for row in rows.values():
         assert row.adjudicator_not_annotator is None
-        assert row.acknowledged_cause_ids == sorted([
-            "SELECTED_ROUND_SUPERSEDED:round-aa",
-            "SELECTED_ROUND_ABANDONED:round-bb",
-            "SELECTED_RESULT_REVISED:sub-2",
-            # Old 3-part text acks stay as they are (open question 2): no status can be
-            # reconstructed, so they never match a 4-part id and each correction asks once more.
-            "SELECTED_TEXT_CORRECTED:doc/v1:doc/v2",
-        ])
+        assert row.acknowledged_cause_ids == sorted(
+            [
+                "SELECTED_ROUND_SUPERSEDED:round-aa",
+                "SELECTED_ROUND_ABANDONED:round-bb",
+                "SELECTED_RESULT_REVISED:sub-2",
+                # Old 3-part text acks stay as they are (open question 2): no status can be
+                # reconstructed, so they never match a 4-part id and each correction asks once more.
+                "SELECTED_TEXT_CORRECTED:doc/v1:doc/v2",
+            ]
+        )
     assert after_events == before_events  # event payloads are immutable history
-    assert after_rows == before_rows      # selections keep their exact identity
+    assert after_rows == before_rows  # selections keep their exact identity
 ```
 
 Adjust the `projects`/`documents`/`users` INSERTs to the NOT NULL columns at revision 0013 if one fails on a missing column (check `0001_initial.py` and `0006_variants.py`); do not change the assertions.
@@ -672,29 +711,46 @@ def upgrade() -> None:
         schema=SCHEMA,
     )
     conn = op.get_bind()
-    selections = conn.execute(sa.text(
-        f"SELECT id, project_id, case_id, language, document_id, submission_id, updated_at, acknowledged_cause_ids FROM {SCHEMA}.final_selections"
-    )).all()
+    selections = conn.execute(
+        sa.text(
+            f"SELECT id, project_id, case_id, language, document_id, submission_id, updated_at, acknowledged_cause_ids FROM {SCHEMA}.final_selections"
+        )
+    ).all()
     for sel in selections:
         # Events are scoped by project: document ids are only unique per project.
-        events = conn.execute(sa.text(
-            f"SELECT payload, created_at FROM {SCHEMA}.final_selection_events "
-            "WHERE project_id = :pid AND payload->>'case_id' = :case AND payload->>'language' = :lang ORDER BY id"
-        ), {"pid": sel.project_id, "case": sel.case_id, "lang": sel.language}).all()
+        events = conn.execute(
+            sa.text(
+                f"SELECT payload, created_at FROM {SCHEMA}.final_selection_events "
+                "WHERE project_id = :pid AND payload->>'case_id' = :case AND payload->>'language' = :lang ORDER BY id"
+            ),
+            {"pid": sel.project_id, "case": sel.case_id, "lang": sel.language},
+        ).all()
         selected_at = sel.updated_at
         previous = None
         for event in events:
-            current = (event.payload.get("document_id"), event.payload.get("submission_id"))
+            current = (
+                event.payload.get("document_id"),
+                event.payload.get("submission_id"),
+            )
             if current != previous:
                 selected_at = event.created_at
                 previous = current
         if previous != (sel.document_id, sel.submission_id):
             selected_at = sel.updated_at
         acks = sorted({_rewrite(a) for a in sel.acknowledged_cause_ids})
-        conn.execute(sa.text(
-            f"UPDATE {SCHEMA}.final_selections SET selected_at = :at, acknowledged_cause_ids = CAST(:acks AS jsonb) WHERE id = :id"
-        ), {"at": selected_at, "acks": json.dumps(acks), "id": sel.id})
-    op.alter_column("final_selections", "selected_at", nullable=False, server_default=sa.func.now(), schema=SCHEMA)
+        conn.execute(
+            sa.text(
+                f"UPDATE {SCHEMA}.final_selections SET selected_at = :at, acknowledged_cause_ids = CAST(:acks AS jsonb) WHERE id = :id"
+            ),
+            {"at": selected_at, "acks": json.dumps(acks), "id": sel.id},
+        )
+    op.alter_column(
+        "final_selections",
+        "selected_at",
+        nullable=False,
+        server_default=sa.func.now(),
+        schema=SCHEMA,
+    )
 
 
 def downgrade() -> None:
@@ -736,10 +792,15 @@ from ontocurator.storage.tables import DocumentRow, TranslationReviewRow
 
 
 def _select(env, document, sid, revision=0, acks=()):
-    response = env.lead.put(f"{BASE}/final-selections", json={
-        "document_id": document, "submission_id": sid,
-        "expected_revision": revision, "acknowledged_cause_ids": list(acks),
-    })
+    response = env.lead.put(
+        f"{BASE}/final-selections",
+        json={
+            "document_id": document,
+            "submission_id": sid,
+            "expected_revision": revision,
+            "acknowledged_cause_ids": list(acks),
+        },
+    )
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -751,8 +812,11 @@ def _warnings(env, code):
 
 def test_acknowledgeable_codes_are_the_five_selection_codes():
     assert ACKNOWLEDGEABLE_CODES == {
-        "SELECTED_ROUND_ABANDONED", "SELECTED_ROUND_SUPERSEDED",
-        "SELECTED_RESULT_REVISED", "SELECTED_TEXT_CORRECTED", "SELECTED_NEWER_RESULT",
+        "SELECTED_ROUND_ABANDONED",
+        "SELECTED_ROUND_SUPERSEDED",
+        "SELECTED_RESULT_REVISED",
+        "SELECTED_TEXT_CORRECTED",
+        "SELECTED_NEWER_RESULT",
     }
 
 
@@ -797,15 +861,25 @@ def test_rejected_or_queried_correction_raises_no_text_cause(case_env):
 
 def _status(env, document):
     with env.db.transaction() as conn:
-        return conn.execute(
-            select(DocumentRow.translation_status).where(DocumentRow.document_id == document)
-        ).scalar_one() or "native"
+        return (
+            conn.execute(
+                select(DocumentRow.translation_status).where(
+                    DocumentRow.document_id == document
+                )
+            ).scalar_one()
+            or "native"
+        )
 
 
 def _set_status(env, document, status):
     from sqlalchemy import update
+
     with env.db.transaction() as conn:
-        conn.execute(update(DocumentRow).where(DocumentRow.document_id == document).values(translation_status=status))
+        conn.execute(
+            update(DocumentRow)
+            .where(DocumentRow.document_id == document)
+            .values(translation_status=status)
+        )
 
 
 def _add_review(env, document, decision):
@@ -823,12 +897,20 @@ def test_round_cause_id_is_stable_across_hold_resume_and_reopen(rounds):
     # up to a submitted round A, select A's submission, create carry-forward round B
     # (A becomes superseded), then:
     state = service.preflight("proj")
-    ids = [w["cause_id"] for w in state["warnings"] if w["code"] == "SELECTED_ROUND_SUPERSEDED"]
+    ids = [
+        w["cause_id"]
+        for w in state["warnings"]
+        if w["code"] == "SELECTED_ROUND_SUPERSEDED"
+    ]
     assert ids == [f"SELECTED_ROUND_SUPERSEDED:{round_a.round_id}"]
     service.select("proj", document, submission, 1, ids)
     # report + resolve + resume on the assignment (ProblemReportService.report/act)
     # and AssignmentService reopen; after each step:
-    assert not [w for w in service.preflight("proj")["warnings"] if w["code"] == "SELECTED_ROUND_SUPERSEDED"]
+    assert not [
+        w
+        for w in service.preflight("proj")["warnings"]
+        if w["code"] == "SELECTED_ROUND_SUPERSEDED"
+    ]
 ```
 
 Write it out fully by copying the setup from `test_final_warning_relevance.py::test_empty_carry_forward_is_pending_until_immutable_submission`; keep the three assertions above verbatim.
@@ -863,21 +945,34 @@ from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.storage.final_tables import FinalSelectionRow
 from ontocurator.storage.repository import Repository, _key_str, _lock_id
 from ontocurator.storage.tables import (
-    AssignmentRow, DocumentRow, DraftRow, SubmissionRow,
-    TranslationReviewDraftRow, TranslationReviewRow,
+    AssignmentRow,
+    DocumentRow,
+    DraftRow,
+    SubmissionRow,
+    TranslationReviewDraftRow,
+    TranslationReviewRow,
 )
 from ontocurator.storage.workflow_tables import WorkRoundRow, WorkRoundStateRow
 
-ACKNOWLEDGEABLE_CODES = frozenset({
-    "SELECTED_ROUND_ABANDONED", "SELECTED_ROUND_SUPERSEDED",
-    "SELECTED_RESULT_REVISED", "SELECTED_TEXT_CORRECTED", "SELECTED_NEWER_RESULT",
-})
+ACKNOWLEDGEABLE_CODES = frozenset(
+    {
+        "SELECTED_ROUND_ABANDONED",
+        "SELECTED_ROUND_SUPERSEDED",
+        "SELECTED_RESULT_REVISED",
+        "SELECTED_TEXT_CORRECTED",
+        "SELECTED_NEWER_RESULT",
+    }
+)
 NOT_NEWER_DECISIONS = frozenset({"rejected", "query"})
 
 
-def authorize_final_results(conn: Connection, actor: Actor, key: str, *, exclusive: bool) -> int:
+def authorize_final_results(
+    conn: Connection, actor: Actor, key: str, *, exclusive: bool
+) -> int:
     conn.execute(select(func.pg_advisory_xact_lock_shared(_lock_id("members", key))))
-    lock = func.pg_advisory_xact_lock if exclusive else func.pg_advisory_xact_lock_shared
+    lock = (
+        func.pg_advisory_xact_lock if exclusive else func.pg_advisory_xact_lock_shared
+    )
     conn.execute(select(lock(_lock_id("project", key))))
     pid = Repository._project_id(conn, key)
     if pid is None:
@@ -892,7 +987,11 @@ def latest_review_decisions(conn: Connection, pid: int) -> dict[str, str]:
         select(TranslationReviewRow.document_id, TranslationReviewRow.decision)
         .where(TranslationReviewRow.project_id == pid)
         .distinct(TranslationReviewRow.document_id)
-        .order_by(TranslationReviewRow.document_id, TranslationReviewRow.created_at.desc(), TranslationReviewRow.id.desc())
+        .order_by(
+            TranslationReviewRow.document_id,
+            TranslationReviewRow.created_at.desc(),
+            TranslationReviewRow.id.desc(),
+        )
     ).all()
     return {row.document_id: row.decision for row in rows}
 
@@ -908,7 +1007,9 @@ def corrects_selected_text(status: str | None, decision: str | None) -> bool:
     return not (status == "reviewed" and decision == "accepted_corrected")
 
 
-def derive_final_state(conn: Connection, repo: Repository, key: str, pid: int) -> dict[str, Any]:
+def derive_final_state(
+    conn: Connection, repo: Repository, key: str, pid: int
+) -> dict[str, Any]:
     # 1. Move the whole body of FinalResultService._projection here.
     # 2. Replace self.repo.list_workflow_causes(key) with repo.workflow_causes_in(conn, key, pid)
     #    and self.repo.get_round_for_submission(key, sid) with
@@ -995,9 +1096,15 @@ Message: `feat: one conn-scoped final cause derivation with newer-result and sta
 def test_selected_at_survives_reaffirmation_and_changes_on_replacement(case_env):
     env = case_env
     seed_submission(env, "alice", "one", document=TARGET)
-    seed_submission(env, "alice", "two", document=TARGET, timestamp="2026-10-16T11:00:00Z")
+    seed_submission(
+        env, "alice", "two", document=TARGET, timestamp="2026-10-16T11:00:00Z"
+    )
     first = _select(env, TARGET, "one")
-    assert first["selected_at"] and first["updated_at"] and first["selected_by"] == _pseudonym(env, "leader")
+    assert (
+        first["selected_at"]
+        and first["updated_at"]
+        and first["selected_by"] == _pseudonym(env, "leader")
+    )
     cause = _warnings(env, "SELECTED_TEXT_CORRECTED")[0]
     kept = _select(env, TARGET, "one", revision=1, acks=[cause["cause_id"]])
     assert kept["selected_at"] == first["selected_at"]
@@ -1011,8 +1118,10 @@ def test_revision_conflict_names_who_changed_the_selection(case_env):
     env = case_env
     seed_submission(env, "alice", "one", document=TARGET)
     _select(env, TARGET, "one")
-    stale = env.lead.put(f"{BASE}/final-selections", json={
-        "document_id": TARGET, "submission_id": "one", "expected_revision": 0})
+    stale = env.lead.put(
+        f"{BASE}/final-selections",
+        json={"document_id": TARGET, "submission_id": "one", "expected_revision": 0},
+    )
     assert stale.status_code == 409
     details = stale.json()["details"]
     assert details["current_revision"] == 1
@@ -1025,9 +1134,15 @@ def _pseudonym(env, username):
 
 
 def _keep(env, acks, revision):
-    return env.lead.put(f"{BASE}/final-selections", json={
-        "document_id": TARGET, "submission_id": "one", "expected_revision": revision,
-        "acknowledged_cause_ids": acks})
+    return env.lead.put(
+        f"{BASE}/final-selections",
+        json={
+            "document_id": TARGET,
+            "submission_id": "one",
+            "expected_revision": revision,
+            "acknowledged_cause_ids": acks,
+        },
+    )
 
 
 def test_keep_requires_the_exact_current_warning_set(case_env):
@@ -1038,28 +1153,42 @@ def test_keep_requires_the_exact_current_warning_set(case_env):
     opened = {w["cause_id"] for w in _warnings(env, "SELECTED_TEXT_CORRECTED")}
     assert opened
     # Addition: a newer submission appears after the confirm opened.
-    seed_submission(env, "alice", "later", document=TARGET, timestamp="2026-10-17T10:00:00Z")
+    seed_submission(
+        env, "alice", "later", document=TARGET, timestamp="2026-10-17T10:00:00Z"
+    )
     added = _keep(env, sorted(opened), 1)
     assert added.status_code == 409, added.text
-    current = {w["cause_id"] for w in env.lead.get(f"{BASE}/workflow-warnings").json()["warnings"]
-               if w["code"] in ACKNOWLEDGEABLE_CODES and w["language"] == "de"}
+    current = {
+        w["cause_id"]
+        for w in env.lead.get(f"{BASE}/workflow-warnings").json()["warnings"]
+        if w["code"] in ACKNOWLEDGEABLE_CODES and w["language"] == "de"
+    }
     # Status change: the correction moves on, so its id (which carries the status) changes.
     _set_status(env, CORRECTED, "accepted")
     changed = _keep(env, sorted(current), 1)
     assert changed.status_code == 409
     # Removal: the correction is rejected in review, so its cause disappears.
-    current = {w["cause_id"] for w in env.lead.get(f"{BASE}/workflow-warnings").json()["warnings"]
-               if w["code"] in ACKNOWLEDGEABLE_CODES and w["language"] == "de"}
+    current = {
+        w["cause_id"]
+        for w in env.lead.get(f"{BASE}/workflow-warnings").json()["warnings"]
+        if w["code"] in ACKNOWLEDGEABLE_CODES and w["language"] == "de"
+    }
     _set_status(env, CORRECTED, "reviewed")
     _add_review(env, CORRECTED, "rejected")
     removed = _keep(env, sorted(current), 1)
     assert removed.status_code == 409
     # Exact set: succeeds and clears every acknowledgeable cause of the row.
-    exact = {w["cause_id"] for w in env.lead.get(f"{BASE}/workflow-warnings").json()["warnings"]
-             if w["code"] in ACKNOWLEDGEABLE_CODES and w["language"] == "de"}
+    exact = {
+        w["cause_id"]
+        for w in env.lead.get(f"{BASE}/workflow-warnings").json()["warnings"]
+        if w["code"] in ACKNOWLEDGEABLE_CODES and w["language"] == "de"
+    }
     assert _keep(env, sorted(exact), 1).status_code == 200
-    assert not [w for w in env.lead.get(f"{BASE}/workflow-warnings").json()["warnings"]
-                if w["code"] in ACKNOWLEDGEABLE_CODES and w["language"] == "de"]
+    assert not [
+        w
+        for w in env.lead.get(f"{BASE}/workflow-warnings").json()["warnings"]
+        if w["code"] in ACKNOWLEDGEABLE_CODES and w["language"] == "de"
+    ]
 ```
 
 The status-change and removal steps rely on `_set_status`/`_add_review` from Task 1.3. If the `case_env` data gives no cause for one of the three changes, build it the same way Task 1.3's tests do; keep one assertion per change (addition, removal, status change) and the final exact-set success.
@@ -1105,7 +1234,9 @@ with module helper:
 
 ```python
 def _pseudonym(conn: Connection, user_id: int) -> str:
-    return conn.execute(select(UserRow.pseudonym).where(UserRow.id == user_id)).scalar_one()
+    return conn.execute(
+        select(UserRow.pseudonym).where(UserRow.id == user_id)
+    ).scalar_one()
 ```
 
 Event payloads and audit details must stay JSON-serialisable (`isoformat()`).
@@ -1113,20 +1244,22 @@ Event payloads and audit details must stay JSON-serialisable (`isoformat()`).
 **Exact warning set (review finding 1).** Replace the subset check in the `if acknowledged_cause_ids:` branch (`final_results.py:135-161` today) by an exact comparison, still under the exclusive lock:
 
 ```python
-                available = {
-                    warning["cause_id"]
-                    for warning in self._projection(conn, key, pid)["warnings"]
-                    if warning["code"] in ACKNOWLEDGEABLE_CODES
-                    and warning["case_id"] == doc.case_id
-                    and warning["language"] == doc.language
-                }
-                if set(acknowledged_cause_ids) != available:
-                    raise RevisionConflict({
-                        "current_revision": old["revision"],
-                        "selected_by": _pseudonym(conn, old["actor_id"]),
-                        "updated_at": old["updated_at"].isoformat(),
-                        "reason": "warnings_changed",
-                    })
+available = {
+    warning["cause_id"]
+    for warning in self._projection(conn, key, pid)["warnings"]
+    if warning["code"] in ACKNOWLEDGEABLE_CODES
+    and warning["case_id"] == doc.case_id
+    and warning["language"] == doc.language
+}
+if set(acknowledged_cause_ids) != available:
+    raise RevisionConflict(
+        {
+            "current_revision": old["revision"],
+            "selected_by": _pseudonym(conn, old["actor_id"]),
+            "updated_at": old["updated_at"].isoformat(),
+            "reason": "warnings_changed",
+        }
+    )
 ```
 
 `available` holds the row's acknowledgeable causes that are raised now (already acknowledged ids are filtered by `derive_final_state`), so the client must send the complete set it showed when the confirm opened (Task 5.8). Additions, removals and status changes (the status is part of the `SELECTED_TEXT_CORRECTED` id) all fail with 409. A PUT with an empty list keeps its current meaning (re-save without acknowledging). Keep the existing merge with `old["acknowledged_cause_ids"]` after the check.
@@ -1168,26 +1301,48 @@ def test_lead_cannot_choose_or_keep_own_result_when_rule_is_on(case_env):
     seed_submission(env, "leader", "own", document=TARGET)
     seed_submission(env, "alice", "other", document=TARGET)
     with env.db.transaction() as conn:
-        conn.execute(update(ProjectRow).where(ProjectRow.project_key == "proj").values(adjudicator_not_annotator=True))
-    refused = env.lead.put(f"{BASE}/final-selections", json={
-        "document_id": TARGET, "submission_id": "own", "expected_revision": 0})
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == "proj")
+            .values(adjudicator_not_annotator=True)
+        )
+    refused = env.lead.put(
+        f"{BASE}/final-selections",
+        json={"document_id": TARGET, "submission_id": "own", "expected_revision": 0},
+    )
     assert refused.status_code == 409
     assert refused.json()["code"] == "OWN_RESULT_NOT_SELECTABLE"
     assert _select(env, TARGET, "other")["adjudicator_not_annotator"] is True
     with env.db.transaction() as conn:
-        conn.execute(update(ProjectRow).where(ProjectRow.project_key == "proj").values(adjudicator_not_annotator=False))
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == "proj")
+            .values(adjudicator_not_annotator=False)
+        )
     own = _select(env, TARGET, "own", revision=1)
     assert own["adjudicator_not_annotator"] is False
     with env.db.transaction() as conn:
-        conn.execute(update(ProjectRow).where(ProjectRow.project_key == "proj").values(adjudicator_not_annotator=True))
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == "proj")
+            .values(adjudicator_not_annotator=True)
+        )
     # Toggling the rule later neither invalidates nor hides the earlier decision.
     state = env.lead.get(f"{BASE}/workflow-warnings").json()
     assert any(s["submission_id"] == "own" for s in state["selections"])
     cause = _warnings(env, "SELECTED_TEXT_CORRECTED")[0]
-    keep = env.lead.put(f"{BASE}/final-selections", json={
-        "document_id": TARGET, "submission_id": "own", "expected_revision": 2,
-        "acknowledged_cause_ids": [cause["cause_id"]]})
-    assert keep.status_code == 409 and keep.json()["code"] == "OWN_RESULT_NOT_SELECTABLE"
+    keep = env.lead.put(
+        f"{BASE}/final-selections",
+        json={
+            "document_id": TARGET,
+            "submission_id": "own",
+            "expected_revision": 2,
+            "acknowledged_cause_ids": [cause["cause_id"]],
+        },
+    )
+    assert (
+        keep.status_code == 409 and keep.json()["code"] == "OWN_RESULT_NOT_SELECTABLE"
+    )
 ```
 
 `seed_submission(env, "leader", ...)` uses the lead's pseudonym as `annotator_id`, which is how "own" is defined.
@@ -1221,12 +1376,22 @@ def test_reaffirmation_refuses_non_acknowledgeable_cause_ids(round_work):
     app, client, row, _service, _legacy = round_work
     report = _report(client, row)
     _act(client, report, 1, "resolve")
-    orphan = next(c for c in _causes(app, row.project_key) if c["code"] == "TASK_PAUSED_WITHOUT_REPORT")
+    orphan = next(
+        c
+        for c in _causes(app, row.project_key)
+        if c["code"] == "TASK_PAUSED_WITHOUT_REPORT"
+    )
     # Select any submission of row.document_id first (seed one like test_annotation_versions.seed_submission
     # with the fixture's project key), then:
-    refused = client.put(f"/api/v1/projects/{row.project_key}/final-selections", json={
-        "document_id": row.document_id, "submission_id": sid, "expected_revision": 1,
-        "acknowledged_cause_ids": [orphan["cause_id"]]})
+    refused = client.put(
+        f"/api/v1/projects/{row.project_key}/final-selections",
+        json={
+            "document_id": row.document_id,
+            "submission_id": sid,
+            "expected_revision": 1,
+            "acknowledged_cause_ids": [orphan["cause_id"]],
+        },
+    )
     assert refused.status_code == 409
 
 
@@ -1235,7 +1400,9 @@ def test_no_selection_changes_without_an_explicit_put(case_env):
     seed_submission(env, "alice", "one", document=TARGET)
     _select(env, TARGET, "one")
     before = env.lead.get(f"{BASE}/workflow-warnings").json()["selections"]
-    seed_submission(env, "alice", "newer", document=TARGET, timestamp="2026-10-17T10:00:00Z")
+    seed_submission(
+        env, "alice", "newer", document=TARGET, timestamp="2026-10-17T10:00:00Z"
+    )
     env.lead.post(f"{BASE}/exports/final/preflight")
     assert env.lead.get(f"{BASE}/workflow-warnings").json()["selections"] == before
 ```
@@ -1266,18 +1433,46 @@ Outcome: `GET /api/v1/projects/{key}/document-rows` and `GET /api/v1/projects/{k
 """Pure Documents row rules (no database)."""
 
 from ontocurator.domain.document_rows import (
-    AssignmentFact, Version, bar_categories, bar_counts, build_chains, bulk_target,
-    missing_final_counts, open_target, prefix_matches, round_ordinals, submission_kind,
-    translation_issue, version_label,
+    AssignmentFact,
+    Version,
+    bar_categories,
+    bar_counts,
+    build_chains,
+    bulk_target,
+    missing_final_counts,
+    open_target,
+    prefix_matches,
+    round_ordinals,
+    submission_kind,
+    translation_issue,
+    version_label,
 )
 
 
-def v(doc, version=1, origin="machine_translation", derived=None, status="accepted",
-      run=None, external="ext", position=1, decision=None):
-    return Version(document_id=doc, case_id="c", language="de", external_id=external,
-                   version=version, origin=origin, derived_from=derived,
-                   translation=run, translation_status=status, position=position,
-                   latest_decision=decision)
+def v(
+    doc,
+    version=1,
+    origin="machine_translation",
+    derived=None,
+    status="accepted",
+    run=None,
+    external="ext",
+    position=1,
+    decision=None,
+):
+    return Version(
+        document_id=doc,
+        case_id="c",
+        language="de",
+        external_id=external,
+        version=version,
+        origin=origin,
+        derived_from=derived,
+        translation=run,
+        translation_status=status,
+        position=position,
+        latest_decision=decision,
+    )
 
 
 def test_chain_names_versions_and_duplicates():
@@ -1298,19 +1493,40 @@ def test_chain_names_versions_and_duplicates():
 
 
 def a(status="submitted", held=False, revoked=False, task="annotate", doc="a"):
-    return AssignmentFact(assignment_id=1, document_id=doc, task=task, status=status,
-                          held=held, revoked=revoked, pseudonym="ann-1", user_id=1,
-                          active_round_id=None)
+    return AssignmentFact(
+        assignment_id=1,
+        document_id=doc,
+        task=task,
+        status=status,
+        held=held,
+        revoked=revoked,
+        pseudonym="ann-1",
+        user_id=1,
+        active_round_id=None,
+    )
 
 
 def test_missing_final_rule():
-    assert not missing_final_counts(has_selection=True, submission_count=1, assignments=[a()])
-    assert not missing_final_counts(has_selection=False, submission_count=0, assignments=[a()])
+    assert not missing_final_counts(
+        has_selection=True, submission_count=1, assignments=[a()]
+    )
+    assert not missing_final_counts(
+        has_selection=False, submission_count=0, assignments=[a()]
+    )
     assert missing_final_counts(has_selection=False, submission_count=1, assignments=[])
-    assert missing_final_counts(has_selection=False, submission_count=1, assignments=[a(), a(status="open", revoked=True)])
-    assert not missing_final_counts(has_selection=False, submission_count=1, assignments=[a(held=True)])
-    assert not missing_final_counts(has_selection=False, submission_count=1,
-                                    assignments=[a(), a(status="open", task="translation_review", doc="b")])
+    assert missing_final_counts(
+        has_selection=False,
+        submission_count=1,
+        assignments=[a(), a(status="open", revoked=True)],
+    )
+    assert not missing_final_counts(
+        has_selection=False, submission_count=1, assignments=[a(held=True)]
+    )
+    assert not missing_final_counts(
+        has_selection=False,
+        submission_count=1,
+        assignments=[a(), a(status="open", task="translation_review", doc="b")],
+    )
 
 
 def test_translation_issue_and_bulk_target():
@@ -1328,8 +1544,13 @@ def test_translation_issue_and_bulk_target():
 
 
 def test_open_target():
-    chains = build_chains([v("p1", position=1), v("p2", external="z", position=5),
-                           v("p2b", 2, "correction", "p2", "accepted", external="z", position=6)])
+    chains = build_chains(
+        [
+            v("p1", position=1),
+            v("p2", external="z", position=5),
+            v("p2b", 2, "correction", "p2", "accepted", external="z", position=6),
+        ]
+    )
     assert open_target(chains, final_document_id=None) == ("p2b", "most_recent_root")
     assert open_target(chains, final_document_id="p1") == ("p1", "final")
     single = build_chains([v("s1"), v("s2", 2, "correction", "s1", "accepted")])
@@ -1346,12 +1567,28 @@ def test_round_ordinals_and_kinds():
 
 
 def test_bar_categories_counts_and_prefix():
-    one = bar_categories({"OPEN_PROBLEM_REPORT", "SELECTED_NEWER_RESULT"}, translation_failed=False, missing_final=False)
-    two = bar_categories({"TASK_PAUSED_WITHOUT_REPORT"}, translation_failed=True, missing_final=True)
-    notes = bar_categories({"ROUND_REVIEW_PENDING", "SOURCE_UPDATE_UNREVIEWED", "TASK_ON_HOLD"}, translation_failed=False, missing_final=False)
+    one = bar_categories(
+        {"OPEN_PROBLEM_REPORT", "SELECTED_NEWER_RESULT"},
+        translation_failed=False,
+        missing_final=False,
+    )
+    two = bar_categories(
+        {"TASK_PAUSED_WITHOUT_REPORT"}, translation_failed=True, missing_final=True
+    )
+    notes = bar_categories(
+        {"ROUND_REVIEW_PENDING", "SOURCE_UPDATE_UNREVIEWED", "TASK_ON_HOLD"},
+        translation_failed=False,
+        missing_final=False,
+    )
     assert one == {"report-or-pause", "confirm-final"}
     assert notes == set()
-    assert bar_counts([one, two, notes]) == {"total": 2, "report-or-pause": 2, "confirm-final": 1, "translation": 1, "missing-final": 1}
+    assert bar_counts([one, two, notes]) == {
+        "total": 2,
+        "report-or-pause": 2,
+        "confirm-final": 1,
+        "translation": 1,
+        "missing-final": 1,
+    }
     assert prefix_matches("ｃａｓｅ-0", ["case-0042"])
     assert not prefix_matches("0042", ["case-0042"])
 ```
@@ -1371,10 +1608,24 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-BarCategory = Literal["report-or-pause", "confirm-final", "translation", "missing-final"]
-CATEGORIES: tuple[BarCategory, ...] = ("report-or-pause", "confirm-final", "translation", "missing-final")
-ACKNOWLEDGEABLE = frozenset({"SELECTED_ROUND_ABANDONED", "SELECTED_ROUND_SUPERSEDED",
-                             "SELECTED_RESULT_REVISED", "SELECTED_TEXT_CORRECTED", "SELECTED_NEWER_RESULT"})
+BarCategory = Literal[
+    "report-or-pause", "confirm-final", "translation", "missing-final"
+]
+CATEGORIES: tuple[BarCategory, ...] = (
+    "report-or-pause",
+    "confirm-final",
+    "translation",
+    "missing-final",
+)
+ACKNOWLEDGEABLE = frozenset(
+    {
+        "SELECTED_ROUND_ABANDONED",
+        "SELECTED_ROUND_SUPERSEDED",
+        "SELECTED_RESULT_REVISED",
+        "SELECTED_TEXT_CORRECTED",
+        "SELECTED_NEWER_RESULT",
+    }
+)
 NOT_NEWER = frozenset({"rejected", "query"})
 
 
@@ -1394,7 +1645,11 @@ class Version:
 
     @property
     def not_newer(self) -> bool:
-        return self.origin == "correction" and self.translation_status == "reviewed" and self.latest_decision in NOT_NEWER
+        return (
+            self.origin == "correction"
+            and self.translation_status == "reviewed"
+            and self.latest_decision in NOT_NEWER
+        )
 
 
 @dataclass(frozen=True)
@@ -1454,24 +1709,39 @@ def build_chains(versions: Sequence[Version]) -> list[Chain]:
     names = {rid: base_chain_name(by_id[rid]) for rid in groups}
     counts = Counter(names.values())
     chains = [
-        Chain(rid, names[rid] if counts[names[rid]] == 1 else f"{names[rid]} · {by_id[rid].external_id}",
-              tuple(sorted(items, key=lambda x: x.version)))
+        Chain(
+            rid,
+            names[rid]
+            if counts[names[rid]] == 1
+            else f"{names[rid]} · {by_id[rid].external_id}",
+            tuple(sorted(items, key=lambda x: x.version)),
+        )
         for rid, items in groups.items()
     ]
-    return sorted(chains, key=lambda c: (c.root.position is None, c.root.position or 0, c.root_id))
+    return sorted(
+        chains, key=lambda c: (c.root.position is None, c.root.position or 0, c.root_id)
+    )
 
 
 def version_label(chain: Chain, version: Version, *, parallel: bool) -> str:
     return f"{chain.name} v{version.version}" if parallel else f"v{version.version}"
 
 
-def missing_final_counts(*, has_selection: bool, submission_count: int, assignments: Iterable[AssignmentFact]) -> bool:
+def missing_final_counts(
+    *, has_selection: bool, submission_count: int, assignments: Iterable[AssignmentFact]
+) -> bool:
     if has_selection or submission_count == 0:
         return False
-    return all(item.status == "submitted" and not item.held for item in assignments if not item.revoked)
+    return all(
+        item.status == "submitted" and not item.held
+        for item in assignments
+        if not item.revoked
+    )
 
 
-def translation_issue(chain: Chain) -> Literal["automatic_check_failed", "rejected", "query"] | None:
+def translation_issue(
+    chain: Chain,
+) -> Literal["automatic_check_failed", "rejected", "query"] | None:
     newest = chain.newest
     if newest.translation_status == "automatic_check_failed":
         return "automatic_check_failed"
@@ -1480,21 +1750,30 @@ def translation_issue(chain: Chain) -> Literal["automatic_check_failed", "reject
     return None
 
 
-def bulk_target(chains: Sequence[Chain]) -> tuple[str | None, Literal["checkbox", "choose_in_versions"]]:
+def bulk_target(
+    chains: Sequence[Chain],
+) -> tuple[str | None, Literal["checkbox", "choose_in_versions"]]:
     if len(chains) != 1:
         return None, "choose_in_versions"
     target = [item for item in chains[0].versions if not item.not_newer][-1]
-    if target.origin == "correction" and target.translation_status == "ready_for_review":
+    if (
+        target.origin == "correction"
+        and target.translation_status == "ready_for_review"
+    ):
         return None, "choose_in_versions"
     return target.document_id, "checkbox"
 
 
-def open_target(chains: Sequence[Chain], *, final_document_id: str | None) -> tuple[str, Literal["final", "newest", "most_recent_root"]]:
+def open_target(
+    chains: Sequence[Chain], *, final_document_id: str | None
+) -> tuple[str, Literal["final", "newest", "most_recent_root"]]:
     if final_document_id is not None:
         return final_document_id, "final"
     if len(chains) == 1:
         return chains[0].newest.document_id, "newest"
-    latest = max(chains, key=lambda c: (c.root.position or -1, c.root_id))  # open question 3
+    latest = max(
+        chains, key=lambda c: (c.root.position or -1, c.root_id)
+    )  # open question 3
     return latest.newest.document_id, "most_recent_root"
 
 
@@ -1513,7 +1792,9 @@ def round_ordinals(rounds: Iterable[tuple[str, str | None]]) -> dict[str, int]:
     return result
 
 
-def submission_kind(round_kind: str | None, mode: str) -> Literal["consolidation", "carry_forward", "annotation", "review"]:
+def submission_kind(
+    round_kind: str | None, mode: str
+) -> Literal["consolidation", "carry_forward", "annotation", "review"]:
     if round_kind == "consolidation":
         return "consolidation"
     if round_kind == "carry_forward":
@@ -1521,7 +1802,9 @@ def submission_kind(round_kind: str | None, mode: str) -> Literal["consolidation
     return "review" if mode == "review" else "annotation"
 
 
-def bar_categories(codes: Iterable[str], *, translation_failed: bool, missing_final: bool) -> set[BarCategory]:
+def bar_categories(
+    codes: Iterable[str], *, translation_failed: bool, missing_final: bool
+) -> set[BarCategory]:
     present = set(codes)
     result: set[BarCategory] = set()
     if present & {"OPEN_PROBLEM_REPORT", "TASK_PAUSED_WITHOUT_REPORT"}:
@@ -1546,7 +1829,9 @@ def bar_counts(rows: Iterable[set[BarCategory]]) -> dict[str, int]:
 
 def prefix_matches(q: str, identifiers: Iterable[str]) -> bool:
     prefix = unicodedata.normalize("NFKC", q)
-    return any(unicodedata.normalize("NFKC", item).startswith(prefix) for item in identifiers)
+    return any(
+        unicodedata.normalize("NFKC", item).startswith(prefix) for item in identifiers
+    )
 ```
 
 **Shared primitive split.** Put `round_ordinals` and `submission_kind` (bodies as above) in `src/ontocurator/domain/submission_labels.py` with a module docstring "Round ordinals and submission kinds shared by Documents and the editor history"; `domain/document_rows.py` imports and re-exports them (`from ontocurator.domain.submission_labels import round_ordinals, submission_kind` plus `__all__`), so the test import above stays valid. Sibling plans import from `submission_labels`.
@@ -1589,50 +1874,77 @@ Interface (field names are binding for B7/B8; types may be refined, report any c
 ```python
 @dataclass(frozen=True)
 class RoundFact:
-    round_id: str; assignment_id: int; predecessor_round_id: str | None; document_id: str
-    kind: str | None; mode: str | None; state: str; latest_submission_id: str | None; author_pseudonym: str
+    round_id: str
+    assignment_id: int
+    predecessor_round_id: str | None
+    document_id: str
+    kind: str | None
+    mode: str | None
+    state: str
+    latest_submission_id: str | None
+    author_pseudonym: str
+
 
 @dataclass(frozen=True)
 class SubmissionFact:
-    submission_id: str; document_id: str; annotator_id: str; recorded_at: datetime; mode: str; round_id: str | None
+    submission_id: str
+    document_id: str
+    annotator_id: str
+    recorded_at: datetime
+    mode: str
+    round_id: str | None
+
 
 @dataclass(frozen=True)
 class ReportFact:
-    report_id: str; assignment_id: int | None; excerpt: str; reporter_label: str; created_at: datetime
+    report_id: str
+    assignment_id: int | None
+    excerpt: str
+    reporter_label: str
+    created_at: datetime
     task_state: Literal["paused", "resumed"]
+
 
 @dataclass(frozen=True)
 class RowFacts:
     project_key: str
     viewer_user_id: int
     viewer_pseudonym: str
-    adjudicator_not_annotator: bool                       # current project rule
+    adjudicator_not_annotator: bool  # current project rule
     versions: list[rules.Version]
-    accepted_without_review: frozenset[str]               # document ids
-    assignments: list[rules.AssignmentFact]               # revoked included
+    accepted_without_review: frozenset[str]  # document ids
+    assignments: list[rules.AssignmentFact]  # revoked included
     rounds: list[RoundFact]
-    submission_counts: dict[str, int]                     # document_id -> count
-    selected_submissions: dict[str, SubmissionFact]       # submission_id -> fact
-    open_translation_reviews: list[tuple[int, str, str]]  # (assignment_id, document_id, reviewer pseudonym)
+    submission_counts: dict[str, int]  # document_id -> count
+    selected_submissions: dict[str, SubmissionFact]  # submission_id -> fact
+    open_translation_reviews: list[
+        tuple[int, str, str]
+    ]  # (assignment_id, document_id, reviewer pseudonym)
     reports: dict[str, ReportFact]
-    final_state: dict[str, Any]                           # derive_final_state output
-    selections: dict[tuple[str, str], dict[str, Any]]     # (case, language) -> row + selected_by
-    last_activity: dict[str, datetime]                    # document_id -> latest
-    selection_activity: dict[tuple[str, str], datetime]   # (case, language) -> updated_at
+    final_state: dict[str, Any]  # derive_final_state output
+    selections: dict[
+        tuple[str, str], dict[str, Any]
+    ]  # (case, language) -> row + selected_by
+    last_activity: dict[str, datetime]  # document_id -> latest
+    selection_activity: dict[
+        tuple[str, str], datetime
+    ]  # (case, language) -> updated_at
 ```
 
 ```python
 """Lead-only Documents read model. Shared project lock; causes from final_causes."""
 
 PAGE_SIZE = 50
-Decision = Literal["all", "report-or-pause", "confirm-final", "translation", "missing-final"]
+Decision = Literal[
+    "all", "report-or-pause", "confirm-final", "translation", "missing-final"
+]
 MAX_RETAIN = 200
 
 
 @dataclass(frozen=True)
 class RowQuery:
     language: str | None = None
-    status: str | None = None          # unassigned|open|in_progress|submitted|reopened|held
+    status: str | None = None  # unassigned|open|in_progress|submitted|reopened|held
     q: str | None = None
     origin: str | None = None
     translation_status: str | None = None  # adds accepted_without_review
@@ -1640,7 +1952,9 @@ class RowQuery:
     final: Literal["missing"] | None = None
     case: str | None = None
     page: int = 1
-    retain: tuple[str, ...] = ()       # "{case_id}:{language}" keys kept visible this visit (Task 5.9)
+    retain: tuple[
+        str, ...
+    ] = ()  # "{case_id}:{language}" keys kept visible this visit (Task 5.9)
 
     def __post_init__(self) -> None:
         if self.decision is not None and self.final is not None:
@@ -1665,7 +1979,9 @@ class DocumentRowsService:
     def submissions(self, key: str, case_id: str, language: str) -> dict[str, Any]:
         with self.db.transaction() as conn:
             pid = authorize_final_results(conn, self.actor, key, exclusive=False)
-            return build_submissions(conn, key, pid, case_id, language, self.actor.user_id)
+            return build_submissions(
+                conn, key, pid, case_id, language, self.actor.user_id
+            )
 ```
 
 A `retain` key splits at the **last** `:` (case ids may contain `:`; language codes do not).
@@ -1682,7 +1998,10 @@ from test_case_api import case_env as case_env
 
 from ontocurator.application import document_rows as rows_module
 from ontocurator.application.document_rows import RowQuery, load_facts
-from ontocurator.application.final_causes import ACKNOWLEDGEABLE_CODES, authorize_final_results
+from ontocurator.application.final_causes import (
+    ACKNOWLEDGEABLE_CODES,
+    authorize_final_results,
+)
 from ontocurator.domain import document_rows as domain_rows
 
 
@@ -1709,7 +2028,10 @@ def test_documents_takes_only_the_shared_project_lock(case_env, monkeypatch):
 def test_facts_cover_versions_selection_rule_and_activity(case_env):
     env = case_env
     seed_submission(env, "alice", "german", document=TARGET)
-    env.lead.put(f"{BASE}/final-selections", json={"document_id": TARGET, "submission_id": "german", "expected_revision": 0})
+    env.lead.put(
+        f"{BASE}/final-selections",
+        json={"document_id": TARGET, "submission_id": "german", "expected_revision": 0},
+    )
     svc = service(env)
     with env.db.transaction() as conn:
         pid = authorize_final_results(conn, svc.actor, "proj", exclusive=False)
@@ -1718,12 +2040,15 @@ def test_facts_cover_versions_selection_rule_and_activity(case_env):
     assert facts.submission_counts[TARGET] == 1
     assert facts.selected_submissions["german"].document_id == TARGET
     assert facts.adjudicator_not_annotator is False
-    assert facts.last_activity[TARGET] >= facts.selected_submissions["german"].recorded_at
+    assert (
+        facts.last_activity[TARGET] >= facts.selected_submissions["german"].recorded_at
+    )
     assert (CASE, "de") in facts.selection_activity
 
 
 def test_retain_keys_are_bounded_and_mutual_exclusion_holds():
     import pytest
+
     with pytest.raises(ValueError):
         RowQuery(decision="all", final="missing")
     with pytest.raises(ValueError):
@@ -1758,21 +2083,37 @@ from ontocurator.storage.tables import ProjectRow
 
 # Cause codes the export preflight emits per row (MISSING_FINAL_SELECTION is unconditional
 # in the preflight and replaced by the Documents-only MISSING_FINAL rule).
-SHARED_CAUSE_CODES = frozenset({
-    "OPEN_PROBLEM_REPORT", "TASK_ON_HOLD", "TASK_PAUSED_WITHOUT_REPORT",
-    "SOURCE_UPDATE_UNREVIEWED", "ROUND_REVIEW_PENDING",
-    "SELECTED_ROUND_ABANDONED", "SELECTED_ROUND_SUPERSEDED", "SELECTED_RESULT_REVISED",
-    "SELECTED_TEXT_CORRECTED", "SELECTED_NEWER_RESULT",
-})
-DOCUMENTS_ONLY_CODES = frozenset({
-    "TRANSLATION_CHECK_FAILED", "TRANSLATION_NOT_ACCEPTED", "REVIEWER_NEEDED", "MISSING_FINAL",
-})
+SHARED_CAUSE_CODES = frozenset(
+    {
+        "OPEN_PROBLEM_REPORT",
+        "TASK_ON_HOLD",
+        "TASK_PAUSED_WITHOUT_REPORT",
+        "SOURCE_UPDATE_UNREVIEWED",
+        "ROUND_REVIEW_PENDING",
+        "SELECTED_ROUND_ABANDONED",
+        "SELECTED_ROUND_SUPERSEDED",
+        "SELECTED_RESULT_REVISED",
+        "SELECTED_TEXT_CORRECTED",
+        "SELECTED_NEWER_RESULT",
+    }
+)
+DOCUMENTS_ONLY_CODES = frozenset(
+    {
+        "TRANSLATION_CHECK_FAILED",
+        "TRANSLATION_NOT_ACCEPTED",
+        "REVIEWER_NEEDED",
+        "MISSING_FINAL",
+    }
+)
 
 
 def test_one_row_per_text_and_language_with_chain_and_final(case_env):
     env = case_env
     seed_submission(env, "alice", "german", document=TARGET)
-    env.lead.put(f"{BASE}/final-selections", json={"document_id": TARGET, "submission_id": "german", "expected_revision": 0})
+    env.lead.put(
+        f"{BASE}/final-selections",
+        json={"document_id": TARGET, "submission_id": "german", "expected_revision": 0},
+    )
     page = service(env).page("proj", RowQuery())
     rows = rows_of(page)
     assert set(rows) >= {(CASE, "en"), (CASE, "de")}
@@ -1780,7 +2121,10 @@ def test_one_row_per_text_and_language_with_chain_and_final(case_env):
     assert [v["document_id"] for v in de["versions"]] == [TARGET, CORRECTED]
     assert de["parallel_roots"] is False
     assert de["final"]["submission_id"] == "german" and de["final"]["version"] == 1
-    assert de["final"]["author_label"] == env.app.state.accounts.get_by_username("alice").pseudonym
+    assert (
+        de["final"]["author_label"]
+        == env.app.state.accounts.get_by_username("alice").pseudonym
+    )
     assert any(i["code"] == "SELECTED_TEXT_CORRECTED" for i in de["issues"])
     assert page["groups"][0]["rows"][0]["language"] == "en"  # source language first
 
@@ -1788,17 +2132,26 @@ def test_one_row_per_text_and_language_with_chain_and_final(case_env):
 def test_shared_cause_ids_equal_the_preflight_per_row(case_env):
     env = case_env
     seed_submission(env, "alice", "german", document=TARGET)
-    env.lead.put(f"{BASE}/final-selections", json={"document_id": TARGET, "submission_id": "german", "expected_revision": 0})
+    env.lead.put(
+        f"{BASE}/final-selections",
+        json={"document_id": TARGET, "submission_id": "german", "expected_revision": 0},
+    )
     preflight = env.lead.post(f"{BASE}/exports/final/preflight").json()
     emitted = {w["code"] for w in preflight["warnings"]} - {"MISSING_FINAL_SELECTION"}
-    assert emitted <= SHARED_CAUSE_CODES, emitted - SHARED_CAUSE_CODES  # extend the set if the preflight grows
+    assert emitted <= SHARED_CAUSE_CODES, (
+        emitted - SHARED_CAUSE_CODES
+    )  # extend the set if the preflight grows
     expected: dict = {}
     for w in preflight["warnings"]:
         if w["code"] in SHARED_CAUSE_CODES:
             expected.setdefault((w["case_id"], w["language"]), set()).add(w["cause_id"])
     page = service(env).page("proj", RowQuery())
     actual = {
-        key: {i["cause_id"] for i in row["issues"] + row["notes"] if i["code"] in SHARED_CAUSE_CODES}
+        key: {
+            i["cause_id"]
+            for i in row["issues"] + row["notes"]
+            if i["code"] in SHARED_CAUSE_CODES
+        }
         for key, row in rows_of(page).items()
     }
     assert {k: v for k, v in actual.items() if v} == expected
@@ -1806,8 +2159,13 @@ def test_shared_cause_ids_equal_the_preflight_per_row(case_env):
 
 def test_documents_only_items_are_derived_here_and_absent_from_the_preflight(case_env):
     env = case_env
-    seed_submission(env, "alice", "english", document=SOURCE)  # en: submission, no final, no open work
-    preflight_codes = {w["code"] for w in env.lead.post(f"{BASE}/exports/final/preflight").json()["warnings"]}
+    seed_submission(
+        env, "alice", "english", document=SOURCE
+    )  # en: submission, no final, no open work
+    preflight_codes = {
+        w["code"]
+        for w in env.lead.post(f"{BASE}/exports/final/preflight").json()["warnings"]
+    }
     assert not preflight_codes & DOCUMENTS_ONLY_CODES
     en = rows_of(service(env).page("proj", RowQuery()))[(CASE, "en")]
     missing = [i for i in en["issues"] if i["code"] == "MISSING_FINAL"]
@@ -1821,13 +2179,20 @@ def test_documents_only_items_are_derived_here_and_absent_from_the_preflight(cas
 def test_current_rule_is_exposed_separately_from_the_selection_snapshot(case_env):
     env = case_env
     seed_submission(env, "leader", "own", document=TARGET)
-    env.lead.put(f"{BASE}/final-selections", json={"document_id": TARGET, "submission_id": "own", "expected_revision": 0})
+    env.lead.put(
+        f"{BASE}/final-selections",
+        json={"document_id": TARGET, "submission_id": "own", "expected_revision": 0},
+    )
     with env.db.transaction() as conn:
-        conn.execute(update(ProjectRow).where(ProjectRow.project_key == "proj").values(adjudicator_not_annotator=True))
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == "proj")
+            .values(adjudicator_not_annotator=True)
+        )
     page = service(env).page("proj", RowQuery())
-    assert page["adjudicator_not_annotator"] is True                      # rule now
+    assert page["adjudicator_not_annotator"] is True  # rule now
     de = rows_of(page)[(CASE, "de")]
-    assert de["final"]["adjudicator_not_annotator"] is False              # rule at selection time
+    assert de["final"]["adjudicator_not_annotator"] is False  # rule at selection time
     assert de["final"]["is_mine"] is True
 
 
@@ -1841,7 +2206,9 @@ def test_bar_counts_are_project_wide_and_ignore_filters(case_env):
 
 
 def test_case_deep_link_keeps_row_visible_and_unknown_case_is_reported(case_env):
-    page = service(case_env).page("proj", RowQuery(case=CASE, language="de", decision="confirm-final"))
+    page = service(case_env).page(
+        "proj", RowQuery(case=CASE, language="de", decision="confirm-final")
+    )
     pinned = rows_of(page)[(CASE, "de")]
     assert pinned["pinned"] is True and pinned["matches_decision"] is False
     assert service(case_env).page("proj", RowQuery(case="nope"))["case_found"] is False
@@ -1852,10 +2219,21 @@ def test_retained_rows_return_with_current_data_when_they_stop_matching(case_env
     seed_submission(env, "alice", "english", document=SOURCE)
     before = rows_of(service(env).page("proj", RowQuery(decision="missing-final")))
     assert (CASE, "en") in before
-    env.lead.put(f"{BASE}/final-selections", json={"document_id": SOURCE, "submission_id": "english", "expected_revision": 0})
+    env.lead.put(
+        f"{BASE}/final-selections",
+        json={
+            "document_id": SOURCE,
+            "submission_id": "english",
+            "expected_revision": 0,
+        },
+    )
     plain = rows_of(service(env).page("proj", RowQuery(decision="missing-final")))
     assert (CASE, "en") not in plain
-    kept = rows_of(service(env).page("proj", RowQuery(decision="missing-final", retain=(f"{CASE}:en",))))
+    kept = rows_of(
+        service(env).page(
+            "proj", RowQuery(decision="missing-final", retain=(f"{CASE}:en",))
+        )
+    )
     row = kept[(CASE, "en")]
     assert row["retained"] is True and row["matches_decision"] is False
     assert row["final"]["submission_id"] == "english" and row["categories"] == []
@@ -1954,11 +2332,19 @@ def test_submissions_cover_all_versions_with_kinds_ordinals_and_counts(rounds):
     # Reuse create_consolidation_fixture(rounds) from tests/test_work_rounds.py:
     # two independent submissions + one consolidation on the same document.
     fixture = create_consolidation_fixture(rounds)
-    result = DocumentRowsService(...).submissions(fixture.project, fixture.case_id, fixture.language)
+    result = DocumentRowsService(...).submissions(
+        fixture.project, fixture.case_id, fixture.language
+    )
     kinds = [s["kind"] for s in result["submissions"]]
     assert kinds.count("annotation") == 2 and kinds[-1] == "consolidation"
-    assert all(s["round_ordinal"] == 1 for s in result["submissions"] if s["kind"] == "annotation")
-    assert [s["recorded_at"] for s in result["submissions"]] == sorted(s["recorded_at"] for s in result["submissions"])
+    assert all(
+        s["round_ordinal"] == 1
+        for s in result["submissions"]
+        if s["kind"] == "annotation"
+    )
+    assert [s["recorded_at"] for s in result["submissions"]] == sorted(
+        s["recorded_at"] for s in result["submissions"]
+    )
     assert all(isinstance(s["finding_count"], int) for s in result["submissions"])
     assert all(r["mode"] is not None for r in result["rounds"])
     assert isinstance(result["adjudicator_not_annotator"], bool)
@@ -1975,6 +2361,7 @@ def test_submission_without_round_has_no_ordinal(case_env):
 def test_unknown_row_is_case_not_found(case_env):
     import pytest
     from ontocurator.domain.errors import DomainError
+
     with pytest.raises(DomainError):
         service(case_env).submissions("proj", "missing-case", "de")
 ```
@@ -2001,15 +2388,43 @@ def test_routes_are_lead_only_and_validate_query(case_env):
     assert env.alice.get(f"{BASE}/document-rows").status_code in (403, 404)
     ok = env.lead.get(f"{BASE}/document-rows", params={"decision": "all", "page": 1})
     assert ok.status_code == 200, ok.text
-    assert set(ok.json()) >= {"groups", "page", "page_count", "group_count", "bar", "case_found", "adjudicator_not_annotator"}
-    retained = env.lead.get(f"{BASE}/document-rows", params=[("decision", "all"), ("retain", f"{CASE}:de"), ("retain", f"{CASE}:en")])
+    assert set(ok.json()) >= {
+        "groups",
+        "page",
+        "page_count",
+        "group_count",
+        "bar",
+        "case_found",
+        "adjudicator_not_annotator",
+    }
+    retained = env.lead.get(
+        f"{BASE}/document-rows",
+        params=[
+            ("decision", "all"),
+            ("retain", f"{CASE}:de"),
+            ("retain", f"{CASE}:en"),
+        ],
+    )
     assert retained.status_code == 200, retained.text
-    assert env.lead.get(f"{BASE}/document-rows", params={"decision": "all", "final": "missing"}).status_code == 422
-    assert env.lead.get(f"{BASE}/document-rows", params={"decision": "nope"}).status_code == 422
+    assert (
+        env.lead.get(
+            f"{BASE}/document-rows", params={"decision": "all", "final": "missing"}
+        ).status_code
+        == 422
+    )
+    assert (
+        env.lead.get(f"{BASE}/document-rows", params={"decision": "nope"}).status_code
+        == 422
+    )
     sub = env.lead.get(f"{BASE}/document-rows/{quote(CASE, safe='')}/de/submissions")
     assert sub.status_code == 200, sub.text
-    assert env.alice.get(f"{BASE}/document-rows/{quote(CASE, safe='')}/de/submissions").status_code in (403, 404)
-    assert env.lead.get(f"{BASE}/document-rows/missing-case/de/submissions").status_code == 404
+    assert env.alice.get(
+        f"{BASE}/document-rows/{quote(CASE, safe='')}/de/submissions"
+    ).status_code in (403, 404)
+    assert (
+        env.lead.get(f"{BASE}/document-rows/missing-case/de/submissions").status_code
+        == 404
+    )
 ```
 
 - [ ] **Step 2: Run**; Expected FAIL (404 for unknown route).
@@ -2017,28 +2432,68 @@ def test_routes_are_lead_only_and_validate_query(case_env):
 - [ ] **Step 3: Implement** pydantic models mirroring the dicts of Tasks 2.2b and 2.2c (names: `DocumentVersionView`, `WorkItemView`, `ReportIssueView`, `RowItemView`, `FinalSelectionSummary`, `MissingFinalView`, `BulkTargetView`, `OpenTargetView`, `DocumentRowView`, `DocumentGroupView`, `DecisionBarView` (`total`, `report_or_pause`, `confirm_final`, `translation`, `missing_final`, `no_final`, `shown`), `DocumentRowsPage` (with top-level `adjudicator_not_annotator: bool`, the current rule), `RowSubmissionView`, `RowRoundView`, `OpenTranslationReviewView`, `RowSubmissions` (with `adjudicator_not_annotator: bool`)). `FinalSelectionSummary` keeps `adjudicator_not_annotator` as the selection-time snapshot and adds `is_mine: bool`; `DocumentRowView` adds `retained: bool`. Use `Literal` types for `kind`, `category`, `mode`, `reason`. Map the hyphenated categories to underscore keys in `DecisionBarView`. Routes:
 
 ```python
-router = APIRouter(prefix="/api/v1/projects/{key}", tags=["documents"], route_class=EncodedParameterRoute)
+router = APIRouter(
+    prefix="/api/v1/projects/{key}",
+    tags=["documents"],
+    route_class=EncodedParameterRoute,
+)
 
 
 @router.get("/document-rows", response_model=DocumentRowsPage)
 def document_rows(
-    key: str, principal: PrincipalDep, request: Request,
-    language: str | None = None, status: AssignmentFilter | None = None, q: str | None = None,
+    key: str,
+    principal: PrincipalDep,
+    request: Request,
+    language: str | None = None,
+    status: AssignmentFilter | None = None,
+    q: str | None = None,
     origin: VariantOrigin | None = None,
-    translation_status: TranslationStatus | Literal["accepted_without_review"] | None = None,
-    decision: Literal["all", "report-or-pause", "confirm-final", "translation", "missing-final"] | None = None,
-    final: Literal["missing"] | None = None, case: str | None = None, page: int = Query(1, ge=1),
+    translation_status: TranslationStatus
+    | Literal["accepted_without_review"]
+    | None = None,
+    decision: Literal[
+        "all", "report-or-pause", "confirm-final", "translation", "missing-final"
+    ]
+    | None = None,
+    final: Literal["missing"] | None = None,
+    case: str | None = None,
+    page: int = Query(1, ge=1),
     retain: list[str] = Query(default_factory=list, max_length=200),
 ) -> dict[str, Any]:
     if decision is not None and final is not None:
-        raise RequestValidationError([{"loc": ("query", "final"), "msg": "decision and final are mutually exclusive", "type": "value_error"}])
-    return _service(request, principal).page(key, RowQuery(language=language, status=status, q=q, origin=origin,
-        translation_status=translation_status, decision=decision, final=final, case=case, page=page,
-        retain=tuple(retain)))
+        raise RequestValidationError(
+            [
+                {
+                    "loc": ("query", "final"),
+                    "msg": "decision and final are mutually exclusive",
+                    "type": "value_error",
+                }
+            ]
+        )
+    return _service(request, principal).page(
+        key,
+        RowQuery(
+            language=language,
+            status=status,
+            q=q,
+            origin=origin,
+            translation_status=translation_status,
+            decision=decision,
+            final=final,
+            case=case,
+            page=page,
+            retain=tuple(retain),
+        ),
+    )
 
 
-@router.get("/document-rows/{case_id:path}/{language}/submissions", response_model=RowSubmissions)
-def row_submissions(key: str, case_id: str, language: str, principal: PrincipalDep, request: Request) -> dict[str, Any]:
+@router.get(
+    "/document-rows/{case_id:path}/{language}/submissions",
+    response_model=RowSubmissions,
+)
+def row_submissions(
+    key: str, case_id: str, language: str, principal: PrincipalDep, request: Request
+) -> dict[str, Any]:
     return _service(request, principal).submissions(key, case_id, language)
 ```
 
@@ -2069,12 +2524,25 @@ def test_leads_see_every_submission_as_a_submission_ref_and_others_do_not(case_e
     assert fetched.json()["ref"]["kind"] == "submission"
     for client in (env.alice, env.reviewer):
         assert not any(r["kind"] == "submission" for r in refs(client, SOURCE))
-        assert client.get(path(SOURCE, "annotation-versions/submission/alice-1")).status_code == 404
+        assert (
+            client.get(
+                path(SOURCE, "annotation-versions/submission/alice-1")
+            ).status_code
+            == 404
+        )
     # Non-lead history keeps its own path (review finding 8): the author opens an old
     # submission through the `own` ref, without broadened permissions.
-    assert any(r["kind"] == "own" and r["id"] == "alice-1" for r in refs(env.alice, SOURCE))
-    assert env.alice.get(path(SOURCE, "annotation-versions/own/alice-1")).status_code == 200
-    assert env.reviewer.get(path(SOURCE, "annotation-versions/own/alice-1")).status_code == 404
+    assert any(
+        r["kind"] == "own" and r["id"] == "alice-1" for r in refs(env.alice, SOURCE)
+    )
+    assert (
+        env.alice.get(path(SOURCE, "annotation-versions/own/alice-1")).status_code
+        == 200
+    )
+    assert (
+        env.reviewer.get(path(SOURCE, "annotation-versions/own/alice-1")).status_code
+        == 404
+    )
 ```
 
 - [ ] **Step 2: Run** `uv run pytest tests/test_annotation_versions.py -k submission_ref -q`; Expected FAIL.

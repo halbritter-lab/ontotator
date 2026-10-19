@@ -53,7 +53,7 @@ const baseView = (): WorkspaceView => ({
   available_inputs: [],
   submissions: [],
   term_statuses: {},
-  allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
+  require_chosen_axes: false, annotation_policy_revision: 1, allow_spanless_findings: true, require_spanless_note: true, enforce_spanless_rules: false, axes_definition: "editor-axes/v1",
   axes_config: [{ id: "assertion", label: "Assertion", options: ["present", "absent", "uncertain"], allow_empty: true }],
   axes_config_sha256: "sha-axes",
   draft: { key, targets: { target_set_id: "empty", targets: [] }, revision: 0, annotations: [], evidence: [], decisions: [], checked_layer_ids: [] },
@@ -440,7 +440,7 @@ describe("Review cases", () => {
     render(<CaseScreen view={reviewView([confirmed], [own], own.evidence)} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
-    expect(dialog.textContent).toMatch(/2 annotation\(s\) will be submitted \(1 confirmed proposal\(s\), 0 unresolved with reviewer flags, 1 curated\)/);
+    expect(dialog.textContent).toMatch(/2 annotation\(s\) will be submitted \(1 confirmed proposal\(s\), 0 unresolved with reviewer flags, 1 saved findings\)/);
   });
 
   it("offers the next case including zero proposals after submitting a review", async () => {

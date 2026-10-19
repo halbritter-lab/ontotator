@@ -24,7 +24,7 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await expect(page.getByRole("checkbox", { name: "Visibility for Hidden findings" })).toBeChecked();
   await expect(page.getByLabel("Proposal details")).toBeFocused();
   await expect(page.getByLabel("Proposal details").getByText("Defaulted", { exact: true })).toBeVisible();
-  await expect(page.getByText(/To confirm or change defaulted values/)).toBeVisible();
+  await expect(page.getByText(/This proposal is immutable/)).toBeVisible();
   await page.getByRole("button", { name: /Edit & Replace/i }).click();
   await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
   await page.getByRole("button", { name: "Confirm Assertion value" }).click();
@@ -41,8 +41,12 @@ test("repeated outcome keys keep decisions and zero resets without losing the no
   await page.getByRole("textbox", { name: "Reviewer note" }).fill("Initial reviewer note");
   await page.locator(".review-actions__title").click();
   for (const [key, label] of [["1", "Confirmed"], ["2", "Rejected"], ["4", "Unresolved"]]) {
-    await page.keyboard.press(key); await expect(proposal).toContainText(label);
-    await page.keyboard.press(key); await expect(proposal).toContainText(label);
+    for (let repeat = 0; repeat < 2; repeat++) {
+      await page.locator(".review-actions__title").click();
+      await page.keyboard.press(key);
+      if (key === "4") await page.getByRole("button", { name: "Save decision", exact: true }).click();
+      await expect(proposal).toContainText(label);
+    }
   }
   const note = page.getByRole("textbox", { name: "Reviewer note" });
   await note.fill("Preserve this note");
@@ -75,7 +79,9 @@ test("unresolved notes are required, survive reload and block submission when lo
   await page.locator(".review-actions__title").click(); await page.keyboard.press("4");
   await expect(note).toBeFocused(); await expect(proposals.first()).toContainText("open");
   await note.fill("Needs specialist review"); await page.locator(".review-actions__title").click();
-  await page.keyboard.press("4"); await expect(proposals.first()).toContainText("Unresolved");
+  await page.keyboard.press("4");
+  await page.getByRole("button", { name: "Save decision", exact: true }).click();
+  await expect(proposals.first()).toContainText("Unresolved");
   await proposals.nth(1).click(); await page.keyboard.press("1");
   await expect(proposals.nth(1)).toContainText("Confirmed");
   await proposals.first().click(); await note.fill("  "); await proposals.nth(1).click();
@@ -99,7 +105,7 @@ test("unresolved notes are required, survive reload and block submission when lo
   expect(bypass.status()).toBe(422); expect((await bypass.json()).code).toBe("REVIEW_NOTE_REQUIRED");
   await page.reload(); await proposals.first().click();
   await expect(note).toHaveValue("Corrected reviewer reason"); await expect(proposals.first()).toContainText("Unresolved");
-  const submitted = page.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST");
+  const submitted = page.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST" && r.ok());
   await submitCase(page);
   const submission = await (await submitted).json();
   expect(submission.decisions.find((d: { outcome: string }) => d.outcome === "uncertain").note).toBe("Corrected reviewer reason");
@@ -167,6 +173,7 @@ test("new-draft spanless findings require a reason, retain it through search and
   await page.getByLabel(/Search ontology term/).fill("Hypotonia");
   const savedResponse = page.waitForResponse(r => r.url().endsWith("/commands") && r.request().method() === "POST" && r.request().postDataJSON().payload.command === "create_annotation");
   await candidate.click();
+  await page.getByRole("button", { name: "Add annotation", exact: true }).click();
   const saved = await (await savedResponse).json();
   expect(saved.annotations[0].annotation.note).toBe("Finding recorded in the clinical summary");
   await expect(page.locator(".status-badge")).toHaveText("Saved");
@@ -280,7 +287,7 @@ test("repairing a historical spanless proposal collects a clinical reason withou
   await expect(proposals.first()).toContainText("Replaced");
   await expect(page.getByLabel("Annotation note")).toHaveValue("Specialist summary supports this finding");
   await proposals.nth(1).click(); await page.keyboard.press("2"); await expect(proposals.nth(1)).toContainText("Rejected");
-  const submitted = page.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST");
+  const submitted = page.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST" && r.ok());
   await submitCase(page);
   const submission = await (await submitted).json();
   expect(submission.snapshots).toHaveLength(1);
@@ -386,7 +393,7 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
     const optionalAgain = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true, require_spanless_note: false });
     expect(optionalAgain.ok()).toBeTruthy();
     await annotator.reload();
-    const submittedResponse = annotator.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST");
+    const submittedResponse = annotator.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST" && r.ok());
     await submitCase(annotator);
     const submitted = await (await submittedResponse).json(); expect(submitted.snapshots).toHaveLength(1);
     expect(submitted.snapshots[0].annotation.note).toBeUndefined(); expect(submitted.snapshots[0].annotation.evidence_refs).toEqual([]);

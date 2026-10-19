@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from auth_harness import HARNESS
 from sqlalchemy import event as sql_event
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from test_admin_write_authority import _wait_for_database_lock
 from test_visibility import PROJECT, _envelope, _open
 from test_visibility import assigned as assigned
@@ -18,7 +18,7 @@ from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
 from ontocurator.packages.models import SearchEventRecord
 from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import EditEventRow, MutationReceiptRow
+from ontocurator.storage.tables import AssignmentRow, EditEventRow, MutationReceiptRow
 
 
 def _context(assigned, operation):
@@ -191,6 +191,21 @@ def test_provenance_on_submitted_work_stays_read_only_without_status_events(assi
             ).scalar_one()
             == 2
         )
+
+
+@pytest.mark.parametrize("operation", ["save", "append"])
+def test_held_task_cannot_add_search_provenance(assigned, operation):
+    app, _repo, assignment, walk, write = _context(assigned, operation)
+    with app.state.repo.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == assignment.id)
+            .values(held=True, hold_reason="Await lead clarification")
+        )
+    with pytest.raises(DomainError, match="TASK_HELD"):
+        write()
+    stored = app.state.repo.get_search_event(walk.event_id, PROJECT)
+    assert stored is None if operation == "save" else stored == walk
 
 
 def test_visible_workspace_key_cannot_authorize_unrelated_event(assigned):

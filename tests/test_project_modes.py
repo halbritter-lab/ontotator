@@ -169,7 +169,12 @@ def test_review_never_shows_other_members_work(app: Any) -> None:
             "layer_id": "hpo-layer",
             "type_id": "phenotype",
             "term_id": "HP:0001250",
-            "axes": {"assertion": "present"},
+            "axes": {
+                "assertion": "present",
+                "experiencer": "patient",
+                "temporality": "current",
+            },
+            "chosen_axis_ids": ["assertion", "experiencer", "temporality"],
             "evidence_id": "ev-alice-1",
             "segments": [{"start": 0, "end": 5}],
         },

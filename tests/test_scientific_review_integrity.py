@@ -78,11 +78,20 @@ def changed_review(ctx):
     return opened.key, ref, replacement
 
 
-def submit(ctx, ws_key, revision):
+def submit(ctx, ws_key, revision, *, warning_acknowledgement=None):
     return ctx["sub_svc"].submit(
         ws_key,
         mutation(
-            revision, {"document_checked": True, "checked_layer_ids": ["hpo-layer"]}
+            revision,
+            {
+                "document_checked": True,
+                "checked_layer_ids": ["hpo-layer"],
+                **(
+                    {"warning_acknowledgement": warning_acknowledgement}
+                    if warning_acknowledgement is not None
+                    else {}
+                ),
+            },
         ),
     )
 
@@ -177,8 +186,17 @@ def test_decision_switch_discards_adopted_copy_but_keeps_authored_finding(tmp_pa
         ws_key, mutation(3, {"target": ref.model_dump(), "outcome": "rejected"})
     )
     assert [a.annotation.annotation_id for a in draft.annotations] == ["additional"]
-    result = submit(ctx, ws_key, 4)
+    with pytest.raises(DomainError, match="AXIS_CONFIRMATION_WARNING") as warning:
+        submit(ctx, ws_key, 4)
+    assert {item["annotation_id"] for item in warning.value.details["warnings"]} == {
+        "additional"
+    }
+    assert ctx["repo"].open_draft(ws_key).revision == 4
+    result = submit(
+        ctx, ws_key, 4, warning_acknowledgement=warning.value.details["acknowledgement"]
+    )
     assert [a.annotation.annotation_id for a in result.snapshots] == ["additional"]
+    assert result.snapshots[0].annotation.axes_values == {}
 
 
 def test_decision_switch_preserves_independent_unattached_evidence(tmp_path):

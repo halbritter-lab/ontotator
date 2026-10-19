@@ -11,8 +11,8 @@ const progress: ProjectProgress = {
   ],
   documents: [
     { document_id: "z-special +/#ß", language: "de", position: 23, assignees: [
-      { assignment_id: 1, username: "first", pseudonym: "Reader A", task: "annotate", status: "submitted" },
-      { assignment_id: 2, username: "second", pseudonym: "Reader B", task: "review", status: "open" },
+      { assignment_id: 1, workflow_revision: 0, held: false, username: "first", pseudonym: "Reader A", task: "annotate", status: "submitted" },
+      { assignment_id: 2, workflow_revision: 0, held: false, username: "second", pseudonym: "Reader B", task: "review", status: "open" },
     ] },
     { document_id: "a-unassigned", language: "en", position: null, assignees: [] },
   ],

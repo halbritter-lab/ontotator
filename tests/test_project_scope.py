@@ -113,6 +113,12 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     ),
     "project_pins": lambda r: r.project_pins("B"),
     "t1_export_content": lambda r: r.t1_export_content("B"),
+    "t1_export_content_exact": lambda r: r.t1_export_content_exact("B", []),
+    "workspace_input_snapshots": lambda r: r.workspace_input_snapshots(_key("B")),
+    "get_work_round": lambda r: r.get_work_round("B", "r"),
+    "get_round_for_submission": lambda r: r.get_round_for_submission("B", "s"),
+    "get_round_input_inventory": lambda r: r.get_round_input_inventory("B", "r"),
+    "list_workflow_causes": lambda r: r.list_workflow_causes("B"),
     "edit_log": lambda r: r.edit_log("B"),
     "add_documents_and_proposals": lambda r: r.add_documents_and_proposals(
         "B", [], [], source_sha256="0" * 64

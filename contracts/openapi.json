@@ -477,6 +477,506 @@
         }
       }
     },
+    "/api/v1/assignments/{assignment_id}/rounds": {
+      "post": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "Create Round",
+        "operationId": "create_round_api_v1_assignments__assignment_id__rounds_post",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoundRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkRoundView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "List Rounds",
+        "operationId": "list_rounds_api_v1_assignments__assignment_id__rounds_get",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkRoundView"
+                  },
+                  "title": "Response List Rounds Api V1 Assignments  Assignment Id  Rounds Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rounds/{round_id}/open": {
+      "post": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "Open Round",
+        "operationId": "open_round_api_v1_rounds__round_id__open_post",
+        "parameters": [
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Round Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rounds/{round_id}/inputs": {
+      "get": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "Round Inputs",
+        "operationId": "round_inputs_api_v1_rounds__round_id__inputs_get",
+        "parameters": [
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Round Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoundInputView"
+                  },
+                  "title": "Response Round Inputs Api V1 Rounds  Round Id  Inputs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/round-input-resolutions": {
+      "post": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "Resolve Input",
+        "operationId": "resolve_input_api_v1_workspaces__workspace_id__round_input_resolutions_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assignments/{assignment_id}/round-sources": {
+      "get": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "Round Sources",
+        "operationId": "round_sources_api_v1_assignments__assignment_id__round_sources_get",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoundSourceView"
+                  },
+                  "title": "Response Round Sources Api V1 Assignments  Assignment Id  Round Sources Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/merge-inputs": {
+      "post": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "Merge Inputs",
+        "operationId": "merge_inputs_api_v1_workspaces__workspace_id__merge_inputs_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assignments/{assignment_id}/problem-reports": {
+      "post": {
+        "tags": [
+          "problem-reports"
+        ],
+        "summary": "Report",
+        "operationId": "report_api_v1_assignments__assignment_id__problem_reports_post",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProblemReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemReportView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/problem-reports": {
+      "get": {
+        "tags": [
+          "problem-reports"
+        ],
+        "summary": "Reports",
+        "operationId": "reports_api_v1_projects__key__problem_reports_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProblemReportView"
+                  },
+                  "title": "Response Reports Api V1 Projects  Key  Problem Reports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/problem-reports/{report_id}/actions": {
+      "post": {
+        "tags": [
+          "problem-reports"
+        ],
+        "summary": "Action",
+        "operationId": "action_api_v1_problem_reports__report_id__actions_post",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProblemActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemReportView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/translation-reviews/{assignment_id}": {
       "get": {
         "tags": [
@@ -661,6 +1161,121 @@
                     "$ref": "#/components/schemas/TranslationReviewRecord"
                   },
                   "title": "Response Review Records Api V1 Projects  Key  Documents  Doc  Translation Reviews Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/{doc}/submissions/{submission_id}": {
+      "get": {
+        "tags": [
+          "submission-history"
+        ],
+        "summary": "Get Submission History",
+        "operationId": "get_submission_history_api_v1_projects__key__documents__doc__submissions__submission_id__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionHistoryDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/{doc}/submissions": {
+      "get": {
+        "tags": [
+          "submission-history"
+        ],
+        "summary": "List Submission History",
+        "operationId": "list_submission_history_api_v1_projects__key__documents__doc__submissions_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubmissionHistorySummary"
+                  },
+                  "title": "Response List Submission History Api V1 Projects  Key  Documents  Doc  Submissions Get"
                 }
               }
             }
@@ -1388,6 +2003,366 @@
                   },
                   "type": "array",
                   "title": "Response Upload Ontology Results Api V1 Admin Ontologies Upload Results Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/final-selections": {
+      "put": {
+        "tags": [
+          "final-results"
+        ],
+        "summary": "Select Final",
+        "operationId": "select_final_api_v1_projects__key__final_selections_put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalSelectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalSelectionView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/exports/final/preflight": {
+      "post": {
+        "tags": [
+          "final-results"
+        ],
+        "summary": "Final Preflight",
+        "operationId": "final_preflight_api_v1_projects__key__exports_final_preflight_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalPreflight"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/workflow-warnings": {
+      "get": {
+        "tags": [
+          "final-results"
+        ],
+        "summary": "Final Preflight",
+        "operationId": "final_preflight_api_v1_projects__key__workflow_warnings_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalPreflight"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/exports/final": {
+      "post": {
+        "tags": [
+          "final-results"
+        ],
+        "summary": "Final Export",
+        "operationId": "final_export_api_v1_projects__key__exports_final_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalExportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Final Export Api V1 Projects  Key  Exports Final Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/{doc}/translation-correction-assignment": {
+      "post": {
+        "tags": [
+          "translation-workflow"
+        ],
+        "summary": "Assign Correction",
+        "operationId": "assign_correction_api_v1_projects__key__documents__doc__translation_correction_assignment_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionAssignmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/translation-reviews/{assignment_id}/source-obligations": {
+      "get": {
+        "tags": [
+          "translation-workflow"
+        ],
+        "summary": "Obligations",
+        "operationId": "obligations_api_v1_translation_reviews__assignment_id__source_obligations_get",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceObligationView"
+                  },
+                  "title": "Response Obligations Api V1 Translation Reviews  Assignment Id  Source Obligations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/translation-reviews/{assignment_id}/source-obligations/{cause_id}/resolve": {
+      "post": {
+        "tags": [
+          "translation-workflow"
+        ],
+        "summary": "Resolve",
+        "operationId": "resolve_api_v1_translation_reviews__assignment_id__source_obligations__cause_id__resolve_post",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          },
+          {
+            "name": "cause_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cause Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveSourceObligationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranslationReviewRecord"
                 }
               }
             }
@@ -2675,7 +3650,8 @@
                     "open",
                     "in_progress",
                     "submitted",
-                    "reopened"
+                    "reopened",
+                    "held"
                   ],
                   "type": "string"
                 },
@@ -3824,6 +4800,38 @@
               "reopened"
             ],
             "title": "Status"
+          },
+          "active_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Round Id"
+          },
+          "workflow_revision": {
+            "type": "integer",
+            "title": "Workflow Revision",
+            "default": 0
+          },
+          "held": {
+            "type": "boolean",
+            "title": "Held",
+            "default": false
+          },
+          "hold_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Reason"
           }
         },
         "type": "object",
@@ -3924,6 +4932,38 @@
               }
             ],
             "title": "External Id"
+          },
+          "active_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Round Id"
+          },
+          "workflow_revision": {
+            "type": "integer",
+            "title": "Workflow Revision",
+            "default": 0
+          },
+          "held": {
+            "type": "boolean",
+            "title": "Held",
+            "default": false
+          },
+          "hold_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Reason"
           }
         },
         "type": "object",
@@ -4099,6 +5139,38 @@
               }
             ],
             "title": "External Id"
+          },
+          "active_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Round Id"
+          },
+          "workflow_revision": {
+            "type": "integer",
+            "title": "Workflow Revision",
+            "default": 0
+          },
+          "held": {
+            "type": "boolean",
+            "title": "Held",
+            "default": false
+          },
+          "hold_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Reason"
           }
         },
         "type": "object",
@@ -4328,6 +5400,37 @@
         ],
         "title": "CommitUpload"
       },
+      "CorrectionAssignmentRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "expected_text_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Expected Text Sha256"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "confirm_language": {
+            "type": "boolean",
+            "title": "Confirm Language",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "expected_text_sha256",
+          "reason"
+        ],
+        "title": "CorrectionAssignmentRequest"
+      },
       "CreateProjectRequest": {
         "properties": {
           "key": {
@@ -4393,6 +5496,57 @@
           "pins"
         ],
         "title": "CreateProjectRequest"
+      },
+      "CreateRoundRequest": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "expected_workflow_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Workflow Revision"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ordinary",
+              "carry_forward",
+              "clean_restart",
+              "consolidation"
+            ],
+            "title": "Kind",
+            "default": "ordinary"
+          },
+          "source_submission_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Submission Ids"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "expected_workflow_revision"
+        ],
+        "title": "CreateRoundRequest"
       },
       "CreateUserRequest": {
         "properties": {
@@ -4638,6 +5792,13 @@
             },
             "type": "array",
             "title": "Reanchor Resolutions"
+          },
+          "round_input_resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/RoundInputResolution"
+            },
+            "type": "array",
+            "title": "Round Input Resolutions"
           },
           "checked_layer_ids": {
             "items": {
@@ -4903,6 +6064,234 @@
           "kind"
         ],
         "title": "ExportRequest"
+      },
+      "FinalExportRequest": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "state_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "State Digest"
+          },
+          "acknowledged_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/WarningAcknowledgement"
+            },
+            "type": "array",
+            "title": "Acknowledged Warnings"
+          },
+          "accepted_omissions": {
+            "items": {
+              "$ref": "#/components/schemas/FinalOmission"
+            },
+            "type": "array",
+            "title": "Accepted Omissions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "state_digest",
+          "acknowledged_warnings",
+          "accepted_omissions"
+        ],
+        "title": "FinalExportRequest"
+      },
+      "FinalOmission": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language"
+        ],
+        "title": "FinalOmission"
+      },
+      "FinalPreflight": {
+        "properties": {
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "selections": {
+            "items": {
+              "$ref": "#/components/schemas/FinalSelectionView"
+            },
+            "type": "array",
+            "title": "Selections"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/FinalWarning"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "omissions": {
+            "items": {
+              "$ref": "#/components/schemas/FinalOmission"
+            },
+            "type": "array",
+            "title": "Omissions"
+          },
+          "state_digest": {
+            "type": "string",
+            "title": "State Digest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project",
+          "selections",
+          "warnings",
+          "omissions",
+          "state_digest"
+        ],
+        "title": "FinalPreflight"
+      },
+      "FinalSelectionRequest": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "acknowledged_cause_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Acknowledged Cause Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "submission_id",
+          "expected_revision"
+        ],
+        "title": "FinalSelectionRequest"
+      },
+      "FinalSelectionView": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "document_id",
+          "submission_id",
+          "revision"
+        ],
+        "title": "FinalSelectionView"
+      },
+      "FinalWarning": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "cause_revision": {
+            "type": "integer",
+            "title": "Cause Revision"
+          },
+          "cause_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cause Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "destination": {
+            "type": "string",
+            "title": "Destination"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "cause_revision",
+          "case_id",
+          "language",
+          "reason",
+          "destination"
+        ],
+        "title": "FinalWarning"
       },
       "HTTPValidationError": {
         "properties": {
@@ -5393,6 +6782,31 @@
           "roles"
         ],
         "title": "MemberChange"
+      },
+      "MultilingualSearchPreferences": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "preferred_languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Preferred Languages"
+          },
+          "automatic_document_language": {
+            "type": "boolean",
+            "title": "Automatic Document Language",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MultilingualSearchPreferences",
+        "description": "Personal defaults; temporary editor switches never change these."
       },
       "MutationEnvelope": {
         "properties": {
@@ -6096,6 +7510,16 @@
       },
       "Preferences": {
         "properties": {
+          "multilingual_search": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MultilingualSearchPreferences"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "last_annotator_id": {
             "anyOf": [
               {
@@ -6136,6 +7560,16 @@
       },
       "PreferencesUpdate": {
         "properties": {
+          "multilingual_search": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MultilingualSearchPreferences"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "last_annotator_id": {
             "anyOf": [
               {
@@ -6188,6 +7622,216 @@
         "type": "object",
         "title": "PreferencesUpdate",
         "description": "Partial update: omitted fields are kept, modes are merged per package."
+      },
+      "ProblemActionRequest": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "resume",
+              "resolve",
+              "extend_hold",
+              "restart"
+            ],
+            "title": "Action"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "assignment_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Assignment Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "expected_revision",
+          "action",
+          "reason"
+        ],
+        "title": "ProblemActionRequest"
+      },
+      "ProblemReportRequest": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "expected_workflow_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Workflow Revision"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "expected_workflow_revision",
+          "reason"
+        ],
+        "title": "ProblemReportRequest"
+      },
+      "ProblemReportView": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          },
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "reporter_id": {
+            "type": "integer",
+            "title": "Reporter Id"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved"
+            ],
+            "title": "State"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "held_assignment_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Held Assignment Ids"
+          },
+          "events": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "new_round": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkRoundView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "report_id",
+          "project_key",
+          "assignment_id",
+          "document_id",
+          "reporter_id",
+          "round_id",
+          "submission_id",
+          "reason",
+          "state",
+          "revision",
+          "resolution"
+        ],
+        "title": "ProblemReportView"
       },
       "Profile": {
         "properties": {
@@ -6721,6 +8365,19 @@
             "type": "object",
             "title": "Hidden Axis Values"
           },
+          "creation_defaults": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Creation Defaults"
+          },
           "project_key": {
             "type": "string",
             "title": "Project Key"
@@ -6748,6 +8405,11 @@
             },
             "type": "object",
             "title": "Axis Defaults"
+          },
+          "annotation_policy_revision": {
+            "type": "integer",
+            "title": "Annotation Policy Revision",
+            "default": 1
           }
         },
         "additionalProperties": false,
@@ -6850,6 +8512,19 @@
             },
             "type": "object",
             "title": "Hidden Axis Values"
+          },
+          "creation_defaults": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Creation Defaults"
           }
         },
         "additionalProperties": false,
@@ -7440,6 +9115,39 @@
         ],
         "title": "RefusedAssignment"
       },
+      "ResolveSourceObligationRequest": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "translation_text_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Translation Text Sha256"
+          },
+          "old_source_text_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Old Source Text Sha256"
+          },
+          "new_source_text_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "New Source Text Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "translation_text_sha256",
+          "old_source_text_sha256",
+          "new_source_text_sha256"
+        ],
+        "title": "ResolveSourceObligationRequest"
+      },
       "ReviewDecision": {
         "properties": {
           "decision_id": {
@@ -7681,6 +9389,141 @@
           "submitted_record"
         ],
         "title": "ReviewWorkspace"
+      },
+      "RoundInputResolution": {
+        "properties": {
+          "input_id": {
+            "type": "string",
+            "title": "Input Id"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "dismissed"
+            ],
+            "title": "Outcome"
+          },
+          "annotation_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnnotationRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_id",
+          "outcome"
+        ],
+        "title": "RoundInputResolution"
+      },
+      "RoundInputView": {
+        "properties": {
+          "input_id": {
+            "type": "string",
+            "title": "Input Id"
+          },
+          "source_submission_id": {
+            "type": "string",
+            "title": "Source Submission Id"
+          },
+          "source_ref": {
+            "$ref": "#/components/schemas/AnnotationRef"
+          },
+          "source_snapshot": {
+            "$ref": "#/components/schemas/AnnotationSnapshot"
+          },
+          "target_snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnnotationSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mapping_status": {
+            "type": "string",
+            "enum": [
+              "carried",
+              "needs_review"
+            ],
+            "title": "Mapping Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_id",
+          "source_submission_id",
+          "source_ref",
+          "source_snapshot",
+          "target_snapshot",
+          "mapping_status"
+        ],
+        "title": "RoundInputView"
+      },
+      "RoundSourceView": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "document_id",
+          "language",
+          "version",
+          "created_at"
+        ],
+        "title": "RoundSourceView"
       },
       "RuleViolation": {
         "properties": {
@@ -8115,6 +9958,91 @@
         "title": "Segment",
         "description": "Zero-based Unicode codepoint interval [start, end)."
       },
+      "SourceObligationView": {
+        "properties": {
+          "cause_id": {
+            "type": "string",
+            "title": "Cause Id"
+          },
+          "cause_revision": {
+            "type": "integer",
+            "title": "Cause Revision",
+            "default": 1
+          },
+          "code": {
+            "type": "string",
+            "const": "SOURCE_UPDATE_UNREVIEWED",
+            "title": "Code",
+            "default": "SOURCE_UPDATE_UNREVIEWED"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "old_source_document_id": {
+            "type": "string",
+            "title": "Old Source Document Id"
+          },
+          "new_source_document_id": {
+            "type": "string",
+            "title": "New Source Document Id"
+          },
+          "translation_text_sha256": {
+            "type": "string",
+            "title": "Translation Text Sha256"
+          },
+          "old_source_text_sha256": {
+            "type": "string",
+            "title": "Old Source Text Sha256"
+          },
+          "new_source_text_sha256": {
+            "type": "string",
+            "title": "New Source Text Sha256"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "destination": {
+            "type": "string",
+            "title": "Destination"
+          },
+          "old_source_text": {
+            "type": "string",
+            "title": "Old Source Text"
+          },
+          "new_source_text": {
+            "type": "string",
+            "title": "New Source Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cause_id",
+          "case_id",
+          "language",
+          "document_id",
+          "old_source_document_id",
+          "new_source_document_id",
+          "translation_text_sha256",
+          "old_source_text_sha256",
+          "new_source_text_sha256",
+          "reason",
+          "destination",
+          "old_source_text",
+          "new_source_text"
+        ],
+        "title": "SourceObligationView"
+      },
       "StatusOverride": {
         "properties": {
           "external_id": {
@@ -8151,6 +10079,17 @@
             "type": "string",
             "title": "Format Version",
             "default": "ontocurator-submission/v2"
+          },
+          "input_manifest_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Manifest Sha256"
           },
           "submission_id": {
             "type": "string",
@@ -8204,6 +10143,13 @@
             "type": "array",
             "title": "Reanchor Resolutions"
           },
+          "round_input_resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/RoundInputResolution"
+            },
+            "type": "array",
+            "title": "Round Input Resolutions"
+          },
           "checked_layer_ids": {
             "items": {
               "type": "string"
@@ -8234,6 +10180,87 @@
         ],
         "title": "Submission",
         "description": "Immutable local submission record."
+      },
+      "SubmissionHistoryDetail": {
+        "properties": {
+          "summary": {
+            "$ref": "#/components/schemas/SubmissionHistorySummary"
+          },
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationSnapshot"
+            },
+            "type": "array",
+            "title": "Annotations"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSnapshot"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "summary",
+          "annotations",
+          "evidence",
+          "decisions"
+        ],
+        "title": "SubmissionHistoryDetail"
+      },
+      "SubmissionHistorySummary": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "author_label": {
+            "type": "string",
+            "title": "Author Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "document_id",
+          "author_label",
+          "created_at",
+          "mode"
+        ],
+        "title": "SubmissionHistorySummary"
       },
       "SubmitRequest": {
         "properties": {
@@ -8405,6 +10432,38 @@
               }
             ],
             "title": "External Id"
+          },
+          "active_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Round Id"
+          },
+          "workflow_revision": {
+            "type": "integer",
+            "title": "Workflow Revision",
+            "default": 0
+          },
+          "held": {
+            "type": "boolean",
+            "title": "Held",
+            "default": false
+          },
+          "hold_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Reason"
           },
           "source_language": {
             "anyOf": [
@@ -9677,6 +11736,25 @@
         ],
         "title": "VersionRef"
       },
+      "WarningAcknowledgement": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cause_revision": {
+            "type": "integer",
+            "title": "Cause Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "cause_revision"
+        ],
+        "title": "WarningAcknowledgement"
+      },
       "WindowOpcodeView": {
         "properties": {
           "op": {
@@ -9731,6 +11809,133 @@
         ],
         "title": "WindowOpcodeView"
       },
+      "WorkRoundView": {
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "title": "Round Id"
+          },
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "annotator_id": {
+            "type": "string",
+            "title": "Annotator Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ordinary",
+              "carry_forward",
+              "clean_restart",
+              "consolidation"
+            ],
+            "title": "Kind"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "independent",
+                  "review",
+                  "assisted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "editable",
+              "submitted",
+              "superseded",
+              "abandoned"
+            ],
+            "title": "State"
+          },
+          "workflow_revision": {
+            "type": "integer",
+            "title": "Workflow Revision"
+          },
+          "latest_submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Submission Id"
+          },
+          "predecessor_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor Round Id"
+          },
+          "input_manifest_sha256": {
+            "type": "string",
+            "title": "Input Manifest Sha256"
+          },
+          "input_submission_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Input Submission Ids"
+          },
+          "workspace_key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "round_id",
+          "project_key",
+          "assignment_id",
+          "document_id",
+          "annotator_id",
+          "kind",
+          "mode",
+          "state",
+          "workflow_revision",
+          "input_manifest_sha256",
+          "active"
+        ],
+        "title": "WorkRoundView"
+      },
       "WorkspaceKey": {
         "properties": {
           "project_key": {
@@ -9762,6 +11967,30 @@
           "target_set_id": {
             "type": "string",
             "title": "Target Set Id"
+          },
+          "format_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "ontocurator-workspace-key/v3"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format Version"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
           }
         },
         "additionalProperties": false,
@@ -9868,6 +12097,29 @@
             "type": "boolean",
             "title": "Require Spanless Note",
             "default": true
+          },
+          "require_chosen_axes": {
+            "type": "boolean",
+            "title": "Require Chosen Axes",
+            "default": false
+          },
+          "creation_defaults": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Creation Defaults"
+          },
+          "annotation_policy_revision": {
+            "type": "integer",
+            "title": "Annotation Policy Revision",
+            "default": 1
           },
           "axes_definition": {
             "type": "string",

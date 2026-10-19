@@ -85,6 +85,10 @@ class Assignment:
     revoked_at: datetime | None
     last_submission_id: str | None
     external_id: str | None = None
+    active_round_id: str | None = None
+    workflow_revision: int = 0
+    held: bool = False
+    hold_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -98,6 +102,10 @@ class TaskSummary:
     status: AssignmentStatus
     updated_at: datetime
     external_id: str | None = None
+    active_round_id: str | None = None
+    workflow_revision: int = 0
+    held: bool = False
+    hold_reason: str | None = None
     source_language: str | None = None
     target_language: str | None = None
 
@@ -117,6 +125,10 @@ def _assignments() -> Select[tuple[object, ...]]:
             AssignmentRow.updated_at,
             AssignmentRow.revoked_at,
             AssignmentRow.last_submission_id,
+            AssignmentRow.active_round_id,
+            AssignmentRow.workflow_revision,
+            AssignmentRow.held,
+            AssignmentRow.hold_reason,
             DocumentRow.external_id,
         )
         .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
@@ -203,8 +215,10 @@ class AssignmentService:
                 .with_for_update(key_share=True)
             )
             .mappings()
-            .one()
+            .one_or_none()
         )
+        if row is None:
+            raise DomainError("ASSIGNMENT_NOT_FOUND")
         if row["revoked_at"] is not None:
             raise DomainError("ASSIGNMENT_REVOKED")
         return row
@@ -286,6 +300,7 @@ class AssignmentService:
         *,
         excluding: int | None = None,
         variants: Mapping[str, VariantInfo] | None = None,
+        allow_accepted_translation_review: bool = False,
     ) -> tuple[str, list[str], bool, list[str]]:
         AssignmentService._require_target(conn, project, target, task)
         if variants is None:
@@ -293,7 +308,13 @@ class AssignmentService:
         variant = variants.get(document_id)
         if variant is None:
             raise DomainError("DOCUMENT_NOT_FOUND")
-        required = check_variant_assignable(project, variant, task, variants.get)
+        required = check_variant_assignable(
+            project,
+            variant,
+            task,
+            variants.get,
+            allow_accepted_translation_review=allow_accepted_translation_review,
+        )
         language = variant.language
         languages = list(
             conn.execute(
@@ -510,6 +531,19 @@ class AssignmentService:
                 .where(AssignmentRow.id == assignment_id)
                 .values(status="reopened", updated_at=now)
             )
+            if old["active_round_id"] is not None:
+                from ontocurator.storage.workflow_tables import WorkRoundStateRow
+
+                conn.execute(
+                    update(WorkRoundStateRow)
+                    .where(WorkRoundStateRow.round_id == old["active_round_id"])
+                    .values(state="editable", revision=WorkRoundStateRow.revision + 1)
+                )
+                conn.execute(
+                    update(AssignmentRow)
+                    .where(AssignmentRow.id == assignment_id)
+                    .values(workflow_revision=AssignmentRow.workflow_revision + 1)
+                )
             record_audit(
                 conn,
                 actor,
@@ -573,6 +607,10 @@ class AssignmentService:
         query = (
             select(
                 AssignmentRow.id.label("assignment_id"),
+                AssignmentRow.active_round_id,
+                AssignmentRow.workflow_revision,
+                AssignmentRow.held,
+                AssignmentRow.hold_reason,
                 ProjectRow.project_key,
                 ProjectRow.name.label("project_name"),
                 AssignmentRow.document_id,

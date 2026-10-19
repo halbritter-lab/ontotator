@@ -166,7 +166,16 @@ def test_any_revision_can_be_reconstructed(app: Any, alice: Any) -> None:
 
 def test_a_submission_references_its_last_event(app: Any, alice: Any) -> None:
     ws_id = _open(alice)
-    assert _send(alice, ws_id, "m0", 0, _create("a1", 30, 44)).status_code == 200
+    creation = {
+        **_create("a1", 30, 44),
+        "axes": {
+            "assertion": "present",
+            "experiencer": "patient",
+            "temporality": "current",
+        },
+        "chosen_axis_ids": ["assertion", "experiencer", "temporality"],
+    }
+    assert _send(alice, ws_id, "m0", 0, creation).status_code == 200
     check = {"command": "check_layer", "layer_id": "hpo-layer", "checked": True}
     assert _send(alice, ws_id, "m1", 1, check).status_code == 200
     submitted = alice.post(

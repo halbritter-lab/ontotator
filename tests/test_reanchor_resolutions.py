@@ -140,50 +140,103 @@ def test_independent_workspace_receives_no_pending_inputs(pending):
     assert response.json()["view"]["pending_reanchor_items"] == []
 
 
-def test_upgrade_preserves_pending_producer_payloads(pending):
-    from alembic import command
-    from pg_harness import owner_engine
-    from sqlalchemy import text
+def test_upgrade_preserves_pending_producer_payloads(pending, tmp_path):
+    from pg_harness import unmigrated_database_url
+    from sqlalchemy import MetaData, Table, create_engine, insert, text
 
-    from ontocurator.storage.schema import alembic_config, upgrade
+    from ontocurator.storage.schema import upgrade
+    from ontocurator.storage.tables import AnnotationSnapshotRow, DocumentRow
 
-    opened(pending)
-    engine = owner_engine(pending.db)
-    with engine.begin() as conn:
-        before = conn.execute(
-            text(
-                "SELECT id, payload::text, pending_items::text FROM ontocurator.proposal_sets ORDER BY id"
-            )
-        ).all()
-        snapshots = conn.execute(
-            text(
-                "SELECT annotation_id, version, payload::text FROM ontocurator.annotation_snapshots ORDER BY annotation_id, version"
-            )
-        ).all()
-        command.downgrade(alembic_config(conn), "0007")
-    upgrade(engine.url, "0008")
-    with engine.begin() as conn:
-        assert (
-            conn.execute(
-                text(
-                    "SELECT id, payload::text, pending_items::text FROM ontocurator.proposal_sets ORDER BY id"
-                )
-            ).all()
-            == before
-        )
-        assert (
-            conn.execute(
-                text(
-                    "SELECT annotation_id, version, payload::text FROM ontocurator.annotation_snapshots ORDER BY annotation_id, version"
-                )
-            ).all()
-            == snapshots
-        )
-        assert conn.execute(
-            text(
-                "SELECT reanchor_inputs, reanchor_resolutions, reanchor_inputs_initialized_at FROM ontocurator.drafts"
-            )
-        ).one() == ([], [], None)
-    # The current application requires the head schema after the 0008 checks.
-    upgrade(engine.url)
     assert len(opened(pending).json()["view"]["draft"]["reanchor_inputs"]) == 2
+    # Seed a genuine old schema with real producer output. The current head has
+    # forward-only migrations and must not be downgraded to manufacture it.
+    proposal_query = text(
+        "SELECT annotation_set_id, payload::text, pending_items::text FROM ontocurator.proposal_sets ORDER BY annotation_set_id"
+    )
+    snapshot_query = text(
+        "SELECT annotation_id, version, payload::text FROM ontocurator.annotation_snapshots ORDER BY annotation_id, version"
+    )
+    with pending.db.transaction() as conn:
+        before = conn.execute(proposal_query).all()
+        snapshots = conn.execute(snapshot_query).all()
+        documents = [dict(row) for row in conn.execute(select(DocumentRow)).mappings()]
+        records = {
+            table.__tablename__: [
+                dict(row) for row in conn.execute(select(table)).mappings()
+            ]
+            for table in (ProposalSetRow, AnnotationSnapshotRow, DraftRow)
+        }
+    url = unmigrated_database_url(tmp_path / "reanchor-before-0008.db")
+    upgrade(url, "0007")
+    engine = create_engine(url)
+    try:
+        metadata = MetaData(schema="ontocurator")
+        tables = {
+            name: Table(name, metadata, autoload_with=engine)
+            for name in ("projects", "documents", *records)
+        }
+        with engine.begin() as conn:
+            pid = conn.execute(
+                insert(tables["projects"])
+                .values(
+                    project_key="migration",
+                    name="migration",
+                    manifest={},
+                    manifest_sha256="m",
+                    task_profile={},
+                    task_profile_sha256="p",
+                )
+                .returning(tables["projects"].c.id)
+            ).scalar_one()
+
+            def copy_row(name, row):
+                table = tables[name]
+                values = {
+                    column.name: row[column.name]
+                    for column in table.c
+                    if column.name in row and column.name != "id"
+                }
+                values["project_id"] = pid
+                for optional in (
+                    "created_by",
+                    "updated_by",
+                    "imported_by",
+                    "job_id",
+                    "source_sha256",
+                ):
+                    if optional in values:
+                        values[optional] = None
+                conn.execute(insert(table).values(**values))
+
+            copied = set()
+            while documents:
+                ready = [
+                    row
+                    for row in documents
+                    if row["derived_from"] is None or row["derived_from"] in copied
+                ]
+                assert ready, "Producer documents must have complete acyclic ancestry"
+                for row in ready:
+                    copy_row("documents", row)
+                    copied.add(row["document_id"])
+                    documents.remove(row)
+            for name, rows in records.items():
+                for row in rows:
+                    copy_row(name, row)
+            assert conn.execute(proposal_query).all() == before
+            assert conn.execute(snapshot_query).all() == snapshots
+        upgrade(url, "0008")
+        with engine.connect() as conn:
+            assert conn.execute(proposal_query).all() == before
+            assert conn.execute(snapshot_query).all() == snapshots
+            assert conn.execute(
+                text(
+                    "SELECT reanchor_inputs, reanchor_resolutions, reanchor_inputs_initialized_at FROM ontocurator.drafts"
+                )
+            ).one() == ([], [], None)
+        upgrade(url)
+        with engine.connect() as conn:
+            assert conn.execute(proposal_query).all() == before
+            assert conn.execute(snapshot_query).all() == snapshots
+    finally:
+        engine.dispose()

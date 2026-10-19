@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import { api, ApiError, type AssignmentOpenRequest, type AssignmentWorkspace, type CurrentUser, type TaskSummary } from "../api/client";
+import { api, ApiError, type AssignmentOpenRequest, type AssignmentView, type AssignmentWorkspace, type CurrentUser, type RoundInputView, type TaskSummary, type WorkRoundView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Dialog, EmptyState, InlineMessage, Select } from "../ui";
 import { CaseScreen } from "../app/CaseScreen";
@@ -8,6 +8,8 @@ import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
 import { NotFound } from "../app/NotFound";
 import { useVersionAccess } from "../variants/useVersionAccess";
 import { TranslationReviewScreen } from "../translation/TranslationReviewScreen";
+import { WorkRoundsDialog } from "./WorkRoundsDialog";
+import { TaskProblemActions } from "./TaskProblemActions";
 
 interface TaskEditorProps {
   assignmentId: number;
@@ -15,16 +17,18 @@ interface TaskEditorProps {
   onNavigate: (route: Route) => void;
   routeLeaveRef: MutableRefObject<RouteLeaveGuard | null>;
   leaveGuardRef: MutableRefObject<((proceed: () => void) => void) | null>;
+  onProjectContext?: (projectKey: string) => void;
 }
 
 export function TaskEditor(props: TaskEditorProps): JSX.Element {
   const identity = JSON.stringify([props.user.username, props.assignmentId]);
-  const [state, setState] = useState<{ identity: string; task?: TaskSummary["task"]; error?: unknown } | null>(null);
+  const [state, setState] = useState<{ identity: string; assignment?: AssignmentView; error?: unknown } | null>(null);
+  const saveBeforeReportRef = useRef<(() => Promise<void>) | null>(null);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true; setState(null);
     api.getAssignmentMetadata(props.assignmentId).then(value => {
-      if (active) setState({ identity, task: value.task });
+      if (active) { setState({ identity, assignment: value }); props.onProjectContext?.(value.project_key); }
     }, error => { if (active) setState({ identity, error }); });
     return () => { active = false; };
   }, [identity, retry]);
@@ -32,7 +36,9 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
   if (state.error) return <section>{state.error instanceof ApiError && state.error.code === "ASSIGNMENT_NOT_FOUND"
     ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={state.error} />}
     <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate({ name: "tasks" })}>Back to my tasks</Button></section>;
-  if (state.task === "translation_review") return <TranslationReviewScreen key={identity} assignmentId={props.assignmentId} username={props.user.username}
+  if (state.assignment?.task === "translation_review") return <TranslationReviewScreen key={identity} assignmentId={props.assignmentId} username={props.user.username}
+    held={state.assignment.held} holdReason={state.assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
+    reportActions={<TaskProblemActions assignment={state.assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={assignment => setState({ identity, assignment })} />}
     onNavigate={props.onNavigate} routeLeaveRef={props.routeLeaveRef} leaveGuardRef={props.leaveGuardRef} />;
   return <AnnotationTaskEditor key={identity} {...props} />;
 }
@@ -50,7 +56,12 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   const generation = useRef(0);
   const taskGeneration = useRef(0);
   const selectedRound = useRef<AssignmentOpenRequest | undefined>();
+  const selectedWorkRound = useRef<string | undefined>();
+  const [roundDialogOpen, setRoundDialogOpen] = useState(false);
+  const [roundInputs, setRoundInputs] = useState<RoundInputView[]>([]);
+  const [roundInfo, setRoundInfo] = useState<WorkRoundView | null>(null);
   const [taskError, setTaskError] = useState<unknown>(null);
+  const saveBeforeReportRef = useRef<(() => Promise<void>) | null>(null);
   const loadTasks = async () => {
     const request = ++taskGeneration.current;
     setTaskError(null);
@@ -61,16 +72,25 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       if (active.current && request === taskGeneration.current) setTaskError(failure);
     }
   };
-  const load = async (selection?: AssignmentOpenRequest) => {
+  const load = async (selection?: AssignmentOpenRequest, workRoundId?: string) => {
     if (!active.current) return;
     const request = ++generation.current;
     const requestedRound = selection ?? selectedRound.current;
+    const requestedWorkRound = workRoundId ?? selectedWorkRound.current;
     setLoading(true); setError(null);
     try {
-      const opened = requestedRound === undefined ? await api.openAssignment(assignmentId) : await api.openAssignment(assignmentId, requestedRound);
+      const opened: AssignmentWorkspace = requestedWorkRound
+        ? await Promise.all([api.openWorkRound(requestedWorkRound), api.getAssignmentMetadata(assignmentId)]).then(([value, assignment]) => ({ ...value, assignment }))
+        : requestedRound === undefined ? await api.openAssignment(assignmentId) : await api.openAssignment(assignmentId, requestedRound);
+      const roundId = opened.view.key.round_id;
+      const [inputs, rounds] = roundId ? await Promise.all([api.listRoundInputs(roundId), api.listWorkRounds(assignmentId)]) : [[], []];
       if (!active.current || request !== generation.current) return;
       selectedRound.current = requestedRound;
-      setWorkspace(opened); setRevision(value => value + 1);
+      selectedWorkRound.current = requestedWorkRound;
+      const info = rounds.find(value => value.round_id === roundId) ?? null;
+      const editableState = info ? info.active && info.state === "editable" : opened.assignment.status !== "submitted";
+      setRoundInputs(inputs); setRoundInfo(info);
+      setWorkspace({ ...opened, read_only: opened.read_only && (!opened.assignment.held || !editableState) }); setRevision(value => value + 1);
     } catch (failure) {
       if (active.current && request === generation.current) setError(failure);
     } finally { if (active.current && request === generation.current) setLoading(false); }
@@ -107,15 +127,27 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   }
   if (!workspace) return <EmptyState title="This task is no longer assigned to you." action={backLink} />;
   const assignment = workspace.assignment;
+  const openRound = async (roundId: string) => {
+    if (routeLeaveRef.current && !await routeLeaveRef.current()) return;
+    selectedWorkRound.current = roundId; setRoundDialogOpen(false);
+    await load(undefined, roundId);
+  };
   const current: TaskSummary = tasks.find(task => task.assignment_id === assignment.id) ?? {
     assignment_id: assignment.id, project_key: assignment.project_key, project_name: assignment.project_key,
     document_id: assignment.document_id, task: assignment.task, status: assignment.status,
     language: workspace.view.document.language, updated_at: assignment.updated_at,
+    workflow_revision: assignment.workflow_revision, held: assignment.held, hold_reason: assignment.hold_reason,
   };
   return <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}
     <CaseErrorBoundary key={`${workspace.workspace_id}:${revision}`} onBackToDashboard={back} backLabel="Back to my tasks" onReload={() => { void load(); }}>
     <CaseScreen view={workspace.view} workspaceId={workspace.workspace_id} annotatorName={user.display_name}
+      taskActions={<><Button size="sm" onClick={() => setRoundDialogOpen(true)}>Work rounds</Button>
+        <TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
+          setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
+        }} /></>}
+      roundInputs={roundInputs} roundKind={roundInfo?.kind}
+      held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
       versionContext={{ username: user.username, assignmentId, onNavigate, canBrowseVersions: versionAccess.allowed }}
       readOnly={workspace.read_only} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef}
       assignmentNavigation={{ tasks, current, onNavigate: id => onNavigate({ name: "task", assignmentId: id }) }}
@@ -124,5 +156,13 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         // CaseScreen owns the successful-submission dialog; retain its mounted state.
         void loadTasks();
       }} />
-  </CaseErrorBoundary></>;
+  </CaseErrorBoundary>
+  {roundDialogOpen && <WorkRoundsDialog assignment={assignment} onClose={() => setRoundDialogOpen(false)} onOpen={openRound}
+    onReload={() => { setRoundDialogOpen(false); void load(); }} onCreate={async request => {
+      if (routeLeaveRef.current && !await routeLeaveRef.current()) return;
+      const created = await api.startWorkRound(assignmentId, request);
+      selectedWorkRound.current = created.round_id; setRoundDialogOpen(false);
+      await load(undefined, created.round_id);
+    }} />}
+  </>;
 }

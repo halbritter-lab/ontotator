@@ -24,9 +24,10 @@ export type Route =
   | { name: "projectNew" }
   | { name: "projectSettings"; key: string }
   | ({ name: "projectDocuments"; key: string } & ProjectDocumentsQuery)
-  | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string }
+  | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string; documents?: ProjectDocumentsQuery }
   | { name: "projectProgress"; key: string }
   | { name: "projectExport"; key: string }
+  | { name: "projectProblemReport"; key: string; reportId: string }
   | { name: "notFound"; hash: string };
 
 export function parseRoute(hash: string): Route {
@@ -57,6 +58,8 @@ export function parseRoute(hash: string): Route {
       const assignmentId = Number(task[1]);
       return Number.isSafeInteger(assignmentId) ? { name: "task", assignmentId } : notFound;
     }
+    const report = /^#\/projects\/([^/]+)\/problem-reports\/([^/]+)$/.exec(path);
+    if (report) return { name: 'projectProblemReport', key: decodeURIComponent(report[1]), reportId: decodeURIComponent(report[2]) };
     const caseRoute = /^#\/projects\/([^/]+)\/cases\/([^/]+)$/.exec(path);
     if (caseRoute) {
       const optional: { variant?: string; annotations?: string } = {};
@@ -64,7 +67,13 @@ export function parseRoute(hash: string): Route {
         const value = params.get(field);
         if (value !== null) optional[field] = value;
       }
-      return { name: "projectCase", key: decodeURIComponent(caseRoute[1]), caseId: decodeURIComponent(caseRoute[2]), ...optional };
+      const documents: ProjectDocumentsQuery = {};
+      for (const field of ["language", "status", "q", "select", "origin", "translation_status"] as const) {
+        const value = params.get(`documents_${field}`);
+        if (value !== null) documents[field] = value;
+      }
+      return { name: "projectCase", key: decodeURIComponent(caseRoute[1]), caseId: decodeURIComponent(caseRoute[2]), ...optional,
+        ...(Object.keys(documents).length ? { documents } : {}) };
     }
     const project = /^#\/projects\/([^/]+)\/(settings|documents|progress|export)$/.exec(path);
     if (!project) return notFound;
@@ -114,9 +123,12 @@ export function routeHref(route: Route): string {
       return `#/projects/${encodeURIComponent(route.key)}/documents${querySuffix({
         language: route.language, status: route.status, q: route.q, select: route.select, origin: route.origin, translation_status: route.translation_status,
       })}`;
-    case "projectCase": return `#/projects/${encodeURIComponent(route.key)}/cases/${encodeURIComponent(route.caseId)}${querySuffix({ variant: route.variant, annotations: route.annotations })}`;
+    case "projectCase": return `#/projects/${encodeURIComponent(route.key)}/cases/${encodeURIComponent(route.caseId)}${querySuffix({ variant: route.variant, annotations: route.annotations,
+      ...Object.fromEntries(Object.entries(route.documents ?? {}).map(([key, value]) => [`documents_${key}`, value])),
+    })}`;
     case "projectProgress": return `#/projects/${encodeURIComponent(route.key)}/progress`;
     case "projectExport": return `#/projects/${encodeURIComponent(route.key)}/export`;
+    case "projectProblemReport": return `#/projects/${encodeURIComponent(route.key)}/problem-reports/${encodeURIComponent(route.reportId)}`;
     case "notFound": return route.hash;
   }
 }

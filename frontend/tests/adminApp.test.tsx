@@ -125,10 +125,10 @@ it("refreshes authoritative project navigation after creation and a saved name",
   fireEvent.click(screen.getByRole("button", { name: "Create project" }));
   await screen.findByRole("heading", { name: "Project settings" });
   expect(window.location.hash).toBe("#/projects/p%2Fkey/settings");
-  await screen.findByRole("region", { name: "Research (p/key)" });
+  await screen.findByRole("heading", { name: "Research" });
   fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: "Edited name" } });
   fireEvent.click(screen.getByRole("button", { name: "Save general" }));
-  await screen.findByRole("region", { name: "Returned server name (p/key)" });
+  await screen.findByRole("heading", { name: "Returned server name" });
   expect(api.updateProjectSettings).toHaveBeenCalledWith("p/key", { name: "Edited name", description: "Original", languages: ["de"] });
   expect(api.listProjects).toHaveBeenCalledTimes(3);
   expect(screen.getByLabelText(/^Name/)).toHaveProperty("value", "Returned server name");

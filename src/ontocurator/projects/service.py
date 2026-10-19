@@ -35,6 +35,7 @@ from ontocurator.storage.tables import (
 )
 
 HiddenValues = dict[str, dict[str, list[str]]]
+CreationDefaults = dict[str, dict[str, dict[str, str]]]
 
 
 class ProjectPin(BaseModel):
@@ -63,6 +64,7 @@ class ProjectSettingsChange(BaseModel):
     contiguous_mentions_only: bool = False
     annotate_accepted_translations_only: bool = True
     hidden_axis_values: HiddenValues = Field(default_factory=dict)
+    creation_defaults: CreationDefaults = Field(default_factory=dict)
 
 
 class ProjectSettings(ProjectSettingsChange):
@@ -71,6 +73,34 @@ class ProjectSettings(ProjectSettingsChange):
     pins: list[PinnedOntology]
     locked: bool
     axis_defaults: dict[str, dict[str, str]]
+    annotation_policy_revision: int = 1
+
+
+def validate_creation_defaults(
+    profile: TaskProfile, defaults: CreationDefaults, hidden: HiddenValues
+) -> None:
+    """Validate every configured preset against its exact editable layer/type."""
+    layers = {layer.layer_id: layer for layer in profile.layers}
+    for layer_id, kinds in defaults.items():
+        layer = layers.get(layer_id)
+        path = f"creation_defaults.{layer_id}"
+        if layer is None or layer.access != "editable":
+            raise DomainError("SETTINGS_INVALID", {"path": path})
+        definitions = {kind.type_id: kind for kind in layer.annotation_types}
+        for type_id, values in kinds.items():
+            definition = definitions.get(type_id)
+            path = f"creation_defaults.{layer_id}.{type_id}"
+            if definition is None:
+                raise DomainError("SETTINGS_INVALID", {"path": path})
+            axes = {axis.id: axis for axis in definition.axes}
+            for axis_id, value in values.items():
+                axis = axes.get(axis_id)
+                if (
+                    axis is None
+                    or value not in axis.options
+                    or value in hidden.get(layer_id, {}).get(axis_id, [])
+                ):
+                    raise DomainError("SETTINGS_INVALID", {"path": f"{path}.{axis_id}"})
 
 
 def axis_defaults(
@@ -205,6 +235,7 @@ class ProjectService:
                 ],
                 locked=self._locked(conn, row["id"]),
                 axis_defaults=axis_defaults(profile, pins),
+                annotation_policy_revision=row["annotation_policy_revision"],
             )
 
     def create(
@@ -282,6 +313,25 @@ class ProjectService:
                 self.repo._pins(conn, row["id"]),
                 combined["hidden_axis_values"],
             )
+            validate_creation_defaults(
+                TaskProfile.model_validate(row["task_profile"]),
+                combined["creation_defaults"],
+                combined["hidden_axis_values"],
+            )
+            policy_fields = {
+                "creation_defaults",
+                "require_chosen_axes",
+                "hidden_axis_values",
+                "allow_spanless_findings",
+                "require_spanless_note",
+                "contiguous_mentions_only",
+            }
+            if any(
+                name in fields and fields[name] != row[name] for name in policy_fields
+            ):
+                fields["annotation_policy_revision"] = (
+                    row["annotation_policy_revision"] + 1
+                )
             if fields:
                 conn.execute(
                     update(ProjectRow)
@@ -295,7 +345,17 @@ class ProjectService:
                     target_type="project",
                     target_id=key,
                     project_id=row["id"],
-                    details={"fields": sorted(fields)},
+                    details={
+                        "fields": sorted(
+                            name
+                            for name in fields
+                            if name != "annotation_policy_revision"
+                        ),
+                        "annotation_policy_revision": fields.get(
+                            "annotation_policy_revision",
+                            row["annotation_policy_revision"],
+                        ),
+                    },
                 )
             return self.settings(key)
 
@@ -386,6 +446,9 @@ class ProjectService:
             validate_hidden_values(
                 selected_profile, selected_pins, row["hidden_axis_values"]
             )
+            validate_creation_defaults(
+                selected_profile, row["creation_defaults"], row["hidden_axis_values"]
+            )
             manifest = PackageManifest.model_validate(row["manifest"]).model_copy(
                 update={
                     "task_profile": selected_profile,
@@ -401,6 +464,7 @@ class ProjectService:
                     task_profile_sha256=profile_hash(selected_profile),
                     manifest=manifest.model_dump(mode="json"),
                     manifest_sha256=canonical_hash(manifest.model_dump()),
+                    annotation_policy_revision=row["annotation_policy_revision"] + 1,
                     updated_at=datetime.now(UTC),
                 )
             )

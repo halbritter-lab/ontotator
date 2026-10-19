@@ -804,7 +804,7 @@ def test_independent_adoption_export_preserves_exact_imported_source_notes():
         doc,
         hpo_profile(),
         layers(),
-        {},
+        {("urn:source", source.version): source},
         set_id="out",
         proposal_notes={("urn:source", source.version): ["imported note"]},
     )
@@ -981,3 +981,205 @@ def test_confirmed_clinically_uncertain_target_has_no_reviewer_flag():
     assert annotation.review_resolution is None
     assert annotation.provenance.method == "adopted"
     assert counts["uncertain"] == 0
+
+
+@pytest.mark.parametrize(
+    "source_id",
+    [
+        "local-source",
+        "colon:rich:source",
+        "urn:ontospan:set:source",
+        "urn:ontospan:bundle:set:source",
+    ],
+)
+def test_export_normalizes_only_exact_inventory_source(source_id):
+    doc = document_from_unit(sketch_unit())
+    source = own_snapshot(doc, source_id, "HP:0001250", None, {})
+    copied = own_snapshot(doc, "copied", "HP:0001250", None, {})
+    raw = f"{source_id}:{source.version}"
+    copied = snapshot(
+        copied.annotation.model_copy(
+            update={
+                "provenance": copied.annotation.provenance.model_copy(
+                    update={"source_refs": [raw]}
+                )
+            }
+        ),
+        [],
+        doc,
+        hpo_profile(),
+    )
+    exported, _ = submission_to_unit(
+        submission([copied]),
+        doc,
+        hpo_profile(),
+        layers(),
+        {(source_id, source.version): source},
+        set_id="out",
+    )
+    try:
+        ontospan.parse_annotation_ref(source_id)
+        expected = source_id
+    except ValueError:
+        expected = ontospan.annotation_ref("proj:proposals", source_id)
+    assert exported.annotation_set.annotations[0].provenance.source_refs == (expected,)
+    assert tuple(copied.annotation.provenance.source_refs) == (raw,)
+
+
+def test_export_preserves_external_hash_like_reference_without_inventory_hit():
+    from ontocurator.exchange.t1 import _export_source_ref
+
+    external = ontospan.annotation_ref("external", "a" * 64)
+    assert _export_source_ref(external, "proj", {}) == external
+    with pytest.raises(ValueError):
+        _export_source_ref("missing:" + "a" * 64, "proj", {})
+
+
+def test_export_rejects_missing_frozen_reanchor_source_even_when_it_parses_as_urn():
+    from ontocurator.domain.reanchor_resolution import PendingReanchorRef
+
+    doc = document_from_unit(sketch_unit())
+    source = own_snapshot(doc, "urn:ontospan:source:seizure", "HP:0001250", None, {})
+    copy = own_snapshot(doc, "copy", "HP:0001250", None, {})
+    raw = f"{source.annotation.annotation_id}:{source.version}"
+    copy = snapshot(
+        copy.annotation.model_copy(
+            update={
+                "provenance": copy.annotation.provenance.model_copy(
+                    update={"source_refs": [raw]}
+                )
+            }
+        ),
+        [],
+        doc,
+        hpo_profile(),
+    )
+    record = submission([copy]).model_copy(
+        update={
+            "reanchor_inputs": [
+                PendingReanchorRef(
+                    proposal_set_id=1,
+                    source_ref=AnnotationRef(
+                        annotation_id=source.annotation.annotation_id,
+                        version=source.version,
+                    ),
+                )
+            ]
+        }
+    )
+    with pytest.raises(DomainError, match="TARGET_NOT_FOUND"):
+        submission_to_unit(record, doc, hpo_profile(), layers(), {}, set_id="out")
+
+
+@pytest.mark.parametrize("outcome", ["confirmed", "uncertain"])
+def test_human_input_alias_uses_owning_submission_reference(outcome):
+    doc = document_from_unit(sketch_unit())
+    source = own_snapshot(
+        doc, "input-unique", "HP:0001250", None, {"assertion": "present"}
+    )
+    ref = AnnotationRef(
+        annotation_id=source.annotation.annotation_id, version=source.version
+    )
+    decision = ReviewDecision(
+        decision_id="d",
+        target=ref,
+        outcome=outcome,
+        reviewer_id="ann-0007",
+        note="review note",
+    )
+    external = ontospan.annotation_ref(
+        "submission-source", "same-local-id", bundle_id="provenance-frozen"
+    )
+    unit, _ = submission_to_unit(
+        submission(
+            [source] if outcome == "confirmed" else [],
+            mode="review",
+            decisions=[decision],
+            targets=[ref],
+        ),
+        doc,
+        hpo_profile(),
+        layers(),
+        {(ref.annotation_id, ref.version): source},
+        set_id="result",
+        source_ref_overrides={ref.annotation_id: external},
+    )
+    [annotation] = unit.annotation_set.annotations
+    assert external in annotation.provenance.source_refs
+    if outcome == "uncertain":
+        assert annotation.review_resolution.note == "review note"
+
+
+def test_merged_review_keeps_every_qualified_source_and_notes():
+    doc = document_from_unit(sketch_unit())
+    sources = [
+        own_snapshot(doc, name, "HP:0001250", None, {})
+        for name in ("input-a", "input-b")
+    ]
+    sources = [
+        snapshot(
+            source.annotation.model_copy(update={"note": f"Source note {index}"}),
+            [],
+            doc,
+            hpo_profile(),
+        )
+        for index, source in enumerate(sources)
+    ]
+    output = own_snapshot(doc, "merged", "HP:0001250", None, {"assertion": "present"})
+    output = snapshot(
+        output.annotation.model_copy(
+            update={"note": "Combined clinical interpretation"}
+        ),
+        [],
+        doc,
+        hpo_profile(),
+    )
+    refs = [
+        AnnotationRef(annotation_id=s.annotation.annotation_id, version=s.version)
+        for s in sources
+    ]
+    replacement = AnnotationRef(
+        annotation_id=output.annotation.annotation_id, version=output.version
+    )
+    decisions = [
+        ReviewDecision(
+            decision_id=f"d-{index}",
+            target=ref,
+            replacement=replacement,
+            outcome="changed",
+            reviewer_id="ann-0007",
+        )
+        for index, ref in enumerate(refs)
+    ]
+    external = {
+        ref.annotation_id: ontospan.annotation_ref(
+            f"submission-{index}", "same-id", bundle_id="provenance"
+        )
+        for index, ref in enumerate(refs)
+    }
+    unit, _ = submission_to_unit(
+        submission([output], mode="review", decisions=decisions, targets=refs),
+        doc,
+        hpo_profile(),
+        layers(),
+        {
+            (ref.annotation_id, ref.version): source
+            for ref, source in zip(refs, sources, strict=True)
+        },
+        set_id="merged-result",
+        source_ref_overrides=external,
+        proposal_notes={
+            (ref.annotation_id, ref.version): [f"Original {index}"]
+            for index, ref in enumerate(refs)
+        },
+    )
+    [annotation] = unit.annotation_set.annotations
+    assert annotation.provenance.method == "merged"
+    assert set(annotation.provenance.source_refs) == set(external.values())
+    assert set(annotation.provenance.notes) == {
+        "Combined clinical interpretation",
+        "Original 0",
+        "Original 1",
+        "Source note 0",
+        "Source note 1",
+    }

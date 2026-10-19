@@ -187,6 +187,11 @@ class TranslationReviewService:
 
     @staticmethod
     def _editable(assignment: Assignment) -> None:
+        if assignment.held:
+            raise DomainError(
+                "TASK_HELD",
+                {"reason": assignment.hold_reason, "assignment_id": assignment.id},
+            )
         if assignment.status == "submitted":
             raise DomainError("ASSIGNMENT_SUBMITTED")
 
@@ -327,7 +332,7 @@ class TranslationReviewService:
                 self._records(
                     conn, access, assignment.project_key, pid, variant.document_id
                 ),
-                assignment.status == "submitted",
+                assignment.status == "submitted" or assignment.held,
                 submitted,
             )
 
@@ -498,6 +503,18 @@ class TranslationReviewService:
                     updated_at=now,
                 )
             )
+            if assignment.active_round_id is not None:
+                from ontocurator.storage.workflow_tables import WorkRoundStateRow
+
+                conn.execute(
+                    update(WorkRoundStateRow)
+                    .where(WorkRoundStateRow.round_id == assignment.active_round_id)
+                    .values(
+                        state="submitted",
+                        latest_submission_id=f"tr-{record_id}",
+                        revision=WorkRoundStateRow.revision + 1,
+                    )
+                )
             record_audit(
                 conn,
                 Actor.user(access.user_id, user["username"]),

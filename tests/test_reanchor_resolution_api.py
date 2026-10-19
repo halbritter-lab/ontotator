@@ -197,7 +197,7 @@ def test_recreate_preserves_verified_absent_historical_axes_and_defaults(
             repo.get_document("proj", runtime.output["document_id"]),
             profile,
             layers_for(profile, repo.project_pins("proj")),
-            {},
+            repo.t1_export_content("proj").proposals,
             set_id="reviewed-absent-historical",
             variant=repo.get_variant("proj", runtime.output["document_id"]),
             source_variant_hashes={

@@ -28,6 +28,7 @@ from ontocurator.application.preferences import Preferences, PreferencesUpdate
 from ontocurator.application.reanchor_resolutions import ReanchorResolutionService
 from ontocurator.application.reviews import ReviewService
 from ontocurator.application.submissions import SubmissionService
+from ontocurator.application.workspace_opening import WorkspaceOpeningService
 from ontocurator.application.workspaces import (
     EditorProposal,
     WorkspaceService,
@@ -398,35 +399,23 @@ def open_workspace(
     """Open or initialize a workspace view of the logged-in user."""
     annotator_id = own_annotator(principal, req.annotator_id)
     require_mode(request, req.project_key, req.mode)
-    targets = req.targets
-    if req.review_round_target_set_id is not None and (
-        req.mode != "review" or targets is not None
-    ):
-        raise DomainError(
-            "INVALID_REVIEW_ROUND",
-            "Round selection requires review mode without explicit targets",
-        )
-    if targets is not None and not targets.target_set_id:
-        targets = ReviewTargetSet.create(targets.targets)
-    target_set_id = (
-        targets.target_set_id
-        if targets
-        else (req.review_round_target_set_id or "targets-0")
-    )
     key = WorkspaceKey(
         project_key=req.project_key,
         document_id=req.document_id,
         annotator_id=annotator_id,
         mode=req.mode,
-        target_set_id=target_set_id,
+        target_set_id="targets-0",
     )
-    view = ws_svc.open(key, targets, req.pending_proposal_set_ids)
-    assert isinstance(ws_svc.repo, ScopedRepository)
-    assignment = ws_svc.repo.workspace_assignment(view.key)
+    opened = WorkspaceOpeningService(ws_svc).open(
+        key,
+        targets=req.targets,
+        review_round_target_set_id=req.review_round_target_set_id,
+        pending_proposal_set_ids=req.pending_proposal_set_ids,
+    )
     return OpenWorkspaceResponse(
-        workspace_id=encode_workspace_id(view.key),
-        view=view,
-        read_only=assignment.status == "submitted",
+        workspace_id=encode_workspace_id(opened.view.key),
+        view=opened.view,
+        read_only=opened.read_only,
     )
 
 

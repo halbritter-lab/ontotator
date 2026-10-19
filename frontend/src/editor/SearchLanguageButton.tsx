@@ -78,6 +78,7 @@ export const SearchLanguageButton: React.FC<{ control: SearchLanguageControl }> 
               <LanguageCode language={option.language} />
             </label>
           ))}
+          {!!control.unavailable?.length && <p>Unavailable for this ontology: {control.unavailable.map(code => code.toUpperCase()).join(", ")}. Your saved preferences are kept.</p>}
         </div>
       )}
     </div>

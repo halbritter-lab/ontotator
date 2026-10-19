@@ -36,6 +36,8 @@ APP_ROLE = "ontocurator_app"
 
 # The application role may only read and insert these (T2 D6).
 APPEND_ONLY_TABLES = (
+    "final_selection_events",
+    "export_selection_snapshots",
     "annotation_snapshots",
     "evidence_snapshots",
     "submissions",
@@ -43,6 +45,15 @@ APPEND_ONLY_TABLES = (
     "edit_events",
     "proposal_sets",
     "translation_reviews",
+    "problem_reports",
+    "task_holds",
+    "problem_report_events",
+    "work_rounds",
+    "round_workspace_bindings",
+    "round_submission_bindings",
+    "round_inputs",
+    "workflow_command_receipts",
+    "review_obligation_resolutions",
 )
 
 NAMING_CONVENTION = {
@@ -88,6 +99,12 @@ class ProjectRow(Base):
     )
     require_chosen_axes: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false")
+    )
+    creation_defaults: Mapped[dict[str, Any]] = mapped_column(
+        server_default=text("'{}'::jsonb")
+    )
+    annotation_policy_revision: Mapped[int] = mapped_column(
+        BigInteger, server_default=text("1")
     )
     adjudicator_not_annotator: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false")
@@ -306,6 +323,9 @@ class DraftRow(Base):
         server_default=text("'[]'::jsonb")
     )
     reanchor_resolutions: Mapped[list[Any]] = mapped_column(
+        server_default=text("'[]'::jsonb")
+    )
+    round_input_resolutions: Mapped[list[Any]] = mapped_column(
         server_default=text("'[]'::jsonb")
     )
     reanchor_inputs_initialized_at: Mapped[datetime | None]
@@ -780,6 +800,10 @@ class AssignmentRow(Base):
     revoked_at: Mapped[datetime | None]
     revoked_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
     last_submission_id: Mapped[str | None]
+    held: Mapped[bool] = mapped_column(server_default=text("false"))
+    hold_reason: Mapped[str | None]
+    active_round_id: Mapped[str | None]
+    workflow_revision: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
 
 
 class TranslationReviewRow(Base):
@@ -866,3 +890,9 @@ class UploadRow(Base):
     commit_job_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(JobRow.id))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+# Register workflow mappings after the shared Base and historical tables exist.
+# Register split final-result metadata with the shared schema.
+from ontocurator.storage import final_tables as _final_tables  # noqa: E402,F401
+from ontocurator.storage import workflow_tables as _workflow_tables  # noqa: E402, F401

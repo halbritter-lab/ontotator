@@ -23,7 +23,8 @@ const viewerUrl = (s: Scenario, document: string, annotations = 'text') =>
 const token = (ref: VersionRef) => JSON.stringify([ref.kind, ref.id]);
 
 async function openVersions(page: Page) {
-  const disclosure = page.locator('.case-version-controls').first();
+  const disclosure = page.locator('details.case-version-controls, details.comparison-identity-choices');
+  await expect(disclosure).toHaveCount(1);
   await expect(disclosure).toBeVisible();
   if (!await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) {
     await disclosure.locator(':scope > summary').focus();
@@ -351,7 +352,7 @@ test('restricted annotator completes exact assigned work and retains pending own
   expect(generalReads).toEqual([]);
   const own = await ownSubmission(page, s.assignments.bob);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Previous Submissions' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Submission history', exact: true })).toBeVisible();
   const historyLabel = await page.evaluate(createdAt => `Submission 1 · ${new Intl.DateTimeFormat('en-GB', {
     dateStyle: 'medium', timeStyle: 'short',
   }).format(new Date(createdAt))}`, own.created_at);

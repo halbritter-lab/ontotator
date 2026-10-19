@@ -331,7 +331,20 @@
   color: var(--text-muted);
 }
 
-/* Keep the selected term readable when the shell wraps at tablet widths. */
-@media (min-width: 701px) and (max-width: 1024px) {
+/* Keep the selected term readable when the shell wraps on tablets and phones. */
+@media (max-width: 1024px) {
   .tree-detail__body { min-height: 60px; }
+}
+
+/* On phones, reserve the term text and pinned actions together. Flex shrinking
+   the detail wrapper below that sum would push its actions beyond the pane. */
+@media (max-width: 700px) {
+  .tree-browser__body {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .tree-detail__body {
+    flex: 0 0 60px;
+    height: 60px;
+  }
 }

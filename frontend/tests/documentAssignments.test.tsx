@@ -42,7 +42,7 @@ it("sends only visible selected documents to assignment tools and refreshes both
   expect(api.listProjectDocuments).toHaveBeenLastCalledWith("p/key", { language: "en", status: undefined, q: undefined });
 });
 it("wires actual assignment IDs through a row's actions and refreshes after removal", async () => {
-  vi.mocked(api.listProjectDocuments).mockResolvedValue([{ ...documents[0], assignees: [{ assignment_id: 3, username: "alice", pseudonym: "A", task: "annotate", status: "open" }] }]);
+  vi.mocked(api.listProjectDocuments).mockResolvedValue([{ ...documents[0], assignees: [{ assignment_id: 3, workflow_revision: 0, held: false, username: "alice", pseudonym: "A", task: "annotate", status: "open" }] }]);
   render(<DocumentsPage projectKey="p/key" query={{}} onNavigate={vi.fn()} />);
   const row = await screen.findByTestId("document-row");
   fireEvent.click(await within(row).findByText("Assignment actions")); const remove = await within(row).findByRole("button", { name: "Remove assignment", hidden: true });

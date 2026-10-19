@@ -13,7 +13,7 @@ const length = (text: string) => Array.from(text).length;
 const validWindow = (value: Window) => Number.isSafeInteger(value.start) && value.start >= 0 && Number.isSafeInteger(value.end)
   && value.end >= value.start && value.end - value.start === length(value.text);
 
-/** Validate and adapt the literal server windows; never run another diff algorithm. */
+/** Validate exact server windows/opcodes. Display may word-diff these validated raw windows; alignment and evidence coordinates remain server-owned. */
 export function pendingDiffParts(item: ReanchorItem): TextDiffPart[] | null {
   const old = item.old_context, next = item.new_context;
   if (!validWindow(old) || !validWindow(next)) return null;
@@ -84,6 +84,7 @@ type PanelProps = { items: readonly ReanchorItem[]; labelFor: (layer:string,term
   resolutions?:readonly ReanchorResolution[]; annotations?:readonly AnnotationSnapshot[]; busy?:boolean;
   onRecreate?:(item:ReanchorItem)=>void; onDismiss?:(item:ReanchorItem,reason:string)=>Promise<void>;
   recreateUnavailableReason?:(item:ReanchorItem)=>string|undefined;
+  onOpenFinding?:(annotationId:string)=>void;
 };
 function ResolutionActions({item,resolution,busy,onRecreate,onDismiss,onResolved,recreateUnavailableReason}: Pick<PanelProps,'busy'|'onRecreate'|'onDismiss'|'recreateUnavailableReason'> & {
   item:ReanchorItem; resolution:ReanchorResolution|undefined; onResolved:()=>void;
@@ -116,14 +117,11 @@ function ResolutionActions({item,resolution,busy,onRecreate,onDismiss,onResolved
     </form>}
   </div>;
 }
-export function ReanchorPanel({ items, labelFor, onContext, resolutions=[], annotations, busy, onRecreate, onDismiss, recreateUnavailableReason }: PanelProps) {
-  const root=useRef<HTMLOListElement|null>(null);
+export function ReanchorPanel({ items, labelFor, onContext, resolutions=[], annotations, busy, onRecreate, onDismiss, recreateUnavailableReason, onOpenFinding }: PanelProps) {
+  const root=useRef<HTMLElement|null>(null);
   if (!items.length) return null;
   const pending=items.filter(item=>!currentReanchorResolution(item,resolutions,annotations)).length;
-  return <section className="reanchor-panel detail-section" aria-label="Needs review after the text change">
-    <details open><summary><h3>Needs review after the text change ({items.length})</h3></summary>
-    {(onRecreate || onDismiss || resolutions.length>0) && <p role="status">{pending} pending · {items.length-pending} resolved</p>}
-    <ol ref={root}>{items.map((item,index) => {
+  const row = (item: ReanchorItem, index: number) => {
       const parts = pendingDiffParts(item);
       const label = labelFor(item.layer_id,item.term_id);
       const resolution=currentReanchorResolution(item,resolutions,annotations);
@@ -136,15 +134,25 @@ export function ReanchorPanel({ items, labelFor, onContext, resolutions=[], anno
         <p>Current context</p><div className="reanchor-context" data-current-context>{validWindow(item.new_context) ? item.new_context.text : 'New context is unavailable.'}</div>
         <details><summary>Original context and text changes</summary>
           <p>Original context</p><div className="reanchor-context" data-old-context data-context-start={item.old_context.start}>{oldContext(item)}</div>
-          {parts ? <div data-old-start={item.old_context.start} data-new-start={item.new_context.start}><DiffView before={item.old_context.text} after={item.new_context.text} parts={parts} /></div> : <p>Text changes are unavailable.</p>}
+          {parts ? <div data-old-start={item.old_context.start} data-new-start={item.new_context.start}><DiffView before={item.old_context.text} after={item.new_context.text} /></div> : <p>Text changes are unavailable.</p>}
         </details>
         <ResolutionActions item={item} resolution={resolution} busy={busy} onRecreate={onRecreate} onDismiss={onDismiss} recreateUnavailableReason={recreateUnavailableReason} onResolved={()=>{
           const rows=[...(root.current?.querySelectorAll<HTMLElement>('[data-reanchor-item]') ?? [])];
           const next=rows.slice(index+1).concat(rows.slice(0,index)).find(row=>row.dataset.reanchorPending==='true');
-          (next ?? rows[index])?.querySelector<HTMLButtonElement>('button')?.focus();
+          if (next) next.querySelector<HTMLButtonElement>('button')?.focus();
+          else root.current?.querySelector<HTMLElement>('.reanchor-completed > summary')?.focus();
         }}/>
+        {resolution?.replacement && onOpenFinding && <Button onClick={() => onOpenFinding(resolution.replacement!.annotation_id)}>Open saved finding</Button>}
       </li>;
-    })}</ol></details>
+  };
+  return <section ref={root} className="reanchor-panel detail-section" aria-label="Needs review after the text change">
+    <details open><summary><h3>Needs review after the text change ({items.length})</h3></summary>
+    {(onRecreate || onDismiss || resolutions.length>0) && <p role="status">{pending} pending · {items.length-pending} resolved</p>}
+    <ol>{items.filter(item=>!currentReanchorResolution(item,resolutions,annotations)).map(row)}</ol>
+    {pending < items.length && <details className="reanchor-completed"><summary>Completed text-change reviews ({items.length-pending})</summary>
+      <ol>{items.filter(item=>!!currentReanchorResolution(item,resolutions,annotations)).map(row)}</ol>
+    </details>}
+    </details>
   </section>;
 }
 

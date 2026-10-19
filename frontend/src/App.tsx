@@ -15,6 +15,7 @@ import { ProjectSettingsPage } from "./admin/ProjectSettingsPage";
 import { DocumentsPage } from "./admin/DocumentsPage";
 import { ProgressPage } from "./admin/ProgressPage";
 import { ExportPage } from "./admin/ExportPage";
+import { ProblemReportDetail } from './tasks/ProblemReportDetail';
 import { Button, EmptyState, InlineMessage } from "./ui";
 
 export interface AppProps { user?: CurrentUser | null; onLogout?: () => void }
@@ -40,6 +41,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const projectIdentity = JSON.stringify([baseUser?.username, baseUser?.is_system_admin, retry]);
   const projects = baseUser && projectContext?.identity === projectIdentity ? projectContext.projects : [];
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
+  const [taskProject, setTaskProject] = useState<{ identity: string; key: string } | null>(null);
+  const taskIdentity = route.name === 'task' ? JSON.stringify([baseUser?.username, route.assignmentId]) : '';
   const acceptedHash = useRef(window.location.hash || "#/");
   const acceptedIndex = useRef(typeof window.history.state?.ontocuratorRouteIndex === "number" ? window.history.state.ontocuratorRouteIndex as number : 0);
   type HistoryEntry = { hash: string; index: number; state: Record<string, unknown> };
@@ -177,7 +180,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   switch (route.name) {
     case "tasks": content = <MyTasks project={route.project} projects={projects} onNavigate={go} />; break;
     case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId])} assignmentId={route.assignmentId}
-      user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
+      user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef}
+      onProjectContext={key => setTaskProject({ identity: taskIdentity, key })} />; break;
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
     case "adminOntologies": content = <OntologiesPage onNavigate={go} />; break;
     case "projectNew": content = <ProjectNewPage onNavigate={next => { setRetry(value => value + 1); go(next); }} />; break;
@@ -190,14 +194,22 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       content = <DocumentsPage projectKey={route.key} currentUser={user} canOverrideTranslationStatus={canOverrideTranslationStatus} query={route} onNavigate={go} />;
       break;
     }
-    case "projectCase": content = <CaseViewer projectKey={route.key} caseId={route.caseId} variant={route.variant} annotations={route.annotations} username={user.username} onNavigate={go} />; break;
+    case "projectCase": content = <CaseViewer projectKey={route.key} caseId={route.caseId} variant={route.variant} annotations={route.annotations} documents={route.documents} username={user.username} onNavigate={go} />; break;
     case "projectProgress": content = <ProgressPage projectKey={route.key} onNavigate={go} />; break;
     case "projectExport": content = <ExportPage projectKey={route.key} currentUser={user} />; break;
+    case 'projectProblemReport': {
+      const canManage = !!projects.find(project => project.project_key === route.key)?.can_manage;
+      content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
+        : canManage ? <ProblemReportDetail key={JSON.stringify([user.username, route.key, route.reportId])} projectKey={route.key} reportId={route.reportId} canManage={canManage} onNavigate={go} />
+        : <NotFound noAccess onNavigate={go} />;
+      break;
+    }
     case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
     case "notFound": content = <NotFound onNavigate={go} />; break;
     default: content = <EmptyState title="This page is not available yet.">This section is planned for a later step.</EmptyState>;
   }
   return <Shell user={user} projects={projects} route={route} onNavigate={go} onLogout={logout}
+    taskProject={taskProject?.identity === taskIdentity ? taskProject.key : undefined}
     breadcrumb={route.name === "task" ? [
       { label: "My tasks", onClick: () => go({ name: "tasks" }) }, { label: `Task ${route.assignmentId}` },
     ] : undefined}>

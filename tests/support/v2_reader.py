@@ -141,9 +141,12 @@ def _read_package(
     try:
         manifest_data = json.loads(file_contents["manifest.json"].decode("utf-8"))
         format_version = manifest_data.get("format_version")
-        if format_version != "ontocurator-work-package/v2":
+        if format_version not in {
+            "ontocurator-work-package/v2",
+            "ontocurator-work-package/v3",
+        }:
             raise InvalidPackage(
-                f"Unsupported package format version: '{format_version}'; only 'ontocurator-work-package/v2' is supported"
+                f"Unsupported package format version: '{format_version}'; expected v2 or v3"
             )
         manifest = PackageManifest.model_validate(manifest_data)
         if manifest.task_profile is None:

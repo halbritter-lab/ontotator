@@ -1,0 +1,175 @@
+{
+  "schema": "ontocurator-full-hpo-sources/v1",
+  "release": "2026-09-01",
+  "release_url": "https://github.com/obophenotype/human-phenotype-ontology/releases/tag/v2026-09-01",
+  "source_commit": "920d4eb3608b50a2c19ddb10290224ab35a759c5",
+  "ontology": {
+    "filename": "hp.json",
+    "url": "https://github.com/obophenotype/human-phenotype-ontology/releases/download/v2026-09-01/hp.json",
+    "sha256": "a7b3a012e7b4007a35a7cf8da35f2373b54cc16907f80d13d62470d31f833501",
+    "bytes": 21915519
+  },
+  "translations": [
+    {
+      "filename": "hp-cs.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-cs.babelon.tsv",
+      "sha256": "55dd86084ead3e6692e336c5e55d8302674bb2a683000f64712e3c04b505fcbe",
+      "git_blob_sha1": "0d60f35dd9e0b1785255bb59ac637d9c0328029d",
+      "bytes": 6029498
+    },
+    {
+      "filename": "hp-cs.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-cs.synonyms.tsv",
+      "sha256": "c2bbe8e5254daaf2fdec59bf895e0488d02db648575e7de751a237bb6f41eefa",
+      "git_blob_sha1": "3a7e072cc503df543293b9c6330093e09bf16bc4",
+      "bytes": 1001688
+    },
+    {
+      "filename": "hp-de.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-de.babelon.tsv",
+      "sha256": "a76218636fe110f833d3888a300da1ef7b698cb740aac1dbf9a60c773581ee49",
+      "git_blob_sha1": "220f414f18c74b47b06a32c39938719d72fe11f3",
+      "bytes": 441958
+    },
+    {
+      "filename": "hp-de.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-de.synonyms.tsv",
+      "sha256": "488e9e1fcbbff66cd99927dc2fda0518bd506558ca068f61b4839d89acee1430",
+      "git_blob_sha1": "00060b9ccca8496193b00019f8b293bc5cbb55ce",
+      "bytes": 45513
+    },
+    {
+      "filename": "hp-es.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-es.babelon.tsv",
+      "sha256": "00972e33775a0340ad7b45620f0ff1d2794766c45beb937a165ee86e6f16ed9a",
+      "git_blob_sha1": "fccbbf0adb13260432c23c5d97b1387d497575e5",
+      "bytes": 2116349
+    },
+    {
+      "filename": "hp-es.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-es.synonyms.tsv",
+      "sha256": "6e4aa4a8b96155f491432f9ea6185d20d53f3a7de4a651eacf34b2acfc31e515",
+      "git_blob_sha1": "cd1c176fbbb43a452f8dae597e9270ce17c6e1bf",
+      "bytes": 92
+    },
+    {
+      "filename": "hp-fr.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-fr.babelon.tsv",
+      "sha256": "95ac47da5de63fbbd4f1687a7ede58675a30a3027ebcf85c2d3610ba0c022a5c",
+      "git_blob_sha1": "4d70724b3162bfb8433e9ca1081e007c8087ef4e",
+      "bytes": 7282222
+    },
+    {
+      "filename": "hp-fr.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-fr.synonyms.tsv",
+      "sha256": "aadc4af7f475ad0aa94bd2a7c59bbf9b5bb6679c52697c46d92a55941e5ecb9e",
+      "git_blob_sha1": "1fb4fcd138072dd8d4231c2ef3d1be87a1d558be",
+      "bytes": 2158039
+    },
+    {
+      "filename": "hp-it.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-it.babelon.tsv",
+      "sha256": "4349bde8befa25309cba295d6928234f7ef58bd8903c87778abe6cac0962ae21",
+      "git_blob_sha1": "cb2cfae10d5e279d01af334aa758a6c776837962",
+      "bytes": 444094
+    },
+    {
+      "filename": "hp-it.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-it.synonyms.tsv",
+      "sha256": "426e6e6683be1850585568d245ecc2366dcaa0600ddd1a96c729ba6c7a6f57de",
+      "git_blob_sha1": "3580995343d8544333abbb33ac11859b37d56f62",
+      "bytes": 1367
+    },
+    {
+      "filename": "hp-ja.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-ja.babelon.tsv",
+      "sha256": "cefe15af19d988598eee0077cc75e2d488837adb746522f4cb5d1312fc343eea",
+      "git_blob_sha1": "e59e7f6c09e1f783fbb9f448a6bb2267e28ba9bd",
+      "bytes": 3821368
+    },
+    {
+      "filename": "hp-ja.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-ja.synonyms.tsv",
+      "sha256": "6fd108205ef6b46aaf45bd343f23e56d91c16b13fd027cc68bc6c5124c6e68f6",
+      "git_blob_sha1": "01ab701e83e5b2d6bf168d1701c5ac2b594c16fa",
+      "bytes": 72
+    },
+    {
+      "filename": "hp-nl.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-nl.babelon.tsv",
+      "sha256": "5ada3a91babe3f5d0b677a667cafa6b5d55a4b54be7c0aaf1fc53f268fa5e225",
+      "git_blob_sha1": "04523ff7b76356d6e756e7b9b06e24618ff3e4ac",
+      "bytes": 6215763
+    },
+    {
+      "filename": "hp-nl.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-nl.synonyms.tsv",
+      "sha256": "40cf0538d436125cc7c6205d4966c5b57f6f3244288e33eeb94686f6545166a4",
+      "git_blob_sha1": "b0160b981ece5934b0eaf86ec952819f67197d0c",
+      "bytes": 1156742
+    },
+    {
+      "filename": "hp-pt.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-pt.babelon.tsv",
+      "sha256": "31f642ef8f6951287d9386d3b3454990504143520161ef4615c1c5c0ed85ebd0",
+      "git_blob_sha1": "f50e82bc8551c4ce63f978e7917160ccfe01e003",
+      "bytes": 949247
+    },
+    {
+      "filename": "hp-pt.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-pt.synonyms.tsv",
+      "sha256": "c66a18b0b44647453f7569809454c6fe021ffb84a4986c8eb804e5cd66472a26",
+      "git_blob_sha1": "e77134e38c2fe5bbf624f6c08d771518e57fc1b7",
+      "bytes": 72
+    },
+    {
+      "filename": "hp-tr.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-tr.babelon.tsv",
+      "sha256": "519e51d8b1aa3fc2d38e068b8f9f550828cacef73f19541473b44a5d9abdd921",
+      "git_blob_sha1": "77748ec2f18d5a87281220029f57f39ddeb58dd5",
+      "bytes": 5972731
+    },
+    {
+      "filename": "hp-tr.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-tr.synonyms.tsv",
+      "sha256": "5981fbbcf236b3c25ec38517cc8e2efa360ac3bad3c28945f6170bb83b3ffb54",
+      "git_blob_sha1": "44c3f898249c653ee75c7b0a291f07ddb3754474",
+      "bytes": 996303
+    },
+    {
+      "filename": "hp-tw.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-tw.babelon.tsv",
+      "sha256": "3f613088c57a8f6432002a29c694cdc09fb1c344c8dc28103c9d66c83461add9",
+      "git_blob_sha1": "09d95fdee5e0a7c3bd066d6204d2152066128c2f",
+      "bytes": 8358
+    },
+    {
+      "filename": "hp-zh.babelon.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-zh.babelon.tsv",
+      "sha256": "64a30d5f065e1180fa6a30c192dd84aa403cd1b44f2b24ee883fcde948b1ca53",
+      "git_blob_sha1": "ee6d1a768c27015a0a175c3096829698262a3128",
+      "bytes": 1748173
+    },
+    {
+      "filename": "hp-zh.synonyms.tsv",
+      "url": "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/920d4eb3608b50a2c19ddb10290224ab35a759c5/src/translations/hp-zh.synonyms.tsv",
+      "sha256": "31855af3e26c1432ed24ea024b761bb3bce29eadc3ce522ba3221fca67eb3c56",
+      "git_blob_sha1": "e72269a9c75cfc4c12afb3d22b4256cd18fee504",
+      "bytes": 72
+    }
+  ],
+  "excluded": [
+    {
+      "language": "dtp",
+      "reason": "Current language/translation filename contract accepts two-letter language codes only"
+    },
+    {
+      "language": "nna",
+      "reason": "Current language/translation filename contract accepts two-letter language codes only"
+    },
+    {
+      "language": "pl",
+      "reason": "No Polish Babelon file is present in the pinned official release tree"
+    }
+  ]
+}

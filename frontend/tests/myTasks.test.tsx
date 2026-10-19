@@ -7,7 +7,7 @@ const project = (key: string, name: string, can_manage = false): ProjectSummary 
   project_key: key, name, description: null, roles: [], allowed_modes: [], document_count: 0, can_manage,
 });
 const task = (id: number, status: TaskSummary["status"], key = "p", name = "Project P"): TaskSummary => ({
-  assignment_id: id, project_key: key, project_name: name, document_id: `doc-${id}`, language: "de", task: id === 2 ? "review" : "annotate", status, updated_at: "2026-10-15T10:30:00Z",
+  assignment_id: id, workflow_revision: 0, held: false, project_key: key, project_name: name, document_id: `doc-${id}`, language: "de", task: id === 2 ? "review" : "annotate", status, updated_at: "2026-10-15T10:30:00Z",
 });
 const tasks = [task(4, "reopened"), task(2, "in_progress", "q", "Project Q"), task(3, "open"), task(1, "submitted")];
 const deferred = <T,>() => {
@@ -75,6 +75,30 @@ describe("My tasks component", () => {
     await screen.findAllByTestId("task-row");
     expect(screen.getByLabelText("Task counts").textContent).toMatch(/Open: 2.*In progress: 1.*Submitted: 1/);
     expect(screen.getByText("Reopened")).toBeDefined();
+  });
+
+  it("shows pauses alongside underlying status and keeps saved work accessible", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([
+      { ...task(11, "open"), held: true, hold_reason: "Source evidence needs clarification" },
+      { ...task(12, "submitted"), held: true, hold_reason: "Lead is checking a reported conflict" },
+      task(13, "in_progress", "q", "Project Q"),
+    ]);
+    const onNavigate = vi.fn();
+    const rendered = render(<MyTasks projects={[]} onNavigate={onNavigate} />);
+    const rows = await screen.findAllByTestId("task-row");
+    expect(within(rows[0]).getByText("Open")).toBeDefined();
+    expect(within(rows[0]).getByText("Paused")).toBeDefined();
+    expect(within(rows[0]).getByText("Source evidence needs clarification")).toBeDefined();
+    expect(within(rows[0]).queryByRole("link", { name: "Start" })).toBeNull();
+    expect(within(rows[1]).getByText("Submitted")).toBeDefined();
+    expect(within(rows[1]).getByText("Paused")).toBeDefined();
+    expect(screen.getByLabelText("Task counts").textContent).toMatch(/Open: 1.*In progress: 1.*Submitted: 1.*Paused: 2/);
+    const action = within(rows[0]).getByRole("link", { name: "View paused task" });
+    expect(action.getAttribute("href")).toBe("#/tasks/11");
+    fireEvent.click(action);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 11 });
+    rendered.rerender(<MyTasks project="q" projects={[]} onNavigate={onNavigate} />);
+    expect(screen.getByLabelText("Task counts").textContent).toMatch(/Open: 0.*In progress: 1.*Submitted: 0.*Paused: 0/);
   });
 
   it("distinguishes duplicate project names for filters and same-document task context", async () => {

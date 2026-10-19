@@ -189,38 +189,76 @@ def _submit_first_round(rounds):  # noqa: F811
     repo, access, actor, assignment, ontology = rounds
     scoped = ScopedRepository(repo.db, access, actor)
     service = WorkRoundService(repo.db)
-    first = service.create(access, actor, assignment.id, request_id="r1", expected_workflow_revision=0)
+    first = service.create(
+        access, actor, assignment.id, request_id="r1", expected_workflow_revision=0
+    )
     created = EditingService(scoped, ontology).apply(
         first.workspace_key,
-        MutationEnvelope(mutation_id="c", expected_revision=0, payload={
-            "command": "create_annotation", "annotation_id": "a", "term_id": "HP:0001252",
-            "axes_values": {"assertion": "present"}, "chosen_axis_ids": ["assertion"], "note": "N"}),
+        MutationEnvelope(
+            mutation_id="c",
+            expected_revision=0,
+            payload={
+                "command": "create_annotation",
+                "annotation_id": "a",
+                "term_id": "HP:0001252",
+                "axes_values": {"assertion": "present"},
+                "chosen_axis_ids": ["assertion"],
+                "note": "N",
+            },
+        ),
     )
     submission = SubmissionService(scoped, ontology).submit(
         first.workspace_key,
-        MutationEnvelope(mutation_id="s", expected_revision=created.revision, payload={"document_checked": True}),
+        MutationEnvelope(
+            mutation_id="s",
+            expected_revision=created.revision,
+            payload={"document_checked": True},
+        ),
     )
-    carried = service.create(access, actor, assignment.id, request_id="r2", expected_workflow_revision=1,
-                             kind="carry_forward", source_submission_ids=[submission.submission_id])
+    carried = service.create(
+        access,
+        actor,
+        assignment.id,
+        request_id="r2",
+        expected_workflow_revision=1,
+        kind="carry_forward",
+        source_submission_ids=[submission.submission_id],
+    )
     return repo, assignment, first, submission, carried
 
 
 def test_rounds_have_ordinals_counts_times_and_text_identity(rounds):  # noqa: F811
     repo, assignment, first, submission, carried = _submit_first_round(rounds)
-    views = enrich_rounds(repo, "pkg-1", [repo.get_work_round("pkg-1", first.round_id), repo.get_work_round("pkg-1", carried.round_id)])
+    views = enrich_rounds(
+        repo,
+        "pkg-1",
+        [
+            repo.get_work_round("pkg-1", first.round_id),
+            repo.get_work_round("pkg-1", carried.round_id),
+        ],
+    )
     one, two = views
     assert (one.round_ordinal, two.round_ordinal) == (1, 2)
     assert one.submission_count == 1 and two.submission_count == 0
-    assert one.latest_submission_recorded_at is not None and two.latest_submission_recorded_at is None
+    assert (
+        one.latest_submission_recorded_at is not None
+        and two.latest_submission_recorded_at is None
+    )
     assert one.input_count == 0 and two.input_count == 1
     assert one.source_round_ordinal is None and two.source_round_ordinal == 1
     assert two.source_submission_recorded_at == one.latest_submission_recorded_at
-    assert two.created_at is not None and two.document_language == "en" and two.document_version == 1
+    assert (
+        two.created_at is not None
+        and two.document_language == "en"
+        and two.document_version == 1
+    )
 
 
 def test_inputs_have_source_round_time_language_version(rounds):  # noqa: F811
     repo, _assignment, _first, _submission, carried = _submit_first_round(rounds)
-    [item] = enrich_inputs(repo, "pkg-1", repo.get_round_input_inventory("pkg-1", carried.round_id))
+    [item] = enrich_inputs(
+        repo, "pkg-1", repo.get_round_input_inventory("pkg-1", carried.round_id)
+    )
     assert item.source_round_ordinal == 1
     assert item.source_recorded_at is not None
     assert (item.source_language, item.source_version) == ("en", 1)
@@ -299,27 +337,50 @@ from ontocurator.storage.workflow_tables import (
 
 def _ordinals(conn: Any, pid: int, assignment_ids: Iterable[int]) -> dict[str, int]:
     rows = conn.execute(
-        select(WorkRoundRow.round_id, WorkRoundRow.predecessor_round_id, WorkRoundRow.assignment_id)
-        .where(WorkRoundRow.project_id == pid, WorkRoundRow.assignment_id.in_(list(assignment_ids)))
+        select(
+            WorkRoundRow.round_id,
+            WorkRoundRow.predecessor_round_id,
+            WorkRoundRow.assignment_id,
+        )
+        .where(
+            WorkRoundRow.project_id == pid,
+            WorkRoundRow.assignment_id.in_(list(assignment_ids)),
+        )
         .order_by(WorkRoundRow.created_at, WorkRoundRow.round_id)
     ).all()
     return round_ordinals((r.round_id, r.predecessor_round_id) for r in rows)
 
 
-def _round_of_submission(conn: Any, pid: int, sids: Sequence[str]) -> dict[str, tuple[str, int]]:
+def _round_of_submission(
+    conn: Any, pid: int, sids: Sequence[str]
+) -> dict[str, tuple[str, int]]:
     """submission_id -> (round_id, assignment_id)."""
     rows = conn.execute(
-        select(RoundSubmissionBindingRow.submission_id, RoundSubmissionBindingRow.round_id, WorkRoundRow.assignment_id)
+        select(
+            RoundSubmissionBindingRow.submission_id,
+            RoundSubmissionBindingRow.round_id,
+            WorkRoundRow.assignment_id,
+        )
         .join(WorkRoundRow, WorkRoundRow.round_id == RoundSubmissionBindingRow.round_id)
-        .where(RoundSubmissionBindingRow.project_id == pid, RoundSubmissionBindingRow.submission_id.in_(list(sids)))
+        .where(
+            RoundSubmissionBindingRow.project_id == pid,
+            RoundSubmissionBindingRow.submission_id.in_(list(sids)),
+        )
     ).all()
     return {r.submission_id: (r.round_id, r.assignment_id) for r in rows}
 
 
 def _recorded(conn: Any, pid: int, sids: Sequence[str]) -> dict[str, Any]:
     rows = conn.execute(
-        select(SubmissionRow.submission_id, SubmissionRow.recorded_at, func.jsonb_array_length(SubmissionRow.payload["snapshots"]).label("findings"))
-        .where(SubmissionRow.project_id == pid, SubmissionRow.submission_id.in_(list(sids)))
+        select(
+            SubmissionRow.submission_id,
+            SubmissionRow.recorded_at,
+            func.jsonb_array_length(SubmissionRow.payload["snapshots"]).label(
+                "findings"
+            ),
+        ).where(
+            SubmissionRow.project_id == pid, SubmissionRow.submission_id.in_(list(sids))
+        )
     ).all()
     return {r.submission_id: r for r in rows}
 ```
@@ -379,47 +440,119 @@ def _ctx(rounds):  # noqa: F811
 def test_dismiss_is_rejected_while_the_carried_finding_exists(rounds):  # noqa: F811
     repo, scoped, _o, key, item = _ctx(rounds)
     with pytest.raises(DomainError, match="ROUND_INPUT_CARRIED_FINDING_PRESENT"):
-        RoundInputResolutionService(scoped).resolve(key, MutationEnvelope(mutation_id="d", expected_revision=0,
-            payload={"input_id": item["input_id"], "outcome": "dismissed", "reason": "Not in this text"}))
+        RoundInputResolutionService(scoped).resolve(
+            key,
+            MutationEnvelope(
+                mutation_id="d",
+                expected_revision=0,
+                payload={
+                    "input_id": item["input_id"],
+                    "outcome": "dismissed",
+                    "reason": "Not in this text",
+                },
+            ),
+        )
 
 
 def test_dismiss_with_removal_removes_finding_and_records_one_event(rounds):  # noqa: F811
     repo, scoped, ontology, key, item = _ctx(rounds)
     carried_id = item["target_snapshot"]["annotation"]["annotation_id"]
-    draft = RoundInputResolutionService(scoped).resolve(key, MutationEnvelope(mutation_id="d", expected_revision=0,
-        payload={"input_id": item["input_id"], "outcome": "dismissed", "reason": "Not in this text", "remove_carried_finding": True}))
+    draft = RoundInputResolutionService(scoped).resolve(
+        key,
+        MutationEnvelope(
+            mutation_id="d",
+            expected_revision=0,
+            payload={
+                "input_id": item["input_id"],
+                "outcome": "dismissed",
+                "reason": "Not in this text",
+                "remove_carried_finding": True,
+            },
+        ),
+    )
     assert draft.revision == 1
     assert all(s.annotation.annotation_id != carried_id for s in draft.annotations)
     assert not any(e.mention.evidence_id.startswith(carried_id) for e in draft.evidence)
     [resolution] = draft.round_input_resolutions
     assert resolution.outcome == "dismissed" and resolution.reason == "Not in this text"
-    events = [e for e in repo.edit_log("pkg-1") if e["command"].get("input_id") == item["input_id"]]
+    events = [
+        e
+        for e in repo.edit_log("pkg-1")
+        if e["command"].get("input_id") == item["input_id"]
+    ]
     assert len(events) == 1 and events[0]["command"]["remove_carried_finding"] is True
     # submission accepts the dismissed input
-    SubmissionService(scoped, ontology).submit(key, MutationEnvelope(mutation_id="s", expected_revision=1, payload={"document_checked": True}))
+    SubmissionService(scoped, ontology).submit(
+        key,
+        MutationEnvelope(
+            mutation_id="s", expected_revision=1, payload={"document_checked": True}
+        ),
+    )
 
 
 def test_removal_flag_is_invalid_for_completion(rounds):  # noqa: F811
     _repo, scoped, _o, key, item = _ctx(rounds)
     with pytest.raises(DomainError, match="ROUND_INPUT_INVALID"):
-        RoundInputResolutionService(scoped).resolve(key, MutationEnvelope(mutation_id="x", expected_revision=0,
-            payload={"input_id": item["input_id"], "outcome": "completed", "remove_carried_finding": True,
-                     "annotation_ref": {"annotation_id": item["target_snapshot"]["annotation"]["annotation_id"], "version": item["target_snapshot"]["version"]}}))
+        RoundInputResolutionService(scoped).resolve(
+            key,
+            MutationEnvelope(
+                mutation_id="x",
+                expected_revision=0,
+                payload={
+                    "input_id": item["input_id"],
+                    "outcome": "completed",
+                    "remove_carried_finding": True,
+                    "annotation_ref": {
+                        "annotation_id": item["target_snapshot"]["annotation"][
+                            "annotation_id"
+                        ],
+                        "version": item["target_snapshot"]["version"],
+                    },
+                },
+            ),
+        )
 
 
 def test_clear_resets_a_dismissal_restores_the_finding_and_is_logged(rounds):  # noqa: F811
     repo, scoped, _o, key, item = _ctx(rounds)
     carried_id = item["target_snapshot"]["annotation"]["annotation_id"]
     service = RoundInputResolutionService(scoped)
-    before = service.resolve(key, MutationEnvelope(mutation_id="d", expected_revision=0,
-        payload={"input_id": item["input_id"], "outcome": "dismissed", "reason": "R", "remove_carried_finding": True}))
+    before = service.resolve(
+        key,
+        MutationEnvelope(
+            mutation_id="d",
+            expected_revision=0,
+            payload={
+                "input_id": item["input_id"],
+                "outcome": "dismissed",
+                "reason": "R",
+                "remove_carried_finding": True,
+            },
+        ),
+    )
     assert all(s.annotation.annotation_id != carried_id for s in before.annotations)
-    cleared = service.clear(key, MutationEnvelope(mutation_id="u", expected_revision=1,
-        payload={"command": "clear_round_input_resolution", "input_id": item["input_id"]}))
+    cleared = service.clear(
+        key,
+        MutationEnvelope(
+            mutation_id="u",
+            expected_revision=1,
+            payload={
+                "command": "clear_round_input_resolution",
+                "input_id": item["input_id"],
+            },
+        ),
+    )
     assert cleared.round_input_resolutions == [] and cleared.revision == 2
-    [restored] = [s for s in cleared.annotations if s.annotation.annotation_id == carried_id]
-    assert restored.version == item["target_snapshot"]["version"]  # untouched since round start
-    assert repo.edit_log("pkg-1")[-1]["command"] == {"command": "clear_round_input_resolution", "input_id": item["input_id"]}
+    [restored] = [
+        s for s in cleared.annotations if s.annotation.annotation_id == carried_id
+    ]
+    assert (
+        restored.version == item["target_snapshot"]["version"]
+    )  # untouched since round start
+    assert repo.edit_log("pkg-1")[-1]["command"] == {
+        "command": "clear_round_input_resolution",
+        "input_id": item["input_id"],
+    }
 
 
 def test_undo_restores_the_edited_version_with_values_note_and_evidence(rounds):  # noqa: F811
@@ -427,30 +560,92 @@ def test_undo_restores_the_edited_version_with_values_note_and_evidence(rounds):
     carried_id = item["target_snapshot"]["annotation"]["annotation_id"]
     # Edit the carried finding first (note and one axis value; add a mention if the fixture text allows),
     # using the same EditingService commands the editor sends; capture the draft after the edit.
-    edited = _edit_carried_finding(scoped, ontology, key, carried_id)  # helper in this file
-    snapshot = next(s for s in edited.annotations if s.annotation.annotation_id == carried_id)
-    evidence = sorted((e.mention.evidence_id, e.version) for e in edited.evidence
-                      if any(r.evidence_id == e.mention.evidence_id for r in snapshot.annotation.evidence_refs))
+    edited = _edit_carried_finding(
+        scoped, ontology, key, carried_id
+    )  # helper in this file
+    snapshot = next(
+        s for s in edited.annotations if s.annotation.annotation_id == carried_id
+    )
+    evidence = sorted(
+        (e.mention.evidence_id, e.version)
+        for e in edited.evidence
+        if any(
+            r.evidence_id == e.mention.evidence_id
+            for r in snapshot.annotation.evidence_refs
+        )
+    )
     service = RoundInputResolutionService(scoped)
-    service.resolve(key, MutationEnvelope(mutation_id="d", expected_revision=edited.revision,
-        payload={"input_id": item["input_id"], "outcome": "dismissed", "reason": "R", "remove_carried_finding": True}))
-    cleared = service.clear(key, MutationEnvelope(mutation_id="u", expected_revision=edited.revision + 1,
-        payload={"command": "clear_round_input_resolution", "input_id": item["input_id"]}))
-    [restored] = [s for s in cleared.annotations if s.annotation.annotation_id == carried_id]
+    service.resolve(
+        key,
+        MutationEnvelope(
+            mutation_id="d",
+            expected_revision=edited.revision,
+            payload={
+                "input_id": item["input_id"],
+                "outcome": "dismissed",
+                "reason": "R",
+                "remove_carried_finding": True,
+            },
+        ),
+    )
+    cleared = service.clear(
+        key,
+        MutationEnvelope(
+            mutation_id="u",
+            expected_revision=edited.revision + 1,
+            payload={
+                "command": "clear_round_input_resolution",
+                "input_id": item["input_id"],
+            },
+        ),
+    )
+    [restored] = [
+        s for s in cleared.annotations if s.annotation.annotation_id == carried_id
+    ]
     assert restored == snapshot  # same version, values, note, evidence refs
-    assert sorted((e.mention.evidence_id, e.version) for e in cleared.evidence
-                  if any(r.evidence_id == e.mention.evidence_id for r in restored.annotation.evidence_refs)) == evidence
+    assert (
+        sorted(
+            (e.mention.evidence_id, e.version)
+            for e in cleared.evidence
+            if any(
+                r.evidence_id == e.mention.evidence_id
+                for r in restored.annotation.evidence_refs
+            )
+        )
+        == evidence
+    )
 
 
 def test_undo_of_a_plain_dismissal_restores_nothing(rounds):  # noqa: F811
     _repo, scoped, ontology, key, item = _ctx(rounds)
     carried_id = item["target_snapshot"]["annotation"]["annotation_id"]
-    deleted = _delete_finding(scoped, ontology, key, carried_id, expected_revision=0)  # user deletes it first
+    deleted = _delete_finding(
+        scoped, ontology, key, carried_id, expected_revision=0
+    )  # user deletes it first
     service = RoundInputResolutionService(scoped)
-    service.resolve(key, MutationEnvelope(mutation_id="d", expected_revision=deleted.revision,
-        payload={"input_id": item["input_id"], "outcome": "dismissed", "reason": "R"}))
-    cleared = service.clear(key, MutationEnvelope(mutation_id="u", expected_revision=deleted.revision + 1,
-        payload={"command": "clear_round_input_resolution", "input_id": item["input_id"]}))
+    service.resolve(
+        key,
+        MutationEnvelope(
+            mutation_id="d",
+            expected_revision=deleted.revision,
+            payload={
+                "input_id": item["input_id"],
+                "outcome": "dismissed",
+                "reason": "R",
+            },
+        ),
+    )
+    cleared = service.clear(
+        key,
+        MutationEnvelope(
+            mutation_id="u",
+            expected_revision=deleted.revision + 1,
+            payload={
+                "command": "clear_round_input_resolution",
+                "input_id": item["input_id"],
+            },
+        ),
+    )
     assert cleared.round_input_resolutions == []
     assert all(s.annotation.annotation_id != carried_id for s in cleared.annotations)
 
@@ -460,43 +655,119 @@ def test_submission_rejects_a_legacy_dismissal_while_the_carried_finding_exists(
     from ontocurator.domain.workspace import RoundInputResolution
 
     def legacy(draft):  # what the pre-B2 resolve() allowed
-        draft.round_input_resolutions = [RoundInputResolution(input_id=item["input_id"], outcome="dismissed", reason="R")]
+        draft.round_input_resolutions = [
+            RoundInputResolution(
+                input_id=item["input_id"], outcome="dismissed", reason="R"
+            )
+        ]
         return draft
 
-    repo.run_mutation(key, MutationEnvelope(mutation_id="legacy", expected_revision=0, payload={"legacy": True}), legacy)
+    repo.run_mutation(
+        key,
+        MutationEnvelope(
+            mutation_id="legacy", expected_revision=0, payload={"legacy": True}
+        ),
+        legacy,
+    )
     with pytest.raises(DomainError, match="ROUND_INPUT_CARRIED_FINDING_PRESENT"):
-        SubmissionService(scoped, ontology).submit(key, MutationEnvelope(mutation_id="s", expected_revision=1, payload={"document_checked": True}))
+        SubmissionService(scoped, ontology).submit(
+            key,
+            MutationEnvelope(
+                mutation_id="s", expected_revision=1, payload={"document_checked": True}
+            ),
+        )
 
 
 def test_submission_rejects_a_finding_recreated_with_the_carried_id(rounds):  # noqa: F811
     _repo, scoped, ontology, key, item = _ctx(rounds)
     carried = item["target_snapshot"]["annotation"]
-    RoundInputResolutionService(scoped).resolve(key, MutationEnvelope(mutation_id="d", expected_revision=0,
-        payload={"input_id": item["input_id"], "outcome": "dismissed", "reason": "R", "remove_carried_finding": True}))
-    EditingService(scoped, ontology).apply(key, MutationEnvelope(mutation_id="c", expected_revision=1, payload={
-        "command": "create_annotation", "annotation_id": carried["annotation_id"], "term_id": carried["term_id"],
-        "axes_values": {}, "chosen_axis_ids": []}))
+    RoundInputResolutionService(scoped).resolve(
+        key,
+        MutationEnvelope(
+            mutation_id="d",
+            expected_revision=0,
+            payload={
+                "input_id": item["input_id"],
+                "outcome": "dismissed",
+                "reason": "R",
+                "remove_carried_finding": True,
+            },
+        ),
+    )
+    EditingService(scoped, ontology).apply(
+        key,
+        MutationEnvelope(
+            mutation_id="c",
+            expected_revision=1,
+            payload={
+                "command": "create_annotation",
+                "annotation_id": carried["annotation_id"],
+                "term_id": carried["term_id"],
+                "axes_values": {},
+                "chosen_axis_ids": [],
+            },
+        ),
+    )
     with pytest.raises(DomainError, match="ROUND_INPUT_CARRIED_FINDING_PRESENT"):
-        SubmissionService(scoped, ontology).submit(key, MutationEnvelope(mutation_id="s", expected_revision=2, payload={"document_checked": True}))
+        SubmissionService(scoped, ontology).submit(
+            key,
+            MutationEnvelope(
+                mutation_id="s", expected_revision=2, payload={"document_checked": True}
+            ),
+        )
 
 
 def test_clear_without_resolution_or_unknown_input_is_invalid(rounds):  # noqa: F811
     _repo, scoped, _o, key, item = _ctx(rounds)
-    for payload in ({"command": "clear_round_input_resolution", "input_id": item["input_id"]},
-                    {"command": "clear_round_input_resolution", "input_id": "nope"}):
+    for payload in (
+        {"command": "clear_round_input_resolution", "input_id": item["input_id"]},
+        {"command": "clear_round_input_resolution", "input_id": "nope"},
+    ):
         with pytest.raises(DomainError, match="ROUND_INPUT_INVALID"):
-            RoundInputResolutionService(scoped).clear(key, MutationEnvelope(mutation_id=payload["input_id"], expected_revision=0, payload=payload))
+            RoundInputResolutionService(scoped).clear(
+                key,
+                MutationEnvelope(
+                    mutation_id=payload["input_id"],
+                    expected_revision=0,
+                    payload=payload,
+                ),
+            )
 
 
 def test_clear_after_submission_is_refused(rounds):  # noqa: F811
     repo, scoped, ontology, key, item = _ctx(rounds)
     service = RoundInputResolutionService(scoped)
-    service.resolve(key, MutationEnvelope(mutation_id="d", expected_revision=0,
-        payload={"input_id": item["input_id"], "outcome": "dismissed", "reason": "R", "remove_carried_finding": True}))
-    SubmissionService(scoped, ontology).submit(key, MutationEnvelope(mutation_id="s", expected_revision=1, payload={"document_checked": True}))
+    service.resolve(
+        key,
+        MutationEnvelope(
+            mutation_id="d",
+            expected_revision=0,
+            payload={
+                "input_id": item["input_id"],
+                "outcome": "dismissed",
+                "reason": "R",
+                "remove_carried_finding": True,
+            },
+        ),
+    )
+    SubmissionService(scoped, ontology).submit(
+        key,
+        MutationEnvelope(
+            mutation_id="s", expected_revision=1, payload={"document_checked": True}
+        ),
+    )
     with pytest.raises(DomainError):
-        service.clear(key, MutationEnvelope(mutation_id="u", expected_revision=2,
-            payload={"command": "clear_round_input_resolution", "input_id": item["input_id"]}))
+        service.clear(
+            key,
+            MutationEnvelope(
+                mutation_id="u",
+                expected_revision=2,
+                payload={
+                    "command": "clear_round_input_resolution",
+                    "input_id": item["input_id"],
+                },
+            ),
+        )
 ```
 
 `_edit_carried_finding` and `_delete_finding` are small helpers in this file that send the editor's existing commands through `EditingService.apply` (look up the command names and payloads in `application/editing.py`: note update, axis update, mention creation if the fixture text has a free span, `delete_annotation`) and return the resulting draft. The legacy test uses `repo.run_mutation` with a custom operation only to build a pre-B2 state; adapt the payload if `MutationEnvelope` requires a `command` key.
@@ -512,12 +783,25 @@ Add one HTTP test in the same file using the app/harness pattern of `tests/test_
 ```python
 def remove_draft_annotation(draft: Draft, annotation_id: str) -> None:
     """Remove a finding, replacement decisions naming it and orphaned evidence; unchecks its layer."""
-    target = next((a for a in draft.annotations if a.annotation.annotation_id == annotation_id), None)
+    target = next(
+        (a for a in draft.annotations if a.annotation.annotation_id == annotation_id),
+        None,
+    )
     if target:
-        draft.checked_layer_ids = [lid for lid in draft.checked_layer_ids if lid != target.annotation.layer_id]
-    draft.annotations = [a for a in draft.annotations if a.annotation.annotation_id != annotation_id]
-    draft.decisions = [d for d in draft.decisions if not (d.replacement and d.replacement.annotation_id == annotation_id)]
-    active = {r.evidence_id for a in draft.annotations for r in a.annotation.evidence_refs}
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != target.annotation.layer_id
+        ]
+    draft.annotations = [
+        a for a in draft.annotations if a.annotation.annotation_id != annotation_id
+    ]
+    draft.decisions = [
+        d
+        for d in draft.decisions
+        if not (d.replacement and d.replacement.annotation_id == annotation_id)
+    ]
+    active = {
+        r.evidence_id for a in draft.annotations for r in a.annotation.evidence_refs
+    }
     draft.evidence = [e for e in draft.evidence if e.mention.evidence_id in active]
 ```
 
@@ -544,9 +828,14 @@ class ClearRoundInputCommand(BaseModel):
 ```python
 target = inputs[resolution.input_id].get("target_snapshot")
 carried_id = target["annotation"]["annotation_id"] if target else None
-present = carried_id is not None and any(s.annotation.annotation_id == carried_id for s in draft.annotations)
+present = carried_id is not None and any(
+    s.annotation.annotation_id == carried_id for s in draft.annotations
+)
 if present and not command.remove_carried_finding:
-    raise DomainError("ROUND_INPUT_CARRIED_FINDING_PRESENT", {"input_id": resolution.input_id, "annotation_id": carried_id})
+    raise DomainError(
+        "ROUND_INPUT_CARRIED_FINDING_PRESENT",
+        {"input_id": resolution.input_id, "annotation_id": carried_id},
+    )
 if present:
     remove_draft_annotation(draft, carried_id)
 ```
@@ -566,7 +855,12 @@ Add `clear(key, envelope)`: same kind and input checks; `ClearRoundInputCommand.
 
 ```python
 @router.post("/workspaces/{workspace_id}/round-input-resolutions/clear")
-def clear_input(workspace_id: str, envelope: MutationEnvelope, request: Request, principal: PrincipalDep) -> Draft:
+def clear_input(
+    workspace_id: str,
+    envelope: MutationEnvelope,
+    request: Request,
+    principal: PrincipalDep,
+) -> Draft:
     key = own_key(principal, decode_workspace_id(workspace_id))
     return RoundInputResolutionService(get_repo(request)).clear(key, envelope)
 ```
@@ -600,7 +894,9 @@ Register `ROUND_INPUT_CARRIED_FINDING_PRESENT` in `domain/admin_error_codes.py`,
 `application/round_reads.py` (append):
 
 ```python
-def assignment_submissions(repo: Repository, project_key: str, assignment_id: int) -> list[dict[str, Any]]:
+def assignment_submissions(
+    repo: Repository, project_key: str, assignment_id: int
+) -> list[dict[str, Any]]:
     """Submissions bound to any round of the assignment, oldest recorded first."""
 ```
 
@@ -619,16 +915,25 @@ class AssignmentSubmissionView(BaseModel):
     language: str
     version: int
 
+
 router = APIRouter(prefix="/api/v1", tags=["work-rounds"])
 
+
 @router.get("/assignments/{assignment_id}/submissions")
-def list_assignment_submissions(assignment_id: int, request: Request, principal: PrincipalDep) -> list[AssignmentSubmissionView]:
+def list_assignment_submissions(
+    assignment_id: int, request: Request, principal: PrincipalDep
+) -> list[AssignmentSubmissionView]:
     repo = get_repo(request)
     with repo.db.transaction() as conn:
         assignment = AssignmentService._get(conn, assignment_id)
-        if assignment.user_id != principal.user_id and not can(get_access(request), Action.MANAGE_ASSIGNMENTS, assignment.project_key):
+        if assignment.user_id != principal.user_id and not can(
+            get_access(request), Action.MANAGE_ASSIGNMENTS, assignment.project_key
+        ):
             raise DomainError("ASSIGNMENT_NOT_FOUND")
-    return [AssignmentSubmissionView(**item) for item in assignment_submissions(repo, assignment.project_key, assignment_id)]
+    return [
+        AssignmentSubmissionView(**item)
+        for item in assignment_submissions(repo, assignment.project_key, assignment_id)
+    ]
 ```
 
 Include the router in `api/app.py` next to the work-round router (one line; take `app.py` only while no Documents or problem-reports WP holds it, see "Cross-plan locks" 5).
@@ -636,12 +941,12 @@ Include the router in `api/app.py` next to the work-round router (one line; take
 `api/submission_history_routes.py`: `SubmissionHistoryDetail` gains
 
 ```python
-    checked_layer_ids: list[str] = []
-    document_checked: bool = False
-    reanchor_inputs: list[ReanchorItem] = []          # same types as on Submission
-    reanchor_resolutions: list[ReanchorResolution] = []
-    round_inputs: list[RoundInputView] = []
-    round_input_resolutions: list[RoundInputResolution] = []
+checked_layer_ids: list[str] = []
+document_checked: bool = False
+reanchor_inputs: list[ReanchorItem] = []  # same types as on Submission
+reanchor_resolutions: list[ReanchorResolution] = []
+round_inputs: list[RoundInputView] = []
+round_input_resolutions: list[RoundInputResolution] = []
 ```
 
 Fill the first four from the decoded `Submission`; when the summary's `round_id` is set and that round is `carry_forward`, after leaving the snapshot `with` block call `enrich_inputs(repo, key, repo.get_round_input_inventory(key, round_id))` and take `submission.round_input_resolutions`. Use the exact types used by `Submission` for re-anchor fields (`grep -n "reanchor_inputs" src/ontocurator/domain/workspace.py`). Authorization stays `may_read_human_submission` (leads and owner).

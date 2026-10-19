@@ -16,6 +16,7 @@ from ontocurator.api.routes import (
     get_access,
     open_workspace,
 )
+from ontocurator.application.workspace_opening import WorkspaceOpeningService
 from ontocurator.assignments.confirmations import (
     ConfirmationRow,
     DistributionConfirmationService,
@@ -52,6 +53,10 @@ class AssignmentView(BaseModel):
     last_submission_id: str | None
     display_name: str
     external_id: str | None = None
+    active_round_id: str | None = None
+    workflow_revision: int = 0
+    held: bool = False
+    hold_reason: str | None = None
 
 
 class AssignmentOpenRequest(BaseModel):
@@ -318,6 +323,18 @@ def open_assignment(
     assignment = _owned_assignment(request, principal.user_id, assignment_id)
     if assignment.task not in MODE_FOR_TASK:
         raise DomainError("TASK_INVALID")
+    if assignment.active_round_id is not None and not (
+        body and body.review_round_target_set_id
+    ):
+        from ontocurator.api.work_round_routes import open_round
+
+        response = open_round(assignment.active_round_id, request, principal, ws_svc)
+        return AssignmentOpenResponse(
+            workspace_id=response.workspace_id,
+            view=response.view,
+            read_only=response.read_only,
+            assignment=_views(request, [assignment])[0],
+        )
     response = open_workspace(
         OpenWorkspaceRequest(
             project_key=assignment.project_key,
@@ -330,6 +347,9 @@ def open_assignment(
         request,
         ws_svc,
         principal,
+    )
+    assignment = WorkspaceOpeningService(ws_svc).bind_assignment_workspace(
+        response.view.key, Actor.user(principal.user_id, principal.username)
     )
     return AssignmentOpenResponse(
         workspace_id=response.workspace_id,

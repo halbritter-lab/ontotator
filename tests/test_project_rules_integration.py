@@ -109,7 +109,7 @@ def test_submission_checks_materialized_result(profile, document, branch):
         get_project_rules=lambda _: ProjectRules(
             require_chosen_axes=True, require_spanless_note=False
         ),
-        list_annotations_for_document=lambda *_: [item],
+        workspace_input_snapshots=lambda *_: [item],
     )
     service = SubmissionService(repo)
     if branch == "rejected":
@@ -138,7 +138,7 @@ def test_adopt_and_edit_inherits_only_unchanged_nonempty_defaults(
     profile, document, changed
 ):
     source = annotation_snapshot(profile, document, defaulted=["presence", "context"])
-    repo = SimpleNamespace(list_annotations_for_document=lambda *_: [source])
+    repo = SimpleNamespace(workspace_input_snapshots=lambda *_: [source])
     ontology = SimpleNamespace(
         validate_term=lambda term: SimpleNamespace(status="valid", term_id=term)
     )
@@ -179,7 +179,7 @@ def test_adopt_and_edit_inherits_only_unchanged_nonempty_defaults(
 )
 def test_copy_requires_verified_exact_source(profile, document, change):
     source = annotation_snapshot(profile, document, defaulted=["presence"])
-    repo = SimpleNamespace(list_annotations_for_document=lambda *_: [source])
+    repo = SimpleNamespace(workspace_input_snapshots=lambda *_: [source])
     ontology = SimpleNamespace(
         validate_term=lambda term: SimpleNamespace(status="valid", term_id=term)
     )
@@ -272,7 +272,7 @@ def test_materialized_result_resolves_distinct_versions_of_same_evidence_id(
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(contiguous_mentions_only=restricted),
-        list_annotations_for_document=lambda *_: [target],
+        workspace_input_snapshots=lambda *_: [target],
     )
     if restricted:
         with pytest.raises(DomainError) as exc:
@@ -328,7 +328,7 @@ def test_new_draft_submission_validates_spanless_materialized_results(
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(),
-        list_annotations_for_document=lambda *_: [item],
+        workspace_input_snapshots=lambda *_: [item],
     )
     with pytest.raises(DomainError) as exc:
         SubmissionService(repo)._create_submission(draft, SubmitCommand(), draft.key)
@@ -407,7 +407,7 @@ def test_submission_requires_each_frozen_reanchor_resolution(profile, resolved):
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(),
-        list_annotations_for_document=lambda *_: [],
+        workspace_input_snapshots=lambda *_: [],
         reanchor_source_identity=lambda *_: (None, None),
     )
     if resolved:
@@ -450,7 +450,7 @@ def test_unresolved_submission_validates_immutable_target_term(
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(require_spanless_note=False),
-        list_annotations_for_document=lambda *_: [item],
+        workspace_input_snapshots=lambda *_: [item],
     )
     ontology = SimpleNamespace(
         validate_term=lambda _: SimpleNamespace(

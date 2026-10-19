@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 from ontocurator import settings
 from ontocurator.api.admin_routes import router as admin_router
 from ontocurator.api.auth_routes import router as auth_router
+from ontocurator.api.final_result_routes import router as final_result_router
 from ontocurator.api.health import ReadinessProbe
 from ontocurator.api.health import router as health_router
 from ontocurator.api.job_routes import router as job_router
@@ -31,6 +32,12 @@ from ontocurator.api.ontology_routes import router as ontology_router
 from ontocurator.api.project_routes import router as project_router
 from ontocurator.api.routes import router
 from ontocurator.api.security import install_security
+from ontocurator.api.submission_history_routes import (
+    router as submission_history_router,
+)
+from ontocurator.api.translation_workflow_routes import (
+    router as translation_workflow_router,
+)
 from ontocurator.api.tree_routes import router as tree_router
 from ontocurator.api.upload_routes import router as upload_router
 from ontocurator.auth.accounts import AccountService
@@ -68,6 +75,10 @@ NOT_FOUND_CODES = frozenset(
         "PACKAGE_NOT_FOUND",
         "UPLOAD_NOT_FOUND",
         "PROPOSAL_SET_NOT_FOUND",
+        "ROUND_NOT_FOUND",
+        "REPORT_NOT_FOUND",
+        "ANNOTATION_NOT_FOUND",
+        "EVIDENCE_NOT_FOUND",
     }
 )
 
@@ -383,6 +394,14 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                 if exc.code in NOT_FOUND_CODES
                 else {
                     "ASSIGNMENT_SUBMITTED": 409,
+                    "WORKFLOW_REVISION_CONFLICT": 409,
+                    "WORKFLOW_REQUEST_CONFLICT": 409,
+                    "ROUND_INPUT_STALE": 409,
+                    "ROUND_INPUT_RESOLUTION_STALE": 409,
+                    "ROUND_NOT_EDITABLE": 409,
+                    "ROUND_ACTIVE": 409,
+                    "ROUND_ALREADY_EXISTS": 409,
+                    "TASK_HELD": 409,
                     "VARIANT_REVIEW_STALE": 409,
                     "TRANSLATION_NOT_ACCEPTED": 409,
                     "LANGUAGE_CONFIRMATION_REQUIRED": 409,
@@ -408,14 +427,23 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     from ontocurator.api.variant_routes import router as variant_router
 
     app.include_router(assignment_router)
+    from ontocurator.api.work_round_routes import router as work_round_router
+
+    app.include_router(work_round_router)
+    from ontocurator.api.problem_report_routes import router as problem_report_router
+
+    app.include_router(problem_report_router)
     from ontocurator.api.translation_review_routes import (
         router as translation_review_router,
     )
 
     app.include_router(translation_review_router)
+    app.include_router(submission_history_router)
     app.include_router(variant_router)
     app.include_router(admin_router)
     app.include_router(ontology_router)
+    app.include_router(final_result_router)
+    app.include_router(translation_workflow_router)
     app.include_router(project_router)
     app.include_router(job_router)
     app.include_router(upload_router)

@@ -469,6 +469,25 @@ def _proposal_ref(annotation_id: str, project: str) -> str:
     return annotation_id
 
 
+def _export_source_ref(
+    source_ref: str,
+    project: str,
+    proposals: Mapping[tuple[str, str], AnnotationSnapshot],
+) -> str:
+    """Normalize verified internal identities before accepting external URNs."""
+    source_id, separator, version = source_ref.rpartition(":")
+    if (
+        separator
+        and len(version) == 64
+        and all(char in "0123456789abcdefABCDEF" for char in version)
+        and (source_id, version) in proposals
+    ):
+        return _proposal_ref(source_id, project)
+    # A hash-looking external annotation ID is valid without an inventory hit.
+    ontospan.parse_annotation_ref(source_ref)
+    return source_ref
+
+
 def _method(provenance: Provenance) -> Method:
     method = provenance.method
     if method in KEPT_METHODS:
@@ -514,14 +533,16 @@ def _mentions(snap: AnnotationSnapshot, text: str) -> tuple[ontospan.Mention, ..
 
 
 def reviewed_provenance(
-    reviewer: ontospan.Actor, method: Method, source_ref: str
+    reviewer: ontospan.Actor, method: Method, source_refs: Sequence[str]
 ) -> ontospan.Provenance:
     """The provenance of an adopted or edited annotation in a review export.
 
     Confirmed 2026-10-15 (user): the reviewer is the actor and the proposal
     is named in ``source_refs``. This is the only place that decides it.
     """
-    return ontospan.Provenance(actor=reviewer, method=method, source_refs=(source_ref,))
+    return ontospan.Provenance(
+        actor=reviewer, method=method, source_refs=tuple(source_refs)
+    )
 
 
 def submission_to_unit(
@@ -538,6 +559,7 @@ def submission_to_unit(
     variant: VariantInfo | None = None,
     source_variant_hashes: Mapping[str, str] | None = None,
     single_native_case: bool = True,
+    source_ref_overrides: Mapping[str, str] | None = None,
 ) -> tuple[ontospan.AnnotatedDocument, ExportCounts]:
     """One ``individual`` set with the annotator's resulting annotations (Q12).
 
@@ -547,12 +569,41 @@ def submission_to_unit(
     their source provenance and carry a separate reviewer resolution flag.
     """
     key = submission.origin_key
+    # Frozen inputs disambiguate internal references that also parse as URNs.
+    for frozen in submission.reanchor_inputs:
+        ref = frozen.source_ref
+        if (ref.annotation_id, ref.version) not in proposals:
+            raise DomainError(
+                "TARGET_NOT_FOUND",
+                {"annotation_id": ref.annotation_id, "version": ref.version},
+            )
+
+    def proposal_ref(annotation_id: str) -> str:
+        if source_ref_overrides and annotation_id in source_ref_overrides:
+            ref = source_ref_overrides[annotation_id]
+            ontospan.parse_annotation_ref(ref)
+            return ref
+        return _proposal_ref(annotation_id, key.project_key)
+
+    def normalize_source_ref(raw: str) -> str:
+        if source_ref_overrides and raw in source_ref_overrides:
+            return proposal_ref(raw)
+        source, separator, version = raw.rpartition(":")
+        if (
+            separator
+            and (source, version) in proposals
+            and source_ref_overrides
+            and source in source_ref_overrides
+        ):
+            return proposal_ref(source)
+        return _export_source_ref(raw, key.project_key, proposals)
+
     reviewer = ontospan.Actor(actor_id=key.annotator_id, kind="human")
     t1_profiles = {layer.layer_id: layer.profile for layer in layers}
     counts: ExportCounts = {"rejected": 0, "uncertain": 0, "defaulted_axes": 0}
 
-    # (annotation id, version) -> (method, source ref) for review results.
-    reviewed: dict[tuple[str, str], tuple[Method, str]] = {}
+    # (annotation id, version) -> (method, all exact source refs) for review results.
+    reviewed: dict[tuple[str, str], tuple[Method, list[str]]] = {}
     note_sources: dict[tuple[str, str], list[tuple[str, str]]] = {}
     unresolved: dict[tuple[str, str], ReviewDecision] = {}
     snapshots = list(submission.snapshots)
@@ -560,9 +611,9 @@ def submission_to_unit(
     decision: ReviewDecision
     for decision in submission.decisions if key.mode == "review" else []:
         target = (decision.target.annotation_id, decision.target.version)
-        source = _proposal_ref(decision.target.annotation_id, key.project_key)
+        source = proposal_ref(decision.target.annotation_id)
         if decision.outcome == "confirmed":
-            reviewed[target] = ("adopted", source)
+            reviewed[target] = ("adopted", [source])
             if target not in present:
                 proposal = proposals.get(target)
                 if proposal is None:
@@ -578,7 +629,7 @@ def submission_to_unit(
                 decision.replacement.annotation_id,
                 decision.replacement.version,
             )
-            reviewed[replacement] = ("edited", source)
+            reviewed.setdefault(replacement, ("edited", []))[1].append(source)
             note_sources.setdefault(replacement, []).append(target)
         elif decision.outcome == "rejected":
             counts["rejected"] += 1
@@ -610,7 +661,18 @@ def submission_to_unit(
         item = snap.annotation
         review = reviewed.get((item.annotation_id, snap.version))
         if review is not None:
-            provenance = reviewed_provenance(reviewer, review[0], review[1])
+            sources = set(review[1])
+            if _method(item.provenance) == "merged":
+                sources.update(
+                    normalize_source_ref(ref) for ref in item.provenance.source_refs
+                )
+            source_refs = tuple(sorted(sources))
+            method = (
+                "merged"
+                if len(source_refs) > 1 or _method(item.provenance) == "merged"
+                else review[0]
+            )
+            provenance = reviewed_provenance(reviewer, method, source_refs)
         else:
             provenance = ontospan.Provenance(
                 actor=ontospan.Actor(
@@ -621,9 +683,12 @@ def submission_to_unit(
                 source_refs=tuple(
                     dict.fromkeys(
                         [
-                            *item.provenance.source_refs,
                             *(
-                                [_proposal_ref(item.annotation_id, key.project_key)]
+                                normalize_source_ref(ref)
+                                for ref in item.provenance.source_refs
+                            ),
+                            *(
+                                [proposal_ref(item.annotation_id)]
                                 if unresolved_decision
                                 else []
                             ),
@@ -642,6 +707,12 @@ def submission_to_unit(
             dict.fromkeys(
                 [
                     *([item.note] if item.note else []),
+                    *(
+                        original_snapshot.annotation.note
+                        for ref in note_refs
+                        if (original_snapshot := proposals.get(ref)) is not None
+                        and original_snapshot.annotation.note
+                    ),
                     *(
                         note
                         for ref in note_refs

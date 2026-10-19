@@ -134,6 +134,28 @@ def readable_case_documents(
         )
     ).all()
     ids = {row.document_id for row in assignments}
+    # Frozen human source texts are visible only through an exact offered input.
+    from ontocurator.storage.tables import SubmissionRow
+    from ontocurator.storage.workflow_tables import RoundInputRow, WorkRoundRow
+
+    ids.update(
+        conn.execute(
+            select(SubmissionRow.document_id)
+            .join(
+                RoundInputRow,
+                and_(
+                    RoundInputRow.project_id == SubmissionRow.project_id,
+                    RoundInputRow.source_submission_id == SubmissionRow.submission_id,
+                ),
+            )
+            .join(WorkRoundRow, WorkRoundRow.round_id == RoundInputRow.round_id)
+            .join(AssignmentRow, AssignmentRow.id == WorkRoundRow.assignment_id)
+            .where(
+                RoundInputRow.project_id == project_id,
+                qualifying_assignment(fresh.user_id),
+            )
+        ).scalars()
+    )
     if not ids:
         return DocumentFilter(False)
     if can(fresh, Action.BROWSE_VERSIONS, project_key):

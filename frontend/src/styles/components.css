@@ -693,6 +693,34 @@ textarea.form-control {
 .shell-page .toolbar .form-group { margin-bottom: 0; }
 .notice { font-size: var(--size-md); line-height: var(--leading-md); }
 
+.shell-project-selector { position: relative; min-width: 0; font-size: var(--size-md); }
+.shell-project-selector > summary { max-width: 32ch; overflow-wrap: anywhere; cursor: pointer; padding: var(--space-2); }
+.shell-project-menu { position: absolute; inset-inline-end: 0; top: calc(100% + var(--space-1)); z-index: 110;
+  width: min(23rem, calc(100vw - 2 * var(--space-4))); max-height: 65dvh; overflow: auto;
+  padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
+.shell-project-menu .form-control, .shell-project-menu .form-select { width: 100%; }
+.shell-project-menu p { margin-bottom: 0; overflow-wrap: anywhere; }
+.document-tree { margin-block: var(--space-4); }
+.logical-text { border-top: 1px solid var(--border-strong); padding-block: var(--space-3); }
+.logical-text > summary { font-size: var(--size-xl); font-family: var(--font-serif); }
+.document-tree summary { cursor: pointer; overflow-wrap: anywhere; }
+.document-tree summary:focus-visible, .shell-project-selector summary:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
+.document-language { margin: var(--space-3) 0 0 var(--space-4); }
+.document-language > summary { font-weight: var(--weight-strong); }
+.document-language-final { display: block; margin-top: var(--space-1); color: var(--text-muted); font-size: var(--size-sm); font-weight: var(--weight-regular); overflow-wrap: anywhere; }
+.document-version-list, .document-corrections { list-style: none; padding-inline-start: var(--space-4); margin-block: var(--space-2); }
+.document-version { border-top: 1px solid var(--border); padding-block: var(--space-2); }
+.document-version-body { padding: var(--space-2) 0 var(--space-3) var(--space-4); }
+.document-version-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.document-version-actions .form-group { margin: 0; }
+.document-version-work { margin-block: var(--space-3); }
+.document-version-work h3 { margin: 0 0 var(--space-2); font-size: var(--size-md); }
+.document-version-body dd { overflow-wrap: anywhere; }
+.submission-result-list { padding-inline-start: var(--space-5); }
+.submission-result-list li { padding-block: var(--space-2); }
+.submission-result > .readonly-annotation-view { min-height: 24rem; max-height: 65vh; }
+.historical-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* Label-over-number readout for a few totals; still a <dl>. */
 .stat-row { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); margin-top: var(--space-3); font-variant-numeric: tabular-nums; }
 .stat-row > div { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -720,5 +748,7 @@ textarea.form-control {
   .shell-body { flex-direction: column; }
   .app-nav { flex: 0 0 auto; border-right: 0; border-bottom: 1px solid var(--border); padding: var(--space-3) var(--space-4); }
   .shell-actions { width: 100%; }
+  .shell-actions .shell-project-selector { flex: 1 0 100%; }
+  .shell-project-menu { inset-inline: 0; width: 100%; max-width: 100%; box-sizing: border-box; }
   .shell-page { padding: var(--space-5) var(--space-4); }
 }

@@ -64,11 +64,29 @@ def _check_search_languages(
     return checked
 
 
+class MultilingualSearchPreferences(BaseModel):
+    """Personal defaults; temporary editor switches never change these."""
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = True
+    preferred_languages: list[str] = Field(default_factory=list)
+    automatic_document_language: bool = True
+
+    @field_validator("preferred_languages")
+    @classmethod
+    def validate_languages(cls, value: list[str]) -> list[str]:
+        cleaned = clean_languages(value)
+        if cleaned is None:
+            raise ValueError("languages must be a short list of language codes")
+        return cleaned
+
+
 class Preferences(BaseModel):
     """A user's preferences returned by ``GET /api/v1/preferences``."""
 
     model_config = ConfigDict(extra="ignore")
 
+    multilingual_search: MultilingualSearchPreferences | None = None
     last_annotator_id: str | None = None
     mode_by_package: dict[str, PreferenceMode] = Field(default_factory=dict)
     # Annotator id -> translation languages that annotator searches in. No
@@ -83,6 +101,7 @@ class PreferencesUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    multilingual_search: MultilingualSearchPreferences | None = None
     last_annotator_id: str | None = None
     mode_by_package: dict[str, PreferenceMode] | None = None
     # Merged per annotator: the given annotators' selections are replaced, the

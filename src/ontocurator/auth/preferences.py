@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ontocurator.application.preferences import (
+    MultilingualSearchPreferences,
     Preferences,
     PreferencesUpdate,
     clean_languages,
@@ -32,6 +33,11 @@ def _from_stored(data: object) -> Preferences:
         prefs.last_annotator_id = Preferences.model_validate(
             {"last_annotator_id": data.get("last_annotator_id")}
         ).last_annotator_id
+    if data.get("multilingual_search") is not None:
+        with contextlib.suppress(ValidationError):
+            prefs.multilingual_search = MultilingualSearchPreferences.model_validate(
+                data["multilingual_search"]
+            )
     modes = data.get("mode_by_package")
     if isinstance(modes, dict):
         for project_key, mode in modes.items():
@@ -82,6 +88,8 @@ class UserPreferencesStore:
                 .with_for_update()
             ).scalar_one()
             prefs = _from_stored(stored)
+            if "multilingual_search" in change.model_fields_set:
+                prefs.multilingual_search = change.multilingual_search
             if "last_annotator_id" in change.model_fields_set:
                 prefs.last_annotator_id = change.last_annotator_id
             if change.mode_by_package:

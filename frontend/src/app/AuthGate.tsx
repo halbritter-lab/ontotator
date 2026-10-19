@@ -41,9 +41,15 @@ export const AuthGate: React.FC = () => {
   const recheckingRef = useRef(false);
   const appShellRef = useRef<HTMLDivElement>(null);
   const [noticeDismissed, setNoticeDismissed] = useState(false);
+  // Keep this through explicit logout; a fresh tab has no previous identity.
+  const lastUsername = useRef<string | null>(null);
 
   /** Take over a user with a valid session; the same user keeps the editor and retries its saves. */
   const adopt = (user: CurrentUser, previous: CurrentUser | null, noticeForAnother?: string) => {
+    if (lastUsername.current !== null && lastUsername.current !== user.username) {
+      window.history.replaceState(null, '', '#/');
+    }
+    lastUsername.current = user.username;
     if (previous && user.username === previous.username) {
       setState({ kind: "ready", user });
       notifySessionRestored();
@@ -91,7 +97,7 @@ export const AuthGate: React.FC = () => {
     let active = true;
     api.me().then(
       (user) => {
-        if (active) setState({ kind: "ready", user });
+        if (active) { lastUsername.current = user.username; setState({ kind: "ready", user }); }
       },
       (err: unknown) => {
         if (!active) return;

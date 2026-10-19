@@ -26,7 +26,7 @@ const text: Schemas["VariantText"] = {
 const ref: Schemas["VersionRef"] = { kind: "proposals", id: refId, label: "Tool", created_at: time };
 const annotationVersion: Schemas["AnnotationVersion"] = { ref, annotations: [], evidence: [] };
 const assignment: Schemas["AssignmentView"] = {
-  id: 41, project_key: project, document_id: documentId, user_id: 4, username: "reviewer",
+  id: 41, workflow_revision: 0, held: false, project_key: project, document_id: documentId, user_id: 4, username: "reviewer",
   pseudonym: "own-pseudo", display_name: "Reviewer", task: "translation_review", status: "submitted", created_at: time,
   updated_at: time, revoked_at: null, last_submission_id: "tr-7", external_id: "external-1",
 };

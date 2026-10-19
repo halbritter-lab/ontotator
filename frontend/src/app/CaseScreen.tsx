@@ -1,4 +1,7 @@
 import { ReanchorPanel, currentReanchorResolution, reanchorKey, reanchorRef, useReanchorContext } from "../variants/ReanchorPanel";
+import { RoundInputPanel, currentRoundInputResolution } from "../tasks/RoundInputPanel";
+import { RoundInputEvidenceDialog } from "../tasks/RoundInputEvidenceDialog";
+import { MergeInputs } from "../tasks/MergeInputs";
 import { ComparePane } from "../variants/ComparePane";
 import { Toolbar } from "../ui/Toolbar";
 import { VariantSelectors } from "../variants/VariantSelectors";
@@ -12,6 +15,7 @@ import type { AnnotationVersion } from "../api/client";
 import type { Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
 import { Textarea } from "../ui/Textarea";
+import { Checkbox } from "../ui/Checkbox";
 import { Button } from "../ui/Button";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -43,6 +47,7 @@ import {
 } from "../editor/autosave";
 import { newEvidenceId } from "../editor/ids";
 import { submissionHistoryLabel } from "../editor/submissionHistoryLabel";
+import { axisOptionLabel, findingAxes } from "../editor/axisLabels";
 import { StatusBadge } from "../ui/StatusBadge";
 import { defaultedResults, resultSnapshots } from "../editor/decisionSemantics";
 import { LayerControls } from "../editor/LayerControls";
@@ -83,8 +88,8 @@ import type { RouteLeaveGuard } from "./router";
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
 /**
- * Initial axis values for a new annotation: every axis starts unspecified (null).
- * No clinical defaults (e.g. assertion "present") are ever pre-filled.
+ * Unspecified baseline for new findings. Configured project presets are applied
+ * separately and never imply deliberate clinical confirmation.
  */
 export const initialAxisValues = (
   axes: { id: string; options: string[] }[],
@@ -113,6 +118,24 @@ interface ConfirmRequest {
   resolve: (ok: boolean) => void;
 }
 
+type AxisWarning = {
+  acknowledgement: { draft_revision: number; policy_revision: number; warning_digest: string };
+  warnings: { annotationId: string; axis: string }[];
+};
+function submissionAxisWarning(error: unknown): AxisWarning | null {
+  if (!(error instanceof ApiError) || error.code !== "AXIS_CONFIRMATION_WARNING" || typeof error.details !== "object" || !error.details) return null;
+  const acknowledgement = error.details.acknowledgement as AxisWarning["acknowledgement"] | undefined;
+  if (!acknowledgement || !Number.isSafeInteger(acknowledgement.draft_revision) || acknowledgement.draft_revision < 0
+    || !Number.isSafeInteger(acknowledgement.policy_revision) || acknowledgement.policy_revision < 0
+    || typeof acknowledgement.warning_digest !== "string" || !acknowledgement.warning_digest) return null;
+  const warnings = Array.isArray(error.details.warnings) ? error.details.warnings.flatMap((warning: unknown) => {
+    if (!warning || typeof warning !== "object") return [];
+    const item = warning as { annotation_id?: unknown; detail?: { axis?: unknown } };
+    return typeof item.annotation_id === "string" && typeof item.detail?.axis === "string" ? [{ annotationId: item.annotation_id, axis: item.detail.axis }] : [];
+  }) : [];
+  return { acknowledgement, warnings };
+}
+
 export type WorkspaceView = components["schemas"]["WorkspaceView"];
 
 export interface CaseScreenProps {
@@ -133,6 +156,12 @@ export interface CaseScreenProps {
   /** The logged-in user's display name, shown with the pseudonym. */
   annotatorName?: string;
   leaveGuardRef?: React.MutableRefObject<((proceed: () => void) => void) | null>;
+  taskActions?: React.ReactNode;
+  held?: boolean;
+  holdReason?: string | null;
+  saveBeforeReportRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+  roundInputs?: readonly import("../api/client").RoundInputView[];
+  roundKind?: import("../api/client").WorkRoundView["kind"];
 }
 
 export const CaseScreen: React.FC<CaseScreenProps> = ({
@@ -145,9 +174,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onSubmitted,
   annotatorName,
   leaveGuardRef,
-  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext,
+  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, held = false, holdReason, saveBeforeReportRef, roundInputs = [], roundKind,
 }) => {
   const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, versionContext?.canBrowseVersions, workspaceId, view.key]);
+  const [acceptedSubmission, setAcceptedSubmission] = useState<{ identity: string; value: Submission } | null>(null);
+  const submissions = useMemo(() => {
+    const stored = view.submissions ?? [];
+    if (acceptedSubmission?.identity !== versionIdentity || stored.some(value => value.submission_id === acceptedSubmission.value.submission_id)) return stored;
+    return [...stored, acceptedSubmission.value];
+  }, [view.submissions, acceptedSubmission, versionIdentity]);
   const { versions, versionError, setVersionError, retryVersions } = useCaseVersions(view.key.project_key, view.document.document_id, versionContext, versionIdentity);
   const [displayed, setDisplayed] = useState<{ identity: string; selection: string; label: string; value: AnnotationVersion | null } | null>(null);
   const display = displayed?.identity === versionIdentity ? displayed : null;
@@ -164,7 +199,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [versionBusy, setVersionBusy] = useState(false);
   const versionGeneration = useRef(0);
   useEffect(() => { versionGeneration.current++; setVersionBusy(false); return () => { versionGeneration.current++; }; }, [versionIdentity]);
-  const readOnly = serverReadOnly || display !== null;
+  const readOnly = serverReadOnly || display !== null || held || acceptedSubmission?.identity === versionIdentity;
   const spanlessNotesRequired = view.enforce_spanless_rules && view.allow_spanless_findings !== false && view.require_spanless_note !== false;
   // A ref also protects callbacks retained before this task became read-only.
   const readOnlyRef = useRef(readOnly);
@@ -180,6 +215,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     segments: SelectionPayload["segments"];
     isSpanless?: boolean;
     reanchorItem?: ReanchorItem;
+    selectedTerm?: { termId: string; searchId?: string };
   } | null>(null);
   const [activeReanchor, setActiveReanchor] = useState<ReanchorItem | null>(null);
   const [resolutionItem, setResolutionItem] = useState<ReanchorItem | null>(null);
@@ -210,6 +246,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const pendingReanchorItems = view.key.mode === "review" ? view.pending_reanchor_items ?? [] : [];
   const unresolvedReanchorCount = pendingReanchorItems.filter(item =>
     !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? [])).length;
+  const carriedInputs = roundKind === "carry_forward" || (view.key.mode === "independent" && roundInputs.length) ? roundInputs : [];
+  const pendingCarriedCount = carriedInputs.filter(input => !currentRoundInputResolution(input, draft.round_input_resolutions ?? [], draft.annotations ?? [])).length;
+  const [originalRoundInput, setOriginalRoundInput] = useState<import("../api/client").RoundInputView | null>(null);
 
   const [layerSelection, setLayerSelection] = useState<LayerSelection>(() =>
     initLayerSelection(view.layers ?? [], view.scope)
@@ -236,12 +275,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // "Finish & Submit" was clicked and waits for pending saves before it validates.
   const [submitPending, setSubmitPending] = useState(false);
   const [textCheckedConfirmed, setTextCheckedConfirmed] = useState(false);
+  const [axisWarning, setAxisWarning] = useState<AxisWarning | null>(null);
+  const [axisWarningAcknowledged, setAxisWarningAcknowledged] = useState(false);
+  const submittingWorkspace = useRef(false);
+  useEffect(() => { setAxisWarning(null); setAxisWarningAcknowledged(false); }, [draft.revision, view.annotation_policy_revision]);
   const [isReloading, setIsReloading] = useState(false);
   // Reviewer notes typed in the UI, keyed by target; kept even when a decision is reset.
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const invalidReviewNoteGuard = useRef<() => boolean>(() => false);
   const hasInvalidReviewNoteRef = useRef(false);
   const [requiredNoteKey, setRequiredNoteKey] = useState<string | null>(null);
+  const [decisionIntentKeys, setDecisionIntentKeys] = useState<string[]>([]);
+  const decisionIntentTokens = useRef<Record<string, number>>({});
+  const nextDecisionIntentToken = useRef(0);
   const noteDraftsRef = useRef(noteDrafts);
   noteDraftsRef.current = noteDrafts;
 
@@ -268,30 +314,31 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     ...(draft.annotations ?? []),
     ...(display?.value?.annotations ?? []),
     ...(view.available_inputs ?? []),
-    ...(view.submissions ?? []).flatMap((submission) => submission.snapshots),
+    ...submissions.flatMap((submission) => submission.snapshots),
+    ...roundInputs.flatMap(input => [input.source_snapshot, ...(input.target_snapshot ? [input.target_snapshot] : [])]),
   ].map((snapshot) => ({
     layer_id: snapshot.annotation.layer_id,
     term_id: snapshot.annotation.term_id,
-  })).concat(pendingReanchorItems.map(item=>({layer_id:item.layer_id,term_id:item.term_id}))), [draft.annotations, display?.value, view.available_inputs, view.submissions, view.pending_reanchor_items]);
+  })).concat(pendingReanchorItems.map(item=>({layer_id:item.layer_id,term_id:item.term_id}))), [draft.annotations, display?.value, view.available_inputs, submissions, view.pending_reanchor_items, roundInputs]);
   const termLabel = useTermLabels(view.key.project_key, displayedTerms);
 
   const searchManager = useMemo(() => new SearchManager(api), []);
   useEffect(() => {
-    if (!readOnly) return;
+    if (!readOnly || held) return;
     setPendingAnnotation(null);
     setActiveReanchor(null);
     setIsAttachingMention(false);
     setSelectionIntent("new_mention");
     setSubmitDialogOpen(false);
     searchManager.clear();
-  }, [readOnly, searchManager]);
+  }, [readOnly, held, searchManager]);
 
   useEffect(() => {
     searchManager.setLayer(layerSelection.activeLayerId);
   }, [layerSelection.activeLayerId, searchManager]);
 
   // Search languages: stored per annotator, offered per ontology of the layer.
-  const languagesForOntology = useSearchLanguages(api, view.key.annotator_id, view.key.project_key);
+  const languagesForOntology = useSearchLanguages(api, view.key.annotator_id, view.key.project_key, view.document.language, view.document.document_id);
   const searchLanguagesFor = (layerId: string | null | undefined) => {
     const ontologyId = (view.layers ?? []).find((layer) => layer.layer_id === layerId)?.ontology_id;
     const definition = (view.ontologies ?? []).find((item) => item.ontology_id === ontologyId);
@@ -534,9 +581,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     request?.resolve(ok);
   };
 
+  const pausedLocalInput = useRef<() => boolean>(() => false);
+  pausedLocalInput.current = () => held && (!!pendingAnnotation || !!activeReanchor || decisionIntentKeys.length > 0 || unsavedAnnotationNotes().length > 0);
   useEffect(() => {
     if (!leaveGuardRef) return;
     leaveGuardRef.current = (proceed) => {
+      if (pausedLocalInput.current()) {
+        void askConfirm("Paused task has local input", "Logging out discards the local input kept in this paused editor. Saved work is kept.", "Discard local input and log out").then(discard => { if (discard) proceed(); }); return;
+      }
       if (unsavedAnnotationNotes().length > 0) {
         logoutRejectedBaseline.current = queueRef.current.rejectedCount();
         setLogoutProceed(() => proceed); return;
@@ -583,6 +635,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (leaveInProgress.current) return false;
     leaveInProgress.current = true;
     try {
+      if (held && (pendingAnnotation || activeReanchor || decisionIntentKeys.length || unsavedAnnotationNotes().length)) {
+        const discard = await askConfirm("Paused task has local input", "Your task is paused and local input cannot be saved. Stay in this editor to resume and save, or explicitly discard the local input and leave. Saved work is kept.", "Discard local input and leave");
+        if (!discard) return false;
+      }
+      if (!readOnlyRef.current && decisionIntentKeys.length) {
+        const discard = await askConfirm("Decision not saved", "An unresolved decision is still a draft. Return to Save decision, or discard this decision draft and leave. The saved decision is kept.", "Discard decision draft and leave");
+        if (!discard) return false;
+        const kept = { ...noteDraftsRef.current };
+        for (const key of decisionIntentKeys) delete kept[key];
+        noteDraftsRef.current = kept; setNoteDrafts(kept); setDecisionIntentKeys([]);
+      }
       const invalidLocalAnnotationNotes = !readOnlyRef.current ? invalidAnnotationNotes() : [];
       if (invalidLocalAnnotationNotes.length > 0) {
         const discard = await askConfirm("Changes not saved", "Annotation notes have unsaved edits. A reason is required when no text span is linked. Leaving discards these local edits.", "Discard edits and leave");
@@ -725,7 +788,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const local = noteDrafts[refKey(d.target)];
     return d.outcome === "uncertain" && local !== undefined && !local.trim() && local !== (d.note ?? "");
   });
-  hasInvalidReviewNoteRef.current = hasInvalidReviewNote || unsavedAnnotationNotes().length > 0;
+  hasInvalidReviewNoteRef.current = hasInvalidReviewNote || unsavedAnnotationNotes().length > 0 || decisionIntentKeys.length > 0;
   const statusText =
     queueState === "conflict" ? "Changed elsewhere – reload required"
     : queueState === "error" ? (
@@ -734,6 +797,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       : "Save error – changes not saved"
     )
     : unsavedAnnotationNotes().length > 0 ? "Annotation note changes not saved"
+    : decisionIntentKeys.length > 0 ? "Draft review decision not saved"
     : hasInvalidReviewNote ? "Reviewer note required – changes not saved"
     : queueState === "saving" ? "Saving..."
     : queueState === "dirty" ? "Unsaved changes"
@@ -808,13 +872,50 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       }
       if(copies.length>1) {
         setResolutionItem(item);setMobilePane("list");
-        setActionError("Select the replacement finding in the annotation list, then choose Resolve with this finding.");return;
+        setActionError("Select the replacement finding in the findings list, then choose Complete text-change review.");return;
       }
       setLayerSelection(previous => setActiveLayer(previous,view.layers ?? [],view.scope,item.layer_id));
       setActiveReanchor(item);setSelectionIntent("new_mention");setMobilePane("text");
       reanchorContext.reveal(item.new_context);
       leftTextElement?.focus();
     } catch(error) {reportError(error);}
+  };
+
+  const resolveCarriedInput = async (input: import("../api/client").RoundInputView, outcome: "completed" | "dismissed", value: string) => {
+    await flushAnnotationNotes();
+    if (unsavedAnnotationNotes().length) throw new ValidationError("Save the annotation note before completing carried-finding review.");
+    assertWritable();
+    const mutationId = crypto.randomUUID();
+    let envelope: Parameters<typeof api.resolveRoundInput>[1] | undefined;
+    await queueRef.current.enqueue(async expectedRevision => {
+      assertWritable();
+      if (!envelope) {
+        const saved = outcome === "completed" ? latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === value) : undefined;
+        if (outcome === "completed" && !saved) throw new ValidationError("Select a current saved finding before completing this input.");
+        envelope = { mutation_id: mutationId, expected_revision: expectedRevision, payload: { input_id: input.input_id, outcome,
+          ...(saved ? { annotation_ref: { annotation_id: saved.annotation.annotation_id, version: saved.version } } : { reason: value }) } };
+      }
+      const updated = await api.resolveRoundInput(workspaceId, envelope).catch(assignmentFailure);
+      latestDraft.current = updated; setDraft(updated); return updated;
+    });
+  };
+
+  const mergeInputs = async (inputIds: string[], outputId: string, note?: string) => {
+    await flushAnnotationNotes();
+    if (unsavedAnnotationNotes().length) throw new ValidationError("Save the annotation note before merging inputs.");
+    assertWritable();
+    const mutationId = crypto.randomUUID();
+    let envelope: Parameters<typeof api.mergeRoundInputs>[1] | undefined;
+    await queueRef.current.enqueue(async expectedRevision => {
+      assertWritable();
+      if (!envelope) {
+        const saved = latestDraft.current.annotations?.find(value => value.annotation.annotation_id === outputId);
+        if (!saved) throw new ValidationError("Select a current saved finding before merging inputs.");
+        envelope = { mutation_id: mutationId, expected_revision: expectedRevision, payload: { input_ids: inputIds, replacement: { annotation_id: saved.annotation.annotation_id, version: saved.version }, ...(note ? { note } : {}) } };
+      }
+      const updated = await api.mergeRoundInputs(workspaceId, envelope).catch(assignmentFailure);
+      latestDraft.current = updated; setDraft(updated); return updated;
+    });
   };
 
   const handleDeselectAll = () => {
@@ -973,6 +1074,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!saveBeforeReportRef) return;
+    const flush = async () => {
+      await flushAnnotationNotes();
+      await queueRef.current.flush();
+      if (unsavedAnnotationNotes().length || invalidAnnotationNotes().length) throw new Error("Some annotation notes are not saved. Your input is kept in this editor.");
+    };
+    saveBeforeReportRef.current = flush;
+    return () => { if (saveBeforeReportRef.current === flush) saveBeforeReportRef.current = null; };
+  });
+
   // Text selection handler
   const handleSelection = async (payload: SelectionPayload) => {
     if (readOnlyRef.current) return;
@@ -1076,6 +1188,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (readOnlyRef.current) return;
     if (!pendingAnnotation || creatingPending.current) return;
     if (pendingAnnotation.isSpanless && spanlessNotesRequired && !spanlessReason.trim()) {
+      setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId, searchId } });
       setSpanlessReasonError(true);
       inspectorRef.current?.querySelector<HTMLTextAreaElement>("#spanless-reason")?.focus();
       return;
@@ -1096,9 +1209,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         ...(!pending.reanchorItem ? {search_event_id:searchId} : {}),
         ...(pending.isSpanless && spanlessReason.trim() ? { note: spanlessReason.trim() } : {}),
         segments: pending.segments,
-        axes_values: pending.reanchorItem?.axes_values ?? initialAxisValues(type?.axes ?? [], termId),
+        axes_values: pending.reanchorItem?.axes_values ?? { ...initialAxisValues(type?.axes ?? [], termId), ...view.creation_defaults?.[pending.layerId]?.[pending.typeId] },
+        ...(!pending.reanchorItem ? { chosen_axis_ids: [] } : {}),
       });
-      if (pending.reanchorItem) await resolveReanchor(pending.reanchorItem,"recreated",pending.annotationId);
+      if (pending.reanchorItem) setResolutionItem(pending.reanchorItem);
       setPendingAnnotation(null);
       setSpanlessReason(""); setSpanlessReasonError(false);
       setSelectedTargetId(null);
@@ -1106,7 +1220,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       setSelectedAnnotationId(pending.annotationId);
       setSelectedEvidenceId(pending.evidenceId ?? null);
       searchManager.clear();
-      if(pending.reanchorItem) requestAnimationFrame(()=>inspectorRef.current?.querySelector<HTMLElement>('button, input, textarea, select')?.focus());
+      if(pending.reanchorItem) requestAnimationFrame(() => {
+        const next = inspectorRef.current?.querySelector<HTMLElement>('.axis-field .btn') ?? inspectorRef.current?.querySelector<HTMLElement>('button, input, textarea, select');
+        next?.focus();
+      });
     } catch (error) { reportError(error); }
     finally { creatingPending.current = false; }
   };
@@ -1338,8 +1455,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
   };
 
-  const requestReviewerNote = (target: TargetProposal) => {
+  const requestReviewerNote = (target: TargetProposal, draftOutcome = false) => {
     const key = targetKeyOf(target);
+    if (draftOutcome) {
+      decisionIntentTokens.current[key] = ++nextDecisionIntentToken.current;
+      setDecisionIntentKeys(keys => keys.includes(key) ? keys : [...keys, key]);
+    }
     setRequiredNoteKey(key); setSelectedTargetId(key);
     setSelectedAnnotationId(null); setSelectedSourceId(null); setSelectedEvidenceId(null);
     cancelPending(); setMobilePane("details");
@@ -1353,6 +1474,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (!target) return;
     setActionError(null);
     const key = targetKeyOf(target);
+    const submittedIntentToken = decisionIntentTokens.current[key];
     if (payload.outcome === "uncertain" && !(payload.note !== undefined ? payload.note.trim() : currentNoteFor(key))) {
       requestReviewerNote(target);
       return;
@@ -1381,6 +1503,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
     try {
       await enqueueDecision(target, payload.outcome, payload.replacement?.annotation_id, note);
+      // A previous decision may finish after the reviewer starts another intent.
+      // Only the intent that this request actually submitted can be cleared.
+      if (decisionIntentTokens.current[key] === submittedIntentToken) setDecisionIntentKeys(keys => keys.filter(value => value !== key));
       if (payload.outcome === null) {
         // An earlier queued note save may clear its draft while reset is waiting.
         // Restore the captured text without overwriting newer typing.
@@ -1479,6 +1604,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         type_id: targetType,
         term_id: targetTerm,
         axes_values: initialAxes,
+        chosen_axis_ids: [],
         segments: firstSegments,
         ...(reason?.trim() || snap?.annotation.note ? { note: reason?.trim() || snap?.annotation.note } : {}),
         source_annotation_id: target.annotation_id,
@@ -1635,6 +1761,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const blockInvalidUnresolvedNotes = (action: "submitting" | "leaving" = "submitting") => {
+    const intent = reviewTargets.find(target => decisionIntentKeys.includes(refKey(target)));
+    if (intent) {
+      requestReviewerNote(intent);
+      setSubmitError(`Save the draft review decision before ${action}.`);
+      return true;
+    }
     if (readOnlyRef.current || view.key.mode !== "review") return false;
     const invalid = (latestDraft.current.decisions ?? []).filter(d => {
       const local = noteDraftsRef.current[refKey(d.target)];
@@ -1674,14 +1806,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
 
     if (blockInvalidUnresolvedNotes()) return;
-    setTextCheckedConfirmed(false);
+    setTextCheckedConfirmed(false); setAxisWarning(null); setAxisWarningAcknowledged(false);
     setSubmitDialogOpen(true);
   };
 
   // Step 2: submit after the explicit "entire text checked" confirmation.
   const confirmSubmit = async () => {
-    if (readOnlyRef.current) return;
-    if (!textCheckedConfirmed || blockInvalidUnresolvedNotes() || submissionIssues.length || unresolvedReanchorCount) return;
+    if (readOnlyRef.current || submittingWorkspace.current || (axisWarning && !axisWarningAcknowledged)) return;
+    if (!textCheckedConfirmed || blockInvalidUnresolvedNotes() || submissionIssues.length || unresolvedReanchorCount || pendingCarriedCount) return;
     if (view.key.mode === "review") {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
       if (missingTargets.length > 0) {
@@ -1691,7 +1823,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         return;
       }
     }
-    setSubmitDialogOpen(false);
+    submittingWorkspace.current = true;
     try {
       const mutationId = crypto.randomUUID();
       let envelope: Parameters<typeof api.submitWorkspace>[1] | undefined;
@@ -1704,10 +1836,25 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             command: "submit_workspace",
             // Explicitly confirmed by the user in the submit dialog.
             document_checked: true,
+            ...(axisWarning && axisWarningAcknowledged ? { warning_acknowledgement: axisWarning.acknowledgement } : {}),
           },
         };
-        return api.submitWorkspace(workspaceId, envelope).catch(assignmentFailure);
+        try { return await api.submitWorkspace(workspaceId, envelope).catch(assignmentFailure); }
+        catch (error) {
+          const warning = submissionAxisWarning(error);
+          // An advisory response applies no mutation and must not count as a
+          // rejected edit, which would incorrectly prevent later navigation.
+          if (warning) return { revision: expectedRevision, axisWarning: warning };
+          throw error;
+        }
       });
+      if ("axisWarning" in submission) {
+        setAxisWarning(submission.axisWarning); setAxisWarningAcknowledged(false); setSubmitDialogOpen(true); return;
+      }
+      setSubmitDialogOpen(false);
+      setAcceptedSubmission({ identity: versionIdentity, value: structuredClone(submission) });
+      readOnlyRef.current = true;
+      retryVersions();
       completedNextAssignment.current = adjacentTask.next;
       setCompletedSubmission(submission);
       try {
@@ -1716,13 +1863,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         // list refresh is best effort
       }
     } catch (err: unknown) {
+      setSubmitDialogOpen(false);
       if (err instanceof DiscardedChangesError) return;
       const msg = errorMessage(err);
       setActionError(null);
       const refresh = err instanceof ApiError && ["PROJECT_RULE_VIOLATION", "UNKNOWN_TERM", "OBSOLETE_TERM"].includes(err.code ?? "");
       setReloadSubmissionRules(refresh);
       setSubmitError(`Submission failed: ${msg}${refresh ? " Reload the case to load the current rules and term status, then review the submission checklist." : ""}`);
-    }
+    } finally { submittingWorkspace.current = false; }
   };
 
   // Selected annotation axes configuration
@@ -1826,7 +1974,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, { ...reviewShortcutOptions, description: "Adopt proposal as editable copy" });
   useShortcut("4", () => {
     if (!selectedTarget) return false;
-    void handleReviewDecision({ outcome: "uncertain" });
+    requestReviewerNote(selectedTarget, true);
   }, { ...reviewShortcutOptions, description: "Mark selected proposal as unresolved (note required)" });
   useShortcut("0", () => { void handleReviewDecision({ outcome: null }); }, { ...reviewShortcutOptions, description: "Reset selected review decision to open" });
   useShortcutHint(["Shift + arrows, then release Shift"], "Select text with the keyboard to create a mention");
@@ -1893,7 +2041,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 : "badge-independent"
             }`}
           >
-            {view.key.mode === "review"
+            {roundKind === "consolidation" ? "Consolidation review" : roundKind === "carry_forward" ? "Review carried findings" : view.key.mode === "review"
               ? "Review proposals"
               : view.key.mode === "assisted"
               ? "Assisted annotation"
@@ -1935,6 +2083,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
           <IconButton label="Keyboard shortcuts" icon={<IconKeyboard />} onClick={openShortcutHelp}
             variant="quiet" size="sm" title="Keyboard shortcuts (?)" />
+          {taskActions}
+          {held && <InlineMessage tone="warning">Task paused: {holdReason ?? "A project problem needs attention."} Saved work remains readable. Your local input is kept.</InlineMessage>}
 
           {queueState === "error" && (
             <Button
@@ -2020,7 +2170,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           />
 
           <div className="sidebar-scroll" ref={sidebarScrollRef}>
+            {!readOnly && roundKind === "consolidation" && <MergeInputs inputs={roundInputs} annotations={draft.annotations ?? []} labelFor={termLabel} onMerge={mergeInputs} />}
+            <RoundInputPanel inputs={carriedInputs} resolutions={draft.round_input_resolutions ?? []} annotations={draft.annotations ?? []} documentText={view.document.text} labelFor={termLabel}
+              onInspectOriginal={setOriginalRoundInput} onOpenFinding={id => { setSelectedTargetId(null); setSelectedSourceId(null); cancelPending(); setSelectedAnnotationId(id); setMobilePane("details"); }}
+              onComplete={readOnly ? undefined : (input, id) => resolveCarriedInput(input, "completed", id)}
+              onDismiss={readOnly ? undefined : (input, reason) => resolveCarriedInput(input, "dismissed", reason)} />
             <ReanchorPanel key={versionIdentity} items={pendingReanchorItems} labelFor={termLabel} onContext={reanchorContext.reveal}
+              onOpenFinding={id => { setSelectedTargetId(null); setSelectedSourceId(null); cancelPending(); setSelectedAnnotationId(id); setMobilePane("details"); }}
               resolutions={draft.reanchor_resolutions} annotations={draft.annotations} busy={queueState === "saving"}
               recreateUnavailableReason={item=>!view.scope.editable_layer_ids.includes(item.layer_id) || !view.layers?.find(layer=>layer.layer_id===item.layer_id)?.annotation_types.some(type=>type.type_id===item.type_id)
                 ? "The original finding type is unavailable for re-creation. You can still dismiss this finding with a reason." : undefined}
@@ -2032,7 +2188,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             {view.key.mode === "review" && (
               <div className="sidebar-section">
                 <div className="sidebar-header">
-                  Review Proposals ({reviewTargets.length})
+                  {roundKind === "consolidation" ? "Selected submitted findings" : "Review Proposals"} ({reviewTargets.length})
                 </div>
                 <ul className="doc-list">
                   {reviewTargets.map((t) => {
@@ -2149,7 +2305,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
             <div className="sidebar-section">
               <div className="sidebar-header sidebar-header--actions">
-                <span>Curated Annotations ({visibleAnnotations.length})</span>
+                <span>Saved findings ({visibleAnnotations.length})</span>
                 <Button
                   type="button"
                   variant="quiet" size="sm"
@@ -2168,14 +2324,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
                   const termId = annSnap.annotation.term_id;
                   const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
-                  const firstAxisVal = Object.values(axesValues).find((v): v is string => typeof v === "string" && v.length > 0);
-                  const layerName = view.layers?.find((l) => l.layer_id === annSnap.annotation.layer_id)?.label;
+                  const findingLayer = view.layers?.find((l) => l.layer_id === annSnap.annotation.layer_id);
+                  const axes = findingAxes(axesValues, findingLayer?.annotation_types.find(type => type.type_id === annSnap.annotation.type_id)?.axes ?? view.axes_config);
+                  const layerName = findingLayer?.label;
 
                   return (
                     <li
                       key={annSnap.annotation.annotation_id}
                       data-list-key={`annotation:${annSnap.annotation.annotation_id}`}
                       className={`doc-item ${isSelected ? "selected" : ""}`}
+                      role="button" tabIndex={0} aria-pressed={isSelected}
+                      onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } }}
                       onClick={() => {
                         if (selectedAnnotationId === annSnap.annotation.annotation_id) {
                           handleDeselectAll();
@@ -2199,9 +2358,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       </div>
                       <div className="doc-meta">
                         {evCount === 0 ? "Spanless" : `${evCount} mention(s)`}
-                        {firstAxisVal && ` • ${firstAxisVal}`}
                         {" "}<AiBadge provenance={annSnap.annotation.provenance} source={proposalFor(annSnap, view.available_inputs ?? [])} />
                       </div>
+                      {axes.length > 0 && <dl className="finding-axis-summary" aria-label="Clinical context">
+                        {axes.map(axis => <div key={axis.id} title={`${axis.label}: ${axisOptionLabel(axis.value)}${annSnap.annotation.axes_defaulted?.includes(axis.id) ? " (defaulted)" : ""}`}>
+                          <dt>{axis.label}: </dt><dd>{axisOptionLabel(axis.value)}{annSnap.annotation.axes_defaulted?.includes(axis.id) && " (defaulted)"}</dd>
+                        </div>)}
+                      </dl>}
                     </li>
                   );
                 })}
@@ -2209,13 +2372,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </div>
           </div>
 
-          {(view.submissions ?? []).length > 0 && <div className="detail-section">
-            <h3>Previous Submissions</h3>
-            {view.submissions!.map((submission, index) => <Button type="button" variant="secondary" size="sm"
+          <section className="detail-section submission-history" aria-label="Submission history">
+            <h3>Submission history</h3>
+            {submissions.length === 0 && <p>No previous submissions yet.</p>}
+            {submissions.map((submission, index) => <Button type="button" variant="secondary" size="sm"
               key={submission.submission_id} onClick={() => setHistorySubmission(submission)}>
               {submissionHistoryLabel(submission.created_at, index + 1)}
             </Button>)}
-          </div>}
+          </section>
 
         </aside>
 
@@ -2227,7 +2391,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           text={view.document.text}
           mentions={textMentions}
           isAttachingMention={isAttachingMention || !!activeReanchor || (!!pendingEvidenceAdoption && !confirmRequest)}
-          attachMessage={activeReanchor ? `Select supporting text to re-create ${activeReanchor.term_id}. The finding remains pending until it is saved.` : pendingEvidenceAdoption ? "Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement." : undefined}
+          attachMessage={activeReanchor ? `Select supporting text to re-create ${activeReanchor.term_id}. Save the finding, review its values, then complete the text-change review.` : pendingEvidenceAdoption ? "Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement." : undefined}
           onCancelAttach={cancelAttach}
           selectedEvidenceId={selectedEvidenceId}
           selectionIntent={selectionIntent}
@@ -2243,12 +2407,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         {/* Right: Annotation & Search Panel + Review Actions */}
         <div className="inspector-pane density-compact" ref={inspectorRef}>
           {!readOnly && !pendingAnnotation && selectedReanchorItem && selectedAnnotation && <InlineMessage tone="warning">
-            <p>This finding has changed or has not yet been linked to the text-correction review.</p>
+            <p>This finding is saved. Its current version still needs text-change review. Check the evidence and clinical values, then complete this review. Later changes require completion again.</p>
             <Button disabled={queueState === "saving"} onClick={()=>{void (async()=>{
               await flushAnnotationNotes();
               if(unsavedAnnotationNotes().length) return;
               await resolveReanchor(selectedReanchorItem,"recreated",selectedAnnotation.annotation.annotation_id);
-            })().catch(reportError);}}>Resolve with this finding</Button>
+            })().catch(reportError);}}>Complete text-change review</Button>
           </InlineMessage>}
           {selectedSource ? (
             <section className="detail-pane" aria-label="Reference details">
@@ -2276,7 +2440,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     : "Select term for highlighted text"}
                 </h2>
                 <p>
-                  {pendingAnnotation.isSpanless
+                  {pendingAnnotation.reanchorItem ? "Save this finding, check its evidence and values, then complete the text-change review." : pendingAnnotation.isSpanless
                     ? "Select a term from the ontology for the new annotation."
                     : "The annotation will be saved upon selecting a term."}
                 </p>
@@ -2285,17 +2449,25 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   <p>Finding type: {view.layers?.find(layer=>layer.layer_id===pendingAnnotation.layerId)?.annotation_types.find(type=>type.type_id===pendingAnnotation.typeId)?.label ?? pendingAnnotation.typeId}</p>
                   {!savedPendingReanchor && pendingAnnotation.reanchorItem.axes_values && <p>Original clinical context: {Object.entries(pendingAnnotation.reanchorItem.axes_values).map(([axis, value]) => `${axis}: ${value ?? "Not specified"}${pendingAnnotation.reanchorItem!.axes_defaulted?.includes(axis) ? " (defaulted)" : ""}`).join(" · ")}. These values will be carried over; you can edit them after saving.</p>}
                   {savedPendingReanchor && <p>The replacement is saved. Link its saved version to finish reviewing this item.</p>}
-                  <Button variant="secondary" disabled={queueState === "saving"} onClick={()=>{void createPendingAnnotation(pendingAnnotation.reanchorItem!.term_id);}}>{savedPendingReanchor ? "Resolve saved finding" : "Save re-created finding"}</Button>
+                  <Button variant="secondary" disabled={readOnly || queueState === "saving"} onClick={()=>{void createPendingAnnotation(pendingAnnotation.reanchorItem!.term_id);}}>Save re-created finding</Button>
                   {!savedPendingReanchor && <p>Or select a different term below.</p>}
                 </>}
                 {pendingAnnotation.isSpanless && <Textarea id="spanless-reason" label="Reason for no text span"
-                  required={spanlessNotesRequired} hint={legacySubmissionHint ?? (!spanlessNotesRequired ? "Optional context for this finding." : undefined)} value={spanlessReason}
-                  error={spanlessReasonError && !spanlessReason.trim() ? "A reason is required before selecting a term." : undefined}
+                  readOnly={readOnly} required={spanlessNotesRequired} hint={legacySubmissionHint ?? (!spanlessNotesRequired ? "Optional context for this finding." : undefined)} value={spanlessReason}
+                  error={spanlessReasonError && !spanlessReason.trim() ? "A reason is required before adding this annotation." : undefined}
                   onChange={event => { setSpanlessReason(event.target.value); setSpanlessReasonError(false); }} />}
-                {!savedPendingReanchor && <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
+                {pendingAnnotation.selectedTerm && <div className="pending-term-continuation">
+                  <p>Selected term: <TermName termId={pendingAnnotation.selectedTerm.termId} label={termLabel(pendingAnnotation.layerId, pendingAnnotation.selectedTerm.termId)} /></p>
+                  <Button disabled={readOnly || queueState === "saving" || (spanlessNotesRequired && !spanlessReason.trim())}
+                    onClick={() => { void createPendingAnnotation(pendingAnnotation.selectedTerm!.termId, pendingAnnotation.selectedTerm!.searchId); }}>Add annotation</Button>
+                </div>}
+                {!readOnly && !savedPendingReanchor && <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
                   languages={searchLanguagesFor(pendingAnnotation.layerId)}
-                  onSelectCandidate={(candidate, searchId) => { void createPendingAnnotation(candidate.term_id, searchId); }} />}
+                  onSelectCandidate={(candidate, searchId) => {
+                    if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId } });
+                    else void createPendingAnnotation(candidate.term_id, searchId);
+                  }} />}
                 <Button type="button" variant="secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</Button>
               </div>
             </section>
@@ -2313,6 +2485,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               draftAnnotations={draft.annotations ?? []}
               onDecide={(payload) => { void handleReviewDecision(payload, selectedTarget); }}
               requireNote={requiredNoteKey === refKey(selectedTarget)}
+              draftUnresolved={decisionIntentKeys.includes(refKey(selectedTarget))}
+              onDraftUnresolved={() => requestReviewerNote(selectedTarget, true)}
+              busy={queueState === "saving"}
+              requireChosenAxes={view.require_chosen_axes}
+              axesConfig={view.layers?.find(layer => layer.layer_id === selectedTarget.layer_id)?.annotation_types.find(type => type.type_id === selectedTarget.type_id)?.axes ?? view.axes_config}
               note={noteDrafts[refKey(selectedTarget)] ?? decisionsMap[refKey(selectedTarget)]?.note ?? ""}
               onNoteChange={(value) => {
                 if (readOnlyRef.current) return;
@@ -2412,7 +2589,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       </>}
       {comparison}
       </div>
-      {historySubmission && <Dialog open title="Historical submission" heading={submissionHistoryLabel(historySubmission.created_at, (view.submissions ?? []).findIndex(s => s.submission_id === historySubmission.submission_id) + 1)} onClose={() => setHistorySubmission(null)}>
+      {originalRoundInput && <RoundInputEvidenceDialog projectKey={view.key.project_key} input={originalRoundInput} onClose={() => setOriginalRoundInput(null)} labelFor={termLabel} />}
+      {historySubmission && <Dialog open title="Historical submission" heading={submissionHistoryLabel(historySubmission.created_at, submissions.findIndex(s => s.submission_id === historySubmission.submission_id) + 1)} onClose={() => setHistorySubmission(null)}>
         <details className="technical-details"><summary>Technical details</summary>
           <p>Submission ID: <code>{historySubmission.submission_id}</code></p>
           <p>Timestamp: {historySubmission.created_at}</p>
@@ -2438,11 +2616,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               {snap.evidence.map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
                 {ev.mention.segments.map(seg => Array.from(view.document.text).slice(seg.start, seg.end).join("")).join(" … ")}
               </p>)}
+              <p className="annotation-note-history"><strong>Annotation note: </strong><span>{snap.annotation.note || "No annotation note."}</span></p>
             </div>
           );
         })}
-        {historySubmission.decisions.map(decision => <p key={refKey(decision.target)}>
-          {decision.target.annotation_id} ({decision.target.version}): {decision.outcome === "uncertain" ? "Unresolved" : decision.outcome} {decision.note}
+        {historySubmission.decisions.map(decision => <p className="annotation-note-history" key={refKey(decision.target)}>
+          {decision.target.annotation_id} ({decision.target.version}): {decision.outcome === "uncertain" ? "Unresolved" : decision.outcome} · Reviewer note: {decision.note || "No reviewer note."}
         </p>)}
         {(historySubmission.reanchor_inputs ?? []).length > 0 && <section aria-label="Re-anchor review history">
           <h3>Findings reviewed after text correction</h3>
@@ -2461,6 +2640,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>
         <p>Timestamp: {completedSubmission.created_at}</p>
         <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+          <Button type="button" onClick={() => { setHistorySubmission(completedSubmission); setCompletedSubmission(null); }}>View submitted result</Button>
           {assignmentNavigation && completedNextAssignment.current !== undefined && <Button type="button" variant="primary"
             onClick={() => navigateAssignment(completedNextAssignment.current!)}>Next task</Button>}
           {nextDoc && onNavigateCase && (
@@ -2497,7 +2677,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           {view.key.mode === "review" ? (
             <li>
               {completionResults.length} annotation(s) will be submitted
-              ({confirmedCount} confirmed proposal(s), {(draft.decisions ?? []).filter(d => d.outcome === "uncertain").length} unresolved with reviewer flags, {(draft.annotations ?? []).length} curated)
+              ({confirmedCount} confirmed proposal(s), {(draft.decisions ?? []).filter(d => d.outcome === "uncertain").length} unresolved with reviewer flags, {(draft.annotations ?? []).length} saved findings)
             </li>
           ) : (
             <li>{(draft.annotations ?? []).length} annotation(s) in this case</li>
@@ -2521,9 +2701,29 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <p>{unresolvedReanchorCount} finding(s) after text correction must be re-created or dismissed with a reason.</p>
           <Button onClick={reviewPendingReanchor}>Review pending findings after text correction</Button>
         </InlineMessage>}
+        {pendingCarriedCount > 0 && <InlineMessage tone="error">
+          <p>{pendingCarriedCount} carried finding(s) still need review before submission.</p>
+          <Button onClick={() => {
+            setSubmitDialogOpen(false); setMobilePane("list");
+            requestAnimationFrame(() => {
+              const panel = sidebarScrollRef.current?.querySelector<HTMLElement>('.round-input-panel');
+              const disclosure = panel?.querySelector('details'); if (disclosure) disclosure.open = true;
+              panel?.querySelector<HTMLElement>('[data-round-pending="true"] select, [data-round-pending="true"] button[data-round-open]')?.focus();
+            });
+          }}>Review carried findings</Button>
+        </InlineMessage>}
         {defaulted.length > 0 && <InlineMessage tone="warning">
           <p>{defaulted.length} {defaulted.length === 1 ? "annotation has" : "annotations have"} defaulted axis values.</p>
           <Button onClick={reviewDefaulted}>Review defaulted annotations</Button>
+        </InlineMessage>}
+        {axisWarning && <InlineMessage tone="warning" title="Review unconfirmed clinical values">
+          <p>These values have not been explicitly confirmed. Continuing records acknowledgement of this warning; it keeps the clinical values and their defaulted status unchanged.</p>
+          <ul>{axisWarning.warnings.map(({ annotationId, axis }) => {
+            const snapshot = completionResults.find(value => value.annotation.annotation_id === annotationId);
+            const definition = view.layers?.find(layer => layer.layer_id === snapshot?.annotation.layer_id)?.annotation_types.find(type => type.type_id === snapshot?.annotation.type_id)?.axes?.find(value => value.id === axis);
+            return <li key={`${annotationId}/${axis}`}>{snapshot ? termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id) ?? snapshot.annotation.term_id : annotationId}: {definition?.label ?? axis} = {axisOptionLabel(snapshot?.annotation.axes_values?.[axis])}</li>;
+          })}</ul>
+          <Checkbox id="submit-axis-warning" label="Submit with these unconfirmed values" checked={axisWarningAcknowledged} disabled={queueState === "saving"} onChange={event => setAxisWarningAcknowledged(event.target.checked)} />
         </InlineMessage>}
         <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
           <input
@@ -2542,10 +2742,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <Button
             type="button"
             variant="primary"
-            disabled={readOnly || !textCheckedConfirmed || submissionIssues.length > 0 || unresolvedReanchorCount > 0 || (view.key.mode === "review" && openReviewTargets.length > 0)}
+            loading={queueState === "saving"}
+            disabled={readOnly || !textCheckedConfirmed || (axisWarning !== null && !axisWarningAcknowledged) || submissionIssues.length > 0 || unresolvedReanchorCount > 0 || pendingCarriedCount > 0 || (view.key.mode === "review" && openReviewTargets.length > 0)}
             onClick={() => { void confirmSubmit(); }}
           >
-            Submit case
+            {axisWarning ? "Continue and submit" : "Submit case"}
           </Button>
           <Button type="button" variant="secondary" onClick={() => setSubmitDialogOpen(false)}>
             Cancel

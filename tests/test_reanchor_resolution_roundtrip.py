@@ -11,12 +11,18 @@ from ontocurator.storage.tables import DraftRow, EditEventRow, SubmissionRow
 
 
 def submitted(env, view, revision):
-    return env.reviewer.post(
-        f"/api/v1/workspaces/{view['workspace_id']}/submit",
-        json=envelope(
-            {"document_checked": True, "checked_layer_ids": ["hpo"]}, revision, "submit"
-        ),
-    )
+    url = f"/api/v1/workspaces/{view['workspace_id']}/submit"
+    payload = {"document_checked": True, "checked_layer_ids": ["hpo"]}
+    result = env.reviewer.post(url, json=envelope(payload, revision, "submit"))
+    if (
+        result.status_code == 422
+        and result.json().get("code") == "AXIS_CONFIRMATION_WARNING"
+    ):
+        payload["warning_acknowledgement"] = result.json()["details"]["acknowledgement"]
+        return env.reviewer.post(
+            url, json=envelope(payload, revision, "submit-acknowledged")
+        )
+    return result
 
 
 def test_recreated_and_dismissed_resolutions_survive_submission_readback(pending):
@@ -68,7 +74,7 @@ def test_recreated_and_dismissed_resolutions_survive_submission_readback(pending
         repo.get_document("proj", pending.output["document_id"]),
         profile,
         layers_for(profile, repo.project_pins("proj")),
-        {},
+        repo.t1_export_content("proj").proposals,
         set_id="reviewed-correction",
         variant=repo.get_variant("proj", pending.output["document_id"]),
         source_variant_hashes={
@@ -78,8 +84,11 @@ def test_recreated_and_dismissed_resolutions_survive_submission_readback(pending
     )
     assert len(unit.annotation_set.annotations) == 1
     assert unit.annotation_set.annotations[0].provenance.method == "edited"
+    from ontocurator.exchange.t1 import _export_source_ref
+
     assert unit.annotation_set.annotations[0].provenance.source_refs == tuple(
-        created["annotation"]["provenance"]["source_refs"]
+        _export_source_ref(ref, "proj", repo.t1_export_content("proj").proposals)
+        for ref in created["annotation"]["provenance"]["source_refs"]
     )
     with pending.db.transaction() as conn:
         stored = conn.execute(select(SubmissionRow.payload)).scalar_one()
@@ -87,6 +96,26 @@ def test_recreated_and_dismissed_resolutions_survive_submission_readback(pending
         events = conn.execute(select(EditEventRow.command, EditEventRow.user_id)).all()
         assert all(actor is not None for _, actor in events)
         assert any(payload.get("outcome") == "dismissed" for payload, _ in events)
+    # Exercise the same queued job and authorized download as the lead UI.
+    import ontospan
+    from auth_harness import logged_in
+    from t1_fixtures import HP_PATH
+    from test_progress_export_api import _run
+
+    lead = logged_in(
+        pending.app, "export-lead", projects={"proj": ["lead"]}, assignments=[]
+    )
+    queued = lead.post("/api/v1/projects/proj/exports", json={"kind": "t1"})
+    assert queued.status_code == 200, queued.text
+    job = _run(pending.app, queued.json()["job_id"])
+    response = lead.get(f"/api/v1/jobs/{job.id}/download")
+    assert response.status_code == 200, response.text
+    artifact = pending.tmp_path / "recreated-download.zip"
+    artifact.write_bytes(response.content)
+    _, exported_units = ontospan.read_bundle(
+        artifact, {"hp": ontospan.ObographOntology.load(HP_PATH)}
+    )
+    assert any(u.annotation_set.annotations for u in exported_units)
     legacy = {
         key: value
         for key, value in submission.items()

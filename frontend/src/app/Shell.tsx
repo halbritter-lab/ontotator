@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { CurrentUser, ProjectSummary } from "../api/client";
 import { AppShell, type Crumb } from "../ui/AppShell";
 import { routeHref, type Route } from "./router";
+import { Select, TextInput } from "../ui";
 
 export interface ShellProps {
   user: CurrentUser;
@@ -11,6 +12,7 @@ export interface ShellProps {
   onLogout: () => void;
   breadcrumb?: Crumb[];
   children: ReactNode;
+  taskProject?: string;
 }
 
 function NavigationLink({ destination, current, onNavigate, children }: {
@@ -29,7 +31,34 @@ function NavigationLink({ destination, current, onNavigate, children }: {
     }}>{children}</a>;
 }
 
-export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children }: ShellProps): JSX.Element {
+export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children, taskProject }: ShellProps): JSX.Element {
+  const [choice, setChoice] = useState<{ username: string; key: string } | null>(null);
+  const [search, setSearch] = useState('');
+  const explicitKey = 'key' in route ? route.key : route.name === 'tasks' ? route.project : route.name === 'task' ? taskProject : undefined;
+  const currentKey = explicitKey ?? (choice?.username === user.username ? choice.key : undefined);
+  const current = projects.find(project => project.project_key === currentKey);
+  const matches = projects.filter(project => `${project.name} ${project.project_key}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const selector = projects.length > 0 && <details className="shell-project-selector">
+    <summary>Project: {current?.name ?? 'Choose project'}</summary>
+    <div className="shell-project-menu">
+      <TextInput id="shell-project-search" type="search" label="Find project" value={search} onChange={event => setSearch(event.target.value)} />
+      <Select id="shell-current-project" label="Current project" value={current?.project_key ?? ''} onChange={event => {
+        const selected = projects.find(project => project.project_key === event.target.value);
+        if (!selected) return;
+        setChoice({ username: user.username, key: selected.project_key });
+        setSearch('');
+        const destination: Route = selected.can_manage
+          ? { name: 'projectDocuments', key: selected.project_key }
+          : { name: 'tasks', project: selected.project_key };
+        onNavigate(destination);
+      }}>
+        <option value="">Choose a project</option>
+        {matches.map(project => <option key={project.project_key} value={project.project_key}>{project.name} ({project.project_key})</option>)}
+      </Select>
+      {!matches.length && <p role="status">No matching projects.</p>}
+      {current && <p className="cell-secondary">Project key: {current.project_key}</p>}
+    </div>
+  </details>;
   const link = (destination: Route, label: string) => <li key={destination.name}>
     <NavigationLink destination={destination} current={route} onNavigate={onNavigate}>{label}</NavigationLink>
   </li>;
@@ -46,19 +75,16 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
         {link({ name: "projectNew" }, "New project")}
       </ul>
     </section>}
-    {projects.filter((project) => project.can_manage).map((project) => {
-      const label = project.name === project.project_key ? project.name : `${project.name} (${project.project_key})`;
-      return <section key={project.project_key} className="shell-nav-group" aria-label={label}>
-        <h2>{label}</h2>
+    {current?.can_manage && <section className="shell-nav-group" aria-label="Current project sections">
+        <h2>{current.name}</h2>
         <ul className="shell-nav-list">
-          {link({ name: "projectSettings", key: project.project_key }, "Settings")}
-          {link({ name: "projectDocuments", key: project.project_key }, "Documents")}
-          {link({ name: "projectProgress", key: project.project_key }, "Progress")}
-          {link({ name: "projectExport", key: project.project_key }, "Export")}
+          {link({ name: "projectDocuments", key: current.project_key }, "Documents")}
+          {link({ name: "projectProgress", key: current.project_key }, "Progress")}
+          {link({ name: "projectSettings", key: current.project_key }, "Settings")}
+          {link({ name: "projectExport", key: current.project_key }, "Export")}
         </ul>
-      </section>;
-    })}
+      </section>}
   </>;
-  return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav}
+  return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav} actions={selector}
     density={(route.name === "task" || route.name === "projectCase") ? "reading" : "compact"}>{children}</AppShell>;
 }

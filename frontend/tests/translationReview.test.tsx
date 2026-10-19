@@ -11,6 +11,7 @@ import type { ReviewDecisionCode } from "../src/translation/reviewRules";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }) {
+  vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
   vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ get matches() { return !viewport || viewport.width >= 1100; }, media: query, onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: (_: string, cb: () => void) => viewport?.listeners.add(cb), removeEventListener: (_: string, cb: () => void) => viewport?.listeners.delete(cb), dispatchEvent: () => true })));
   const open = vi.spyOn(api, "openTranslationReview").mockResolvedValue(workspace);
   const save = vi.spyOn(api, "saveTranslationReviewDraft").mockResolvedValue({ revision: 41 });

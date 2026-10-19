@@ -13,6 +13,7 @@ import { TermName } from "./TermName";
 import type { SearchLanguageControl } from "./searchLanguages";
 import type { SearchManager, WorkspaceKey } from "./searchState";
 import { IconClose, IconTrash } from "../ui/icons";
+import { axisOptionLabel } from "./axisLabels";
 
 export type AxesValues = Record<string, string | null>;
 export type Axes = AxesValues;
@@ -226,11 +227,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             const unavailableLabel = `${val} (current unavailable value)`;
             const options = [
               ...(axis.allow_empty ? [{ value: "", label: "Not specified" }] : []),
-              ...axis.options.map((option) => ({ value: option, label: ({
-                present: "Present", absent: "Absent", uncertain: "Uncertain",
-                patient: "Patient", other: "Other person", current: "Current",
-                historical: "Historical", future: "Future",
-              } as Record<string, string>)[option] ?? option })),
+              ...axis.options.map((option) => ({ value: option, label: axisOptionLabel(option) })),
               ...(unavailable ? [{ value: val, label: unavailableLabel }] : []),
             ];
             const updateAxis = (value: string) => onUpdateAxes({
@@ -261,7 +258,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     {axis.allow_empty && <option value="">Not specified</option>}
                     {!axis.allow_empty && <option value="" disabled>Please select</option>}
                     {unavailable && <option value={val} disabled>{unavailableLabel}</option>}
-                    {axis.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                    {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
                   </Select>
                 )}
                 {ann.axes_defaulted?.includes(axis.id) && val !== "" && (
@@ -314,7 +311,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               color: "var(--text-muted)",
             }}
           >
-            ℹ️ <strong>Spanless Annotation:</strong> This finding currently has no linked text mentions.
+            <strong>No text span:</strong> This finding currently has no linked text mentions.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
