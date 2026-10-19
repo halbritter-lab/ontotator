@@ -37,7 +37,7 @@ function CodeSession({ code, expires_at, kind, onClose }: CodeOnceDialogProps): 
     }
   };
 
-  return <Dialog open title={kind === "setup" ? "Setup code" : "Reset code"} size="sm" onClose={close} closeOnBackdrop
+  return <Dialog open title={kind === "setup" ? "Setup code" : "Reset code"} size="sm" onClose={acknowledged ? close : undefined} closeOnBackdrop
     footer={<Button variant="primary" disabled={!acknowledged} onClick={close}>Close</Button>}>
     <p>This code is shown only once. Hand it over in person or by a secure channel.</p>
     <p><code>{code}</code></p>
