@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 import type { FinalSelectionSummary, RowRoundView, RowSubmissionView } from "../api/client";
 import { routeHref, type Route } from "../app/router";
-import { kindLabels, personLabel, submissionLabel, formatTime, type SubmissionKind } from "../app/submissionLabels";
+import { kindLabels, personLabel, submissionLabel, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { plural } from "../app/labels";
 import { Button, DataTable, StatusBadge, type Column } from "../ui";
@@ -103,12 +103,11 @@ export function SubmissionsTable({
   const newest = new Set(sorted.slice(-SUBMISSIONS_COLLAPSED_LIMIT).map(row => row.submission_id));
   const visible = collapsed ? sorted.filter(row => newest.has(row.submission_id) || isFinal(row)) : sorted;
   const showVersion = new Set(rows.map(row => row.document_id)).size > 1;
-  const minutes = new Map<string, number>();
-  for (const row of rows) {
-    const minute = formatTime(row.recorded_at, { now });
-    minutes.set(minute, (minutes.get(minute) ?? 0) + 1);
-  }
-  const needsSeconds = (row: RowSubmissionView) => (minutes.get(formatTime(row.recorded_at, { now })) ?? 0) > 1;
+  // Seconds only where two otherwise identical labels share a minute.
+  const minuteLabels = new Map<string, number>();
+  const minuteLabel = (row: RowSubmissionView) => rowSubmissionLabel(row, language, parallel, { now, seconds: false });
+  for (const row of rows) minuteLabels.set(minuteLabel(row), (minuteLabels.get(minuteLabel(row)) ?? 0) + 1);
+  const needsSeconds = (row: RowSubmissionView) => (minuteLabels.get(minuteLabel(row)) ?? 0) > 1;
   const labelOf = (row: RowSubmissionView) => rowSubmissionLabel(row, language, parallel, { now, seconds: needsSeconds(row) });
   const labelId = (row: RowSubmissionView) => `${id}-label-${sorted.indexOf(row)}`;
 
