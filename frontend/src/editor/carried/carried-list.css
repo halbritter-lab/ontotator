@@ -1,0 +1,55 @@
+/* Carried-finding list parts (spec section 1): badge lines, meta, instruction, placeholder rows, progress. */
+
+.carried-extras {
+  display: grid;
+  gap: 2px;
+  margin-top: var(--space-1);
+}
+
+.carried-extras__badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.carried-extras__line,
+.carried-meta,
+.carried-instruction,
+.carried-placeholder__where,
+.carried-placeholder__note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: max(12px, var(--size-sm));
+  overflow-wrap: anywhere;
+}
+
+.carried-placeholder {
+  list-style: none;
+}
+
+/* Muted by colour, not opacity, so the text keeps at least 4.5:1 contrast. */
+.carried-placeholder.is-muted .doc-row,
+.carried-placeholder.is-muted .carried-placeholder__term {
+  color: var(--text-muted);
+}
+
+.carried-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.carried-progress__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: max(12px, var(--size-sm));
+}
+
+.carried-progress__status svg {
+  flex: none;
+}
