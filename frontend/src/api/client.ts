@@ -56,6 +56,11 @@ export type ResolveSourceObligationRequest = components["schemas"]["ResolveSourc
 export type ProblemReportRequest = components["schemas"]["ProblemReportRequest"];
 export type ProblemActionRequest = components["schemas"]["ProblemActionRequest"];
 export type ProblemReportView = components["schemas"]["ProblemReportView"];
+export type ReportEventView = components["schemas"]["ReportEventView"];
+export type ReportHoldView = components["schemas"]["ReportHoldView"];
+export type AffectedTask = components["schemas"]["AffectedTask"];
+export type PauseCandidate = components["schemas"]["PauseCandidate"];
+export type ActiveHoldView = components["schemas"]["ActiveHoldView"];
 export type CreateRoundRequest = components["schemas"]["CreateRoundRequest"];
 export type MutationEnvelope = components["schemas"]["MutationEnvelope"];
 export type Draft = components["schemas"]["Draft"];
@@ -736,6 +741,19 @@ export class ApiClient {
   async listProblemReports(projectKey: string, documentId?: string): Promise<ProblemReportView[]> {
     const query = documentId === undefined ? "" : `?${new URLSearchParams({ document_id: documentId })}`;
     return this.request(`/api/v1/projects/${encodeURIComponent(projectKey)}/problem-reports${query}`, { method: "GET" });
+  }
+
+  async listTaskProblemReports(projectKey: string, assignmentId: number): Promise<ProblemReportView[]> {
+    const query = new URLSearchParams({ assignment_id: String(assignmentId) });
+    return this.request(`/api/v1/projects/${encodeURIComponent(projectKey)}/problem-reports?${query}`, { method: "GET" });
+  }
+
+  async getProblemReport(reportId: string): Promise<ProblemReportView> {
+    return this.request(`/api/v1/problem-reports/${encodeURIComponent(reportId)}`, { method: "GET" });
+  }
+
+  async listPauseCandidates(reportId: string): Promise<PauseCandidate[]> {
+    return this.request(`/api/v1/problem-reports/${encodeURIComponent(reportId)}/pause-candidates`, { method: "GET" });
   }
 
   async actOnProblemReport(reportId: string, body: ProblemActionRequest): Promise<ProblemReportView> {
