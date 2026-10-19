@@ -1275,6 +1275,9 @@ if __name__ == "__main__":
         register_translation_review_scenario_route(app)
         register_variant_admin_scenario_routes(app)
         register_reanchor_scenario_route(app)
+        from browser_documents_scenarios import register_documents_scenario_route
+
+        register_documents_scenario_route(app)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:
