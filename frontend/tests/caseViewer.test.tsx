@@ -284,3 +284,34 @@ it('uses a collapsed native Versions disclosure for permitted browsing', async (
   const disclosure = screen.getByText('Versions').closest('details')!;
   expect(disclosure.open).toBe(false);
 });
+
+it('shows a lead the read-only check states of a submitted carry-forward submission', async () => {
+  const { CaseViewer } = await import('../src/variants/CaseViewer');
+  const carriedRef = { ...ownRef, kind: 'submission' as const, id: 'sub-carried', label: 'ann-0002 · submission' };
+  const plainRef = { ...ownRef, kind: 'submission' as const, id: 'sub-plain', label: 'ann-0003 · submission' };
+  vi.mocked(api.listAnnotationVersions).mockResolvedValue([ownRef, carriedRef, plainRef]);
+  const snapshot = historical.annotations[0];
+  const other = { ...snapshot, annotation: { ...snapshot.annotation, annotation_id: 'gone', term_id: 'HP:gone' } };
+  const summary = (id: string) => ({ submission_id: id, document_id: 'target', author_label: 'Reader A', created_at: '2026-10-16T00:00:00Z', mode: 'independent', round_id: 'round-2' });
+  const input = (id: string, source: typeof snapshot, target: typeof snapshot | null) => ({ input_id: id, source_submission_id: 'sub-1',
+    source_ref: { annotation_id: source.annotation.annotation_id, version: source.version }, source_snapshot: source, target_snapshot: target,
+    mapping_status: 'carried' as const, source_round_ordinal: 1 });
+  const history = vi.spyOn(api, 'getSubmissionHistory').mockImplementation(async (_project, _doc, id) => ({ summary: summary(id) as any,
+    annotations: historical.annotations, evidence: [], decisions: [], checked_layer_ids: [], document_checked: false, reanchor_inputs: [], reanchor_resolutions: [],
+    round_inputs: id === 'sub-carried' ? [input('in-1', snapshot, snapshot), input('in-2', other, null)] : [],
+    round_input_resolutions: id === 'sub-carried' ? [
+      { input_id: 'in-1', outcome: 'completed' as const, annotation_ref: { annotation_id: 'old', version: snapshot.version } },
+      { input_id: 'in-2', outcome: 'dismissed' as const, reason: 'Not here' },
+    ] : [] }));
+  const mounted = render(<CaseViewer {...props} annotations={refKey(carriedRef)} />);
+  const section = await screen.findByRole('region', { name: 'Carried findings' });
+  expect(history).toHaveBeenCalledWith('pkg', 'target', 'sub-carried');
+  expect(within(section).getByText('Checked')).toBeTruthy();
+  expect(within(section).getByText('Dismissed')).toBeTruthy();
+  expect(within(section).getByText('Dismissal reason: Not here')).toBeTruthy();
+  expect(within(section).getAllByText('Carried from Round 1')).toHaveLength(2);
+  mounted.rerender(<CaseViewer {...props} annotations={refKey(plainRef)} />);
+  await waitFor(() => expect(history).toHaveBeenCalledWith('pkg', 'target', 'sub-plain'));
+  await screen.findByText('HP:old');
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Carried findings' })).toBeNull());
+});

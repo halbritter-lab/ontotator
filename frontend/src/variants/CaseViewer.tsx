@@ -1,7 +1,7 @@
 import { useVersionAccess } from './useVersionAccess';
 import { ComparePane } from './ComparePane';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError, type AnnotationVersion, type CaseDetail, type TaskSummary, type VariantText, type VersionRef } from '../api/client';
+import { api, ApiError, type AnnotationVersion, type CaseDetail, type SubmissionHistoryDetail, type TaskSummary, type VariantText, type VersionRef } from '../api/client';
 import { ErrorNotice } from '../admin/ErrorNotice';
 import { routeHref, type Route, type ProjectDocumentsQuery } from '../app/router';
 import { useTermLabels } from '../editor/useTermLabels';
@@ -13,6 +13,10 @@ import { SubmissionHistory } from './SubmissionHistory';
 import { useFinalSelectionState } from './finalSelectionState';
 import { TranslationCorrectionAction } from './TranslationCorrectionAction';
 import { reviewLanguages } from '../admin/variantMetadata';
+import { CarriedChecksReadOnly } from '../editor/carried/CarriedChecksReadOnly';
+import { deriveCarriedStates, type CarriedInputLike } from '../editor/carried/checkState';
+import { carriedFromLine } from '../editor/carried/instructions';
+import { TermName } from '../editor/TermName';
 
 export interface CaseViewerProps {
   projectKey: string; caseId: string; variant?: string; annotations?: string;
@@ -62,6 +66,30 @@ export function VariantDetails({ detail, documentId }: { detail: CaseDetail; doc
       <ul>{(run.checks ?? []).map((check, index) => <li key={index}>{check.code}: {check.passed ? 'passed' : 'failed'}{check.detail ? ` · ${check.detail}` : ''}</li>)}</ul>
     </details>
   </details>;
+}
+
+/** Read-only check states of a submitted carry-forward submission (lead view); nothing without round inputs. */
+function SubmissionCarriedChecks({ projectKey, documentId, submissionId }: { projectKey: string; documentId: string; submissionId: string }): JSX.Element | null {
+  const key = JSON.stringify([projectKey, documentId, submissionId]);
+  const [state, setState] = useState<{ key: string; value: SubmissionHistoryDetail | null; failed: boolean } | null>(null);
+  useEffect(() => {
+    let active = true;
+    api.getSubmissionHistory(projectKey, documentId, submissionId).then(value => { if (active) setState({ key, value, failed: false }); }, () => { if (active) setState({ key, value: null, failed: true }); });
+    return () => { active = false; };
+  }, [key]);
+  const detail = state?.key === key ? state.value : null;
+  const inputs = detail?.round_inputs ?? [];
+  const termOf = (input: Pick<CarriedInputLike, 'source_snapshot' | 'target_snapshot'>) => (input.target_snapshot ?? input.source_snapshot).annotation;
+  const labelFor = useTermLabels(projectKey, inputs.map(input => ({ layer_id: termOf(input).layer_id, term_id: termOf(input).term_id })));
+  if (state?.key === key && state.failed) return <InlineMessage tone="warning">Carried check states are unavailable.</InlineMessage>;
+  if (!detail || !inputs.length) return null;
+  const items = deriveCarriedStates(inputs, detail.round_input_resolutions, detail.annotations).map(row => ({
+    term: <TermName termId={termOf(row.input).term_id} label={labelFor(termOf(row.input).layer_id, termOf(row.input).term_id)} />,
+    state: row.variant === 'checked' || row.variant === 'dismissed' ? row.variant : 'needed' as const,
+    reason: row.resolution?.reason ?? undefined,
+    origin: carriedFromLine(row.input.source_round_ordinal ?? null),
+  }));
+  return <CarriedChecksReadOnly items={items} />;
 }
 
 /** Ref kind of a selection key ("own" for `["own", id]`), or null for text, draft and malformed keys. */
@@ -194,6 +222,7 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, compare, 
     {!access.allowed && ref && <p className="case-own-submission">{ref.label}</p>}
     {refs && selection !== 'text' && !ref && <InlineMessage tone="info">This annotation version is not available to you.</InlineMessage>}
     {payloadFailed && <><ErrorNotice error={payloadError.error} />{retryButton}</>}
+    {ref?.kind === 'submission' && <SubmissionCarriedChecks projectKey={projectKey} documentId={current.document_id} submissionId={ref.id} />}
     <div className="comparison-reading">
     {compareOpen && <div className="comparison-toolbar-slot" ref={setComparisonToolbar} />}
     {access.allowed && <div className="viewer-left-controls">
