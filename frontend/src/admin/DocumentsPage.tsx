@@ -10,22 +10,29 @@ import {
   type Member,
   type ProjectDocumentSummary,
   type ProjectSettings,
+  type RowSubmissions,
   type TranslationReviewRecord,
   type VariantSummary,
 } from "../api/client";
 import { formatDateTime, labelFor, plural } from "../app/labels";
-import type { NavigateOptions, ProjectDocumentsQuery, Route } from "../app/router";
+import { routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
 import { Button, Checkbox, Dialog, EmptyState, Select, TextInput, Toolbar, useMediaQuery } from "../ui";
 import { DecisionBar } from "../documents/DecisionBar";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, groupName, initialExpandedGroups } from "../documents/DocumentsTable";
-import { ExpandedRow } from "../documents/ExpandedRow";
-import { RouteLink, rowKeyOf } from "../documents/RowCells";
+import { ExpandedRow, submissionsHeadingId, type ExpandedRowProps, type SelectFinalRequest } from "../documents/ExpandedRow";
+import {
+  barChanges, failureOf, FinalConfirm, keepRequest, selectionPayload, selectRequest, successMessage,
+  type CauseLine, type FinalConfirmFailure, type FinalConfirmRequest,
+} from "../documents/FinalConfirm";
+import { acknowledgeableItems, type KeepRequest } from "../documents/SelectionNotice";
+import { RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
 import { useDocumentRows } from "../documents/useDocumentRows";
 import { useRowSubmissions } from "../documents/useRowSubmissions";
+import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
 import { AssignDialog } from "./AssignDialog";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
@@ -81,6 +88,33 @@ export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
 }
 
 const caseOfKey = (key: string): string => key.slice(0, Math.max(0, key.lastIndexOf(":")));
+const languageOfKey = (key: string): string => key.slice(key.lastIndexOf(":") + 1);
+const nameOfKey = (key: string): string => `${caseOfKey(key)} · ${languageOfKey(key)}`;
+
+/** The open final-result confirmation; `revision` and `causes` are the row's state at open. */
+interface ConfirmState {
+  request: FinalConfirmRequest;
+  revision: number;
+  causes: string;
+  busy: boolean;
+  failure: FinalConfirmFailure | null;
+}
+
+type FocusTarget = { kind: "selected" | "kept" | "row"; rowKey: string };
+
+/** The row's acknowledgeable cause ids as a comparable set. */
+const causeSet = (row: DocumentRowView): string => acknowledgeableItems(row).map(item => item.cause_id).sort().join("\n");
+
+/** The first `count` cause lines of the selection notice holding the Keep trigger, as shown at open. */
+function noticeCauseLines(triggerId: string, count: number): CauseLine[] {
+  const notice = document.getElementById(triggerId)?.closest(".selection-notice");
+  return [...(notice?.querySelectorAll(".selection-notice-lines > li") ?? [])].slice(0, count).map(line => {
+    const copy = line.cloneNode(true) as HTMLElement;
+    const hint = copy.querySelector(".selection-notice-hint");
+    hint?.remove();
+    return { text: (copy.textContent ?? "").trim(), ...(hint?.textContent ? { hint: hint.textContent } : {}) };
+  });
+}
 
 export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
   if (!props.canManage) {
@@ -270,12 +304,114 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     }
     return null;
   };
+  // Final-result confirmations: one per page, everything captured at open.
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const confirmRef = useRef(confirm);
+  confirmRef.current = confirm;
+  const [success, setSuccess] = useState<{ text: string; next: string | null } | null>(null);
+  const successRef = useRef<HTMLDivElement>(null);
+  const pendingSuccess = useRef<{ request: FinalConfirmRequest; before: DocumentRowsPage } | null>(null);
+  const [focusTarget, setFocusTarget] = useState<FocusTarget | null>(null);
+
+  const rowDisclosure = (key: string) => [...(rootRef.current?.querySelectorAll<HTMLButtonElement>("button[aria-label]") ?? [])]
+    .find(button => button.getAttribute("aria-label") === `Show submissions, ${nameOfKey(key)}`);
+  const restoreFocus = (request: FinalConfirmRequest) => (document.getElementById(request.triggerId) ?? rowDisclosure(request.rowKey))?.focus();
+  const openConfirm = (request: FinalConfirmRequest, row: DocumentRowView) => {
+    const current = confirmRef.current;
+    if (current?.busy || current?.request.triggerId === request.triggerId) return;
+    if (current) announce("Previous confirmation closed.");
+    setSuccess(null);
+    setConfirm({ request, revision: row.final?.revision ?? 0, causes: causeSet(row), busy: false, failure: null });
+  };
+  const cancelConfirm = () => {
+    const current = confirmRef.current;
+    if (!current || current.busy) return;
+    restoreFocus(current.request);
+    setConfirm(null);
+  };
+  const reviewAgain = () => {
+    const current = confirmRef.current;
+    if (!current) return;
+    setConfirm(null);
+    rows.reload();
+    document.getElementById(submissionsHeadingId(current.request.caseId, current.request.language))?.focus();
+  };
+  const submitConfirm = () => {
+    const current = confirmRef.current;
+    if (!current || current.busy || !page) return;
+    const { request } = current;
+    const before = page;
+    setConfirm({ ...current, busy: true, failure: null });
+    api.selectFinalResult(projectKey, selectionPayload(request)).then(() => {
+      notifyFinalSelectionChanged(projectKey);
+      pendingSuccess.current = { request, before };
+      setConfirm(value => (value?.request === request ? null : value));
+      rows.reload();
+    }, error => {
+      setConfirm(value => (value?.request === request ? { ...value, busy: false, failure: failureOf(error) } : value));
+    });
+  };
+
+  // A new rows page: report a pending success, and close the confirmation when its row's
+  // selection revision or set of acknowledgeable causes changed (other refreshes keep it open).
+  useEffect(() => {
+    if (!page) return;
+    const pending = pendingSuccess.current;
+    if (pending && page !== pending.before) {
+      pendingSuccess.current = null;
+      const { request } = pending;
+      const text = [successMessage(request), barChanges(pending.before.bar, page.bar)].filter(Boolean).join(" ");
+      const next = query.decision ? pageRows.find(row => rowKeyOf(row) !== request.rowKey && row.matches_decision && row.categories.length > 0) : undefined;
+      announce(next ? `${text} Next decision: ${rowName(next)}.` : text);
+      setSuccess({ text, next: next ? rowKeyOf(next) : null });
+      setFocusTarget({ kind: request.kind === "keep" ? "kept" : "selected", rowKey: request.rowKey });
+    }
+    const current = confirmRef.current;
+    if (!current || current.busy || current.failure) return;
+    const row = pageRows.find(item => rowKeyOf(item) === current.request.rowKey);
+    if (row && (row.final?.revision ?? 0) === current.revision && causeSet(row) === current.causes) return;
+    const inside = document.activeElement?.closest(".final-confirm") != null;
+    setConfirm(null);
+    if (!row) return;
+    if (inside) restoreFocus(current.request);
+    announce("The final result or its warnings changed. The confirmation was closed.");
+    // Only a new page can change the confirmation's row.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  // Focus after a success (new Final row's View link, or the Submissions heading after Keep) or "Next decision".
+  useEffect(() => {
+    if (!focusTarget) return;
+    setFocusTarget(null);
+    if (focusTarget.kind === "row") { rowDisclosure(focusTarget.rowKey)?.focus(); return; }
+    const heading = document.getElementById(submissionsHeadingId(caseOfKey(focusTarget.rowKey), languageOfKey(focusTarget.rowKey)));
+    const target = focusTarget.kind === "kept" ? heading
+      : heading?.closest(".expanded-row")?.querySelector<HTMLElement>("tr.final-row a[aria-label^='View ']");
+    (target ?? successRef.current)?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTarget]);
+
+  const nextDecisionRoute = (key: string) => documentsRoute({ open: [...new Set([...openKeys, key])] });
+  const goToRow = (key: string) => {
+    setGroupState({ identity: requestIdentity, groups: new Set([...expandedGroups, caseOfKey(key)]) });
+    onNavigate(nextDecisionRoute(key), { replace: true });
+    setFocusTarget({ kind: "row", rowKey: key });
+  };
+
+  const confirmElement = (state: ConfirmState) => <FinalConfirm key={state.request.triggerId} request={state.request} busy={state.busy}
+    failure={state.failure} onConfirm={submitConfirm} onCancel={cancelConfirm} onReview={reviewAgain} />;
+
   const renderExpanded = (row: DocumentRowView) => {
     const notice = rowNotice(row);
+    const own = confirm?.request.rowKey === rowKeyOf(row) ? confirm : null;
     return <>
       {notice && <p className="documents-row-notice">{notice}</p>}
       <ExpandedRowLoader row={row} refresh={page} projectKey={projectKey} query={viewQuery} onNavigate={route => onNavigate(route)}
-        adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} onAnnounce={announce} textVersionTools={textVersionTools} />
+        adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} onAnnounce={announce} textVersionTools={textVersionTools}
+        onOpenConfirm={request => openConfirm(request, row)}
+        renderConfirm={submission => (own && own.request.kind !== "keep" && own.request.submissionId === submission.submission_id ? confirmElement(own) : null)}
+        keepConfirm={own?.request.kind === "keep" ? confirmElement(own) : undefined}
+        confirmBusy={confirm?.busy ?? false} />
     </>;
   };
 
@@ -351,6 +487,15 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     </Toolbar>
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}
     {inventoryError !== undefined && <ErrorNotice error={inventoryError} />}
+    {success && <div ref={successRef} tabIndex={-1} className="notice notice-success documents-success">
+      <div className="notice-content">
+        {success.text}
+        {success.next && <> <a href={routeHref(nextDecisionRoute(success.next))} onClick={event => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault(); goToRow(success.next!);
+        }}>Next decision: {nameOfKey(success.next)}</a></>}
+      </div>
+    </div>}
     {content}
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <Dialog open={uploadOpen} title="Upload documents" size="lg" onClose={() => setUploadOpen(false)}>
@@ -384,10 +529,15 @@ interface ExpandedRowLoaderProps {
   adjudicatorNotAnnotator: boolean;
   onAnnounce: (message: string) => void;
   textVersionTools?: TextVersionsTools;
+  /** Opens a final-result confirmation built from this row and its loaded submissions. */
+  onOpenConfirm: (request: FinalConfirmRequest) => void;
+  renderConfirm: ExpandedRowProps["renderConfirm"];
+  keepConfirm?: ExpandedRowProps["keepConfirm"];
+  confirmBusy: boolean;
 }
 
 /** Loads the submissions of an open row and reloads them whenever the rows refresh. */
-function ExpandedRowLoader({ row, refresh, projectKey, ...props }: ExpandedRowLoaderProps): JSX.Element {
+function ExpandedRowLoader({ row, refresh, projectKey, onOpenConfirm, ...props }: ExpandedRowLoaderProps): JSX.Element {
   const submissions = useRowSubmissions(projectKey, row.case_id, row.language, true);
   const mounted = useRef(false);
   const { reload } = submissions;
@@ -397,7 +547,11 @@ function ExpandedRowLoader({ row, refresh, projectKey, ...props }: ExpandedRowLo
     // Only a new rows page triggers the reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh]);
-  return <ExpandedRow row={row} projectKey={projectKey} submissions={submissions} {...props} />;
+  const data: RowSubmissions | null = submissions.data;
+  const onSelectFinal = (request: SelectFinalRequest) => onOpenConfirm(selectRequest(row, data, request.submission, request.triggerId));
+  const onKeep = (request: KeepRequest) =>
+    onOpenConfirm(keepRequest(row, data, request.causeIds, request.triggerId, noticeCauseLines(request.triggerId, request.causeIds.length)));
+  return <ExpandedRow row={row} projectKey={projectKey} submissions={submissions} onSelectFinal={onSelectFinal} onKeep={onKeep} {...props} />;
 }
 
 function ReviewHistory({ projectKey, documentId, onClose }: { projectKey: string; documentId: string; onClose: () => void }): JSX.Element {
