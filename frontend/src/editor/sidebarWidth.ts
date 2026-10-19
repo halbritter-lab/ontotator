@@ -123,8 +123,6 @@ export function useSidebarWidth(username: string | undefined): SidebarWidthState
       timer.current = null;
     }
   }, []);
-  useEffect(() => clearTimer, [clearTimer]);
-
   const setWidth = useCallback((value: number) => {
     const next = Math.round(value);
     preferredRef.current = next;
@@ -137,6 +135,12 @@ export function useSidebarWidth(username: string | undefined): SidebarWidthState
     const value = preferredRef.current;
     if (user && value != null) writeStoredWidth(user, clampSidebarWidth(value, currentLimits()));
   }, []);
+  // Unmount: a pending keyboard write is flushed, not dropped (a drag in progress is not committed).
+  useEffect(() => () => {
+    const owed = timer.current != null;
+    clearTimer();
+    if (owed) write();
+  }, [clearTimer, write]);
 
   const commit = useCallback((source: SidebarCommitSource = "drag") => {
     if (source === "drag-start") {

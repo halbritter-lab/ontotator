@@ -102,3 +102,19 @@ export function sourceOptionLabel(source: CarrySourceFacts, options: FormatTimeO
     plural(source.finding_count, "finding", "findings"),
   ].filter(Boolean).join(" · ");
 }
+
+/** Starting point in the Work rounds table: "from Round 2 submission", "restarted empty", … */
+export function roundStartingPoint(round: Pick<RoundFacts, "kind" | "source_round_ordinal" | "input_submission_ids">): string {
+  switch (round.kind) {
+    case "carry_forward": return round.source_round_ordinal ? `from Round ${round.source_round_ordinal} submission` : "from an earlier submission";
+    case "clean_restart": return "restarted empty";
+    case "consolidation": return `consolidation of ${plural(round.input_submission_ids?.length ?? 0, "submission", "submissions")}`;
+    default: return "started empty";
+  }
+}
+
+/** Short toolbar badge of a carry-forward round ("Round 3 · continued from Round 2"); undefined otherwise. */
+export function roundBadge(round: Pick<RoundFacts, "kind" | "round_ordinal" | "source_round_ordinal"> | null | undefined): string | undefined {
+  if (round?.kind !== "carry_forward" || !round.round_ordinal) return undefined;
+  return `Round ${round.round_ordinal} · continued from ${round.source_round_ordinal ? `Round ${round.source_round_ordinal}` : "an earlier submission"}`;
+}

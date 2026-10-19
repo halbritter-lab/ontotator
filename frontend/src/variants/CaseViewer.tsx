@@ -14,8 +14,8 @@ import { useFinalSelectionState } from './finalSelectionState';
 import { TranslationCorrectionAction } from './TranslationCorrectionAction';
 import { reviewLanguages } from '../admin/variantMetadata';
 import { CarriedChecksReadOnly } from '../editor/carried/CarriedChecksReadOnly';
-import { deriveCarriedStates, type CarriedInputLike } from '../editor/carried/checkState';
-import { carriedFromLine } from '../editor/carried/instructions';
+import type { CarriedInputLike } from '../editor/carried/checkState';
+import { carriedCheckItems } from '../editor/historicalSubmission';
 import { TermName } from '../editor/TermName';
 
 export interface CaseViewerProps {
@@ -83,12 +83,8 @@ function SubmissionCarriedChecks({ projectKey, documentId, submissionId }: { pro
   const labelFor = useTermLabels(projectKey, inputs.map(input => ({ layer_id: termOf(input).layer_id, term_id: termOf(input).term_id })));
   if (state?.key === key && state.failed) return <InlineMessage tone="warning">Carried check states are unavailable.</InlineMessage>;
   if (!detail || !inputs.length) return null;
-  const items = deriveCarriedStates(inputs, detail.round_input_resolutions, detail.annotations).map(row => ({
-    term: <TermName termId={termOf(row.input).term_id} label={labelFor(termOf(row.input).layer_id, termOf(row.input).term_id)} />,
-    state: row.variant === 'checked' || row.variant === 'dismissed' ? row.variant : 'needed' as const,
-    reason: row.resolution?.reason ?? undefined,
-    origin: carriedFromLine(row.input.source_round_ordinal ?? null),
-  }));
+  const items = carriedCheckItems(inputs, detail.round_input_resolutions ?? [], detail.annotations,
+    ({ annotation }) => <TermName termId={annotation.term_id} label={labelFor(annotation.layer_id, annotation.term_id)} />);
   return <CarriedChecksReadOnly items={items} />;
 }
 

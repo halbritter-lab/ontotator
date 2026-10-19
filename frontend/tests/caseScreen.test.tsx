@@ -269,7 +269,7 @@ describe("CaseScreen integration", () => {
     );
     const layout = rendered.container.querySelector(".app-layout")!;
     expect(layout.classList.contains("mobile-pane-text")).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: /List|Liste/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Findings/ }));
     expect(layout.classList.contains("mobile-pane-list")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
     expect(layout.classList.contains("mobile-pane-details")).toBe(true);

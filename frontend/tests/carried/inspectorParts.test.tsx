@@ -48,7 +48,7 @@ function section(overrides: Partial<Parameters<typeof CarriedSection>[0]> = {}) 
     readOnly={false}
     onMarkChecked={vi.fn().mockResolvedValue(undefined)}
     onShowOriginal={vi.fn()}
-    onDismiss={vi.fn().mockResolvedValue(undefined)}
+    onDismiss={vi.fn().mockResolvedValue(true)}
     {...overrides}
   />;
 }
@@ -177,10 +177,16 @@ describe("CarriedSection", () => {
 
   it("note_error_offers_save_note_and_check", async () => {
     const onSaveNoteAndCheck = vi.fn().mockResolvedValue(undefined);
-    render(section({ error: { kind: "note" }, onSaveNoteAndCheck }));
+    render(section({ error: { kind: "note", action: "check" }, onSaveNoteAndCheck }));
     expect(screen.getByText("Save the note first.")).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save note and mark as checked" })); });
     expect(onSaveNoteAndCheck).toHaveBeenCalled();
+  });
+
+  it("note_error_of_a_dismissal_does_not_offer_mark_as_checked", () => {
+    render(section({ error: { kind: "note", action: "dismiss" }, onSaveNoteAndCheck: vi.fn() }));
+    expect(screen.getByText("Save the note first.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save note and mark as checked" })).toBeNull();
   });
 
   it("read_only_paused_has_no_check_actions", () => {
@@ -200,7 +206,7 @@ describe("CarriedSection", () => {
 
   it("dismiss_requires_a_reason", async () => {
     const user = userEvent.setup();
-    const onDismiss = vi.fn().mockResolvedValue(undefined);
+    const onDismiss = vi.fn().mockResolvedValue(true);
     render(section({ onDismiss }));
     await user.click(screen.getByRole("button", { name: "Does not apply…" }));
     const group = screen.getByRole("group", { name: "Dismiss carried finding" });
@@ -214,6 +220,19 @@ describe("CarriedSection", () => {
     await user.type(field, "Not here");
     await user.click(confirm);
     expect(onDismiss).toHaveBeenCalledWith("Not here");
+  });
+
+  it("a_dismissal_that_was_not_applied_keeps_the_confirm_and_reason", async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn().mockResolvedValue(false);
+    render(section({ onDismiss }));
+    await user.click(screen.getByRole("button", { name: "Does not apply…" }));
+    const group = screen.getByRole("group", { name: "Dismiss carried finding" });
+    await user.type(within(group).getByLabelText(/Why does this finding not apply/), "Not here");
+    await user.click(within(group).getByRole("button", { name: "Dismiss" }));
+    expect(onDismiss).toHaveBeenCalledWith("Not here");
+    const still = screen.getByRole("group", { name: "Dismiss carried finding" });
+    expect((within(still).getByLabelText(/Why does this finding not apply/) as HTMLTextAreaElement).value).toBe("Not here");
   });
 
   it("escape_cancels_the_dismissal_and_returns_focus", async () => {
@@ -249,8 +268,8 @@ function panel(overrides: Partial<Parameters<typeof ExceptionPanel>[0]> = {}) {
     candidates={candidates}
     readOnly={false}
     onMarkInText={vi.fn()}
-    onLink={vi.fn().mockResolvedValue(undefined)}
-    onDismiss={vi.fn().mockResolvedValue(undefined)}
+    onLink={vi.fn().mockResolvedValue(true)}
+    onDismiss={vi.fn().mockResolvedValue(true)}
     onUndoDismissal={vi.fn().mockResolvedValue(undefined)}
     onShowOriginal={vi.fn()}
     {...overrides}
@@ -282,7 +301,7 @@ describe("ExceptionPanel", () => {
 
   it("link_chooser_is_a_radio_group", async () => {
     const user = userEvent.setup();
-    const onLink = vi.fn().mockResolvedValue(undefined);
+    const onLink = vi.fn().mockResolvedValue(true);
     render(panel({ onLink }));
     await user.click(screen.getByRole("button", { name: "Link to an existing finding…" }));
     const group = screen.getByRole("group", { name: "Link to an existing finding" });
@@ -293,6 +312,23 @@ describe("ExceptionPanel", () => {
     await user.click(within(group).getByRole("radio", { name: "Seizure · “Krampfanfälle werden …”" }));
     await user.click(screen.getByRole("button", { name: "Link and mark as checked" }));
     expect(onLink).toHaveBeenCalledWith("own");
+    // Linked: the chooser closes and focus returns to its trigger, never to the body.
+    expect(screen.queryByRole("group", { name: "Link to an existing finding" })).toBeNull();
+    const trigger = screen.getByRole("button", { name: "Link to an existing finding…" });
+    expect(trigger.hasAttribute("data-carried-link")).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("a_link_that_was_not_applied_keeps_the_chooser_open", async () => {
+    const user = userEvent.setup();
+    const onLink = vi.fn().mockResolvedValue(false);
+    render(panel({ onLink }));
+    await user.click(screen.getByRole("button", { name: "Link to an existing finding…" }));
+    await user.click(screen.getByRole("radio", { name: "Seizure · no text span" }));
+    await user.click(screen.getByRole("button", { name: "Link and mark as checked" }));
+    expect(onLink).toHaveBeenCalledWith("other");
+    const group = screen.getByRole("group", { name: "Link to an existing finding" });
+    expect(within(group).getByRole("radio", { name: "Seizure · no text span" })).toHaveProperty("checked", true);
   });
 
   it("link_cancel_returns_focus_to_the_trigger", async () => {
@@ -316,7 +352,7 @@ describe("ExceptionPanel", () => {
 
   it("dismiss_with_reason", async () => {
     const user = userEvent.setup();
-    const onDismiss = vi.fn().mockResolvedValue(undefined);
+    const onDismiss = vi.fn().mockResolvedValue(true);
     render(panel({ onDismiss }));
     await user.click(screen.getByRole("button", { name: "Dismiss with reason…" }));
     const group = screen.getByRole("group", { name: "Dismiss carried finding" });
@@ -337,8 +373,24 @@ describe("ExceptionPanel", () => {
     expect(screen.getByText("Dismissed by You")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Dismiss with reason…" })).toBeNull();
     expect(screen.getByRole("button", { name: "Link to an existing finding…" })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Undo dismissal" }));
+    const undo = screen.getByRole("button", { name: "Undo dismissal" });
+    expect(undo.hasAttribute("data-carried-undo")).toBe(true);
+    await user.click(undo);
     expect(onUndoDismissal).toHaveBeenCalled();
+  });
+
+  it("read_only_dismissed_does_not_name_you", () => {
+    render(panel({ readOnly: "submitted", state: stateOf("dismissed", { input_id: "in-1", outcome: "dismissed", reason: "Not here" }, "placeholder") }));
+    expect(screen.queryByText("Dismissed by You")).toBeNull();
+    expect(screen.getAllByText("Dismissed")).toHaveLength(2);
+  });
+
+  it("note_error_offers_save_note", async () => {
+    const onSaveNote = vi.fn().mockResolvedValue(undefined);
+    render(panel({ error: { kind: "note", action: "link" }, onSaveNote }));
+    expect(screen.getByText("Save the note first.")).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save note" })); });
+    expect(onSaveNote).toHaveBeenCalled();
   });
 
   it("read_only_paused_has_no_actions", () => {

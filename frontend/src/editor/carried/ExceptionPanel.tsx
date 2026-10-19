@@ -27,20 +27,24 @@ export interface ExceptionPanelProps {
   candidates: LinkCandidate[];
   readOnly: CarriedReadOnly;
   onMarkInText?: () => void;
-  onLink?: (annotationId: string) => Promise<void>;
-  onDismiss?: (reason: string) => Promise<void>;
-  onUndoDismissal?: () => Promise<void>;
+  /** Resolves true only when the link was applied; otherwise the chooser stays open. */
+  onLink?: (annotationId: string) => Promise<boolean>;
+  /** Resolves true only when the dismissal was applied; otherwise the confirm stays open. */
+  onDismiss?: (reason: string) => Promise<boolean>;
+  onUndoDismissal?: () => Promise<unknown>;
   onShowOriginal: () => void;
   error?: CarriedError | null;
   /** "Retry" of a network error: retries the queued write. */
   onRetry?: () => void;
+  /** "Save note" of an unsaved-note error: saves the open notes; the action is then repeated by hand. */
+  onSaveNote?: () => Promise<unknown>;
 }
 
 /** Inline chooser below "Link to an existing finding…": a radio group, never a select. */
 function LinkChooser({ candidates, blocked, onLink, onBusyChange }: {
   candidates: LinkCandidate[];
   blocked: boolean;
-  onLink: (annotationId: string) => Promise<void>;
+  onLink: (annotationId: string) => Promise<boolean>;
   onBusyChange: (busy: boolean) => void;
 }): JSX.Element {
   const name = useId();
@@ -69,7 +73,11 @@ function LinkChooser({ candidates, blocked, onLink, onBusyChange }: {
     setBusy(true);
     onBusyChange(true);
     onLink(choice).then(
-      () => { setBusy(false); onBusyChange(false); setOpen(false); setSelected(null); },
+      applied => {
+        setBusy(false); onBusyChange(false);
+        // Linked: close and return focus to the trigger (it stays rendered), never to the body.
+        if (applied) { returnFocus.current = true; setOpen(false); setSelected(null); }
+      },
       () => { setBusy(false); onBusyChange(false); },
     );
   };
@@ -78,6 +86,7 @@ function LinkChooser({ candidates, blocked, onLink, onBusyChange }: {
     <>
       <Button
         ref={trigger}
+        data-carried-link=""
         aria-expanded={open}
         aria-disabled={(blocked && !busy) || undefined}
         onClick={() => { if (!blocked && !open) setOpen(true); }}
@@ -135,8 +144,9 @@ function LinkChooser({ candidates, blocked, onLink, onBusyChange }: {
 /** Inspector section of a carried input without a carried finding (spec section 3; Resolved 3). */
 export function ExceptionPanel({
   state, origin, recordedAt, reason, original, candidates, readOnly, onMarkInText, onLink, onDismiss,
-  onUndoDismissal, onShowOriginal, error = null, onRetry,
+  onUndoDismissal, onShowOriginal, error = null, onRetry, onSaveNote,
 }: ExceptionPanelProps): JSX.Element {
+  const [savingNote, setSavingNote] = useState(false);
   const [busy, setBusy] = useState<null | "link" | "dismiss" | "undo">(null);
   const blocked = busy !== null || blocksCheckActions(error);
   const dismissed = state.variant === "dismissed";
@@ -162,7 +172,7 @@ export function ExceptionPanel({
       {dismissed ? (
         <>
           {state.resolution?.reason && <p className="carried-reason">Dismissal reason: {state.resolution.reason}</p>}
-          <p className="carried-hint">Dismissed by You</p>
+          <p className="carried-hint">{readOnly ? "Dismissed" : "Dismissed by You"}</p>
         </>
       ) : (
         <p className="carried-reason">{reason}</p>
@@ -180,11 +190,19 @@ export function ExceptionPanel({
         <Button variant="quiet" size="sm" onClick={onShowOriginal}>Show original evidence</Button>
       </div>
       {readOnly === "paused" && <p className="carried-hint">{PAUSED_SENTENCE}</p>}
-      {error && <CarriedErrorNotice error={error} onRetry={onRetry} />}
+      {error && <CarriedErrorNotice error={error} onRetry={onRetry} noteAction={onSaveNote && !readOnly && (
+        <Button size="sm" variant="primary" loading={savingNote} onClick={() => {
+          if (savingNote) return;
+          setSavingNote(true);
+          onSaveNote().then(() => setSavingNote(false), () => setSavingNote(false));
+        }}>
+          Save note
+        </Button>
+      )} />}
       {!readOnly && dismissed && (
         <div className="carried-actions">
           {onUndoDismissal && (
-            <Button loading={busy === "undo"} aria-disabled={blocked || undefined} onClick={undo}>Undo dismissal</Button>
+            <Button data-carried-undo="" loading={busy === "undo"} aria-disabled={blocked || undefined} onClick={undo}>Undo dismissal</Button>
           )}
           {linkChooser}
         </div>

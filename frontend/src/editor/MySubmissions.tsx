@@ -67,7 +67,7 @@ export function MySubmissions({ assignmentId, projectKey, currentRound, document
           {rows.map(row => <li key={row.submission_id}>
             <span>{`${submissionName(row)} · ${findings(row.finding_count)}`}</span>{" "}
             <Button type="button" variant="secondary" size="sm" loading={opening === row.submission_id}
-              aria-label={`View ${roundOf(row)} submission`} onClick={() => { if (!opening) void view(row); }}>View</Button>
+              aria-label={`View ${submissionName(row)}`} onClick={() => { if (!opening) void view(row); }}>View</Button>
           </li>)}
           {pending && <li style={{ color: "var(--text-muted)" }}>{`Round ${currentRound.ordinal} · not submitted yet`}</li>}
         </ul>}

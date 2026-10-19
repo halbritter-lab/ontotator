@@ -60,8 +60,8 @@ describe("My submissions", () => {
     expect(items[0]).toContain(first.textContent);
     expect(items[1]).toContain(`Round 2 · ${formatTime(round2At)} · 2 findings`);
     expect(items[2]).toBe("Round 3 · not submitted yet");
-    expect(within(mine()).getByRole("button", { name: "View Round 1 submission" })).toBeDefined();
-    expect(within(mine()).getByRole("button", { name: "View Round 2 submission" })).toBeDefined();
+    expect(within(mine()).getByRole("button", { name: `View Round 1 · ${formatTime(round1At)}` })).toBeDefined();
+    expect(within(mine()).getByRole("button", { name: `View Round 2 · ${formatTime(round2At)}` })).toBeDefined();
     expect(screen.queryByText("No previous submissions yet.")).toBeNull();
     expect(screen.queryByRole("region", { name: "Submission history" })).toBeNull();
     expect(list).toHaveBeenCalledWith(7);
@@ -70,7 +70,7 @@ describe("My submissions", () => {
   it("omits the not-submitted line once the current round has a submission", async () => {
     vi.spyOn(api, "listAssignmentSubmissions").mockResolvedValue([...rows, row("sub-3", 3, at(19, 1, 30), 0)]);
     renderAssignmentCase();
-    await within(mine()).findByRole("button", { name: "View Round 3 submission" });
+    await within(mine()).findByRole("button", { name: `View Round 3 · ${formatTime(at(19, 1, 30))}` });
     expect(within(mine()).queryByText(/not submitted yet/)).toBeNull();
   });
 
@@ -79,7 +79,7 @@ describe("My submissions", () => {
     renderAssignmentCase();
     expect(await within(mine()).findByText("Your submissions could not be loaded.")).toBeDefined();
     fireEvent.click(within(mine()).getByRole("button", { name: "Retry" }));
-    await within(mine()).findByRole("button", { name: "View Round 1 submission" });
+    await within(mine()).findByRole("button", { name: `View Round 1 · ${formatTime(round1At)}` });
     expect(list).toHaveBeenCalledTimes(2);
   });
 
@@ -87,7 +87,7 @@ describe("My submissions", () => {
     vi.spyOn(api, "listAssignmentSubmissions").mockResolvedValue(rows);
     const history = vi.spyOn(api, "getSubmissionHistory").mockImplementation(async (_project, _doc, id) => detail(id, id === "sub-2"));
     renderAssignmentCase();
-    fireEvent.click(await within(mine()).findByRole("button", { name: "View Round 1 submission" }));
+    fireEvent.click(await within(mine()).findByRole("button", { name: `View Round 1 · ${formatTime(round1At)}` }));
     let dialog = await screen.findByRole("dialog", { name: "Historical submission" });
     expect(history).toHaveBeenCalledWith("pkg", "doc", "sub-1");
     expect(within(dialog).getByRole("heading", { name: `Round 1 · ${formatTime(round1At)}` })).toBeDefined();
@@ -95,7 +95,7 @@ describe("My submissions", () => {
     fireEvent.click(within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog", { name: "Historical submission" })).toBeNull();
 
-    fireEvent.click(within(mine()).getByRole("button", { name: "View Round 2 submission" }));
+    fireEvent.click(within(mine()).getByRole("button", { name: `View Round 2 · ${formatTime(round2At)}` }));
     dialog = await screen.findByRole("dialog", { name: "Historical submission" });
     expect(within(dialog).getByRole("heading", { name: `Round 2 · ${formatTime(round2At)}` })).toBeDefined();
     const carried = within(dialog).getByRole("region", { name: "Carried findings" });

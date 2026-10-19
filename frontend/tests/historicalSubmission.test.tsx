@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, type Submission, type SubmissionHistoryDetail } from "../src/api/client";
 import { HistoricalSubmissionDialog } from "../src/editor/HistoricalSubmissionDialog";
-import { fromHistoryDetail, fromSubmission } from "../src/editor/historicalSubmission";
+import { carriedCheckItems, fromHistoryDetail, fromSubmission } from "../src/editor/historicalSubmission";
 import { historical } from "./variantFixtures";
 import { workspaceFixture } from "./assignments";
 
@@ -52,6 +52,11 @@ describe("historical submission adapters", () => {
       { term: "Term HP:old", state: "checked", reason: undefined, origin: "Carried from Round 2" },
       { term: "Term HP:gone", state: "dismissed", reason: "Not in this text", origin: "Carried from Round 2" },
     ]);
+  });
+
+  it("carriedCheckItems reads unchecked inputs of a submitted round as Check needed", () => {
+    const items = carriedCheckItems([input("in-1", snapshot, snapshot)], [], [snapshot], value => value.annotation.term_id);
+    expect(items).toEqual([{ term: "HP:old", state: "needed", reason: undefined, origin: "Carried from Round 2" }]);
   });
 
   it("has no carried section for a detail without round inputs", () => {

@@ -102,6 +102,20 @@ describe("carried findings in the findings list", () => {
     expect(screen.getByText("Previous unchecked carried finding")).toBeDefined();
   });
 
+  it("N goes to an unchecked finding on a hidden layer and makes the layer visible", () => {
+    const hidden = finding("hidden-carried");
+    hidden.annotation.layer_id = "extra";
+    const view = workspaceFixture().view;
+    view.key.round_id = "round-3"; view.draft.key = view.key; view.require_spanless_note = false;
+    view.layers = [...(view.layers ?? []), { ...view.layers![0], layer_id: "extra", label: "Extra", default_visible: false }];
+    view.draft.annotations = [hidden];
+    const { container } = render(<CaseScreen view={view} workspaceId="round-workspace" roundKind="carry_forward"
+      roundInputs={[input("input-hidden", hidden)]} onClose={vi.fn()} />);
+    expect(row(container, "annotation:hidden-carried")).toBeNull();
+    fireEvent.keyDown(window, { key: "n" });
+    expect(pressed(container)).toEqual(["annotation:hidden-carried"]);
+  });
+
   it("keeps a single selection across rows, placeholders and N, and scrolls the row into view", async () => {
     const carried = finding("carried");
     const plain = finding("plain");

@@ -23,8 +23,16 @@ it("starts a continued round from one deliberately selected immutable own submis
   renderRounds([round], [source], { onCreate: create });
   const option = await screen.findByRole("radio", { name: /Earlier submission · .* · en v1 · 0 findings/ });
   const button = screen.getByRole("button", { name: "Continue from this submission" });
-  expect(button).toHaveProperty("disabled", true);
+  // No preselection: the button stays focusable, names why it is unavailable and starts nothing.
+  expect(option).toHaveProperty("checked", false);
+  expect(button).toHaveProperty("disabled", false);
+  expect(button.getAttribute("aria-disabled")).toBe("true");
+  expect(screen.getByText("Choose a submission to continue from.").id).toBe(button.getAttribute("aria-describedby"));
+  fireEvent.click(button);
+  expect(create).not.toHaveBeenCalled();
   fireEvent.click(option);
+  expect(button.getAttribute("aria-disabled")).toBeNull();
+  expect(screen.queryByText("Choose a submission to continue from.")).toBeNull();
   fireEvent.click(button);
   await waitFor(() => expect(create).toHaveBeenCalledWith({ request_id: expect.any(String), expected_workflow_revision: 3, kind: "carry_forward", source_submission_ids: ["exact-source"] }));
   expect(screen.queryByRole("button", { name: /Consolidation|restart/i })).toBeNull();

@@ -10,7 +10,7 @@ import { useVersionAccess } from "../variants/useVersionAccess";
 import { TranslationReviewScreen } from "../translation/TranslationReviewScreen";
 import { WorkRoundsDialog } from "./WorkRoundsDialog";
 import { TaskProblemActions } from "./TaskProblemActions";
-import { roundIdentity } from "../editor/rounds/roundLabels";
+import { roundBadge as roundBadgeOf, roundIdentity } from "../editor/rounds/roundLabels";
 
 interface TaskEditorProps {
   assignmentId: number;
@@ -140,8 +140,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     workflow_revision: assignment.workflow_revision, held: assignment.held, hold_reason: assignment.hold_reason,
   };
   // Toolbar identity (spec section 7): short badge, full identity line as its title.
-  const roundBadge = roundInfo?.kind === "carry_forward" && roundInfo.round_ordinal
-    ? `Round ${roundInfo.round_ordinal} · continued from ${roundInfo.source_round_ordinal ? `Round ${roundInfo.source_round_ordinal}` : "an earlier submission"}` : undefined;
+  const roundBadge = roundBadgeOf(roundInfo);
   const roundTitle = roundInfo ? roundIdentity(roundInfo) : undefined;
   return <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}

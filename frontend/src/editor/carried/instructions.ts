@@ -50,12 +50,6 @@ export function valuesLines(defaultedAxisLabels: readonly string[]): string[] {
   return lines;
 }
 
-/** Inspector origin line; `formattedTime` is already formatted (`formatTime`). */
-export function originLine(ordinal: number | null, formattedTime: string | null): string {
-  const from = ordinal ? `Carried from Round ${ordinal}` : "Carried from an earlier submission";
-  return formattedTime ? `${from} (submitted ${formattedTime})` : from;
-}
-
 /** List meta line of a carried row, e.g. "Carried from Round 2". */
 export const carriedFromLine = (ordinal: number | null): string => (ordinal ? `Carried from Round ${ordinal}` : "Carried from an earlier submission");
 

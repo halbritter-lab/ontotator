@@ -1,7 +1,7 @@
 import { ApiError, ConflictError, isSessionProblem } from "../api/client";
 
 /** 409 codes for a carried-review command that was refused, not a stale draft: no reload needed. */
-const REJECTED_CONFLICT_CODES = new Set(["ROUND_INPUT_RESOLUTION_STALE", "ROUND_INPUT_CARRIED_FINDING_PRESENT"]);
+export const REJECTED_CONFLICT_CODES: ReadonlySet<string> = new Set(["ROUND_INPUT_RESOLUTION_STALE", "ROUND_INPUT_CARRIED_FINDING_PRESENT"]);
 
 export type QueueState = "saved" | "dirty" | "saving" | "error" | "conflict";
 

@@ -107,6 +107,17 @@ describe("useSidebarWidth", () => {
     expect(localStorage.getItem(storageKey("anna"))).toBe("330");
   });
 
+  it("unmount_flushes_a_pending_key_write", () => {
+    vi.useFakeTimers();
+    localStorage.setItem(storageKey("anna"), "300");
+    const { result, unmount } = renderHook(() => useSidebarWidth("anna"));
+    act(() => result.current.setWidth(340));
+    act(() => result.current.commit("key"));
+    expect(localStorage.getItem(storageKey("anna"))).toBe("300");
+    unmount();
+    expect(localStorage.getItem(storageKey("anna"))).toBe("340");
+  });
+
   it("drag_cancel_after_a_pending_key_change_leaves_storage_at_the_pre_drag_state", () => {
     vi.useFakeTimers();
     localStorage.setItem(storageKey("anna"), "300");

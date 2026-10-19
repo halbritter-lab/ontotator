@@ -197,7 +197,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </div>
       </div>
 
-      <div className="detail-section review-actions__proposal" aria-label="Proposal details">
+      <div className="detail-section review-actions__proposal" aria-label="Proposal details" tabIndex={-1}>
         <strong className="review-actions__term"><TermName termId={target.term_id ?? target.annotation_id} label={termLabel} /></strong>
         <dl className="axis-list">
           {(() => {

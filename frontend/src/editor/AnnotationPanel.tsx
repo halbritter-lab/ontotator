@@ -221,7 +221,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
       {/* 2. Dynamic Context Axes (hidden if empty or undefined) */}
       {axesConfig && axesConfig.length > 0 && (
-        <div className="detail-section" data-testid="axes-section">
+        <div className="detail-section" data-testid="axes-section" tabIndex={-1}>
           <h3>Context Axes</h3>
           {axesConfig.map((axis) => {
             const val = axesValues[axis.id] ?? "";

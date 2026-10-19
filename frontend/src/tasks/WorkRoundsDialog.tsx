@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api, type AssignmentView, type CreateRoundRequest, type RoundSourceView, type WorkRoundView } from "../api/client";
 import { Button, Dialog, InlineMessage } from "../ui";
 import { ErrorNotice } from "../admin/ErrorNotice";
@@ -31,9 +31,14 @@ export function WorkRoundsDialog({ assignment, onClose, onCreate, onOpen, onRelo
   const control = useRoundStart(assignment, sources, onCreate);
   const available = data !== null && carryAvailability(assignment, data.rounds, data.sources).kind === "available";
   const title = documentLabel ? `Work rounds · ${documentLabel.textId} · ${documentLabel.language}` : "Work rounds";
+  // No preselection: the source stays a deliberate choice. Until then the button stays focusable and names why.
+  const reasonId = `${useId()}-continue-reason`;
+  const chosen = sources.some(value => value.submission_id === control.source);
   const footer = <>
-    {available && <Button variant="primary" loading={control.busy} disabled={assignment.held || !sources.some(value => value.submission_id === control.source)}
-      onClick={() => control.start("carry_forward")}>Continue from this submission</Button>}
+    {available && !chosen && <span id={reasonId} className="work-rounds__reason">Choose a submission to continue from.</span>}
+    {available && <Button variant="primary" loading={control.busy} disabled={assignment.held}
+      aria-disabled={!chosen || undefined} aria-describedby={chosen ? undefined : reasonId}
+      onClick={() => { if (chosen) control.start("carry_forward"); }}>Continue from this submission</Button>}
     <Button onClick={onClose}>Close</Button>
   </>;
   return <Dialog open title={title} onClose={onClose} size="lg" footer={footer}>

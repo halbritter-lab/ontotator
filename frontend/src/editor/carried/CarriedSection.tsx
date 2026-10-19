@@ -6,8 +6,11 @@ import type { CarriedState } from "./checkState";
 import { CarriedStateBadge } from "./CarriedRowExtras";
 import "./carried-inspector.css";
 
-/** Error shown inside the carried section (spec "Loading and errors"). */
-export type CarriedError = { kind: "stale" | "network" | "session" | "rejected" | "note"; message?: string };
+/** The check action a write belongs to. */
+export type CarriedAction = "check" | "dismiss" | "link" | "undo";
+
+/** Error shown inside the carried section (spec "Loading and errors"); `action` names the write that failed. */
+export type CarriedError = { kind: "stale" | "network" | "session" | "rejected" | "note"; action?: CarriedAction; message?: string };
 
 export type CarriedReadOnly = false | "submitted" | "paused" | "older";
 
@@ -49,7 +52,7 @@ export function CarriedFrame({ children, className }: { children: ReactNode; cla
   );
 }
 
-/** Error notice of a section; "Retry" only for network errors, "Save note and mark as checked" for unsaved notes. */
+/** Error notice of a section; "Retry" only for network errors, `noteAction` (saves the note) for unsaved notes. */
 export function CarriedErrorNotice({ error, onRetry, noteAction }: {
   error: CarriedError;
   onRetry?: () => void;
@@ -73,7 +76,8 @@ export function CarriedErrorNotice({ error, onRetry, noteAction }: {
 export function DismissControl({ label, blocked, onDismiss, onBusyChange, dataDismiss = false }: {
   label: string;
   blocked: boolean;
-  onDismiss: (reason: string) => Promise<void>;
+  /** Resolves true only when the dismissal was applied; otherwise the confirm stays open with the reason. */
+  onDismiss: (reason: string) => Promise<boolean>;
   onBusyChange?: (busy: boolean) => void;
   dataDismiss?: boolean;
 }): JSX.Element {
@@ -103,7 +107,7 @@ export function DismissControl({ label, blocked, onDismiss, onBusyChange, dataDi
     if (!text) { showMissing(); return; }
     setBusyBoth(true);
     onDismiss(text).then(
-      () => { setBusyBoth(false); setOpen(false); setReason(""); setMissing(false); },
+      applied => { setBusyBoth(false); if (applied) { setOpen(false); setReason(""); setMissing(false); } },
       () => setBusyBoth(false),
     );
   };
@@ -165,15 +169,15 @@ export interface CarriedSectionProps {
   recordedAt?: string | null;
   whatToCheck: WhatToCheck;
   readOnly: CarriedReadOnly;
-  onMarkChecked?: () => Promise<void>;
+  onMarkChecked?: () => Promise<unknown>;
   onShowOriginal: () => void;
   onNextUnchecked?: () => void;
-  onDismiss?: (reason: string) => Promise<void>;
+  onDismiss?: (reason: string) => Promise<boolean>;
   error?: CarriedError | null;
   onRetry?: () => void;
   /** When set with `onSaveNoteAndCheck`, "Mark as checked" saves the note first. */
   noteUnsaved?: boolean;
-  onSaveNoteAndCheck?: () => Promise<void>;
+  onSaveNoteAndCheck?: () => Promise<unknown>;
 }
 
 /** Inspector section of a selected carried finding (spec section 2). Presentational; async callbacks only. */
@@ -195,7 +199,7 @@ export function CarriedSection({
   }, [state.variant]);
 
   const blocked = busy !== null || blocksCheckActions(error);
-  const run = (kind: "check" | "note", action?: () => Promise<void>) => {
+  const run = (kind: "check" | "note", action?: () => Promise<unknown>) => {
     if (!action || blocked) return;
     setBusy(kind);
     action().then(() => setBusy(null), () => setBusy(null));
@@ -206,7 +210,8 @@ export function CarriedSection({
     <CarriedErrorNotice
       error={error}
       onRetry={onRetry}
-      noteAction={onSaveNoteAndCheck && !readOnly && (
+      // Only a failed "Mark as checked" offers to save the note and check; dismissals are retried by hand.
+      noteAction={onSaveNoteAndCheck && !readOnly && error.action === "check" && (
         <Button size="sm" variant="primary" loading={busy === "note"} aria-disabled={(blocked && busy !== "note") || undefined} onClick={() => run("note", onSaveNoteAndCheck)}>
           Save note and mark as checked
         </Button>

@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react
 import type { AssignmentView, CreateRoundRequest, RoundSourceView, WorkRoundView } from "../api/client";
 import { Button, DataTable, IconChevronRight, useMediaQuery, type Column } from "../ui";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { carriedCell, carryUnavailableReason, roundStateLabel, sourceOptionLabel, submissionCell } from "../editor/rounds/roundLabels";
+import { carriedCell, carryUnavailableReason, roundStartingPoint, roundStateLabel, sourceOptionLabel, submissionCell } from "../editor/rounds/roundLabels";
 import "./workRounds.css";
 
 /** Start state shared by the dialog body (choices) and its footer (primary action). */
@@ -74,18 +74,6 @@ export function carryAvailability(assignment: AssignmentView, rounds: readonly W
   return { kind: "unavailable", reason };
 }
 
-function startingPoint(round: WorkRoundView): string {
-  switch (round.kind) {
-    case "carry_forward": return round.source_round_ordinal ? `from Round ${round.source_round_ordinal} submission` : "from an earlier submission";
-    case "clean_restart": return "restarted empty";
-    case "consolidation": {
-      const count = round.input_submission_ids?.length ?? 0;
-      return `consolidation of ${count} ${count === 1 ? "submission" : "submissions"}`;
-    }
-    default: return "started empty";
-  }
-}
-
 const sourceTime = (source: RoundSourceView) => source.recorded_at ?? source.created_at;
 
 export interface WorkRoundActionsProps {
@@ -109,7 +97,7 @@ export function WorkRoundActions({ assignment, rounds, sources, control, current
   const here = <span className="work-rounds__here" aria-current="true"><IconChevronRight className="work-rounds__here-icon" />You are here</span>;
   const roundCell = (round: WorkRoundView) => <>
     <span className="work-rounds__name">{name(round)}</span>
-    <span className="work-rounds__start">{startingPoint(round)}</span>
+    <span className="work-rounds__start">{roundStartingPoint(round)}</span>
     {round.round_id === currentRoundId && here}
   </>;
   const action = (round: WorkRoundView) => round.round_id === currentRoundId ? null

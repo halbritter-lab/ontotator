@@ -3,9 +3,10 @@
  * "View" in My submissions loads a `SubmissionHistoryDetail`; the non-assignment "Submission history"
  * list and "View submitted result" hold raw `Submission` objects.
  */
+import type { ReactNode } from "react";
 import type { AnnotationSnapshot, Submission, SubmissionHistoryDetail } from "../api/client";
 import type { CarriedCheckItem } from "./carried/CarriedChecksReadOnly";
-import { deriveCarriedStates, type SnapshotLike } from "./carried/checkState";
+import { deriveCarriedStates, type CarriedInputLike, type ResolutionLike, type SnapshotLike } from "./carried/checkState";
 import { carriedFromLine } from "./carried/instructions";
 
 type EvidenceSnapshot = AnnotationSnapshot["evidence"][number];
@@ -44,16 +45,28 @@ export function fromSubmission(submission: Submission, heading: string): Histori
   };
 }
 
+/**
+ * Read-only check states of a submitted carry-forward round (historical dialog and case viewer). A
+ * submitted round has no open checks; anything not checked or dismissed reads "Check needed".
+ */
+export function carriedCheckItems(
+  inputs: readonly CarriedInputLike[],
+  resolutions: readonly ResolutionLike[],
+  annotations: readonly SnapshotLike[],
+  term: (snapshot: SnapshotLike) => ReactNode,
+): CarriedCheckItem[] {
+  return deriveCarriedStates(inputs, resolutions, annotations).map(state => ({
+    term: term(state.input.target_snapshot ?? state.input.source_snapshot),
+    state: state.variant === "checked" || state.variant === "dismissed" ? state.variant : "needed",
+    reason: state.resolution?.reason ?? undefined,
+    origin: carriedFromLine(state.input.source_round_ordinal ?? null),
+  }));
+}
+
 export function fromHistoryDetail(detail: SubmissionHistoryDetail, heading: string, termText: (snapshot: SnapshotLike) => string): HistoricalSubmissionView {
   const inputs = detail.round_inputs ?? [];
   const carried = inputs.length === 0 ? null : {
-    items: deriveCarriedStates(inputs, detail.round_input_resolutions ?? [], detail.annotations).map((state): CarriedCheckItem => ({
-      term: termText(state.input.target_snapshot ?? state.input.source_snapshot),
-      // A submitted round has no open checks; anything not checked or dismissed reads "Check needed".
-      state: state.variant === "checked" || state.variant === "dismissed" ? state.variant : "needed",
-      reason: state.resolution?.reason ?? undefined,
-      origin: carriedFromLine(state.input.source_round_ordinal ?? null),
-    })),
+    items: carriedCheckItems(inputs, detail.round_input_resolutions ?? [], detail.annotations, termText),
   };
   return {
     submissionId: detail.summary.submission_id,

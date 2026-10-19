@@ -204,6 +204,36 @@ describe("carried finding inspector", () => {
     await act(async () => { fireEvent.click(within(section()).getByRole("button", { name: "Link and mark as checked" })); });
     await waitFor(() => expect(resolve).toHaveBeenCalledTimes(1));
     expect(payloadOf(resolve)).toEqual({ input_id: "input-failed", outcome: "completed", annotation_ref: { annotation_id: "other", version: "v1" } });
+    // Focus returns to the chooser trigger, never to the body.
+    await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-carried-link")).toBe(true));
+  });
+
+  it("a refused link keeps the chooser open and shows the error", async () => {
+    const other = finding("other");
+    vi.spyOn(api, "resolveRoundInput").mockRejectedValue(new ApiError(422, "bad", "ROUND_INPUT_INVALID"));
+    const { container } = setup({ annotations: [other], inputs: [input("input-failed", null)] });
+    await screen.findByRole("button", { name: "Seizure, carried, not on this text, check needed" });
+    fireEvent.click(row(container, "input:input-failed"));
+    fireEvent.click(within(section()).getByRole("button", { name: "Link to an existing finding…" }));
+    await act(async () => { fireEvent.click(within(section()).getByRole("button", { name: "Link and mark as checked" })); });
+    await waitFor(() => expect(within(section()).getByRole("alert")).toBeDefined());
+    expect(within(section()).getByRole("group", { name: "Link to an existing finding" })).toBeDefined();
+  });
+
+  it("leaves the selection alone when the user moved on while a dismissal was pending", async () => {
+    const carried = finding("carried");
+    const plain = finding("plain");
+    let finish!: (draft: Draft) => void;
+    vi.spyOn(api, "resolveRoundInput").mockImplementation(() => new Promise<Draft>(resolve => { finish = resolve; }));
+    const { container } = setup({ annotations: [carried, plain], inputs: [input("input-1", carried)] });
+    fireEvent.click(row(container, "annotation:carried"));
+    await dismissWithReason("Does not apply…", "Not here");
+    await waitFor(() => expect(finish).toBeDefined());
+    fireEvent.click(row(container, "annotation:plain"));
+    const dismissed = { input_id: "input-1", outcome: "dismissed", reason: "Not here" };
+    await act(async () => { finish(draftWith(1, [plain], [dismissed])); });
+    await waitFor(() => expect(within(row(container, "input:input-1")).getByText("Dismissed: Not here")).toBeDefined());
+    expect(pressed(container)).toEqual(["annotation:plain"]);
   });
 
   it("marks the selected carried finding as checked with C, never while typing or read-only", async () => {
@@ -216,6 +246,8 @@ describe("carried finding inspector", () => {
     fireEvent.keyDown(window, { key: "?" });
     expect(screen.getByText("Mark carried finding as checked")).toBeDefined();
     fireEvent.keyDown(window, { key: "Escape" });
+    await act(async () => { fireEvent.keyDown(window, { key: "C", shiftKey: true }); });
+    expect(resolve).not.toHaveBeenCalled();
     await act(async () => { fireEvent.keyDown(window, { key: "c" }); });
     await waitFor(() => expect(resolve).toHaveBeenCalledTimes(1));
     expect(payloadOf(resolve)).toEqual(expect.objectContaining({ outcome: "completed", input_id: "input-1" }));

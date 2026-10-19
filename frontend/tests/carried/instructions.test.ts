@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { carriedFromLine, dismissedLine, instructionLine, linkedMetaLine, missingReason, originLine, textSpanLine, valuesLines, whatToCheckContext } from "../../src/editor/carried/instructions";
+import { carriedFromLine, dismissedLine, instructionLine, linkedMetaLine, missingReason, textSpanLine, valuesLines, whatToCheckContext } from "../../src/editor/carried/instructions";
 
 const base = { sourceOrdinal: 2, sourceVersion: 1, currentVersion: 1, language: "de", hasEvidence: true, sameText: true };
 describe("instruction lines", () => {
@@ -29,9 +29,7 @@ describe("inspector lines", () => {
     expect(valuesLines([])).toEqual(["Carried unchanged. Carrying does not confirm values."]);
     expect(valuesLines(["Temporality"])).toEqual(["Carried unchanged. Carrying does not confirm values.", "Not confirmed: Temporality."]);
   });
-  it("origin_line_and_missing_reason", () => {
-    expect(originLine(2, "19 Oct, 00:57")).toBe("Carried from Round 2 (submitted 19 Oct, 00:57)");
-    expect(originLine(null, null)).toBe("Carried from an earlier submission");
+  it("missing_reason", () => {
     expect(missingReason("deleted", null)).toBe("You deleted the carried finding in this round.");
     expect(missingReason("mapping_failed", null)).toBe("Its text span could not be found in this text.");
     expect(missingReason("mapping_failed", "ambiguous_evidence")).toBe("Its text appears more than once in this text, so it could not be placed automatically.");

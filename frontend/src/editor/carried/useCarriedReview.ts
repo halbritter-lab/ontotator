@@ -6,8 +6,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, ConflictError, isSessionProblem, ValidationError, type Draft, type MutationEnvelope, type RoundInputView } from "../../api/client";
 import { errorMessage } from "../../admin/errors";
-import { DiscardedChangesError, type MutationQueue, type QueueState } from "../autosave";
-import type { CarriedError } from "./CarriedSection";
+import { DiscardedChangesError, REJECTED_CONFLICT_CODES, type MutationQueue, type QueueState } from "../autosave";
+import type { CarriedAction, CarriedError } from "./CarriedSection";
 import { deriveCarriedStates, progressText, rowKeyOf, type CarriedState, type SnapshotLike } from "./checkState";
 
 export interface UseCarriedReviewArgs {
@@ -35,14 +35,17 @@ export interface CarriedReview {
   /** inputId -> annotationId of the finding re-created via "Mark in text" (client-side only). */
   recreatedFor: Record<string, string>;
   busy(inputId: string): boolean;
-  markChecked(state: CarriedState, annotationId?: string): Promise<void>;
-  link(state: CarriedState, annotationId: string): Promise<void>;
+  /** Each write resolves true only when the server applied it; false when it was refused or not sent. */
+  markChecked(state: CarriedState, annotationId?: string): Promise<boolean>;
+  link(state: CarriedState, annotationId: string): Promise<boolean>;
   /** Sends `remove_carried_finding: true` only while the carried finding exists. */
-  dismiss(state: CarriedState, reason: string): Promise<void>;
+  dismiss(state: CarriedState, reason: string): Promise<boolean>;
   /** Clears the resolution; the server restores a finding the dismissal removed. */
-  undoDismissal(state: CarriedState): Promise<void>;
+  undoDismissal(state: CarriedState): Promise<boolean>;
   rememberRecreated(inputId: string, annotationId: string): void;
   errorFor(inputId: string): CarriedError | null;
+  /** Clears a settled error (e.g. an unsaved-note error after the note was saved). */
+  clearError(inputId: string): void;
   /** Retries the queue; never enqueues a second operation. */
   retry(inputId: string): void;
 }
@@ -58,7 +61,7 @@ export function useCarriedReview(args: UseCarriedReviewArgs): CarriedReview {
   const { inputs, draft, queue, queueState } = args;
   const latest = useRef(args);
   latest.current = args;
-  const [pending, setPending] = useState<Record<string, true>>({});
+  const [pending, setPending] = useState<Record<string, CarriedAction>>({});
   const [errors, setErrors] = useState<Record<string, CarriedError>>({});
   const [recreatedFor, setRecreatedFor] = useState<Record<string, string>>({});
   const pendingRef = useRef(new Set<string>());
@@ -94,11 +97,11 @@ export function useCarriedReview(args: UseCarriedReviewArgs): CarriedReview {
       if (error) next[inputId] = error; else delete next[inputId];
       return next;
     });
-  const setPendingFor = (inputId: string, value: boolean) => {
+  const setPendingFor = (inputId: string, value: CarriedAction | false) => {
     if (value) pendingRef.current.add(inputId); else pendingRef.current.delete(inputId);
     setPending(current => {
       const next = { ...current };
-      if (value) next[inputId] = true; else delete next[inputId];
+      if (value) next[inputId] = value; else delete next[inputId];
       return next;
     });
   };
@@ -106,18 +109,19 @@ export function useCarriedReview(args: UseCarriedReviewArgs): CarriedReview {
   /** One write per user action: one `mutation_id`; the envelope is built once so a retry resends it unchanged. */
   const write = async (
     state: CarriedState,
+    action: CarriedAction,
     buildPayload: () => Record<string, unknown>,
     send: Send,
     message: (term: string, before: CarriedState, updated: Draft) => string,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const inputId = state.input.input_id;
-    if (latest.current.readOnly || pendingRef.current.has(inputId)) return;
+    if (latest.current.readOnly || pendingRef.current.has(inputId)) return false;
     setError(inputId, null);
     try { await latest.current.flushNotes(); } catch { /* reported as an unsaved note below */ }
-    if (latest.current.hasUnsavedNotes()) { setError(inputId, { kind: "note" }); return; }
+    if (latest.current.hasUnsavedNotes()) { setError(inputId, { kind: "note", action }); return false; }
     const mutationId = crypto.randomUUID();
     let envelope: MutationEnvelope | undefined;
-    setPendingFor(inputId, true);
+    setPendingFor(inputId, action);
     try {
       const updated = await latest.current.queue.enqueue(async expectedRevision => {
         envelope ??= { mutation_id: mutationId, expected_revision: expectedRevision, payload: buildPayload() };
@@ -127,14 +131,17 @@ export function useCarriedReview(args: UseCarriedReviewArgs): CarriedReview {
       setError(inputId, null);
       latest.current.onDraft(updated);
       latest.current.announce(message(latest.current.termText(termSnapshot(state)), state, updated));
+      return true;
     } catch (error) {
       setPendingFor(inputId, false);
-      if (error instanceof DiscardedChangesError) return;
-      if (error instanceof ApiError && error.code === "ROUND_INPUT_RESOLUTION_STALE") { setError(inputId, { kind: "stale" }); return; }
-      if (error instanceof ConflictError) throw error;
+      if (error instanceof DiscardedChangesError) return false;
+      if (error instanceof ApiError && error.code === "ROUND_INPUT_RESOLUTION_STALE") { setError(inputId, { kind: "stale", action }); return false; }
+      // A refused carried command (409, no reload needed) reads like any other rejection.
+      const refused = error instanceof ConflictError && REJECTED_CONFLICT_CODES.has(error.code ?? "");
+      if (error instanceof ConflictError && !refused) throw error;
       if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
-        setError(inputId, { kind: "rejected", message: errorMessage(error) });
-        return;
+        setError(inputId, { kind: "rejected", action, message: errorMessage(error) });
+        return false;
       }
       throw error;
     }
@@ -146,19 +153,19 @@ export function useCarriedReview(args: UseCarriedReviewArgs): CarriedReview {
   const complete = (state: CarriedState, annotationId?: string) => {
     const inputId = state.input.input_id;
     const targetId = annotationId ?? state.homeId ?? recreatedFor[inputId] ?? state.carriedId;
-    return write(state, () => {
+    return write(state, annotationId ? "link" : "check", () => {
       const saved = latest.current.draft.annotations?.find(snapshot => snapshot.annotation.annotation_id === targetId);
       if (!saved) throw new ValidationError("Select a current saved finding before completing this input.");
       return { input_id: inputId, outcome: "completed", annotation_ref: { annotation_id: saved.annotation.annotation_id, version: saved.version } };
     }, resolve, (term, _before, updated) => `${term} checked. ${progressAfter(updated)}.`);
   };
 
-  const dismiss = (state: CarriedState, reason: string) => write(state, () => ({
+  const dismiss = (state: CarriedState, reason: string) => write(state, "dismiss", () => ({
     input_id: state.input.input_id, outcome: "dismissed", reason,
     ...(state.carriedId ? { remove_carried_finding: true } : {}),
   }), resolve, (term, _before, updated) => `${term} dismissed. ${progressAfter(updated)}.`);
 
-  const undoDismissal = (state: CarriedState) => write(state, () => ({
+  const undoDismissal = (state: CarriedState) => write(state, "undo", () => ({
     command: "clear_round_input_resolution", input_id: state.input.input_id,
   }), envelope => api.clearRoundInputResolution(latest.current.workspaceId, envelope), (term, before, updated) => {
     const carriedRef = before.input.target_snapshot?.annotation.annotation_id;
@@ -176,9 +183,11 @@ export function useCarriedReview(args: UseCarriedReviewArgs): CarriedReview {
     undoDismissal,
     rememberRecreated: (inputId, annotationId) => setRecreatedFor(current => ({ ...current, [inputId]: annotationId })),
     errorFor: inputId => {
-      if (pending[inputId] && queueFailed) return { kind: isSessionProblem(queue.getLastError()) ? "session" : "network" };
+      const action = pending[inputId];
+      if (action && queueFailed) return { kind: isSessionProblem(queue.getLastError()) ? "session" : "network", action };
       return errors[inputId] ?? null;
     },
+    clearError: inputId => setError(inputId, null),
     retry: () => { void queue.retry(); },
   };
 }

@@ -85,7 +85,7 @@ describe("useCarriedReview", () => {
 
   it("markChecked sends one completed resolution and announces the result", async () => {
     const t = setup();
-    let done!: Promise<void>;
+    let done!: Promise<boolean>;
     await act(async () => { done = t.hook.result.current.markChecked(t.state()); await Promise.resolve(); });
     expect(t.flushNotes).toHaveBeenCalled();
     expect(t.queue.enqueue).toHaveBeenCalledTimes(1);
@@ -96,7 +96,9 @@ describe("useCarriedReview", () => {
     expect(workspaceId).toBe("ws-1");
     expect(envelope.expected_revision).toBe(1);
     expect(envelope.payload).toEqual({ input_id: "in-1", outcome: "completed", annotation_ref: { annotation_id: "a-1", version: "v1" } });
-    await act(async () => { t.ops[0].resolve(result); await done; });
+    let applied: boolean | undefined;
+    await act(async () => { t.ops[0].resolve(result); applied = await done; });
+    expect(applied).toBe(true);
     expect(t.hook.result.current.busy("in-1")).toBe(false);
     expect(t.onDraft).toHaveBeenCalledWith(checkedDraft);
     expect(t.announce).toHaveBeenCalledWith("Seizure checked. All carried findings checked.");
@@ -109,7 +111,7 @@ describe("useCarriedReview", () => {
     await t.attempt();
     t.setLastError(new TypeError("Failed to fetch"));
     t.rerender({ queueState: "error" });
-    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "network" });
+    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "network", action: "check" });
     expect(t.hook.result.current.busy("in-1")).toBe(false);
     act(() => t.hook.result.current.retry("in-1"));
     expect(t.queue.retry).toHaveBeenCalledTimes(1);
@@ -118,7 +120,7 @@ describe("useCarriedReview", () => {
 
   it("lost response: the retry resends the identical envelope and the replay applies the draft", async () => {
     const t = setup();
-    let done!: Promise<void>;
+    let done!: Promise<boolean>;
     await act(async () => { done = t.hook.result.current.markChecked(t.state()); await Promise.resolve(); });
     apiMock.resolveRoundInput.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(checkedDraft);
     await t.attempt(1);
@@ -142,7 +144,7 @@ describe("useCarriedReview", () => {
     await act(async () => { void t.hook.result.current.markChecked(t.state()); await Promise.resolve(); });
     t.setLastError(new AuthError("Not authenticated", undefined, "NOT_AUTHENTICATED", 401));
     t.rerender({ queueState: "error" });
-    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "session" });
+    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "session", action: "check" });
     expect(t.hook.result.current.busy("in-1")).toBe(false);
     act(() => t.hook.result.current.retry("in-1"));
     expect(t.queue.retry).toHaveBeenCalledTimes(1);
@@ -151,11 +153,11 @@ describe("useCarriedReview", () => {
 
   it("recovery: queue back to saved and the operation resolves clears the error and announces", async () => {
     const t = setup();
-    let done!: Promise<void>;
+    let done!: Promise<boolean>;
     await act(async () => { done = t.hook.result.current.markChecked(t.state()); await Promise.resolve(); });
     t.setLastError(new TypeError("Failed to fetch"));
     t.rerender({ queueState: "error" });
-    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "network" });
+    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "network", action: "check" });
     t.setLastError(null);
     t.rerender({ queueState: "saved" });
     await act(async () => { t.ops[0].resolve(checkedDraft); await done; });
@@ -165,16 +167,19 @@ describe("useCarriedReview", () => {
 
   it("stale rejection maps to stale; other 4xx to rejected; conflicts are rethrown", async () => {
     const t = setup();
-    let done!: Promise<void>;
+    let done!: Promise<boolean>;
     await act(async () => { done = t.hook.result.current.markChecked(t.state()); await Promise.resolve(); });
-    await act(async () => { t.ops[0].reject(new ConflictError("stale", "ROUND_INPUT_RESOLUTION_STALE")); await done; });
-    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "stale" });
+    let applied: boolean | undefined;
+    await act(async () => { t.ops[0].reject(new ConflictError("stale", "ROUND_INPUT_RESOLUTION_STALE")); applied = await done; });
+    expect(applied).toBe(false);
+    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "stale", action: "check" });
     expect(t.hook.result.current.busy("in-1")).toBe(false);
 
     await act(async () => { done = t.hook.result.current.markChecked(t.state()); await Promise.resolve(); });
     expect(t.hook.result.current.errorFor("in-1")).toBeNull();
-    await act(async () => { t.ops[1].reject(new ApiError(422, "bad", "ROUND_INPUT_INVALID")); await done; });
-    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "rejected", message: "Choose the exact eligible submissions shown for this task." });
+    await act(async () => { t.ops[1].reject(new ApiError(422, "bad", "ROUND_INPUT_INVALID")); applied = await done; });
+    expect(applied).toBe(false);
+    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "rejected", action: "check", message: "Choose the exact eligible submissions shown for this task." });
 
     await act(async () => { done = t.hook.result.current.markChecked(t.state()); await Promise.resolve(); });
     const conflict = new ConflictError();
@@ -184,9 +189,29 @@ describe("useCarriedReview", () => {
     expect(t.hook.result.current.busy("in-1")).toBe(false);
   });
 
+  it("a refused carried command (409 without reload) reads as rejected for the action that failed", async () => {
+    const t = setup();
+    let done!: Promise<boolean>;
+    await act(async () => { done = t.hook.result.current.dismiss(t.state(), "Not in this text"); await Promise.resolve(); });
+    let applied: boolean | undefined;
+    await act(async () => { t.ops[0].reject(new ConflictError("present", "ROUND_INPUT_CARRIED_FINDING_PRESENT")); applied = await done; });
+    expect(applied).toBe(false);
+    expect(t.hook.result.current.errorFor("in-1")).toMatchObject({ kind: "rejected", action: "dismiss" });
+  });
+
+  it("unsaved note on a dismissal records the dismiss action; clearError removes it", async () => {
+    const t = setup({ hasUnsavedNotes: () => true });
+    let applied: boolean | undefined;
+    await act(async () => { applied = await t.hook.result.current.dismiss(t.state(), "No"); });
+    expect(applied).toBe(false);
+    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "note", action: "dismiss" });
+    act(() => t.hook.result.current.clearError("in-1"));
+    expect(t.hook.result.current.errorFor("in-1")).toBeNull();
+  });
+
   it("discarded changes clear busy silently", async () => {
     const t = setup();
-    let done!: Promise<void>;
+    let done!: Promise<boolean>;
     await act(async () => { done = t.hook.result.current.markChecked(t.state()); await Promise.resolve(); });
     await act(async () => { t.ops[0].reject(new DiscardedChangesError()); await done; });
     expect(t.hook.result.current.busy("in-1")).toBe(false);
@@ -198,7 +223,7 @@ describe("useCarriedReview", () => {
     const t = setup({ hasUnsavedNotes: () => true });
     await act(async () => { await t.hook.result.current.markChecked(t.state()); });
     expect(t.flushNotes).toHaveBeenCalled();
-    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "note" });
+    expect(t.hook.result.current.errorFor("in-1")).toEqual({ kind: "note", action: "check" });
     expect(t.queue.enqueue).not.toHaveBeenCalled();
   });
 
@@ -225,7 +250,7 @@ describe("useCarriedReview", () => {
     const dismissed = draftOf([], [{ input_id: "in-1", outcome: "dismissed", reason: "No" }], 3);
     const t = setup({ draft: dismissed });
     expect(t.state().variant).toBe("dismissed");
-    let done!: Promise<void>;
+    let done!: Promise<boolean>;
     await act(async () => { done = t.hook.result.current.undoDismissal(t.state()); await Promise.resolve(); });
     const restored = draftOf([snapshot("a-1")], [], 4);
     apiMock.clearRoundInputResolution.mockResolvedValueOnce(restored);

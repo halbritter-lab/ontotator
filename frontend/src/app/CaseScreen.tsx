@@ -558,6 +558,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     : selectedAnnotationId ? `annotation:${selectedAnnotationId}`
     : selectedInputId ? `input:${selectedInputId}`
     : null;
+  // The selection as of the last render, for async actions that must not move a selection the user changed.
+  const selectedListKeyRef = useRef(selectedListKey);
+  selectedListKeyRef.current = selectedListKey;
   useEffect(() => {
     if (!selectedListKey) return;
     const entry = Array.from(
@@ -1133,11 +1136,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   });
   const carriedActive = carried.states.length > 0;
   const pendingCarriedCount = carried.states.filter(state => state.unchecked).length;
-  /** Row order of the findings list: placeholder rows (input order), then the visible findings. */
+  /**
+   * Row order of the findings list: placeholder rows (input order), then every finding in list order,
+   * including findings on hidden layers (going there makes their layer visible).
+   */
   const carriedListOrder = useMemo(() => [
     ...carried.placeholders.map(state => `input:${state.input.input_id}`),
-    ...visibleAnnotations.map(snapshot => `annotation:${snapshot.annotation.annotation_id}`),
-  ], [carried.placeholders, visibleAnnotations]);
+    ...(draft.annotations ?? []).map(snapshot => `annotation:${snapshot.annotation.annotation_id}`),
+  ], [carried.placeholders, draft.annotations]);
   // Version of the open text: from the round (prop), the case versions or the document list. A text
   // with the source's hash is the source's text, so its version is the source version.
   const currentTextVersion = documentVersion
@@ -1185,6 +1191,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       instruction={carriedInstruction(shown, shown.home === "placeholder" ? "linked" : undefined)} linked={linked} />;
   };
 
+  /** Makes a finding's layer visible and active, so the row it goes to is shown. */
+  const revealLayerOf = (ann: { layer_id: string; type_id: string }) =>
+    setLayerSelection(previous => ({ ...previous, activeLayerId: ann.layer_id, activeTypeId: ann.type_id,
+      visibleLayerIds: [...new Set([...previous.visibleLayerIds, ann.layer_id])] }));
   /** The one selection entry point of the findings list: selects a row and clears every other selection. */
   const selectListKey = (key: string | null) => {
     cancelPending();
@@ -1205,6 +1215,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const goToUnchecked = (direction: 1 | -1): boolean => {
     const key = nextUncheckedKey(carriedListOrder, carried.openKeys, selectedListKey, direction);
     if (!key) return false;
+    if (key.startsWith("annotation:")) {
+      const snapshot = draft.annotations?.find(s => s.annotation.annotation_id === key.slice("annotation:".length));
+      if (snapshot) revealLayerOf(snapshot.annotation);
+    }
     selectListKey(key);
     return true;
   };
@@ -1214,11 +1228,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   useEffect(() => {
     if (!focusRequest || !inspectorRef.current) return;
     if (inspectorKey !== focusRequest.key) { if (inspectorKey !== null) setFocusRequest(null); return; }
-    const target = focusRequest.find(inspectorRef.current);
-    if (target) { target.focus(); setFocusRequest(null); }
+    // One matching render: focus the target if it exists; a request for a missing target is dropped.
+    focusRequest.find(inspectorRef.current)?.focus();
+    setFocusRequest(null);
   });
-  const byButtonText = (text: string) => (root: HTMLElement) =>
-    Array.from(root.querySelectorAll<HTMLElement>("button")).find(button => button.textContent?.trim() === text) ?? null;
   const carriedPrimary = (root: HTMLElement) => root.querySelector<HTMLElement>("[data-carried-primary]");
   /** Check state of an input in the latest draft (after a write resolved, before the re-render). */
   const carriedStateNow = (inputId: string) =>
@@ -1228,26 +1241,34 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const showCarriedOriginal = (state: CarriedState) =>
     setOriginalRoundInput(carriedInputs.find(input => input.input_id === state.input.input_id) ?? null);
 
-  const markCarriedChecked = (state: CarriedState) => carried.markChecked(state).catch(reportError);
-  const linkCarried = (state: CarriedState, annotationId: string) => carried.link(state, annotationId).catch(reportError);
-  const dismissCarried = async (state: CarriedState, reason: string) => {
+  /** Carried writes resolve true only when applied; an unexpected error is reported and reads as not applied. */
+  const notApplied = (error: unknown) => { reportError(error); return false; };
+  const markCarriedChecked = (state: CarriedState) => carried.markChecked(state).catch(notApplied);
+  const linkCarried = (state: CarriedState, annotationId: string) => carried.link(state, annotationId).catch(notApplied);
+  const dismissCarried = async (state: CarriedState, reason: string): Promise<boolean> => {
     const inputId = state.input.input_id;
-    try { await carried.dismiss(state, reason); } catch (error) { reportError(error); return; }
+    const selectionBefore = selectedListKeyRef.current;
+    if (!await carried.dismiss(state, reason).catch(notApplied)) return false;
+    // The user moved on while the write was pending: leave their selection and focus alone.
+    if (selectedListKeyRef.current !== selectionBefore) return true;
     const after = carriedStateNow(inputId);
-    if (after?.variant !== "dismissed") return;
+    if (after?.variant !== "dismissed") return true;
     // An atomic dismissal removed the carried finding: its row is now the placeholder.
     const key = rowKeyOf(after);
-    if (key !== selectedListKey) selectListKey(key);
-    setFocusRequest({ key, find: byButtonText("Undo dismissal") });
+    if (key !== selectionBefore) selectListKey(key);
+    setFocusRequest({ key, find: root => root.querySelector<HTMLElement>("[data-carried-undo]") });
+    return true;
   };
   const undoCarriedDismissal = async (state: CarriedState) => {
     const inputId = state.input.input_id;
-    try { await carried.undoDismissal(state); } catch (error) { reportError(error); return; }
+    const selectionBefore = selectedListKeyRef.current;
+    if (!await carried.undoDismissal(state).catch(notApplied)) return;
+    if (selectedListKeyRef.current !== selectionBefore) return;
     if (latestDraft.current.round_input_resolutions?.some(resolution => resolution.input_id === inputId)) return;
     const after = carriedStateNow(inputId);
     // The server restored the removed carried finding: select it and offer "Mark as checked".
     const key = after?.carriedId ? `annotation:${after.carriedId}` : `input:${inputId}`;
-    if (key !== selectedListKey) selectListKey(key);
+    if (key !== selectionBefore) selectListKey(key);
     setFocusRequest({ key, find: carriedPrimary });
   };
   /** "Mark in text": attach mode with the original term; the new finding is linked client-side only. */
@@ -2057,10 +2078,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       ?? field?.querySelector<HTMLElement>('input[type="radio"]:not(:disabled)')
       ?? field?.querySelector<HTMLElement>("select:not(:disabled)");
     if (control) return control;
-    // Proposals show their values read-only: focus the values section instead.
-    const panel = root.querySelector<HTMLElement>('[data-testid="axes-section"], .review-actions__proposal');
-    if (panel) panel.tabIndex = -1;
-    return panel;
+    // Proposals show their values read-only: focus the values section instead (rendered with tabIndex -1).
+    return root.querySelector<HTMLElement>('[data-testid="axes-section"], .review-actions__proposal');
   };
   const [textScrollRequest, setTextScrollRequest] = useState<{ evidenceId: string; nonce: number } | null>(null);
   const lastOpenItem = useRef<string | null>(null);
@@ -2074,11 +2093,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const kind = listKey.slice(0, listKey.indexOf(":")), id = listKey.slice(listKey.indexOf(":") + 1);
     const snapshot = kind === "target" ? (view.available_inputs ?? []).find(s => refKey({ annotation_id: s.annotation.annotation_id, version: s.version }) === id)
       : kind === "annotation" ? draft.annotations?.find(s => s.annotation.annotation_id === id) : undefined;
-    if (snapshot) {
-      const ann = snapshot.annotation;
-      setLayerSelection(previous => ({ ...previous, activeLayerId: ann.layer_id, activeTypeId: ann.type_id,
-        visibleLayerIds: [...new Set([...previous.visibleLayerIds, ann.layer_id])] }));
-    }
+    if (snapshot) revealLayerOf(snapshot.annotation);
     selectListKey(listKey);
     const evidenceId = item.evidenceId;
     if (evidenceId) {
@@ -2328,8 +2343,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     { ...shortcutOptions, enabled: carriedActive && !display, group: "Carried findings", description: "Next unchecked carried finding" });
   useShortcutHint(["Shift + N"], "Previous unchecked carried finding", { group: "Carried findings", enabled: carriedActive && !display });
   const checkableCarried = selectedCarriedState?.unchecked && !carried.busy(selectedCarriedState.input.input_id) ? selectedCarriedState : undefined;
-  useShortcut("c", () => {
-    if (!checkableCarried || readOnlyRef.current) return false;
+  useShortcut("c", event => {
+    // Plain "c" only: Shift+C is not this shortcut.
+    if (event.shiftKey || !checkableCarried || readOnlyRef.current) return false;
     void markCarriedChecked(checkableCarried);
   }, { ...shortcutOptions, enabled: carriedActive && !readOnly && !!selectedCarriedState?.unchecked, group: "Carried findings", description: "Mark carried finding as checked" });
   useShortcutHint(["Shift + arrows, then release Shift"], "Select text with the keyboard to create a mention");
@@ -2847,7 +2863,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 onUndoDismissal={() => undoCarriedDismissal(state)}
                 onShowOriginal={() => showCarriedOriginal(state)}
                 error={carried.errorFor(state.input.input_id)}
-                onRetry={() => carried.retry(state.input.input_id)} />
+                onRetry={() => carried.retry(state.input.input_id)}
+                onSaveNote={async () => {
+                  await flushAnnotationNotes();
+                  if (!unsavedAnnotationNotes().length) carried.clearError(state.input.input_id);
+                }} />
             </div>;
           })() : view.key.mode === "review" && selectedTarget ? (
             <ReviewActions
