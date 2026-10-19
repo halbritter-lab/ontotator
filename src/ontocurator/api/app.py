@@ -407,6 +407,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "LANGUAGE_CONFIRMATION_REQUIRED": 409,
                     "REASSIGN_CONFIRMATION_REQUIRED": 409,
                     "ADJUDICATOR_IS_ANNOTATOR": 409,
+                    "OWN_RESULT_NOT_SELECTABLE": 409,
                     "ASSIGNMENT_REVOKED": 409,
                     "ASSIGNMENT_NOT_SUBMITTED": 409,
                     "ASSIGNMENT_EXISTS": 409,

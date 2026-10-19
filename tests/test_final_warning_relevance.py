@@ -106,6 +106,11 @@ def test_pending_consolidation_warns_until_submit_and_invalidates_acknowledgemen
     original = service.preflight("pkg-1")
     (warning,) = pending(original)
     assert service.preflight("pkg-1") == original
+    # ROUND_REVIEW_PENDING is not acknowledgeable: a reaffirmation naming it fails.
+    with pytest.raises(RevisionConflict):
+        service.select(
+            "pkg-1", "doc-1", sources[0].submission_id, 1, [warning["cause_id"]]
+        )
     view = WorkspaceService(reviewer, ontology).open(work_round.workspace_key)
     draft = view.draft
     for index, target in enumerate(view.targets.targets):

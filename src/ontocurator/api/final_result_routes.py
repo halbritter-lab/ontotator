@@ -1,5 +1,6 @@
 """Explicit result selection and final export acknowledgements."""
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -27,6 +28,10 @@ class FinalSelectionView(BaseModel):
     document_id: str
     submission_id: str
     revision: int
+    selected_at: datetime | None = None
+    updated_at: datetime | None = None
+    selected_by: str | None = None
+    adjudicator_not_annotator: bool | None = None
 
 
 class FinalWarning(BaseModel):

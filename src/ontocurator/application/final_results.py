@@ -16,7 +16,7 @@ from ontocurator.application.workflow_warnings import state_digest
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.domain.errors import DomainError, RevisionConflict
+from ontocurator.domain.errors import AccessDenied, DomainError, RevisionConflict
 from ontocurator.exchange.final_content import freeze_content
 from ontocurator.exchange.human_inputs import human_input_closure
 from ontocurator.storage.database import Database
@@ -28,10 +28,31 @@ from ontocurator.storage.final_tables import (
 from ontocurator.storage.tables import (
     DocumentRow,
     JobRow,
+    ProjectRow,
     SubmissionRow,
     TranslationReviewRow,
+    UserRow,
 )
 from ontocurator.storage.workflow_tables import ReviewObligationResolutionRow
+
+
+def _pseudonym(conn: Connection, user_id: int | None) -> str | None:
+    if user_id is None:
+        return None
+    return conn.execute(
+        select(UserRow.pseudonym).where(UserRow.id == user_id)
+    ).scalar_one_or_none()
+
+
+def _conflict(conn: Connection, old: Any) -> dict[str, Any]:
+    """409 details naming the current selection's revision, author and time."""
+    if not old:
+        return {"current_revision": 0, "selected_by": None, "updated_at": None}
+    return {
+        "current_revision": old["revision"],
+        "selected_by": _pseudonym(conn, old["actor_id"]),
+        "updated_at": old["updated_at"].isoformat(),
+    }
 
 
 class FinalResultService:
@@ -50,6 +71,13 @@ class FinalResultService:
         expected_revision: int,
         acknowledged_cause_ids: list[str],
     ) -> dict[str, Any]:
+        if self.actor.user_id is None:
+            # A selection names the lead who chose it (final_selections.actor_id
+            # is NOT NULL); process actors pass project authority but cannot
+            # be that lead, so refuse instead of failing on the insert.
+            raise AccessDenied(
+                "NOT_ALLOWED", "Only a signed-in lead can choose a final result."
+            )
         with self.db.transaction() as conn:
             pid = self._authorize(conn, key, exclusive=True)
             doc = conn.execute(
@@ -58,7 +86,7 @@ class FinalResultService:
                 )
             ).one_or_none()
             exact = conn.execute(
-                select(SubmissionRow.submission_id).where(
+                select(SubmissionRow.submission_id, SubmissionRow.annotator_id).where(
                     SubmissionRow.project_id == pid,
                     SubmissionRow.document_id == document,
                     SubmissionRow.submission_id == submission,
@@ -66,6 +94,9 @@ class FinalResultService:
             ).first()
             if doc is None or exact is None:
                 raise DomainError("VERSION_NOT_FOUND")
+            rule = conn.execute(
+                select(ProjectRow.adjudicator_not_annotator).where(ProjectRow.id == pid)
+            ).scalar_one()
             slot = (
                 FinalSelectionRow.project_id == pid,
                 FinalSelectionRow.case_id == doc.case_id,
@@ -77,19 +108,29 @@ class FinalResultService:
                 .first()
             )
             if expected_revision != (old["revision"] if old else 0):
-                raise RevisionConflict(
-                    {"current_revision": old["revision"] if old else 0}
+                raise RevisionConflict(_conflict(conn, old))
+            # After the revision check: a stale request learns of the newer
+            # selection first instead of the rule refusal.
+            selected_by = _pseudonym(conn, self.actor.user_id)
+            if rule and exact.annotator_id == selected_by:
+                raise DomainError(
+                    "OWN_RESULT_NOT_SELECTABLE",
+                    "This project keeps adjudication separate from annotation. "
+                    "Another lead must choose this result.",
                 )
+            same = bool(
+                old
+                and old["document_id"] == document
+                and old["submission_id"] == submission
+            )
             if acknowledged_cause_ids:
-                if (
-                    not old
-                    or old["document_id"] != document
-                    or old["submission_id"] != submission
-                ):
+                if not old or not same:
                     raise DomainError(
                         "INVALID_FINAL_SELECTION",
                         "New selections cannot pre-acknowledge future causes.",
                     )
+                # The client sends the complete set it showed; any addition,
+                # removal or status change since then is a conflict.
                 available = {
                     warning.get("cause_id")
                     for warning in self._projection(conn, key, pid)["warnings"]
@@ -97,18 +138,15 @@ class FinalResultService:
                     and warning["case_id"] == doc.case_id
                     and warning["language"] == doc.language
                 }
-                if not set(acknowledged_cause_ids).issubset(available):
+                if set(acknowledged_cause_ids) != available:
                     raise RevisionConflict(
-                        "Selection warnings changed; review them again."
+                        _conflict(conn, old) | {"reason": "warnings_changed"}
                     )
-            if (
-                old
-                and old["document_id"] == document
-                and old["submission_id"] == submission
-            ):
+            if old and same:
                 acknowledged_cause_ids = sorted(
                     set(acknowledged_cause_ids) | set(old["acknowledged_cause_ids"])
                 )
+            now = datetime.now(UTC)
             values = {
                 "project_id": pid,
                 "case_id": doc.case_id,
@@ -118,7 +156,9 @@ class FinalResultService:
                 "revision": expected_revision + 1,
                 "actor_id": self.actor.user_id,
                 "acknowledged_cause_ids": sorted(set(acknowledged_cause_ids)),
-                "updated_at": datetime.now(UTC),
+                "updated_at": now,
+                "selected_at": old["selected_at"] if old and same else now,
+                "adjudicator_not_annotator": rule,
             }
             if old:
                 conn.execute(update(FinalSelectionRow).where(*slot).values(**values))
@@ -132,12 +172,14 @@ class FinalResultService:
                     "document_id",
                     "submission_id",
                     "revision",
+                    "adjudicator_not_annotator",
                 )
             }
             event = {
                 **result,
                 "actor_id": self.actor.user_id,
                 "acknowledged_cause_ids": values["acknowledged_cause_ids"],
+                "selected_at": values["selected_at"].isoformat(),
             }
             conn.execute(
                 insert(FinalSelectionEventRow).values(project_id=pid, payload=event)
@@ -151,7 +193,11 @@ class FinalResultService:
                 project_id=pid,
                 details=event,
             )
-            return result
+            return result | {
+                "selected_at": values["selected_at"],
+                "updated_at": values["updated_at"],
+                "selected_by": selected_by,
+            }
 
     def _projection(self, conn: Connection, key: str, pid: int) -> dict[str, Any]:
         return derive_final_state(conn, self.repo, key, pid)
