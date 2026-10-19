@@ -6621,6 +6621,13 @@
           "matches_decision": {
             "type": "boolean",
             "title": "Matches Decision"
+          },
+          "problem_reports": {
+            "items": {
+              "$ref": "#/components/schemas/RowProblemReport"
+            },
+            "type": "array",
+            "title": "Problem Reports"
           }
         },
         "additionalProperties": false,
@@ -11671,6 +11678,51 @@
           "author_label"
         ],
         "title": "RowItemView"
+      },
+      "RowProblemReport": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "reporter_label": {
+            "type": "string",
+            "title": "Reporter Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved",
+              "withdrawn"
+            ],
+            "title": "State"
+          },
+          "active_hold_count": {
+            "type": "integer",
+            "title": "Active Hold Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "report_id",
+          "title",
+          "reporter_label",
+          "created_at",
+          "state",
+          "active_hold_count"
+        ],
+        "title": "RowProblemReport"
       },
       "RowRoundView": {
         "properties": {

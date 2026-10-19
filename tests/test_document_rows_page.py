@@ -293,6 +293,7 @@ def test_retained_rows_still_respect_non_decision_filters(case_env):
 
 ROW_KEYS = {
     "case_id",
+    "problem_reports",
     "language",
     "is_source",
     "position",

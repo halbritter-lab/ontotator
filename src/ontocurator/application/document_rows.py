@@ -6,13 +6,14 @@ shared project lock. ``document_row_page`` and ``document_row_submissions``
 build the responses from these facts.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
 from sqlalchemy import Connection, and_, exists, func, select, union_all
 
 from ontocurator.application.document_row_page import build_page
+from ontocurator.application.document_row_reports import load_row_reports
 from ontocurator.application.document_row_submissions import build_submissions
 from ontocurator.application.final_causes import (
     authorize_final_results,
@@ -136,6 +137,10 @@ class RowFacts:
     selection_activity: dict[
         tuple[str, str], datetime
     ]  # (case, language) -> updated_at
+    # (case, language) -> every problem report of the row, newest first
+    row_reports: dict[tuple[str, str], list[dict[str, Any]]] = field(
+        default_factory=dict
+    )
 
 
 def load_last_activity(
@@ -470,12 +475,13 @@ def load_facts(
         select(UserRow.pseudonym).where(UserRow.id == viewer_user_id)
     ).scalar_one()
     last_activity, selection_activity = load_last_activity(conn, pid)
+    versions = _versions(conn, pid)
     return RowFacts(
         project_key=key,
         viewer_user_id=viewer_user_id,
         viewer_pseudonym=viewer,
         adjudicator_not_annotator=rule,
-        versions=_versions(conn, pid),
+        versions=versions,
         accepted_without_review=_accepted_without_review(conn, pid),
         assignments=_assignments(conn, pid),
         rounds=_rounds(conn, pid),
@@ -487,6 +493,9 @@ def load_facts(
         selections=_selections(conn, pid),
         last_activity=last_activity,
         selection_activity=selection_activity,
+        row_reports=load_row_reports(
+            conn, pid, {(v.case_id, v.language) for v in versions}
+        ),
     )
 
 

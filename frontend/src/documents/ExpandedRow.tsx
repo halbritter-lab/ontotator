@@ -18,6 +18,9 @@ export const REPORT_EXCERPT_LENGTH = 120;
 /** Codes that never appear in the Issues section (selection notice, waiting lines, preflight-only). */
 const NOT_IN_ISSUES = new Set([...ACKNOWLEDGEABLE_CODES, "ROUND_REVIEW_PENDING", "MISSING_FINAL_SELECTION"]);
 
+/** Report state words of the "Problem reports (n)" list (same words as `reportStateBadge`). */
+const REPORT_STATE_TEXT = { open: "Open", resolved: "Closed", withdrawn: "Withdrawn" } as const;
+
 export interface SelectFinalRequest {
   kind: "use" | "replace";
   submission: RowSubmissionView;
@@ -139,6 +142,7 @@ export function ExpandedRow({
 
   const rows = data?.submissions ?? [];
   const final = row.final;
+  const problemReports = row.problem_reports ?? [];
 
   const selectionAction = (submission: RowSubmissionView, context: SubmissionActionContext): ReactNode => {
     if (!onSelectFinal || context.isFinal) return null;
@@ -232,6 +236,13 @@ export function ExpandedRow({
         <summary>Text versions ({row.versions.length})</summary>
         <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} />
       </details>
+      {problemReports.length > 0 && <details className="expanded-row-more">
+        <summary>Problem reports ({problemReports.length})</summary>
+        <ul className="expanded-row-issues">{problemReports.map(report => <li key={report.report_id}>
+          {report.title}{" · "}{report.reporter_label}{" · "}<Time iso={report.created_at} now={now} />
+          {" · "}Report: {REPORT_STATE_TEXT[report.state]}{" · "}Paused tasks: {report.active_hold_count}{" · "}{link(reportRoute(report.report_id), "Open report")}
+        </li>)}</ul>
+      </details>}
       <details className="expanded-row-more">
         <summary>Technical details</summary>
         <dl className="technical-details">

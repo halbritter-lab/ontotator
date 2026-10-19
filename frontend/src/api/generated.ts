@@ -2267,6 +2267,8 @@ export interface components {
             retained: boolean;
             /** Matches Decision */
             matches_decision: boolean;
+            /** Problem Reports */
+            problem_reports?: components["schemas"]["RowProblemReport"][];
         };
         /** DocumentRowsPage */
         DocumentRowsPage: {
@@ -4096,6 +4098,27 @@ export interface components {
             assignment_id: number | null;
             /** Author Label */
             author_label: string | null;
+        };
+        /** RowProblemReport */
+        RowProblemReport: {
+            /** Report Id */
+            report_id: string;
+            /** Title */
+            title: string;
+            /** Reporter Label */
+            reporter_label: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "resolved" | "withdrawn";
+            /** Active Hold Count */
+            active_hold_count: number;
         };
         /** RowRoundView */
         RowRoundView: {

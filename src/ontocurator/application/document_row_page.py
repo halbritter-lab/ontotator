@@ -356,6 +356,7 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
         "pinned": False,
         "retained": False,
         "matches_decision": True,
+        "problem_reports": facts.row_reports.get(key, []),
     }
 
 

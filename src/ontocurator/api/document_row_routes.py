@@ -125,6 +125,15 @@ class OpenTargetView(_View):
     label: str | None
 
 
+class RowProblemReport(_View):
+    report_id: str
+    title: str
+    reporter_label: str
+    created_at: datetime
+    state: Literal["open", "resolved", "withdrawn"]
+    active_hold_count: int
+
+
 class DocumentRowView(_View):
     case_id: str
     language: str
@@ -145,6 +154,9 @@ class DocumentRowView(_View):
     pinned: bool
     retained: bool
     matches_decision: bool
+    # Every report of the row, newest first. A factory default keeps the field
+    # optional in the generated types (older fixtures and clients omit it).
+    problem_reports: list[RowProblemReport] = Field(default_factory=list)
 
 
 class DocumentGroupView(_View):
