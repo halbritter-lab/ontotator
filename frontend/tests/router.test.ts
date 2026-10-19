@@ -128,3 +128,33 @@ describe("hash route subscription", () => {
     expect(remove).toHaveBeenCalledWith("hashchange", subscription![1]);
   });
 });
+
+describe("Documents deep-link parameters", () => {
+  it("round_trips_documents_decision_final_case_open_and_page", () => {
+    const route: Route = { name: "projectDocuments", key: "p", language: "de", case: "case/1 #é", decision: "confirm-final", open: ["case-1:de", "case-2:en"], page: "2" };
+    const href = routeHref(route);
+    expect(href).toContain("open=case-1%3Ade&open=case-2%3Aen");
+    expect(parseRoute(href)).toEqual(route);
+    expect(parseRoute("#/projects/p/documents?final=missing")).toEqual({ name: "projectDocuments", key: "p", final: "missing" });
+  });
+  it("round_trips_a_single_open_row_and_keeps_every_repeated_value", () => {
+    const route: Route = { name: "projectDocuments", key: "p", open: ["c:de"] };
+    expect(parseRoute(routeHref(route))).toEqual(route);
+    expect(parseRoute("#/projects/p/documents?open=a%3Ade&open=a%3Ade&open=b%3Aen"))
+      .toEqual({ name: "projectDocuments", key: "p", open: ["a:de", "a:de", "b:en"] });
+  });
+  it("passes_the_full_documents_query_through_case_and_report_routes", () => {
+    const documents = { decision: "report-or-pause", open: ["c:de"], page: "3", case: "c", language: "de" };
+    const viewer: Route = { name: "projectCase", key: "p", caseId: "c", variant: "d", annotations: JSON.stringify(["submission", "s1"]), compare: JSON.stringify(["submission", "s2"]), documents };
+    expect(parseRoute(routeHref(viewer))).toEqual(viewer);
+    const report: Route = { name: "projectProblemReport", key: "p", reportId: "r 1", action: "resume", documents };
+    expect(parseRoute(routeHref(report))).toEqual(report);
+  });
+  it("keeps case parameter order: variant, annotations, compare, then documents_*", () => {
+    const href = routeHref({ name: "projectCase", key: "p", caseId: "c", documents: { q: "x", open: ["c:de"] }, compare: "b", annotations: "a", variant: "v" });
+    expect(href).toBe("#/projects/p/cases/c?variant=v&annotations=a&compare=b&documents_q=x&documents_open=c%3Ade");
+  });
+  it("drops_unknown_report_actions", () => {
+    expect(parseRoute("#/projects/p/problem-reports/r?action=restart")).toEqual({ name: "projectProblemReport", key: "p", reportId: "r" });
+  });
+});

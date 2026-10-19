@@ -4,7 +4,7 @@ import { CaseViewer } from "./variants/CaseViewer";
 import { Shell } from "./app/Shell";
 import { NotFound } from "./app/NotFound";
 import { TaskEditor } from "./tasks/TaskEditor";
-import { parseRoute, routeHref, type Route, type RouteLeaveGuard } from "./app/router";
+import { parseRoute, routeHref, type NavigateOptions, type Route, type RouteLeaveGuard } from "./app/router";
 import { MyTasks } from "./tasks/MyTasks";
 import { ProfilePage } from "./me/ProfilePage";
 import { ErrorNotice } from "./admin/ErrorNotice";
@@ -53,7 +53,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const historyRestored = useRef<(() => void) | null>(null);
   const routeLeaveRef = useRef<RouteLeaveGuard | null>(null);
   const logoutGuardRef = useRef<((proceed: () => void) => void) | null>(null);
-  const destination = useRef<{ route: Route; nativeIndex?: number } | null>(null);
+  const destination = useRef<{ route: Route; nativeIndex?: number; options?: NavigateOptions } | null>(null);
   const leaving = useRef(false);
   const alive = useRef(true);
 
@@ -102,8 +102,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
 
   // Share a single editor save/leave flow. Keep the accepted editor until it
   // resolves, then honor the latest native destination or ordinary link.
-  const requestRoute = async (next: Route, nativeIndex?: number): Promise<void> => {
-    destination.current = { route: next, nativeIndex };
+  const requestRoute = async (next: Route, nativeIndex?: number, options?: NavigateOptions): Promise<void> => {
+    destination.current = { route: next, nativeIndex, options };
     if (leaving.current) return;
     leaving.current = true;
     try {
@@ -124,8 +124,13 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       const hash = routeHref(target.route);
       if (target.nativeIndex === undefined) {
         if (hash === acceptedHash.current) return;
-        acceptedIndex.current++;
-        window.history.pushState({ ...window.history.state, ontocuratorRouteIndex: acceptedIndex.current }, "", hash);
+        // Replace keeps the accepted index (e.g. row expansion), so Back skips it.
+        if (target.options?.replace) {
+          window.history.replaceState({ ...window.history.state, ontocuratorRouteIndex: acceptedIndex.current }, "", hash);
+        } else {
+          acceptedIndex.current++;
+          window.history.pushState({ ...window.history.state, ontocuratorRouteIndex: acceptedIndex.current }, "", hash);
+        }
         historyCursor.current = acceptedIndex.current;
       } else acceptedIndex.current = target.nativeIndex;
       acceptedHash.current = hash;
@@ -168,7 +173,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   }, []);
 
   if (!user) return projectError ? <ErrorNotice error={projectError} /> : <InlineMessage tone="info">Checking your session...</InlineMessage>;
-  const go = (next: Route) => { void requestRoute(next); };
+  const go = (next: Route, options?: NavigateOptions) => { void requestRoute(next, undefined, options); };
   const logout = () => {
     const proceed = () => onLogout?.();
     if (logoutGuardRef.current) logoutGuardRef.current(proceed);

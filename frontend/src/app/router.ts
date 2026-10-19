@@ -13,6 +13,40 @@ export interface ProjectDocumentsQuery {
   select?: string;
   origin?: string;
   translation_status?: string;
+  /** Exact case ID (unlike the `q` prefix search). */
+  case?: string;
+  decision?: string;
+  final?: string;
+  /** Expanded rows as `<case>:<language>`; repeatable in the URL. */
+  open?: string[];
+  page?: string;
+}
+
+/** Options for in-app navigation; `replace` rewrites the current history entry. */
+export interface NavigateOptions { replace?: boolean }
+
+const DOCUMENT_FIELDS = ["language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final", "page"] as const;
+
+function readDocumentsQuery(params: URLSearchParams, prefix = ""): ProjectDocumentsQuery {
+  const result: ProjectDocumentsQuery = {};
+  for (const field of DOCUMENT_FIELDS) {
+    const value = params.get(`${prefix}${field}`);
+    if (value !== null) result[field] = value;
+  }
+  const open = params.getAll(`${prefix}open`);
+  if (open.length) result.open = open;
+  return result;
+}
+
+function documentsEntries(query: ProjectDocumentsQuery | undefined, prefix = ""): [string, string][] {
+  const entries: [string, string][] = [];
+  if (!query) return entries;
+  for (const field of DOCUMENT_FIELDS) {
+    const value = query[field];
+    if (value !== undefined) entries.push([`${prefix}${field}`, value]);
+  }
+  for (const value of query.open ?? []) entries.push([`${prefix}open`, value]);
+  return entries;
 }
 
 export type Route =
@@ -24,10 +58,10 @@ export type Route =
   | { name: "projectNew" }
   | { name: "projectSettings"; key: string }
   | ({ name: "projectDocuments"; key: string } & ProjectDocumentsQuery)
-  | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string; documents?: ProjectDocumentsQuery }
+  | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string; compare?: string; documents?: ProjectDocumentsQuery }
   | { name: "projectProgress"; key: string }
   | { name: "projectExport"; key: string }
-  | { name: "projectProblemReport"; key: string; reportId: string }
+  | { name: "projectProblemReport"; key: string; reportId: string; action?: "resume"; documents?: ProjectDocumentsQuery }
   | { name: "notFound"; hash: string };
 
 export function parseRoute(hash: string): Route {
@@ -59,19 +93,20 @@ export function parseRoute(hash: string): Route {
       return Number.isSafeInteger(assignmentId) ? { name: "task", assignmentId } : notFound;
     }
     const report = /^#\/projects\/([^/]+)\/problem-reports\/([^/]+)$/.exec(path);
-    if (report) return { name: 'projectProblemReport', key: decodeURIComponent(report[1]), reportId: decodeURIComponent(report[2]) };
+    if (report) {
+      const documents = readDocumentsQuery(params, "documents_");
+      return { name: "projectProblemReport", key: decodeURIComponent(report[1]), reportId: decodeURIComponent(report[2]),
+        ...(params.get("action") === "resume" ? { action: "resume" as const } : {}),
+        ...(Object.keys(documents).length ? { documents } : {}) };
+    }
     const caseRoute = /^#\/projects\/([^/]+)\/cases\/([^/]+)$/.exec(path);
     if (caseRoute) {
-      const optional: { variant?: string; annotations?: string } = {};
-      for (const field of ["variant", "annotations"] as const) {
+      const optional: { variant?: string; annotations?: string; compare?: string } = {};
+      for (const field of ["variant", "annotations", "compare"] as const) {
         const value = params.get(field);
         if (value !== null) optional[field] = value;
       }
-      const documents: ProjectDocumentsQuery = {};
-      for (const field of ["language", "status", "q", "select", "origin", "translation_status"] as const) {
-        const value = params.get(`documents_${field}`);
-        if (value !== null) documents[field] = value;
-      }
+      const documents = readDocumentsQuery(params, "documents_");
       return { name: "projectCase", key: decodeURIComponent(caseRoute[1]), caseId: decodeURIComponent(caseRoute[2]), ...optional,
         ...(Object.keys(documents).length ? { documents } : {}) };
     }
@@ -82,14 +117,7 @@ export function parseRoute(hash: string): Route {
       case "settings": return { name: "projectSettings", key };
       case "progress": return { name: "projectProgress", key };
       case "export": return { name: "projectExport", key };
-      case "documents": {
-        const filters: ProjectDocumentsQuery = {};
-        for (const field of ["language", "status", "q", "select", "origin", "translation_status"] as const) {
-          const value = params.get(field);
-          if (value !== null) filters[field] = value;
-        }
-        return { name: "projectDocuments", key, ...filters };
-      }
+      case "documents": return { name: "projectDocuments", key, ...readDocumentsQuery(params) };
     }
   } catch (error) {
     if (!(error instanceof URIError)) throw error;
@@ -97,10 +125,10 @@ export function parseRoute(hash: string): Route {
   return notFound;
 }
 
-function querySuffix(values: Record<string, string | undefined>): string {
+function querySuffix(entries: [string, string | undefined][]): string {
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(values)) {
-    if (value !== undefined) params.set(key, value);
+  for (const [key, value] of entries) {
+    if (value !== undefined) params.append(key, value);
   }
   const query = params.toString();
   return query ? `?${query}` : "";
@@ -108,7 +136,7 @@ function querySuffix(values: Record<string, string | undefined>): string {
 
 export function routeHref(route: Route): string {
   switch (route.name) {
-    case "tasks": return `#/${querySuffix({ project: route.project })}`;
+    case "tasks": return `#/${querySuffix([["project", route.project]])}`;
     case "task":
       if (!Number.isSafeInteger(route.assignmentId) || route.assignmentId <= 0) {
         throw new RangeError("Assignment ID must be a positive safe integer");
@@ -120,15 +148,16 @@ export function routeHref(route: Route): string {
     case "projectNew": return "#/projects/new";
     case "projectSettings": return `#/projects/${encodeURIComponent(route.key)}/settings`;
     case "projectDocuments":
-      return `#/projects/${encodeURIComponent(route.key)}/documents${querySuffix({
-        language: route.language, status: route.status, q: route.q, select: route.select, origin: route.origin, translation_status: route.translation_status,
-      })}`;
-    case "projectCase": return `#/projects/${encodeURIComponent(route.key)}/cases/${encodeURIComponent(route.caseId)}${querySuffix({ variant: route.variant, annotations: route.annotations,
-      ...Object.fromEntries(Object.entries(route.documents ?? {}).map(([key, value]) => [`documents_${key}`, value])),
-    })}`;
+      return `#/projects/${encodeURIComponent(route.key)}/documents${querySuffix(documentsEntries(route))}`;
+    case "projectCase": return `#/projects/${encodeURIComponent(route.key)}/cases/${encodeURIComponent(route.caseId)}${querySuffix([
+      ["variant", route.variant], ["annotations", route.annotations], ["compare", route.compare],
+      ...documentsEntries(route.documents, "documents_"),
+    ])}`;
     case "projectProgress": return `#/projects/${encodeURIComponent(route.key)}/progress`;
     case "projectExport": return `#/projects/${encodeURIComponent(route.key)}/export`;
-    case "projectProblemReport": return `#/projects/${encodeURIComponent(route.key)}/problem-reports/${encodeURIComponent(route.reportId)}`;
+    case "projectProblemReport": return `#/projects/${encodeURIComponent(route.key)}/problem-reports/${encodeURIComponent(route.reportId)}${querySuffix([
+      ["action", route.action], ...documentsEntries(route.documents, "documents_"),
+    ])}`;
     case "notFound": return route.hash;
   }
 }
