@@ -5,3 +5,6 @@
 @import "./screens/dashboard.css";
 @import "./screens/editor.css";
 @import "./screens/tree.css";
+@import "./screens/documents-table.css";
+@import "./screens/documents-cards.css";
+@import "./screens/documents-expanded.css";

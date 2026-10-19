@@ -11,7 +11,7 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "secondary", size = "md", type = "button", loading = false, icon, disabled, className, children, ...props },
+  { variant = "secondary", size = "md", type = "button", loading = false, icon, disabled, className, children, onClick, ...props },
   ref,
 ) {
   return (
@@ -20,8 +20,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       className={["btn", `btn-${variant}`, size === "sm" && "btn-sm", className].filter(Boolean).join(" ")}
-      disabled={disabled || loading}
+      disabled={disabled}
+      // Busy buttons stay focusable: aria-disabled instead of native disabled.
+      aria-disabled={loading ? true : props["aria-disabled"]}
       aria-busy={loading || props["aria-busy"]}
+      onClick={(event) => {
+        if (loading) { event.preventDefault(); return; }
+        onClick?.(event);
+      }}
     >
       {loading ? <span className="btn-spinner" aria-hidden="true" /> : icon ? <span className="btn-leading-icon" aria-hidden="true">{icon}</span> : null}
       {children}

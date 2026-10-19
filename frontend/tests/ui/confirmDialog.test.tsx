@@ -16,7 +16,8 @@ it("escape_cancels", () => {
 it("busy_disables_both_and_prevents_escape_cancel", () => {
   const cancel = vi.fn();
   render(<ConfirmDialog open busy title="Delete" message="Sure?" confirmLabel="Delete" onConfirm={() => {}} onCancel={cancel} />);
-  expect(screen.getAllByRole("button").every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+  expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole("button", { name: "Delete" }).getAttribute("aria-disabled")).toBe("true");
   expect(screen.getByRole("button", { name: "Delete" }).getAttribute("aria-busy")).toBe("true");
   fireEvent.keyDown(window, { key: "Escape" }); expect(cancel).not.toHaveBeenCalled();
 });

@@ -490,6 +490,12 @@ textarea.form-control {
   color: var(--text-muted);
 }
 
+/* Busy (loading) buttons use aria-disabled so they keep focus; hover must not suggest they act. */
+.btn-primary[aria-disabled="true"]:hover { background: var(--accent); }
+.btn-secondary[aria-disabled="true"]:hover,
+.btn-danger[aria-disabled="true"]:hover { background: transparent; border-color: var(--border); }
+.btn-quiet[aria-disabled="true"]:hover { background: transparent; color: var(--text-muted); }
+
 .btn-icon {
   gap: 4px;
   padding-inline: 6px;
@@ -745,4 +751,38 @@ textarea.form-control {
   .shell-actions .shell-project-selector { flex: 1 0 100%; }
   .shell-project-menu { inset-inline: 0; width: 100%; max-width: 100%; box-sizing: border-box; }
   .shell-page { padding: var(--space-5) var(--space-4); }
+}
+
+/* Documents table primitives (Documents U1): disclosure, final marker, inline confirmation, segments. */
+.disclosure-chevron { transition: transform 150ms ease; }
+[aria-expanded="true"] > .disclosure-chevron { transform: rotate(90deg); }
+.data-table-expanded > td { animation: expand-in 150ms ease; }
+@keyframes expand-in { from { opacity: 0; } to { opacity: 1; } }
+.final-row { background: var(--success-light); }
+.final-row > :first-child { box-shadow: inset 3px 0 var(--success); }
+.inline-confirm { border: 1px solid var(--border-strong); border-radius: var(--radius); padding: var(--space-3); background: var(--surface-raised); overflow-wrap: anywhere; }
+.inline-confirm-title { margin: 0 0 var(--space-2); font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); }
+.inline-confirm-message { margin-bottom: var(--space-2); }
+.inline-confirm-notice { margin: var(--space-2) 0 0; }
+.inline-confirm-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.segment { border-bottom: 2px solid transparent; }
+.segment[aria-current="page"] { border-bottom-color: currentColor; text-decoration: underline; font-weight: var(--weight-strong); }
+.target-min { min-width: 24px; min-height: 24px; }
+@media (prefers-reduced-motion: reduce) {
+  .disclosure-chevron { transition: none; }
+  .data-table-expanded > td { animation: none; }
+}
+@media (forced-colors: active) {
+  .final-row > :first-child { box-shadow: none; border-left: 3px solid CanvasText; }
+  .status-pill { border: 1px solid CanvasText; forced-color-adjust: none; color: CanvasText; background: Canvas; }
+  :focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  /* Class-level focus rules outrank the bare selector above; repeat Highlight for each of them. */
+  .btn:focus-visible,
+  .form-control:focus-visible,
+  .form-select:focus-visible,
+  .shell-nav-link:focus-visible,
+  .shell-reading-navigation > summary:focus-visible,
+  .document-tree summary:focus-visible,
+  .shell-project-selector summary:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  .segment[aria-current="page"] { border-bottom-color: Highlight; color: Highlight; }
 }

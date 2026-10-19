@@ -70,7 +70,7 @@ describe("one-time code dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
     expect(writeText).toHaveBeenCalledWith(props.code);
     const button = screen.getByRole("button", { name: "Copy" }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
+    expect(button.getAttribute("aria-disabled")).toBe("true");
     expect(button.getAttribute("aria-busy")).toBe("true");
     expect(screen.queryByRole("button", { name: "Copied" })).toBeNull();
     await act(async () => { pending.resolve(); });

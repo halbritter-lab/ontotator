@@ -13,5 +13,7 @@ export * from "./Textarea";
 export * from "./Checkbox";
 export * from "./Dialog";
 export * from "./ConfirmDialog";
+export * from "./InlineConfirm";
 export * from "./ShortcutHelp";
 export * from "./DataTable";
+export * from "./useMediaQuery";

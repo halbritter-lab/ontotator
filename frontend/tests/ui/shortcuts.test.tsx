@@ -1,5 +1,5 @@
-import { StrictMode, createRef } from "react";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { StrictMode, createRef, useRef } from "react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { isTypingTarget, matches, useRegisteredShortcuts, useShortcut, useShortcutHint, type ShortcutOptions } from "../../src/ui/shortcuts";
 
@@ -239,4 +239,27 @@ it("multiple_hooks_in_one_component_register_and_cleanup_independently", () => {
   expect(press("j").defaultPrevented).toBe(false);
   expect(press("k").defaultPrevented).toBe(false);
   expect(calls).toEqual(["screen", "global"]);
+});
+
+it("escape_with_allowInInputs_reaches_a_handler_while_a_checkbox_is_focused", () => {
+  const handler = vi.fn(() => undefined);
+  function Host() {
+    const root = useRef<HTMLDivElement>(null);
+    useShortcut("Escape", handler, { allowInInputs: true, root });
+    return <div ref={root}><input type="checkbox" aria-label="Reviewed" /></div>;
+  }
+  render(<Host />);
+  const box = screen.getByRole("checkbox", { name: "Reviewed" });
+  box.focus();
+  fireEvent.keyDown(box, { key: "Escape" });
+  expect(handler).toHaveBeenCalledOnce();
+});
+
+it("a_handler_returning_false_lets_the_event_through", () => {
+  const outer = vi.fn(() => undefined), inner = vi.fn(() => false as const);
+  function Host() { useShortcut("Escape", outer); useShortcut("Escape", inner); return <button>x</button>; }
+  render(<Host />);
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(inner).toHaveBeenCalledOnce();
+  expect(outer).toHaveBeenCalledOnce();
 });
