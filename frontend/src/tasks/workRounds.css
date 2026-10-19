@@ -1,0 +1,176 @@
+/* Work rounds dialog and original evidence dialog (editor spec sections 6 and 7). */
+
+.work-rounds {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.work-rounds__intro,
+.work-rounds__empty,
+.work-rounds__reason,
+.work-rounds__consequence {
+  margin: 0;
+}
+
+.work-rounds__reason,
+.work-rounds__consequence,
+.work-rounds__empty {
+  color: var(--text-muted);
+}
+
+.work-rounds__name {
+  display: block;
+  font-weight: var(--weight-strong);
+}
+
+.work-rounds__start {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-regular);
+}
+
+.work-rounds__here {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-light);
+  color: var(--text);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-strong);
+}
+
+.work-rounds__cards {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.work-rounds__card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.work-rounds__card-title {
+  margin: 0;
+  font-size: var(--size-md);
+}
+
+.work-rounds__card dl,
+.work-rounds__technical dl,
+.round-evidence__technical dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.work-rounds__card dt,
+.work-rounds__technical dt,
+.round-evidence__technical dt {
+  color: var(--text-muted);
+}
+
+.work-rounds__card dd,
+.work-rounds__technical dd,
+.round-evidence__technical dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.work-rounds__card > .btn,
+.work-rounds__card > button {
+  justify-self: start;
+}
+
+.work-rounds__technical summary,
+.round-evidence__technical summary,
+.round-evidence__text summary {
+  cursor: pointer;
+  min-height: 24px;
+}
+
+.work-rounds__technical dl,
+.round-evidence__technical dl {
+  margin-top: var(--space-2);
+}
+
+.work-rounds__start-new {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.work-rounds__title {
+  margin: 0;
+  font-size: var(--size-md);
+}
+
+.work-rounds__sources {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.work-rounds__legend {
+  font-weight: var(--weight-strong);
+}
+
+.work-rounds__source {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 24px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.work-rounds__source input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.work-rounds__error {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.round-evidence__meta {
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+}
+
+.round-evidence__facts {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.round-evidence__term {
+  font-weight: var(--weight-strong);
+}
+
+.round-evidence__note {
+  white-space: pre-wrap;
+}
+
+.round-evidence__text,
+.round-evidence__technical {
+  margin-top: var(--space-3);
+}

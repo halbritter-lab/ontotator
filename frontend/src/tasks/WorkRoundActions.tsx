@@ -1,70 +1,171 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import type { AssignmentView, CreateRoundRequest, RoundSourceView, WorkRoundView } from "../api/client";
-import { Button, Select, StatusBadge } from "../ui";
+import { Button, DataTable, IconChevronRight, useMediaQuery, type Column } from "../ui";
 import { ErrorNotice } from "../admin/ErrorNotice";
+import { carriedCell, carryUnavailableReason, roundStateLabel, sourceOptionLabel, submissionCell } from "../editor/rounds/roundLabels";
+import "./workRounds.css";
 
-export interface WorkRoundActionsProps {
-  assignment: AssignmentView;
-  rounds: readonly WorkRoundView[];
-  sources: readonly RoundSourceView[];
-  onCreate: (request: CreateRoundRequest) => Promise<void>;
-  onOpen: (roundId: string) => Promise<void>;
-  onReload: () => void;
+/** Start state shared by the dialog body (choices) and its footer (primary action). */
+export interface RoundStart {
+  source: string;
+  setSource: (submissionId: string) => void;
+  busy: boolean;
+  error: unknown;
+  run: (work: () => Promise<void>) => void;
+  start: (kind: "ordinary" | "carry_forward") => void;
 }
 
-const kindLabels: Record<WorkRoundView["kind"], string> = {
-  ordinary: "Ordinary round", carry_forward: "Carry-forward annotation", clean_restart: "Clean restart", consolidation: "Consolidation review",
-};
-
-export function WorkRoundActions({ assignment, rounds, sources, onCreate, onOpen, onReload }: WorkRoundActionsProps): JSX.Element {
+export function useRoundStart(assignment: AssignmentView, sources: readonly RoundSourceView[], onCreate: (request: CreateRoundRequest) => Promise<void>): RoundStart {
   const [source, setSource] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const writing = useRef(false), active = useRef(false);
   const requests = useRef(new Map<string, CreateRoundRequest>());
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const run = async (work: () => Promise<void>) => {
+  const run = useCallback((work: () => Promise<void>) => {
     if (writing.current) return;
     writing.current = true; setBusy(true); setError(undefined);
-    try { await work(); }
-    catch (failure) { if (active.current) setError(failure); }
-    finally { writing.current = false; if (active.current) setBusy(false); }
-  };
+    void (async () => {
+      try { await work(); }
+      catch (failure) { if (active.current) setError(failure); }
+      finally { writing.current = false; if (active.current) setBusy(false); }
+    })();
+  }, []);
   const start = (kind: "ordinary" | "carry_forward") => {
     if (assignment.held) return;
     if (kind === "carry_forward" && !sources.some(value => value.submission_id === source)) return;
+    // One request ID per identity, so a retry after a failure is idempotent on the server.
     const identity = JSON.stringify([assignment.id, assignment.workflow_revision, kind, kind === "carry_forward" ? source : null]);
     let request = requests.current.get(identity);
     if (!request) {
       request = { request_id: crypto.randomUUID(), expected_workflow_revision: assignment.workflow_revision, kind, source_submission_ids: kind === "carry_forward" ? [source] : [] };
       requests.current.set(identity, request);
     }
-    void run(() => onCreate(request!));
+    const exact = request;
+    run(() => onCreate(exact));
   };
-  return <section className="work-round-actions" aria-label="Work round actions">
-    <p>Each round keeps its exact inputs and result history. Starting a round does not choose a final project result.</p>
-    {rounds.length ? <ol>{rounds.map((round, index) => <li key={round.round_id}>
-      <h3>Round {index + 1}: {kindLabels[round.kind]}</h3>
-      <p><StatusBadge status={round.state}>{round.state}</StatusBadge>{round.active ? " · Active round" : " · Historical round"}</p>
-      <p>{(round.input_submission_ids ?? []).length} selected submission input(s).</p>
-      <Button disabled={busy} onClick={() => { void run(() => onOpen(round.round_id)); }}>Open round {index + 1}</Button>
-      <details className="technical-details"><summary>Exact round details</summary><p>Round: <code>{round.round_id}</code></p>
-        {round.latest_submission_id && <p>Latest submission: <code>{round.latest_submission_id}</code></p>}
-        {(round.input_submission_ids ?? []).map(id => <p key={id}>Input: <code>{id}</code></p>)}
-      </details>
-    </li>)}</ol> : <p>No explicit work rounds recorded yet.</p>}
-    {assignment.held && <p>Task paused: {assignment.hold_reason ?? "A project problem needs attention."} You can read existing rounds; resume the task before starting another.</p>}
-    {assignment.status === "open" && !rounds.length && !assignment.last_submission_id && <Button loading={busy} disabled={assignment.held} onClick={() => start("ordinary")}>Start empty round</Button>}
-    {assignment.task === "annotate" && (sources.length ? <form aria-label="Carry my submitted findings forward" onSubmit={event => { event.preventDefault(); start("carry_forward"); }}>
-      <h3>Continue from my submitted findings</h3>
-      <p>Select your exact submitted work. Every carried finding needs review against this text, including unchanged evidence. Carrying a value does not confirm it.</p>
-      <Select id="carry-forward-source" label="My submitted work to carry forward" aria-label="My submitted work to carry forward" value={source} disabled={busy} required onChange={event => setSource(event.target.value)}>
-        <option value="">Choose a submitted result</option>
-        {sources.map(value => <option key={value.submission_id} value={value.submission_id}>v{value.version} · {value.language} · {value.document_id} · {value.created_at}</option>)}
-      </Select>
-      {source && <p>Selected submission: <code>{source}</code></p>}
-      <Button type="submit" loading={busy} disabled={assignment.held || !sources.some(value => value.submission_id === source)}>Start carry-forward round</Button>
-    </form> : <p>No eligible submitted work is available to carry forward.</p>)}
-    {error !== undefined && <><ErrorNotice error={error} /><Button disabled={busy} onClick={onReload}>Reload task state</Button></>}
-  </section>;
+  return { source, setSource, busy, error, run, start };
+}
+
+/** Rounds oldest first, each with a display ordinal (server `round_ordinal`, else its position). */
+export function orderedRounds(rounds: readonly WorkRoundView[]): WorkRoundView[] {
+  return rounds.map((round, index) => ({ round, index }))
+    .sort((a, b) => (a.round.round_ordinal ?? a.index + 1) - (b.round.round_ordinal ?? b.index + 1) || a.index - b.index)
+    .map(({ round, index }) => ({ ...round, round_ordinal: round.round_ordinal ?? index + 1 }));
+}
+
+export type CarryAvailability =
+  | { kind: "available" }
+  | { kind: "unavailable"; reason: string }
+  | { kind: "unknown" }
+  | { kind: "none" };
+
+/** Whether "Continue from" is offered, and the reason derived from data when it is not. */
+export function carryAvailability(assignment: AssignmentView, rounds: readonly WorkRoundView[], sources: readonly RoundSourceView[]): CarryAvailability {
+  if (assignment.task !== "annotate") return { kind: "none" };
+  const ordered = orderedRounds(rounds);
+  const open = ordered.find(round => round.state === "editable" && round.active) ?? ordered.find(round => round.state === "editable");
+  const reason = carryUnavailableReason({ held: assignment.held, openRoundOrdinal: open?.round_ordinal ?? null, sourceCount: sources.length });
+  if (reason === null) return { kind: "available" };
+  if (!sources.length && !assignment.held && !open) {
+    const submitted = Boolean(assignment.last_submission_id) || rounds.some(round => round.submission_count > 0 || round.latest_submission_id);
+    if (submitted) return { kind: "unknown" };
+  }
+  return { kind: "unavailable", reason };
+}
+
+function startingPoint(round: WorkRoundView): string {
+  switch (round.kind) {
+    case "carry_forward": return round.source_round_ordinal ? `from Round ${round.source_round_ordinal} submission` : "from an earlier submission";
+    case "clean_restart": return "restarted empty";
+    case "consolidation": {
+      const count = round.input_submission_ids?.length ?? 0;
+      return `consolidation of ${count} ${count === 1 ? "submission" : "submissions"}`;
+    }
+    default: return "started empty";
+  }
+}
+
+const sourceTime = (source: RoundSourceView) => source.recorded_at ?? source.created_at;
+
+export interface WorkRoundActionsProps {
+  assignment: AssignmentView;
+  rounds: readonly WorkRoundView[];
+  sources: readonly RoundSourceView[];
+  control: RoundStart;
+  /** The round open in the editor; marked "You are here" and offers no Open action. */
+  currentRoundId?: string;
+  onOpen: (roundId: string) => Promise<void>;
+  onReload: () => void;
+}
+
+export function WorkRoundActions({ assignment, rounds, sources, control, currentRoundId, onOpen, onReload }: WorkRoundActionsProps): JSX.Element {
+  const narrow = useMediaQuery("(max-width: 700px)");
+  const ordered = orderedRounds(rounds);
+  const legendId = useId(), radioName = useId();
+  const availability = carryAvailability(assignment, rounds, sources);
+  const selected = sources.find(value => value.submission_id === control.source);
+  const name = (round: WorkRoundView) => `Round ${round.round_ordinal}`;
+  const here = <span className="work-rounds__here" aria-current="true"><IconChevronRight className="work-rounds__here-icon" />You are here</span>;
+  const roundCell = (round: WorkRoundView) => <>
+    <span className="work-rounds__name">{name(round)}</span>
+    <span className="work-rounds__start">{startingPoint(round)}</span>
+    {round.round_id === currentRoundId && here}
+  </>;
+  const action = (round: WorkRoundView) => round.round_id === currentRoundId ? null
+    : <Button size="sm" aria-label={`Open ${name(round)}`} disabled={control.busy} onClick={() => control.run(() => onOpen(round.round_id))}>Open</Button>;
+  const columns: Column<WorkRoundView>[] = [
+    { id: "round", header: "Round", rowHeader: true, cell: roundCell },
+    { id: "state", header: "Round state", cell: round => roundStateLabel(round, ordered) },
+    { id: "submission", header: "Submission", cell: round => submissionCell(round.submission_count, round.latest_submission_recorded_at) },
+    { id: "carried", header: "Carried", cell: round => carriedCell(round.input_count) },
+    { id: "actions", header: "Actions", cell: action },
+  ];
+  const showEmptyStart = assignment.status === "open" && !rounds.length && !assignment.last_submission_id;
+  return <div className="work-rounds">
+    <p className="work-rounds__intro">Each round keeps its starting point and its submissions. Starting a round does not change the final result.</p>
+    {!ordered.length ? <p className="work-rounds__empty">No rounds yet.</p> : narrow
+      ? <ul className="work-rounds__cards" aria-label="Rounds">{ordered.map(round => <li key={round.round_id} className="work-rounds__card">
+        <h3 className="work-rounds__card-title">{roundCell(round)}</h3>
+        <dl>
+          <dt>Round state</dt><dd>{roundStateLabel(round, ordered)}</dd>
+          <dt>Submission</dt><dd>{submissionCell(round.submission_count, round.latest_submission_recorded_at)}</dd>
+          <dt>Carried</dt><dd>{carriedCell(round.input_count)}</dd>
+        </dl>
+        {action(round)}
+      </li>)}</ul>
+      : <DataTable label="Rounds" columns={columns} rows={ordered} rowKey={round => round.round_id} className="work-rounds__table" />}
+    {ordered.length > 0 && <details className="work-rounds__technical">
+      <summary>Technical details</summary>
+      <dl>{ordered.map(round => <Fragment key={round.round_id}>
+        <dt>{name(round)}</dt><dd><code>{round.round_id}</code></dd>
+        {round.latest_submission_id && <><dt>{name(round)} latest submission</dt><dd><code>{round.latest_submission_id}</code></dd></>}
+        {(round.input_submission_ids ?? []).map(id => <Fragment key={id}><dt>{name(round)} started from</dt><dd><code>{id}</code></dd></Fragment>)}
+      </Fragment>)}</dl>
+    </details>}
+    {(showEmptyStart || availability.kind !== "none") && <section className="work-rounds__start-new" aria-labelledby={`${legendId}-title`}>
+      <h3 id={`${legendId}-title`} className="work-rounds__title">Start a new round</h3>
+      {showEmptyStart && <Button loading={control.busy} disabled={assignment.held} onClick={() => control.start("ordinary")}>Start empty round</Button>}
+      {availability.kind === "available" && <>
+        <div role="radiogroup" aria-labelledby={legendId} className="work-rounds__sources">
+          <span id={legendId} className="work-rounds__legend">Continue from</span>
+          {sources.map(value => <label key={value.submission_id} className="work-rounds__source">
+            <input type="radio" name={radioName} value={value.submission_id} checked={control.source === value.submission_id}
+              disabled={control.busy} onChange={() => control.setSource(value.submission_id)} />
+            <span>{sourceOptionLabel({ ...value, recorded_at: sourceTime(value) })}</span>
+          </label>)}
+        </div>
+        <p className="work-rounds__consequence">{`${selected?.round_ordinal ? `Round ${selected.round_ordinal}` : "The round you continue from"} stays in the history. Every carried finding must be checked again; carried values are not confirmed.`}</p>
+      </>}
+      {availability.kind === "unavailable" && <p className="work-rounds__reason">{availability.reason}</p>}
+      {availability.kind === "unknown" && <>
+        <p className="work-rounds__reason">No submission can be continued right now.</p>
+        <Button disabled={control.busy} onClick={onReload}>Reload task state</Button>
+      </>}
+    </section>}
+    {control.error !== undefined && <div className="work-rounds__error">
+      <ErrorNotice error={control.error} />
+      <Button disabled={control.busy} onClick={onReload}>Reload task state</Button>
+    </div>}
+  </div>;
 }

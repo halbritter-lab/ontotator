@@ -16,11 +16,12 @@ const footer = (dialog: HTMLElement = screen.getByRole("dialog")) => {
 const notInBody = (button: HTMLElement) => expect(button.closest(".ui-dialog-body")).toBeNull();
 const assignment = { id: 7, task: "annotate", project_key: "p", document_id: "d", held: false, hold_reason: null, workflow_revision: 0 } as unknown as AssignmentView;
 
-// B1: obsolete after editor F8a (F8a deletes this block).
+// B1: kept and updated by editor F8a (round dialogs).
 describe("B1 task dialogs: Close in the footer", () => {
   it("puts Close original evidence in the footer", () => {
     vi.spyOn(api, "getVariantText").mockReturnValue(never());
-    const input = { source_submission_id: "s", source_snapshot: { document_id: "d", text_sha256: "h", evidence: [] } } as unknown as RoundInputView;
+    const annotation = { annotation_id: "a", term_id: "HP:1", layer_id: "l", axes_values: {}, evidence_refs: [], provenance: { actor: { actor_id: "ann-1", kind: "human" } } };
+    const input = { source_submission_id: "s", source_ref: { annotation_id: "a", version: "v" }, source_snapshot: { document_id: "d", text_sha256: "h", evidence: [], annotation } } as unknown as RoundInputView;
     render(<RoundInputEvidenceDialog projectKey="p" input={input} onClose={vi.fn()} labelFor={() => null} />);
     notInBody(footer().getByRole("button", { name: "Close original evidence" }));
   });
@@ -30,7 +31,7 @@ describe("B1 task dialogs: Close in the footer", () => {
     vi.spyOn(api, "listRoundSources").mockResolvedValue([]);
     render(<WorkRoundsDialog assignment={assignment} onClose={vi.fn()} onCreate={vi.fn()} onOpen={vi.fn()} onReload={vi.fn()} />);
     notInBody(footer(screen.getByRole("dialog", { name: "Work rounds" })).getByRole("button", { name: "Close" }));
-    const retry = await screen.findByRole("button", { name: "Retry round list" });
+    const retry = await screen.findByRole("button", { name: "Retry" });
     expect(retry.closest(".ui-dialog-body")).not.toBeNull();
   });
 });

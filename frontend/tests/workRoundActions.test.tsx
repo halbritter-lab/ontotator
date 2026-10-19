@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { WorkRoundActions } from "../src/tasks/WorkRoundActions";
+import { WorkRoundsDialog } from "../src/tasks/WorkRoundsDialog";
 import { api, type WorkRoundView } from "../src/api/client";
 import { TaskEditor } from "../src/tasks/TaskEditor";
 import { historical } from "./variantFixtures";
@@ -12,12 +12,19 @@ const assignment = { ...assigned(workspaceFixture()).assignment, workflow_revisi
 const source = { submission_id: "exact-source", document_id: "old-document", language: "en", version: 1, created_at: "2026-10-18T12:00:00Z", round_id: null, finding_count: 0 };
 const round: WorkRoundView = { round_id: "round-exact", project_key: "pkg", assignment_id: 1, document_id: "doc", annotator_id: "alice", kind: "carry_forward", mode: "independent", state: "submitted", workflow_revision: 3, input_manifest_sha256: "manifest", input_submission_ids: ["exact-source"], active: true, submission_count: 1, input_count: 1 };
 
-it("starts carry-forward from one deliberately selected immutable own submission", async () => {
+function renderRounds(rounds: WorkRoundView[], sources: typeof source[], handlers: { onCreate?: ReturnType<typeof vi.fn>; onOpen?: ReturnType<typeof vi.fn>; assignment?: typeof assignment } = {}) {
+  vi.spyOn(api, "listWorkRounds").mockResolvedValue(rounds);
+  vi.spyOn(api, "listRoundSources").mockResolvedValue(sources);
+  render(<WorkRoundsDialog assignment={handlers.assignment ?? assignment} onClose={vi.fn()} onCreate={handlers.onCreate ?? vi.fn()} onOpen={handlers.onOpen ?? vi.fn()} onReload={vi.fn()} />);
+}
+
+it("starts a continued round from one deliberately selected immutable own submission", async () => {
   const create = vi.fn().mockResolvedValue(undefined);
-  render(<WorkRoundActions assignment={assignment} rounds={[round]} sources={[source]} onCreate={create} onOpen={vi.fn()} onReload={vi.fn()} />);
-  const button = screen.getByRole("button", { name: "Start carry-forward round" });
+  renderRounds([round], [source], { onCreate: create });
+  const option = await screen.findByRole("radio", { name: /Earlier submission · .* · en v1 · 0 findings/ });
+  const button = screen.getByRole("button", { name: "Continue from this submission" });
   expect(button).toHaveProperty("disabled", true);
-  fireEvent.change(screen.getByRole("combobox", { name: "My submitted work to carry forward" }), { target: { value: "exact-source" } });
+  fireEvent.click(option);
   fireEvent.click(button);
   await waitFor(() => expect(create).toHaveBeenCalledWith({ request_id: expect.any(String), expected_workflow_revision: 3, kind: "carry_forward", source_submission_ids: ["exact-source"] }));
   expect(screen.queryByRole("button", { name: /Consolidation|restart/i })).toBeNull();
@@ -25,20 +32,20 @@ it("starts carry-forward from one deliberately selected immutable own submission
 
 it("preserves exact source selection and idempotency identity after a failed start", async () => {
   const create = vi.fn().mockRejectedValueOnce(new Error("The round could not be opened")).mockResolvedValue(undefined);
-  render(<WorkRoundActions assignment={assignment} rounds={[]} sources={[source]} onCreate={create} onOpen={vi.fn()} onReload={vi.fn()} />);
-  fireEvent.change(screen.getByRole("combobox", { name: "My submitted work to carry forward" }), { target: { value: "exact-source" } });
-  fireEvent.click(screen.getByRole("button", { name: "Start carry-forward round" }));
+  renderRounds([], [source], { onCreate: create });
+  fireEvent.click(await screen.findByRole("radio", { name: /Earlier submission/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue from this submission" }));
   await screen.findByText("The round could not be opened");
-  expect(screen.getByRole("combobox", { name: "My submitted work to carry forward" })).toHaveProperty("value", "exact-source");
-  fireEvent.click(screen.getByRole("button", { name: "Start carry-forward round" }));
+  expect(screen.getByRole("radio", { name: /Earlier submission/ })).toHaveProperty("checked", true);
+  fireEvent.click(screen.getByRole("button", { name: "Continue from this submission" }));
   await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
   expect(create.mock.calls[1][0]).toEqual(create.mock.calls[0][0]);
 });
 
 it("opens the exact selected historical round without creating another round", async () => {
   const open = vi.fn().mockResolvedValue(undefined), create = vi.fn();
-  render(<WorkRoundActions assignment={assignment} rounds={[{ ...round, active: false }]} sources={[]} onCreate={create} onOpen={open} onReload={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "Open round 1" }));
+  renderRounds([{ ...round, active: false }], [], { onCreate: create, onOpen: open });
+  fireEvent.click(await screen.findByRole("button", { name: "Open Round 1" }));
   await waitFor(() => expect(open).toHaveBeenCalledWith("round-exact"));
   expect(create).not.toHaveBeenCalled();
 });
@@ -46,8 +53,8 @@ it("opens the exact selected historical round without creating another round", a
 it("serializes repeated start clicks while an ordinary round is opening", async () => {
   let finish!: () => void;
   const create = vi.fn().mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
-  render(<WorkRoundActions assignment={assignment} rounds={[]} sources={[]} onCreate={create} onOpen={vi.fn()} onReload={vi.fn()} />);
-  const button = screen.getByRole("button", { name: "Start empty round" });
+  renderRounds([], [], { onCreate: create, assignment: { ...assignment, status: "open", last_submission_id: null } });
+  const button = await screen.findByRole("button", { name: "Start empty round" });
   fireEvent.click(button); fireEvent.click(button);
   expect(create).toHaveBeenCalledTimes(1);
   await act(async () => { finish(); });
@@ -70,8 +77,8 @@ it("opens the newly created exact round from the real task editor controls", asy
   const open = vi.spyOn(api, "openWorkRound").mockResolvedValue({ ...workspaceFixture(), workspace_id: "exact-workspace", view: { ...workspaceFixture().view, key: { ...workspaceFixture().view.key, round_id: "round-exact" } } });
   render(<TaskEditor assignmentId={1} user={{ username: "alice", display_name: "Alice", pseudonym: "alice", is_system_admin: false, csrf_token: "csrf" }} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
   fireEvent.click(await screen.findByRole("button", { name: "Work rounds" }));
-  fireEvent.change(await screen.findByRole("combobox", { name: "My submitted work to carry forward" }), { target: { value: "exact-source" } });
-  fireEvent.click(screen.getByRole("button", { name: "Start carry-forward round" }));
+  fireEvent.click(await screen.findByRole("radio", { name: /Earlier submission/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue from this submission" }));
   await waitFor(() => expect(create).toHaveBeenCalledWith(1, expect.objectContaining({ kind: "carry_forward", source_submission_ids: ["exact-source"], expected_workflow_revision: 3 })));
   await waitFor(() => expect(open).toHaveBeenCalledWith("round-exact"));
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Work rounds" })).toBeNull());
