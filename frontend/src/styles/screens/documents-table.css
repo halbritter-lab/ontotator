@@ -68,7 +68,8 @@
 
 @media (forced-colors: active) {
   .documents-table .documents-group--issue > th { box-shadow: none; border-left: 3px solid CanvasText; }
-  .decision-bar-segment[aria-current] { border-bottom-color: LinkText; }
+  .decision-bar-segment { border-bottom-color: Canvas; }
+  .decision-bar-segment[aria-current] { border-bottom-color: Highlight; }
   .documents-skeleton-bar { background: GrayText; }
   .documents-paging a[aria-disabled="true"] { color: GrayText; }
 }
