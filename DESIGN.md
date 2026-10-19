@@ -236,24 +236,43 @@ Import from `frontend/src/ui/`. Native attributes, event handlers, refs and call
 
 | Component | Props / contract | Use and retained classes |
 | --- | --- | --- |
-| `Button` | Native button attrs except `type`; `variant=primary/secondary/quiet/danger` (secondary default), `size=md/sm`, `type=button/submit`, `loading`, `icon`; forwarded ref. | All actions; one primary per view. `btn`, `btn-{variant}`, `btn-sm`, `btn-spinner`, `btn-leading-icon`. Loading disables and sets busy. |
+| `Button` | Native button attrs except `type`; `variant=primary/secondary/quiet/danger` (secondary default), `size=md/sm`, `type=button/submit`, `loading`, `icon`; forwarded ref. | All actions; one primary per view. `btn`, `btn-{variant}`, `btn-sm`, `btn-spinner`, `btn-leading-icon`. Loading sets `aria-disabled` and `aria-busy` and swallows activation; it is not natively disabled, so a focused button keeps focus. A caller-set `aria-disabled` without `loading` still fires `onClick`, so the caller can explain why the action is unavailable. `.btn[aria-disabled="true"]` looks disabled and does not react to hover. |
 | `IconButton` | Button props without children/icon; required `label`, `icon`. | Labelled compact action; `btn-icon` plus Button classes; aria-label and title. |
 | `Field` | Required `id`, `label`, one control child; optional `hint`, `error`, `required`. | Shared label/error wiring; `form-group`, `form-label`, `field-hint`, `field-hint-error`; merges descriptions, sets invalid. |
 | `TextInput` | `FieldOwn` plus native input attrs; forwarded ref. | Single-line entry; Field classes and `form-control`. |
 | `Textarea` | `FieldOwn` plus native textarea attrs; forwarded ref. | Multiline entry; Field classes and `form-control`. |
 | `Select` | `FieldOwn` plus native select attrs; forwarded ref. | Native choice; Field classes and `form-select`. |
 | `Checkbox` | `id`, `label`, optional hint and native input attrs (no Field error prop); forwarded ref. | Boolean choice; `form-group`, `form-checkbox-row`, `form-checkbox`, `field-hint`. |
-| `Dialog` | `open`, `title`, `children`; optional visible `heading`, `onClose`, `closeOnBackdrop=false`, `initialFocus`, `size=sm/md/lg`, `footer`. | Every modal; `modal-overlay`, `modal-content`, `ui-dialog`, `ui-dialog--{size}`, `ui-dialog-heading`, `ui-dialog-body`, `modal-actions`. Traps/restores focus and locks scroll; only top dialog handles keys. |
+| `Dialog` | `open`, `title`, `children`; optional visible `heading`, `onClose`, `closeOnBackdrop=false`, `initialFocus`, `size=sm/md/lg`, `footer`. | Every modal; `modal-overlay`, `modal-content`, `ui-dialog`, `ui-dialog--{size}`, `ui-dialog-header`, `ui-dialog-heading`, `ui-dialog-close`, `ui-dialog-body`, `modal-actions`. Traps/restores focus and locks scroll; only top dialog handles keys. With `onClose` the header shows a labelled Close icon button, reachable by Tab but never given initial focus. The body scrolls; header and `footer` stay fixed. Below 700 px a `md` dialog becomes a full-height sheet. |
 | `ConfirmDialog` | `open`, `title`, `message`, `confirmLabel`, `onConfirm`, `onCancel`; `cancelLabel=Cancel`, `tone=primary/danger`, `busy=false`. | Explicit decisions; composes Dialog and Button classes. Busy blocks dismissal. |
-| `StatusBadge` | `children`; optional `status`, `tone=neutral/info/success/warning/danger`, `title`. | Status plus dot/ring/check/warning/cross shape; `status-pill`, `status-pill--{tone}`, `status-pill-shape`, `status-pill-dot`, `status-pill-ring`. `statusTone(status)` maps workflow statuses. |
+| `InlineConfirm` | `ConfirmDialog` props minus `open`, plus `children`, `outcome` (`conflict` with `changedBy`, `changedAt`, `onReview` / `error` with `onRetry` / `session`), `headingLevel=3/4` (4 default), `conflictMessage` (replaces the default conflict sentence; the "Changed by … at …" suffix stays), `confirmUnavailable` (`reason` shown below the content, or `reasonId` of a reason the caller renders) with `onConfirmUnavailable`. | Confirmation bound to an item on the page, such as a table row; placement and the one-per-page policy belong to the caller. `inline-confirm`, `inline-confirm-title`, `inline-confirm-message`, `inline-confirm-notice`, `inline-confirm-actions`, `action-reason`. A labelled group; focus moves to the heading on open and to the notice on conflict. Escape cancels only while focus is inside, and is consumed without cancelling while busy. Busy keeps focus: Cancel and Retry use `aria-disabled`, confirm uses `loading`. An unavailable confirm stays focusable with `aria-disabled` and `aria-describedby` pointing at the reason; activating it calls `onConfirmUnavailable`. A conflict hides the children and offers "Review again" and "Close"; error and session outcomes say that nothing was saved. |
+| `StatusBadge` | `children`; optional `status`, `tone=neutral/info/success/warning/danger`, `title`. | Status plus dot/ring/check/warning/cross shape; `status-pill`, `status-pill--{tone}`, `status-pill-shape`, `status-pill-dot`, `status-pill-ring`. `statusTone(status)` maps workflow statuses. Final marker: `<StatusBadge tone="success">Final</StatusBadge>` (check shape from `IconCheck`) on a row with class `final-row` (`success-light` tint, `success` left edge); `is-selected` stays reserved for selection state. |
 | `InlineMessage` | `tone=info/success/warning/error`, `children`; optional `title`, `onDismiss`, `aria-label`. | Errors and feedback; `notice`, `notice-{tone}`, `notice-content`, `notice-title`. Errors are alerts, others statuses. |
-| `DataTable<T>` | `label`, `columns`, `rows`, `rowKey`; optional `initialSort`, `empty`, `rowProps`, `className`. Column: `id`, `header`, `cell`, optional `sortValue`, `width`, `align=start/end`. | Lists of records; `data-table-scroll`, `data-table`, `density-compact`, `data-table-sort`, `data-table-sort-icon`, `is-selected`. Stable sort; `rowProps` retains row handlers/test selectors and selected state. |
+| `DataTable<T>` | `label`, `columns`, `rows`, `rowKey`; optional `initialSort`, `empty`, `rowProps`, `className`, `groups`, `renderExpanded(row)`, `busy`. Column: `id`, `header`, `cell`, optional `sortValue`, `width`, `align=start/end`, `rowHeader`. Group (`DataTableGroup<T>`): `key`, `header`, `rows`, `expanded`, optional `headerProps`. | Lists of records; `data-table-scroll`, `data-table`, `density-compact`, `data-table-sort`, `data-table-sort-icon`, `is-selected`, `data-table-group`, `data-table-expanded`. Stable sort, within groups when grouped; `rowProps` retains row handlers/test selectors and selected state. See "Grouped expandable table". |
 | `EmptyState` | `title`; optional `children`, `action`. | Explain an empty result and next action; `empty-state`, `empty-state-title`, `empty-state-body`, `empty-state-action`. |
 | `Toolbar` | `label`, `children`, optional `className`. | Named, wrapping action group; `toolbar`, role group. |
 | `Kbd` | `children`. | Key label; `kbd`. `formatKey` shortens arrows and Escape. |
 | `AppShell` | `user`, `children`; optional `onLogout`, `breadcrumb`, `actions`, `nav`, `navLabel=Sections`, `density=compact`. Crumb: `label`, optional `onClick` or `href`. | Shared frame; `shell`, `skip-link`, `app-header`, `shell-header`, `shell-heading`, `shell-product`, `shell-subtitle`, `shell-breadcrumb`, `shell-actions`, `current-user`, `shell-body`, `app-nav`, `shell-main`, `density-*`; `#main`, `current-user` test ID. |
+| `useMediaQuery` | `useMediaQuery(query): boolean`. | Hook for layout switches CSS alone cannot make (for example Documents cards below 700 px, `(max-width: 699px)`); false where `matchMedia` is unavailable (tests, server rendering). |
 | `ShortcutHelpHost` | No props; `openShortcutHelp()` opens help. | One effective help owner even with nested hosts; `shortcut-help-group`, `shortcut-help-row`, `shortcut-help-note`. AppShell already mounts it. |
 | `icons.tsx` | Each exported `Icon*` takes optional `className`. | Inline 16px SVG, 1.5px currentColor stroke; `icon`. Hidden from assistive technology; surrounding control supplies name. Available: ChevronLeft/Right, Sort/SortUp/SortDown, Keyboard, Download, Check, Retry, Close, Pencil, Question, Undo, Trash, Warning, Document. |
+
+### Grouped expandable table
+
+`DataTable` options for records that belong to groups or open in place. All are additive; existing props, sorting and classes are unchanged.
+
+- `groups`: one `tbody` per group, starting with a `tr.data-table-group` whose single `th scope="rowgroup"` spans all columns and holds `header` (typically a disclosure button). A collapsed group (`expanded: false`) renders only its header row. `rows` is ignored when `groups` is given. Sorting applies within groups; groups keep their order.
+- `renderExpanded(row)`: non-null content is rendered in a following full-width `tr.data-table-expanded`. The caller owns the disclosure control (`aria-expanded`, `aria-controls`) and the region ID.
+- `Column.rowHeader`: renders that column's cells as `th scope="row"`, so every row has a name.
+- `busy`: sets `aria-busy` on the table while it refreshes.
+
+Disclosure buttons put an `IconChevronRight` with class `disclosure-chevron` inside the control; it rotates 90 degrees while `aria-expanded="true"`. Small table controls use `target-min` (24 x 24 px minimum). Reference use: the Documents page (`documents/DocumentsTable.tsx`) groups rows by case and expands a row into its issues and submissions; below 700 px it switches to cards (`documents/DocumentCards.tsx`).
+
+### Forced colours and motion
+
+- Under `@media (forced-colors: active)`: the Final row gets a `CanvasText` left border instead of the tinted edge; `status-pill` keeps a `CanvasText` outline and its shape icon; `:focus-visible` (and the class-level focus rules of buttons, fields and navigation links) uses a `Highlight` outline; the active segment of the shared `.segment` class (`[aria-current="page"]`) uses `Highlight`. The Documents decision bar styles its own `decision-bar-segment` links the same way (`LinkText` border under forced colours).
+- Expansion (`data-table-expanded` fade-in) and chevron rotation take 150 ms; both are instant under `prefers-reduced-motion: reduce`.
+- The active segment is underlined and bold, not only coloured.
 
 ### Shortcuts
 
@@ -267,7 +286,7 @@ useShortcut("Ctrl+Enter", submit, {
 
 Scopes resolve `dialog` before `screen` before `global`; equal-scope conflicts use reverse registration order without promotion on rerender. Dialogs suppress non-dialog shortcuts. Typing in input/textarea/select/contenteditable, composing text and repeated keys are suppressed by default. Opt into `allowInInputs` or `allowRepeat` only for a justified control interaction; `root` excludes inert hosts. `useShortcutHint` registers help for locally managed keys without adding a global handler; `useRegisteredShortcuts` supplies help rows. Preserve review keys and descriptions during migration.
 
-`Dialog` closes on Escape when `onClose` is supplied. “Case submitted” intentionally has no Escape action. Backdrop dismissal is opt-in. Pending operations can deliberately suppress close. Editor logout with unsaved changes asks “Save and log out” or “Cancel”; saving must finish before logout.
+`Dialog` closes on Escape when `onClose` is supplied. `InlineConfirm` registers Escape with `allowInInputs` and its own `root`, and lets the event fall through unless focus is inside it. “Case submitted” intentionally has no Escape action. Backdrop dismissal is opt-in. Pending operations can deliberately suppress close. Editor logout with unsaved changes asks “Save and log out” or “Cancel”; saving must finish before logout.
 
 ## Do's and Don'ts
 
@@ -276,7 +295,7 @@ Scopes resolve `dialog` before `screen` before `global`; equal-scope conflicts u
 - Do use `Button`, for example `<Button variant="primary" onClick={save}>Save</Button>`.
 - Do use `DataTable` for lists of records, retaining existing row handlers and selectors.
 - Do use `InlineMessage tone="error"` for errors and visible text for every status.
-- Do use `Dialog` for every modal and `ConfirmDialog` for confirmation decisions.
+- Do use `Dialog` for every modal and `ConfirmDialog` for confirmation decisions, except confirmations bound to a row inside a table (final-result selection, replacement, reaffirmation), which use `InlineConfirm`.
 - Do register every new screen's keys with a description and choose the appropriate density.
 
 ### Don't
