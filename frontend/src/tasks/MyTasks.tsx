@@ -59,10 +59,13 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
     const selected = projects.find(item => item.project_key === project);
     options.set(project, selected ? projectLabel(selected.name, selected.project_key) : project || "Empty project filter");
   }
-  // Keep even an empty raw query distinct from All projects without reserving
+  // Keep even an empty raw query distinct from All my tasks without reserving
   // any actual project key as a magic value.
   let allProjectsValue = "";
   while (options.has(allProjectsValue)) allProjectsValue += "_";
+  const showFilter = new Set(tasks.map(task => task.project_key)).size >= 2 || project !== undefined;
+  const count = (predicate: (task: TaskSummary) => boolean) => filtered.filter(predicate).length;
+  const countsLabel = project === undefined ? "Task counts" : `Task counts in ${options.get(project) ?? project}`;
   const managed = projects.filter(item => item.can_manage && (project === undefined || item.project_key === project));
   const columns: Column<TaskSummary>[] = [
     { id: "document", header: "Document", cell: task => task.external_id ?? task.document_id },
@@ -97,11 +100,16 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
       <Button onClick={() => setRetry(value => value + 1)}>Try again</Button>
     </>}
     {state.kind === "ready" && <>
-      <Select id="project-select" label="Project" value={project ?? allProjectsValue} onChange={event => onNavigate(event.target.value === allProjectsValue ? { name: "tasks" } : { name: "tasks", project: event.target.value })}>
-        <option value={allProjectsValue}>All projects</option>
+      {showFilter && <Select id="project-select" label="Filter my tasks by project" value={project ?? allProjectsValue} onChange={event => onNavigate(event.target.value === allProjectsValue ? { name: "tasks" } : { name: "tasks", project: event.target.value })}>
+        <option value={allProjectsValue}>All my tasks</option>
         {[...options].map(([key, name]) => <option key={key} value={key}>{name}</option>)}
-      </Select>
-      <p role="group" aria-label="Task counts">Open: {filtered.filter(task => task.status === "open" || task.status === "reopened").length} · In progress: {filtered.filter(task => task.status === "in_progress").length} · Submitted: {filtered.filter(task => task.status === "submitted").length} · Paused: {filtered.filter(task => task.held).length}</p>
+      </Select>}
+      {tasks.length > 0 && <ul className="task-counts" aria-label={countsLabel}>
+        <li>Open: {count(task => task.status === "open" || task.status === "reopened")}</li>
+        <li>In progress: {count(task => task.status === "in_progress")}</li>
+        <li>Submitted: {count(task => task.status === "submitted")}</li>
+        <li>of which paused: {count(task => task.held)}</li>
+      </ul>}
       {filtered.length === 0 ? empty : <DataTable label="My tasks" className="data-table--pin-end" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${task.document_id}` })} />}
     </>}
   </section>;

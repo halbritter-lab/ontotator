@@ -727,6 +727,9 @@ textarea.form-control {
 .stat-row dt { font-size: var(--size-sm); line-height: var(--leading-sm); color: var(--text-muted); }
 .stat-row dd { margin: 0; font-size: var(--size-xl); line-height: var(--leading-xl); }
 
+/* My tasks counts: a list whose separators are gaps, not glyphs. */
+ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); list-style: none; padding: 0; margin-block: var(--space-3); font-variant-numeric: tabular-nums; }
+
 /* Keeps a row's action column in view while the rest of a wide table scrolls. */
 .data-table--pin-end :is(th, td:not([colspan])):last-child { position: sticky; right: 0; background: var(--surface); box-shadow: inset 1px 0 var(--border); }
 .data-table--pin-end th:last-child { background: var(--surface-sunken); }

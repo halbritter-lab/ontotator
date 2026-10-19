@@ -54,7 +54,7 @@ describe("My tasks component", () => {
     const props = { projects: [], onNavigate };
     const view = render(<MyTasks {...props} />);
     await screen.findAllByTestId("task-row");
-    const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
+    const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
     expect(select.id).toBe("project-select");
     expect(within(select).getByRole("option", { name: "Project Q (q)" })).toBeDefined();
     fireEvent.change(select, { target: { value: "q" } });
@@ -64,7 +64,7 @@ describe("My tasks component", () => {
     view.rerender(<MyTasks {...props} project="q" />);
     expect(select.value).toBe("q");
     expect(screen.getAllByTestId("task-row")).toHaveLength(1);
-    expect(screen.getByLabelText("Task counts").textContent).toMatch(/Open: 0.*In progress: 1.*Submitted: 0/);
+    expect(screen.getByRole("list", { name: /^Task counts/ }).textContent).toMatch(/Open: 0.*In progress: 1.*Submitted: 0/);
     fireEvent.change(select, { target: { value: "" } });
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks" });
     expect(api.listMyTasks).toHaveBeenCalledTimes(1);
@@ -73,7 +73,7 @@ describe("My tasks component", () => {
   it("counts reopened as Open without altering its visible status", async () => {
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
     await screen.findAllByTestId("task-row");
-    expect(screen.getByLabelText("Task counts").textContent).toMatch(/Open: 2.*In progress: 1.*Submitted: 1/);
+    expect(screen.getByRole("list", { name: /^Task counts/ }).textContent).toMatch(/Open: 2.*In progress: 1.*Submitted: 1/);
     expect(screen.getByText("Reopened")).toBeDefined();
   });
 
@@ -92,13 +92,13 @@ describe("My tasks component", () => {
     expect(within(rows[0]).queryByRole("link", { name: "Start" })).toBeNull();
     expect(within(rows[1]).getByText("Submitted")).toBeDefined();
     expect(within(rows[1]).getByText("Paused")).toBeDefined();
-    expect(screen.getByLabelText("Task counts").textContent).toMatch(/Open: 1.*In progress: 1.*Submitted: 1.*Paused: 2/);
+    expect(screen.getByRole("list", { name: /^Task counts/ }).textContent).toMatch(/Open: 1.*In progress: 1.*Submitted: 1.*of which paused: 2/);
     const action = within(rows[0]).getByRole("link", { name: "View paused task" });
     expect(action.getAttribute("href")).toBe("#/tasks/11");
     fireEvent.click(action);
     expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 11 });
     rendered.rerender(<MyTasks project="q" projects={[]} onNavigate={onNavigate} />);
-    expect(screen.getByLabelText("Task counts").textContent).toMatch(/Open: 0.*In progress: 1.*Submitted: 0.*Paused: 0/);
+    expect(screen.getByRole("list", { name: /^Task counts/ }).textContent).toMatch(/Open: 0.*In progress: 1.*Submitted: 0.*of which paused: 0/);
   });
 
   it("distinguishes duplicate project names for filters and same-document task context", async () => {
@@ -109,7 +109,7 @@ describe("My tasks component", () => {
     ]);
     render(<MyTasks projects={[project("p", "Research"), project("q", "Research")]} onNavigate={onNavigate} />);
     const rows = await screen.findAllByTestId("task-row");
-    const select = screen.getByRole("combobox", { name: "Project" });
+    const select = screen.getByRole("combobox", { name: "Filter my tasks by project" });
     expect((within(select).getByRole("option", { name: "Research (p)" }) as HTMLOptionElement).value).toBe("p");
     expect((within(select).getByRole("option", { name: "Research (q)" }) as HTMLOptionElement).value).toBe("q");
     expect(within(rows[0]).getByText("Research (p)")).toBeDefined();
@@ -139,7 +139,7 @@ describe("My tasks component", () => {
   it("keeps a selected empty project visible by its current project summary name", async () => {
     render(<MyTasks project="empty%/project" projects={[project("empty%/project", "Empty project", true)]} onNavigate={vi.fn()} />);
     await screen.findByText("No documents are assigned to you yet.");
-    const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
+    const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
     expect(select.value).toBe("empty%/project");
     expect(select.selectedOptions[0].textContent).toBe("Empty project (empty%/project)");
     expect(screen.getByRole("link", { name: "Assign documents" }).getAttribute("href")).toBe("#/projects/empty%25%2Fproject/documents");
@@ -148,7 +148,7 @@ describe("My tasks component", () => {
   it("keeps unknown route filters without inventing a project or choosing another one", async () => {
     render(<MyTasks project="unavailable" projects={[project("p", "Managed", true)]} onNavigate={vi.fn()} />);
     await screen.findByText("No documents are assigned to you yet.");
-    const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
+    const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
     expect(select.value).toBe("unavailable");
     expect(select.selectedOptions[0].textContent).toBe("unavailable");
     expect(screen.queryByRole("link", { name: /Assign documents/ })).toBeNull();
@@ -161,14 +161,14 @@ describe("My tasks component", () => {
     expect(screen.queryByRole("link", { name: /Assign documents/ })).toBeNull();
   });
 
-  it("keeps an empty raw route filter distinct from All projects", async () => {
+  it("keeps an empty raw route filter distinct from All my tasks", async () => {
     const onNavigate = vi.fn();
     render(<MyTasks project="" projects={[]} onNavigate={onNavigate} />);
     await screen.findByText("No documents are assigned to you yet.");
-    const select = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
+    const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
     expect(select.value).toBe("");
     expect(select.selectedOptions[0].textContent).toBe("Empty project filter");
-    const all = within(select).getByRole("option", { name: "All projects" }) as HTMLOptionElement;
+    const all = within(select).getByRole("option", { name: "All my tasks" }) as HTMLOptionElement;
     fireEvent.change(select, { target: { value: all.value } });
     expect(onNavigate).toHaveBeenCalledWith({ name: "tasks" });
   });
@@ -264,5 +264,55 @@ describe("My tasks component", () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([task(8, "open")]);
     act(() => { notifySessionRestored(); });
     expect(await screen.findByText("doc-8")).toBeDefined();
+  });
+});
+
+describe("My tasks filter and counts", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  const counts = () => screen.getByRole("list", { name: /^Task counts/ });
+
+  it("hides filter and counts for a lead without tasks", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
+    render(<MyTasks projects={[project("p", "Project P", true)]} onNavigate={vi.fn()} />);
+    await screen.findByText("No documents are assigned to you yet.");
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("list", { name: /^Task counts/ })).toBeNull();
+  });
+
+  it("hides the filter for tasks in one project until a filter is active", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([task(1, "open"), task(3, "submitted")]);
+    const view = render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    expect(screen.queryByRole("combobox")).toBeNull();
+    view.rerender(<MyTasks project="p" projects={[]} onNavigate={vi.fn()} />);
+    const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
+    expect(select.value).toBe("p");
+    expect(within(select).getByRole("option", { name: "All my tasks" })).toBeDefined();
+  });
+
+  it("shows the filter for tasks in two projects", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    const select = screen.getByRole("combobox", { name: "Filter my tasks by project" });
+    expect(within(select).getAllByRole("option").map(o => o.textContent)).toEqual(["All my tasks", "Project P (p)", "Project Q (q)"]);
+  });
+
+  it("renders four count items without glyph separators that add up", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([{ ...task(1, "open"), held: true }, task(2, "in_progress"), task(3, "submitted"), task(4, "reopened")]);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    expect(within(counts()).getAllByRole("listitem").map(item => item.textContent)).toEqual([
+      "Open: 2", "In progress: 1", "Submitted: 1", "of which paused: 1",
+    ]);
+    expect(counts().textContent).not.toContain("·");
+    expect(counts().getAttribute("aria-label")).toBe("Task counts");
+  });
+
+  it("names the filtered scope in the counts label", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
+    render(<MyTasks project="q" projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    expect(counts().getAttribute("aria-label")).toBe("Task counts in Project Q (q)");
   });
 });
