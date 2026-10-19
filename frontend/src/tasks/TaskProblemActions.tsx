@@ -1,64 +1,106 @@
-import { useRef, useState } from "react";
-import { api, type AssignmentView, type ProblemReportView } from "../api/client";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import type { AssignmentView, ProblemReportView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { Button, Dialog, InlineMessage, Textarea } from "../ui";
+import { ownPauseActive, ReporterReportCard, type ReporterConfirm } from "../problems/ReporterReportCard";
+import { reportTitle, toolbarEntry } from "../problems/labels";
+import { useTaskReports } from "../problems/useTaskReports";
+import { Button, Dialog, IconWarning, InlineMessage } from "../ui";
 import { ProblemReportForm } from "./ProblemReportForm";
-import { ReportHistory } from "./ReportHistory";
+import "../problems/problems.css";
 
+/**
+ * The editor's "Report problem" toolbar entry and its dialog: the reporter's own reports on this task,
+ * a new report, resume and withdraw. Mounted by the annotation editor and the translation review screen.
+ */
 export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }: { assignment: AssignmentView; onSaveBeforeReport: () => Promise<void>; onRefresh: (assignment: AssignmentView) => void }): JSX.Element {
-  const [open, setOpen] = useState(false), [reports, setReports] = useState<ProblemReportView[] | null>(null);
-  const [drafting, setDrafting] = useState(true);
-  const [error, setError] = useState<unknown>(), [busy, setBusy] = useState(false), [reasons, setReasons] = useState<Record<string, string>>({});
-  const requests = useRef(new Map<string, string>()), writing = useRef(false);
-  const refresh = async () => onRefresh(await api.getAssignmentMetadata(assignment.id));
-  const load = async () => {
-    setBusy(true); setError(undefined);
-    try {
-      const [values, metadata] = await Promise.all([api.listProblemReports(assignment.project_key, assignment.document_id), api.getAssignmentMetadata(assignment.id)]);
-      setReports(values.filter(value => value.assignment_id === assignment.id)); onRefresh(metadata);
+  const { reports, error, reload, put } = useTaskReports(assignment, onRefresh);
+  const [open, setOpen] = useState(false), [view, setView] = useState<"list" | "form">("list");
+  const [busy, setBusy] = useState(false), [notice, setNotice] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ReporterConfirm | null>(null);
+  const [focusReport, setFocusReport] = useState<string | null>(null);
+  const headings = useRef(new Map<string, HTMLHeadingElement>());
+  const newReport = useRef<HTMLButtonElement>(null);
+  const listLabel = useId();
+  const entry = toolbarEntry(reports, assignment.held);
+
+  const openDialog = () => {
+    setNotice(null); setConfirm(null);
+    setView(reports && reports.length === 0 ? "form" : "list");
+    setOpen(true);
+    void reload(true);
+  };
+  const close = () => { setOpen(false); setConfirm(null); setNotice(null); };
+
+  // No report (after the load on open): the dialog shows the new report view directly.
+  useEffect(() => { if (open && view === "list" && reports?.length === 0 && !busy) setView("form"); }, [open, view, reports, busy]);
+  useEffect(() => {
+    if (!focusReport) return;
+    const target = headings.current.get(focusReport);
+    if (target) { target.focus(); setFocusReport(null); }
+  }, [focusReport, reports, view, open]);
+
+  // List view: the first report whose own pause is active, else "New report".
+  const focusTarget = reports?.find(ownPauseActive)?.report_id ?? null;
+  const listFocus = { get current() { return (focusTarget && headings.current.get(focusTarget)) || newReport.current; } } as RefObject<HTMLElement>;
+
+  // Escape / header Close: never while a write is busy; an open confirmation with text asks first.
+  const onListClose = busy ? undefined : () => {
+    if (confirm?.reason.trim()) setConfirm({ ...confirm, askDiscard: true });
+    else if (confirm) setConfirm(null);
+    else close();
+  };
+
+  const causes = (assignment.active_holds ?? []).map((h, index) => {
+    if (h.own_report_id !== null) {
+      const own = reports?.find(r => r.report_id === h.own_report_id);
+      return <p key={`own-${h.own_report_id}-${index}`}>{`Paused by your report "${reportTitle(own?.reason ?? h.reason)}".`}</p>;
     }
-    catch (failure) { setError(failure); }
-    finally { setBusy(false); }
-  };
-  const resume = async (report: ProblemReportView) => {
-    const reason = reasons[report.report_id]?.trim();
-    if (!reason || writing.current) return;
-    writing.current = true; setBusy(true); setError(undefined);
-    const key = JSON.stringify([report.report_id, report.revision, reason]);
-    let request_id = requests.current.get(key);
-    if (!request_id) { request_id = crypto.randomUUID(); requests.current.set(key, request_id); }
-    try {
-      const value = await api.actOnProblemReport(report.report_id, { request_id, expected_revision: report.revision, action: "resume", reason, assignment_ids: [assignment.id] });
-      setReports(values => values?.map(item => item.report_id === value.report_id ? value : item) ?? null);
-      await refresh();
-    } catch (failure) { setError(failure); }
-    finally { writing.current = false; setBusy(false); }
-  };
+    return <p key={`lead-${index}`}>{`Paused by a project lead: ${h.reason}. Only a project lead can release this pause.`}</p>;
+  });
+  const leadActed = (reports ?? []).some(r => r.state === "open" && r.withdrawable === false);
+
   return <>
-    <Button size="sm" disabled={busy} onClick={() => { setDrafting(true); setOpen(true); }}>Report a problem</Button>
-    <Button size="sm" disabled={busy} onClick={() => { setDrafting(false); setOpen(true); void load(); }}>My problem reports</Button>
-    {open && <Dialog open title="Task problem reports" onClose={() => { if (!busy) setOpen(false); }} footer={<>
-      <Button disabled={busy} onClick={() => { void load(); }}>Reload my reports</Button>
-      <Button disabled={busy} onClick={() => setOpen(false)}>Close reports</Button>
+    <Button size="sm" className="problem-entry" onClick={openDialog}>
+      Report problem
+      {entry.badge && <> <span className="problem-badge" aria-hidden="true">{entry.paused && <IconWarning />}{entry.badge}</span></>}
+      <span className="visually-hidden"> {entry.accessibleSuffix}</span>
+    </Button>
+    {open && view === "form" && <ProblemReportForm assignment={assignment} onSaveBeforeReport={onSaveBeforeReport} onBusyChange={setBusy}
+      onAssignmentReload={onRefresh}
+      onCancel={() => { if (reports?.length) setView("list"); else close(); }}
+      onClose={close}
+      onReported={report => {
+        put(report);
+        setNotice("Reported. Your task is paused until you or a project lead resume it.");
+        setFocusReport(report.report_id);
+        setView("list");
+        void reload(true);
+      }}
+      frame={({ body, footer, initialFocus, onClose }) => <Dialog open title="New problem report" size="md" initialFocus={initialFocus} onClose={onClose} footer={footer}>{body}</Dialog>} />}
+    {open && view === "list" && <Dialog open title={`Problems with Task ${assignment.id}`} size="md" initialFocus={listFocus} onClose={onListClose} footer={<>
+      <Button ref={newReport} onClick={() => { setConfirm(null); setNotice(null); setView("form"); }}>New report</Button>
+      <Button variant="quiet" aria-disabled={busy || undefined} onClick={() => { if (!busy) close(); }}>Close</Button>
     </>}>
-      {assignment.held && <InlineMessage tone="warning">Task paused: {assignment.hold_reason ?? "A project problem needs attention."} Your input stays in this editor.</InlineMessage>}
-      {drafting && <ProblemReportForm assignment={assignment} onBusyChange={setBusy} onSaveBeforeReport={onSaveBeforeReport} onReported={report => {
-        setDrafting(false);
-        setReports(values => [report, ...(values ?? []).filter(value => value.report_id !== report.report_id)]);
-        onRefresh({ ...assignment, held: true, hold_reason: report.reason, workflow_revision: assignment.workflow_revision + 1 });
-        void refresh().catch(setError);
-      }} />}
-      {error !== undefined && <ErrorNotice error={error} />}
-      {reports?.map(report => <section key={report.report_id}><h3>My report · {report.state}</h3><p className="annotation-note-history">{report.reason}</p>
-        {report.resolution && <p>Resolution: {report.resolution}</p>}
-        <ReportHistory report={report} />
-        {(report.held_assignment_ids ?? []).includes(assignment.id) && <form onSubmit={event => { event.preventDefault(); void resume(report); }}>
-          <p>Resuming releases this report’s pause on your task. Other active pauses may remain; the report stays open.</p>
-          <Textarea id={`resume-${report.report_id}`} label="Reason to resume" required value={reasons[report.report_id] ?? ""} disabled={busy} onChange={event => setReasons(values => ({ ...values, [report.report_id]: event.target.value }))} />
-          <Button type="submit" loading={busy} disabled={!reasons[report.report_id]?.trim()}>Resume my task</Button>
-        </form>}
-      </section>)}
-      {reports?.length === 0 && <p>No reports from you for this task. A pause added by a lead is described in the task banner; contact the lead to release it.</p>}
+      <div className="problem-task-status">
+        <p>{`Your task: ${assignment.held ? "Paused" : "Active"}`}</p>
+        {causes}
+        {assignment.status === "submitted" && <p>Your submitted result stays unchanged and readable.</p>}
+      </div>
+      {notice && <InlineMessage tone="success">{notice}</InlineMessage>}
+      {reports === null && error !== undefined && <div className="problem-load-error">
+        <ErrorNotice error={error} />
+        <Button onClick={() => { void reload(true); }}>Retry</Button>
+      </div>}
+      {reports && reports.length > 0 && <section aria-labelledby={listLabel} className="reporter-reports">
+        <p id={listLabel} className="reporter-reports-heading"><strong>{`Your reports (${reports.length})`}</strong></p>
+        {reports.map((report: ProblemReportView) => <ReporterReportCard key={report.report_id} report={report} assignment={assignment}
+          confirm={confirm?.reportId === report.report_id ? confirm : null} onConfirmChange={setConfirm}
+          busy={busy} onBusyChange={setBusy}
+          onUpdated={value => { put(value); void reload(true); }}
+          onConflict={() => { void reload(true); }}
+          headingRef={element => { if (element) headings.current.set(report.report_id, element); else headings.current.delete(report.report_id); }} />)}
+      </section>}
+      {leadActed && <p className="field-hint">A project lead has acted on this report. Resume your task with a reason and ask a project lead to close it.</p>}
     </Dialog>}
   </>;
 }

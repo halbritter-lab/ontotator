@@ -18,13 +18,15 @@ it("requires an explicit report and preserves unsaved work when saving fails", a
   const create = vi.spyOn(api, "createProblemReport").mockResolvedValue(report);
   const flush = vi.fn().mockRejectedValue(new Error("Offline save")), reported = vi.fn();
   render(<ProblemReportForm assignment={assignment} onSaveBeforeReport={flush} onReported={reported} />);
-  expect(screen.getByRole("button", { name: "Report and pause my task" })).toHaveProperty("disabled", true);
-  fireEvent.change(screen.getByRole("textbox", { name: /Problem description/ }), { target: { value: "Conflicting source evidence" } });
   fireEvent.click(screen.getByRole("button", { name: "Report and pause my task" }));
-  await screen.findByText("Offline save");
+  await screen.findByText("Describe the problem.");
+  expect(flush).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole("textbox", { name: /What is the problem\?/ }), { target: { value: "Conflicting source evidence" } });
+  fireEvent.click(screen.getByRole("button", { name: "Report and pause my task" }));
+  await screen.findByText("Your latest changes could not be saved. Nothing was reported.");
   expect(create).not.toHaveBeenCalled();
-  expect(screen.getByRole("textbox", { name: /Problem description/ })).toHaveProperty("value", "Conflicting source evidence");
-  fireEvent.click(screen.getByRole("checkbox", { name: /Keep my unsaved input/ }));
+  expect(screen.getByRole("textbox", { name: /What is the problem\?/ })).toHaveProperty("value", "Conflicting source evidence");
+  fireEvent.click(screen.getByRole("checkbox", { name: /Report anyway/ }));
   fireEvent.click(screen.getByRole("button", { name: "Report and pause my task" }));
   await waitFor(() => expect(create).toHaveBeenCalledWith(1, { request_id: expect.any(String), expected_workflow_revision: 4, round_id: "current-round", submission_id: "exact-result", reason: "Conflicting source evidence" }));
   expect(reported).toHaveBeenCalledWith(report);
@@ -33,7 +35,7 @@ it("requires an explicit report and preserves unsaved work when saving fails", a
 it("retries an unchanged report with the same request identity", async () => {
   const create = vi.spyOn(api, "createProblemReport").mockRejectedValueOnce(new Error("Connection lost")).mockResolvedValue(report);
   render(<ProblemReportForm assignment={assignment} onSaveBeforeReport={vi.fn().mockResolvedValue(undefined)} onReported={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox", { name: /Problem description/ }), { target: { value: "Conflicting source evidence" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /What is the problem\?/ }), { target: { value: "Conflicting source evidence" } });
   fireEvent.click(screen.getByRole("button", { name: "Report and pause my task" }));
   await screen.findByText("Connection lost");
   fireEvent.click(screen.getByRole("button", { name: "Report and pause my task" }));
@@ -141,15 +143,22 @@ it("can resume a translation first opened while held without treating the hold a
   expect(save).toHaveBeenCalledWith(17, expect.objectContaining({ expected_revision: 6, text: "Resumed correction" }));
 });
 
-it("resumes only the selected own report pause and refreshes task metadata", async () => {
-  vi.spyOn(api, "listProblemReports").mockResolvedValue([report]);
-  const action = vi.spyOn(api, "actOnProblemReport").mockResolvedValue({ ...report, revision: 3, held_assignment_ids: [] });
-  vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue({ ...assignment, held: false });
+it("resumes only the selected own report pause, reuses the request identity on retry and refreshes task metadata", async () => {
+  const paused = { ...assignment, held: true, hold_reason: report.reason, active_holds: [{ reason: report.reason, created_at: "2026-10-19T01:00:00Z", own_report_id: "report-1" }] };
+  vi.spyOn(api, "listTaskProblemReports").mockResolvedValue([report]);
+  const action = vi.spyOn(api, "actOnProblemReport").mockRejectedValueOnce(new Error("Connection lost")).mockResolvedValue({ ...report, revision: 3, held_assignment_ids: [] });
+  const metadata = vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(paused);
   const refresh = vi.fn();
-  render(<TaskProblemActions assignment={{ ...assignment, held: true, hold_reason: report.reason }} onSaveBeforeReport={vi.fn()} onRefresh={refresh} />);
-  fireEvent.click(screen.getByRole("button", { name: "My problem reports" }));
-  fireEvent.change(await screen.findByRole("textbox", { name: /Reason to resume/ }), { target: { value: "Lead clarified the conflict" } });
+  render(<TaskProblemActions assignment={paused} onSaveBeforeReport={vi.fn()} onRefresh={refresh} />);
+  fireEvent.click(await screen.findByRole("button", { name: /^Report problem Task paused, 1 open report$/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Resume my task…" }));
+  fireEvent.change(screen.getByRole("textbox", { name: /Why can you continue\?/ }), { target: { value: "Lead clarified the conflict" } });
   fireEvent.click(screen.getByRole("button", { name: "Resume my task" }));
-  await waitFor(() => expect(action).toHaveBeenCalledWith("report-1", expect.objectContaining({ action: "resume", expected_revision: 2, assignment_ids: [1], reason: "Lead clarified the conflict" })));
+  await screen.findByText("Could not save. Nothing changed.");
+  metadata.mockResolvedValue({ ...assignment, held: false, active_holds: [] });
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(action).toHaveBeenCalledTimes(2));
+  expect(action.mock.calls[0]).toEqual(action.mock.calls[1]);
+  expect(action).toHaveBeenCalledWith("report-1", expect.objectContaining({ action: "resume", expected_revision: 2, assignment_ids: [1], reason: "Lead clarified the conflict" }));
   await waitFor(() => expect(refresh).toHaveBeenCalledWith(expect.objectContaining({ held: false })));
 });

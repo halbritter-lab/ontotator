@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, type AssignmentView, type RoundInputView } from "../src/api/client";
+import { api, type AssignmentView, type ProblemReportView, type RoundInputView } from "../src/api/client";
 import { RoundInputEvidenceDialog } from "../src/tasks/RoundInputEvidenceDialog";
 import { WorkRoundsDialog } from "../src/tasks/WorkRoundsDialog";
 import { TaskProblemActions } from "../src/tasks/TaskProblemActions";
@@ -36,20 +36,21 @@ describe("B1 task dialogs: Close in the footer", () => {
   });
 });
 
-// B2: obsolete after problem-reports WP6 (WP6 deletes this block).
+// B2: problem-reports WP6 (reporter dialog).
 describe("B2 task problem reports: footer actions", () => {
-  it("puts Reload my reports then Close reports in the footer, both disabled while busy", async () => {
-    vi.spyOn(api, "listProblemReports").mockReturnValue(never());
+  it("puts New report then Close in the problem dialog footer", async () => {
+    const report = { report_id: "r1", assignment_id: 7, reason: "Broken text", state: "open", revision: 1, created_at: "2026-10-19T01:12:00Z",
+      events: [], holds: [], held_assignment_ids: [], withdrawable: false, viewer_label: "ann", viewer_is_lead: false, reporter_label: "ann" } as unknown as ProblemReportView;
+    vi.spyOn(api, "listTaskProblemReports").mockResolvedValue([report]);
     vi.spyOn(api, "getAssignmentMetadata").mockReturnValue(never());
     render(<TaskProblemActions assignment={assignment} onSaveBeforeReport={vi.fn()} onRefresh={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "My problem reports" }));
-    const dialog = screen.getByRole("dialog", { name: "Task problem reports" });
-    const reload = footer(dialog).getByRole("button", { name: "Reload my reports" });
-    const close = footer(dialog).getByRole("button", { name: "Close reports" });
-    notInBody(reload); notInBody(close);
-    expect(reload.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect((close as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.keyDown(dialog, { key: "Escape" });
-    expect(screen.getByRole("dialog", { name: "Task problem reports" })).toBeDefined();
+    await screen.findByRole("button", { name: /^Report problem.*1 open report$/ });
+    fireEvent.click(screen.getByRole("button", { name: /^Report problem/ }));
+    const dialog = screen.getByRole("dialog", { name: "Problems with Task 7" });
+    const create = footer(dialog).getByRole("button", { name: "New report" });
+    const close = footer(dialog).getByRole("button", { name: "Close" });
+    notInBody(create); notInBody(close);
+    expect(create.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: /Reload/ })).toBeNull();
   });
 });
