@@ -48,6 +48,8 @@ export type OpenWorkspaceResponse = components["schemas"]["OpenWorkspaceResponse
 export type WorkRoundView = components["schemas"]["WorkRoundView"];
 export type RoundInputView = components["schemas"]["RoundInputView"];
 export type RoundSourceView = components["schemas"]["RoundSourceView"];
+// Carried review (editor-carried-review plan)
+export type AssignmentSubmissionView = components["schemas"]["AssignmentSubmissionView"];
 export type SourceObligationView = components["schemas"]["SourceObligationView"];
 export type CorrectionAssignmentRequest = components["schemas"]["CorrectionAssignmentRequest"];
 export type ResolveSourceObligationRequest = components["schemas"]["ResolveSourceObligationRequest"];
@@ -708,6 +710,15 @@ export class ApiClient {
 
   async listRoundSources(assignmentId: number): Promise<RoundSourceView[]> {
     return this.request(`/api/v1/assignments/${assignmentId}/round-sources`, { method: "GET" });
+  }
+
+  // Carried review (editor-carried-review plan)
+  async clearRoundInputResolution(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/round-input-resolutions/clear`, { method: "POST", body: JSON.stringify(envelope) });
+  }
+
+  async listAssignmentSubmissions(assignmentId: number): Promise<AssignmentSubmissionView[]> {
+    return this.request(`/api/v1/assignments/${assignmentId}/submissions`, { method: "GET" });
   }
 
   async assignTranslationCorrection(projectKey: string, documentId: string, body: CorrectionAssignmentRequest): Promise<AssignmentView> {

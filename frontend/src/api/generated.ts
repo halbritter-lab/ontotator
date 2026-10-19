@@ -210,6 +210,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/round-input-resolutions/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Input
+         * @description Reset a carried input to unresolved; restores a finding its dismissal removed.
+         */
+        post: operations["clear_input_api_v1_workspaces__workspace_id__round_input_resolutions_clear_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{assignment_id}/round-sources": {
         parameters: {
             query?: never;
@@ -244,6 +264,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assignments/{assignment_id}/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Assignment Submissions */
+        get: operations["list_assignment_submissions_api_v1_assignments__assignment_id__submissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{assignment_id}/problem-reports": {
         parameters: {
             query?: never;
@@ -270,6 +307,40 @@ export interface paths {
         };
         /** Reports */
         get: operations["reports_api_v1_projects__key__problem_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/problem-reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Report */
+        get: operations["get_report_api_v1_problem_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/problem-reports/{report_id}/pause-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pause Candidates */
+        get: operations["pause_candidates_api_v1_problem_reports__report_id__pause_candidates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1514,6 +1585,21 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * ActiveHoldView
+         * @description An active pause on the owner's task; other people's reports stay unnamed.
+         */
+        ActiveHoldView: {
+            /** Reason */
+            reason: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Own Report Id */
+            own_report_id: string | null;
+        };
+        /**
          * ActorRef
          * @description Reference to human or tool actor.
          */
@@ -1568,6 +1654,22 @@ export interface components {
             projects: components["schemas"]["UserProject"][];
             /** Qualification */
             qualification: string | null;
+        };
+        /** AffectedTask */
+        AffectedTask: {
+            /** Assignment Id */
+            assignment_id: number;
+            /** Owner Label */
+            owner_label: string;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review" | "translation_review";
         };
         /**
          * Annotation
@@ -1800,6 +1902,28 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** AssignmentSubmissionView */
+        AssignmentSubmissionView: {
+            /** Submission Id */
+            submission_id: string;
+            /** Round Id */
+            round_id: string | null;
+            /** Round Ordinal */
+            round_ordinal: number | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /** Finding Count */
+            finding_count: number;
+            /** Document Id */
+            document_id: string;
+            /** Language */
+            language: string;
+            /** Version */
+            version: number;
+        };
         /** AssignmentView */
         AssignmentView: {
             /** Id */
@@ -1856,6 +1980,8 @@ export interface components {
             held: boolean;
             /** Hold Reason */
             hold_reason?: string | null;
+            /** Active Holds */
+            active_holds?: components["schemas"]["ActiveHoldView"][];
         };
         /**
          * AxisDefinition
@@ -2879,6 +3005,11 @@ export interface components {
              */
             read_only: boolean;
         };
+        /** OtherActiveHold */
+        OtherActiveHold: {
+            /** Report Id */
+            report_id: string;
+        };
         /** PasswordChange */
         PasswordChange: {
             /** Current Password */
@@ -2909,6 +3040,28 @@ export interface components {
             languages?: string[];
             /** Qualification */
             qualification?: string | null;
+        };
+        /** PauseCandidate */
+        PauseCandidate: {
+            /** Assignment Id */
+            assignment_id: number;
+            /** Owner Label */
+            owner_label: string;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review" | "translation_review";
+            /** Same Text */
+            same_text: boolean;
+            /** Paused By This Report */
+            paused_by_this_report: boolean;
+            /** Reporter Task */
+            reporter_task: boolean;
         };
         /** PendingReanchorRef */
         PendingReanchorRef: {
@@ -3107,10 +3260,55 @@ export interface components {
             /** Held Assignment Ids */
             held_assignment_ids?: number[];
             /** Events */
-            events?: {
-                [key: string]: unknown;
-            }[];
+            events?: components["schemas"]["ReportEventView"][];
             new_round?: components["schemas"]["WorkRoundView"] | null;
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Reporter Label
+             * @default
+             */
+            reporter_label: string;
+            /**
+             * Case Id
+             * @default
+             */
+            case_id: string;
+            /**
+             * Language
+             * @default
+             */
+            language: string;
+            /** Task */
+            task?: ("annotate" | "review" | "translation_review") | null;
+            /** Round Ordinal */
+            round_ordinal?: number | null;
+            /** Current Round Id */
+            current_round_id?: string | null;
+            /** Current Round Ordinal */
+            current_round_ordinal?: number | null;
+            submission?: components["schemas"]["ReportSubmissionRef"] | null;
+            /** State Changed At */
+            state_changed_at?: string | null;
+            /** State Changed By Label */
+            state_changed_by_label?: string | null;
+            /**
+             * Withdrawable
+             * @default false
+             */
+            withdrawable: boolean;
+            /**
+             * Viewer Label
+             * @default
+             */
+            viewer_label: string;
+            /**
+             * Viewer Is Lead
+             * @default false
+             */
+            viewer_is_lead: boolean;
+            /** Holds */
+            holds?: components["schemas"]["ReportHoldView"][];
         };
         /** Profile */
         Profile: {
@@ -3615,6 +3813,78 @@ export interface components {
             /** Code */
             code: string;
         };
+        /** ReportEventView */
+        ReportEventView: {
+            /** Event Id */
+            event_id: string;
+            /** Action */
+            action: string;
+            /** Actor Label */
+            actor_label: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Reason */
+            reason?: string | null;
+            /** Round Id */
+            round_id?: string | null;
+            /** Round Ordinal */
+            round_ordinal?: number | null;
+            /** Abandoned Round Id */
+            abandoned_round_id?: string | null;
+            /** Abandoned Round Ordinal */
+            abandoned_round_ordinal?: number | null;
+            /** Abandoned Translation Draft */
+            abandoned_translation_draft?: {
+                [key: string]: unknown;
+            } | null;
+            /** Affected */
+            affected?: components["schemas"]["AffectedTask"][];
+            /**
+             * Own Task
+             * @default false
+             */
+            own_task: boolean;
+        };
+        /** ReportHoldView */
+        ReportHoldView: {
+            /** Hold Id */
+            hold_id: string;
+            /** Assignment Id */
+            assignment_id: number;
+            /** Owner Label */
+            owner_label: string;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review" | "translation_review";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Label */
+            created_by_label: string;
+            /** Active */
+            active: boolean;
+            /** Released At */
+            released_at?: string | null;
+            /** Released By Label */
+            released_by_label?: string | null;
+            /** Release Action */
+            release_action?: ("resume" | "restart" | "withdraw") | null;
+            /** Release Event Id */
+            release_event_id?: string | null;
+            /** Other Active Holds */
+            other_active_holds?: components["schemas"]["OtherActiveHold"][];
+        };
         /** ReportIssueView */
         ReportIssueView: {
             /** Report Id */
@@ -3633,6 +3903,18 @@ export interface components {
              * @enum {string}
              */
             task_state: "paused" | "resumed";
+        };
+        /** ReportSubmissionRef */
+        ReportSubmissionRef: {
+            /** Submission Id */
+            submission_id: string;
+            /** Round Ordinal */
+            round_ordinal: number | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
         };
         /** ResolveSourceObligationRequest */
         ResolveSourceObligationRequest: {
@@ -4167,6 +4449,36 @@ export interface components {
             evidence: components["schemas"]["EvidenceSnapshot"][];
             /** Decisions */
             decisions: components["schemas"]["ReviewDecision"][];
+            /**
+             * Checked Layer Ids
+             * @default []
+             */
+            checked_layer_ids: string[];
+            /**
+             * Document Checked
+             * @default false
+             */
+            document_checked: boolean;
+            /**
+             * Reanchor Inputs
+             * @default []
+             */
+            reanchor_inputs: components["schemas"]["PendingReanchorRef"][];
+            /**
+             * Reanchor Resolutions
+             * @default []
+             */
+            reanchor_resolutions: components["schemas"]["ReanchorResolution"][];
+            /**
+             * Round Inputs
+             * @default []
+             */
+            round_inputs: components["schemas"]["RoundInputView"][];
+            /**
+             * Round Input Resolutions
+             * @default []
+             */
+            round_input_resolutions: components["schemas"]["RoundInputResolution"][];
         };
         /** SubmissionHistorySummary */
         SubmissionHistorySummary: {
@@ -5390,6 +5702,41 @@ export interface operations {
             };
         };
     };
+    clear_input_api_v1_workspaces__workspace_id__round_input_resolutions_clear_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MutationEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     round_sources_api_v1_assignments__assignment_id__round_sources_get: {
         parameters: {
             query?: never;
@@ -5456,6 +5803,37 @@ export interface operations {
             };
         };
     };
+    list_assignment_submissions_api_v1_assignments__assignment_id__submissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentSubmissionView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     report_api_v1_assignments__assignment_id__problem_reports_post: {
         parameters: {
             query?: never;
@@ -5495,6 +5873,7 @@ export interface operations {
         parameters: {
             query?: {
                 document_id?: string | null;
+                assignment_id?: number | null;
             };
             header?: never;
             path: {
@@ -5511,6 +5890,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemReportView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_report_api_v1_problem_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemReportView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_candidates_api_v1_problem_reports__report_id__pause_candidates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseCandidate"][];
                 };
             };
             /** @description Validation Error */

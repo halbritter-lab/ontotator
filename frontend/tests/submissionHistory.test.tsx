@@ -9,7 +9,8 @@ const summary = { submission_id: 'immutable/submission', document_id: 'target', 
 const detail = { summary, annotations: historical.annotations, evidence: [], decisions: [{
   decision_id: 'decision', target: { annotation_id: 'proposal', version: 'v1' }, outcome: 'uncertain' as const,
   note: 'Review reason remains historical', reviewer_id: 'reader',
-}] };
+}], checked_layer_ids: [], document_checked: false, reanchor_inputs: [], reanchor_resolutions: [],
+  round_inputs: [], round_input_resolutions: [] };
 beforeEach(() => {
   vi.spyOn(api, 'listSubmissionHistory').mockResolvedValue([summary, { ...summary, submission_id: 'later', created_at: '2026-10-18T13:00:00Z' }]);
   vi.spyOn(api, 'getSubmissionHistory').mockResolvedValue(detail);

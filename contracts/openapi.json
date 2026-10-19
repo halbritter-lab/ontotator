@@ -713,6 +713,59 @@
         }
       }
     },
+    "/api/v1/workspaces/{workspace_id}/round-input-resolutions/clear": {
+      "post": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "Clear Input",
+        "description": "Reset a carried input to unresolved; restores a finding its dismissal removed.",
+        "operationId": "clear_input_api_v1_workspaces__workspace_id__round_input_resolutions_clear_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assignments/{assignment_id}/round-sources": {
       "get": {
         "tags": [
@@ -794,6 +847,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assignments/{assignment_id}/submissions": {
+      "get": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "List Assignment Submissions",
+        "operationId": "list_assignment_submissions_api_v1_assignments__assignment_id__submissions_get",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssignmentSubmissionView"
+                  },
+                  "title": "Response List Assignment Submissions Api V1 Assignments  Assignment Id  Submissions Get"
                 }
               }
             }
@@ -895,6 +994,22 @@
               ],
               "title": "Document Id"
             }
+          },
+          {
+            "name": "assignment_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assignment Id"
+            }
           }
         ],
         "responses": {
@@ -908,6 +1023,94 @@
                     "$ref": "#/components/schemas/ProblemReportView"
                   },
                   "title": "Response Reports Api V1 Projects  Key  Problem Reports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/problem-reports/{report_id}": {
+      "get": {
+        "tags": [
+          "problem-reports"
+        ],
+        "summary": "Get Report",
+        "operationId": "get_report_api_v1_problem_reports__report_id__get",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemReportView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/problem-reports/{report_id}/pause-candidates": {
+      "get": {
+        "tags": [
+          "problem-reports"
+        ],
+        "summary": "Pause Candidates",
+        "operationId": "pause_candidates_api_v1_problem_reports__report_id__pause_candidates_get",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PauseCandidate"
+                  },
+                  "title": "Response Pause Candidates Api V1 Problem Reports  Report Id  Pause Candidates Get"
                 }
               }
             }
@@ -4609,6 +4812,38 @@
   },
   "components": {
     "schemas": {
+      "ActiveHoldView": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "own_report_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Report Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason",
+          "created_at",
+          "own_report_id"
+        ],
+        "title": "ActiveHoldView",
+        "description": "An active pause on the owner's task; other people's reports stay unnamed."
+      },
       "ActorRef": {
         "properties": {
           "actor_id": {
@@ -4771,6 +5006,45 @@
           "qualification"
         ],
         "title": "AdminUser"
+      },
+      "AffectedTask": {
+        "properties": {
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "owner_label": {
+            "type": "string",
+            "title": "Owner Label"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review",
+              "translation_review"
+            ],
+            "title": "Task"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "owner_label",
+          "case_id",
+          "language",
+          "task"
+        ],
+        "title": "AffectedTask"
       },
       "Annotation": {
         "properties": {
@@ -5343,6 +5617,69 @@
         ],
         "title": "AssignmentRowRequest"
       },
+      "AssignmentSubmissionView": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recorded At"
+          },
+          "finding_count": {
+            "type": "integer",
+            "title": "Finding Count"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "round_id",
+          "round_ordinal",
+          "recorded_at",
+          "finding_count",
+          "document_id",
+          "language",
+          "version"
+        ],
+        "title": "AssignmentSubmissionView"
+      },
       "AssignmentView": {
         "properties": {
           "id": {
@@ -5467,6 +5804,13 @@
               }
             ],
             "title": "Hold Reason"
+          },
+          "active_holds": {
+            "items": {
+              "$ref": "#/components/schemas/ActiveHoldView"
+            },
+            "type": "array",
+            "title": "Active Holds"
           }
         },
         "type": "object",
@@ -8225,6 +8569,20 @@
         "title": "OpenWorkspaceResponse",
         "description": "Response returned upon opening a workspace."
       },
+      "OtherActiveHold": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "report_id"
+        ],
+        "title": "OtherActiveHold"
+      },
       "PasswordChange": {
         "properties": {
           "current_password": {
@@ -8297,6 +8655,60 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PatchUserRequest"
+      },
+      "PauseCandidate": {
+        "properties": {
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "owner_label": {
+            "type": "string",
+            "title": "Owner Label"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review",
+              "translation_review"
+            ],
+            "title": "Task"
+          },
+          "same_text": {
+            "type": "boolean",
+            "title": "Same Text"
+          },
+          "paused_by_this_report": {
+            "type": "boolean",
+            "title": "Paused By This Report"
+          },
+          "reporter_task": {
+            "type": "boolean",
+            "title": "Reporter Task"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "owner_label",
+          "case_id",
+          "language",
+          "task",
+          "same_text",
+          "paused_by_this_report",
+          "reporter_task"
+        ],
+        "title": "PauseCandidate"
       },
       "PendingReanchorRef": {
         "properties": {
@@ -8898,8 +9310,7 @@
           },
           "events": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ReportEventView"
             },
             "type": "array",
             "title": "Events"
@@ -8913,6 +9324,137 @@
                 "type": "null"
               }
             ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "reporter_label": {
+            "type": "string",
+            "title": "Reporter Label",
+            "default": ""
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id",
+            "default": ""
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": ""
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "annotate",
+                  "review",
+                  "translation_review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "current_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Round Id"
+          },
+          "current_round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Round Ordinal"
+          },
+          "submission": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportSubmissionRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state_changed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Changed At"
+          },
+          "state_changed_by_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Changed By Label"
+          },
+          "withdrawable": {
+            "type": "boolean",
+            "title": "Withdrawable",
+            "default": false
+          },
+          "viewer_label": {
+            "type": "string",
+            "title": "Viewer Label",
+            "default": ""
+          },
+          "viewer_is_lead": {
+            "type": "boolean",
+            "title": "Viewer Is Lead",
+            "default": false
+          },
+          "holds": {
+            "items": {
+              "$ref": "#/components/schemas/ReportHoldView"
+            },
+            "type": "array",
+            "title": "Holds"
           }
         },
         "additionalProperties": false,
@@ -10214,6 +10756,232 @@
         ],
         "title": "RefusedAssignment"
       },
+      "ReportEventView": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "actor_label": {
+            "type": "string",
+            "title": "Actor Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "abandoned_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abandoned Round Id"
+          },
+          "abandoned_round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abandoned Round Ordinal"
+          },
+          "abandoned_translation_draft": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abandoned Translation Draft"
+          },
+          "affected": {
+            "items": {
+              "$ref": "#/components/schemas/AffectedTask"
+            },
+            "type": "array",
+            "title": "Affected"
+          },
+          "own_task": {
+            "type": "boolean",
+            "title": "Own Task",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "action",
+          "actor_label",
+          "created_at"
+        ],
+        "title": "ReportEventView"
+      },
+      "ReportHoldView": {
+        "properties": {
+          "hold_id": {
+            "type": "string",
+            "title": "Hold Id"
+          },
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "owner_label": {
+            "type": "string",
+            "title": "Owner Label"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review",
+              "translation_review"
+            ],
+            "title": "Task"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "created_by_label": {
+            "type": "string",
+            "title": "Created By Label"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "released_by_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released By Label"
+          },
+          "release_action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "resume",
+                  "restart",
+                  "withdraw"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Action"
+          },
+          "release_event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Event Id"
+          },
+          "other_active_holds": {
+            "items": {
+              "$ref": "#/components/schemas/OtherActiveHold"
+            },
+            "type": "array",
+            "title": "Other Active Holds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "hold_id",
+          "assignment_id",
+          "owner_label",
+          "case_id",
+          "language",
+          "task",
+          "created_at",
+          "created_by_label",
+          "active"
+        ],
+        "title": "ReportHoldView"
+      },
       "ReportIssueView": {
         "properties": {
           "report_id": {
@@ -10252,6 +11020,38 @@
           "task_state"
         ],
         "title": "ReportIssueView"
+      },
+      "ReportSubmissionRef": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recorded At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "submission_id",
+          "round_ordinal",
+          "recorded_at"
+        ],
+        "title": "ReportSubmissionRef"
       },
       "ResolveSourceObligationRequest": {
         "properties": {
@@ -11817,6 +12617,51 @@
             },
             "type": "array",
             "title": "Decisions"
+          },
+          "checked_layer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Checked Layer Ids",
+            "default": []
+          },
+          "document_checked": {
+            "type": "boolean",
+            "title": "Document Checked",
+            "default": false
+          },
+          "reanchor_inputs": {
+            "items": {
+              "$ref": "#/components/schemas/PendingReanchorRef"
+            },
+            "type": "array",
+            "title": "Reanchor Inputs",
+            "default": []
+          },
+          "reanchor_resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/ReanchorResolution"
+            },
+            "type": "array",
+            "title": "Reanchor Resolutions",
+            "default": []
+          },
+          "round_inputs": {
+            "items": {
+              "$ref": "#/components/schemas/RoundInputView"
+            },
+            "type": "array",
+            "title": "Round Inputs",
+            "default": []
+          },
+          "round_input_resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/RoundInputResolution"
+            },
+            "type": "array",
+            "title": "Round Input Resolutions",
+            "default": []
           }
         },
         "type": "object",

@@ -12,7 +12,7 @@ import type { RouteLeaveGuard } from "../src/app/router";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const assignment = { ...assigned(workspaceFixture()).assignment, workflow_revision: 4, active_round_id: "current-round", last_submission_id: "exact-result" };
-const report: ProblemReportView = { report_id: "report-1", project_key: "pkg", assignment_id: 1, document_id: "doc", reporter_id: 1, round_id: "current-round", submission_id: "exact-result", reason: "Conflicting source evidence", state: "open", revision: 2, resolution: null, held_assignment_ids: [1], events: [] };
+const report: ProblemReportView = { report_id: "report-1", project_key: "pkg", assignment_id: 1, document_id: "doc", reporter_id: 1, round_id: "current-round", submission_id: "exact-result", reason: "Conflicting source evidence", state: "open", revision: 2, resolution: null, held_assignment_ids: [1], events: [], reporter_label: "Reporter", case_id: "doc", language: "en", withdrawable: false, viewer_label: "Reporter", viewer_is_lead: false };
 
 it("requires an explicit report and preserves unsaved work when saving fails", async () => {
   const create = vi.spyOn(api, "createProblemReport").mockResolvedValue(report);
