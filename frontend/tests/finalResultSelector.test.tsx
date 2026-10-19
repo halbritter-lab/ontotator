@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, expect, it, vi } from 'vitest';
 import { api, ApiError, type FinalPreflight, type SubmissionHistorySummary } from '../src/api/client';
 import { FinalResultSelector } from '../src/variants/FinalResultSelector';
+import { formatDateTime } from '../src/app/labels';
 
 const result = { case_id: 'case', language: 'de', document_id: 'text-v1', submission_id: 'old', revision: 3 };
 const projection = (selections: FinalPreflight['selections'] = []): FinalPreflight => ({ project: 'p', selections, warnings: [], omissions: [], state_digest: 'a'.repeat(64) });
@@ -81,4 +82,13 @@ it('requires conscious reaffirmation of current finite causes without resolving 
   fireEvent.click(reaffirm);
   await waitFor(() => expect(save).toHaveBeenCalledWith('p', { document_id: 'text-v1', submission_id: 'old', expected_revision: 3, acknowledged_cause_ids: ['correction-1'] }));
   expect(save).toHaveBeenCalledTimes(1);
+});
+
+it('labels options with the same local time string as the submission history', async () => {
+  vi.spyOn(api, 'getWorkflowWarnings').mockResolvedValue(projection());
+  render(<FinalResultSelector {...props} />);
+  const select = await screen.findByLabelText('Submitted result') as HTMLSelectElement;
+  const labels = [...select.options].slice(1).map(option => option.textContent);
+  expect(labels).toEqual(expect.arrayContaining(rows.map(row => `${row.author_label} · ${formatDateTime(row.created_at)} · ${row.submission_id}`)));
+  expect(labels.join(' ')).not.toMatch(/T\d\d:\d\d:\d\dZ/);
 });

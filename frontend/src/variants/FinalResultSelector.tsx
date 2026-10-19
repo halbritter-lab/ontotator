@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type SubmissionHistorySummary } from "../api/client";
 import { Button, Checkbox, InlineMessage, Select } from "../ui";
 import { ErrorNotice } from "../admin/ErrorNotice";
+import { formatDateTime } from "../app/labels";
 import { notifyFinalSelectionChanged, useFinalSelectionState } from './finalSelectionState';
 
 interface Props { projectKey: string; documentId: string; caseId: string; language: string; rows: SubmissionHistorySummary[] }
@@ -51,7 +52,7 @@ function FinalResultContent({ projectKey, documentId, caseId, language, rows }: 
       <p>This records your selection decision. Open reports, pauses and source reviews remain separate.</p>
     </div>}
     {eligibleRows.length ? <><Select id={`final-result-${encodeURIComponent(documentId)}`} label="Submitted result" value={eligibleChoice ? chosen : ''} disabled={busy || !state} onChange={event => setChosen(event.target.value)}>
-      <option value="">Choose a result</option>{eligibleRows.map(row => <option key={row.submission_id} value={row.submission_id}>{row.author_label} · {row.created_at} · {row.submission_id}</option>)}
+      <option value="">Choose a result</option>{eligibleRows.map(row => <option key={row.submission_id} value={row.submission_id}>{row.author_label} · {formatDateTime(row.created_at)} · {row.submission_id}</option>)}
     </Select><Button disabled={!eligibleChoice || !state || busy} loading={busy} onClick={() => { void save(); }}>{selected ? "Replace final selection" : "Select final result"}</Button></> : <InlineMessage tone="info">Submit an annotation result before selecting it.</InlineMessage>}
   </section>;
 }
