@@ -16,7 +16,7 @@ it("forced_colors_focus_overrides_the_class_level_focus_selectors", () => {
   const rule = [...block.matchAll(/([^{}]+)\{([^}]*)\}/g)].find(match => match[1].includes(".btn:focus-visible"));
   expect(rule?.[2]).toMatch(/outline: 2px solid Highlight/);
   for (const selector of [".btn:focus-visible", ".form-control:focus-visible", ".form-select:focus-visible", ".shell-nav-link:focus-visible",
-    ".shell-reading-navigation > summary:focus-visible", ".document-tree summary:focus-visible", ".shell-project-selector summary:focus-visible"]) {
+    ".shell-reading-navigation > summary:focus-visible", ".document-tree summary:focus-visible", ".shell-project-link:focus-visible"]) {
     expect(rule?.[1]).toContain(selector);
   }
 });

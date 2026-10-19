@@ -109,10 +109,10 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
 }
 
 async function selectProject(page: Page, key: string) {
-  await page.locator(".shell-project-selector > summary").click();
-  await page.getByLabel("Current project", { exact: true }).selectOption(key);
+  await page.locator(".shell-project-trigger").click();
+  await page.locator(`#shell-project-panel a[href="#/projects/${encodeURIComponent(key)}/documents"]`).click();
   await expect(page).toHaveURL(new RegExp(`#/projects/${key}/documents$`));
-  await page.locator(".shell-project-selector > summary").click();
+  await expect(page.locator("#shell-project-panel")).toBeHidden();
 }
 
 async function openDocumentVersion(page: Page, documentId: string) {

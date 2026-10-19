@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { CurrentUser, ProjectSummary } from "../api/client";
 import { AppShell, type Crumb } from "../ui/AppShell";
 import { routeHref, type Route } from "./router";
-import { Select, TextInput } from "../ui";
+import { ProjectPicker } from "./ProjectPicker";
 
 export interface ShellProps {
   user: CurrentUser;
@@ -33,32 +33,11 @@ function NavigationLink({ destination, current, onNavigate, children }: {
 
 export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children, taskProject }: ShellProps): JSX.Element {
   const [choice, setChoice] = useState<{ username: string; key: string } | null>(null);
-  const [search, setSearch] = useState('');
   const explicitKey = 'key' in route ? route.key : route.name === 'tasks' ? route.project : route.name === 'task' ? taskProject : undefined;
   const currentKey = explicitKey ?? (choice?.username === user.username ? choice.key : undefined);
   const current = projects.find(project => project.project_key === currentKey);
-  const matches = projects.filter(project => `${project.name} ${project.project_key}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
-  const selector = projects.length > 0 && <details className="shell-project-selector">
-    <summary>Project: {current?.name ?? 'Choose project'}</summary>
-    <div className="shell-project-menu">
-      <TextInput id="shell-project-search" type="search" label="Find project" value={search} onChange={event => setSearch(event.target.value)} />
-      <Select id="shell-current-project" label="Current project" value={current?.project_key ?? ''} onChange={event => {
-        const selected = projects.find(project => project.project_key === event.target.value);
-        if (!selected) return;
-        setChoice({ username: user.username, key: selected.project_key });
-        setSearch('');
-        const destination: Route = selected.can_manage
-          ? { name: 'projectDocuments', key: selected.project_key }
-          : { name: 'tasks', project: selected.project_key };
-        onNavigate(destination);
-      }}>
-        <option value="">Choose a project</option>
-        {matches.map(project => <option key={project.project_key} value={project.project_key}>{project.name} ({project.project_key})</option>)}
-      </Select>
-      {!matches.length && <p role="status">No matching projects.</p>}
-      {current && <p className="cell-secondary">Project key: {current.project_key}</p>}
-    </div>
-  </details>;
+  const selector = projects.length > 0 && <ProjectPicker projects={projects} current={current} route={route}
+    onNavigate={onNavigate} onChoose={key => setChoice({ username: user.username, key })} />;
   const link = (destination: Route, label: string) => <li key={destination.name}>
     <NavigationLink destination={destination} current={route} onNavigate={onNavigate}>{label}</NavigationLink>
   </li>;

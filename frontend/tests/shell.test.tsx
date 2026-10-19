@@ -4,6 +4,7 @@ import type { CurrentUser, ProjectSummary } from "../src/api/client";
 import userEvent from "@testing-library/user-event";
 import { Shell, type ShellProps } from "../src/app/Shell";
 import { NotFound } from "../src/app/NotFound";
+import { routeHref } from "../src/app/router";
 
 const user: CurrentUser = { username: "alex", display_name: "Alex", pseudonym: "a1", is_system_admin: false, csrf_token: "test" };
 const project = (key: string, canManage: boolean): ProjectSummary => ({
@@ -58,15 +59,18 @@ describe("role-based shell", () => {
     expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
   });
 
-  it("searches authorized projects and shows sections only for the current project", () => {
+  it("lists authorized projects and shows sections only for the current project", () => {
     const state = props({ projects: [project("first", true), project("reader", false), project("second / α", true)], route: { name: "projectDocuments", key: "first" } });
     render(<Shell {...state} />);
     expect(screen.getAllByRole("link", { name: "Documents" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Documents" }).getAttribute("href")).toBe("#/projects/first/documents");
-    expect(screen.getByText("Project key: first")).toBeTruthy();
-    fireEvent.change(screen.getByRole("searchbox", { name: "Find project" }), { target: { value: "second" } });
-    expect(screen.queryByRole("option", { name: /first/ })).toBeNull();
-    fireEvent.change(screen.getByLabelText("Current project"), { target: { value: "second / α" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Current project: / }));
+    const panel = document.querySelector<HTMLElement>("#shell-project-panel")!;
+    const target = routeHref({ name: "projectDocuments", key: "second / α" });
+    // Every fixture project is named "Research", so the link is found by its destination, not its name.
+    const link = within(panel).getAllByRole("link").find(item => item.getAttribute("href") === target);
+    expect(link, `link to ${target}`).toBeDefined();
+    fireEvent.click(link!);
     expect(state.onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "second / α" });
     expect(screen.queryByText("unauthorized")).toBeNull();
   });
