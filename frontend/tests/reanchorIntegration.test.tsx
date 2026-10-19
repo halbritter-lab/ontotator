@@ -217,12 +217,12 @@ it('blocks submission for an invalidated frozen reanchor resolution and focuses 
   render(<CaseScreen view={view} workspaceId="reanchor-submit" onClose={()=>{}}/>);
   const disclosure = screen.getByRole('button', {name:'HP:1 · phenotype'}).closest('details')!;
   disclosure.open = false;
-  fireEvent.click(screen.getByRole('button',{name:/Finish & Submit Case/}));
+  fireEvent.click(screen.getByRole('button',{name:/Finish & Submit/}));
   const dialog=await screen.findByRole('dialog',{name:'Submit case'});
-  expect(within(dialog).getByText(/1 finding\(s\) after text correction must be re-created/)).toBeTruthy();
+  expect(within(dialog).getByText(/1 finding after text correction is still pending/)).toBeTruthy();
   fireEvent.click(within(dialog).getByRole('checkbox'));
-  expect(within(dialog).getByRole('button',{name:'Submit case'})).toHaveProperty('disabled',true);
-  fireEvent.click(within(dialog).getByRole('button',{name:'Review pending findings after text correction'}));
+  expect(within(dialog).getByRole('button',{name:'Submit case'}).getAttribute('aria-disabled')).toBe('true');
+  fireEvent.click(within(dialog).getAllByRole('button',{name:/^Go to /})[0]);
   await waitFor(()=>expect(screen.getByRole('button',{name:'HP:1 · phenotype'})).toBe(document.activeElement));
   expect(disclosure.open).toBe(true);
   expect(submit).not.toHaveBeenCalled();

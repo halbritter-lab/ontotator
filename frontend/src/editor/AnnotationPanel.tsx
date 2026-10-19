@@ -239,7 +239,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
             });
 
             return (
-              <fieldset key={axis.id} className="form-group axis-field">
+              <fieldset key={axis.id} className="form-group axis-field" data-axis-field={axis.id}>
                 <legend className="form-label">
                   {axis.label} {isRequired && <span style={{ color: "var(--danger)" }}>* (Required)</span>}
                 </legend>

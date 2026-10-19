@@ -45,6 +45,8 @@ export interface SpanEditorHandle {
   ) => void;
   /** Evidence ids whose segments get drag handles. */
   setResizable: (evidenceIds: string[]) => void;
+  /** Scrolls the first mark of the evidence to the middle of the text; unknown ids do nothing. */
+  scrollToEvidence: (evidenceId: string) => void;
   destroy: () => void;
 }
 
@@ -185,6 +187,12 @@ export function mountSpanEditor(
     },
     setResizable: (evidenceIds: string[]) => {
       editor.setResizable(evidenceIds);
+    },
+    scrollToEvidence: (evidenceId: string) => {
+      // The vendor editor renders one `.run` per text run, listing its mention ids in `data-mentions`.
+      const mark = Array.from(container.querySelectorAll<HTMLElement>(".run[data-mentions]"))
+        .find((node) => (node.dataset.mentions ?? "").split(",").includes(evidenceId));
+      mark?.scrollIntoView?.({ block: "center" });
     },
     destroy: () => {
       editor.destroy();

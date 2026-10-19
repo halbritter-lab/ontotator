@@ -147,7 +147,7 @@ describe("CaseScreen integration", () => {
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
       expect(state.onLogout).not.toHaveBeenCalled();
       expect(screen.queryByRole("dialog")).toBeNull();
-      expect(screen.getByRole("button", { name: /Finish & Submit Case/ })).toBeDefined();
+      expect(screen.getByRole("button", { name: /Finish & Submit/ })).toBeDefined();
       act(() => state.leaveGuardRef.current?.(state.onLogout));
       fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -318,12 +318,12 @@ describe("CaseScreen integration", () => {
       .mockRejectedValueOnce(new ApiError(422, "Policy changed", "AXIS_CONFIRMATION_WARNING", { acknowledgement: renewed, warnings: [] })).mockResolvedValue(submission);
     const update = vi.spyOn(api, "applyCommand");
     render(<CaseScreen view={view} workspaceId="warning" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
     const acknowledgementBox = await within(dialog).findByRole("checkbox", { name: "Submit with these unconfirmed values" });
-    expect(within(dialog).getByRole("button", { name: "Continue and submit" })).toHaveProperty("disabled", true);
+    expect(within(dialog).getByRole("button", { name: "Continue and submit" }).getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(acknowledgementBox);
     fireEvent.click(within(dialog).getByRole("button", { name: "Continue and submit" }));
     await waitFor(() => expect(acknowledgementBox).toHaveProperty("checked", false));
@@ -341,7 +341,7 @@ describe("CaseScreen integration", () => {
     vi.spyOn(api, "submitWorkspace").mockRejectedValue(new ApiError(422, "Review defaults", "AXIS_CONFIRMATION_WARNING", { acknowledgement: { draft_revision: view.draft.revision, policy_revision: 1, warning_digest: "warning" }, warnings: [] }));
     const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
     render(<CaseScreen view={view} workspaceId="cancel-warning" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
@@ -491,7 +491,7 @@ describe("CaseScreen integration", () => {
     expect((field as HTMLTextAreaElement).value).toBe("New reason");
     fireEvent.change(field, { target: { value: "  " } }); fireEvent.blur(field);
     expect(apply).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     await screen.findByText("A reason is required for findings without a text span.");
     expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
     act(() => leaveGuardRef.current?.(logout));
@@ -920,7 +920,7 @@ describe("CaseScreen integration", () => {
     vi.spyOn(api, "submitWorkspace").mockResolvedValue(submission);
     render(<CaseScreen view={view} workspaceId="history-after-submit" onClose={vi.fn()} />);
     expect(screen.getByText("No previous submissions yet.")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const confirm = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(within(confirm).getByRole("checkbox", { name: /Entire text checked/ }));
     fireEvent.click(within(confirm).getByRole("button", { name: "Submit case" }));
@@ -933,7 +933,7 @@ describe("CaseScreen integration", () => {
     expect(within(history).getByText("fresh-exact-submission")).toBeDefined();
     expect(within(history).queryByRole("textbox")).toBeNull();
     fireEvent.click(within(history.querySelector(".ui-dialog-body") as HTMLElement).getByRole("button", { name: "Close" }));
-    expect(screen.getByRole("button", { name: /Finish & Submit Case/ })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: /Finish & Submit/ })).toHaveProperty("disabled", true);
   });
 
   it("labels every profile axis and opens a finding with the keyboard", () => {
@@ -960,11 +960,12 @@ describe("CaseScreen integration", () => {
     delete view.draft.annotations![0].annotation.note;
     const submit = vi.spyOn(api, "submitWorkspace");
     render(<CaseScreen view={view} workspaceId="legacy-rules" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(within(dialog).getByRole("checkbox"));
-    expect(within(dialog).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", true);
-    fireEvent.click(within(dialog).getByRole("button", { name: new RegExp(reason.replace(".", "\\.")) }));
+    expect(within(dialog).getByRole("button", { name: "Submit case" }).getAttribute("aria-disabled")).toBe("true");
+    expect(within(dialog).getByText(new RegExp(reason.replace(".", "\\.")))).toBeDefined();
+    fireEvent.click(within(dialog).getAllByRole("button", { name: /^Go to / })[0]);
     expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
     expect(submit).not.toHaveBeenCalled();
     await waitFor(() => expect(allow && requireNote && evidencePolicy === "optional"
@@ -1003,10 +1004,11 @@ describe("CaseScreen integration", () => {
   it("focuses Edit & Replace for a proposal missing its annotation reason", async () => {
     const { view } = proposalView();
     render(<CaseScreen view={view} workspaceId="proposal-reason" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
     expect(within(dialog).getByText(/The reviewer note does not supply the annotation reason/)).toBeDefined();
-    fireEvent.click(within(dialog).getByRole("button", { name: /A reason is required/ }));
+    expect(within(dialog).getByText(/A reason is required/)).toBeDefined();
+    fireEvent.click(within(dialog).getAllByRole("button", { name: /^Go to / })[0]);
     await waitFor(() => expect(screen.getByRole("button", { name: /Edit & Replace/ })).toBe(document.activeElement));
   });
 
@@ -1017,12 +1019,13 @@ describe("CaseScreen integration", () => {
     view.draft.decisions![0].note = "Needs review";
     view.term_statuses = { [`phenotype:${proposal.annotation.term_id}`]: status };
     render(<CaseScreen view={view} workspaceId="invalid-proposal" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     return screen.findByRole("dialog", { name: "Submit case" }).then(async dialog => {
       fireEvent.click(within(dialog).getByRole("checkbox"));
-      expect(within(dialog).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", true);
+      expect(within(dialog).getByRole("button", { name: "Submit case" }).getAttribute("aria-disabled")).toBe("true");
       expect(within(dialog).getByText(/Reject this proposal or use Edit & Replace/)).toBeDefined();
-      fireEvent.click(within(dialog).getByRole("button", { name: new RegExp(`term is ${status}`) }));
+      expect(within(dialog).getByText(new RegExp(`term is ${status}`))).toBeDefined();
+      fireEvent.click(within(dialog).getAllByRole("button", { name: /^Go to / })[0]);
       await waitFor(() => expect(screen.getByRole("button", { name: /Edit & Replace/ })).toBe(document.activeElement));
     });
   });
@@ -1032,7 +1035,7 @@ describe("CaseScreen integration", () => {
     const reload = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(api, "submitWorkspace").mockRejectedValue(new ValidationError("Rules changed", "PROJECT_RULE_VIOLATION", { violations: [] }));
     render(<CaseScreen view={view} workspaceId="stale-policy" onClose={vi.fn()} onReload={reload} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(within(dialog).getByRole("checkbox")); fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
     await screen.findByText(/Reload the case to load the current rules/);
@@ -1046,9 +1049,9 @@ describe("CaseScreen integration", () => {
     const { view, proposal } = proposalView(); view.require_spanless_note = false;
     proposal.annotation.axes_values = { assertion: "present" }; proposal.annotation.axes_defaulted = ["assertion"];
     render(<CaseScreen view={view} workspaceId="proposal-defaults" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
-    await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(screen.getByRole("button", { name: "Review defaulted annotations" }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.click(within(dialog).getAllByRole("button", { name: /^Go to / })[0]);
     await waitFor(() => expect(document.activeElement).toHaveProperty("className", "detail-section review-actions__proposal"));
     expect(within(document.activeElement as HTMLElement).getByText("Defaulted")).toBeDefined();
     expect(screen.getByText(/This proposal is immutable/)).toBeDefined();
@@ -1060,7 +1063,7 @@ describe("CaseScreen integration", () => {
     view.draft.annotations![0].annotation.evidence_refs = [];
     delete view.draft.annotations![0].annotation.note;
     render(<CaseScreen view={view} workspaceId="legacy-optional" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(within(dialog).getByRole("checkbox"));
     expect(within(dialog).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
@@ -1068,11 +1071,11 @@ describe("CaseScreen integration", () => {
 
   it("escape_cancels_the_submit_dialog", async () => {
     render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.keyDown(dialog, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
-    expect(screen.getByRole("button", { name: /Finish & Submit Case/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Finish & Submit/i })).toBeDefined();
   });
 
   it("the_case_submitted_dialog_ignores_escape", async () => {
@@ -1081,7 +1084,7 @@ describe("CaseScreen integration", () => {
       snapshots: [], decisions: [], checked_layer_ids: [], document_checked: true,
     } as any);
     render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(screen.getByRole("checkbox", { name: "Entire text checked for further findings" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit case" }));
@@ -1124,10 +1127,10 @@ describe("CaseScreen integration", () => {
     });
     render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
-    expect(await screen.findByText("1 annotation has defaulted axis values.")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Review defaulted annotations" }));
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("axes-section")));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
+    expect(await screen.findByText(/1 annotation has defaulted axis values/)).toBeDefined();
+    fireEvent.click(document.querySelector<HTMLElement>('[data-open-item="defaulted"] button')!);
+    await waitFor(() => expect((document.activeElement as HTMLElement).closest('[data-axis-field="assertion"]')).not.toBeNull());
     expect((screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText("Defaulted axes")).toBeDefined();
     expect(apply).not.toHaveBeenCalled();
@@ -1168,7 +1171,7 @@ describe("CaseScreen integration", () => {
     fireEvent.keyDown(window, { key: "0" });
     await waitFor(() => expect(record).toHaveBeenLastCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({ outcome: null }) })));
     expect((note as HTMLTextAreaElement).value).toBe("Keep this draft");
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     await screen.findByRole("dialog", { name: /Submit case/i });
     const beforeModal = record.mock.calls.length;
     fireEvent.keyDown(window, { key: "1" });
@@ -1257,7 +1260,7 @@ describe("CaseScreen integration", () => {
     expect(logout).toHaveBeenCalledOnce();
     await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
     expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     expect((await screen.findAllByText(/unresolved proposals require a reviewer note before submitting/)).length).toBeGreaterThan(0);
     expect(screen.queryByRole("dialog", { name: /Submit case/ })).toBeNull();
     expect(submit).not.toHaveBeenCalled();
@@ -1299,7 +1302,7 @@ describe("CaseScreen integration", () => {
     await act(async () => { expect(await departure).toBe(false); });
     const unloading = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(unloading); expect(unloading.defaultPrevented).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: /Submit case/ })).toBeNull());
     expect((await screen.findAllByText(/unresolved proposals require a reviewer note before submitting/)).length).toBeGreaterThan(0);
     const note = screen.getByRole("textbox", { name: "Reviewer note" });
@@ -1307,7 +1310,7 @@ describe("CaseScreen integration", () => {
     expect(record).not.toHaveBeenCalled(); expect(submit).not.toHaveBeenCalled();
     fireEvent.change(note, { target: { value: "Corrected reviewer note" } }); fireEvent.blur(note);
     await waitFor(() => expect(record).toHaveBeenCalledOnce());
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     expect(await screen.findByRole("dialog", { name: /Submit case/ })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Reviewer note" }), { target: { value: "" } });
@@ -1451,12 +1454,12 @@ describe("CaseScreen integration", () => {
     view.layers!.push({ ...view.layers![0], layer_id: "hidden", label: "Hidden", default_visible: false });
     view.scope!.editable_layer_ids.push("hidden");
     render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
     expect(dialog.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
     fireEvent.click(screen.getByRole("checkbox", { name: "Entire text checked for further findings" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     await screen.findByRole("dialog", { name: /Submit case/i });
     expect((screen.getByRole("checkbox", { name: "Entire text checked for further findings" }) as HTMLInputElement).checked).toBe(false);
     expect(screen.queryByText(/Verified layers:/)).toBeNull();
@@ -1478,7 +1481,7 @@ describe("CaseScreen integration", () => {
       const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
       return { promise, resolve, reject };
     };
-    const finishButton = () => screen.getByRole("button", { name: /Finish & Submit Case/i });
+    const finishButton = () => screen.getByRole("button", { name: /Finish & Submit/i });
 
     it("waits for the save and validates against the saved draft", async () => {
       const view = twoLayerView();

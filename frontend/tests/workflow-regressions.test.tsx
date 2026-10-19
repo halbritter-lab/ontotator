@@ -238,7 +238,7 @@ it("allows clearing an existing review decision back to offen", async () => {
  await waitFor(() => expect(decide).toHaveBeenCalled());
  expect(decide.mock.calls[0][1].payload.outcome).toBeNull();
  expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v1" });
- await waitFor(() => expect(screen.getByText(/open|offen/i)).toBeDefined());
+ await waitFor(() => expect(within(document.querySelector<HTMLElement>(".sidebar")!).getByText(/open|offen/i)).toBeDefined());
 });
 
 it("keeps a repeated outcome explicit and resets only through zero", async () => {

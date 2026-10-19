@@ -56,6 +56,7 @@ import { submissionHistoryLabel } from "../editor/submissionHistoryLabel";
 import { FindingRow } from "../editor/FindingRow";
 import { SubmitCaseDialog } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
+import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
 import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
 import { axisOptionLabel, findingAxes } from "../editor/axisLabels";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -1988,44 +1989,104 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   });
   const defaulted = defaultedResults(completionResults);
   const defaultedKeys = new Set(defaulted.map(s => refKey({ annotation_id: s.annotation.annotation_id, version: s.version })));
-  const [focusDefaultedAxes, setFocusDefaultedAxes] = useState(false);
-  useEffect(() => {
-    if (!focusDefaultedAxes || submitDialogOpen) return;
-    const panel = inspectorRef.current?.querySelector<HTMLElement>('[data-testid="axes-section"], .review-actions__proposal');
-    if (panel) { panel.tabIndex = -1; panel.focus(); setFocusDefaultedAxes(false); }
-  }, [focusDefaultedAxes, submitDialogOpen, selectedAnnotationId, selectedTargetId]);
-  const reviewDefaulted = () => {
-    const first = defaulted[0];
-    if (!first) return;
-    const layerId = first.annotation.layer_id;
-    setLayerSelection(previous => ({ ...previous, activeLayerId: layerId,
-      activeTypeId: first.annotation.type_id,
-      visibleLayerIds: previous.visibleLayerIds.includes(layerId) ? previous.visibleLayerIds : [...previous.visibleLayerIds, layerId] }));
-    const target = reviewTargets.find(t => refKey(t) === refKey({ annotation_id: first.annotation.annotation_id, version: first.version }));
-    setSelectedTargetId(target ? refKey(target) : null);
-    setSelectedAnnotationId(target ? null : first.annotation.annotation_id);
-    setSelectedSourceId(null); setSelectedEvidenceId(null); cancelPending();
-    setMobilePane("details"); setSubmitDialogOpen(false); setFocusDefaultedAxes(true);
+  /** Axis definitions (id, label) of a snapshot's layer and type. */
+  const axisDefinitions = (snapshot: SnapshotLike) => view.layers?.find(layer => layer.layer_id === snapshot.annotation.layer_id)?.annotation_types
+    .find(type => type.type_id === snapshot.annotation.type_id)?.axes ?? view.axes_config ?? [];
+  const reviewTargetOf = (snapshot: AnnotationSnapshot) =>
+    reviewTargets.find(t => refKey(t) === refKey({ annotation_id: snapshot.annotation.annotation_id, version: snapshot.version }));
+  /** Evidence id of the snapshot's first mark in the text (proposal marks use their own ids). */
+  const firstEvidenceId = (snapshot: AnnotationSnapshot): string | undefined => {
+    const target = reviewTargetOf(snapshot);
+    if (!target) return snapshot.annotation.evidence_refs?.[0]?.evidence_id;
+    const evidence = snapshot.evidence?.[0];
+    return evidence ? `target:${target.annotation_id}:${target.version}:${evidence.mention.evidence_id}:${evidence.version}` : undefined;
+  };
+  const snapshotTerm = (snapshot: SnapshotLike) => termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id) ?? snapshot.annotation.term_id;
+  const findingRef = (snapshot: AnnotationSnapshot) => {
+    const target = reviewTargetOf(snapshot);
+    return { annotationId: snapshot.annotation.annotation_id, term: snapshotTerm(snapshot),
+      ...(target ? { targetKey: refKey(target) } : {}), evidenceId: firstEvidenceId(snapshot) };
+  };
+  // Server axis warnings that still apply: the value is empty or still a default (as the server checks).
+  const unconfirmedEntries = axisWarning ? completionResults.flatMap(snapshot => {
+    const warned = new Set(axisWarning.warnings.filter(warning => warning.annotationId === snapshot.annotation.annotation_id).map(warning => warning.axis));
+    const axes = axisDefinitions(snapshot);
+    const position = (id: string) => { const index = axes.findIndex(axis => axis.id === id); return index < 0 ? axes.length : index; };
+    const open = [...warned].filter(axis => {
+      const value = snapshot.annotation.axes_values?.[axis];
+      return value === null || value === undefined || value === "" || (snapshot.annotation.axes_defaulted ?? []).includes(axis);
+    }).sort((a, b) => position(a) - position(b));
+    if (!open.length) return [];
+    const label = (id: string) => axes.find(axis => axis.id === id)?.label ?? id;
+    return [{ ...findingRef(snapshot), axisId: open[0], axisLabel: label(open[0]),
+      values: open.map(axis => `${label(axis)} = ${axisOptionLabel(snapshot.annotation.axes_values?.[axis])}`).join(", ") }];
+  }) : [];
+  const openItems = collectOpenItems({
+    carried: carried.states.filter(state => state.unchecked).map(state => {
+      const home = state.homeId ? draft.annotations?.find(snapshot => snapshot.annotation.annotation_id === state.homeId) : undefined;
+      return { state, term: carriedTermText(home ?? state.input.source_snapshot), instruction: carriedInstruction(state) ?? "Check needed.",
+        evidenceId: home?.annotation.evidence_refs?.[0]?.evidence_id };
+    }),
+    evidence: submissionIssues.map(({ snapshot, reason, remedy, focus }) => ({ ...findingRef(snapshot), reason, remedy, focus })),
+    reanchor: pendingReanchorItems.filter(item => !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? []))
+      .map(item => ({ key: reanchorKey(item), term: termLabel(item.layer_id, item.term_id) ?? item.term_id })),
+    unconfirmed: unconfirmedEntries,
+    openTargets: view.key.mode === "review" ? openReviewTargets.map(target => {
+      const snapshot = (view.available_inputs ?? []).find(s => s.annotation.annotation_id === target.annotation_id && s.version === target.version);
+      return { key: refKey(target), term: snapshot ? snapshotTerm(snapshot) : target.annotation_id, evidenceId: snapshot ? firstEvidenceId(snapshot) : undefined };
+    }) : [],
+    defaulted: defaulted.map(snapshot => {
+      const axes = axisDefinitions(snapshot), defaultedAxes = snapshot.annotation.axes_defaulted ?? [];
+      return { ...findingRef(snapshot), axisId: axes.find(axis => defaultedAxes.includes(axis.id))?.id ?? defaultedAxes[0] };
+    }),
+  });
+
+  /** Control of an open item in the inspector: an axis item focuses its axis field, else the item's selector. */
+  const openItemControl = (item: OpenItem) => (root: HTMLElement): HTMLElement | null => {
+    if (!item.axisId) return root.querySelector<HTMLElement>(item.focus);
+    const field = Array.from(root.querySelectorAll<HTMLElement>("[data-axis-field]")).find(element => element.dataset.axisField === item.axisId);
+    const control = field?.querySelector<HTMLElement>('input[type="radio"]:checked:not(:disabled)')
+      ?? field?.querySelector<HTMLElement>('input[type="radio"]:not(:disabled)')
+      ?? field?.querySelector<HTMLElement>("select:not(:disabled)");
+    if (control) return control;
+    // Proposals show their values read-only: focus the values section instead.
+    const panel = root.querySelector<HTMLElement>('[data-testid="axes-section"], .review-actions__proposal');
+    if (panel) panel.tabIndex = -1;
+    return panel;
+  };
+  const [textScrollRequest, setTextScrollRequest] = useState<{ evidenceId: string; nonce: number } | null>(null);
+  const lastOpenItem = useRef<string | null>(null);
+  /** "Go to {term}": close the dialog, select the row, scroll the text to its mark and focus the resolving control. */
+  const goToOpenItem = (item: OpenItem) => {
+    setSubmitDialogOpen(false);
+    lastOpenItem.current = item.key;
+    if (item.kind === "reanchor") { reviewPendingReanchor(item.key.slice("reanchor:".length)); return; }
+    const listKey = item.listKey;
+    if (!listKey) return;
+    const kind = listKey.slice(0, listKey.indexOf(":")), id = listKey.slice(listKey.indexOf(":") + 1);
+    const snapshot = kind === "target" ? (view.available_inputs ?? []).find(s => refKey({ annotation_id: s.annotation.annotation_id, version: s.version }) === id)
+      : kind === "annotation" ? draft.annotations?.find(s => s.annotation.annotation_id === id) : undefined;
+    if (snapshot) {
+      const ann = snapshot.annotation;
+      setLayerSelection(previous => ({ ...previous, activeLayerId: ann.layer_id, activeTypeId: ann.type_id,
+        visibleLayerIds: [...new Set([...previous.visibleLayerIds, ann.layer_id])] }));
+    }
+    selectListKey(listKey);
+    const evidenceId = item.evidenceId;
+    if (evidenceId) {
+      setSelectedEvidenceId(evidenceId);
+      setTextScrollRequest(previous => ({ evidenceId, nonce: (previous?.nonce ?? 0) + 1 }));
+    }
+    setFocusRequest({ key: listKey, find: openItemControl(item) });
+  };
+  const goToNextOpenItem = () => {
+    const item = nextOpenItem(openItems, selectedListKey, lastOpenItem.current);
+    if (item) goToOpenItem(item);
   };
 
-  const [repairFocus, setRepairFocus] = useState<string | null>(null);
-  useEffect(() => {
-    if (!repairFocus || submitDialogOpen) return;
-    const control = inspectorRef.current?.querySelector<HTMLElement>(repairFocus);
-    if (control) { control.focus(); control.scrollIntoView?.({ block: "nearest" }); setRepairFocus(null); }
-  }, [repairFocus, submitDialogOpen, selectedAnnotationId, selectedTargetId]);
-  const reviewEvidenceIssue = (snapshot: AnnotationSnapshot, focus: string) => {
-    const ann = snapshot.annotation;
-    setLayerSelection(previous => ({ ...previous, activeLayerId: ann.layer_id, activeTypeId: ann.type_id,
-      visibleLayerIds: [...new Set([...previous.visibleLayerIds, ann.layer_id])] }));
-    const target = reviewTargets.find(t => refKey(t) === refKey({ annotation_id: ann.annotation_id, version: snapshot.version }));
-    setSelectedTargetId(target ? refKey(target) : null); setSelectedAnnotationId(target ? null : ann.annotation_id);
-    setSelectedSourceId(null); setSelectedEvidenceId(null); cancelPending();
-    setMobilePane("details"); setSubmitDialogOpen(false);
-    setRepairFocus(focus);
-  };
-  const reviewPendingReanchor = () => {
-    const item = pendingReanchorItems.find(item => !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? []));
+  const reviewPendingReanchor = (key?: string) => {
+    const item = pendingReanchorItems.find(item => (key === undefined || reanchorKey(item) === key)
+      && !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? []));
     if (!item) return;
     setSubmitDialogOpen(false); setMobilePane("list");
     requestAnimationFrame(() => {
@@ -2389,6 +2450,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             onSubmit={() => { void handleSubmitWorkspace(); }}
             disabled={readOnly || submitPending}
             pending={submitPending}
+            openCount={readOnly ? null : openItems.length}
+            onNextOpen={goToNextOpenItem}
           />
         </div>
       </Toolbar>
@@ -2674,6 +2737,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           resizableEvidenceIds={resizableEvidenceIds}
           onResizeMention={(evidenceId, segments) => { void handleResizeMention(evidenceId, segments); }}
           resyncToken={textResyncToken}
+          scrollRequest={textScrollRequest}
         />
 
         {/* Right: Annotation & Search Panel + Review Actions */}
@@ -2935,7 +2999,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         open={submitDialogOpen}
         documentId={view.document.document_id}
         reviewMode={view.key.mode === "review"}
-        completionResults={completionResults}
+        resultCount={completionResults.length}
         confirmedCount={confirmedCount}
         unresolvedDecisionCount={(draft.decisions ?? []).filter(d => d.outcome === "uncertain").length}
         savedFindingsCount={(draft.annotations ?? []).length}
@@ -2943,31 +3007,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         openReviewTargetCount={openReviewTargets.length}
         pendingReanchorCount={pendingReanchorItems.length}
         unresolvedReanchorCount={unresolvedReanchorCount}
-        pendingCarriedCount={pendingCarriedCount}
-        defaultedCount={defaulted.length}
-        submissionIssues={submissionIssues}
+        items={openItems}
         axisWarning={axisWarning}
         axisWarningAcknowledged={axisWarningAcknowledged}
         textChecked={textCheckedConfirmed}
         saving={queueState === "saving"}
         readOnly={readOnly}
-        layers={view.layers}
-        termLabel={termLabel}
         setTextChecked={setTextCheckedConfirmed}
         setAxisWarningAcknowledged={setAxisWarningAcknowledged}
-        onReviewEvidenceIssue={reviewEvidenceIssue}
-        onReviewPendingReanchor={reviewPendingReanchor}
-        onReviewCarried={() => {
-          setSubmitDialogOpen(false);
-          const key = nextUncheckedKey(carriedListOrder, carried.openKeys, null, 1);
-          if (!key) return;
-          selectListKey(key);
-          requestAnimationFrame(() => {
-            Array.from(sidebarScrollRef.current?.querySelectorAll<HTMLElement>("[data-list-key]") ?? [])
-              .find(element => element.dataset.listKey === key)?.focus();
-          });
-        }}
-        onReviewDefaulted={reviewDefaulted}
+        onGoTo={goToOpenItem}
         onConfirm={() => { void confirmSubmit(); }}
         onCancel={() => setSubmitDialogOpen(false)}
       />

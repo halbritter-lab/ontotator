@@ -131,7 +131,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     await confirmIdentity();
     await waitFor(() => expect(open).toHaveBeenCalledWith(1));
     expect(inputs).not.toHaveBeenCalled();
-    expect(await screen.findByRole("button", { name: /Finish & Submit Case/i })).toBeDefined();
+    expect(await screen.findByRole("button", { name: /Finish & Submit/i })).toBeDefined();
   });
 
   it("requires and sends explicit round selection when resuming is ambiguous", async () => {
@@ -402,11 +402,11 @@ describe("Submit", () => {
     const onSubmitted = vi.fn();
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} onSubmitted={onSubmitted} />);
     expect(screen.getAllByRole("button", { name: /Submit Case/i })).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
     expect(dialog.textContent).toMatch(/1 annotation\(s\)/);
     const confirm = within(dialog).getByRole("button", { name: /^Submit case$/i }) as HTMLButtonElement;
-    expect(confirm.disabled).toBe(true);
+    expect(confirm.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(confirm);
     expect(submit).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("checkbox", { name: /Entire text checked/i }));
@@ -418,18 +418,18 @@ describe("Submit", () => {
   it("shows open review decisions in the summary and blocks submission", async () => {
     vi.spyOn(api, "submitWorkspace");
     render(<CaseScreen view={reviewView()} workspaceId="ws" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
     expect(dialog.textContent).toMatch(/0 of 1 review proposal\(s\) decided/);
     fireEvent.click(within(dialog).getByRole("checkbox"));
-    expect((within(dialog).getByRole("button", { name: /^Submit case$/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(dialog).getByRole("button", { name: /^Submit case$/i }).getAttribute("aria-disabled")).toBe("true");
   });
 });
 
 describe("Review cases", () => {
   const confirmed = { decision_id: "d", target: { annotation_id: "prop", version: "p-v1" }, outcome: "confirmed" as const, reviewer_id: "dr-a" };
   const submitCase = async () => {
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
     fireEvent.click(within(dialog).getByRole("checkbox"));
     fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
@@ -438,7 +438,7 @@ describe("Review cases", () => {
   it("counts confirmed proposals among the annotations that will be submitted", async () => {
     const own = proposal("own", "o-v1", "HP:0003");
     render(<CaseScreen view={reviewView([confirmed], [own], own.evidence)} workspaceId="ws" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
     expect(dialog.textContent).toMatch(/2 annotation\(s\) will be submitted \(1 confirmed proposal\(s\), 0 unresolved with reviewer flags, 1 saved findings\)/);
   });
@@ -618,7 +618,7 @@ describe("Shortcuts and error handling", () => {
     const onNavigate = vi.fn().mockRejectedValue(new Error("network down"));
     render(<CaseScreen view={baseView()} workspaceId="ws" onClose={vi.fn()} onNavigateCase={onNavigate}
       documentList={[{ ...docs[0], document_id: "doc" }, docs[1]]} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
     fireEvent.click(within(dialog).getByRole("checkbox"));
     fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));

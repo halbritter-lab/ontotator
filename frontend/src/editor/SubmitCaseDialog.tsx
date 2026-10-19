@@ -1,26 +1,18 @@
-import type { AnnotationSnapshot } from "../api/client";
-import type { components } from "../api/generated";
+import { useEffect, useId, useState } from "react";
 import { Button } from "../ui/Button";
 import { Checkbox } from "../ui/Checkbox";
 import { Dialog } from "../ui/Dialog";
 import { InlineMessage } from "../ui/InlineMessage";
-import { axisOptionLabel } from "./axisLabels";
-import { TermName } from "./TermName";
+import { submitBlockedReason, summaryLine, type OpenItem } from "./openItems";
 
-const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
-
-export interface SubmissionIssue {
-  snapshot: AnnotationSnapshot;
-  reason: string;
-  remedy: string;
-  focus: string;
-}
+/** At most this many open items are listed; the rest are reached with "Next open item". */
+const LISTED_ITEMS = 5;
 
 export interface SubmitCaseDialogProps {
   open: boolean;
   documentId: string;
   reviewMode: boolean;
-  completionResults: AnnotationSnapshot[];
+  resultCount: number;
   confirmedCount: number;
   unresolvedDecisionCount: number;
   savedFindingsCount: number;
@@ -28,108 +20,111 @@ export interface SubmitCaseDialogProps {
   openReviewTargetCount: number;
   pendingReanchorCount: number;
   unresolvedReanchorCount: number;
-  pendingCarriedCount: number;
-  defaultedCount: number;
-  submissionIssues: SubmissionIssue[];
+  /** Everything still open, in dialog order (`collectOpenItems`). */
+  items: readonly OpenItem[];
   axisWarning: { warnings: { annotationId: string; axis: string }[] } | null;
   axisWarningAcknowledged: boolean;
   textChecked: boolean;
   saving: boolean;
   readOnly: boolean;
-  layers: components["schemas"]["WorkspaceView"]["layers"];
-  termLabel: (layer: string | undefined, term: string) => string | null;
   setTextChecked: (checked: boolean) => void;
   setAxisWarningAcknowledged: (acknowledged: boolean) => void;
-  onReviewEvidenceIssue: (snapshot: AnnotationSnapshot, focus: string) => void;
-  onReviewPendingReanchor: () => void;
-  onReviewCarried: () => void;
-  onReviewDefaulted: () => void;
+  /** Closes the dialog and goes to the item: selects it, scrolls to its mark and focuses its control. */
+  onGoTo: (item: OpenItem) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 /** Final confirmation before a case is submitted, listing everything that blocks or warns. */
 export function SubmitCaseDialog({
-  open, documentId, reviewMode, completionResults, confirmedCount, unresolvedDecisionCount, savedFindingsCount,
-  reviewTargetCount, openReviewTargetCount, pendingReanchorCount, unresolvedReanchorCount, pendingCarriedCount,
-  defaultedCount, submissionIssues, axisWarning, axisWarningAcknowledged, textChecked, saving, readOnly, layers,
-  termLabel, setTextChecked, setAxisWarningAcknowledged, onReviewEvidenceIssue, onReviewPendingReanchor,
-  onReviewCarried, onReviewDefaulted, onConfirm, onCancel,
+  open, documentId, reviewMode, resultCount, confirmedCount, unresolvedDecisionCount, savedFindingsCount,
+  reviewTargetCount, openReviewTargetCount, pendingReanchorCount, unresolvedReanchorCount, items, axisWarning,
+  axisWarningAcknowledged, textChecked, saving, readOnly, setTextChecked, setAxisWarningAcknowledged, onGoTo,
+  onConfirm, onCancel,
 }: SubmitCaseDialogProps) {
-  return (
-      <Dialog open={open} title="Submit case" heading={<>Submit case {documentId}?</>} onClose={onCancel}>
-        <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
-          {reviewMode ? (
-            <li>
-              {completionResults.length} annotation(s) will be submitted
-              ({confirmedCount} confirmed proposal(s), {unresolvedDecisionCount} unresolved with reviewer flags, {savedFindingsCount} saved findings)
-            </li>
-          ) : (
-            <li>{savedFindingsCount} annotation(s) in this case</li>
-          )}
-          {reviewMode && (
-            <li>
-              {reviewTargetCount - openReviewTargetCount} of {reviewTargetCount} review proposal(s) decided
-              {openReviewTargetCount > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargetCount} still open</strong>}
-            </li>
-          )}
-          {pendingReanchorCount > 0 && <li>{unresolvedReanchorCount} finding(s) after text correction still pending</li>}
+  const reasonId = useId();
+  const [announcement, setAnnouncement] = useState<{ text: string; count: number } | null>(null);
+  useEffect(() => { if (!open) setAnnouncement(null); }, [open]);
 
-        </ul>
-        {submissionIssues.length > 0 && <InlineMessage tone="error">
-          <p>{submissionIssues.length} finding(s) need attention before submission.</p>
-          <ul>{submissionIssues.map(({snapshot, reason, remedy, focus}) => <li key={refKey({ annotation_id: snapshot.annotation.annotation_id, version: snapshot.version })}>
-            <Button variant="quiet" onClick={() => onReviewEvidenceIssue(snapshot, focus)}><TermName termId={snapshot.annotation.term_id ?? snapshot.annotation.annotation_id} label={termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id ?? snapshot.annotation.annotation_id)} />: {reason}</Button><p>{remedy}</p>
-          </li>)}</ul>
-        </InlineMessage>}
-        {unresolvedReanchorCount > 0 && <InlineMessage tone="error">
-          <p>{unresolvedReanchorCount} finding(s) after text correction must be re-created or dismissed with a reason.</p>
-          <Button onClick={onReviewPendingReanchor}>Review pending findings after text correction</Button>
-        </InlineMessage>}
-        {pendingCarriedCount > 0 && <InlineMessage tone="error">
-          <p>{pendingCarriedCount} carried finding(s) still need review before submission.</p>
-          <Button onClick={onReviewCarried}>Review carried findings</Button>
-        </InlineMessage>}
-        {defaultedCount > 0 && <InlineMessage tone="warning">
-          <p>{defaultedCount} {defaultedCount === 1 ? "annotation has" : "annotations have"} defaulted axis values.</p>
-          <Button onClick={onReviewDefaulted}>Review defaulted annotations</Button>
-        </InlineMessage>}
-        {axisWarning && <InlineMessage tone="warning" title="Review unconfirmed clinical values">
-          <p>These values have not been explicitly confirmed. Continuing records acknowledgement of this warning; it keeps the clinical values and their defaulted status unchanged.</p>
-          <ul>{axisWarning.warnings.map(({ annotationId, axis }) => {
-            const snapshot = completionResults.find(value => value.annotation.annotation_id === annotationId);
-            const definition = layers?.find(layer => layer.layer_id === snapshot?.annotation.layer_id)?.annotation_types.find(type => type.type_id === snapshot?.annotation.type_id)?.axes?.find(value => value.id === axis);
-            return <li key={`${annotationId}/${axis}`}>{snapshot ? termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id) ?? snapshot.annotation.term_id : annotationId}: {definition?.label ?? axis} = {axisOptionLabel(snapshot?.annotation.axes_values?.[axis])}</li>;
-          })}</ul>
-          <Checkbox id="submit-axis-warning" label="Submit with these unconfirmed values" checked={axisWarningAcknowledged} disabled={saving} onChange={event => setAxisWarningAcknowledged(event.target.checked)} />
-        </InlineMessage>}
-        <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
-          <input
-            type="checkbox"
-            checked={textChecked}
-            onChange={(e) => setTextChecked(e.target.checked)}
-          />
-          <span>Entire text checked for further findings</span>
-        </label>
-        {reviewMode && openReviewTargetCount > 0 && (
-          <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
-            Decide every review proposal before submitting.
-          </p>
+  const blockedReason = readOnly ? "This case is read-only."
+    : submitBlockedReason(items)
+    ?? (!textChecked ? "Confirm that the entire text was checked before submitting."
+      : axisWarning !== null && !axisWarningAcknowledged ? "Confirm “Submit with these unconfirmed values” before submitting."
+      : null);
+  const blocking = items.some(item => item.blocking);
+  const firstCarried = items.find(item => item.kind === "carried");
+  const listed = items.slice(0, LISTED_ITEMS);
+
+  const submit = () => {
+    if (blockedReason) {
+      // Re-mounting the text makes screen readers read the same sentence again.
+      setAnnouncement(previous => ({ text: blockedReason, count: (previous?.count ?? 0) + 1 }));
+      return;
+    }
+    onConfirm();
+  };
+
+  return (
+    <Dialog open={open} title="Submit case" heading={<>Submit case {documentId}?</>} onClose={onCancel}
+      footer={<>
+        <Button
+          type="button"
+          variant="primary"
+          loading={saving}
+          aria-disabled={blockedReason ? true : undefined}
+          aria-describedby={blockedReason ? reasonId : undefined}
+          onClick={submit}
+        >
+          {axisWarning ? "Continue and submit" : "Submit case"}
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+      </>}>
+      <ul style={{ margin: "8px 0 12px", paddingLeft: 18, fontSize: "0.9rem" }}>
+        {reviewMode ? (
+          <li>
+            {resultCount} annotation(s) will be submitted
+            ({confirmedCount} confirmed proposal(s), {unresolvedDecisionCount} unresolved with reviewer flags, {savedFindingsCount} saved findings)
+          </li>
+        ) : (
+          <li>{savedFindingsCount} annotation(s) in this case</li>
         )}
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <Button
-            type="button"
-            variant="primary"
-            loading={saving}
-            disabled={readOnly || !textChecked || (axisWarning !== null && !axisWarningAcknowledged) || submissionIssues.length > 0 || unresolvedReanchorCount > 0 || pendingCarriedCount > 0 || (reviewMode && openReviewTargetCount > 0)}
-            onClick={onConfirm}
-          >
-            {axisWarning ? "Continue and submit" : "Submit case"}
-          </Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
-      </Dialog>
+        {reviewMode && (
+          <li>
+            {reviewTargetCount - openReviewTargetCount} of {reviewTargetCount} review proposal(s) decided
+            {openReviewTargetCount > 0 && <strong style={{ color: "var(--danger)" }}> – {openReviewTargetCount} still open</strong>}
+          </li>
+        )}
+        {pendingReanchorCount > 0 && <li>{unresolvedReanchorCount} finding(s) after text correction still pending</li>}
+      </ul>
+      {items.length > 0 && <InlineMessage tone={blocking ? "error" : "warning"}>
+        <p>{summaryLine(items)}</p>
+        {firstCarried && <Button variant="secondary" size="sm" onClick={() => onGoTo(firstCarried)}>Go to first unchecked</Button>}
+        <ul style={{ paddingLeft: 18 }}>
+          {listed.map(item => <li key={item.key} data-open-item={item.kind}>
+            <strong>{item.term}</strong> <span>{item.line}</span>{" "}
+            <Button variant="quiet" size="sm" onClick={() => onGoTo(item)}>Go to {item.term}</Button>
+          </li>)}
+        </ul>
+        {items.length > LISTED_ITEMS && <p>and {items.length - LISTED_ITEMS} more</p>}
+      </InlineMessage>}
+      {axisWarning && <InlineMessage tone="warning" title="Review unconfirmed clinical values">
+        <p>These values have not been explicitly confirmed. Continuing records acknowledgement of this warning; it keeps the clinical values and their defaulted status unchanged.</p>
+        <Checkbox id="submit-axis-warning" label="Submit with these unconfirmed values" checked={axisWarningAcknowledged} disabled={saving} onChange={event => setAxisWarningAcknowledged(event.target.checked)} />
+      </InlineMessage>}
+      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
+        <input
+          type="checkbox"
+          checked={textChecked}
+          onChange={(e) => setTextChecked(e.target.checked)}
+        />
+        <span>Entire text checked for further findings</span>
+      </label>
+      {blockedReason && <p id={reasonId} className="form-hint" data-submit-blocked-reason>{blockedReason}</p>}
+      <div className="visually-hidden" aria-live="assertive" data-submit-announcer>
+        {announcement && <span key={announcement.count}>{announcement.text}</span>}
+      </div>
+    </Dialog>
   );
 }
