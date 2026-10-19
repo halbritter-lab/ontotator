@@ -221,8 +221,8 @@ test("sidebar transitions at 1024 and 700 px; findings tab label", async ({ page
 });
 
 test("320 px reflow without horizontal scrolling in every pane", async ({ page }) => {
-  // Phone height: the toolbar wraps to several lines at 320 px, so the list needs the height.
-  await page.setViewportSize({ width: 320, height: 844 });
+  // 320 × 640: the wrapping toolbar scrolls away; the findings rows stay reachable and clickable.
+  await page.setViewportSize({ width: 320, height: 640 });
   await openT5(page);
   const overflow = () => page.evaluate(() => ({ document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
   const panes: [RegExp, string][] = [[/^Findings/, "findings"], [/^Document$/, "document"], [/^Details$/, "details"]];

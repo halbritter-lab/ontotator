@@ -34,11 +34,13 @@ const baseDraft = () => workspaceFixture().view.draft;
 const draftWith = (revision: number, annotations: AnnotationSnapshot[], resolutions: unknown[] = []): Draft =>
   ({ ...baseDraft(), key: { ...baseDraft().key, round_id: "round-3" }, revision, annotations, round_input_resolutions: resolutions as never });
 
-function setup({ annotations, inputs, resolutions = [], props = {} }: {
+function setup({ annotations, inputs, resolutions = [], props = {}, adjustView }: {
   annotations: AnnotationSnapshot[]; inputs: RoundInputView[]; resolutions?: unknown[]; props?: Record<string, unknown>;
+  adjustView?: (view: ReturnType<typeof workspaceFixture>["view"]) => void;
 }) {
   const view = workspaceFixture().view;
   view.key.round_id = "round-3"; view.draft.key = view.key; view.require_spanless_note = false;
+  adjustView?.(view);
   view.draft.annotations = annotations;
   view.draft.round_input_resolutions = resolutions as never;
   return render(<CaseScreen view={view} workspaceId="round-workspace" roundKind="carry_forward" roundInputs={inputs} onClose={vi.fn()} {...props} />);
@@ -190,6 +192,44 @@ describe("carried finding inspector", () => {
     expect(within(row(container, "input:input-failed")).getByText("Linked to Seizure")).toBeDefined();
     expect(within(row(container, "input:input-failed")).getByText("Check needed")).toBeDefined();
     expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it("Mark in text keeps the original's chosen axis values chosen and its defaulted ones defaulted", async () => {
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_workspace, envelope) => {
+      const payload = envelope.payload as Record<string, unknown>;
+      return draftWith(1, [finding(String(payload.annotation_id), "new-v1")], []);
+    });
+    const missing = input("input-failed", null);
+    missing.source_snapshot.annotation.axes_values = { assertion: "present", temporality: "current" };
+    missing.source_snapshot.annotation.axes_defaulted = ["temporality"];
+    const { container } = setup({ annotations: [], inputs: [missing], adjustView: view => {
+      view.layers![0].annotation_types[0].axes = [
+        { id: "assertion", label: "Assertion", options: ["present", "absent"], allow_empty: true },
+        { id: "temporality", label: "Temporality", options: ["current", "past"], allow_empty: true },
+      ] as never;
+    } });
+    await screen.findByRole("button", { name: "Seizure, carried, not on this text, check needed" });
+    fireEvent.click(row(container, "input:input-failed"));
+    fireEvent.click(within(section()).getByRole("button", { name: "Mark in text" }));
+    const text = container.querySelector(".text-container")!;
+    const node = text.querySelector(".run")!.firstChild!;
+    const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 7);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+    fireEvent.mouseUp(text);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save re-created finding" })); });
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    expect(payloadOf(apply)).toEqual(expect.objectContaining({
+      command: "create_annotation", axes_values: { assertion: "present", temporality: "current" }, chosen_axis_ids: ["assertion"],
+    }));
+  });
+
+  it("lists carried findings and placeholders first, in round-input order", () => {
+    const plain = finding("ann-plain");
+    const carriedB = finding("input-b");
+    const { container } = setup({ annotations: [plain, carriedB], inputs: [input("a", null), input("b", carriedB)] });
+    const keys = Array.from(container.querySelectorAll<HTMLElement>(".sidebar ul.doc-list [data-list-key]"))
+      .map(element => element.dataset.listKey);
+    expect([...new Set(keys)]).toEqual(["input:a", "annotation:input-b", "annotation:ann-plain"]);
   });
 
   it("links a placeholder to an existing finding and completes it", async () => {

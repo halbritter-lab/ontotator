@@ -136,3 +136,33 @@ export function checkStateBadge(variant: CheckVariant): CheckStateBadge {
       return { tone: "warning", label: "Check needed", line: null };
   }
 }
+
+/**
+ * Row keys of the findings list (spec section 1: carried findings lead the list): one row per
+ * carried input in round-input order (its carried finding while it exists, else its placeholder
+ * row), then every other finding in draft order. `annotationIds` is the draft order.
+ */
+export function carriedListOrder(
+  states: readonly Pick<CarriedState, "input" | "carriedId">[],
+  annotationIds: readonly string[],
+): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  const push = (key: string) => { if (!seen.has(key)) { seen.add(key); keys.push(key); } };
+  for (const state of states) push(state.carriedId ? `annotation:${state.carriedId}` : `input:${state.input.input_id}`);
+  for (const id of annotationIds) push(`annotation:${id}`);
+  return keys;
+}
+
+/**
+ * Axes to send as chosen when a carried finding is re-created ("Mark in text"): the original's
+ * non-empty values that were not defaulted, limited to the axes of the target type.
+ */
+export function carriedChosenAxisIds(source: SnapshotLike["annotation"], axisIds: readonly string[]): string[] {
+  const defaulted = new Set(source.axes_defaulted ?? []);
+  const values = source.axes_values ?? {};
+  return axisIds.filter(axis => {
+    const value = values[axis];
+    return value !== null && value !== undefined && value !== "" && !defaulted.has(axis);
+  });
+}

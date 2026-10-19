@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkStateBadge, deriveCarriedStates, nextUncheckedKey, progressText, rowKeyOf } from "../../src/editor/carried/checkState";
+import { carriedChosenAxisIds, carriedListOrder, checkStateBadge, deriveCarriedStates, nextUncheckedKey, progressText, rowKeyOf } from "../../src/editor/carried/checkState";
 
 const snap = (id: string, version = "v1", evidence = 0) => ({ annotation: { annotation_id: id, layer_id: "hpo", type_id: "phenotype", term_id: "HP:1", evidence_refs: Array.from({ length: evidence }, (_, i) => ({ evidence_id: `e${i}`, version: "1" })), axes_values: {}, axes_defaulted: [] }, version, evidence: [], text_sha256: "t1" }) as any;
 const input = (id: string, target: any) => ({ input_id: id, source_submission_id: "s1", source_snapshot: snap("orig"), target_snapshot: target, mapping_status: target ? "carried" : "needs_review" }) as any;
@@ -66,5 +66,26 @@ describe("check state badge", () => {
     expect(checkStateBadge("removed")).toEqual({ tone: "warning", label: "Check needed", line: "The linked finding was deleted" });
     expect(checkStateBadge("checked")).toEqual({ tone: "success", label: "Checked", line: null });
     expect(checkStateBadge("dismissed")).toEqual({ tone: "neutral", label: "Dismissed", line: null });
+  });
+});
+
+describe("carriedListOrder", () => {
+  it("puts carried findings and placeholders first in input order, then the other findings", () => {
+    const states = deriveCarriedStates([input("i1", snap("input-i1")), input("i2", null), input("i3", snap("input-i3"))], [], [snap("ann-1"), snap("input-i3"), snap("input-i1")]);
+    expect(carriedListOrder(states, ["ann-1", "input-i3", "input-i1"])).toEqual(["annotation:input-i1", "input:i2", "annotation:input-i3", "annotation:ann-1"]);
+  });
+  it("keeps the draft order without carried inputs", () => {
+    expect(carriedListOrder([], ["b", "a"])).toEqual(["annotation:b", "annotation:a"]);
+  });
+});
+
+describe("carriedChosenAxisIds", () => {
+  it("keeps the original's chosen, non-empty axes of the target type", () => {
+    const source = { ...snap("orig").annotation, axes_values: { assertion: "present", temporality: "current", onset: "", gone: "x" }, axes_defaulted: ["temporality"] };
+    expect(carriedChosenAxisIds(source, ["assertion", "temporality", "onset"])).toEqual(["assertion"]);
+  });
+  it("chooses nothing when every value was defaulted", () => {
+    const source = { ...snap("orig").annotation, axes_values: { assertion: "present" }, axes_defaulted: ["assertion"] };
+    expect(carriedChosenAxisIds(source, ["assertion"])).toEqual([]);
   });
 });

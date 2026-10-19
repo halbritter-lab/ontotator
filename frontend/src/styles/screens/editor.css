@@ -1888,3 +1888,34 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   .case-viewer.case-comparing .comparison-reading > .readonly-annotation-view { grid-column: 1; grid-row: 3; }
   .case-viewer.case-comparing .compare-pane { grid-row: 4; }
 }
+
+/* Editor root: a full-height column. The workspace wrapper (pane tabs and panes) adds no box
+   above 700 px and while comparing. */
+.case-screen { display: flex; flex-direction: column; height: 100%; }
+.case-workspace { display: contents; }
+
+/* My submissions: a plain list inside the column (no markers outside it), like the other
+   sidebar lists. It never takes the findings list's height: it scrolls on its own. */
+.my-submissions { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.my-submissions > li { overflow-wrap: anywhere; }
+.sidebar > .submission-history { flex: none; max-height: 40%; overflow-y: auto; }
+
+/* Narrow screens: the header and the wrapping case toolbar scroll away with the shell, and the
+   pane tabs plus the open pane fill one viewport below them, so the findings list keeps a usable
+   height at 320 × 640 and nothing overlaps it. */
+@media (max-width: 700px) {
+  .shell-reading:has(.case-screen:not(.case-comparing) .case-workspace) { overflow-y: auto; }
+  .shell-reading:has(.case-screen:not(.case-comparing) .case-workspace) > .shell-body,
+  .shell-reading:has(.case-screen:not(.case-comparing) .case-workspace) .shell-main.density-reading {
+    flex: none;
+    overflow: visible;
+  }
+  .shell-main.density-reading > .case-screen:not(.case-comparing) { flex: none; height: auto; }
+  .case-screen:not(.case-comparing) .case-workspace {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    height: 100dvh;
+  }
+  .case-workspace > .app-layout { flex: 1; min-height: 0; }
+}

@@ -94,6 +94,8 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   await expect(seizure).toContainText("Carried from Round 1");
   await expect(seizure).toContainText("No text span. Check that it still applies to this text.");
   await expect(hypotonia).not.toContainText("Check needed");
+  // Carried rows lead the findings list (spec section 1).
+  await expect(page.locator(".sidebar ul.doc-list [data-list-key]").first()).toContainText("Seizure");
 
   // Check: badge, progress, collapsed section with focus.
   await seizure.click();

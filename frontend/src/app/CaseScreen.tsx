@@ -1,6 +1,6 @@
 import { ReanchorPanel, currentReanchorResolution, reanchorKey, reanchorRef, useReanchorContext } from "../variants/ReanchorPanel";
 import { useCarriedReview } from "../editor/carried/useCarriedReview";
-import { deriveCarriedStates, nextUncheckedKey, rowKeyOf, type CarriedState, type SnapshotLike } from "../editor/carried/checkState";
+import { carriedChosenAxisIds, carriedListOrder as orderCarriedFirst, deriveCarriedStates, nextUncheckedKey, rowKeyOf, type CarriedState, type SnapshotLike } from "../editor/carried/checkState";
 import { carriedFromLine, instructionLine, missingReason, roundName, textSpanLine, valuesLines, whatToCheckContext, type WhatToCheckContext } from "../editor/carried/instructions";
 import { CarriedSection, type CarriedReadOnly } from "../editor/carried/CarriedSection";
 import { ExceptionPanel } from "../editor/carried/ExceptionPanel";
@@ -417,6 +417,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       layerSelection.visibleLayerIds.includes(a.annotation.layer_id)
     );
   }, [draft.annotations, layerSelection.visibleLayerIds]);
+
+  const visibleAnnotationById = useMemo(
+    () => new Map(visibleAnnotations.map(snapshot => [snapshot.annotation.annotation_id, snapshot])), [visibleAnnotations]);
 
   const visibleEvidenceIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1137,13 +1140,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const carriedActive = carried.states.length > 0;
   const pendingCarriedCount = carried.states.filter(state => state.unchecked).length;
   /**
-   * Row order of the findings list: placeholder rows (input order), then every finding in list order,
-   * including findings on hidden layers (going there makes their layer visible).
+   * Row order of the findings list (spec section 1): carried findings and placeholder rows first, in
+   * round-input order, then every other finding in draft order, including findings on hidden layers
+   * (going there makes their layer visible). The rendered list uses the same order.
    */
-  const carriedListOrder = useMemo(() => [
-    ...carried.placeholders.map(state => `input:${state.input.input_id}`),
-    ...(draft.annotations ?? []).map(snapshot => `annotation:${snapshot.annotation.annotation_id}`),
-  ], [carried.placeholders, draft.annotations]);
+  const carriedListOrder = useMemo(() => orderCarriedFirst(carried.states,
+    (draft.annotations ?? []).map(snapshot => snapshot.annotation.annotation_id)), [carried.states, draft.annotations]);
   // Version of the open text: from the round (prop), the case versions or the document list. A text
   // with the source's hash is the source's text, so its version is the source version.
   const currentTextVersion = documentVersion
@@ -1512,7 +1514,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         segments: pending.segments,
         axes_values: pending.reanchorItem?.axes_values ?? (pending.carriedInput ? { ...pending.carriedInput.source_snapshot.annotation.axes_values }
           : { ...initialAxisValues(type?.axes ?? [], termId), ...view.creation_defaults?.[pending.layerId]?.[pending.typeId] }),
-        ...(!pending.reanchorItem ? { chosen_axis_ids: [] } : {}),
+        // A re-created carried finding keeps the original's chosen (not defaulted) axis values as chosen.
+        ...(!pending.reanchorItem ? { chosen_axis_ids: pending.carriedInput
+          ? carriedChosenAxisIds(pending.carriedInput.source_snapshot.annotation, (type?.axes ?? []).map(axis => axis.id))
+          : [] } : {}),
       });
       if (pending.reanchorItem) setResolutionItem(pending.reanchorItem);
       // Linked client-side as the input's result; the input stays "Check needed" (no auto-complete).
@@ -2374,7 +2379,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   return (
     <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []} metadata={view.proposal_sets ?? []} allowPublicFetch={false}>
-    <div ref={rootRef} className={compareOpen ? "case-comparing" : undefined} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div ref={rootRef} className={compareOpen ? "case-screen case-comparing" : "case-screen"}>
       <div className="visually-hidden" aria-live="polite" data-carried-announcer>{carriedAnnouncement}</div>
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
@@ -2516,6 +2521,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           proposalContext={display.value && versions && refForKey(display.selection,versions.refs)?.kind === "proposals"
             ? {projectKey:view.key.project_key,documentId:view.document.document_id,scope:JSON.stringify([versionIdentity,display.selection]),setId:refForKey(display.selection,versions.refs)!.id} : undefined} />
       </div> : <>
+      {/* Pane tabs and panes; on narrow screens one viewport-high block below the scrolling toolbar. */}
+      <div className="case-workspace">
       <nav className="mobile-pane-tabs" aria-label="Select view">
         {([ ["list", carried.openKeys.size > 0 ? `Findings, ${carried.openKeys.size} to check` : "Findings"], ["text", "Document"], ["details", "Details"] ] as const).map(([pane, label]) => (
           <button key={pane} type="button" aria-pressed={mobilePane === pane}
@@ -2685,19 +2692,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               {legacySubmissionHint && <p className="field-hint">{legacySubmissionHint}</p>}
               {carriedActive && <CarriedProgress text={carried.progress} showNext={carried.openKeys.size > 0} onNext={() => { goToUnchecked(1); }} />}
               <ul className="doc-list">
-                {carried.placeholders.map(state => {
-                  const source = state.input.target_snapshot ?? state.input.source_snapshot;
-                  const recreated = recreatedFinding(state);
-                  const linked = state.home === "linked" ? draft.annotations?.find(snapshot => snapshot.annotation.annotation_id === state.homeId) : recreated;
-                  const key = `input:${state.input.input_id}`;
-                  return <PlaceholderRow key={key} state={state}
-                    termLabel={<TermName termId={source.annotation.term_id} label={termLabel(source.annotation.layer_id, source.annotation.term_id)} />}
-                    termText={carriedTermText(source)} instruction={recreated ? null : carriedInstruction(state)}
-                    selected={selectedInputId === state.input.input_id}
-                    linkedTo={linked ? carriedTermText(linked) : undefined}
-                    onActivate={() => { if (selectedInputId === state.input.input_id) handleDeselectAll(); else selectListKey(key); }} />;
-                })}
-                {visibleAnnotations.map((annSnap) => {
+                {carriedListOrder.map(listKey => {
+                  if (listKey.startsWith("input:")) {
+                    const state = carried.placeholders.find(value => `input:${value.input.input_id}` === listKey);
+                    if (!state) return null;
+                    const source = state.input.target_snapshot ?? state.input.source_snapshot;
+                    const recreated = recreatedFinding(state);
+                    const linked = state.home === "linked" ? draft.annotations?.find(snapshot => snapshot.annotation.annotation_id === state.homeId) : recreated;
+                    const key = `input:${state.input.input_id}`;
+                    return <PlaceholderRow key={key} state={state}
+                      termLabel={<TermName termId={source.annotation.term_id} label={termLabel(source.annotation.layer_id, source.annotation.term_id)} />}
+                      termText={carriedTermText(source)} instruction={recreated ? null : carriedInstruction(state)}
+                      selected={selectedInputId === state.input.input_id}
+                      linkedTo={linked ? carriedTermText(linked) : undefined}
+                      onActivate={() => { if (selectedInputId === state.input.input_id) handleDeselectAll(); else selectListKey(key); }} />;
+                  }
+                  const annSnap = visibleAnnotationById.get(listKey.slice("annotation:".length));
+                  if (!annSnap) return null;
                   const isSelected =
                     annSnap.annotation.annotation_id === selectedAnnotationId;
                   const axesValues = annSnap.annotation.axes_values ?? (annSnap.annotation as any).axes?.values ?? {};
@@ -2984,6 +2995,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             onUseTerm={handleUseTreeTerm}
           />
         )}
+      </div>
       </div>
 
       </>}

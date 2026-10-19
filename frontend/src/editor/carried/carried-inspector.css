@@ -9,6 +9,12 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* In the inspector the section sits above the finding's detail sections: same inline padding. */
+.inspector-pane .carried-section {
+  padding: var(--space-4) var(--cell-pad-x);
+  margin-bottom: 0;
+}
+
 .carried-section__title {
   margin: 0;
   font-size: var(--size-md);
