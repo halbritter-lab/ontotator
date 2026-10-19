@@ -24,7 +24,7 @@ import { DocumentsTable, groupName, initialExpandedGroups } from "../documents/D
 import { ExpandedRow, submissionsHeadingId, type ExpandedRowProps, type SelectFinalRequest } from "../documents/ExpandedRow";
 import {
   barChanges, failureOf, FinalConfirm, keepRequest, selectionPayload, selectRequest, successMessage,
-  type CauseLine, type FinalConfirmFailure, type FinalConfirmRequest,
+  type FinalConfirmFailure, type FinalConfirmRequest,
 } from "../documents/FinalConfirm";
 import { acknowledgeableItems, type KeepRequest } from "../documents/SelectionNotice";
 import { RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
@@ -104,17 +104,6 @@ type FocusTarget = { kind: "selected" | "kept" | "row"; rowKey: string };
 
 /** The row's acknowledgeable cause ids as a comparable set. */
 const causeSet = (row: DocumentRowView): string => acknowledgeableItems(row).map(item => item.cause_id).sort().join("\n");
-
-/** The first `count` cause lines of the selection notice holding the Keep trigger, as shown at open. */
-function noticeCauseLines(triggerId: string, count: number): CauseLine[] {
-  const notice = document.getElementById(triggerId)?.closest(".selection-notice");
-  return [...(notice?.querySelectorAll(".selection-notice-lines > li") ?? [])].slice(0, count).map(line => {
-    const copy = line.cloneNode(true) as HTMLElement;
-    const hint = copy.querySelector(".selection-notice-hint");
-    hint?.remove();
-    return { text: (copy.textContent ?? "").trim(), ...(hint?.textContent ? { hint: hint.textContent } : {}) };
-  });
-}
 
 export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
   if (!props.canManage) {
@@ -550,7 +539,7 @@ function ExpandedRowLoader({ row, refresh, projectKey, onOpenConfirm, ...props }
   const data: RowSubmissions | null = submissions.data;
   const onSelectFinal = (request: SelectFinalRequest) => onOpenConfirm(selectRequest(row, data, request.submission, request.triggerId));
   const onKeep = (request: KeepRequest) =>
-    onOpenConfirm(keepRequest(row, data, request.causeIds, request.triggerId, noticeCauseLines(request.triggerId, request.causeIds.length)));
+    onOpenConfirm(keepRequest(row, data, request.causeIds, request.triggerId));
   return <ExpandedRow row={row} projectKey={projectKey} submissions={submissions} onSelectFinal={onSelectFinal} onKeep={onKeep} {...props} />;
 }
 

@@ -1,11 +1,11 @@
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { ApiError, type DecisionBarView, type DocumentRowView, type FinalSelectionSummary, type RowSubmissionView, type RowSubmissions } from "../api/client";
 import type { components } from "../api/generated";
 import { submissionLabel, type SubmissionKind } from "../app/submissionLabels";
 import { Checkbox, InlineConfirm, type InlineConfirmOutcome } from "../ui";
 import { decisionCategoryLabels, workText } from "./labels";
 import { rowKeyOf } from "./RowCells";
-import { OWN_RESULT_REASON, waitingLines } from "./SelectionNotice";
+import { causeLines, OWN_RESULT_REASON, waitingLines } from "./SelectionNotice";
 import { rowSubmissionLabel, submissionVersion } from "./SubmissionsTable";
 
 export type FinalConfirmKind = "use" | "replace" | "keep";
@@ -96,8 +96,10 @@ export function selectRequest(row: DocumentRowView, data: RowSubmissions | null,
 }
 
 /** Keep the current final result and acknowledge every cause shown at open. */
-export function keepRequest(row: DocumentRowView, data: RowSubmissions | null, causeIds: readonly string[], triggerId: string, causeLines: readonly CauseLine[]): FinalConfirmRequest {
+export function keepRequest(row: DocumentRowView, data: RowSubmissions | null, causeIds: readonly string[], triggerId: string): FinalConfirmRequest {
   const final = row.final as FinalSelectionSummary;
+  const lines = causeLines(row, data).filter(line => causeIds.includes(line.causeId))
+    .map(({ text, hint }): CauseLine => (hint ? { text, hint } : { text }));
   return {
     rowKey: rowKeyOf(row), caseId: row.case_id, language: row.language,
     kind: "keep",
@@ -111,7 +113,7 @@ export function keepRequest(row: DocumentRowView, data: RowSubmissions | null, c
     stillOpen: null,
     roundNote: null,
     own: final.is_mine,
-    causeLines: [...causeLines],
+    causeLines: lines,
     waiting: waitingLines(row, data),
   };
 }
@@ -174,21 +176,10 @@ export interface FinalConfirmProps {
 /** The inline Use / Replace / Keep confirmation of the Documents page. */
 export function FinalConfirm({ request, busy, failure, onConfirm, onCancel, onReview }: FinalConfirmProps): JSX.Element {
   const id = useId();
-  const root = useRef<HTMLDivElement>(null);
   const [checked, setChecked] = useState(false);
   const [needsCheck, setNeedsCheck] = useState(false);
   const keep = request.kind === "keep";
   const hintId = `${id}-check-required`;
-
-  // The primary button stays enabled but reads as unavailable until the box is checked.
-  useLayoutEffect(() => {
-    const primary = root.current?.querySelector<HTMLButtonElement>(".inline-confirm-actions .btn-primary");
-    if (!primary || busy) return;
-    if (keep && !checked) primary.setAttribute("aria-disabled", "true");
-    else primary.removeAttribute("aria-disabled");
-    if (keep && needsCheck && !checked) primary.setAttribute("aria-describedby", hintId);
-    else primary.removeAttribute("aria-describedby");
-  });
 
   const target = `${request.caseId} · ${request.language}`;
   const title = request.kind === "use" ? "Use as final result" : request.kind === "replace" ? "Replace final result" : "Keep final result";
@@ -217,7 +208,7 @@ export function FinalConfirm({ request, busy, failure, onConfirm, onCancel, onRe
       : failure.kind === "error" ? { kind: "error", onRetry: onConfirm }
         : { kind: "session" };
 
-  return <div ref={root} className="final-confirm">
+  return <div className="final-confirm">
     <InlineConfirm
       title={title}
       message={message}
@@ -226,10 +217,10 @@ export function FinalConfirm({ request, busy, failure, onConfirm, onCancel, onRe
       outcome={outcome}
       conflictMessage={failure?.kind === "conflict" && failure.ownResult ? `${OWN_RESULT_REASON} Nothing was saved.` : undefined}
       onCancel={onCancel}
-      onConfirm={() => {
-        if (keep && !checked) { setNeedsCheck(true); return; }
-        onConfirm();
-      }}
+      // The primary stays focusable but reads as unavailable until the box is checked.
+      confirmUnavailable={keep && !checked ? { reasonId: needsCheck ? hintId : undefined } : null}
+      onConfirmUnavailable={() => setNeedsCheck(true)}
+      onConfirm={onConfirm}
     >
       {keep && <>
         <Checkbox id={`${id}-reviewed`} label="I reviewed these changes and keep this exact result" checked={checked}

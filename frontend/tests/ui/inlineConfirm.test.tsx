@@ -114,3 +114,38 @@ it("button_order_matches_confirm_dialog_and_heading_level_is_configurable", () =
   expect(screen.getByRole("heading", { level: 3, name: "Use as final" })).toBeTruthy();
   expect(screen.getAllByRole("button").map(button => button.textContent)).toEqual(["Cancel", "Use as final"]);
 });
+
+it("confirm_unavailable_with_a_reason_is_aria_disabled_described_and_calls_the_unavailable_handler", () => {
+  const confirm = vi.fn(), unavailable = vi.fn();
+  const { rerender } = render(<InlineConfirm title="Keep final result" message="m" confirmLabel="Keep as final" onConfirm={confirm} onCancel={vi.fn()}
+    confirmUnavailable={{ reason: "Check the box first." }} onConfirmUnavailable={unavailable} />);
+  const primary = screen.getByRole("button", { name: "Keep as final" });
+  expect(primary.getAttribute("aria-disabled")).toBe("true");
+  expect(document.getElementById(primary.getAttribute("aria-describedby")!)?.textContent).toBe("Check the box first.");
+  fireEvent.click(primary);
+  expect(unavailable).toHaveBeenCalledOnce();
+  expect(confirm).not.toHaveBeenCalled();
+  rerender(<InlineConfirm title="Keep final result" message="m" confirmLabel="Keep as final" onConfirm={confirm} onCancel={vi.fn()} onConfirmUnavailable={unavailable} />);
+  expect(primary.getAttribute("aria-disabled")).toBeNull();
+  expect(primary.getAttribute("aria-describedby")).toBeNull();
+  expect(screen.queryByText("Check the box first.")).toBeNull();
+  fireEvent.click(primary);
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(unavailable).toHaveBeenCalledOnce();
+});
+
+it("confirm_unavailable_can_point_at_a_reason_rendered_by_the_caller_and_swallows_activation_without_handler", () => {
+  const confirm = vi.fn();
+  const { rerender } = render(<InlineConfirm title="t" message="m" confirmLabel="Keep as final" onConfirm={confirm} onCancel={vi.fn()} confirmUnavailable={{}}>
+    <p id="caller-reason">Caller reason</p>
+  </InlineConfirm>);
+  const primary = screen.getByRole("button", { name: "Keep as final" });
+  expect(primary.getAttribute("aria-disabled")).toBe("true");
+  expect(primary.getAttribute("aria-describedby")).toBeNull();
+  fireEvent.click(primary);
+  expect(confirm).not.toHaveBeenCalled();
+  rerender(<InlineConfirm title="t" message="m" confirmLabel="Keep as final" onConfirm={confirm} onCancel={vi.fn()} confirmUnavailable={{ reasonId: "caller-reason" }}>
+    <p id="caller-reason">Caller reason</p>
+  </InlineConfirm>);
+  expect(primary.getAttribute("aria-describedby")).toBe("caller-reason");
+});

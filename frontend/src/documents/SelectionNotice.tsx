@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from "react";
 import type { DocumentRowView, RowItemView, RowSubmissions } from "../api/client";
-import { personLabel, roundCell } from "../app/submissionLabels";
+import { formatTime, personLabel, roundCell } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { Button } from "../ui";
 import { statusBadgeText, versionName } from "./labels";
@@ -27,6 +27,18 @@ export function acknowledgeableItems(row: DocumentRowView): RowItemView[] {
 
 interface NoticeLine { key: string; content: ReactNode; hint?: string }
 
+/** A cause line part: plain text or a timestamp shown as a local time label. */
+export type CauseSegment = string | { time: string };
+
+/** One acknowledgeable cause line of the selection notice. */
+export interface NoticeCauseLine {
+  causeId: string;
+  segments: CauseSegment[];
+  /** The line as plain text, timestamps formatted as the notice shows them. */
+  text: string;
+  hint?: string;
+}
+
 function suffix(causeId: string, code: string): string {
   return causeId.startsWith(`${code}:`) ? causeId.slice(code.length + 1) : causeId;
 }
@@ -35,8 +47,8 @@ function chainNameOf(row: DocumentRowView, documentId: string | null): string {
   return row.versions.find(version => version.document_id === documentId)?.chain_name ?? "";
 }
 
-/** One line per acknowledgeable cause, worded as in the spec ("Selection notice"). */
-function causeLine(row: DocumentRowView, data: RowSubmissions | null, item: RowItemView, now?: Date): NoticeLine | null {
+/** Segments and hint of one acknowledgeable cause, worded as in the spec ("Selection notice"). */
+function causeSegments(row: DocumentRowView, data: RowSubmissions | null, item: RowItemView): { segments: CauseSegment[]; hint?: string } | null {
   const rounds = data?.rounds ?? [];
   const submissions = data?.submissions ?? [];
   const roundLabel = (roundId: string | null | undefined) => {
@@ -48,17 +60,19 @@ function causeLine(row: DocumentRowView, data: RowSubmissions | null, item: RowI
   };
   switch (item.code) {
     case "SELECTED_ROUND_ABANDONED":
-      return { key: item.cause_id, content: `${roundLabel(suffix(item.cause_id, item.code))} is abandoned.` };
+      return { segments: [`${roundLabel(suffix(item.cause_id, item.code))} is abandoned.`] };
     case "SELECTED_ROUND_SUPERSEDED": {
       const roundId = suffix(item.cause_id, item.code);
       const successor = rounds.find(entry => entry.predecessor_round_id === roundId);
       const by = successor ? ` by ${roundName({ round_ordinal: successor.round_ordinal, round_id: successor.round_id, kind: successor.kind })}` : "";
-      return { key: item.cause_id, content: `${roundLabel(roundId)} has been superseded${by}.` };
+      return { segments: [`${roundLabel(roundId)} has been superseded${by}.`] };
     }
     case "SELECTED_RESULT_REVISED": {
       const newer = submissions.find(entry => entry.submission_id === suffix(item.cause_id, item.code));
       const roundId = newer?.round_id ?? submissions.find(entry => entry.submission_id === row.final?.submission_id)?.round_id;
-      return { key: item.cause_id, content: <>{roundLabel(roundId)} has a newer submission{newer ? <> (<Time iso={newer.recorded_at} now={now} />)</> : null}.</> };
+      return { segments: newer
+        ? [`${roundLabel(roundId)} has a newer submission (`, { time: newer.recorded_at }, ")."]
+        : [`${roundLabel(roundId)} has a newer submission.`] };
     }
     case "SELECTED_NEWER_RESULT": {
       const newer = submissions.find(entry => entry.submission_id === suffix(item.cause_id, item.code));
@@ -66,7 +80,9 @@ function causeLine(row: DocumentRowView, data: RowSubmissions | null, item: RowI
         ? [roundName(newer), personLabel(newer.author_label, newer.is_me), submissionVersion(newer.version, newer.chain_name, row.parallel_roots)].join(" · ")
         : "A newer result";
       const selectedAt = row.final?.selected_at;
-      return { key: item.cause_id, content: <>{subject} was submitted after the final result was chosen{selectedAt ? <> (<Time iso={selectedAt} now={now} />)</> : null}.</> };
+      return { segments: selectedAt
+        ? [`${subject} was submitted after the final result was chosen (`, { time: selectedAt }, ")."]
+        : [`${subject} was submitted after the final result was chosen.`] };
     }
     case "SELECTED_TEXT_CORRECTED": {
       const corrected = row.versions.find(version => version.document_id === item.document_id);
@@ -75,14 +91,26 @@ function causeLine(row: DocumentRowView, data: RowSubmissions | null, item: RowI
       const accepted = corrected?.translation_status === "accepted";
       const finalName = row.final?.version != null ? versionName(row.final.version, row.final.chain_name ?? "", row.parallel_roots) : "the final result";
       return {
-        key: item.cause_id,
-        content: `${name}${status ? ` (${status})` : ""} corrects the text of the final result.`,
+        segments: [`${name}${status ? ` (${status})` : ""} corrects the text of the final result.`],
         hint: accepted ? `Keep ${finalName}, or choose a result on ${name} once one exists (assign work in Text versions).` : undefined,
       };
     }
     default:
       return null;
   }
+}
+
+/**
+ * The acknowledgeable cause lines of a row, in server order, exactly as the selection notice
+ * shows them. `now` is the reference for the current-year rule of the time labels.
+ */
+export function causeLines(row: DocumentRowView, data: RowSubmissions | null, now?: Date): NoticeCauseLine[] {
+  return acknowledgeableItems(row).flatMap(item => {
+    const line = causeSegments(row, data, item);
+    if (!line) return [];
+    const text = line.segments.map(part => (typeof part === "string" ? part : formatTime(part.time, { now }))).join("");
+    return [{ causeId: item.cause_id, segments: line.segments, text, ...(line.hint ? { hint: line.hint } : {}) }];
+  });
 }
 
 /** Corrections of the final result's chain whose latest review rejected or queried them. */
@@ -140,17 +168,20 @@ export interface SelectionNoticeProps {
 export function SelectionNotice({ row, data, adjudicatorNotAnnotator = false, onKeep, keepConfirm, unavailable = false, onAnnounce, now }: SelectionNoticeProps): JSX.Element | null {
   const id = useId();
   const causes = acknowledgeableItems(row);
-  const causeLines = causes.map(item => causeLine(row, data, item, now)).filter((line): line is NoticeLine => line !== null);
+  const lines = causeLines(row, data, now);
   const other = notAcceptedLines(row);
   const waiting = row.final ? waitingLines(row, data) : [];
-  if (!causeLines.length && !other.length && !waiting.length && !keepConfirm) return null;
+  if (!lines.length && !other.length && !waiting.length && !keepConfirm) return null;
   const ownBlocked = adjudicatorNotAnnotator && !!row.final?.is_mine;
   const triggerId = `${id}-keep`;
   const reasonId = `${id}-keep-reason`;
   const keepAvailable = causes.length > 0 && !!onKeep && !!row.final;
   return <div className="selection-notice">
     <ul className="selection-notice-lines">
-      {causeLines.map(line => <li key={line.key}>{line.content}{line.hint && <span className="selection-notice-hint">{line.hint}</span>}</li>)}
+      {lines.map(line => <li key={line.causeId}>
+        {line.segments.map((part, index) => (typeof part === "string" ? part : <Time key={index} iso={part.time} now={now} />))}
+        {line.hint && <span className="selection-notice-hint">{line.hint}</span>}
+      </li>)}
       {other.map(line => <li key={line.key}>{line.content}</li>)}
       {waiting.map(line => <li key={line} className="selection-notice-waiting">{line}</li>)}
     </ul>
