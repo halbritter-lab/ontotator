@@ -16,10 +16,9 @@ export function RoundInputEvidenceDialog({ projectKey, input, onClose, labelFor 
     }).catch(failure => { if (active) setError(failure); });
     return () => { active = false; };
   }, [projectKey, input]);
-  return <Dialog open title="Original carried finding" onClose={onClose} size="lg">
+  return <Dialog open title="Original carried finding" onClose={onClose} size="lg" footer={<Button onClick={onClose}>Close original evidence</Button>}>
     <p>Submitted input: <code>{input.source_submission_id}</code></p>
     {error !== undefined ? <ErrorNotice error={error} /> : text === null ? <InlineMessage tone="info">Loading exact original evidence…</InlineMessage>
       : <ReadOnlyAnnotationView text={text} annotations={[input.source_snapshot]} evidence={input.source_snapshot.evidence} labelFor={labelFor} />}
-    <Button onClick={onClose}>Close original evidence</Button>
   </Dialog>;
 }

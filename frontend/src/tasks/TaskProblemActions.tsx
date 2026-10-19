@@ -37,7 +37,10 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }
   return <>
     <Button size="sm" disabled={busy} onClick={() => { setDrafting(true); setOpen(true); }}>Report a problem</Button>
     <Button size="sm" disabled={busy} onClick={() => { setDrafting(false); setOpen(true); void load(); }}>My problem reports</Button>
-    {open && <Dialog open title="Task problem reports" onClose={() => { if (!busy) setOpen(false); }}>
+    {open && <Dialog open title="Task problem reports" onClose={() => { if (!busy) setOpen(false); }} footer={<>
+      <Button disabled={busy} onClick={() => { void load(); }}>Reload my reports</Button>
+      <Button disabled={busy} onClick={() => setOpen(false)}>Close reports</Button>
+    </>}>
       {assignment.held && <InlineMessage tone="warning">Task paused: {assignment.hold_reason ?? "A project problem needs attention."} Your input stays in this editor.</InlineMessage>}
       {drafting && <ProblemReportForm assignment={assignment} onBusyChange={setBusy} onSaveBeforeReport={onSaveBeforeReport} onReported={report => {
         setDrafting(false);
@@ -56,8 +59,6 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }
         </form>}
       </section>)}
       {reports?.length === 0 && <p>No reports from you for this task. A pause added by a lead is described in the task banner; contact the lead to release it.</p>}
-      <Button disabled={busy} onClick={() => { void load(); }}>Reload my reports</Button>
-      <Button disabled={busy} onClick={() => setOpen(false)}>Close reports</Button>
     </Dialog>}
   </>;
 }

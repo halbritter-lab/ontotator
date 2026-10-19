@@ -16,10 +16,9 @@ export function WorkRoundsDialog({ assignment, onClose, onCreate, onOpen, onRelo
       .then(([rounds, sources]) => { if (active) setData({ rounds, sources }); }, failure => { if (active) setError(failure); });
     return () => { active = false; };
   }, [assignment.id, retry]);
-  return <Dialog open title="Work rounds" onClose={onClose} size="lg">
+  return <Dialog open title="Work rounds" onClose={onClose} size="lg" footer={<Button onClick={onClose}>Close</Button>}>
     {error !== undefined ? <><ErrorNotice error={error} /><Button onClick={() => setRetry(value => value + 1)}>Retry round list</Button></> : data
       ? <WorkRoundActions assignment={assignment} rounds={data.rounds} sources={data.sources} onCreate={onCreate} onOpen={onOpen} onReload={onReload} />
       : <InlineMessage tone="info">Loading authorized work rounds…</InlineMessage>}
-    <Button onClick={onClose}>Close</Button>
   </Dialog>;
 }
