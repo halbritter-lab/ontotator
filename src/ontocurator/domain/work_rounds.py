@@ -61,6 +61,48 @@ class RoundInputView(BaseModel):
         return value
 
 
+# Archived rounds (package ``workflow_history``) keep the inputs in the shape
+# older readers validate with extra="forbid"; the ``review_reason`` of a
+# needs-review input travels beside them as ``{input_id: reason}``, a key those
+# readers never look at. Packages without the map import with no reasons.
+ARCHIVED_REVIEW_REASONS = "review_reasons"
+
+
+def archive_round(
+    round_view: dict[str, Any],
+    inputs: Iterable[dict[str, Any]],
+    submission_ids: list[str],
+) -> dict[str, Any]:
+    """The ``workflow_history`` entry of one round, read facts left out."""
+    archived_inputs = []
+    reasons: dict[str, str] = {}
+    for item in inputs:
+        if item.get("review_reason") is not None:
+            reasons[item["input_id"]] = item["review_reason"]
+        archived_inputs.append(
+            {k: v for k, v in item.items() if k not in RoundInputView.NOT_ARCHIVED}
+        )
+    entry: dict[str, Any] = {
+        "round": round_view,
+        "inputs": archived_inputs,
+        "submission_ids": submission_ids,
+    }
+    if reasons:
+        entry[ARCHIVED_REVIEW_REASONS] = reasons
+    return entry
+
+
+def archived_inputs(archived: dict[str, Any]) -> list[dict[str, Any]]:
+    """The inputs of an archived round with their stored review reasons."""
+    reasons = archived.get(ARCHIVED_REVIEW_REASONS) or {}
+    return [
+        dict(item) | {"review_reason": reasons[item["input_id"]]}
+        if item["input_id"] in reasons
+        else dict(item)
+        for item in archived["inputs"]
+    ]
+
+
 class WorkRoundView(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

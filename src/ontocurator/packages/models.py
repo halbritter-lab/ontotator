@@ -201,7 +201,11 @@ class ValidatedPackage(BaseModel):
     def validate_workflow_inventory(self) -> "ValidatedPackage":
         if self.manifest.format_version != "ontocurator-work-package/v3":
             return self
-        from ontocurator.domain.work_rounds import RoundInputView, WorkRoundView
+        from ontocurator.domain.work_rounds import (
+            ARCHIVED_REVIEW_REASONS,
+            RoundInputView,
+            WorkRoundView,
+        )
 
         if not set(self.manifest.proposal_annotation_refs or []) <= set(
             self.annotations
@@ -218,6 +222,7 @@ class ValidatedPackage(BaseModel):
             if not set(view.input_submission_ids) <= set(self.submissions):
                 raise ValueError("Missing frozen human source submission")
             seen = set()
+            needs_review: set[str] = set()
             for raw in archived["inputs"]:
                 item = RoundInputView.model_validate(raw)
                 if (
@@ -226,6 +231,8 @@ class ValidatedPackage(BaseModel):
                 ):
                     raise ValueError("Ambiguous frozen round input")
                 seen.add(item.input_id)
+                if item.mapping_status == "needs_review":
+                    needs_review.add(item.input_id)
                 source = self.submissions[item.source_submission_id]
                 if not any(
                     s == item.source_snapshot
@@ -245,4 +252,11 @@ class ValidatedPackage(BaseModel):
                         != snap
                     ):
                         raise ValueError("Missing exact round snapshot closure")
+            reasons = archived.get(ARCHIVED_REVIEW_REASONS, {})
+            if (
+                not isinstance(reasons, dict)
+                or not set(reasons) <= needs_review
+                or not all(isinstance(r, str) and r for r in reasons.values())
+            ):
+                raise ValueError("Review reasons must name needs-review inputs")
         return self

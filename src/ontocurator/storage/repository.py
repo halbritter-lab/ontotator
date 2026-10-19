@@ -47,8 +47,9 @@ from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.work_rounds import (
-    RoundInputView,
     WorkRoundView,
+    archive_round,
+    archived_inputs,
     derive_source_obligations,
 )
 from ontocurator.domain.workspace import (
@@ -495,7 +496,7 @@ class Repository:
             project_id = self._require_project(conn, project_key)
             archived = self._archived_rounds(conn, project_id).get(round_id)
             if archived is not None:
-                return list(archived["inputs"])
+                return archived_inputs(archived)
             self.get_work_round(project_key, round_id)
             return [
                 dict(row.payload)
@@ -3759,19 +3760,12 @@ class Repository:
             ).scalars():
                 # The archived format predates the read-only facts; leave them
                 # out so older readers (extra="forbid") still accept it.
-                workflow_history[rid] = {
-                    "round": self.get_work_round(project_key, rid).model_dump(
+                workflow_history[rid] = archive_round(
+                    self.get_work_round(project_key, rid).model_dump(
                         mode="json", exclude=set(WorkRoundView.NOT_ARCHIVED)
                     ),
-                    "inputs": [
-                        {
-                            k: v
-                            for k, v in item.items()
-                            if k not in RoundInputView.NOT_ARCHIVED
-                        }
-                        for item in self.get_round_input_inventory(project_key, rid)
-                    ],
-                    "submission_ids": list(
+                    self.get_round_input_inventory(project_key, rid),
+                    list(
                         conn.execute(
                             select(RoundSubmissionBindingRow.submission_id).where(
                                 RoundSubmissionBindingRow.project_id == project_id,
@@ -3779,7 +3773,7 @@ class Repository:
                             )
                         ).scalars()
                     ),
-                }
+                )
             proposal_annotation_refs = [
                 tuple(row)
                 for row in conn.execute(

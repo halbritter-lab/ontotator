@@ -1,5 +1,8 @@
 """Read-only facts on work rounds, carried inputs and carry sources."""
 
+import pytest
+from pg_harness import owner_engine
+from sqlalchemy import select, text, update
 from test_reanchor import run, source
 from test_work_rounds import rounds  # noqa: F401  (fixture reuse)
 
@@ -12,9 +15,11 @@ from ontocurator.application.round_reads import (
 from ontocurator.application.submissions import SubmissionService
 from ontocurator.application.work_rounds import WorkRoundService, _input_payload
 from ontocurator.authz.scoped import ScopedRepository
+from ontocurator.domain.errors import DomainError
 from ontocurator.domain.reanchor import NeedsReview
 from ontocurator.domain.work_rounds import RoundInputView
 from ontocurator.domain.workspace import MutationEnvelope
+from ontocurator.storage.workflow_tables import RoundInputRow
 
 
 def _submit_first_round(rounds):  # noqa: F811
@@ -176,6 +181,116 @@ def test_package_archive_keeps_the_round_format_without_read_facts(rounds):  # n
         "mapping_status",
     }
     for item in history.values():
+        # No needs-review reason to keep, so no ``review_reasons`` map either.
+        assert set(item) == {"round", "inputs", "submission_ids"}
         assert set(item["round"]) == round_keys
         assert all(set(i) == input_keys for i in item["inputs"])
     assert len(history[carried.round_id]["inputs"]) == 1
+
+
+ARCHIVED_INPUT_KEYS = {
+    "input_id",
+    "source_submission_id",
+    "source_ref",
+    "source_snapshot",
+    "target_snapshot",
+    "mapping_status",
+}
+
+
+def _needs_review_round(rounds):  # noqa: F811
+    """A carried round whose one input needs review for ``changed_segment``.
+
+    Stored inputs are immutable for the app role; the schema owner rewrites the
+    one mapped input as a needs-review input (as a corrected text produces).
+    """
+    repo, _assignment, _first, _submission, carried = _submit_first_round(rounds)
+    table = f"{RoundInputRow.__table__.schema}.{RoundInputRow.__tablename__}"
+    with owner_engine(repo.db).begin() as conn:
+        conn.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER USER"))
+        row = conn.execute(
+            select(RoundInputRow.input_id, RoundInputRow.payload).where(
+                RoundInputRow.round_id == carried.round_id
+            )
+        ).one()
+        conn.execute(
+            update(RoundInputRow)
+            .where(RoundInputRow.input_id == row.input_id)
+            .values(
+                payload=dict(row.payload)
+                | {
+                    "mapping_status": "needs_review",
+                    "target_snapshot": None,
+                    "review_reason": "changed_segment",
+                }
+            )
+        )
+        conn.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER USER"))
+    return repo, carried, row.input_id
+
+
+def _clone(package, package_id):  # type: ignore[no-untyped-def]
+    return package.model_copy(
+        update={
+            "manifest": package.manifest.model_copy(update={"package_id": package_id})
+        }
+    )
+
+
+def test_archived_needs_review_input_keeps_its_review_reason(rounds):  # noqa: F811
+    repo, carried, input_id = _needs_review_round(rounds)
+    package = repo.export_package("pkg-1")
+    archived = package.manifest.workflow_history[carried.round_id]
+    # The inputs keep the old archived shape (older readers validate them with
+    # extra="forbid"); the reason travels in a sibling map they never read.
+    assert all(set(i) == ARCHIVED_INPUT_KEYS for i in archived["inputs"])
+    assert archived["review_reasons"] == {input_id: "changed_segment"}
+    clone = _clone(package, "roundtrip")
+    repo.import_package(clone)
+    [item] = repo.get_round_input_inventory("roundtrip", carried.round_id)
+    view = RoundInputView.model_validate(item)
+    assert (view.mapping_status, view.review_reason) == (
+        "needs_review",
+        "changed_segment",
+    )
+    # A re-export of the imported project keeps the reason unchanged.
+    again = repo.export_package("roundtrip")
+    assert again.manifest.workflow_history == clone.manifest.workflow_history
+
+
+def test_older_package_without_review_reasons_still_imports(rounds):  # noqa: F811
+    repo, carried, _input_id = _needs_review_round(rounds)
+    package = repo.export_package("pkg-1")
+    history = {
+        rid: {k: v for k, v in archived.items() if k != "review_reasons"}
+        for rid, archived in package.manifest.workflow_history.items()
+    }
+    old = package.model_copy(
+        update={
+            "manifest": package.manifest.model_copy(
+                update={"package_id": "older", "workflow_history": history}
+            )
+        }
+    )
+    repo.import_package(old)
+    [item] = repo.get_round_input_inventory("older", carried.round_id)
+    view = RoundInputView.model_validate(item)
+    assert (view.mapping_status, view.review_reason) == ("needs_review", None)
+
+
+def test_review_reason_for_an_unknown_input_is_refused(rounds):  # noqa: F811
+    repo, carried, _input_id = _needs_review_round(rounds)
+    package = repo.export_package("pkg-1")
+    history = dict(package.manifest.workflow_history)
+    history[carried.round_id] = dict(history[carried.round_id]) | {
+        "review_reasons": {"no-such-input": "changed_segment"}
+    }
+    with pytest.raises((DomainError, ValueError)):
+        type(package).model_validate(
+            package.model_dump()
+            | {
+                "manifest": package.manifest.model_copy(
+                    update={"package_id": "bad", "workflow_history": history}
+                )
+            }
+        )
