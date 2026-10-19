@@ -1,208 +1,403 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { api, type AssignmentView, type ProjectDocumentSummary, type Member, type ProjectSettings, type CaseSummary, type TranslationReviewRecord, type CurrentUser } from "../api/client";
-import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
-import { Button, Checkbox, DataTable, Dialog, EmptyState, InlineMessage, Select, StatusBadge, TextInput, Toolbar, type Column } from "../ui";
-import { ErrorNotice } from "./ErrorNotice";
-import { UploadPanel } from "./UploadPanel";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  api,
+  type AssignmentView,
+  type CaseSummary,
+  type CurrentUser,
+  type DocumentRowView,
+  type DocumentRowsPage,
+  type DocumentRowsQuery,
+  type Member,
+  type ProjectDocumentSummary,
+  type ProjectSettings,
+  type TranslationReviewRecord,
+  type VariantSummary,
+} from "../api/client";
+import { formatDateTime, labelFor, plural } from "../app/labels";
+import type { NavigateOptions, ProjectDocumentsQuery, Route } from "../app/router";
+import { categoryLabels, decisionLabels } from "../translation/labels";
+import { Button, Checkbox, Dialog, EmptyState, Select, TextInput, Toolbar, useMediaQuery } from "../ui";
+import { DecisionBar } from "../documents/DecisionBar";
+import { DocumentCards } from "../documents/DocumentCards";
+import { DocumentsTable, groupName, initialExpandedGroups } from "../documents/DocumentsTable";
+import { ExpandedRow } from "../documents/ExpandedRow";
+import { RouteLink, rowKeyOf } from "../documents/RowCells";
+import type { TextVersionsTools } from "../documents/TextVersions";
+import { workText } from "../documents/labels";
+import { useDocumentRows } from "../documents/useDocumentRows";
+import { useRowSubmissions } from "../documents/useRowSubmissions";
 import { AssignDialog } from "./AssignDialog";
 import { DistributionDialog } from "./DistributionDialog";
-import { AssignmentActions } from "./AssignmentActions";
-import { AssigneeSummary } from "./assignmentUI";
-import { assignmentStatusLabels, formatDateTime, labelFor } from "../app/labels";
-import { categoryLabels, decisionLabels } from "../translation/labels";
-import { originLabels, translationStatusLabels, reviewLanguages } from "./variantMetadata";
-import { buildDocumentTree, type DocumentVersionNode } from '../variants/documentTree';
-import { SubmissionHistory } from '../variants/SubmissionHistory';
-import { useFinalSelectionState } from '../variants/finalSelectionState';
-import { TranslationCorrectionAction } from '../variants/TranslationCorrectionAction';
+import { ErrorNotice } from "./ErrorNotice";
+import { UploadPanel } from "./UploadPanel";
+import { originLabels, reviewLanguages, translationStatusLabels } from "./variantMetadata";
 
-export interface DocumentsPageProps { projectKey: string; query: ProjectDocumentsQuery; onNavigate: (route: Route) => void; canOverrideTranslationStatus?: boolean; currentUser?: Pick<CurrentUser, "username"> }
-const statuses = ["unassigned", "open", "in_progress", "submitted", "reopened"];
-function disclosureKey(event: KeyboardEvent<HTMLElement>) {
-  if (event.key !== 'Enter' && event.key !== ' ') return;
-  const parent = event.currentTarget.parentElement;
-  if (!(parent instanceof HTMLDetailsElement)) return;
-  event.preventDefault();
-  parent.open = !parent.open;
+export interface DocumentsPageProps {
+  projectKey: string;
+  query: ProjectDocumentsQuery;
+  onNavigate: (route: Route, options?: NavigateOptions) => void;
+  /** Lead access (`ProjectSummary.can_manage`); checked before anything loads. */
+  canManage: boolean;
+  canOverrideTranslationStatus?: boolean;
+  currentUser?: Pick<CurrentUser, "username" | "pseudonym">;
 }
+
+/** Narrow viewports render cards instead of the table. */
+export const NARROW_DOCUMENTS_QUERY = "(max-width: 699px)";
+
+export const STATUS_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["status"]>, string])[] = [
+  ["unassigned", "Unassigned"], ["open", "Open"], ["in_progress", "In progress"],
+  ["submitted", "Submitted"], ["reopened", "Reopened"], ["held", "Paused"],
+];
+const TRANSLATION_STATUS_OPTIONS: readonly (readonly [string, string])[] = [
+  ...Object.entries(translationStatusLabels), ["accepted_without_review", "Accepted without review"],
+];
+const DECISIONS = new Set(["all", "report-or-pause", "confirm-final", "translation", "missing-final"]);
+const DOCUMENT_FIELDS = ["language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final", "page"] as const;
+const SKELETON_HEADERS = ["Select", "Text · language", "Text version(s)", "Work", "Final result", "Issues", "Last activity"];
+
+/** The Documents fields of a route (the page receives the whole route as `query`). */
+function documentsQuery(query: ProjectDocumentsQuery): ProjectDocumentsQuery {
+  const result: ProjectDocumentsQuery = {};
+  for (const field of DOCUMENT_FIELDS) if (query[field] !== undefined && query[field] !== "") result[field] = query[field];
+  if (query.open?.length) result.open = [...query.open];
+  return result;
+}
+
+/** Server query for the rows endpoint; unknown values are dropped, `decision` wins over `final`. */
+export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
+  const result: DocumentRowsQuery = {};
+  if (query.language) result.language = query.language;
+  if (STATUS_OPTIONS.some(([value]) => value === query.status)) result.status = query.status as DocumentRowsQuery["status"];
+  if (query.q) result.q = query.q;
+  if (query.origin && Object.hasOwn(originLabels, query.origin)) result.origin = query.origin as DocumentRowsQuery["origin"];
+  if (TRANSLATION_STATUS_OPTIONS.some(([value]) => value === query.translation_status)) result.translation_status = query.translation_status as DocumentRowsQuery["translation_status"];
+  if (query.decision && DECISIONS.has(query.decision)) result.decision = query.decision as DocumentRowsQuery["decision"];
+  else if (query.final === "missing") result.final = "missing";
+  if (query.case) result.case = query.case;
+  const page = Number(query.page);
+  if (Number.isInteger(page) && page > 1) result.page = page;
+  return result;
+}
+
+const caseOfKey = (key: string): string => key.slice(0, Math.max(0, key.lastIndexOf(":")));
 
 export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
-  return <DocumentEditor key={JSON.stringify([props.projectKey, props.currentUser?.username])} {...props} />;
+  if (!props.canManage) {
+    return <section className="documents-page">
+      <h1>Documents</h1>
+      <EmptyState title="Documents is for project leads"
+        action={<RouteLink route={{ name: "tasks" }} onNavigate={route => props.onNavigate(route)}>Go to My tasks</RouteLink>}>
+        Your tasks for this project are under My tasks.
+      </EmptyState>
+    </section>;
+  }
+  return <LeadDocuments key={JSON.stringify([props.projectKey, props.currentUser?.username])} {...props} />;
 }
-function DocumentEditor({ projectKey, query, onNavigate, canOverrideTranslationStatus = false, currentUser }: DocumentsPageProps): JSX.Element {
-  const finalResults = useFinalSelectionState(projectKey, currentUser?.username);
-  const [rows, setRows] = useState<ProjectDocumentSummary[]>([]);
-  const [settings, setSettings] = useState<ProjectSettings | null>(null);
-  const [error, setError] = useState<unknown>();
-  const [settingsError, setSettingsError] = useState<unknown>();
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [uploadOpen, setUploadOpen] = useState(false);
+
+function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTranslationStatus = false, currentUser }: DocumentsPageProps): JSX.Element {
+  const ids = useId();
+  const rootRef = useRef<HTMLElement>(null);
+  const narrow = useMediaQuery(NARROW_DOCUMENTS_QUERY);
+  const query = documentsQuery(route);
+  const request = rowsQuery(query);
+  const requestIdentity = JSON.stringify(request);
+  const filterIdentity = JSON.stringify({ ...request, page: undefined, case: undefined });
+  const rows = useDocumentRows(projectKey, request);
+  const page: DocumentRowsPage | null = rows.page;
+
+  const [announcement, setAnnouncement] = useState("");
+  const announce = (message: string) => setAnnouncement(message);
+
+  // Page data for upload and assignment tools (the rows endpoint does not carry it).
   const [revision, setRevision] = useState(0);
-  const [assignments, setAssignments] = useState<AssignmentView[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [assignmentError, setAssignmentError] = useState<unknown>();
-  const [cases, setCases] = useState<CaseSummary[] | null>(null);
-  const [caseError, setCaseError] = useState<unknown>();
-  const [reviewDocument, setReviewDocument] = useState<string | null>(null);
-  const [assignmentDialog, setAssignmentDialog] = useState<{ kind: "manual" | "distribution"; documents: ProjectDocumentSummary[]; identity: string } | null>(null);
-  const selectionIdentity = JSON.stringify([query.language, query.status, query.q, query.select, query.origin, query.translation_status]);
-  // Invalidate selection dialogs without remounting the focused filter controls.
-  const currentSelection = useRef(selectionIdentity);
-  currentSelection.current = selectionIdentity;
-  const visibleDialog = assignmentDialog?.identity === selectionIdentity ? assignmentDialog : null;
-  useEffect(() => { setAssignmentDialog(null); setReviewDocument(null); }, [selectionIdentity]);
-  const request = useRef(0);
-  const language = query.language || undefined;
-  const status = statuses.includes(query.status ?? "") ? query.status : undefined;
-  const q = query.q || undefined;
-  const origin = Object.hasOwn(originLabels, query.origin ?? "") ? query.origin : undefined;
-  const translationStatus = Object.hasOwn(translationStatusLabels, query.translation_status ?? "") ? query.translation_status : undefined;
-  const preselect = query.select;
-  useEffect(() => {
-    let active = true; setCases(null); setCaseError(undefined);
-    void api.listCases(projectKey).then(value => { if (active) setCases(value); }, failure => { if (active) setCaseError(failure); });
-    return () => { active = false; };
-  }, [projectKey, revision]);
+  const [settings, setSettings] = useState<ProjectSettings | null>(null);
+  const [settingsError, setSettingsError] = useState<unknown>();
+  const [inventory, setInventory] = useState<{ documents: ProjectDocumentSummary[]; cases: CaseSummary[]; assignments: AssignmentView[]; members: Member[] } | null>(null);
+  const [inventoryError, setInventoryError] = useState<unknown>();
   useEffect(() => {
     let active = true;
-    setAssignmentError(undefined); setAssignments([]);
-    void Promise.all([api.listAssignments(projectKey), api.listMembers(projectKey)]).then(([inventory, people]) => {
-      if (active) { setAssignments(inventory); setMembers(people); }
-    }).catch((failure: unknown) => { if (active) setAssignmentError(failure); });
-    return () => { active = false; };
-  }, [projectKey, revision]);
-  useEffect(() => {
-    let active = true;
-    setSettings(null); setSettingsError(undefined); setUploadOpen(false);
-    void api.getProjectSettings(projectKey).then(value => { if (active) setSettings(value); }, err => { if (active) setSettingsError(err); });
+    void api.getProjectSettings(projectKey).then(value => { if (active) setSettings(value); }, failure => { if (active) setSettingsError(failure); });
     return () => { active = false; };
   }, [projectKey]);
   useEffect(() => {
-    const generation = ++request.current;
-    setLoading(true); setError(undefined); setRows([]); setSelected(new Set());
-    void api.listProjectDocuments(projectKey, { language, status, q, ...(origin ? { origin } : {}), ...(translationStatus ? { translation_status: translationStatus } : {}) }).then(documents => {
-      if (request.current !== generation) return;
-      setRows(documents);
-      setSelected(new Set(preselect && documents.some(doc => doc.document_id === preselect) ? [preselect] : []));
-      setLoading(false);
-    }, err => { if (request.current === generation) { setError(err); setLoading(false); } });
-    return () => { request.current++; };
-  }, [projectKey, language, status, q, origin, translationStatus, preselect, revision]);
-  const navigate = (patch: ProjectDocumentsQuery) => onNavigate({ name: "projectDocuments", key: projectKey, language: query.language, status: query.status, q: query.q, ...(query.origin === undefined ? {} : { origin: query.origin }), ...(query.translation_status === undefined ? {} : { translation_status: query.translation_status }), select: undefined, ...patch });
-  const toggle = (id: string) => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  const assignmentsChanged = (identity: string) => { if (currentSelection.current === identity) setRevision(value => value + 1); };
-  const tree = cases ? buildDocumentTree(cases, new Set(rows.map(row => row.document_id))) : [];
-  const groupedIds = new Set<string>();
-  const collect = (node: DocumentVersionNode) => { if (node.matching) groupedIds.add(node.variant.document_id); node.children.forEach(collect); };
-  tree.forEach(item => item.languages.forEach(language => language.roots.forEach(collect)));
-  const returnFilters: ProjectDocumentsQuery = Object.fromEntries(Object.entries(query).filter(([key, value]) =>
-    ['language', 'status', 'q', 'select', 'origin', 'translation_status'].includes(key) && value !== undefined));
-  const destinationFor = (caseId: string, documentId: string): Route => ({ name: 'projectCase', key: projectKey, caseId, variant: documentId,
-    ...(Object.keys(returnFilters).length ? { documents: returnFilters } : {}) });
-  const columns: Column<ProjectDocumentSummary>[] = [
-    { id: "select", header: <Checkbox id="documents-all" label={<span className="visually-hidden">Select all visible</span>} disabled={!rows.length || loading} checked={rows.length > 0 && rows.every(doc => selected.has(doc.document_id))} onChange={event => setSelected(new Set(event.target.checked ? rows.map(doc => doc.document_id) : []))} />, cell: doc => <Checkbox id={`document-select-${encodeURIComponent(doc.document_id)}`} label={<span className="visually-hidden">Select {doc.document_id}</span>} checked={selected.has(doc.document_id)} onChange={() => toggle(doc.document_id)} /> },
-    { id: "id", header: "Document ID", cell: doc => doc.document_id },
-    // The external ID only adds information when some row's differs from its document ID.
-    ...(rows.some(doc => doc.external_id && doc.external_id !== doc.document_id) ? [{ id: "external-id", header: "External ID", cell: (doc: ProjectDocumentSummary) => doc.external_id }] : []),
-    { id: "case", header: "Case", cell: doc => {
-      if (typeof doc.case_id !== "string") return null;
-      const destination = destinationFor(doc.case_id, doc.document_id);
-      return <a href={routeHref(destination)} aria-label={`View case for ${doc.document_id}`} onClick={event => {
-        if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-        event.preventDefault(); onNavigate(destination);
-      }}>{doc.case_id}</a>;
-    } },
-    { id: "language", header: "Language", cell: doc => doc.language },
-    { id: "version", header: "Version", cell: doc => doc.version },
-    { id: "origin", header: "Origin", cell: doc => originLabels[doc.origin] },
-    { id: "translation-status", header: "Translation status", cell: doc => <span title={doc.status_reason ?? undefined}>{doc.accepted_without_review ? "Accepted without review" : doc.translation_status ? translationStatusLabels[doc.translation_status] : "—"}</span> },
-    { id: "reviews", header: "Reviews", cell: doc => doc.translation_status != null ? <Button size="sm" onClick={() => setReviewDocument(doc.document_id)} aria-label={`Reviews for ${doc.document_id}`}>Reviews</Button> : null },
-    { id: "assignees", header: "Assignees", cell: doc => doc.assignees?.length ? <ul className="assignee-list">{doc.assignees.map(assignee => {
-      const actual = assignments.find(item => item.id === assignee.assignment_id && item.document_id === doc.document_id && item.project_key === projectKey && !item.revoked_at);
-      return <li key={assignee.assignment_id}><AssigneeSummary name={members.find(member => member.username === assignee.username)?.display_name} {...assignee} />{actual && <AssignmentActions assignment={actual} members={members} onChanged={() => assignmentsChanged(selectionIdentity)} />}</li>;
-    })}</ul> : "Unassigned" },
-  ];
-  const renderVersion = (node: DocumentVersionNode): JSX.Element => {
-    const version = node.variant;
-    const doc = rows.find(row => row.document_id === version.document_id);
-    const destination = destinationFor(version.case_id, version.document_id);
-    const final = finalResults.state?.selections.find(selection => selection.case_id === version.case_id && selection.language === version.language && selection.document_id === version.document_id);
-    return <li key={version.document_id}>
-      <details className="document-version">
-        <summary onKeyDown={disclosureKey}>v{version.version} · {originLabels[version.origin]}{(doc?.accepted_without_review || version.translation_status) && <span title={doc?.status_reason ?? undefined}> · {doc?.accepted_without_review ? 'Accepted without review' : version.translation_status ? translationStatusLabels[version.translation_status] : ''}</span>}
-          <span className="cell-secondary"> · {version.external_id}</span>
-        </summary>
-        {doc ? <div className="document-version-body" data-testid="document-row">
-          {final && <p><StatusBadge tone="success">Selected final result</StatusBadge>{' '}{final.submission_id}</p>}
-          <div className="document-version-actions">
-            <Checkbox id={`document-select-${encodeURIComponent(doc.document_id)}`} label={<span className="visually-hidden">Select {doc.document_id}</span>} checked={selected.has(doc.document_id)} onChange={() => toggle(doc.document_id)} />
-            <a href={routeHref(destination)} aria-label={`View text ${doc.document_id}`} onClick={event => {
-              if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-              event.preventDefault(); onNavigate(destination);
-            }}>View text</a>
-            <SubmissionHistory projectKey={projectKey} documentId={doc.document_id} username={currentUser?.username ?? ''} selectionContext={{ caseId: version.case_id, language: version.language }} />
-            <TranslationCorrectionAction projectKey={projectKey} variant={version} username={currentUser?.username ?? ''}
-              requiredLanguages={reviewLanguages(version.document_id, new Map((cases?.find(item => item.case_id === version.case_id)?.variants ?? []).map(row => [row.document_id, row])))} />
-            {doc.translation_status != null && <Button size="sm" onClick={() => setReviewDocument(doc.document_id)} aria-label={`Translation reviews for ${doc.document_id}`}>Translation reviews</Button>}
-          </div>
-          <div className="document-version-work"><h3>Assignments</h3>{columns.find(column => column.id === 'assignees')!.cell(doc)}</div>
-          <details><summary>Text version details</summary><dl><dt>Document ID</dt><dd>{doc.document_id}</dd>
-            {version.derived_from && <><dt>{version.origin === 'correction' ? 'Earlier text version' : 'Translation source'}</dt><dd>{cases?.find(item => item.case_id === version.case_id)?.variants.some(row => row.document_id === version.derived_from && row.case_id === version.case_id)
-              ? <a href={routeHref(destinationFor(version.case_id, version.derived_from))} onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); onNavigate(destinationFor(version.case_id, version.derived_from!)); }}>{version.derived_from}</a>
-              : 'Unavailable'}</dd></>}
-          </dl></details>
-        </div> : <p className="cell-secondary">Earlier version outside current filters</p>}
-        {node.issue && <p className="cell-secondary">{node.issue}</p>}
-      </details>
-      {!!node.children.length && <ul className="document-corrections">{node.children.map(renderVersion)}</ul>}
-    </li>;
+    let active = true;
+    setInventoryError(undefined);
+    void Promise.all([api.listProjectDocuments(projectKey), api.listCases(projectKey), api.listAssignments(projectKey), api.listMembers(projectKey)])
+      .then(([documents, cases, assignments, members]) => { if (active) setInventory({ documents, cases, assignments, members }); },
+        failure => { if (active) setInventoryError(failure); });
+    return () => { active = false; };
+  }, [projectKey, revision]);
+
+  // Announce the number of texts once the data for a changed filter arrives.
+  const shownFilters = useRef<string | null>(null);
+  useEffect(() => {
+    if (!page) return;
+    if (shownFilters.current !== null && shownFilters.current !== filterIdentity) announce(`${plural(page.group_count, "text")} shown`);
+    shownFilters.current = filterIdentity;
+    // Only a new page (never a query change alone) can carry the new count.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  // Deep link `case` + `language`: that row is open until the lead collapses it.
+  const deepKey = query.case && query.language ? `${query.case}:${query.language}` : null;
+  const [collapsedDeepKey, setCollapsedDeepKey] = useState<string | null>(null);
+  const openKeys = useMemo(() => {
+    const keys = new Set(query.open ?? []);
+    if (deepKey && collapsedDeepKey !== deepKey) keys.add(deepKey);
+    return keys;
+  }, [query.open, deepKey, collapsedDeepKey]);
+  const viewQuery: ProjectDocumentsQuery = { ...query, ...(openKeys.size ? { open: [...openKeys] } : {}) };
+
+  const documentsRoute = (patch: ProjectDocumentsQuery): Route => {
+    const next: Route = { name: "projectDocuments", key: projectKey };
+    for (const [name, value] of Object.entries({ ...query, ...patch })) {
+      if (value !== undefined && value !== "" && !(Array.isArray(value) && value.length === 0)) Object.assign(next, { [name]: value });
+    }
+    return next;
   };
-  return <section>
+  const changeFilter = (patch: ProjectDocumentsQuery) => onNavigate(documentsRoute({ ...patch, page: undefined, select: undefined }));
+  const toggleRow = (key: string) => {
+    const next = new Set(openKeys);
+    if (next.has(key)) {
+      next.delete(key);
+      if (key === deepKey) setCollapsedDeepKey(key);
+    } else next.add(key);
+    onNavigate(documentsRoute({ open: [...next] }), { replace: true });
+  };
+
+  // Group expansion: initial rule per filter set, then the lead's own toggles.
+  const [groupState, setGroupState] = useState<{ identity: string; groups: ReadonlySet<string> } | null>(null);
+  const expandedGroups = useMemo(() => {
+    if (!page) return new Set<string>();
+    if (groupState?.identity === requestIdentity) return groupState.groups;
+    const initial = initialExpandedGroups(page);
+    for (const key of openKeys) initial.add(caseOfKey(key));
+    if (query.case) initial.add(query.case);
+    return initial;
+  }, [page, groupState, requestIdentity, openKeys, query.case]);
+  const toggleGroup = (caseId: string) => {
+    const next = new Set(expandedGroups);
+    if (next.has(caseId)) next.delete(caseId); else next.add(caseId);
+    setGroupState({ identity: requestIdentity, groups: next });
+  };
+
+  // Bulk selection of exact document IDs; a filter, category or page change starts over.
+  const pageRows = useMemo(() => page?.groups.flatMap(group => group.rows) ?? [], [page]);
+  const [selection, setSelection] = useState<{ identity: string; ids: ReadonlySet<string> } | null>(null);
+  const preselected = useMemo(() => {
+    const target = query.select;
+    return new Set(target && pageRows.some(row => row.versions.some(version => version.document_id === target)) ? [target] : []);
+  }, [query.select, pageRows]);
+  const selected: ReadonlySet<string> = selection?.identity === requestIdentity ? selection.ids : preselected;
+  const setSelected = (ids: ReadonlySet<string>) => setSelection({ identity: requestIdentity, ids });
+  const toggleSelect = (documentId: string, checked: boolean) => {
+    const next = new Set(selected);
+    if (checked) next.add(documentId); else next.delete(documentId);
+    setSelected(next);
+  };
+  const selectable = pageRows.filter(row => row.bulk.mode === "checkbox" && row.bulk.document_id != null);
+  const skipped = pageRows.length - selectable.length;
+  const allSelected = selectable.length > 0 && selectable.every(row => selected.has(row.bulk.document_id!));
+  const selectAll = (checked: boolean) => {
+    if (!checked) { setSelected(new Set()); announce("Selection cleared."); return; }
+    setSelected(new Set([...selected, ...selectable.map(row => row.bulk.document_id!)]));
+    announce(`Selected ${plural(selectable.length, "row")}.${skipped ? ` ${plural(skipped, "row")} ${skipped === 1 ? "needs" : "need"} a choice in Text versions.` : ""}`);
+  };
+
+  // Assignment dialogs work on the selected versions; a later filter change invalidates them.
+  const [dialog, setDialog] = useState<{ kind: "manual" | "distribution"; documents: ProjectDocumentSummary[]; identity: string } | null>(null);
+  const currentIdentity = useRef(requestIdentity);
+  currentIdentity.current = requestIdentity;
+  const visibleDialog = dialog?.identity === requestIdentity ? dialog : null;
+  const selectedDocuments = inventory ? inventory.documents.filter(document => selected.has(document.document_id)) : [];
+  const assignReasonId = `${ids}-assign-reason`;
+  const assignReason = !selected.size ? "Select text versions first." : !inventory ? "Loading assignment data…" : null;
+  const openDialog = (kind: "manual" | "distribution") => {
+    if (assignReason) { announce(assignReason); return; }
+    setDialog({ kind, documents: selectedDocuments, identity: requestIdentity });
+  };
+  const refreshAll = () => { rows.reload(); setRevision(value => value + 1); };
+  const changedFor = (identity: string) => { if (currentIdentity.current === identity) refreshAll(); };
+
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [reviewDocument, setReviewDocument] = useState<string | null>(null);
+
+  const textVersionTools = useMemo<TextVersionsTools | undefined>(() => {
+    if (!inventory) return undefined;
+    const variants = new Map<string, VariantSummary>(inventory.cases.flatMap(item => item.variants).map(variant => [variant.document_id, variant]));
+    return {
+      username: currentUser?.username ?? "",
+      assignments: inventory.assignments,
+      members: inventory.members,
+      variants,
+      requiredLanguages: documentId => reviewLanguages(documentId, variants),
+      onAssignmentsChanged: refreshAll,
+      onShowTranslationReviews: setReviewDocument,
+      bulkSelected: selected,
+      onToggleBulk: documentId => toggleSelect(documentId, !selected.has(documentId)),
+    };
+    // The callbacks close over the current selection; rebuild with it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inventory, currentUser?.username, selected, rows.reload, requestIdentity]);
+
+  // Deep link: focus the named row header (or the group header) once its data is shown.
+  const focusedDeepLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!page || !query.case || !page.case_found) return;
+    const identity = JSON.stringify([query.case, query.language ?? null]);
+    if (focusedDeepLink.current === identity) return;
+    focusedDeepLink.current = identity;
+    const group = page.groups.find(item => item.case_id === query.case);
+    const labels = [
+      ...(query.language ? [`Show submissions, ${query.case} · ${query.language}`] : []),
+      ...(group ? [groupName(group)] : []),
+    ];
+    const buttons = [...(rootRef.current?.querySelectorAll<HTMLButtonElement>("button[aria-label]") ?? [])];
+    const target = labels.map(label => buttons.find(button => button.getAttribute("aria-label") === label)).find(Boolean)
+      ?? buttons.find(button => button.getAttribute("aria-label")?.startsWith(`Show submissions, ${query.case} · `));
+    if (!target) return;
+    target.scrollIntoView?.({ block: "center" });
+    target.focus();
+  }, [page, query.case, query.language]);
+
+  const rowNotice = (row: DocumentRowView): string | null => {
+    const named = row.pinned || rowKeyOf(row) === deepKey;
+    if (!named) return null;
+    if (query.decision && !row.matches_decision) return "This no longer needs your decision.";
+    if (!query.decision && rowKeyOf(row) === deepKey && !row.final && !row.missing_final.counts) {
+      return `No final result. Not counted as a decision yet: ${row.missing_final.reason === "work_open" ? `work still open: ${workText(row.work)}` : "no submission"}.`;
+    }
+    return null;
+  };
+  const renderExpanded = (row: DocumentRowView) => {
+    const notice = rowNotice(row);
+    return <>
+      {notice && <p className="documents-row-notice">{notice}</p>}
+      <ExpandedRowLoader row={row} refresh={page} projectKey={projectKey} query={viewQuery} onNavigate={route => onNavigate(route)}
+        adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} onAnnounce={announce} textVersionTools={textVersionTools} />
+    </>;
+  };
+
+  const languages = [...new Set([...(settings?.languages ?? []), ...pageRows.map(row => row.language), ...(query.language ? [query.language] : [])])];
+  const status = STATUS_OPTIONS.some(([value]) => value === query.status) ? query.status! : "";
+  const origin = query.origin && Object.hasOwn(originLabels, query.origin) ? query.origin : "";
+  const translationStatus = TRANSLATION_STATUS_OPTIONS.some(([value]) => value === query.translation_status) ? query.translation_status! : "";
+  const showAll: Route = { name: "projectDocuments", key: projectKey };
+  const navigateLink = (target: Route) => onNavigate(target);
+
+  let content: JSX.Element;
+  if (!page && rows.error != null) {
+    content = <div className="documents-error"><ErrorNotice error={rows.error} /><Button onClick={rows.retry}>Retry</Button></div>;
+  } else if (!page) {
+    content = <DocumentsSkeleton />;
+  } else {
+    let body: JSX.Element;
+    if (query.case && !page.case_found) {
+      body = <EmptyState title={`Text ${query.case} not found`} action={<RouteLink route={showAll} onNavigate={navigateLink}>Show all texts</RouteLink>} />;
+    } else if (page.groups.length === 0 && request.decision) {
+      body = <EmptyState title="Nothing needs your decision" action={<RouteLink route={showAll} onNavigate={navigateLink}>Show all texts</RouteLink>} />;
+    } else if (page.groups.length === 0) {
+      body = <EmptyState title="No documents">Try another filter or upload documents to this project.</EmptyState>;
+    } else if (narrow) {
+      body = <DocumentCards page={page} projectKey={projectKey} query={viewQuery} onToggleRow={toggleRow} selected={selected}
+        onToggleSelect={toggleSelect} renderExpanded={renderExpanded} onNavigate={navigateLink} busy={rows.loading} />;
+    } else {
+      body = <DocumentsTable page={page} projectKey={projectKey} query={viewQuery} expandedGroups={expandedGroups} onToggleGroup={toggleGroup}
+        onToggleRow={toggleRow} selected={selected} onToggleSelect={toggleSelect} renderExpanded={renderExpanded} onNavigate={navigateLink} busy={rows.loading} />;
+    }
+    content = <>
+      <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} />
+      {body}
+      {page.page_count > 1 && <nav className="documents-paging" aria-label="Pages">
+        {page.page > 1 && <RouteLink route={documentsRoute({ page: page.page - 1 > 1 ? String(page.page - 1) : undefined })} onNavigate={navigateLink}>Previous</RouteLink>}
+        <span>Page {page.page} of {page.page_count}</span>
+        {page.page < page.page_count && <RouteLink route={documentsRoute({ page: String(page.page + 1) })} onNavigate={navigateLink}>Next</RouteLink>}
+      </nav>}
+    </>;
+  }
+
+  return <section className="documents-page" ref={rootRef}>
     <h1>Documents</h1>
-    <Toolbar label="Document filters" className="filter-bar">
-      <Select id="documents-language" label="Language" value={query.language ?? ""} onChange={event => navigate({ language: event.target.value || undefined })}><option value="">All languages</option>{[...new Set([...(settings?.languages ?? []), ...rows.map(doc => doc.language), ...(query.language ? [query.language] : [])])].map(value => <option key={value} value={value}>{value}</option>)}</Select>
-      <Select id="documents-status" label="Status" value={status ?? ""} onChange={event => navigate({ status: event.target.value || undefined })}><option value="">All statuses</option>{statuses.map(value => <option key={value} value={value}>{labelFor(assignmentStatusLabels, value)}</option>)}</Select>
-      <TextInput id="documents-prefix" label="ID prefix" value={query.q ?? ""} onChange={event => navigate({ q: event.target.value || undefined })} />
-      <Select id="documents-origin" label="Origin" value={origin ?? ""} onChange={event => navigate({ origin: event.target.value || undefined })}><option value="">All origins</option>{Object.entries(originLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-      <Select id="documents-translation-status" label="Translation status" value={translationStatus ?? ""} onChange={event => navigate({ translation_status: event.target.value || undefined })}><option value="">All translation statuses</option>{Object.entries(translationStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+    <Toolbar label="Document filters" className="filter-bar documents-filters">
+      <Select id="documents-language" label="Language" value={query.language ?? ""} onChange={event => changeFilter({ language: event.target.value || undefined })}>
+        <option value="">All languages</option>{languages.map(value => <option key={value} value={value}>{value}</option>)}
+      </Select>
+      <Select id="documents-status" label="Status" value={status} onChange={event => changeFilter({ status: event.target.value || undefined })}>
+        <option value="">All statuses</option>{STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </Select>
+      <TextInput id="documents-prefix" label="ID" value={query.q ?? ""} onChange={event => changeFilter({ q: event.target.value || undefined })} />
+      <details className="documents-more-filters" open={origin !== "" || translationStatus !== "" ? true : undefined}>
+        <summary>More filters</summary>
+        <div className="documents-more-filters-body">
+          <Select id="documents-origin" label="Origin" value={origin} onChange={event => changeFilter({ origin: event.target.value || undefined })}>
+            <option value="">All origins</option>{Object.entries(originLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
+          <Select id="documents-translation-status" label="Translation status" value={translationStatus} onChange={event => changeFilter({ translation_status: event.target.value || undefined })}>
+            <option value="">All translation statuses</option>{TRANSLATION_STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
+        </div>
+      </details>
     </Toolbar>
-    <Toolbar label="Document actions"><span aria-live="polite">{selected.size} selected</span><Button disabled={!settings} onClick={() => setUploadOpen(true)}>Upload documents</Button><Button disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh documents</Button>
-      <Button disabled={loading || !selected.size} onClick={() => setAssignmentDialog({ kind: "manual", documents: rows.filter(doc => selected.has(doc.document_id)), identity: selectionIdentity })}>Assign …</Button>
-      <Button disabled={loading || !selected.size} onClick={() => setAssignmentDialog({ kind: "distribution", documents: rows.filter(doc => selected.has(doc.document_id)), identity: selectionIdentity })}>Propose distribution …</Button>
+    <Toolbar label="Document actions" className="documents-actions">
+      <Checkbox id={`${ids}-select-all`} label="Select all" checked={allSelected} aria-disabled={selectable.length === 0 ? true : undefined}
+        onChange={event => { if (selectable.length) selectAll(event.target.checked); }} />
+      <span className="documents-selected-count">{selected.size} selected</span>
+      <Button aria-disabled={settings ? undefined : true} onClick={() => { if (settings) setUploadOpen(true); }}>Upload documents</Button>
+      <Button onClick={refreshAll}>Refresh</Button>
+      <Button aria-disabled={assignReason ? true : undefined} aria-describedby={assignReason ? assignReasonId : undefined} onClick={() => openDialog("manual")}>Assign …</Button>
+      <Button aria-disabled={assignReason ? true : undefined} aria-describedby={assignReason ? assignReasonId : undefined} onClick={() => openDialog("distribution")}>Propose distribution …</Button>
+      {assignReason && <span id={assignReasonId} className="documents-action-reason">{assignReason}</span>}
     </Toolbar>
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}
-    {error !== undefined && <ErrorNotice error={error} />}
-    {assignmentError !== undefined && <ErrorNotice error={assignmentError} />}
-    {caseError !== undefined && <ErrorNotice error={caseError} />}
-    {finalResults.loading && <InlineMessage tone="info">Loading final selections…</InlineMessage>}
-    {finalResults.error != null && <InlineMessage tone="warning">Final selections are unavailable. <Button size="sm" onClick={finalResults.reload}>Retry final selections</Button></InlineMessage>}
-    {loading && <p role="status">Loading documents …</p>}
-    {tree.length > 0 && <>
-      <Checkbox id="documents-all" label="Select all visible" checked={rows.length > 0 && rows.every(doc => selected.has(doc.document_id))} onChange={event => setSelected(new Set(event.target.checked ? rows.map(doc => doc.document_id) : []))} />
-      <div className="document-tree">{tree.map(item => <details key={item.caseId} className="logical-text" aria-label={`Text ${item.caseId}`} open>
-        <summary onKeyDown={disclosureKey}>{item.caseId}</summary>
-        {item.languages.map(language => {
-          const final = finalResults.state?.selections.find(selection => selection.case_id === item.caseId && selection.language === language.language);
-          const matching = rows.filter(row => row.case_id === item.caseId && row.language === language.language);
-          const assignedCount = matching.filter(row => (row.assignees?.length ?? 0) > 0).length;
-          return <details key={language.language} className="document-language" aria-label={`Language ${language.language} for ${item.caseId}`} open>
-            <summary onKeyDown={disclosureKey}>{language.language} · {matching.length} text {matching.length === 1 ? 'version' : 'versions'}
-              <span className="cell-secondary"> · {assignedCount ? `${assignedCount} assigned` : 'Unassigned'}</span>
-              <span className="document-language-final">{final ? `Final result selected: ${final.document_id} · ${final.submission_id}` : finalResults.state ? 'No final result selected' : ''}</span>
-            </summary>
-            {final && !rows.some(row => row.document_id === final.document_id) && <p>Final result outside current filters: <a href={routeHref(destinationFor(item.caseId, final.document_id))}>{final.document_id}</a> · {final.submission_id}</p>}
-            <ul className="document-version-list">{language.roots.map(renderVersion)}</ul>
-          </details>;
-        })}
-      </details>)}</div>
-    </>}
-    {(tree.length === 0 || rows.some(row => !groupedIds.has(row.document_id))) && <DataTable label="Documents" columns={tree.length ? columns.filter(column => column.id !== 'select') : columns} rows={tree.length ? rows.filter(row => !groupedIds.has(row.document_id)) : rows} rowKey={doc => doc.document_id} rowProps={doc => ({ "data-testid": "document-row", selected: selected.has(doc.document_id) })} empty={<EmptyState title="No documents">Try another filter or upload documents to this project.</EmptyState>} />}
-    <Dialog open={uploadOpen} title="Upload documents" size="lg" onClose={() => setUploadOpen(false)}>{uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus} onImported={() => setRevision(value => value + 1)} />}</Dialog>
+    {inventoryError !== undefined && <ErrorNotice error={inventoryError} />}
+    {content}
+    <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
+    <Dialog open={uploadOpen} title="Upload documents" size="lg" onClose={() => setUploadOpen(false)}>
+      {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus} onImported={refreshAll} />}
+    </Dialog>
     {reviewDocument !== null && <ReviewHistory key={reviewDocument} projectKey={projectKey} documentId={reviewDocument} onClose={() => setReviewDocument(null)} />}
-    {visibleDialog?.kind === "manual" && <AssignDialog projectKey={projectKey} cases={cases} documents={visibleDialog.documents} onClose={() => setAssignmentDialog(null)} onChanged={() => assignmentsChanged(visibleDialog.identity)} />}
-    {visibleDialog?.kind === "distribution" && <DistributionDialog projectKey={projectKey} cases={cases} documents={visibleDialog.documents} onClose={() => setAssignmentDialog(null)} onChanged={() => assignmentsChanged(visibleDialog.identity)} />}
+    {visibleDialog?.kind === "manual" && <AssignDialog projectKey={projectKey} cases={inventory?.cases ?? null} documents={visibleDialog.documents} onClose={() => setDialog(null)} onChanged={() => changedFor(visibleDialog.identity)} />}
+    {visibleDialog?.kind === "distribution" && <DistributionDialog projectKey={projectKey} cases={inventory?.cases ?? null} documents={visibleDialog.documents} onClose={() => setDialog(null)} onChanged={() => changedFor(visibleDialog.identity)} />}
   </section>;
+}
+
+/** Skeleton rows while the first page loads. */
+function DocumentsSkeleton(): JSX.Element {
+  return <div className="data-table-scroll">
+    <table aria-label="Documents" aria-busy="true" className="data-table density-compact documents-table documents-skeleton">
+      <thead><tr>{SKELETON_HEADERS.map(header => <th key={header} scope="col">{header}</th>)}</tr></thead>
+      <tbody>{[0, 1, 2, 3, 4].map(index => <tr key={index} className="documents-skeleton-row">
+        {SKELETON_HEADERS.map(header => <td key={header}><span className="documents-skeleton-bar" aria-hidden="true" /></td>)}
+      </tr>)}</tbody>
+    </table>
+  </div>;
+}
+
+interface ExpandedRowLoaderProps {
+  row: DocumentRowView;
+  /** The current rows page; a new page (refetch) reloads this row's submissions. */
+  refresh: DocumentRowsPage | null;
+  projectKey: string;
+  query: ProjectDocumentsQuery;
+  onNavigate: (route: Route) => void;
+  adjudicatorNotAnnotator: boolean;
+  onAnnounce: (message: string) => void;
+  textVersionTools?: TextVersionsTools;
+}
+
+/** Loads the submissions of an open row and reloads them whenever the rows refresh. */
+function ExpandedRowLoader({ row, refresh, projectKey, ...props }: ExpandedRowLoaderProps): JSX.Element {
+  const submissions = useRowSubmissions(projectKey, row.case_id, row.language, true);
+  const mounted = useRef(false);
+  const { reload } = submissions;
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    reload();
+    // Only a new rows page triggers the reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refresh]);
+  return <ExpandedRow row={row} projectKey={projectKey} submissions={submissions} {...props} />;
 }
 
 function ReviewHistory({ projectKey, documentId, onClose }: { projectKey: string; documentId: string; onClose: () => void }): JSX.Element {

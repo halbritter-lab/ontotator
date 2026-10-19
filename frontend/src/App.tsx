@@ -196,7 +196,9 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       const currentProject = projects.find(project => project.project_key === route.key);
       // Display capability only; the import endpoint rechecks current authority.
       const canOverrideTranslationStatus = !!currentProject?.can_manage && (user.is_system_admin || currentProject.roles.includes("lead"));
-      content = <DocumentsPage projectKey={route.key} currentUser={user} canOverrideTranslationStatus={canOverrideTranslationStatus} query={route} onNavigate={go} />;
+      // Lead access is decided from the projects list before the page shows anything (open question 6).
+      content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
+        : <DocumentsPage projectKey={route.key} currentUser={user} canManage={!!currentProject?.can_manage} canOverrideTranslationStatus={canOverrideTranslationStatus} query={route} onNavigate={go} />;
       break;
     }
     case "projectCase": content = <CaseViewer projectKey={route.key} caseId={route.caseId} variant={route.variant} annotations={route.annotations} documents={route.documents} username={user.username} onNavigate={go} />; break;

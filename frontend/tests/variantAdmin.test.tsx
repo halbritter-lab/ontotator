@@ -14,8 +14,15 @@ import { reviewLanguages } from "../src/admin/variantMetadata";
 import * as downloads from "../src/api/download";
 import { currentUser, ontologies, settings } from "./projectFixtures";
 import { documents, members, assignment, deferred } from "./assignmentFixtures";
+import { group, page, row, rowKey, submissions, version } from "./documents/fixtures";
 
 const target: ProjectDocumentSummary = { ...documents[0], origin: "machine_translation", translation_status: "accepted", accepted_without_review: true, status_reason: "translation review 123" };
+/** The Documents row of `target`; `openTarget` expands it so Text versions is rendered. */
+const targetPage = (overrides: { document_id?: string; accepted_without_review?: boolean } = {}) => page([group(target.case_id!, [row({
+  case_id: target.case_id!, language: target.language,
+  versions: [version({ document_id: overrides.document_id ?? target.document_id, origin: "machine_translation", chain_name: "DeepL", translation_status: "accepted", accepted_without_review: overrides.accepted_without_review ?? true })],
+})])]);
+const openTarget = { open: [rowKey(target.case_id!, target.language)] };
 beforeEach(() => {
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue([target]);
   vi.spyOn(api, "getProjectSettings").mockResolvedValue({ ...settings, annotate_accepted_translations_only: false });
@@ -24,6 +31,8 @@ beforeEach(() => {
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   vi.spyOn(api, "listOntologies").mockResolvedValue(ontologies);
   vi.spyOn(api, "listUploads").mockResolvedValue([]);
+  vi.spyOn(api, "listDocumentRows").mockImplementation(async () => targetPage());
+  vi.spyOn(api, "getRowSubmissions").mockImplementation(async (_key, caseId, language) => submissions(caseId, language));
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); });
 
@@ -45,18 +54,17 @@ it("sends actual override tuples while preserving the legacy omitted body and tr
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ plan_sha256: "actual-plan" });
 });
 
-it("uses the server-owned override label and actual controlled filters without remounting the prefix", async () => {
+it("shows the server-owned override label and sends controlled filters without remounting the ID input", async () => {
   const navigate = vi.fn();
-  const view = render(<DocumentsPage projectKey="p" query={{ origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
-  const badge = await screen.findByText("Accepted without review");
-  expect(badge.getAttribute("title")).toBe("translation review 123");
-  expect(api.listProjectDocuments).toHaveBeenCalledWith("p", expect.objectContaining({ origin: "machine_translation", translation_status: "accepted" }));
-  const prefix = screen.getByLabelText("ID prefix"); prefix.focus();
+  const view = render(<DocumentsPage projectKey="p" canManage query={{ origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
+  expect(await screen.findByText(/Accepted without review/)).toBeTruthy();
+  expect(api.listDocumentRows).toHaveBeenCalledWith("p", { origin: "machine_translation", translation_status: "accepted" });
+  const prefix = screen.getByLabelText("ID"); prefix.focus();
   fireEvent.change(prefix, { target: { value: "abc" } });
   expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({ origin: "machine_translation", translation_status: "accepted", q: "abc" }));
-  view.rerender(<DocumentsPage projectKey="p" query={{ q: "abc", origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
-  await screen.findByRole("link", { name: `View case for ${target.document_id}` });
-  expect(screen.getByLabelText("ID prefix")).toBe(prefix);
+  view.rerender(<DocumentsPage projectKey="p" canManage query={{ q: "abc", origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
+  await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });
+  expect(screen.getByLabelText("ID")).toBe(prefix);
   expect(document.activeElement).toBe(prefix);
   expect(api.getProjectSettings).toHaveBeenCalledTimes(1);
   expect(api.listCases).toHaveBeenCalledTimes(1);
@@ -165,20 +173,19 @@ it("defaults to no override controls and drops them on capability loss", async (
 it("reads immutable review history for the actual internal ID and discards superseded replies", async () => {
   const old = deferred<Awaited<ReturnType<typeof api.listTranslationReviews>>>();
   vi.spyOn(api, "listTranslationReviews").mockReturnValue(old.promise);
-  const view = render(<DocumentsPage projectKey="p" query={{}} onNavigate={vi.fn()} />);
-  fireEvent.click(await screen.findByRole("button", { name: `Reviews for ${target.document_id}` }));
+  const view = render(<DocumentsPage projectKey="p" canManage query={openTarget} onNavigate={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Translation reviews for v1" }));
   expect(api.listTranslationReviews).toHaveBeenCalledWith("p", target.document_id);
-  view.rerender(<DocumentsPage projectKey="other" query={{}} onNavigate={vi.fn()} />);
+  view.rerender(<DocumentsPage projectKey="other" canManage query={openTarget} onNavigate={vi.fn()} />);
   await act(async () => old.resolve([{ reviewer_pseudonym: "Must not appear" } as never]));
   expect(screen.queryByText("Must not appear")).toBeNull();
 });
 
 it("does not infer manual acceptance from a descriptive reason", async () => {
-  vi.mocked(api.listProjectDocuments).mockResolvedValue([{ ...target, accepted_without_review: false, status_reason: "Manual approval" }]);
-  render(<DocumentsPage projectKey="p" query={{}} onNavigate={vi.fn()} />);
-  const table = within(await screen.findByRole("table", { name: "Documents" }));
-  await waitFor(() => expect(table.getByText("Accepted", { selector: "span" })).toBeTruthy());
-  expect(table.queryByText("Accepted without review")).toBeNull();
+  vi.mocked(api.listDocumentRows).mockImplementation(async () => targetPage({ accepted_without_review: false }));
+  render(<DocumentsPage projectKey="p" canManage query={{}} onNavigate={vi.fn()} />);
+  expect(await screen.findByText("v1 · Machine translation · Accepted")).toBeTruthy();
+  expect(within(screen.getByRole("table", { name: "Documents" })).queryByText(/Accepted without review/)).toBeNull();
 });
 
 it("shows ordered readonly reviewer snapshots, rationale and created variant", async () => {
@@ -189,8 +196,8 @@ it("shows ordered readonly reviewer snapshots, rationale and created variant", a
     machine_text_sha256: "a".repeat(64), proposed_text: "Immutable proposed text", proposed_text_sha256: "b".repeat(64),
     status_before: "ready_for_review", status_after: "reviewed", created_variant_id: "actual-created-variant", review_policy: "review/v1", created_at: "2026-10-16T00:00:00Z",
   }]);
-  render(<DocumentsPage projectKey="p" query={{}} onNavigate={vi.fn()} />);
-  fireEvent.click(await screen.findByRole("button", { name: `Reviews for ${target.document_id}` }));
+  render(<DocumentsPage projectKey="p" canManage query={openTarget} onNavigate={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Translation reviews for v1" }));
   const history = within(screen.getByRole("dialog", { name: `Translation reviews: ${target.document_id}` }));
   expect((await history.findByText(/by Original pseudonym/)).textContent).toMatch(/^Accepted with corrections by Original pseudonym · \d{1,2} Oct 2026, \d{2}:\d{2}$/);
   expect(history.getByText("Original qualification · reads en, de")).toBeTruthy();
@@ -203,7 +210,7 @@ it("shows ordered readonly reviewer snapshots, rationale and created variant", a
   expect(history.queryByRole("button", { name: /Reopen|Submit/ })).toBeNull();
   fireEvent.click(within(screen.getByRole("dialog", { name: `Translation reviews: ${target.document_id}` }).querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
   expect(screen.queryByRole("dialog", { name: `Translation reviews: ${target.document_id}` })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: `Reviews for ${target.document_id}` }));
+  fireEvent.click(screen.getByRole("button", { name: "Translation reviews for v1" }));
   const reopened = await screen.findByRole("dialog", { name: `Translation reviews: ${target.document_id}` });
   fireEvent.keyDown(reopened, { key: "Escape" });
   await waitFor(() => expect(screen.queryByRole("dialog", { name: `Translation reviews: ${target.document_id}` })).toBeNull());
@@ -273,13 +280,14 @@ it("rechecks authenticated translation-review downloads including an empty JSONL
 });
 
 it("binds document state to actual user identity before accepting late replies", async () => {
-  const old = deferred<ProjectDocumentSummary[]>();
-  vi.mocked(api.listProjectDocuments).mockReturnValueOnce(old.promise).mockResolvedValueOnce([{ ...target, document_id: "new-user-document", external_id: "new-external" }]);
-  const view = render(<DocumentsPage projectKey="p" currentUser={{ username: "first" }} query={{}} onNavigate={vi.fn()} />);
-  view.rerender(<DocumentsPage projectKey="p" currentUser={{ username: "second" }} query={{}} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "View case for new-user-document" });
-  await act(async () => old.resolve([{ ...target, document_id: "old-user-document" }]));
-  expect(screen.queryByRole("link", { name: "View case for old-user-document" })).toBeNull();
+  const old = deferred<Awaited<ReturnType<typeof api.listDocumentRows>>>();
+  vi.mocked(api.listDocumentRows).mockReturnValueOnce(old.promise).mockResolvedValueOnce(targetPage({ document_id: "new-user-document" }));
+  const view = render(<DocumentsPage projectKey="p" canManage currentUser={{ username: "first", pseudonym: "F" }} query={{}} onNavigate={vi.fn()} />);
+  view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "second", pseudonym: "S" }} query={{}} onNavigate={vi.fn()} />);
+  const link = await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });
+  expect(link.getAttribute("href")).toContain("new-user-document");
+  await act(async () => old.resolve(targetPage({ document_id: "old-user-document" })));
+  expect(screen.getByRole("link", { name: `Open ${target.case_id} · ${target.language}` }).getAttribute("href")).not.toContain("old-user-document");
 });
 
 it("renders exact preview variant lineage and every failed code", () => {

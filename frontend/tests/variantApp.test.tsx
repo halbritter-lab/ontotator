@@ -68,16 +68,20 @@ it('keeps the real task, URL and text after cancelling a failed-save sibling tra
   expect(api.openAssignment).toHaveBeenCalledOnce();
   expect(api.openAssignment).toHaveBeenCalledWith(17);
 });
-it('documents case link preserves opaque IDs, guarded navigation and native modified clicks', async () => {
+it('documents Open link preserves opaque IDs, guarded navigation and native modified clicks', async () => {
   const { DocumentsPage } = await import('../src/admin/DocumentsPage');
-  const { documents } = await import('./assignmentFixtures');
-  vi.spyOn(api, 'listProjectDocuments').mockResolvedValue([{ ...documents[0], case_id: caseDetail.case_id }]);
+  const fixtures = await import('./documents/fixtures');
+  vi.spyOn(api, 'listDocumentRows').mockResolvedValue(fixtures.page([fixtures.group(caseDetail.case_id, [
+    fixtures.row({ case_id: caseDetail.case_id, language: 'en', versions: [fixtures.version({ document_id: 'z/doc' })] }),
+  ])]));
+  vi.spyOn(api, 'listProjectDocuments').mockResolvedValue([]);
+  vi.spyOn(api, 'listCases').mockResolvedValue([]);
   vi.spyOn(api, 'getProjectSettings').mockResolvedValue({ languages: [] } as never);
   vi.spyOn(api, 'listMembers').mockResolvedValue([]);
   vi.spyOn(api, 'listAssignments').mockResolvedValue([]);
   const onNavigate = vi.fn();
-  render(<DocumentsPage projectKey="p/ %" query={{}} onNavigate={onNavigate} />);
-  const link = await screen.findByRole('link', { name: 'View case for z/doc' });
+  render(<DocumentsPage projectKey="p/ %" canManage query={{}} onNavigate={onNavigate} />);
+  const link = await screen.findByRole('link', { name: `Open ${caseDetail.case_id} · en` });
   const destination = { name: 'projectCase' as const, key: 'p/ %', caseId: caseDetail.case_id, variant: 'z/doc' };
   expect(link.getAttribute('href')).toBe(routeHref(destination));
   fireEvent.click(link, { ctrlKey: true }); expect(onNavigate).not.toHaveBeenCalled();
