@@ -236,8 +236,11 @@ class TaskSummary:
     # (the list ReviewWorkspace.failed_checks shows); None for other tasks.
     failed_check_count: int | None = None
 
+
 # src/ontocurator/application/translation_reviews.py (module level, used by open() and my_tasks())
-def failed_translation_checks(translation: dict[str, Any] | None) -> list[TranslationCheck]: ...
+def failed_translation_checks(
+    translation: dict[str, Any] | None,
+) -> list[TranslationCheck]: ...
 ```
 
 Generated TS: `TaskSummary.failed_check_count?: number | null`.
@@ -608,7 +611,9 @@ def env(tmp_path):
     assert result.status == "succeeded", result.error
     plan_all(db, "proj")
     alice = logged_in(
-        app, "alice", projects={"proj": ["annotator"]},
+        app,
+        "alice",
+        projects={"proj": ["annotator"]},
         assignments=[("proj", "src", "annotate")],
     )
     lead = logged_in(app, "leader", projects={"proj": ["lead"]}, assignments=[])
@@ -629,7 +634,10 @@ def review(env, external_id, version=1):
         f"{BASE}/assignments",
         json={
             "rows": [
-                {"document_id": document_id(env, external_id, version), "username": "alice"}
+                {
+                    "document_id": document_id(env, external_id, version),
+                    "username": "alice",
+                }
             ],
             "task": "translation_review",
             "confirm_language": True,
@@ -666,7 +674,9 @@ def test_workspace_and_task_list_agree(env):
     row = review(env, "failing")
     workspace = env.alice.get(f"/api/v1/translation-reviews/{row['id']}")
     assert workspace.status_code == 200, workspace.text
-    assert len(workspace.json()["failed_checks"]) == counts(env, "translation_review")[0]
+    assert (
+        len(workspace.json()["failed_checks"]) == counts(env, "translation_review")[0]
+    )
 ```
 
   If an assignment is refused because a correction supersedes its predecessor or because of the work plan, read the refusal code and adjust the fixture (another case for the corrected chain, or `plan_all` after import), never the assertions.
