@@ -20,3 +20,4 @@ export * from "./PlanChip";
 export * from "./TriStateButton";
 export * from "./Toast";
 export * from "./useMediaQuery";
+export * from "./GuidelineDocument";
