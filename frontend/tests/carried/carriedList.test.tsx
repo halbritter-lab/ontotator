@@ -93,7 +93,7 @@ describe("carried findings in the findings list", () => {
     fireEvent.keyDown(window, { key: "N", shiftKey: true });
     expect(pressed(container)).toEqual(["annotation:carried"]);
 
-    const note = screen.getByRole("textbox", { name: "Annotation note" });
+    const note = screen.getByRole("textbox", { name: "Note" });
     fireEvent.keyDown(note, { key: "n" });
     expect(pressed(container)).toEqual(["annotation:carried"]);
 
@@ -144,7 +144,7 @@ describe("carried findings in the findings list", () => {
     vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1, annotations: [edited], round_input_resolutions: [resolution] } as never);
     expect(liveRegion(container).textContent).toBe("");
     fireEvent.click(row(container, "annotation:carried"));
-    const note = screen.getByRole("textbox", { name: "Annotation note" });
+    const note = screen.getByRole("textbox", { name: "Note" });
     fireEvent.change(note, { target: { value: "Edited" } });
     await act(async () => { fireEvent.blur(note); });
     await waitFor(() => expect(liveRegion(container).textContent).toBe("Seizure needs a new check. 0 of 1 checked."));

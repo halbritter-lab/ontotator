@@ -65,12 +65,12 @@ export interface AnnotationPanelProps {
   onAttachMention: (segments: CodepointSegment[]) => void;
   onDetachMention: (evidenceId: string) => void;
   onDeleteAnnotation: (annotationId: string) => void;
-  /** Text of the delete confirmation; defaults to "Delete this annotation and all its mentions?". */
+  /** Text of the delete confirmation; defaults to "Delete this finding and all its mentions?". */
   deleteConfirmMessage?: string;
   onSetIntent: (intent: "new_mention" | "extend_mention") => void;
   /** Document text, used to quote mention snippets. */
   documentText?: string;
-  /** True while "+ Add Mention" mode waits for a text selection. */
+  /** True while "Add mention" mode waits for a text selection. */
   isAttachingMention?: boolean;
   /** Language selection of the term search, when the layer's ontology has translations. */
   searchLanguages?: SearchLanguageControl;
@@ -110,7 +110,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   axesFlushRef,
   onDetachMention,
   onDeleteAnnotation,
-  deleteConfirmMessage = "Delete this annotation and all its mentions?",
+  deleteConfirmMessage = "Delete this finding and all its mentions?",
   onSetIntent,
   documentText = "",
   isAttachingMention = false,
@@ -142,10 +142,11 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
     return (
       <div className="detail-pane">
         <div className="detail-section detail-empty">
-          <h3>No annotation selected</h3>
+          <h3>No finding selected</h3>
           <p>
-            Select an existing annotation or mention in the text,
-            {readOnly ? "to inspect its details." : "or highlight text to create a new annotation."}
+            {readOnly
+              ? "Select a finding in the list or in the text to see its details."
+              : "Select a finding in the list or in the text, or mark text to add one."}
           </p>
         </div>
       </div>
@@ -186,28 +187,17 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
       <ProposalSource source={source} />
       {/* Target Proposal Counter-Annotation Banner */}
       {linkedTarget && (
-        <div
-          style={{
-            padding: "8px 12px",
-            background: "var(--accent-light)",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: "0.82rem",
-          }}
-        >
+        <div className="replacement-banner">
           <div>
-            <span style={{ fontWeight: 600, color: "var(--accent)" }}>↳ Replacement for proposal: </span>
-            <span style={{ color: "var(--text)", fontWeight: 500 }}>
+            <span className="replacement-banner__label">Replacement for proposal: </span>
+            <span className="replacement-banner__term">
               {linkedTarget.termLabel ? `${linkedTarget.termLabel} (${linkedTarget.termId})` : linkedTarget.termId}
             </span>
           </div>
           {onNavigateTarget && (
             <Button
               type="button"
-              variant="secondary" size="sm"
-              style={{ padding: "2px 8px", fontSize: "0.75rem", background: "var(--surface)" }}
+              variant="secondary" size="sm" className="replacement-banner__action"
               onClick={onNavigateTarget}
             >
               View review target
@@ -218,9 +208,9 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
       {/* 1. Term heading */}
       <div className="detail-section">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="term-heading-row">
           <div>
-            <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "2px 0 4px" }}>
+            <h2 className="term-heading">
               <TermName termId={currentTerm} label={termLabel} />{" "}<AiBadge provenance={ann.provenance} source={source} />
             </h2>
             {onShowInTree && currentTerm && (
@@ -234,7 +224,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               </Button>
             )}
           </div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <div className="term-heading-actions">
             <Button
               ref={changeTermButton}
               type="button"
@@ -252,7 +242,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         </div>
 
         {showSearch && (
-          <div style={{ marginTop: 12 }}>
+          <div className="term-search">
             <SearchPanel
               canAssign={!readOnly}
               searchManager={searchManager}
@@ -343,7 +333,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
       )}
 
       <div className="detail-section">
-        <Textarea id={`annotation-note-${ann.annotation_id}`} label={noteRequired ? "Reason for no text span" : "Annotation note"}
+        <Textarea id={`annotation-note-${ann.annotation_id}`} label={noteRequired ? "Reason for no text span" : "Note"}
           data-repair="annotation-note" hint={noteHint} required={noteRequired} value={noteValue ?? ann.note ?? ""} readOnly={readOnly}
           error={noteRequired && !(noteValue ?? ann.note ?? "").trim() ? "A reason is required for a finding without a text span." : undefined}
           onChange={event => onChangeNote?.(event.target.value)} onBlur={onSaveNote} />
@@ -351,34 +341,25 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
       {/* 3. Evidence Mentions */}
       <div className="detail-section">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div className="mentions-header">
           <h3>Mentions ({linkedEvidence.length})</h3>
           <Button
             type="button" data-repair="add-mention"
             variant="secondary" size="sm"
             disabled={readOnly} onClick={() => onSetIntent("new_mention")}
             aria-pressed={isAttachingMention}
-            title="Highlight text to add an additional mention for this term"
+            title="Mark text to add another mention for this term"
           >
-            {isAttachingMention ? "Select text…" : "+ Add Mention"}
+            {isAttachingMention ? "Select text…" : "Add mention"}
           </Button>
         </div>
 
         {linkedEvidence.length === 0 ? (
-          <div
-            style={{
-              padding: "10px 12px",
-              background: "var(--surface)",
-              border: "1px dashed var(--border)",
-              borderRadius: "var(--radius)",
-              fontSize: "0.85rem",
-              color: "var(--text-muted)",
-            }}
-          >
+          <div className="no-span-box">
             <strong>No text span:</strong> This finding currently has no linked text mentions.
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="mention-cards">
             {linkedEvidence.map((ev, idx) => {
               const isSelected = ev.mention.evidence_id === selectedEvidenceId;
               const segments = ev.mention.segments ?? [];
@@ -388,34 +369,25 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               return (
                 <div
                   key={ev.mention.evidence_id}
-                  style={{
-                    padding: "8px 10px",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius)",
-                    background: isSelected ? "var(--accent-light)" : "var(--surface-raised)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
+                  className={`mention-card${isSelected ? " is-selected" : ""}`}
                 >
                   <div
-                    style={{ cursor: "pointer", flex: 1 }}
+                    className="mention-card__body"
                     onClick={() => onSelectEvidence(ev.mention.evidence_id)}
                   >
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    <div className="mention-card__label">
                       Mention #{idx + 1}
                     </div>
                     <div
                       className="mention-snippet"
                       title={`Offsets: ${ranges}`}
-                      style={{ fontSize: "0.85rem", fontWeight: 600 }}
                     >
                       {snippet ? `“${snippet}”` : `Offsets: ${ranges}`}
                     </div>
                   </div>
                   {confirmDetachId === ev.mention.evidence_id ? (
-                    <div style={{ display: "flex", gap: 4, alignItems: "center" }} role="group" aria-label="Confirm mention removal">
-                      <span style={{ fontSize: "0.75rem" }}>Remove?</span>
+                    <div className="confirm-group" role="group" aria-label="Confirm mention removal">
+                      <span className="confirm-group__question">Remove?</span>
                       <Button
                         type="button"
                         variant="danger" size="sm"
@@ -428,7 +400,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                       </Button>
                     </div>
                   ) : (
-                  <div style={{ display: "flex", gap: 4 }}>
+                  <div className="mention-card__actions">
                     <Button
                       type="button"
                       variant="secondary" size="sm"
@@ -439,13 +411,13 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                       }}
                       title="Add another text segment to this mention"
                     >
-                      + Segment
+                      Add segment
                     </Button>
                     <Button
                       type="button"
                       variant="danger" size="sm"
                       disabled={readOnly || (linkedEvidence.length === 1 && !!detachLastBlockedReason)} onClick={() => setConfirmDetachId(ev.mention.evidence_id)}
-                      title="Detach mention from this annotation"
+                      title="Detach this mention from the finding"
                     >
                       Remove
                     </Button>
@@ -460,21 +432,20 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
       {detachLastBlockedReason && <p className="field-hint">{detachLastBlockedReason}</p>}
 
-      {/* 4. Delete Annotation */}
-      <div className="detail-section" style={{ marginTop: "auto" }}>
+      {/* 4. Delete finding */}
+      <div className="detail-section delete-section">
         {confirmDelete ? (
-          <div role="group" aria-label="Confirm deletion" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: "0.85rem" }}>{deleteConfirmMessage}</span>
-            <div style={{ display: "flex", gap: 6 }}>
+          <div role="group" aria-label="Confirm deletion" className="delete-confirm">
+            <span className="delete-confirm__question">{deleteConfirmMessage}</span>
+            <div className="delete-confirm__actions">
               <Button
                 type="button"
                 variant="danger"
-                style={{ flex: 1 }}
                 disabled={readOnly} onClick={() => { if (readOnly) return; setConfirmDelete(false); onDeleteAnnotation(ann.annotation_id); }}
               >
                 Yes, delete
               </Button>
-              <Button type="button" variant="secondary" style={{ flex: 1 }} onClick={() => setConfirmDelete(false)}>
+              <Button type="button" variant="secondary" onClick={() => setConfirmDelete(false)}>
                 Cancel
               </Button>
             </div>
@@ -482,12 +453,11 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         ) : (
           <Button
             type="button"
-            variant="danger"
-            style={{ width: "100%" }}
+            variant="danger" className="delete-finding"
             disabled={readOnly} onClick={() => setConfirmDelete(true)}
           >
             <IconTrash />
-            Delete Annotation
+            Delete finding
           </Button>
         )}
       </div>

@@ -185,3 +185,24 @@ it.each(["alice", "bob"])("uses the real AuthGate after an expired translation s
     expect(writes).toHaveLength(1); expect(metadata).toHaveBeenCalledTimes(1); expect(open).toHaveBeenCalledTimes(1);
   }
 });
+it("names the task in the breadcrumb and keeps the assignment number in its title", async () => {
+  const workspace = reviewWorkspace();
+  window.history.replaceState(null, "", "#/tasks/17");
+  vi.stubGlobal("matchMedia", vi.fn((media: string) => ({ media, matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+  vi.spyOn(api, "listProjects").mockResolvedValue([]);
+  let finish!: (tasks: Awaited<ReturnType<typeof api.listMyTasks>>) => void;
+  const tasks = new Promise<Awaited<ReturnType<typeof api.listMyTasks>>>(resolve => { finish = resolve; });
+  vi.spyOn(api, "listMyTasks").mockReturnValue(tasks);
+  vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue({ ...workspace.assignment, display_name: "Alice" });
+  vi.spyOn(api, "openTranslationReview").mockResolvedValue(workspace);
+  render(<App user={testUser("alice")} />);
+  const breadcrumb = await screen.findByRole("navigation", { name: "Breadcrumb" });
+  const current = () => breadcrumb.querySelector('[aria-current="page"]')!;
+  expect(current().textContent).toBe("Task");
+  expect(current().getAttribute("title")).toBe("Assignment 17");
+  expect(breadcrumb.textContent).not.toMatch(/Task 17/);
+  await act(async () => { finish([{ assignment_id: 17, workflow_revision: 0, held: false, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "in_progress", updated_at: "2026-10-16T12:00:00Z" }]); });
+  await waitFor(() => expect(current().textContent).toBe("EN 1/7 · Translation review (de)"));
+  expect(current().getAttribute("title")).toBe("Assignment 17");
+  expect(within(breadcrumb).getByRole("button", { name: "My tasks" })).toBeDefined();
+});

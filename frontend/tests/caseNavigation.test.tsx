@@ -187,4 +187,12 @@ describe("CaseNavigation Component", () => {
     render(<CaseNavigation documents={sampleDocuments} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
     expect(screen.getByRole("option", { name: /Case 2 of 3/ }).textContent).toBe("Case 2 of 3: doc-alpha (In Progress)");
   });
+
+  it("shows Case n of m without the document id", () => {
+    render(<CaseNavigation documents={[sampleDocuments[0]]} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
+    const label = screen.getByText("Case 1 of 1");
+    expect(label.textContent).toBe("Case 1 of 1");
+    expect(label.getAttribute("title")).toBe("doc-beta");
+    expect(screen.queryByText(/doc-beta/)).toBeNull();
+  });
 });

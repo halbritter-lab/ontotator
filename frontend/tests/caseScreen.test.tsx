@@ -212,8 +212,8 @@ describe("CaseScreen integration", () => {
       });
       render(<CaseScreen view={view} workspaceId="ws-note-transport" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} />);
       selectEditableFinding();
-      fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Retained transport note" } });
-      fireEvent.blur(screen.getByLabelText("Annotation note"));
+      fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Retained transport note" } });
+      fireEvent.blur(screen.getByLabelText("Note"));
       return { routeLeaveRef, leaveGuardRef, logout, apply };
     };
 
@@ -224,7 +224,7 @@ describe("CaseScreen integration", () => {
       await screen.findByRole("dialog", { name: "Changes not saved" });
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
       await act(async () => { expect(await departure).toBe(false); });
-      expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Retained transport note");
+      expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Retained transport note");
       act(() => { departure = state.routeLeaveRef.current!(); });
       fireEvent.click(await screen.findByRole("button", { name: "Discard edits and leave" }));
       await act(async () => { expect(await departure).toBe(true); });
@@ -235,12 +235,12 @@ describe("CaseScreen integration", () => {
 
     it.each(failures)("logout releases a failed note flush and retry saves the latest text after %s", async failure => {
       const state = setup(failure); await screen.findByRole("button", { name: "Retry" });
-      fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Latest local explanation" } });
+      fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Latest local explanation" } });
       act(() => state.leaveGuardRef.current?.(state.logout));
       fireEvent.click(await screen.findByRole("button", { name: "Save and log out" }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).toBeNull());
       expect(state.logout).not.toHaveBeenCalled();
-      expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Latest local explanation");
+      expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Latest local explanation");
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
       await screen.findByText(/^Saved$/);
       expect(state.apply).toHaveBeenLastCalledWith("ws-note-transport", expect.objectContaining({ payload: expect.objectContaining({ note: "Latest local explanation" }) }));
@@ -258,9 +258,9 @@ describe("CaseScreen integration", () => {
       />
     );
 
-    expect(screen.getByText(/Case: doc-test-1|Fall: doc-test-1/i)).toBeDefined();
-    expect(screen.getByText(/Annotate from scratch/i)).toBeDefined();
-    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
+    expect(screen.getByRole("heading", { level: 1, name: "doc-test-1" })).toBeDefined();
+    expect(screen.getByText("Independent annotation")).toBeDefined();
+    expect(screen.getByText("No finding selected")).toBeDefined();
   });
 
   it("switches the compact view between text, list, and details", () => {
@@ -374,7 +374,7 @@ describe("CaseScreen integration", () => {
     const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
     render(<CaseScreen view={view} workspaceId="ws-optional-clear" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
     selectEditableFinding();
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "  " } });
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "  " } });
     await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
     expect(apply).toHaveBeenCalledWith("ws-optional-clear", expect.objectContaining({ payload: { command: "set_annotation_note", annotation_id: "pending-finding", note: null } }));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -414,7 +414,7 @@ describe("CaseScreen integration", () => {
     await waitFor(() => expect(apply).toHaveBeenCalledOnce());
     expect(apply.mock.calls[0][1].payload).not.toHaveProperty("note");
     expect(screen.queryByRole("dialog", { name: "Reason for no text span" })).toBeNull();
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).required).toBe(false);
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).required).toBe(false);
     expect(decide).not.toHaveBeenCalled();
   });
 
@@ -447,11 +447,11 @@ describe("CaseScreen integration", () => {
     const apply = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     selectEditableFinding();
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Clinical explanation" } });
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Clinical explanation" } });
     fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
     selectEditableFinding();
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Clinical explanation");
-    fireEvent.blur(screen.getByLabelText("Annotation note"));
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Clinical explanation");
+    fireEvent.blur(screen.getByLabelText("Note"));
     await waitFor(() => expect(apply).toHaveBeenCalledWith("ws", expect.objectContaining({ payload: { command: "set_annotation_note", annotation_id: "pending-finding", note: "Clinical explanation" } })));
   });
 
@@ -463,15 +463,15 @@ describe("CaseScreen integration", () => {
     const apply = vi.spyOn(api, "applyCommand").mockReturnValue(new Promise((_resolve, reject) => { rejectSave = reject; }));
     render(<CaseScreen view={view} workspaceId="ws-note" onClose={vi.fn()} />);
     selectEditableFinding();
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "First unsaved explanation" } });
-    fireEvent.blur(screen.getByLabelText("Annotation note"));
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "First unsaved explanation" } });
+    fireEvent.blur(screen.getByLabelText("Note"));
     await waitFor(() => expect(apply).toHaveBeenCalledOnce());
     fireEvent.click(document.querySelector('[data-list-key="annotation:second-finding"]')!);
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Second local explanation" } });
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Second local explanation" } });
     await act(async () => { rejectSave(new ValidationError("Delayed note refusal")); });
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Second local explanation");
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Second local explanation");
     selectEditableFinding();
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("First unsaved explanation");
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("First unsaved explanation");
     expect(apply).toHaveBeenCalledWith("ws-note", expect.objectContaining({ payload: expect.objectContaining({ annotation_id: "pending-finding", note: "First unsaved explanation" }) }));
   });
 
@@ -790,7 +790,7 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByText("HP:0001252"));
 
     // Click delete
-    fireEvent.click(screen.getByText(/Delete Annotation|Annotation löschen/i));
+    fireEvent.click(screen.getByText("Delete finding"));
     // Deletion requires an explicit confirmation
     fireEvent.click(screen.getByRole("button", { name: /Yes, delete/i }));
 
@@ -1074,7 +1074,7 @@ describe("CaseScreen integration", () => {
         const rendered = render(<CaseScreen view={view} workspaceId="ws-guard" onClose={vi.fn()} />);
         await addHypotonia(rendered.container);
         await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
-        const note = screen.getByLabelText("Annotation note");
+        const note = screen.getByLabelText("Note");
         note.focus();
         for (const key of ["d", "v", "/"]) fireEvent.keyDown(note, { key });
         expect(document.activeElement).toBe(note);
@@ -1397,7 +1397,7 @@ describe("CaseScreen integration", () => {
     expect(row.textContent).toContain("Betroffene Person (Experiencer): Other person");
     expect(row.textContent).toContain("Zeitlicher Bezug (Temporality): Historical");
     fireEvent.keyDown(row, { key: "Enter" });
-    expect(screen.getByRole("textbox", { name: "Annotation note" })).toBeDefined();
+    expect(screen.getByRole("textbox", { name: "Note" })).toBeDefined();
   });
 
   it.each([
@@ -1421,7 +1421,7 @@ describe("CaseScreen integration", () => {
     expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
     expect(submit).not.toHaveBeenCalled();
     await waitFor(() => expect(allow && requireNote && evidencePolicy === "optional"
-      ? screen.getByLabelText("Annotation note") : screen.getByRole("button", { name: /Add Mention/ })).toBe(document.activeElement));
+      ? screen.getByLabelText("Note") : screen.getByRole("button", { name: "Add mention" })).toBe(document.activeElement));
   });
 
   it("does not request a reason when a text span is required", () => {
@@ -1430,7 +1430,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="prohibited" onClose={vi.fn()} />);
     selectEditableFinding();
     expect(screen.queryByLabelText(/Reason for no text span/)).toBeNull();
-    expect(screen.getByLabelText("Annotation note")).toHaveProperty("required", false);
+    expect(screen.getByLabelText("Note")).toHaveProperty("required", false);
   });
 
   it.each([false, true])("explains current submission rules without restricting legacy edits (%s)", allow => {
@@ -1813,8 +1813,8 @@ describe("CaseScreen integration", () => {
     const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...saved, revision: 2 });
     render(<CaseScreen view={view} workspaceId="ws-note" onClose={vi.fn()} />);
     selectEditableFinding();
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Specific clinical reason" } });
-    fireEvent.blur(screen.getByLabelText("Annotation note"));
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Specific clinical reason" } });
+    fireEvent.blur(screen.getByLabelText("Note"));
     await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-note", expect.objectContaining({ expected_revision: 1,
       payload: expect.objectContaining({ outcome: "changed", target, replacement: { annotation_id: "pending-finding", version: "note-version" } }) })));
     expect(apply).toHaveBeenCalledOnce();
@@ -1869,13 +1869,13 @@ describe("CaseScreen integration", () => {
     fireEvent.change(screen.getByLabelText(/Reason for no text span/), { target: { value: "Revised reason before supporting text" } });
     fireEvent.blur(screen.getByLabelText(/Reason for no text span/));
     await screen.findByText(/^Saved$/); expect(decide).not.toHaveBeenCalled(); expect(apply).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add Mention" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add mention" }));
     const text = document.querySelector(".text-container")!;
     const node = text.querySelector(".run")!.firstChild!;
     const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 3);
     window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range); fireEvent.mouseUp(text);
     await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-required-copy", expect.objectContaining({ payload: expect.objectContaining({ target, outcome: "changed", replacement: { annotation_id: "pending-finding", version: "supported-copy" } }) })));
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Revised reason before supporting text");
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Revised reason before supporting text");
     await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
   });
 
@@ -2018,6 +2018,91 @@ describe("CaseScreen integration", () => {
       expect(screen.getByRole("status").textContent).toMatch(/Offline – changes not saved/);
       await waitFor(() => expect(finishButton().getAttribute("aria-busy")).not.toBe("true"));
       expect(screen.queryByRole("dialog", { name: /Submit case/i })).toBeNull();
+    });
+  });
+
+  describe("editor polish", () => {
+    const task = { assignment_id: 17, workflow_revision: 0, held: false, project_key: "pkg-1", project_name: "Project", document_id: "doc-test-1",
+      external_id: "accepted-translation", language: "de", source_language: "en", target_language: "de", task: "annotate" as const,
+      status: "in_progress" as const, updated_at: "2026-10-16T12:00:00Z" };
+    const assignmentNavigation = { tasks: [task], current: task, onNavigate: vi.fn() };
+    const withMention = (view: WorkspaceView) => {
+      const evidence = { mention: { evidence_id: "ev-h", segments: [{ start: 26, end: 35 }] }, version: "ev-1" };
+      view.draft.evidence = [evidence] as any;
+      view.draft.annotations = [{ schema_version: "ontocurator-annotation/v3", version: "v1",
+        document_id: view.document.document_id, text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
+        annotation: { annotation_id: "ann-h", document_id: view.document.document_id, layer_id: "phenotype",
+          type_id: "default", term_id: "HP:0001252", axes_values: {}, evidence_refs: [{ evidence_id: "ev-h", version: "ev-1" }],
+          provenance: { actor: { actor_id: "user-test", kind: "human" }, method: "manual", source_refs: [] } }, evidence: [evidence] }] as any;
+      return view;
+    };
+    const selectMention = () => fireEvent.click(document.querySelector('[data-list-key="annotation:ann-h"]')!);
+
+    it("shows the empty inspector without the typo", () => {
+      const rendered = render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} />);
+      expect(screen.getByRole("heading", { name: "No finding selected" })).toBeDefined();
+      expect(screen.getByText("Select a finding in the list or in the text, or mark text to add one.")).toBeDefined();
+      expect(document.body.textContent).not.toMatch(/text,or/);
+      rendered.unmount();
+      render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} readOnly />);
+      expect(screen.getByText("Select a finding in the list or in the text to see its details.")).toBeDefined();
+    });
+
+    it("has no My tasks button on assignment routes and keeps Dashboard on the legacy path", () => {
+      const rendered = render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} assignmentNavigation={assignmentNavigation} />);
+      const toolbar = screen.getByRole("group", { name: "Case" });
+      expect(within(toolbar).queryByRole("button", { name: /My tasks/ })).toBeNull();
+      expect(within(toolbar).queryByRole("button", { name: /Dashboard/ })).toBeNull();
+      rendered.unmount();
+      render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} />);
+      expect(screen.getByRole("button", { name: "← Dashboard" })).toBeDefined();
+    });
+
+    it("renders the document name as h1 and the plain case navigation", () => {
+      const rendered = render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} assignmentNavigation={assignmentNavigation} />);
+      const title = screen.getByRole("heading", { level: 1 });
+      expect(title.textContent).toBe("accepted-translation");
+      expect(title.classList.contains("case-title")).toBe(true);
+      expect(screen.getByText("Case 1 of 1")).toBeDefined();
+      rendered.unmount();
+      render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} />);
+      expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("doc-test-1");
+      expect(screen.queryByText(/Case: doc-test-1/)).toBeNull();
+    });
+
+    it("names modes and identity without jargon", () => {
+      render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} annotatorName="Alice" />);
+      const badge = screen.getByText("Independent annotation");
+      expect(badge.getAttribute("title")).toBe("You do not see proposals from other people or tools.");
+      expect(screen.getByTestId("annotator-identity").textContent).toBe("as Alice (user-test)");
+      expect(document.body.textContent).not.toMatch(/Annotating as|Annotate from scratch/);
+    });
+
+    it("hides the selection intent and explains segment and mention adding", async () => {
+      vi.spyOn(api, "resolveTermLabels").mockResolvedValue([{ layer_id: "phenotype", term_id: "HP:0001252", label: "Hypotonia" }] as any);
+      render(<CaseScreen view={withMention(structuredClone(sampleView))} workspaceId="ws" onClose={vi.fn()} />);
+      expect(screen.queryByText(/Selection intent/)).toBeNull();
+      selectMention();
+      await screen.findByRole("heading", { level: 2, name: /Hypotonia/ });
+      expect(screen.queryByText(/Selection intent/)).toBeNull();
+      expect(screen.queryByText(/Mark the text/)).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Add segment" }));
+      expect(screen.getByText("Adding a segment to mention 1 of Hypotonia. Mark the text. Esc cancels.")).toBeDefined();
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByText(/Adding a segment/)).toBeNull());
+      fireEvent.click(screen.getByRole("button", { name: "Add mention" }));
+      expect(screen.getByText("Adding a mention to Hypotonia. Mark the text. Esc cancels.")).toBeDefined();
+      expect(screen.queryByText(/Adding a segment/)).toBeNull();
+    });
+
+    it("uses Add mention, Add segment, Delete finding and Note", () => {
+      render(<CaseScreen view={withMention(structuredClone(sampleView))} workspaceId="ws" onClose={vi.fn()} />);
+      selectMention();
+      expect(screen.getByRole("button", { name: "Add mention" })).toBeDefined();
+      expect(screen.getByRole("button", { name: "Add segment" })).toBeDefined();
+      expect(screen.getByRole("button", { name: "Delete finding" })).toBeDefined();
+      expect(screen.getByLabelText("Note")).toBeDefined();
+      expect(document.body.textContent).not.toMatch(/\+ Add Mention|\+ Segment|Delete Annotation/);
     });
   });
 });

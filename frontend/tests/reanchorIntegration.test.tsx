@@ -113,8 +113,8 @@ it('reuses a saved edited finding and explicitly pins its current version withou
   const mounted=render(<CaseScreen view={view} workspaceId="w" onClose={()=>{}}/>);
   expect(screen.getByText('0 pending · 1 resolved')).toBeTruthy();
   fireEvent.click(mounted.container.querySelector('[data-list-key="annotation:old"]')!);
-  fireEvent.change(screen.getByRole('textbox',{name:'Annotation note'}),{target:{value:edited.annotation.note}});
-  fireEvent.blur(screen.getByRole('textbox',{name:'Annotation note'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Note'}),{target:{value:edited.annotation.note}});
+  fireEvent.blur(screen.getByRole('textbox',{name:'Note'}));
   await screen.findByText('1 pending · 0 resolved');
   expect(screen.getByText('1 pending · 0 resolved')).toBeTruthy();
   fireEvent.click(screen.getByRole('button',{name:'Re-create here'}));

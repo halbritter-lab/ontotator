@@ -31,7 +31,7 @@ describe("Values block", () => {
   it("renders Values above the note with one row per axis and (required) in text", () => {
     const { container } = render(<AnnotationPanel {...props()} />);
     const heading = screen.getByRole("heading", { name: "Values" });
-    const note = screen.getByLabelText("Annotation note");
+    const note = screen.getByLabelText("Note");
     expect(heading.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const section = container.querySelector("[data-values-section]")!;
     expect(section.getAttribute("aria-labelledby")).toBe(heading.id);

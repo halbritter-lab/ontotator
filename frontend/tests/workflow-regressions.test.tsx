@@ -437,7 +437,7 @@ it("merges rapid span extensions against the latest saved evidence", async () =>
  const edit = vi.spyOn(api, "applyCommand").mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })).mockResolvedValue({ ...view.draft, revision: 2 });
  const rendered = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));
- fireEvent.click(screen.getByRole("button", { name: /Switch to »Additional segment«|Auf »Weiteres Segment«/i }));
+ fireEvent.click(screen.getAllByRole("button", { name: "Add segment" })[0]);
  const drag = (start: number, end: number) => {
    const node = rendered.container.querySelector('.text-container .run[data-start="5"]')!.firstChild!;
    const range = document.createRange();
@@ -744,7 +744,7 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
   // 3. Clicking the selected annotation in the sidebar again deselects it
   fireEvent.click(screen.getAllByText("HP:0003")[1]);
   await waitFor(() => {
-    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
+    expect(screen.getByText("No finding selected")).toBeDefined();
   });
   expect(screen.queryByRole("heading", { name: "Values" })).toBeNull();
   expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
@@ -757,7 +757,7 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
   // Click target1 again to deselect
   fireEvent.click(screen.getAllByText("HP:0001")[0]);
   await waitFor(() => {
-    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
+    expect(screen.getByText("No finding selected")).toBeDefined();
   });
 });
 
@@ -830,7 +830,7 @@ it("supports review keyboard shortcuts: 1 (confirm), 2 (reject), Escape (deselec
   // 4. Press Escape to deselect
   fireEvent.keyDown(window, { key: "Escape" });
   await waitFor(() => {
-    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
+    expect(screen.getByText("No finding selected")).toBeDefined();
   });
 });
 });

@@ -89,7 +89,7 @@ describe("carried finding inspector", () => {
     vi.spyOn(api, "applyCommand").mockResolvedValue(draftWith(1, [edited], [resolution]));
     const { container } = setup({ annotations: [carried], inputs: [input("input-1", carried)], resolutions: [resolution] });
     fireEvent.click(row(container, "annotation:carried"));
-    const note = screen.getByRole("textbox", { name: "Annotation note" });
+    const note = screen.getByRole("textbox", { name: "Note" });
     fireEvent.change(note, { target: { value: "Edited" } });
     await act(async () => { fireEvent.blur(note); });
     await waitFor(() => expect(within(row(container, "annotation:carried")).getByText("Changed after your check")).toBeDefined());
@@ -132,14 +132,14 @@ describe("carried finding inspector", () => {
     const { container } = setup({ annotations: [carried, plain], inputs: [input("input-1", carried)] });
 
     fireEvent.click(row(container, "annotation:plain"));
-    fireEvent.click(screen.getByRole("button", { name: /Delete Annotation/ }));
-    expect(within(screen.getByRole("group", { name: "Confirm deletion" })).getByText("Delete this annotation and all its mentions?")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: /Delete finding/ }));
+    expect(within(screen.getByRole("group", { name: "Confirm deletion" })).getByText("Delete this finding and all its mentions?")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     fireEvent.click(row(container, "annotation:carried"));
-    fireEvent.click(screen.getByRole("button", { name: /Delete Annotation/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Delete finding/ }));
     expect(within(screen.getByRole("group", { name: "Confirm deletion" })).getByText(
-      "Delete this annotation and all its mentions? This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason.",
+      "Delete this finding and all its mentions? This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason.",
     )).toBeDefined();
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, delete" })); });
     await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
@@ -281,7 +281,7 @@ describe("carried finding inspector", () => {
     const resolve = vi.spyOn(api, "resolveRoundInput").mockResolvedValue(draftWith(1, [carried], []));
     const { container } = setup({ annotations: [carried], inputs: [input("input-1", carried)] });
     fireEvent.click(row(container, "annotation:carried"));
-    fireEvent.keyDown(screen.getByRole("textbox", { name: "Annotation note" }), { key: "c" });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Note" }), { key: "c" });
     expect(resolve).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: "?" });
     expect(screen.getByText("Mark carried finding as checked")).toBeDefined();

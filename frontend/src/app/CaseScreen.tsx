@@ -1394,7 +1394,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       onSaveNoteAndCheck={async () => { await flushAnnotationNotes(); await markCarriedChecked(state); }} />;
   })() : null;
   const carriedDeleteMessage = selectedAnnotationId && carried.byHome.has(selectedAnnotationId)
-    ? "Delete this annotation and all its mentions? This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason."
+    ? "Delete this finding and all its mentions? This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason."
     : undefined;
   /** Delete; a deleted carried finding becomes its placeholder row, selected with "Dismiss with reason…" focused. */
   const deleteAnnotation = async (annotationId: string) => {
@@ -2067,6 +2067,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     ? (selectedAnnotation.annotation.evidence_refs ?? []).map((r) => r.evidence_id)
     : [];
 
+  // One line above the text, only while a marking mode waits for text (spec C.6).
+  const intentTerm = selectedAnnotation
+    ? termLabel(selectedAnnotation.annotation.layer_id, selectedAnnotation.annotation.term_id) || selectedAnnotation.annotation.term_id
+    : null;
+  const extendedMention = selectedAnnotation && selectedEvidenceId
+    ? (selectedAnnotation.annotation.evidence_refs ?? []).findIndex(ref => ref.evidence_id === selectedEvidenceId) + 1 : 0;
+  const intentMessage = readOnly || !intentTerm ? null
+    : isAttachingMention ? `Adding a mention to ${intentTerm}. Mark the text. Esc cancels.`
+    : selectionIntent === "extend_mention" && extendedMention > 0
+      ? `Adding a segment to mention ${extendedMention} of ${intentTerm}. Mark the text. Esc cancels.` : null;
+
   const openReviewTargets = reviewTargets.filter(
     (t) => !(draft.decisions ?? []).some((d) => refKey(d.target) === refKey(t)),
   );
@@ -2478,9 +2489,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, { ...shortcutOptions, group: "Navigation", description: "Previous / next case" });
   useShortcut("Escape", () => {
     if (isAttachingMention) { setIsAttachingMention(false); return; }
+    if (selectionIntent === "extend_mention" && !readOnly) { setSelectionIntent("new_mention"); return; }
     if (!selectedAnnotationId && !selectedTargetId && !selectedSourceId && !selectedInputId) return false;
     handleDeselectAll();
-  }, { ...shortcutOptions, allowRepeat: true, group: "General", description: "Clear selection / cancel adding a mention" });
+  }, { ...shortcutOptions, allowRepeat: true, group: "General", description: "Clear selection / cancel adding a mention or segment" });
   useShortcut(["j", "k"], (event) => {
     const current = reviewTargets.findIndex((target) => refKey(target) === selectedTargetId);
     const index = event.key.toLowerCase() === "j"
@@ -2587,14 +2599,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
         <div className="app-title">
-          <Button
-            type="button"
-            variant="quiet" size="sm"
-            onClick={() => { if (assignmentNavigation) onClose(); else void leaveCase(onClose); }}
-            title={assignmentNavigation ? "Back to my tasks" : "Back to dashboard"}
-          >
-            {assignmentNavigation ? "← My tasks" : "← Dashboard"}
-          </Button>
+          {/* Assignment routes go back through the shell breadcrumb; only the legacy path keeps its own way back. */}
+          {!assignmentNavigation && (
+            <Button type="button" variant="quiet" size="sm" onClick={() => { void leaveCase(onClose); }} title="Back to dashboard">
+              ← Dashboard
+            </Button>
+          )}
           {assignmentNavigation && assignmentTasks?.length ? (
             <CaseNavigation documents={assignmentTasks.map((task, index) => ({ document_id: task.document_id,
               position: index + 1, language: task.language, text_length: 0, status: task.status === "submitted" ? "completed" : task.status === "in_progress" ? "in_progress" : "not_started" }))}
@@ -2609,11 +2619,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onNavigate={async (docId) => { await leaveCase(() => onNavigateCase(docId)); }}
               disabled={queueState === "saving"}
             />
-          ) : (
-            <span className="case-label">Case: {view.document.document_id}</span>
-          )}
+          ) : null}
+          <h1 className="case-title" title={view.document.document_id}>{assignmentNavigation?.current.external_id || view.document.document_id}</h1>
           <span
-            title={roundTitle}
+            title={roundTitle ?? (roundKind !== "consolidation" && roundKind !== "carry_forward" && view.key.mode === "independent" ? "You do not see proposals from other people or tools." : undefined)}
             className={`badge ${
               view.key.mode === "review"
                 ? "badge-review"
@@ -2626,7 +2635,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               ? "Review proposals"
               : view.key.mode === "assisted"
               ? "Assisted annotation"
-              : "Annotate from scratch"}
+              : "Independent annotation"}
           </span>
           {/* The display name has a bounded width (full text in the title), so the header
               does not need another line; the pseudonym is never shortened. */}
@@ -2635,7 +2644,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             data-testid="annotator-identity"
             title={`${annotatorName ? `${annotatorName} (${view.key.annotator_id})` : view.key.annotator_id}: your annotations and decisions are saved under this pseudonym`}
           >
-            Annotating as{" "}
+            as{" "}
             <strong>
               {annotatorName ? (
                 <>
@@ -2972,6 +2981,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           mentions={textMentions}
           isAttachingMention={isAttachingMention || !!activeReanchor || !!activeCarried || (!!pendingEvidenceAdoption && !confirmRequest)}
           attachMessage={activeCarried ? `Select supporting text to re-create ${carriedTermText(activeCarried.source_snapshot)}.` : activeReanchor ? `Select supporting text to re-create ${activeReanchor.term_id}. Save the finding, review its values, then complete the text-change review.` : pendingEvidenceAdoption ? "Select supporting text to create an editable copy of this proposal. The current decision is kept until you confirm the replacement." : undefined}
+          intentMessage={intentMessage}
           onCancelAttach={cancelAttach}
           selectedEvidenceId={selectedEvidenceId}
           selectionIntent={selectionIntent}
@@ -3034,7 +3044,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 {pendingIsMarkedSpan
                   ? <p className="pending-quote">“{quoteSegments(view.document.text, pendingAnnotation.segments)}”</p>
                   : <p>
-                    {pendingAnnotation.carriedInput ? "Save this finding with the original term and values. Then check it and mark it as checked." : pendingAnnotation.reanchorItem ? "Save this finding, check its evidence and values, then complete the text-change review." : "Select a term from the ontology for the new annotation."}
+                    {pendingAnnotation.carriedInput ? "Save this finding with the original term and values. Then check it and mark it as checked." : pendingAnnotation.reanchorItem ? "Save this finding, check its evidence and values, then complete the text-change review." : "Select a term from the ontology for the new finding."}
                   </p>}
                 {pendingAnnotation.reanchorItem && <>
                   <p><TermName termId={savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id} label={termLabel(pendingAnnotation.layerId,savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id)} /> · {pendingAnnotation.layerId}</p>

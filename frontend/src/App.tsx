@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type CurrentUser, type Profile, type ProjectSummary } from "./api/client";
+import { api, type CurrentUser, type Profile, type ProjectSummary, type TaskSummary } from "./api/client";
+import { taskCrumbLabel } from "./app/labels";
 import { CaseViewer } from "./variants/CaseViewer";
 import { Shell } from "./app/Shell";
 import { NotFound } from "./app/NotFound";
@@ -47,6 +48,17 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const [landing, setLanding] = useState(() => route.name === "tasks" && route.project === undefined);
   const [taskProject, setTaskProject] = useState<{ identity: string; key: string } | null>(null);
   const taskIdentity = route.name === 'task' ? JSON.stringify([baseUser?.username, route.assignmentId]) : '';
+  // The breadcrumb names the open task; until its summary arrives it reads "Task" (never the bare number).
+  const [crumbTask, setCrumbTask] = useState<{ identity: string; task: TaskSummary | null } | null>(null);
+  const crumbAssignmentId = route.name === "task" ? route.assignmentId : null;
+  useEffect(() => {
+    if (crumbAssignmentId === null || !baseUser) return;
+    let active = true;
+    api.listMyTasks().then(tasks => {
+      if (active) setCrumbTask({ identity: taskIdentity, task: tasks.find(task => task.assignment_id === crumbAssignmentId) ?? null });
+    }, () => { /* The breadcrumb keeps its "Task" fallback. */ });
+    return () => { active = false; };
+  }, [taskIdentity]);
   const acceptedHash = useRef(window.location.hash || "#/");
   const acceptedIndex = useRef(typeof window.history.state?.ontocuratorRouteIndex === "number" ? window.history.state.ontocuratorRouteIndex as number : 0);
   type HistoryEntry = { hash: string; index: number; state: Record<string, unknown> };
@@ -237,7 +249,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   return <Shell user={user} projects={projects} route={route} onNavigate={go} onLogout={logout}
     taskProject={taskProject?.identity === taskIdentity ? taskProject.key : undefined}
     breadcrumb={route.name === "task" ? [
-      { label: "My tasks", onClick: () => go({ name: "tasks" }) }, { label: `Task ${route.assignmentId}` },
+      { label: "My tasks", onClick: () => go({ name: "tasks" }) },
+      { label: crumbTask?.identity === taskIdentity && crumbTask.task ? taskCrumbLabel(crumbTask.task) : "Task", title: `Assignment ${route.assignmentId}` },
     ] : undefined}>
     {!!projectError && <><ErrorNotice error={projectError} /><Button onClick={() => setRetry(value => value + 1)}>Retry projects</Button></>}
     {content}

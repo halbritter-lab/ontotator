@@ -176,7 +176,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     const name = "Maximiliane Schmidt-Rottluff";
     render(<CaseScreen view={baseView()} workspaceId="ws" onClose={vi.fn()} annotatorName={name} />);
     const badge = screen.getByTestId("annotator-identity");
-    expect(badge.textContent).toBe(`Annotating as ${name} (dr-a)`);
+    expect(badge.textContent).toBe(`as ${name} (dr-a)`);
     expect(badge.title).toBe(`${name} (dr-a): your annotations and decisions are saved under this pseudonym`);
     // The CSS class .identity-name cuts the name with an ellipsis; the pseudonym is outside it.
     const cut = screen.getByTestId("annotator-name");
@@ -543,10 +543,10 @@ describe("Annotation panel and text pane", () => {
   it("shows a visible banner in add-mention mode that Esc cancels", async () => {
     render(<CaseScreen view={withMention()} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByText("HP:0003"));
-    fireEvent.click(screen.getByRole("button", { name: /\+ Add Mention/ }));
-    expect(screen.getByText(/Adding a mention:/)).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Add mention" }));
+    expect(screen.getByText(/^Adding a mention to .*. Mark the text. Esc cancels.$/)).toBeDefined();
     fireEvent.keyDown(document.body, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByText(/Adding a mention:/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Adding a mention to/)).toBeNull());
     // The annotation stays selected.
     expect(screen.getByRole("heading", { name: "Values" })).toBeDefined();
   });
