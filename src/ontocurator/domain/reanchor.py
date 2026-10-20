@@ -20,8 +20,34 @@ class TextMap:
 
 
 def text_map(old: str, new: str) -> TextMap:
-    matcher = SequenceMatcher(None, old, new, autojunk=False)
-    return TextMap(tuple((a, b, n) for a, b, n in matcher.get_matching_blocks() if n))
+    """Equal codepoint blocks of ``old`` and ``new``, in order.
+
+    The common prefix and suffix are equal blocks as they are; only the
+    changed middle goes through ``SequenceMatcher``. Matching a whole long,
+    repetitive text character by character without autojunk is quadratic
+    (seconds for an ordinary clinical text), and callers such as round creation
+    map under the exclusive project lock.
+    """
+    limit = min(len(old), len(new))
+    prefix = 0
+    while prefix < limit and old[prefix] == new[prefix]:
+        prefix += 1
+    suffix = 0
+    while suffix < limit - prefix and old[-1 - suffix] == new[-1 - suffix]:
+        suffix += 1
+    old_middle = old[prefix : len(old) - suffix]
+    new_middle = new[prefix : len(new) - suffix]
+    blocks: list[tuple[int, int, int]] = [(0, 0, prefix)] if prefix else []
+    if old_middle and new_middle:
+        matcher = SequenceMatcher(None, old_middle, new_middle, autojunk=False)
+        blocks.extend(
+            (prefix + a, prefix + b, n)
+            for a, b, n in matcher.get_matching_blocks()
+            if n
+        )
+    if suffix:
+        blocks.append((len(old) - suffix, len(new) - suffix, suffix))
+    return TextMap(tuple(blocks))
 
 
 def map_span(m: TextMap, start: int, end: int) -> tuple[int, int] | None:

@@ -79,7 +79,7 @@ async function openLeadPage(page: Page, s: ProblemReportScenario, report: Proble
 
 async function openDocuments(page: Page, s: ProblemReportScenario, query = "") {
   await page.goto(documentsUrl(s, query));
-  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
 }
 
 /** Sorted ``name=value`` pairs of the hash query (order-independent comparison). */
@@ -118,7 +118,7 @@ async function confirmRestart(box: Locator, reporter: string, reason: string) {
 /** Documents table helpers (same accessible names as the Documents specs). */
 const table = (page: Page) => page.getByRole("table", { name: "Documents", exact: true });
 const disclosure = (page: Page, caseId: string, language: string) =>
-  page.getByRole("button", { name: `Show submissions, ${caseId} · ${language}`, exact: true });
+  page.getByRole("button", { name: `Show details, ${caseId} · ${language}`, exact: true });
 const languageRow = (page: Page, caseId: string, language: string): Locator =>
   table(page).getByRole("row").filter({ has: disclosure(page, caseId, language) });
 const region = (page: Page, caseId: string, language: string) => page.getByRole("region", { name: `${caseId} · ${language}`, exact: true });
@@ -128,7 +128,8 @@ async function expand(page: Page, caseId: string, language: string): Promise<Loc
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
   await expect(button).toHaveAttribute("aria-expanded", "true");
   const area = region(page, caseId, language);
-  await expect(area.getByRole("heading", { name: /^Submissions( \(\d+\))?$/, level: 3 })).toBeVisible();
+  // Submissions (n) is shown only with submissions or a final result; the More section always is.
+  await expect(area.getByRole("heading", { name: "More", level: 3 })).toBeVisible();
   await expect(area.getByText("Loading submissions…")).toHaveCount(0);
   return area;
 }
@@ -165,7 +166,8 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await openDocuments(page, s, "?decision=report-or-pause");
   const row = languageRow(page, caseId, "de");
   await expect(row).toBeVisible();
-  await expect(row.locator(".documents-issues")).toHaveAttribute("aria-label", /problem report or paused task 1/);
+  // The orphaned pause is the row's next step (a decision for the lead).
+  await expect(row).toContainText("Resume paused task");
   const area = await expand(page, caseId, "de");
   const orphan = area.getByRole("listitem").filter({ hasText: `${s.labels.reporter}'s task is paused, but its report is resolved.` });
   await expect(orphan).toBeVisible();
@@ -189,8 +191,8 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await openDocuments(page, s);
   const plain = languageRow(page, caseId, "de");
   await expect(plain).toBeVisible();
-  const issues = plain.locator(".documents-issues");
-  if (await issues.count()) await expect(issues).not.toHaveAttribute("aria-label", /problem report/);
+  await expect(plain).not.toContainText("Resume paused task");
+  await expect(plain).not.toContainText("Decide on problem report");
   const expanded = await expand(page, caseId, "de");
   await expect(expanded.getByText(/task is paused, but its report is resolved/)).toHaveCount(0);
   await expect(expanded.getByRole("link", { name: "Resume task" })).toHaveCount(0);
@@ -368,7 +370,7 @@ test("the back link restores the full Documents query (decision, open, page)", a
   await expect(page).toHaveURL(new RegExp(`/problem-reports/${esc(report.report_id)}\\?`));
   const back = page.getByRole("link", { name: "Back to Documents" }).first();
   await back.click();
-  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
   expect(hashQueryOf(page.url())).toEqual(query);
   await expect(disclosure(page, caseId, "de")).toHaveAttribute("aria-expanded", "true");
 

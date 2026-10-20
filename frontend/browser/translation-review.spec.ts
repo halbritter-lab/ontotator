@@ -65,7 +65,7 @@ async function documentRow(page: Page, id: string) {
   const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
   const name = `${doc.case_id} · ${doc.language}`;
-  const disclosure = page.getByRole('button', { name: `Show submissions, ${name}`, exact: true });
+  const disclosure = page.getByRole('button', { name: `Show details, ${name}`, exact: true });
   if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
   const versions = page.getByRole('region', { name, exact: true }).locator('details').filter({ has: page.locator('summary', { hasText: /^Text versions \(\d+\)$/ }) });
   if (!await versions.evaluate(node => (node as HTMLDetailsElement).open)) await versions.locator(':scope > summary').click();
@@ -73,19 +73,11 @@ async function documentRow(page: Page, id: string) {
   await expect(version).toHaveCount(1);
   return version;
 }
-/** Select one exact document for assignment: the row checkbox, or its own checkbox in Text versions when the row has several. */
-async function selectForAssignment(page: Page, version: Locator, id: string) {
-  const own = version.getByRole('checkbox', { name: /for assignment$/ });
-  if (await own.count()) { await own.check(); return; }
-  const project = decodeURIComponent(/#\/projects\/([^/?]+)\/documents/.exec(page.url())![1]);
-  const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
-  const doc = docs.find(item => item.document_id === id)!;
-  await page.getByRole('table', { name: 'Documents', exact: true }).getByRole('checkbox', { name: `Select ${doc.case_id} · ${doc.language}`, exact: true }).check();
-}
 async function section(page: Page, name: string) {
   const details = page.locator('.shell-reading-navigation');
   if (await details.count() && !await details.evaluate(el => (el as HTMLDetailsElement).open)) await details.locator('summary').click();
-  await page.getByRole('link', { name, exact: true }).click();
+  // The nav shows the open task count: "My tasks (n)".
+  await page.getByRole('link', { name: name === 'My tasks' ? /^My tasks( \(\d+\))?$/ : name, exact: name !== 'My tasks' }).click();
 }
 async function alignAt(surface: Locator, index: number) {
   await surface.dispatchEvent('wheel');
@@ -108,14 +100,18 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
     await lead.page.goto(documentsUrl(s));
     const row = await documentRow(lead.page, s.documents.target);
     await expect(row).toContainText('Ready for review');
-    await selectForAssignment(lead.page, row, s.documents.target);
-    await lead.page.getByRole('button', { name: 'Assign …', exact: true }).click();
-    const dialog = lead.page.getByRole('dialog', { name: 'Assign documents', exact: true });
-    await dialog.getByLabel('Task', { exact: true }).selectOption('translation_review');
-    await dialog.getByRole('checkbox', { name: new RegExp(s.users.reviewer) }).check();
-    await dialog.getByRole('button', { name: 'Assign', exact: true }).click();
-    await expect(dialog).toContainText('Assignment request complete: 1 accepted; 0 refused.');
-    await dialog.locator('.modal-actions').getByRole('button', { name: 'Close', exact: true }).click();
+    // Work plan: the lead turns Review on for the row, then assigns it from the row action.
+    const rowName = `${s.case_id} · de`;
+    const table = lead.page.getByRole('table', { name: 'Documents', exact: true });
+    const review = table.getByRole('button', { name: `Review, ${rowName}`, exact: true });
+    if ((await review.getAttribute('aria-pressed')) !== 'true') await review.click();
+    await expect(review).toHaveAttribute('aria-pressed', 'true');
+    await table.getByRole('button', { name: `Assign translation review…, ${rowName}`, exact: true }).click();
+    const dialog = lead.page.getByRole('dialog', { name: 'Assign translation review', exact: true });
+    await dialog.getByRole('table', { name: 'Members' }).getByRole('radio', { name: new RegExp(s.users.reviewer) }).check();
+    // The row holds two parallel de translations (target and failed); the row assigns both roots.
+    await dialog.getByRole('button', { name: 'Assign 2', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
     const inventory = await (await authenticatedRequest(lead.page, `/api/v1/projects/${encodeURIComponent(s.project)}/assignments`)).json() as Assignment[];
     const assigned = inventory.filter(a => a.document_id === s.documents.target && a.username === s.users.reviewer && a.task === 'translation_review' && !a.revoked_at);
     expect(assigned).toHaveLength(1); assignmentId = assigned[0].id;
@@ -184,7 +180,8 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   await page.getByRole('link', { name: 'Back to my tasks', exact: true }).click();
   const submittedTask = page.getByTestId('task-row').filter({ has: page.locator(`a[href="#/tasks/${assignmentId}"]`) });
   await expect(submittedTask).toContainText('Submitted');
-  await expect(submittedTask.getByRole('cell', { name: s.external_id, exact: true })).toBeVisible();
+  // My tasks names the text as "{case ID} · {language}".
+  await expect(submittedTask).toContainText(`${s.case_id} · de`);
   await submittedTask.getByRole('link', { name: 'View', exact: true }).click();
   await expect(target(page)).toHaveAttribute('readonly', ''); expect(writes).toEqual([]);
   const reopenedLead = await leadContext(browser, s);

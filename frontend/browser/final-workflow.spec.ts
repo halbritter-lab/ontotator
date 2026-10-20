@@ -96,7 +96,7 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     const docs = await value<components['schemas']['ProjectDocumentSummary'][]>(page, `${root(s)}/documents`);
     const language = docs.find(doc => doc.document_id === s.documents.source)!.language;
     const openRow = async () => {
-      const disclosure = page.getByRole('button', { name: `Show submissions, ${s.case_id} · ${language}`, exact: true });
+      const disclosure = page.getByRole('button', { name: `Show details, ${s.case_id} · ${language}`, exact: true });
       if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
       await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
       const area = page.getByRole('region', { name: `${s.case_id} · ${language}`, exact: true });
@@ -139,7 +139,7 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await expect(use).toHaveCount(0);
     await expect(finalRow.getByRole('cell').first()).toHaveText('Final');
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
-    await page.getByRole('button', { name: 'Prepare final export', exact: true }).click();
+    // D8: the preflight runs on opening Export.
     await expect(page.getByRole('heading', { name: 'Export preflight' })).toBeVisible();
     const create = page.getByRole('button', { name: 'Create final export', exact: true });
     await expect(create).toHaveAttribute('aria-disabled', 'true');

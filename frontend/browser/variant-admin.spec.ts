@@ -71,7 +71,10 @@ async function documentRow(page: Page, id: string) {
   const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
   const name = `${doc.case_id} · ${doc.language}`;
-  const disclosure = page.getByRole('button', { name: `Show submissions, ${name}`, exact: true });
+  const disclosure = page.getByRole('button', { name: `Show details, ${name}`, exact: true });
+  // Rows not in the work plan sit behind the case's "… not in plan · show" line.
+  const notInPlan = page.locator(`button.documents-not-in-plan-toggle[aria-expanded="false"][aria-label$=" not in plan, ${doc.case_id}"]`);
+  if (!await disclosure.count() && await notInPlan.count()) await notInPlan.click();
   if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
   const versions = page.getByRole('region', { name, exact: true }).locator('details').filter({ has: page.locator('summary', { hasText: /^Text versions \(\d+\)$/ }) });
   if (!await versions.evaluate(node => (node as HTMLDetailsElement).open)) await versions.locator(':scope > summary').click();
@@ -88,9 +91,9 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   const projects = await (await authenticatedRequest(page, '/api/v1/projects')).json() as { project_key: string; roles: string[] }[];
   expect(projects.find(p => p.project_key === s.project)?.roles).toEqual(['lead']);
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
-  await expect(page.getByRole('heading', { name: 'No documents', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Upload documents', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Upload documents', exact: true });
+  await expect(page.getByRole('heading', { name: 'No texts yet', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Upload texts…', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Upload texts', exact: true });
   await dialog.getByLabel('Files (required)', { exact: true }).setInputFiles({ name: s.filename, mimeType: 'application/zip', buffer: bytes });
   const checking = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`${root(s)}/uploads`));
   await dialog.getByRole('button', { name: 'Check', exact: true }).click();
@@ -105,20 +108,23 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   expect(planned.external_id).toBe(s.external_id); expect(planned.failed_checks).toEqual(['units_added']);
   expect(planned.derived_in_upload).toBe(true); expect(planned.origin).toBe('machine_translation');
   const checkbox = dialog.getByRole('checkbox', { name: `Accept without review: ${s.external_id} · de · v1`, exact: true });
-  await checkbox.check(); await expect(dialog.getByRole('button', { name: 'Import', exact: true })).toBeDisabled();
+  const importButton = dialog.getByRole('button', { name: /^Import \d+ (texts?|cases?)$/ });
+  await checkbox.check(); await expect(importButton).toBeDisabled();
   const reason = 'Independent lead accepts this generic example after checking its units.';
   await dialog.getByRole('textbox', { name: `Reason: ${s.external_id} · de · v1 (required)`, exact: true }).fill(reason);
   const committing = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/uploads/${created.upload_id}/commit`));
-  await dialog.getByRole('button', { name: 'Import', exact: true }).click();
+  await importButton.click();
   const committed = await committing; expect(committed.ok(), await committed.text()).toBeTruthy();
-  expect(committed.request().postDataJSON()).toEqual({ plan_sha256: upload.plan_sha256, status_overrides: [{ external_id: s.external_id, language: 'de', version: 1, reason }] });
+  // The Work plan step was left at the project default: no plan overrides.
+  expect(committed.request().postDataJSON()).toEqual({ plan_sha256: upload.plan_sha256, plan_cases: [], plan_languages: {}, status_overrides: [{ external_id: s.external_id, language: 'de', version: 1, reason }] });
   const commit = await committed.json() as { job_id: number };
   const job = await finishedJob(page, commit.job_id); expect(job.kind).toBe('upload_commit');
-  await expect(dialog).toContainText('Imported 2 documents and 0 proposals.');
+  // The upload dialog closes itself after the import; Documents reports the result in a toast.
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.ui-toast-message')).toHaveText('Imported 2 documents and 0 proposals.');
   const inventory = await (await authenticatedRequest(page, `${root(s)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const target = inventory.find(d => d.external_id === s.external_id && d.language === 'de')!;
   expect(target.accepted_without_review).toBe(true); expect(target.translation_status).toBe('accepted'); expect(target.status_reason).toBe(reason);
-  await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0);
   await page.locator('summary').filter({ hasText: /^More filters$/ }).click();
   await page.getByLabel('Origin', { exact: true }).selectOption('machine_translation');
   await page.getByLabel('Translation status', { exact: true }).selectOption('accepted');

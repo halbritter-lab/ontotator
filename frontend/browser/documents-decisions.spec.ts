@@ -47,7 +47,7 @@ async function prepare(page: Page, name: string) {
 
 async function openDocuments(page: Page, s: DocumentsScenario, query = "") {
   await page.goto(documentsUrl(s, query));
-  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
 }
 
 /** Another user's API session (own cookie jar and CSRF token). */
@@ -220,7 +220,7 @@ test("S3 a correction accepted after keep raises the text-corrected cause again"
 
   await expect(async () => {
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
     area = await expand(page, caseId, "de");
     await expect(area.getByText(/^v3 \(Accepted\) corrects the text of the final result\./)).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });

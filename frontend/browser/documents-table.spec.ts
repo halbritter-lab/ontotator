@@ -40,7 +40,7 @@ async function openScenario(page: Page, name: string, query = "") {
   await loginExisting(page, s.users.lead);
   const labels = await labelsOf(page, s);
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents${query}`);
-  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
   return { s, labels };
 }
 

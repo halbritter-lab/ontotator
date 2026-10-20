@@ -15,7 +15,14 @@ export async function loginExisting(page: Page, username: string) {
   await form.getByLabel("Username", { exact: true }).fill(username);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Log in", exact: true }).click();
-  await expect(page.getByTestId("current-user")).toContainText(username);
+  // The shell shows "Display name (pseudonym)", never the username (D1); the
+  // session itself must belong to ``username``.
+  await expect(page.getByTestId("current-user")).toBeVisible();
+  const me = await page.request.get("/api/v1/auth/me");
+  expect(me.ok()).toBeTruthy();
+  const identity = await me.json() as { username: string; pseudonym: string };
+  expect(identity.username).toBe(username);
+  await expect(page.getByTestId("current-user")).toContainText(identity.pseudonym);
 }
 
 /** Current page cookies and freshly read CSRF token; never a second actor context. */

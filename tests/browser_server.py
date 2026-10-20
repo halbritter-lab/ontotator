@@ -69,6 +69,7 @@ from tests.t1_fixtures import (  # noqa: E402
     run_import,
     unit,
 )
+from tests.work_plan_support import plan_all  # noqa: E402
 
 ONTOLOGY = ROOT / "tests/fixtures/hp.json"
 MONDO_ONTOLOGY = ROOT / "tests/fixtures/mondo.json"
@@ -580,6 +581,9 @@ def register_variant_scenario_route(app: FastAPI) -> None:
             )
         if imported.status != "succeeded":
             raise HTTPException(500, imported.error)
+        # Assignments need the work plan: every language version in it (Annotate
+        # on, Review on translations); the import default leaves the source off.
+        plan_all(db, key)
         expected_pairs = {
             (pair["old_document_id"], pair["new_document_id"])
             for pair in (imported.result or {}).get("reanchor_pairs", [])
@@ -833,6 +837,8 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
             )
         if imported.status != "succeeded":
             raise HTTPException(500, imported.error)
+        # Every language version in the work plan, the source with Annotate on.
+        plan_all(db, key)
         inventory = app.state.repo.list_variants(key, case_id=case_id)
         documents = {
             name: next(
