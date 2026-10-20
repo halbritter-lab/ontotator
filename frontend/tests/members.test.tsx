@@ -17,7 +17,8 @@ describe("project members", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Adjudicator" }));
     expect(api.setMemberRoles).toHaveBeenCalledWith("p/key", "alice", ["annotator", "adjudicator"], false);
     await waitFor(() => expect((screen.getByRole("checkbox", { name: "alice: Adjudicator" }) as HTMLInputElement).checked).toBe(true));
-    expect(screen.getByText("ann-1")).toBeDefined();
+    expect(screen.getByText("Alice (ann-1)")).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Username" })).toBeDefined();
     fireEvent.click(screen.getByRole("checkbox", { name: "lead: Project lead" }));
     await waitFor(() => expect(screen.queryByRole("checkbox", { name: "lead: Project lead" })).toBeNull());
     expect(api.setMemberRoles).toHaveBeenLastCalledWith("p/key", "lead", [], false);

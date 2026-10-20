@@ -3,6 +3,7 @@ import { api, ApiError, type AdminUser, type Member } from "../api/client";
 import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, TextInput, type Column } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { labelFor, roleLabels, taskLabels } from "../app/labels";
+import { personLabel } from "../app/identity";
 export interface MembersSectionProps { projectKey: string; isSystemAdmin: boolean }
 
 const roles = ["lead", "annotator", "adjudicator"] as const;
@@ -64,8 +65,8 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
   };
   const blocked = busy || pending !== null || members === null;
   const columns: Column<Member>[] = [
-    { id: "user", header: "User", cell: member => <>{member.display_name} ({member.username})</> },
-    { id: "pseudonym", header: "Pseudonym", cell: member => member.pseudonym },
+    { id: "person", header: "Person", cell: member => personLabel(member) },
+    { id: "username", header: "Username", cell: member => member.username },
     { id: "languages", header: "Languages", cell: member => member.languages.join(", ") || "None" },
     ...roles.map(role => ({ id: role, header: roleLabels[role], cell: (member: Member) => <Checkbox id={`${id}-${member.username}-${role}`} label={<span className="visually-hidden">{member.username}: {roleLabels[role]}</span>} checked={member.roles.includes(role)} disabled={blocked} onChange={event => {
       if (blocked) return;

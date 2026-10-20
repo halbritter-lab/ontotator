@@ -32,3 +32,8 @@ it("blocks duplicate mutations and ignores completion for a replaced assignment 
   const view = render(<AssignmentActions assignment={{ ...assignment, status: "submitted" }} members={members} onChanged={changed} />); fireEvent.click(screen.getByText("Assignment actions")); fireEvent.click(screen.getByRole("button", { name: "Reopen" })); const button = screen.getByRole("button", { name: "Reopen assignment" }); fireEvent.click(button); fireEvent.click(button); expect(api.reopenAssignment).toHaveBeenCalledOnce();
   view.rerender(<AssignmentActions assignment={{ ...assignment, id: 4 }} members={members} onChanged={changed} />); await act(async () => { pending.resolve(assignment); }); expect(changed).not.toHaveBeenCalled();
 });
+it("lists other members in the identity format with open tasks", () => {
+  render(<AssignmentActions assignment={assignment} members={members.map(member => ({ ...member, open_tasks: { translation_review: 0, annotate: 1, review: 0 } }))} onChanged={vi.fn()} />);
+  fireEvent.click(screen.getByText("Assignment actions")); fireEvent.click(screen.getByRole("button", { name: "Reassign …" }));
+  expect(screen.getByRole("option", { name: "Bob (B) — en, de · 1 open task" })).toBeDefined();
+});

@@ -5,8 +5,16 @@ import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
 import { errorMessage } from "./errors";
 import { ErrorNotice } from "./ErrorNotice";
 import { reviewLanguages } from "./variantMetadata";
+import { personLabel } from "../app/identity";
 
 export type Task = AssignRequest["task"];
+/** Member select label: identity format, languages and open-task count ("Ana Weber (ann-0004) — en, de · 3 open tasks"). */
+export function memberOptionLabel(member: Member): string {
+  const open = member.open_tasks ? member.open_tasks.translation_review + member.open_tasks.annotate + member.open_tasks.review : null;
+  return `${personLabel(member)} — ${member.languages.join(", ") || "No languages listed"}${open === null ? "" : ` · ${open} open task${open === 1 ? "" : "s"}`}`;
+}
+/** The document fields task-language and review checks need (a `DocumentSummary` satisfies it). */
+export type TaskDocument = Pick<DocumentSummary, "document_id" | "language" | "translation_status">;
 export const eligibleMembers = (members: Member[], task: Task) => members.filter(member => member.roles.includes(task === "review" ? "adjudicator" : "annotator"));
 export function useCaseVariants(key: string, supplied?: readonly CaseSummary[] | null) {
   const [loaded, setLoaded] = useState<CaseSummary[] | null>(null);
@@ -22,12 +30,13 @@ export function useCaseVariants(key: string, supplied?: readonly CaseSummary[] |
   for (const item of cases ?? []) for (const variant of item.variants) variants.set(variant.document_id, variant);
   return { variants, notice: error !== undefined ? <ErrorNotice error={error} /> : cases === null ? <p>Translation metadata unavailable or loading.</p> : null };
 }
-export function taskLanguages(document: DocumentSummary, task: Task, variants: ReadonlyMap<string, VariantSummary>): readonly string[] | null {
+export function taskLanguages(document: TaskDocument, task: Task, variants: ReadonlyMap<string, VariantSummary>): readonly string[] | null {
   return task === "translation_review" ? reviewLanguages(document.document_id, variants) : [document.language];
 }
-export const canReviewSelection = (documents: readonly DocumentSummary[], variants: ReadonlyMap<string, VariantSummary>) => documents.length > 0 && documents.every(doc => {
+export const canReviewSelection = (documents: readonly TaskDocument[], variants: ReadonlyMap<string, VariantSummary>) => documents.length > 0 && documents.every(doc => {
   const actual = variants.get(doc.document_id);
-  return doc.translation_status != null && doc.translation_status !== "accepted" && actual && actual.translation_status !== null && actual.translation_status !== "accepted" && reviewLanguages(doc.document_id, variants) !== null;
+  // Without a status on the document itself (targets from a batch preview), the variant decides.
+  return doc.translation_status !== null && doc.translation_status !== "accepted" && actual && actual.translation_status !== null && actual.translation_status !== "accepted" && reviewLanguages(doc.document_id, variants) !== null;
 });
 export function useAlive() {
   const alive = useRef(false);

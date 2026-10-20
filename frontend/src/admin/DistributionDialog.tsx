@@ -1,13 +1,16 @@
 import { useRef, useState } from "react";
 import { api, ApiError, type AssignmentRow, type AssignmentView, type ProposalResponse } from "../api/client";
 import { Button, Dialog, InlineMessage, Select, TextInput } from "../ui";
-import type { AssignDialogProps } from "./AssignDialog";
-import { BatchFeedback, eligibleMembers, TaskSelect, useAlive, useAssignmentBatch, useMembers, type Task, useCaseVariants, canReviewSelection, taskLanguages } from "./assignmentUI";
+import { BatchFeedback, eligibleMembers, memberOptionLabel, TaskSelect, useAlive, useAssignmentBatch, useMembers, type Task, type TaskDocument, useCaseVariants, canReviewSelection, taskLanguages } from "./assignmentUI";
+import { personLabel } from "../app/identity";
+import type { CaseSummary } from "../api/client";
 import { ErrorNotice } from "./ErrorNotice";
 type Slot = { document_id: string; language: string; username: string; place: number };
-export function DistributionDialog(props: AssignDialogProps): JSX.Element { return <DistributionEditor key={JSON.stringify([props.projectKey, props.documents.map(doc => [doc.document_id, doc.language])])} {...props} />; }
-function DistributionEditor({ projectKey, documents, cases, onClose, onChanged }: AssignDialogProps): JSX.Element {
-  const [task, setTask] = useState<Task>("annotate");
+/** `task` presets the task (the assign dialog's "Random distribution…" link). */
+export interface DistributionDialogProps { projectKey: string; documents: readonly TaskDocument[]; cases?: readonly CaseSummary[] | null; task?: Task; onClose: () => void; onChanged: () => void }
+export function DistributionDialog(props: DistributionDialogProps): JSX.Element { return <DistributionEditor key={JSON.stringify([props.projectKey, props.documents.map(doc => [doc.document_id, doc.language]), props.task])} {...props} />; }
+function DistributionEditor({ projectKey, documents, cases, task: initialTask, onClose, onChanged }: DistributionDialogProps): JSX.Element {
+  const [task, setTask] = useState<Task>(initialTask ?? "annotate");
   const [count, setCount] = useState("1");
   const [proposal, setProposal] = useState<ProposalResponse | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -66,12 +69,12 @@ function DistributionEditor({ projectKey, documents, cases, onClose, onChanged }
       <h3>Proposal #{proposal.seed}</h3>
       <table><caption>Proposed assignments</caption><thead><tr><th>Document</th><th>Languages</th><th>Person</th></tr></thead><tbody>{slots.map((slot, index) => <tr key={JSON.stringify([slot.document_id, slot.place])}><td>{slot.document_id}</td><td>{languages.get(slot.document_id)?.join(", ") || "Required languages unavailable"}</td><td>
         <Select id={`distribution-slot-${index}`} label={`${slot.document_id}, slot ${slot.place + 1}`} value={slot.username} disabled={batch.busy || batch.attempted || stale || busy} onChange={event => setSlots(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, username: event.target.value } : item))}>
-          <option value="">Nobody</option>{slot.username && !eligible.some(member => member.username === slot.username) && <option value={slot.username}>{slot.username}</option>}
-          {eligible.map(member => <option key={member.username} value={member.username} disabled={slots.some((other, otherIndex) => index !== otherIndex && other.document_id === slot.document_id && other.username === member.username)}>{member.display_name} ({member.username}) — {member.languages.join(", ") || "No languages listed"}</option>)}
+          <option value="">Nobody</option>{slot.username && !eligible.some(member => member.username === slot.username) && <option value={slot.username}>{proposal.rows.find(row => row.username === slot.username)?.display_name || "Former member"}</option>}
+          {eligible.map(member => <option key={member.username} value={member.username} disabled={slots.some((other, otherIndex) => index !== otherIndex && other.document_id === slot.document_id && other.username === member.username)}>{memberOptionLabel(member)}</option>)}
         </Select></td></tr>)}</tbody></table>
       {duplicate && <InlineMessage tone="warning">Choose each person only once per document.</InlineMessage>}
       <section aria-label="Unassignable documents"><h3>Unassignable documents</h3>{proposal.unassignable.length ? <ul>{proposal.unassignable.map(row => <li key={row.document_id}>{row.document_id} ({row.language}): {unassignableLabel(row, proposal.per_document, languages.get(row.document_id))}</li>)}</ul> : <p>Every document has a proposal.</p>}</section>
-      <section aria-label="Resulting load"><h3>Resulting load</h3><p>Open, in progress and reopened work across this project, before and after the selected rows.</p><ul>{eligible.map(member => <li key={member.username}>{member.display_name} ({member.username}): {loadBefore.has(member.username) || inventory !== null ? `${loadBefore.get(member.username) ?? 0} now, ${(loadBefore.get(member.username) ?? 0) + newRows.filter(row => row.username === member.username).length} after` : "Load unavailable"}</li>)}</ul></section>
+      <section aria-label="Resulting load"><h3>Resulting load</h3><p>Open, in progress and reopened work across this project, before and after the selected rows.</p><ul>{eligible.map(member => <li key={member.username}>{personLabel(member)}: {loadBefore.has(member.username) || inventory !== null ? `${loadBefore.get(member.username) ?? 0} now, ${(loadBefore.get(member.username) ?? 0) + newRows.filter(row => row.username === member.username).length} after` : "Load unavailable"}</li>)}</ul></section>
       <Button variant="primary" disabled={busy || batch.busy || batch.attempted || stale || duplicate} onClick={() => confirm(false)}>Confirm</Button>
     </>}
     <BatchFeedback batch={batch} languages={languages} disabled={stale || busy} onConfirmLanguage={() => confirm(true)} />

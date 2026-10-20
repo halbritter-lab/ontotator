@@ -65,7 +65,7 @@ it.each([
   await waitFor(() => expect(screen.getByRole("button", { name: "Propose" })).toHaveProperty("disabled", false));
   fireEvent.click(screen.getByRole("button", { name: "Propose" })); await screen.findByText("Proposal #123");
   fireEvent.change(screen.getByLabelText("z/doc, slot 1"), { target: { value: "alice" } });
-  expect(screen.getByText(`Alice (alice): ${before} now, ${after} after`)).toBeDefined();
+  expect(screen.getByText(`Alice (A): ${before} now, ${after} after`)).toBeDefined();
   expect(api.listAssignments).toHaveBeenCalledOnce();
   expect(api.createAssignments).not.toHaveBeenCalled();
 });
@@ -80,4 +80,13 @@ it("requires a fresh server proposal on stale and never submits the previous con
 it("prevents duplicate proposals and ignores replies after unmount", async () => {
   const pending = deferred<typeof proposal>(); vi.mocked(api.proposeDistribution).mockReturnValue(pending.promise);
   const options = props(); const view = render(<DistributionDialog {...options} />); const button = await screen.findByRole("button", { name: "Propose" }); fireEvent.click(button); fireEvent.click(button); expect(api.proposeDistribution).toHaveBeenCalledOnce(); view.unmount(); await act(async () => { pending.resolve(proposal); }); expect(options.onChanged).not.toHaveBeenCalled();
+});
+it("labels people in the identity format with open tasks and accepts a preset task", async () => {
+  vi.mocked(api.listMembers).mockResolvedValue(members.map(member => member.username === "bob" ? { ...member, open_tasks: { translation_review: 1, annotate: 2, review: 0 } } : member));
+  render(<DistributionDialog projectKey="p/key" documents={[{ document_id: "z/doc", language: "en" }]} task="review" onClose={vi.fn()} onChanged={vi.fn()} />);
+  expect((await screen.findByLabelText("Task") as HTMLSelectElement).value).toBe("review");
+  await waitFor(() => expect(screen.getByRole("button", { name: "Propose" })).toHaveProperty("disabled", false));
+  fireEvent.click(screen.getByRole("button", { name: "Propose" })); await screen.findByText("Proposal #123");
+  expect(screen.getAllByRole("option", { name: "Bob (B) — en, de · 3 open tasks" }).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/\(bob\)/)).toBeNull();
 });

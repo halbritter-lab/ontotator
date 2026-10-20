@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { api, ApiError, type AssignmentView, type Member } from "../api/client";
 import { Button, ConfirmDialog, Dialog, Select, Textarea } from "../ui";
-import { eligibleMembers, useAlive } from "./assignmentUI";
+import { eligibleMembers, memberOptionLabel, useAlive } from "./assignmentUI";
 import { ErrorNotice } from "./ErrorNotice";
 import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
 export interface AssignmentActionsProps { assignment: AssignmentView; members: Member[]; onChanged: () => void }
@@ -43,7 +43,7 @@ function Actions({ assignment, members, onChanged }: AssignmentActionsProps): JS
     <Dialog open={action === "reassign"} title={`Reassign ${assignment.document_id}`} onClose={busy || confirmation ? undefined : close} footer={<><Button disabled={busy || confirmation !== null} onClick={close}>Cancel</Button><Button disabled={!target || confirmation !== null} loading={busy} onClick={() => { if (assignment.status !== "open" && !confirmedStarted) setConfirmation("started"); else void mutate(confirmedStarted, false); }}>Reassign</Button></>}>
       <p>{assignment.pseudonym}: {labelFor(taskLabels, assignment.task)}, {labelFor(assignmentStatusLabels, assignment.status).toLowerCase()}</p>
       {confirmedStarted && <p>{startedMessage}</p>}
-      <Select id={`reassign-${assignment.id}`} label="New assignee" value={target} disabled={busy || confirmation !== null} onChange={event => { setTarget(event.target.value); setConfirmedStarted(false); setError(undefined); }}><option value="">Choose a member</option>{eligibleMembers(members, assignment.task).filter(member => member.username !== assignment.username).map(member => <option key={member.username} value={member.username}>{member.display_name} ({member.username}) — {member.languages.join(", ") || "No languages listed"}</option>)}</Select>
+      <Select id={`reassign-${assignment.id}`} label="New assignee" value={target} disabled={busy || confirmation !== null} onChange={event => { setTarget(event.target.value); setConfirmedStarted(false); setError(undefined); }}><option value="">Choose a member</option>{eligibleMembers(members, assignment.task).filter(member => member.username !== assignment.username).map(member => <option key={member.username} value={member.username}>{memberOptionLabel(member)}</option>)}</Select>
       {error !== undefined && <ErrorNotice error={error} />}
     </Dialog>
     <ConfirmDialog open={confirmation !== null} title={confirmation === "started" ? "Reassign started work?" : "Confirm document language?"} message={<>{confirmation === "started" ? startedMessage : <><p>This person's profile does not list the document language. Reassign anyway?</p>{confirmedStarted && <p>{startedMessage}</p>}</>}{error !== undefined && <ErrorNotice error={error} />}</>} confirmLabel={confirmation === "started" ? "Reassign started work" : "Reassign anyway"} busy={busy} onCancel={() => { setConfirmation(null); setError(undefined); }} onConfirm={() => { if (confirmation === "started") { setConfirmedStarted(true); void mutate(true, false); } else void mutate(confirmedStarted, true); }} />

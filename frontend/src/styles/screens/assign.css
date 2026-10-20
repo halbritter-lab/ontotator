@@ -1,0 +1,58 @@
+/* Assign dialog for a row and for many cases (lead workflow L5, spec "Assign dialog"). */
+.assign-dialog { display: flex; flex-direction: column; gap: var(--space-3); }
+.assign-dialog p { margin: 0; }
+.assign-muted, .assign-footer-reason { color: var(--text-muted); font-size: var(--size-sm); }
+.assign-footer-reason { margin-right: auto; }
+.assign-context { display: flex; flex-direction: column; gap: var(--space-1); }
+.assign-field { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.assign-field .form-group { margin-bottom: 0; flex: 1 1 16rem; }
+.assign-step { font-weight: var(--weight-strong); padding: var(--space-1) var(--space-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-sunken); }
+
+/* "Distribute": a radio group drawn as segments; the checked one is underlined and bold (not by colour alone). */
+.assign-distribute { border: 0; margin: 0; padding: 0; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.assign-distribute legend { float: left; font-weight: var(--weight-strong); margin-right: var(--space-2); padding: 0; }
+.assign-segments { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; }
+.assign-segments .segment { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 32px; padding: 0 var(--space-3); cursor: pointer; }
+.assign-segments .segment + .segment { border-left: 1px solid var(--border-strong); }
+.assign-segments .segment[data-checked] { background: var(--accent-light); font-weight: var(--weight-strong); text-decoration: underline; border-bottom-color: currentColor; }
+.assign-segments .segment:has(input:focus-visible) { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }
+
+/* Members table: Person · Reads · Open tasks (+ Gets). */
+.assign-members { width: 100%; border-collapse: collapse; font-size: var(--size-sm); }
+.assign-members th, .assign-members td { text-align: left; vertical-align: middle; padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--border); }
+.assign-members th { color: var(--text-muted); font-weight: var(--weight-strong); }
+.assign-members .assign-open, .assign-members .assign-gets { font-variant-numeric: tabular-nums; }
+.assign-member { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 24px; }
+.assign-member input { width: 18px; height: 18px; margin: 0; flex: none; }
+.assign-member label { cursor: pointer; }
+.assign-members tr.is-chosen td { background: var(--accent-light); }
+.assign-members tr.is-unavailable td { color: var(--text-muted); }
+.assign-members tr.is-unavailable .assign-reason { font-style: italic; }
+.assign-member input[aria-disabled="true"], .assign-member input[aria-disabled="true"] + label { cursor: not-allowed; }
+.assign-reason { color: var(--text-muted); }
+.assign-narrow-label { display: none; }
+
+.assign-summary { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--size-sm); }
+.assign-summary:not(:empty) { padding: var(--space-2) var(--space-3); border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--accent-light); }
+.assign-random { align-self: flex-start; }
+.assign-notice, .assign-error { font-size: var(--size-sm); }
+.assign-error { color: var(--danger); }
+.assign-refused { margin: 0; padding-left: var(--space-4); font-size: var(--size-sm); }
+.assign-confirm { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-sunken); }
+.assign-confirm-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+
+/* Narrow: members as list items with "Reads" and "Open" on a second line. */
+@media (max-width: 699px) {
+  .assign-members thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .assign-members, .assign-members tbody, .assign-members tr { display: block; }
+  .assign-members tr { padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+  .assign-members td { display: inline; border: 0; padding: 0 var(--space-2) 0 0; }
+  .assign-members td:first-child { display: block; }
+  .assign-members td:not(:first-child) { color: var(--text-muted); }
+  .assign-members td.assign-reads { padding-left: calc(18px + var(--space-2)); }
+  .assign-narrow-label { display: inline; }
+}
+
+@media (forced-colors: active) {
+  .assign-segments .segment[data-checked], .assign-members tr.is-chosen td { border: 1px solid CanvasText; }
+}
