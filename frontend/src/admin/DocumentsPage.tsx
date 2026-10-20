@@ -32,12 +32,13 @@ import {
 } from "../documents/FinalConfirm";
 import { STEP_FILTER_GROUPS, STEP_LABELS, stepLabel } from "../documents/nextStepLabels";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
-import { useShortcutHint } from "../ui/shortcuts";
+import { useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { ResolveTranslation } from "../documents/ResolveTranslation";
 import { SelectByIdsDialog } from "../documents/SelectByIdsDialog";
 import { SelectionBar } from "../documents/SelectionBar";
 import { acknowledgeableItems, type KeepRequest } from "../documents/SelectionNotice";
 import { documentsGroupId, documentsRowId, isPlainClick, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
+import { plannedStages, stageBlockHeadingId } from "../documents/StageBlocks";
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
 import { MAX_SELECTION, useCaseSelection } from "../documents/useCaseSelection";
@@ -140,7 +141,10 @@ const rowElement = (key: string, part: "disclosure" | "final-view" | "action"): 
 
 /** A row action that needs the row's submissions; it runs once they are loaded (Choose final…, Review changes…). */
 export interface AutoAction { rowKey: string; kind: "choose_final" | "review_changes"; triggerId: string }
-/** Resolve options under a row: rule 4 "Resolve…" or rule 4a "Assign review or accept…". */
+/**
+ * Resolve options of a row: rule 4 "Resolve…" or rule 4a "Assign review or accept…". They render inside
+ * the expanded row's Translation review block, or under the row when it has no such block (F5).
+ */
 interface RowPanel { rowKey: string; mode: "resolve" | "not_accepted" }
 export type AssignTask = "translation_review" | "annotate" | "review";
 
@@ -673,6 +677,29 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // Row actions.
   const [autoAction, setAutoAction] = useState<AutoAction | null>(null);
   const [rowPanel, setRowPanel] = useState<RowPanel | null>(null);
+  /** The rendered Resolve options (in the Translation review block or under the row). */
+  const panelBox = useRef<HTMLDivElement>(null);
+  /** Row whose Translation review heading takes focus once its Resolve options render in that block. */
+  const [slotFocus, setSlotFocus] = useState<string | null>(null);
+  const hasTranslationBlock = (row: DocumentRowView) => plannedStages(row).includes("translation_review");
+  const panelInBlock = (row: DocumentRowView) => openKeys.has(rowKeyOf(row)) && hasTranslationBlock(row);
+  const openPanel = (row: DocumentRowView, mode: RowPanel["mode"]) => {
+    const key = rowKeyOf(row);
+    setRowPanel({ rowKey: key, mode });
+    if (!hasTranslationBlock(row)) { setSlotFocus(null); return; }
+    setSlotFocus(key);
+    expandRow(key);
+  };
+  // Runs after the options' own heading focus (child effects first): the block heading wins.
+  useEffect(() => {
+    if (!slotFocus) return;
+    if (rowPanel?.rowKey !== slotFocus) { setSlotFocus(null); return; }
+    const heading = document.getElementById(stageBlockHeadingId(caseOfKey(slotFocus), languageOfKey(slotFocus), "translation_review"));
+    const box = panelBox.current;
+    if (!heading || !box || !heading.closest(".stage-block")?.contains(box)) return;
+    heading.focus();
+    setSlotFocus(null);
+  });
   const reportRoute = (reportId: string, extra: { section?: "decide"; action?: "resume" }): Route => ({
     name: "projectProblemReport", key: projectKey, reportId, ...extra, ...(Object.keys(viewQuery).length ? { documents: viewQuery } : {}),
   });
@@ -695,15 +722,23 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         if (reportId) onNavigate(reportRoute(reportId, { action: "resume" })); else expandRow(key);
         return;
       }
-      case "resolve": setRowPanel({ rowKey: key, mode: "resolve" }); return;
-      case "accept_or_review": setRowPanel({ rowKey: key, mode: "not_accepted" }); return;
+      case "resolve": openPanel(row, "resolve"); return;
+      case "accept_or_review": openPanel(row, "not_accepted"); return;
       default: return;
     }
   };
-  const closePanel = (key: string, focus: "action" | "disclosure") => {
+  const closePanel = (key: string) => {
     setRowPanel(null);
-    window.setTimeout(() => (rowElement(key, focus) ?? rowElement(key, "disclosure"))?.focus(), 0);
+    window.setTimeout(() => (rowElement(key, "action") ?? rowElement(key, "disclosure"))?.focus(), 0);
   };
+  // Escape inside the options (or their Translation review block) closes them; a discard confirmation
+  // inside handles its own Escape first (registered later).
+  useShortcut("Escape", event => {
+    const box = panelBox.current;
+    const scope = box?.closest(".stage-block") ?? box;
+    if (!rowPanel || !scope || !(event.target instanceof Node) || !scope.contains(event.target)) return false;
+    closePanel(rowPanel.rowKey);
+  }, { allowInInputs: true, enabled: rowPanel != null });
 
   const confirmElement = (state: ConfirmState) => <FinalConfirm key={state.request.triggerId} ref={confirmBox} request={state.request} busy={state.busy}
     failure={state.failure} onConfirm={submitConfirm} onCancel={cancelConfirm} onReview={reviewAgain} />;
@@ -720,21 +755,19 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         keepConfirm={own?.request.kind === "keep" ? confirmElement(own) : undefined}
         confirmBusy={confirm?.busy ?? false} layout={options?.layout}
         planRevision={planSaves.revisionOf(row.case_id, groupOf(row.case_id)?.plan_revision ?? 1)} onAssign={onAssign}
-        autoAction={autoAction?.rowKey === rowKeyOf(row) ? autoAction : null} onAutoActionDone={() => setAutoAction(null)} />
+        autoAction={autoAction?.rowKey === rowKeyOf(row) ? autoAction : null} onAutoActionDone={() => setAutoAction(null)}
+        translationSlot={rowPanel?.rowKey === rowKeyOf(row) && panelInBlock(row) ? resolvePanel(row, rowPanel) : undefined} />
     </>;
   };
 
   const renderPlan = (row: DocumentRowView, group: DocumentGroupView) =>
     <PlanChips row={row} groupRevision={group.plan_revision} saves={planSaves} size={narrow ? "card" : "table"} />;
 
-  const renderRowNotice = (row: DocumentRowView): ReactNode | null => {
+  const resolvePanel = (row: DocumentRowView, panel: RowPanel): JSX.Element => {
     const key = rowKeyOf(row);
-    const panel = rowPanel?.rowKey === key ? rowPanel : null;
-    if (!panel && !planSaves.noticeOf(row)) return null;
     const groupRevision = groupOf(row.case_id)?.plan_revision ?? 1;
-    return <>
-      <PlanRowNotice row={row} saves={planSaves} />
-      {panel && <ResolveTranslation key={panel.mode} mode={panel.mode} row={row} projectKey={projectKey}
+    return <div ref={panelBox}>
+      <ResolveTranslation key={panel.mode} mode={panel.mode} row={row} projectKey={projectKey}
         revision={planSaves.revisionOf(row.case_id, groupRevision)}
         onAssignReview={() => { setRowPanel(null); void onAssign(row, "translation_review"); }}
         onCorrect={() => onNavigate({ name: "projectCase", key: projectKey, caseId: row.case_id, variant: row.next_step?.document_id ?? row.open.document_id, ...(Object.keys(viewQuery).length ? { documents: viewQuery } : {}) })}
@@ -742,11 +775,21 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
           planSaves.noteRevision(saved.caseId, saved.revision);
           announce(message);
           rows.reload();
-          closePanel(key, "disclosure");
+          closePanel(key);
         }}
         onChanged={(caseId, revision) => { planSaves.noteRevision(caseId, revision); rows.reload(); }}
         onAnnounce={announce}
-        onCancel={() => closePanel(key, "action")} />}
+        onCancel={() => closePanel(key)} />
+    </div>;
+  };
+
+  const renderRowNotice = (row: DocumentRowView): ReactNode | null => {
+    const key = rowKeyOf(row);
+    const panel = rowPanel?.rowKey === key ? rowPanel : null;
+    if (!panel && !planSaves.noticeOf(row)) return null;
+    return <>
+      <PlanRowNotice row={row} saves={planSaves} />
+      {panel && !panelInBlock(row) && resolvePanel(row, panel)}
     </>;
   };
 
@@ -917,6 +960,7 @@ interface ExpandedRowLoaderProps {
   layout?: ExpandedRowProps["layout"];
   planRevision?: ExpandedRowProps["planRevision"];
   onAssign?: ExpandedRowProps["onAssign"];
+  translationSlot?: ExpandedRowProps["translationSlot"];
   /** Opens a final-result confirmation built from this row and its loaded submissions. */
   onOpenConfirm: (request: FinalConfirmRequest) => void;
   renderConfirm: ExpandedRowProps["renderConfirm"];

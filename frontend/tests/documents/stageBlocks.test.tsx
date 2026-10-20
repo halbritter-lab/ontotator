@@ -154,3 +154,16 @@ it("lists report and source-change lines under Issues", () => {
   const blocks = container.querySelector(".stage-blocks")!;
   expect(blocks.compareDocumentPosition(issues) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
+
+it("renders translationSlot inside the Translation review block", () => {
+  const target = planRow("case-0101", "de", stepOf("resolve_rejected", { document_id: "case-0101-de" }));
+  renderBlocks(target, { translationSlot: <p>Slot content</p> });
+  expect(within(block("Translation review")).getByText("Slot content")).toBeTruthy();
+  expect(within(block("Annotation")).queryByText("Slot content")).toBeNull();
+  cleanup();
+
+  // No Translation review block: the slot is not rendered.
+  const annotationOnly = planRow("case-0101", "en", stepOf("assign_annotation", { stage: "annotation" }), { is_source: true });
+  renderBlocks(annotationOnly, { translationSlot: <p>Slot content</p> });
+  expect(screen.queryByText("Slot content")).toBeNull();
+});

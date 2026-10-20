@@ -70,6 +70,8 @@ export interface ExpandedRowProps {
   planRevision?: number;
   /** Assign dialog for this row (stage block links, D25 "Assign a new review…"). */
   onAssign?: (row: DocumentRowView, task: AssignTaskKind, options?: { newReviewOfAccepted?: boolean }) => void;
+  /** Content inside the Translation review block (`StageBlocks` `translationSlot`). */
+  translationSlot?: ReactNode;
   now?: Date;
 }
 
@@ -89,7 +91,7 @@ function toHistorySummary(row: RowSubmissionView): SubmissionHistorySummary {
 /** Expanded content of one Documents row: stage blocks, Issues, Submissions (n) and More. */
 export function ExpandedRow({
   row, projectKey, query, submissions, onNavigate, id, labelledBy, adjudicatorNotAnnotator = false,
-  onSelectFinal, onKeep, renderConfirm, keepConfirm, confirmBusy = false, onAnnounce, textVersionTools, layout = "table", planRevision, onAssign, now,
+  onSelectFinal, onKeep, renderConfirm, keepConfirm, confirmBusy = false, onAnnounce, textVersionTools, layout = "table", planRevision, onAssign, translationSlot, now,
 }: ExpandedRowProps): JSX.Element {
   const ownId = useId();
   const labelId = `${ownId}-label`;
@@ -234,7 +236,7 @@ export function ExpandedRow({
     {!labelledBy && <span id={labelId} hidden>{row.case_id} · {row.language}</span>}
     <StageBlocks row={row} submissions={data?.submissions ?? null} lines={blockLines} now={now}
       onOpenTextVersions={openTextVersions} onShowTranslationReviews={textVersionTools?.onShowTranslationReviews} onAssign={onAssign}
-      onFocusSubmissions={showSubmissions ? focusSubmissions : undefined} />
+      onFocusSubmissions={showSubmissions ? focusSubmissions : undefined} translationSlot={translationSlot} />
     {issueLines.length > 0 && <div className="expanded-row-section">
       <h3>Issues</h3>
       <ul className="expanded-row-issues">{issueLines.map(({ item, content }) => <li key={item.cause_id}>{content}</li>)}</ul>

@@ -5,6 +5,8 @@ import { api, ApiError, type DocumentRowView, type DocumentRowsPage, type PlanRo
 import type { AssignWorkDialogProps } from "../src/admin/AssignWorkDialog";
 import { DocumentsPage, type DocumentsPageProps } from "../src/admin/DocumentsPage";
 import type { ProjectDocumentsQuery, Route } from "../src/app/router";
+import { documentsRowId } from "../src/documents/RowCells";
+import { stageBlockHeadingId } from "../src/documents/StageBlocks";
 import { recordDecision } from "../src/documents/visitState";
 import { useRegisteredShortcuts } from "../src/ui/shortcuts";
 import { final, group, item, notInPlanRow, page, planRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
@@ -893,5 +895,77 @@ describe("lead review fixes", () => {
     fireEvent.click(within(box).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(document.activeElement?.id).toBe("documents-group-case-1-not-in-plan"));
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Show en, de not in plan, case-1");
+  });
+});
+
+describe("Resolve focuses the Translation review block", () => {
+  const rejected = () => planRow("case-1", "de", stepOf("resolve_rejected", { document_id: "case-1-de" }));
+  const translationHeading = () => document.getElementById(stageBlockHeadingId("case-1", "de", "translation_review"));
+  const actionButton = () => document.getElementById(documentsRowId("case-1", "de", "action"));
+  const resolveBox = () => screen.queryByRole("group", { name: "Resolve rejected translation, case-1 · de" });
+
+  it("Resolve… expands the row and focuses the Translation review heading", async () => {
+    mockRows(page([group("case-1", [rejected()])]));
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Show details, case-1 · de" }).getAttribute("aria-expanded")).toBe("true"));
+    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
+    expect(translationHeading()).not.toBeNull();
+  });
+
+  it("renders the options inside the Translation review block", async () => {
+    mockRows(page([group("case-1", [rejected()])]));
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
+    await waitFor(() => expect(translationHeading()).not.toBeNull());
+    const box = resolveBox()!;
+    expect(within(box).getByRole("button", { name: "Correct the translation…" })).toBeTruthy();
+    expect(translationHeading()!.closest(".stage-block")!.contains(box)).toBe(true);
+    // Only one copy of the options (not also below the row).
+    expect(screen.getAllByRole("group", { name: "Resolve rejected translation, case-1 · de" })).toHaveLength(1);
+  });
+
+  it("Cancel and Escape return focus to the row's Resolve… button", async () => {
+    mockRows(page([group("case-1", [rejected()])]));
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
+    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
+    fireEvent.click(within(resolveBox()!).getByRole("button", { name: "Cancel" }));
+    expect(resolveBox()).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(actionButton()));
+
+    fireEvent.click(actionButton()!);
+    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(resolveBox()).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(actionButton()));
+  });
+
+  it("falls back to options below the row when there is no Translation block", async () => {
+    const reviewOff = planRow("case-1", "de", stepOf("translation_not_accepted", { document_id: "case-1-de", stage: "annotation" }), {
+      plan_row: { review: false, annotate: true, review_applicable: true, discarded: false },
+    });
+    mockRows(page([group("case-1", [reviewOff])]));
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Assign review or accept…, case-1 · de" }));
+    const box = await screen.findByRole("group", { name: "Translation not accepted, case-1 · de" });
+    expect(box.closest(".stage-block")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(box).getByRole("heading", { name: "Translation not accepted, case-1 · de" })));
+    expect(translationHeading()).toBeNull();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "Translation not accepted, case-1 · de" })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(actionButton()));
+  });
+
+  it("cards behave the same", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+    mockRows(page([group("case-1", [rejected()])]));
+    renderStateful({});
+    await screen.findByRole("list", { name: "Documents" });
+    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
+    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
+    expect(translationHeading()!.closest(".stage-block")!.contains(resolveBox()!)).toBe(true);
+    fireEvent.click(within(resolveBox()!).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(document.activeElement).toBe(actionButton()));
   });
 });

@@ -32,6 +32,8 @@ export interface StageBlocksProps {
   onAssign?: (row: DocumentRowView, task: AssignTaskKind, options?: { newReviewOfAccepted?: boolean }) => void;
   /** Focuses the "Submissions (n)" heading; without it no Submissions link is shown. */
   onFocusSubmissions?: () => void;
+  /** Content shown at the end of the Translation review block (the row's Resolve options); dropped without that block. */
+  translationSlot?: ReactNode;
   now?: Date;
 }
 
@@ -78,7 +80,7 @@ export function plannedStages(row: DocumentRowView): BlockStage[] {
   ];
 }
 
-export function StageBlocks({ row, submissions = null, lines = {}, onOpenTextVersions, onShowTranslationReviews, onAssign, onFocusSubmissions, now }: StageBlocksProps): JSX.Element {
+export function StageBlocks({ row, submissions = null, lines = {}, onOpenTextVersions, onShowTranslationReviews, onAssign, onFocusSubmissions, translationSlot, now }: StageBlocksProps): JSX.Element {
   const id = useId();
   const plan = effectivePlan(row);
   const steps = row.steps?.length ? row.steps : row.next_step ? [row.next_step] : [];
@@ -146,6 +148,7 @@ export function StageBlocks({ row, submissions = null, lines = {}, onOpenTextVer
         {reviewed && onShowTranslationReviews && linkButton("Translation reviews", () => onShowTranslationReviews(reviewed.document_id))}
         {newReview && linkButton("Assign a new review…", () => onAssign(row, "translation_review", { newReviewOfAccepted: true }))}
       </div>
+      {translationSlot}
     </>;
   };
 
