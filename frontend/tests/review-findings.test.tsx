@@ -200,7 +200,7 @@ describe("A4/A5: review decisions and notes", () => {
     const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...view.draft, revision: 2, annotations: [updated] });
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByText("HP:0001", { selector: '[data-list-key="annotation:copy"] *' }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirm Assertion value" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm defaults (1)" }));
     await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply.mock.calls[0][1].payload).toEqual(expect.objectContaining({ command: "set_axes", chosen_axis_ids: ["assertion"], axes_values: { assertion: "absent" } }));
     if (explicitRejection) {
@@ -548,7 +548,7 @@ describe("Annotation panel and text pane", () => {
     fireEvent.keyDown(document.body, { key: "Escape" });
     await waitFor(() => expect(screen.queryByText(/Adding a mention:/)).toBeNull());
     // The annotation stays selected.
-    expect(screen.getByText(/Context Axes/i)).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Values" })).toBeDefined();
   });
 
   it("commits a keyboard (Shift+arrow) selection when Shift is released", () => {

@@ -1985,3 +1985,79 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   }
   .case-workspace > .app-layout { flex: 1; min-height: 0; }
 }
+
+/* Values block (spec B.2): one row per axis, the axis name in a 96 px column, compact segmented options. */
+.values-section .axis-field {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  margin: 0 0 6px;
+}
+.values-section .axis-legend {
+  /* A floated legend takes part in the grid like any other child. */
+  float: left;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.values-section .axis-required {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.values-section .axis-option {
+  min-height: 24px;
+  min-width: 24px;
+  border-style: solid;
+}
+/* An unconfirmed default: dashed border plus the word "default" (never colour alone). */
+.values-section .axis-option.is-default {
+  border-style: dashed;
+}
+.values-section .axis-default-tag {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.values-section .axis-option:has(input:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.values-section .axis-option input:focus-visible {
+  outline: none;
+}
+.values-section .values-confirm {
+  margin-top: 4px;
+}
+.values-section .form-hint {
+  margin: 6px 0 0;
+}
+@media (forced-colors: active) {
+  .values-section .axis-option {
+    border: 1px solid CanvasText;
+  }
+  .values-section .axis-option.is-default {
+    border-style: dashed;
+  }
+}
+
+/* <=700 px: a new mark keeps the text pane; this bar leads to the term search (spec B.5). */
+.pending-bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+.pending-bar__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.back-to-text {
+  margin: 8px 12px 0;
+}

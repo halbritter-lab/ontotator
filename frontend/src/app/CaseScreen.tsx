@@ -26,6 +26,7 @@ import { InlineMessage } from "../ui/InlineMessage";
 import { Textarea } from "../ui/Textarea";
 import { Button } from "../ui/Button";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import {
   api,
   isSessionProblem,
@@ -1413,7 +1414,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const handleSelection = async (payload: SelectionPayload) => {
     if (readOnlyRef.current) return;
     if (!payload.segments || payload.segments.length === 0) return;
-    setMobilePane("details");
+    // At <=700 px a new mark stays in the text pane: the "New finding" bar offers Choose term (spec B.5).
+    const newMark = !activeCarried && !activeReanchor && !pendingEvidenceAdoption
+      && !(payload.intent === "extend_mention" && selectedEvidenceId) && !(isAttachingMention && selectedAnnotationId);
+    if (!(newMark && panesLayout)) setMobilePane("details");
 
     setActionError(null);
     if (activeCarried) {
@@ -1537,7 +1541,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       .find(row=>row.dataset.reanchorItem===reanchorKey(item))?.querySelector<HTMLButtonElement>('button')?.focus();
   };
 
-  const createPendingAnnotation = async (termId: string, searchId?: string) => {
+  const createPendingAnnotation = async (termId: string, searchId?: string, termText?: string) => {
     if (readOnlyRef.current) return;
     if (!pendingAnnotation || creatingPending.current) return;
     if (pendingAnnotation.isSpanless && spanlessNotesRequired && !spanlessReason.trim()) {
@@ -1582,8 +1586,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       setSelectedAnnotationId(pending.annotationId);
       setSelectedEvidenceId(pending.evidenceId ?? null);
       searchManager.clear();
+      // A newly marked span continues the loop: values next, then back to the text (spec B.2).
+      if (!pending.isSpanless && !pending.reanchorItem && !pending.carriedInput) {
+        setLoopFocus({ annotationId: pending.annotationId, termText: termText ?? null });
+        setLoopAnnotationId(pending.annotationId);
+      }
       if(pending.reanchorItem) requestAnimationFrame(() => {
-        const next = inspectorRef.current?.querySelector<HTMLElement>('.axis-field .btn') ?? inspectorRef.current?.querySelector<HTMLElement>('button, input, textarea, select');
+        const next = inspectorRef.current?.querySelector<HTMLElement>('[data-confirm-defaults]') ?? inspectorRef.current?.querySelector<HTMLElement>('button, input, textarea, select');
         next?.focus();
       });
     } catch (error) { reportError(error); }
@@ -1739,7 +1748,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followAnnotationId]);
 
-  const handleUpdateAxes = async (axesValues: Partial<AxesValues>, confirmedAxisId?: string) => {
+  const handleUpdateAxes = async (axesValues: Partial<AxesValues>, confirmedAxisIds?: string[]) => {
     if (readOnlyRef.current) return;
     if (!selectedAnnotationId || !selectedAnnotation) return;
     const annotationId = selectedAnnotationId;
@@ -1748,7 +1757,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         command: "set_axes",
         annotation_id: annotationId,
         axes_values: axesValues as Record<string, string | null>,
-        chosen_axis_ids: confirmedAxisId ? [confirmedAxisId] : Object.keys(axesValues).filter(
+        chosen_axis_ids: confirmedAxisIds ?? Object.keys(axesValues).filter(
           (axis) => axesValues[axis] != null && axesValues[axis] !== "" && axesValues[axis] !== selectedAnnotation.annotation.axes_values?.[axis]
         ),
       })
@@ -2349,6 +2358,88 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     void leaveCase(() => onNavigateCase(docId));
   };
 
+  // --- Annotation term loop (spec B.2): values after a new term, keys / V D -------------------
+  const [loopFocus, setLoopFocus] = useState<{ annotationId: string; termText: string | null } | null>(null);
+  // The finding last created from a marked span; at <=700 px it offers "Back to text".
+  const [loopAnnotationId, setLoopAnnotationId] = useState<string | null>(null);
+  const [valuesError, setValuesError] = useState<{ annotationId: string; message: string } | null>(null);
+  const [changeTermRequest, setChangeTermRequest] = useState(0);
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  /** End of the mark: largest segment end of the selected mention, else of the finding's first mention. */
+  const markEndOf = (snapshot: AnnotationSnapshot, evidenceId: string | null): number | null => {
+    const refs = snapshot.annotation.evidence_refs ?? [];
+    const id = evidenceId && refs.some(ref => ref.evidence_id === evidenceId) ? evidenceId : refs[0]?.evidence_id;
+    const segments = id ? allEvidenceMap[id]?.mention.segments ?? [] : [];
+    return segments.length ? Math.max(...segments.map(segment => segment.end)) : null;
+  };
+  const focusInspector = (element: HTMLElement | null | undefined) => {
+    if (!element) return false;
+    element.focus({ preventScroll: true });
+    return true;
+  };
+  useEffect(() => {
+    if (!loopFocus) return;
+    // Another selection before the new finding arrived ends the loop.
+    if (selectedAnnotationId !== loopFocus.annotationId) { setLoopFocus(null); return; }
+    if (!selectedAnnotation || selectedAnnotation.annotation.annotation_id !== loopFocus.annotationId) return;
+    setLoopFocus(null);
+    const snapshot = selectedAnnotation, values = snapshot.annotation.axes_values ?? {};
+    const isSet = (value: unknown) => value !== null && value !== undefined && value !== "";
+    const defaults = currentAxesConfig.filter(axis => (snapshot.annotation.axes_defaulted ?? []).includes(axis.id) && isSet(values[axis.id]));
+    const term = loopFocus.termText ?? termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id) ?? snapshot.annotation.term_id;
+    announceCarried(defaults.length
+      ? `${term} added. Values from defaults: ${defaults.map(axis => axisOptionLabel(values[axis.id])).join(", ")}. Confirm defaults or change a value.`
+      : `${term} added.`);
+    const inspector = inspectorRef.current;
+    const requiredEmpty = currentAxesConfig.find(axis => !axis.allow_empty && !isSet(values[axis.id]));
+    const field = requiredEmpty ? Array.from(inspector?.querySelectorAll<HTMLElement>("[data-axis-field]") ?? [])
+      .find(element => element.dataset.axisField === requiredEmpty.id) : undefined;
+    if (focusInspector(field?.querySelector<HTMLElement>('input[type="radio"]:not(:disabled), select:not(:disabled)'))) return;
+    if (focusInspector(inspector?.querySelector<HTMLElement>("[data-confirm-defaults]"))) return;
+    if (!panesLayout) setTextFocusRequest({ offset: markEndOf(snapshot, selectedEvidenceId) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loopFocus, selectedAnnotation, selectedAnnotationId]);
+  useEffect(() => {
+    if (!searchFocusRequest) return;
+    const input = inspectorRef.current?.querySelector<HTMLInputElement>("#search-input");
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    input.select();
+  }, [searchFocusRequest]);
+  useEffect(() => { setValuesError(null); }, [selectedAnnotationId]);
+
+  /** "Confirm defaults (n)": one set_axes with the shown values; then back to the text after the mark. */
+  const handleConfirmDefaults = async (axisIds: string[], values?: AxesValues) => {
+    if (readOnlyRef.current || !selectedAnnotation) return;
+    const snapshot = selectedAnnotation, annotationId = snapshot.annotation.annotation_id;
+    const current: AxesValues = values ?? snapshot.annotation.axes_values ?? {};
+    const ids = axisIds.filter(id => current[id] !== null && current[id] !== undefined && current[id] !== "");
+    if (ids.length === 0) return;
+    setValuesError(null);
+    try {
+      await handleUpdateAxes(current, ids);
+    } catch (error) {
+      if (!(error instanceof DiscardedChangesError)) setValuesError({ annotationId, message: "The values could not be confirmed. Try again." });
+      return;
+    }
+    const axisLabel = (id: string) => currentAxesConfig.find(axis => axis.id === id)?.label ?? id;
+    announceCarried(`Confirmed: ${ids.map(id => `${axisLabel(id)} ${axisOptionLabel(current[id])}`).join(", ")}.`);
+    if (panesLayout && mobilePane === "details") {
+      focusInspector(inspectorRef.current?.querySelector<HTMLElement>("[data-back-to-text]"));
+      return;
+    }
+    setTextFocusRequest({ offset: markEndOf(snapshot, selectedEvidenceId) });
+  };
+  const backToText = () => {
+    setMobilePane("text");
+    setTextFocusRequest({ offset: selectedAnnotation ? markEndOf(selectedAnnotation, selectedEvidenceId) : null });
+  };
+  /** Choose term at <=700 px: the details pane with the prefilled, focused search. */
+  const chooseTerm = () => {
+    setMobilePane("details");
+    setSearchFocusRequest(count => count + 1);
+  };
+
   const shortcutOptions = { scope: "screen" as const, root: rootRef };
   useShortcut(["Alt+ArrowLeft", "Alt+ArrowRight"], (event) => {
     if (assignmentNavigation) {
@@ -2405,6 +2496,41 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     void markCarriedChecked(checkableCarried);
   }, { ...shortcutOptions, enabled: carriedActive && !readOnly && !!selectedCarriedState?.unchecked, group: "Carried findings", description: "Mark carried finding as checked" });
   useShortcutHint(["Shift + arrows, then release Shift"], "Select text with the keyboard to create a mention");
+  // Finding keys (spec B.7): own editable findings and the new finding only, never proposals or read-only views.
+  const ownFindingActive = !readOnly && !display && !!selectedAnnotation && !pendingAnnotation && !selectedSource
+    && !selectedInputState && !(view.key.mode === "review" && selectedTarget);
+  const pendingSearchable = !readOnly && !display && !!pendingAnnotation && !pendingAnnotation.carriedInput && !savedPendingReanchor;
+  useShortcut("/", () => {
+    if (pendingSearchable) {
+      if (panesLayout) chooseTerm();
+      else setSearchFocusRequest(count => count + 1);
+      return;
+    }
+    if (!ownFindingActive) return false;
+    if (panesLayout) setMobilePane("details");
+    setChangeTermRequest(count => count + 1);
+  }, { ...shortcutOptions, enabled: pendingSearchable || ownFindingActive, group: "Finding", description: "Focus the term search" });
+  useShortcut("v", event => {
+    // Plain "v" only: Shift+V is not this shortcut.
+    if (event.shiftKey) return false;
+    const fields = Array.from(inspectorRef.current?.querySelectorAll<HTMLElement>("[data-values-section] [data-axis-field]") ?? []);
+    const defaulted = new Set(selectedAnnotation?.annotation.axes_defaulted ?? []);
+    const field = fields.find(element => defaulted.has(element.dataset.axisField ?? "")) ?? fields[0];
+    const control = field?.querySelector<HTMLElement>('input[type="radio"]:checked:not(:disabled)')
+      ?? field?.querySelector<HTMLElement>('input[type="radio"]:not(:disabled)') ?? field?.querySelector<HTMLElement>("select:not(:disabled)");
+    if (!control) return false;
+    // At <=700 px the details pane must be shown before its control can take focus.
+    if (panesLayout && mobilePane !== "details") flushSync(() => setMobilePane("details"));
+    control.focus({ preventScroll: true });
+  }, { ...shortcutOptions, enabled: ownFindingActive && currentAxesConfig.length > 0, group: "Finding", description: "Focus the values" });
+  useShortcut("d", event => {
+    // Plain "d" only: Shift+D is not this shortcut.
+    if (event.shiftKey || readOnlyRef.current) return false;
+    const button = inspectorRef.current?.querySelector<HTMLButtonElement>("[data-confirm-defaults]");
+    if (!button || button.disabled || button.getAttribute("aria-disabled") === "true") return false;
+    button.click();
+  }, { ...shortcutOptions, enabled: ownFindingActive && (selectedAnnotation?.annotation.axes_defaulted?.length ?? 0) > 0,
+    group: "Finding", description: "Confirm all default values" });
   useShortcutHint(["←", "→", "Ctrl + ← / →"], "Move the focused mention edge (Tab to an edge handle of the selected annotation)");
 
   const textMentions: MentionDisplay[] = useMemo(() => [
@@ -2648,7 +2774,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       >
                         <div className="doc-id doc-row">
                           <TermName termId={t.term_id ?? t.annotation_id} label={termLabel(t.layer_id, t.term_id ?? t.annotation_id)} />
-                          {defaultedKeys.has(refKey(t)) && <StatusBadge tone="warning">Defaulted axes</StatusBadge>}
+                          {defaultedKeys.has(refKey(t)) && <StatusBadge tone="warning">Defaults to confirm</StatusBadge>}
                           {dec ? (
                             <span className={`decision-tag decision-tag--${dec.outcome}`}>
                               {dec.outcome === "confirmed" ? <><IconCheck />Confirmed</>
@@ -2832,6 +2958,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           resyncToken={textResyncToken}
           scrollRequest={textScrollRequest}
         />
+        {panesLayout && pendingIsMarkedSpan && !readOnly && mobilePane === "text" && (
+          <div className="pending-bar" role="group" aria-label="New finding">
+            <span className="pending-bar__text">New finding “{quoteSegments(view.document.text, pendingAnnotation!.segments, 40)}” · </span>
+            <Button type="button" variant="primary" size="sm" onClick={chooseTerm}>Choose term</Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => {
+              const end = pendingAnnotation!.segments.reduce((max, segment) => Math.max(max, segment.end), 0);
+              cancelPending();
+              setTextFocusRequest({ offset: end });
+            }}>Cancel</Button>
+          </div>
+        )}
 
         {/* Right: Annotation & Search Panel + Review Actions */}
         <div className="inspector-pane density-compact" ref={inspectorRef}>
@@ -2900,7 +3037,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   {...pendingSearchProps(pendingAnnotation)}
                   onSelectCandidate={(candidate, searchId) => {
                     if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId } });
-                    else void createPendingAnnotation(candidate.term_id, searchId);
+                    else void createPendingAnnotation(candidate.term_id, searchId, candidate.label ?? undefined);
                   }} />}
                 <Button type="button" variant="secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</Button>
               </div>
@@ -2970,6 +3107,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             />
           ) : (<>
             {carriedSection}
+            {panesLayout && !readOnly && selectedAnnotation && selectedAnnotationId === loopAnnotationId && (
+              <Button type="button" variant="secondary" size="sm" className="back-to-text" data-back-to-text onClick={backToText}>
+                Back to text
+              </Button>
+            )}
             <AnnotationPanel
               source={proposalFor(selectedAnnotation, view.available_inputs ?? [])}
               readOnly={readOnly}
@@ -3010,7 +3152,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
               onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
               onUpdateAxes={(axesValues) => { void handleUpdateAxes(axesValues).catch(reportError); }}
-              onConfirmAxis={(axisId) => { void handleUpdateAxes(selectedAnnotation!.annotation.axes_values ?? {}, axisId).catch(reportError); }}
+              onConfirmDefaults={(axisIds, values) => { void handleConfirmDefaults(axisIds, values); }}
+              valuesError={valuesError && valuesError.annotationId === selectedAnnotationId ? valuesError.message : null}
+              searchRequest={changeTermRequest}
               onAttachMention={(segments) =>
                 handleSelection({ segments, intent: "new_mention" })
               }

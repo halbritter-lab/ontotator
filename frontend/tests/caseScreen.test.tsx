@@ -918,6 +918,242 @@ describe("CaseScreen integration", () => {
       expect(container.scrollTop).toBe(40);
       focus.mockRestore();
     });
+
+    describe("values loop", () => {
+      const allDefaults = { assertion: "present", experiencer: "patient", temporality: "current" };
+      const loopView = (defaults: Record<string, string> = allDefaults, requiredAssertion = false) => {
+        const view = structuredClone(sampleView);
+        view.creation_defaults = { phenotype: { default: defaults } };
+        if (requiredAssertion) view.layers![0].annotation_types[0].axes![0].allow_empty = false;
+        return view;
+      };
+      /** A server that keeps the created finding and its values. */
+      const loopServer = (view: WorkspaceView) => {
+        let current = structuredClone(view.draft);
+        return vi.spyOn(api, "applyCommand").mockImplementation(async (_workspace: string, body: any) => {
+          const p = body.payload;
+          current = structuredClone(current); current.revision += 1;
+          if (p.command === "create_annotation") {
+            const evidence = { mention: { evidence_id: p.evidence_id, segments: p.segments }, version: "ev-1" };
+            current.evidence = [...(current.evidence ?? []), evidence] as any;
+            current.annotations = [...(current.annotations ?? []), { schema_version: "ontocurator-annotation/v3", version: "v1",
+              document_id: view.document.document_id, text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
+              annotation: { annotation_id: p.annotation_id, document_id: view.document.document_id, layer_id: p.layer_id,
+                type_id: p.type_id, term_id: p.term_id, axes_values: p.axes_values,
+                axes_defaulted: Object.keys(p.axes_values).filter(id => p.axes_values[id] != null && !p.chosen_axis_ids.includes(id)),
+                evidence_refs: [{ evidence_id: p.evidence_id, version: "ev-1" }],
+                provenance: { actor: { actor_id: "user-test", kind: "human" }, method: "manual", source_refs: [] } },
+              evidence: [evidence] }] as any;
+          }
+          if (p.command === "set_axes") {
+            current.annotations = current.annotations!.map(snapshot => snapshot.annotation.annotation_id !== p.annotation_id ? snapshot
+              : { ...snapshot, annotation: { ...snapshot.annotation, axes_values: p.axes_values,
+                axes_defaulted: (snapshot.annotation.axes_defaulted ?? []).filter(id => !p.chosen_axis_ids.includes(id)
+                  && p.axes_values[id] === snapshot.annotation.axes_values?.[id]) } });
+          }
+          return structuredClone(current);
+        });
+      };
+      const addHypotonia = async (container: HTMLElement) => {
+        const text = markThe(container);
+        const input = screen.getByRole("combobox", { name: "Search term" });
+        await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBe(screen.getAllByRole("option")[1].id));
+        fireEvent.keyDown(input, { key: "Enter" });
+        return text;
+      };
+      const announcer = () => document.querySelector("[data-carried-announcer]")!.textContent;
+      const setAxesCalls = (apply: ReturnType<typeof loopServer>) => apply.mock.calls.filter(call => (call[1] as any).payload.command === "set_axes");
+
+      it("after adding a term focuses Confirm defaults and announces the defaults", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-loop" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        expect(document.activeElement!.textContent).toContain("Confirm defaults (3)");
+        expect(announcer()).toBe("Hypotonia added. Values from defaults: Present, Patient, Current. Confirm defaults or change a value.");
+      });
+
+      it("after adding a term focuses the first required empty value instead", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView({ experiencer: "patient", temporality: "current" }, true);
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-required" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).closest('[data-axis-field="assertion"]')).not.toBeNull());
+        expect((document.activeElement as HTMLInputElement).type).toBe("radio");
+        expect(announcer()).toBe("Hypotonia added. Values from defaults: Patient, Current. Confirm defaults or change a value.");
+      });
+
+      it("D confirms all defaults in one set_axes and returns focus to the text after the mark", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        const apply = loopServer(view);
+        const focus = vi.spyOn(HTMLElement.prototype, "focus");
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-d" onClose={vi.fn()} />);
+        const text = await addHypotonia(rendered.container);
+        text.scrollTop = 25;
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        fireEvent.keyDown(document.body, { key: "d" });
+        await waitFor(() => expect(document.activeElement).toBe(rendered.container.querySelector(".text-container")));
+        const calls = setAxesCalls(apply);
+        expect(calls).toHaveLength(1);
+        expect((calls[0][1] as any).payload).toEqual(expect.objectContaining({ command: "set_axes",
+          axes_values: allDefaults, chosen_axis_ids: ["assertion", "experiencer", "temporality"] }));
+        expect(announcer()).toBe("Confirmed: Vorhandensein (Assertion) Present, Betroffene Person (Experiencer) Patient, Zeitlicher Bezug (Temporality) Current.");
+        const selection = window.getSelection()!;
+        expect(selection.isCollapsed).toBe(true);
+        const range = document.createRange(); range.setStart(text, 0); range.setEnd(selection.anchorNode!, selection.anchorOffset);
+        expect(range.toString()).toBe("The");
+        expect(text.scrollTop).toBe(25);
+        for (const [index, call] of focus.mock.calls.entries()) {
+          if (focus.mock.contexts[index] === text || (focus.mock.contexts[index] as HTMLElement).hasAttribute?.("data-confirm-defaults")) {
+            expect(call[0]).toEqual({ preventScroll: true });
+          }
+        }
+        focus.mockRestore();
+        await waitFor(() => expect(screen.queryByRole("button", { name: /Confirm defaults/ })).toBeNull());
+      });
+
+      it("V focuses the first defaulted value and arrow changes are sent once", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView({ experiencer: "patient", temporality: "current" });
+        const apply = loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-v" onClose={vi.fn()} />);
+        const text = await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        text.focus();
+        vi.useFakeTimers();
+        try {
+          fireEvent.keyDown(text, { key: "v" });
+          const patient = document.activeElement as HTMLInputElement;
+          expect(patient.closest('[data-axis-field="experiencer"]')).not.toBeNull();
+          expect(patient.checked).toBe(true);
+          fireEvent.keyDown(patient, { key: "ArrowRight" });
+          fireEvent.click(screen.getByRole("radio", { name: "Other person" }));
+          fireEvent.keyDown(screen.getByRole("radio", { name: "Other person" }), { key: "ArrowLeft" });
+          fireEvent.click(screen.getByRole("radio", { name: /^Patient/ }));
+          fireEvent.keyDown(screen.getByRole("radio", { name: /^Patient/ }), { key: "ArrowRight" });
+          fireEvent.click(screen.getByRole("radio", { name: "Other person" }));
+          expect(setAxesCalls(apply)).toHaveLength(0);
+          await act(async () => { vi.advanceTimersByTime(300); });
+        } finally { vi.useRealTimers(); }
+        await waitFor(() => expect(setAxesCalls(apply)).toHaveLength(1));
+        expect((setAxesCalls(apply)[0][1] as any).payload).toEqual(expect.objectContaining({
+          axes_values: { assertion: null, experiencer: "other", temporality: "current" }, chosen_axis_ids: ["experiencer"] }));
+      });
+
+      it("/ focuses the term search of a new finding and opens Change term for an own finding", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-slash" onClose={vi.fn()} />);
+        const text = markThe(rendered.container);
+        text.focus();
+        fireEvent.keyDown(text, { key: "/" });
+        expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Search term" }));
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        expect(screen.queryByRole("combobox", { name: "Search term" })).toBeNull();
+        fireEvent.keyDown(document.activeElement!, { key: "/" });
+        expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Search term" }));
+        expect(screen.getByRole("button", { name: "Close search" })).toBeDefined();
+      });
+
+      it("never fires / V D in text fields, with Shift for D and V, or in read-only and proposal views", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        const apply = loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-guard" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        const note = screen.getByLabelText("Annotation note");
+        note.focus();
+        for (const key of ["d", "v", "/"]) fireEvent.keyDown(note, { key });
+        expect(document.activeElement).toBe(note);
+        fireEvent.keyDown(document.body, { key: "D", shiftKey: true });
+        fireEvent.keyDown(document.body, { key: "V", shiftKey: true });
+        expect(document.activeElement).toBe(note);
+        rendered.rerender(<CaseScreen view={view} workspaceId="ws-guard" onClose={vi.fn()} readOnly />);
+        fireEvent.keyDown(document.body, { key: "d" });
+        fireEvent.keyDown(document.body, { key: "v" });
+        fireEvent.keyDown(document.body, { key: "/" });
+        await act(async () => { await Promise.resolve(); });
+        expect(setAxesCalls(apply)).toHaveLength(0);
+        expect(screen.queryByRole("combobox", { name: "Search term" })).toBeNull();
+      });
+
+      it("never fires D for a selected proposal in review mode", () => {
+        const { view, proposal } = proposalView();
+        proposal.annotation.axes_values = { assertion: "present" }; proposal.annotation.axes_defaulted = ["assertion"];
+        const apply = vi.spyOn(api, "applyCommand");
+        render(<CaseScreen view={view} workspaceId="ws-proposal" onClose={vi.fn()} />);
+        fireEvent.keyDown(window, { key: "j" });
+        fireEvent.keyDown(document.body, { key: "d" });
+        fireEvent.keyDown(document.body, { key: "v" });
+        expect(apply).not.toHaveBeenCalled();
+      });
+
+      it("lists /, V and D under Finding in ? help", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-help" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        fireEvent.keyDown(document.body, { key: "?" });
+        const help = await screen.findByRole("dialog");
+        expect(within(help).getByText("Finding")).toBeDefined();
+        expect(within(help).getByText("Focus the term search")).toBeDefined();
+        expect(within(help).getByText("Focus the values")).toBeDefined();
+        expect(within(help).getByText("Confirm all default values")).toBeDefined();
+      });
+
+      it("renames the findings badge to Defaults to confirm", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-badge" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        expect(await screen.findByText("Defaults to confirm")).toBeDefined();
+        expect(screen.queryByText("Defaulted axes")).toBeNull();
+      });
+
+      it("at 700 px shows the New finding bar instead of switching panes and opens the focused search on Choose term", async () => {
+        const original = window.matchMedia;
+        window.matchMedia = ((query: string) => ({
+          matches: query === "(max-width: 700px)", media: query, onchange: null,
+          addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+        })) as unknown as typeof window.matchMedia;
+        try {
+          vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+          const view = loopView();
+          loopServer(view);
+          const rendered = render(<CaseScreen view={view} workspaceId="ws-narrow" onClose={vi.fn()} />);
+          const text = markThe(rendered.container);
+          const layout = () => rendered.container.querySelector(".app-layout")!;
+          expect(layout().classList.contains("mobile-pane-text")).toBe(true);
+          const bar = rendered.container.querySelector<HTMLElement>(".pending-bar")!;
+          expect(bar.textContent).toContain("New finding “The” · Choose term");
+          expect(within(bar).getByRole("button", { name: "Cancel" })).toBeDefined();
+          expect(document.activeElement).not.toBe(screen.getByRole("combobox", { name: "Search term" }));
+          fireEvent.click(within(bar).getByRole("button", { name: "Choose term" }));
+          expect(layout().classList.contains("mobile-pane-details")).toBe(true);
+          const input = screen.getByRole("combobox", { name: "Search term" });
+          await waitFor(() => expect(document.activeElement).toBe(input));
+          await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBe(screen.getAllByRole("option")[1].id));
+          fireEvent.keyDown(input, { key: "Enter" });
+          await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+          fireEvent.keyDown(document.body, { key: "d" });
+          const back = await screen.findByRole("button", { name: "Back to text" });
+          await waitFor(() => expect(document.activeElement).toBe(back));
+          fireEvent.click(back);
+          expect(layout().classList.contains("mobile-pane-text")).toBe(true);
+          await waitFor(() => expect(document.activeElement).toBe(text));
+        } finally { window.matchMedia = original; }
+      });
+    });
   });
 
   it("does not expose imported sources in an independent view", () => {
@@ -1219,10 +1455,12 @@ describe("CaseScreen integration", () => {
     fireEvent.click(document.querySelector<HTMLElement>('[data-open-item="defaulted"] button')!);
     await waitFor(() => expect((document.activeElement as HTMLElement).closest('[data-axis-field="assertion"]')).not.toBeNull());
     expect((screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }) as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByText("Defaulted axes")).toBeDefined();
+    expect(screen.getByText("Defaults to confirm")).toBeDefined();
     expect(apply).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /Confirm Vorhandensein.* value/ }));
-    await waitFor(() => expect(apply).toHaveBeenCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({ chosen_axis_ids: ["assertion"] }) })));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm defaults (3)" }));
+    await waitFor(() => expect(apply).toHaveBeenCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({
+      command: "set_axes", chosen_axis_ids: ["assertion", "experiencer", "temporality"] }) })));
+    expect(apply).toHaveBeenCalledTimes(1);
   });
 
   it("outcome keys set decisions repeatedly and zero resets while inputs, IME and dialogs suppress them", async () => {

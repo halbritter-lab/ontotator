@@ -33,7 +33,7 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
     >
       <div className="doc-id doc-row">
         <TermName termId={termId} label={termLabel(annSnap.annotation.layer_id, termId)} />
-        {defaulted && <StatusBadge tone="warning">Defaulted axes</StatusBadge>}
+        {defaulted && <StatusBadge tone="warning">Defaults to confirm</StatusBadge>}
         {layerName && showLayer && (
           <span className="decision-tag decision-tag--open">{layerName}</span>
         )}

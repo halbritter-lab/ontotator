@@ -2,7 +2,7 @@ import { IconButton } from "../ui/IconButton";
 import { Textarea } from "../ui/Textarea";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/Button";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { ProposalSource } from "./ProposalSource";
 import { AiBadge } from "./AiBadge";
 import type { EditorProposal, AnnotationSnapshot, SearchCandidate } from "../api/client";
@@ -14,6 +14,9 @@ import type { SearchLanguageControl } from "./searchLanguages";
 import type { SearchManager, WorkspaceKey } from "./searchState";
 import { IconClose, IconTrash } from "../ui/icons";
 import { axisOptionLabel } from "./axisLabels";
+import { InlineMessage } from "../ui/InlineMessage";
+import { Kbd } from "../ui/Kbd";
+import { useCoalescedAxisChange } from "./useCoalescedAxisChange";
 
 export type AxesValues = Record<string, string | null>;
 export type Axes = AxesValues;
@@ -50,7 +53,12 @@ export interface AnnotationPanelProps {
   detachLastBlockedReason?: string;
   onUpdateTerm: (termId: string, searchId?: string) => void;
   onUpdateAxes: (axes: Partial<Axes>) => void;
-  onConfirmAxis?: (axisId: string) => void;
+  /** "Confirm defaults (n)": the defaulted axes to confirm and the values shown (one set_axes). */
+  onConfirmDefaults?: (axisIds: string[], values?: AxesValues) => void;
+  /** Error of the last confirmation, shown inside the Values section. */
+  valuesError?: string | null;
+  /** Each increment opens "Change term" and focuses the term search. */
+  searchRequest?: number;
   onAttachMention: (segments: CodepointSegment[]) => void;
   onDetachMention: (evidenceId: string) => void;
   onDeleteAnnotation: (annotationId: string) => void;
@@ -93,7 +101,9 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   noteValue, noteRequired, noteHint, onChangeNote, onSaveNote, detachLastBlockedReason,
   onUpdateTerm,
   onUpdateAxes,
-  onConfirmAxis,
+  onConfirmDefaults,
+  valuesError,
+  searchRequest,
   onDetachMention,
   onDeleteAnnotation,
   deleteConfirmMessage = "Delete this annotation and all its mentions?",
@@ -106,6 +116,17 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   const changeTermButton = useRef<HTMLButtonElement>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmDetachId, setConfirmDetachId] = useState<string | null>(null);
+  const valuesHeadingId = useId();
+  // Radio changes by arrow keys are coalesced (one save after a pause); a click saves at once.
+  const arrowChange = useRef(false);
+  const savedAxes: AxesValues = annotation?.annotation.axes_values ?? (annotation?.annotation as any)?.axes?.values ?? {};
+  const axes = useCoalescedAxisChange(savedAxes, values => onUpdateAxes(values));
+  const searchRequestSeen = useRef(searchRequest);
+  useEffect(() => {
+    if (searchRequest === searchRequestSeen.current) return;
+    searchRequestSeen.current = searchRequest;
+    setShowSearch(true);
+  }, [searchRequest]);
 
   if (!annotation) {
     return (
@@ -123,7 +144,20 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
   const ann = annotation.annotation;
   const currentTerm = ann.term_id;
-  const axesValues = ann.axes_values ?? (ann as any).axes?.values ?? {};
+  const axesValues = axes.values;
+  const defaultedAxes = new Set(ann.axes_defaulted ?? []);
+  /** A defaulted axis is unconfirmed while it shows its saved, still available default value. */
+  const isUnconfirmedDefault = (axis: AxisDefinition) => {
+    const value = axesValues[axis.id];
+    return defaultedAxes.has(axis.id) && typeof value === "string" && value === savedAxes[axis.id] && axis.options.includes(value);
+  };
+  const confirmableDefaults = (axesConfig ?? []).filter(isUnconfirmedDefault);
+  const confirmDefaults = () => {
+    if (readOnly || !onConfirmDefaults || confirmableDefaults.length === 0) return;
+    const ids = confirmableDefaults.map(axis => axis.id);
+    axes.flush();
+    onConfirmDefaults(ids, { ...axes.values });
+  };
 
   const evidenceRefs = ann.evidence_refs ?? [];
   const linkedEvidence = evidenceRefs
@@ -196,8 +230,10 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               type="button"
               variant="secondary" size="sm"
               data-repair="change-term" onClick={() => setShowSearch(!showSearch)}
+              aria-keyshortcuts={!showSearch && !readOnly ? "/" : undefined}
             >
               {showSearch ? "Close search" : readOnly ? "Search ontology" : "Change term"}
+              {!showSearch && !readOnly && <span aria-hidden="true"> <Kbd>/</Kbd></span>}
             </Button>
             {onDeselect && (
               <IconButton label="Clear selection" icon={<IconClose />} variant="quiet" size="sm" onClick={onDeselect} />
@@ -226,41 +262,50 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         )}
       </div>
 
-      {/* 2. Dynamic Context Axes (hidden if empty or undefined) */}
+      {/* 2. Values (hidden if the type has no axes) */}
       {axesConfig && axesConfig.length > 0 && (
-        <div className="detail-section" data-testid="axes-section" tabIndex={-1}>
-          <h3>Context Axes</h3>
+        <section className="detail-section values-section" data-values-section data-testid="axes-section" tabIndex={-1}
+          aria-labelledby={valuesHeadingId}
+          onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) axes.flush(); }}>
+          <h3 id={valuesHeadingId}>Values{!readOnly && <span aria-hidden="true"> <Kbd>V</Kbd></span>}</h3>
           {axesConfig.map((axis) => {
             const val = axesValues[axis.id] ?? "";
             const isRequired = !axis.allow_empty;
             const unavailable = val !== "" && !axis.options.includes(val);
             const unavailableLabel = `${val} (current unavailable value)`;
+            const unconfirmed = isUnconfirmedDefault(axis);
             const options = [
               ...(axis.allow_empty ? [{ value: "", label: "Not specified" }] : []),
               ...axis.options.map((option) => ({ value: option, label: axisOptionLabel(option) })),
               ...(unavailable ? [{ value: val, label: unavailableLabel }] : []),
             ];
-            const updateAxis = (value: string) => onUpdateAxes({
-              ...axesValues,
-              [axis.id]: value === "" ? null : value,
-            });
+            const updateAxis = (value: string) => {
+              axes.change(axis.id, value === "" ? null : value);
+              if (!arrowChange.current) axes.flush();
+              arrowChange.current = false;
+            };
 
             return (
-              <fieldset key={axis.id} className="form-group axis-field" data-axis-field={axis.id}>
-                <legend className="form-label">
-                  {axis.label} {isRequired && <span style={{ color: "var(--danger)" }}>* (Required)</span>}
+              <fieldset key={axis.id} className="axis-field" data-axis-field={axis.id}>
+                <legend className="axis-legend">
+                  {axis.label}{isRequired && <span className="axis-required"> (required)</span>}
                 </legend>
                 {options.length <= 4 ? (
                   <div className="axis-options">
-                    {options.map((option) => (
-                      <label key={option.value} className="axis-option">
-                        <input type="radio" name={`axis-${ann.annotation_id}-${axis.id}`}
-                          value={option.value} checked={val === option.value}
-                          disabled={readOnly || (unavailable && option.value === val)}
-                          onChange={() => updateAxis(option.value)} />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
+                    {options.map((option) => {
+                      const isDefault = unconfirmed && val === option.value;
+                      return (
+                        <label key={option.value} className={`axis-option${isDefault ? " is-default" : ""}`}
+                          onPointerDown={() => { arrowChange.current = false; }}>
+                          <input type="radio" name={`axis-${ann.annotation_id}-${axis.id}`}
+                            value={option.value} checked={val === option.value}
+                            disabled={readOnly || (unavailable && option.value === val)}
+                            onKeyDown={event => { if (event.key.startsWith("Arrow")) arrowChange.current = true; }}
+                            onChange={() => updateAxis(option.value)} />
+                          <span>{option.label}</span>{isDefault && <span className="axis-default-tag"> · default</span>}
+                        </label>
+                      );
+                    })}
                   </div>
                 ) : (
                   <Select label={null} id={`axis-select-${axis.id}`} aria-label={axis.label}
@@ -268,24 +313,23 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     {axis.allow_empty && <option value="">Not specified</option>}
                     {!axis.allow_empty && <option value="" disabled>Please select</option>}
                     {unavailable && <option value={val} disabled>{unavailableLabel}</option>}
-                    {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
+                    {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}{unconfirmed && option === val ? " · default" : ""}</option>)}
                   </Select>
-                )}
-                {ann.axes_defaulted?.includes(axis.id) && val !== "" && (
-                  <div>
-                    <p className="form-hint">Default value; confirm it or choose a value.</p>
-                    {onConfirmAxis && !unavailable && (
-                      <Button type="button" variant="secondary" size="sm"
-                        disabled={readOnly} onClick={() => onConfirmAxis(axis.id)}>
-                        Confirm {axis.label} value
-                      </Button>
-                    )}
-                  </div>
                 )}
               </fieldset>
             );
           })}
-        </div>
+          {!readOnly && onConfirmDefaults && confirmableDefaults.length > 0 && (
+            <Button type="button" variant="primary" size="sm" className="values-confirm" data-confirm-defaults
+              aria-keyshortcuts="d" onClick={confirmDefaults}>
+              Confirm defaults ({confirmableDefaults.length})<span aria-hidden="true"> <Kbd>D</Kbd></span>
+            </Button>
+          )}
+          {confirmableDefaults.length > 0 && (
+            <p className="form-hint">Defaults are not confirmed until you confirm them or choose another value.</p>
+          )}
+          {valuesError && <InlineMessage tone="error">{valuesError}</InlineMessage>}
+        </section>
       )}
 
       <div className="detail-section">
