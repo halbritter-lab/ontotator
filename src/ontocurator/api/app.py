@@ -427,6 +427,8 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "NOT_IN_WORK_PLAN": 409,
                     "CASE_IDS_TOO_MANY": 422,
                     "VARIANT_ALREADY_DISCARDED": 409,
+                    "ASSIGNMENT_BATCH_REFUSED": 409,
+                    "ASSIGNMENT_BATCH_STALE": 409,
                 }.get(exc.code, 422)
             ),
             content={"code": exc.code, "details": exc.details or str(exc)},
@@ -436,6 +438,11 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     from ontocurator.api.variant_routes import router as variant_router
 
     app.include_router(assignment_router)
+    from ontocurator.api.assignment_batch_routes import (
+        router as assignment_batch_router,
+    )
+
+    app.include_router(assignment_batch_router)
     from ontocurator.api.work_round_routes import router as work_round_router
 
     app.include_router(work_round_router)
