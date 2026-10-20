@@ -7,8 +7,8 @@ it("shows_product_user_and_logout", () => {
   const logout = vi.fn(); render(<AppShell user={user} onLogout={logout}>Content</AppShell>);
   expect(screen.getByText("Ontocurator")).toBeTruthy();
   expect(screen.getByText("Clinical Curation Workbench")).toBeTruthy();
-  expect(screen.getByTestId("current-user").title).toBe("Logged in as alex");
-  expect(screen.getByTestId("current-user").textContent).toBe("Alex · a1");
+  expect(screen.getByTestId("current-user").textContent).toBe("Alex (a1)");
+  expect(screen.getByTestId("current-user").title).toBe("");
   screen.getByRole("button", { name: "Log out" }).click(); expect(logout).toHaveBeenCalledOnce();
 });
 it("no_logout_without_handler", () => { render(<AppShell user={user}>Content</AppShell>); expect(screen.queryByRole("button", { name: "Log out" })).toBeNull(); });
@@ -31,4 +31,10 @@ it("skip_link_targets_main", () => { render(<AppShell user={null}>Content</AppSh
 it("density_class_on_main", () => {
   const { rerender } = render(<AppShell user={null}>Content</AppShell>); expect(screen.getByRole("main").classList.contains("density-compact")).toBe(true);
   rerender(<AppShell user={null} density="reading">Content</AppShell>); expect(screen.getByRole("main").classList.contains("density-reading")).toBe(true);
+});
+it("shows the role as a muted second line under the identity", () => {
+  render(<AppShell user={user} role="Project lead">Content</AppShell>);
+  const identity = screen.getByTestId("current-user");
+  expect(identity.querySelector(".current-user-name")?.textContent).toBe("Alex (a1)");
+  expect(identity.querySelector(".cell-secondary")?.textContent).toBe("Project lead");
 });

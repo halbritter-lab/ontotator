@@ -244,7 +244,7 @@ describe("the login gate", () => {
     fireEvent.click(within(form).getByRole("button", { name: "Log in" }));
 
     await waitFor(() => expect(login).toHaveBeenCalledWith("alice", "correct horse battery"));
-    expect((await screen.findByTestId("current-user")).textContent).toBe("Alice · ann-0007");
+    expect((await screen.findByTestId("current-user")).querySelector(".current-user-name")?.textContent).toBe("Alice (ann-0007)");
     expect(screen.getByRole("button", { name: "Log out" })).toBeDefined();
     await screen.findByRole("table");
   });
@@ -273,7 +273,7 @@ describe("the login gate", () => {
     fireEvent.click(within(form).getByRole("button", { name: "Set password and log in" }));
 
     await waitFor(() => expect(redeem).toHaveBeenCalledWith("bob", "ABCD-EFGH", "a long new password"));
-    expect((await screen.findByTestId("current-user")).textContent).toBe("Bob · ann-0008");
+    expect((await screen.findByTestId("current-user")).querySelector(".current-user-name")?.textContent).toBe("Bob (ann-0008)");
   });
 
   it("asks to log in again when the password is set but the login after it fails", async () => {
@@ -347,7 +347,7 @@ describe("the login gate", () => {
 
     logInThrough(await screen.findByRole("dialog", { name: "Log in to Ontocurator" }), "bob");
 
-    await waitFor(() => expect(screen.getByTestId("current-user").textContent).toBe("Bob · ann-0009"));
+    await waitFor(() => expect(screen.getByTestId("current-user").querySelector(".current-user-name")?.textContent).toBe("Bob (ann-0009)"));
     expect(screen.queryByRole("dialog", { name: "Log in to Ontocurator" })).toBeNull();
     expect(screen.queryByTestId("annotator-identity")).toBeNull();
     expect(callsTo(fetchMock, "/api/v1/workspaces/ws/commands")).toHaveLength(1);
@@ -389,7 +389,7 @@ describe("the login gate", () => {
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
     await editFinding();
     expect(await screen.findByText("You are now logged in as Bob (from another tab).")).toBeDefined();
-    expect(screen.getByTestId("current-user").textContent).toBe("Bob · ann-0009");
+    expect(screen.getByTestId("current-user").querySelector(".current-user-name")?.textContent).toBe("Bob (ann-0009)");
     await screen.findByRole('heading', { name: 'My tasks' });
     expect(window.location.hash).toBe('#/');
     expect(screen.queryByTestId("annotator-identity")).toBeNull();

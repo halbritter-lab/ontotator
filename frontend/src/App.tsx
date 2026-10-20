@@ -6,6 +6,7 @@ import { NotFound } from "./app/NotFound";
 import { TaskEditor } from "./tasks/TaskEditor";
 import { parseRoute, routeHref, type NavigateOptions, type Route, type RouteLeaveGuard } from "./app/router";
 import { MyTasks } from "./tasks/MyTasks";
+import { landingProject, rememberProject } from "./app/lastProject";
 import { ProfilePage } from "./me/ProfilePage";
 import { ErrorNotice } from "./admin/ErrorNotice";
 import { UsersPage } from "./admin/UsersPage";
@@ -41,6 +42,9 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const projectIdentity = JSON.stringify([baseUser?.username, baseUser?.is_system_admin, retry]);
   const projects = baseUser && projectContext?.identity === projectIdentity ? projectContext.projects : [];
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
+  // Landing (D7): only the first view of plain `#/` after login redirects a lead;
+  // a later visit to My tasks stays there.
+  const [landing, setLanding] = useState(() => route.name === "tasks" && route.project === undefined);
   const [taskProject, setTaskProject] = useState<{ identity: string; key: string } | null>(null);
   const taskIdentity = route.name === 'task' ? JSON.stringify([baseUser?.username, route.assignmentId]) : '';
   const acceptedHash = useRef(window.location.hash || "#/");
@@ -145,6 +149,20 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   };
   const requestRef = useRef(requestRoute);
   requestRef.current = requestRoute;
+
+  const projectsReady = !!baseUser && projectContext?.identity === projectIdentity;
+  useEffect(() => {
+    if (!landing) return;
+    if (route.name !== "tasks" || route.project !== undefined || projectError) { setLanding(false); return; }
+    if (!projectsReady || !baseUser) return;
+    setLanding(false);
+    const key = landingProject(baseUser.username, projects);
+    if (key !== undefined) void requestRef.current({ name: "projectDocuments", key }, undefined, { replace: true });
+  }, [landing, route, projectError, projectsReady, baseUser, projects]);
+  const rememberedKey = baseUser && route.name !== "notFound" && "key" in route ? route.key : undefined;
+  useEffect(() => {
+    if (baseUser && rememberedKey !== undefined) rememberProject(baseUser.username, rememberedKey);
+  }, [baseUser?.username, rememberedKey]);
   useEffect(() => {
     const changed = (event: Event) => {
       // Native traversal dispatches popstate followed by hashchange. A paired
@@ -183,7 +201,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   };
   let content: JSX.Element;
   switch (route.name) {
-    case "tasks": content = <MyTasks project={route.project} projects={projects} onNavigate={go} />; break;
+    case "tasks": content = landing ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
+      : <MyTasks project={route.project} projects={projects} onNavigate={go} />; break;
     case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId])} assignmentId={route.assignmentId}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef}
       onProjectContext={key => setTaskProject({ identity: taskIdentity, key })} />; break;

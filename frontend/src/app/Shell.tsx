@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react";
-import type { CurrentUser, ProjectSummary } from "../api/client";
+import { useEffect, useState, type ReactNode } from "react";
+import { api, onSessionRestored, type CurrentUser, type ProjectSummary } from "../api/client";
+import { roleLabels } from "./labels";
 import { AppShell, type Crumb } from "../ui/AppShell";
 import { routeHref, type Route } from "./router";
 import { ProjectPicker } from "./ProjectPicker";
@@ -31,11 +32,48 @@ function NavigationLink({ destination, current, onNavigate, children }: {
     }}>{children}</a>;
 }
 
+const ROLE_ORDER = ["lead", "adjudicator", "annotator"] as const;
+
+/** Second header line: the roles in the current project, else across all projects. */
+export function shellRole(user: CurrentUser, projects: readonly ProjectSummary[], current: ProjectSummary | undefined): string | undefined {
+  const roles = new Set((current ? [current] : projects).flatMap(project => project.roles));
+  const labels = [
+    ...(user.is_system_admin ? ["System administrator"] : []),
+    ...ROLE_ORDER.filter(role => roles.has(role)).map(role => roleLabels[role]),
+  ];
+  return labels.length ? labels.join(", ") : undefined;
+}
+
+/** Unsubmitted own tasks, loaded once per session and again on window focus or a restored session. */
+function useOpenTaskCount(username: string): number | null {
+  const [count, setCount] = useState<{ username: string; value: number } | null>(null);
+  useEffect(() => {
+    let active = true;
+    let generation = 0;
+    const load = () => {
+      const request = ++generation;
+      api.listMyTasks().then(tasks => {
+        if (active && request === generation) setCount({ username, value: tasks.filter(task => task.status !== "submitted").length });
+      }, () => { /* The nav keeps its plain label; My tasks itself reports errors. */ });
+    };
+    load();
+    window.addEventListener("focus", load);
+    const stopRestored = onSessionRestored(load);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", load);
+      stopRestored();
+    };
+  }, [username]);
+  return count?.username === username ? count.value : null;
+}
+
 export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children, taskProject }: ShellProps): JSX.Element {
   const [choice, setChoice] = useState<{ username: string; key: string } | null>(null);
   const explicitKey = 'key' in route ? route.key : route.name === 'tasks' ? route.project : route.name === 'task' ? taskProject : undefined;
   const currentKey = explicitKey ?? (choice?.username === user.username ? choice.key : undefined);
   const current = projects.find(project => project.project_key === currentKey);
+  const openTasks = useOpenTaskCount(user.username);
   const selector = projects.length > 0 && <ProjectPicker projects={projects} current={current} route={route}
     onNavigate={onNavigate} onChoose={key => setChoice({ username: user.username, key })} />;
   const link = (destination: Route, label: string) => <li key={destination.name}>
@@ -43,7 +81,7 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
   </li>;
   const nav = <>
     <ul className="shell-nav-list">
-      {link({ name: "tasks" }, "My tasks")}
+      {link({ name: "tasks" }, openTasks === null ? "My tasks" : `My tasks (${openTasks})`)}
       {link({ name: "me" }, "Profile")}
     </ul>
     {user.is_system_admin && <section className="shell-nav-group" aria-label="Administration">
@@ -64,6 +102,6 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
         </ul>
       </section>}
   </>;
-  return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav} actions={selector}
+  return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav} actions={selector} role={shellRole(user, projects, current)}
     density={(route.name === "task" || route.name === "projectCase") ? "reading" : "compact"}>{children}</AppShell>;
 }

@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CurrentUser, ProjectSummary } from "../src/api/client";
+import { api, notifySessionRestored, type CurrentUser, type ProjectSummary, type TaskSummary } from "../src/api/client";
 import userEvent from "@testing-library/user-event";
 import { Shell, type ShellProps } from "../src/app/Shell";
 import { NotFound } from "../src/app/NotFound";
@@ -15,7 +15,16 @@ const props = (extra: Partial<ShellProps> = {}): ShellProps => ({
   user, projects: [], route: { name: "tasks" }, onNavigate: vi.fn(), onLogout: vi.fn(), children: "Page content", ...extra,
 });
 
-beforeEach(() => { window.history.replaceState(null, "", "#/tasks/42"); });
+const task = (id: number, status: TaskSummary["status"]): TaskSummary => ({
+  assignment_id: id, workflow_revision: 0, held: false, project_key: "p", project_name: "P", document_id: `doc-${id}`,
+  case_id: `case-${id}`, language: "de", task: "annotate", status, updated_at: "2026-10-20T10:00:00Z",
+});
+
+beforeEach(() => {
+  window.history.replaceState(null, "", "#/tasks/42");
+  // The task count stays unknown unless a test answers it.
+  vi.spyOn(api, "listMyTasks").mockReturnValue(new Promise(() => {}));
+});
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, "", "/"); });
 
 describe("role-based shell", () => {
@@ -46,8 +55,8 @@ describe("role-based shell", () => {
     expect(within(nav).queryByRole("navigation")).toBeNull();
     expect(screen.getAllByRole("banner")).toHaveLength(1);
     expect(screen.getAllByRole("main")).toHaveLength(1);
-    expect(screen.getByTestId("current-user").textContent).toBe("Alex · a1");
-    expect(screen.getByTestId("current-user").title).toBe("Logged in as alex");
+    expect(screen.getByTestId("current-user").textContent).toBe("Alex (a1)Annotator");
+    expect(screen.getByTestId("current-user").textContent).not.toContain("alex");
     expect(screen.getByText("Page content")).toBeDefined();
   });
 
@@ -164,6 +173,43 @@ describe("role-based shell", () => {
     expect(document.activeElement).toBe(screen.getByRole("main"));
     expect(window.location.hash).toBe("#/tasks/17");
     expect(onNavigate).not.toHaveBeenCalled();
+  });
+});
+
+describe("shell identity and task count", () => {
+  it("shows My tasks (n) counting unsubmitted tasks, refreshed on focus", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([task(1, "open"), task(2, "in_progress"), task(3, "reopened"), task(4, "submitted")]);
+    render(<Shell {...props()} />);
+    const link = await screen.findByRole("link", { name: "My tasks (3)" });
+    expect(link.getAttribute("href")).toBe("#/");
+    expect(api.listMyTasks).toHaveBeenCalledTimes(1);
+    vi.mocked(api.listMyTasks).mockResolvedValue([task(1, "submitted")]);
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    expect(await screen.findByRole("link", { name: "My tasks (0)" })).toBe(link);
+    expect(api.listMyTasks).toHaveBeenCalledTimes(2);
+    vi.mocked(api.listMyTasks).mockResolvedValue([task(5, "open")]);
+    act(() => { notifySessionRestored(); });
+    expect(await screen.findByRole("link", { name: "My tasks (1)" })).toBe(link);
+  });
+
+  it("keeps the plain My tasks label when the count cannot be loaded", async () => {
+    vi.mocked(api.listMyTasks).mockRejectedValue(new Error("offline"));
+    render(<Shell {...props()} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByRole("link", { name: "My tasks" })).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows Display name (pseudonym) with the role as a second line", () => {
+    const { rerender } = render(<Shell {...props({ projects: [project("led", true)], route: { name: "projectDocuments", key: "led" } })} />);
+    const identity = screen.getByTestId("current-user");
+    expect(identity.querySelector(".current-user-name")?.textContent).toBe("Alex (a1)");
+    expect(identity.querySelector(".cell-secondary")?.textContent).toBe("Project lead");
+    expect(identity.textContent).not.toContain("alex");
+    rerender(<Shell {...props({ user: { ...user, is_system_admin: true }, projects: [] })} />);
+    expect(identity.querySelector(".cell-secondary")?.textContent).toBe("System administrator");
+    rerender(<Shell {...props({ projects: [] })} />);
+    expect(identity.querySelector(".cell-secondary")).toBeNull();
   });
 });
 

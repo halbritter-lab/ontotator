@@ -25,7 +25,7 @@ async function editFinding() {
 
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, "", "#/"); });
-function clickSection(name: string): void {
+function clickSection(name: string | RegExp): void {
   const disclosure = document.querySelector<HTMLDetailsElement>(".shell-reading-navigation");
   if (disclosure && !disclosure.open) fireEvent.click(disclosure.querySelector("summary")!);
   fireEvent.click(screen.getByRole("link", { name }));
@@ -71,7 +71,7 @@ it("holds shell navigation during a save and honors only the latest destination"
   await editFinding();
   await waitFor(() => expect(api.applyCommand).toHaveBeenCalledOnce());
   const editor = document.querySelector(".text-container");
-  clickSection("My tasks");
+  clickSection(/^My tasks/);
   clickSection("Profile");
   expect(window.location.hash).toBe("#/tasks/17");
   expect(document.querySelector(".text-container")).toBe(editor);
@@ -90,14 +90,14 @@ it("cancels a raw-hash leave without losing the editor or duplicating its unsave
   const editor = document.querySelector(".text-container");
   act(() => { window.location.hash = "#/me"; });
   const dialog = await screen.findByRole("dialog", { name: "Changes not saved" });
-  clickSection("My tasks");
+  clickSection(/^My tasks/);
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
   expect(window.location.hash).toBe("#/tasks/17");
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/17"));
   expect(document.querySelector(".text-container")).toBe(editor);
-  clickSection("My tasks");
+  clickSection(/^My tasks/);
   fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard edits and leave" }));
   await screen.findByRole("heading", { name: "My tasks" });
   expect(window.location.hash).toBe("#/");
@@ -109,14 +109,14 @@ it("does not leave when a refused save emptied the pending queue", async () => {
   render(<App user={testUser("alice")} />);
   await editFinding();
   await screen.findByText("Invalid change");
-  clickSection("My tasks");
+  clickSection(/^My tasks/);
   await screen.findByText("A change could not be saved. Reload the case before leaving.");
   expect(window.location.hash).toBe("#/tasks/17");
   expect(screen.getByTestId("annotator-identity")).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "Reload case" }));
   await waitFor(() => expect(api.openAssignment).toHaveBeenCalledTimes(2));
   await screen.findByTestId("annotator-identity");
-  clickSection("My tasks");
+  clickSection(/^My tasks/);
   await screen.findByRole("heading", { name: "My tasks" });
 });
 
@@ -153,11 +153,16 @@ it.each(["open", "submitted"] as const)("retains the actual submitted dialog aft
   const { first, open, tasks } = editorServer();
   tasks[1] = { ...tasks[1], status };
   open.mockImplementation(async id => assigned(id === 17 ? first : { ...workspaceFixture("a-first"), read_only: status === "submitted" }, id));
-  vi.mocked(api.listMyTasks).mockResolvedValueOnce(tasks).mockResolvedValue([tasks[1], { ...tasks[0], status: "submitted" }]);
+  // Answer by submit state, not call order: the shell's "My tasks (n)" count also lists tasks.
+  let submitted = false;
+  vi.mocked(api.listMyTasks).mockImplementation(async () => submitted ? [tasks[1], { ...tasks[0], status: "submitted" }] : tasks);
   first.view.draft.checked_layer_ids = ["phenotype"];
   // This navigation case submits a valid spanless result under current project rules.
   first.view.draft.annotations![0].annotation.note = "Finding supported by the clinical summary";
-  vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "submission", created_at: "2026-10-14T12:00:00Z", draft_revision: 1, snapshots: [], decisions: [] } as any);
+  vi.spyOn(api, "submitWorkspace").mockImplementation(async () => {
+    submitted = true;
+    return { submission_id: "submission", created_at: "2026-10-14T12:00:00Z", draft_revision: 1, snapshots: [], decisions: [] } as any;
+  });
   render(<App user={testUser("alice")} />);
   fireEvent.click(await screen.findByRole("button", { name: /Finish & Submit Case/ }));
   const submit = await screen.findByRole("dialog", { name: "Submit case" });
@@ -165,7 +170,8 @@ it.each(["open", "submitted"] as const)("retains the actual submitted dialog aft
   expect(within(submit).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
   fireEvent.click(within(submit).getByRole("button", { name: "Submit case" }));
   const dialog = await screen.findByRole("dialog", { name: "Case submitted" });
-  await waitFor(() => expect(api.listMyTasks).toHaveBeenCalledTimes(2));
+  // Editor list and its refresh after submit, plus the shell's "My tasks (n)" count.
+  await waitFor(() => expect(api.listMyTasks).toHaveBeenCalledTimes(3));
   expect((screen.getByRole("button", { name: /Finish & Submit Case/ }) as HTMLButtonElement).disabled).toBe(true);
   expect(open).toHaveBeenCalledTimes(1);
   expect(first.read_only).toBe(false);
@@ -194,7 +200,7 @@ it("ignores an open response after navigating away while it was loading", async 
   vi.mocked(api.openAssignment).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   render(<App user={testUser("alice")} />);
   await screen.findByText("Opening task...");
-  clickSection("My tasks");
+  clickSection(/^My tasks/);
   await screen.findByRole("heading", { name: "My tasks" });
   await act(async () => finish(assigned(workspaceFixture(), 17)));
   expect(screen.queryByTestId("annotator-identity")).toBeNull();
@@ -214,9 +220,9 @@ it("refreshes displayed identity from the saved Profile response and keeps the s
   const user = userEvent.setup();
   await user.clear(input); await user.type(input, "Alice Smith ");
   await user.click(screen.getByRole("button", { name: "Save" }));
-  await waitFor(() => expect(screen.getByTestId("current-user").textContent).toBe("Alice Smith · alice"));
+  await waitFor(() => expect(screen.getByTestId("current-user").querySelector(".current-user-name")?.textContent).toBe("Alice Smith (alice)"));
   expect(logout).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled();
-  clickSection("My tasks");
+  clickSection(/^My tasks/);
   const table = await screen.findByRole("table", { name: "My tasks" });
   fireEvent.click(within(table).getAllByRole("link", { name: /^(Start|Continue|View)$/ })[0]);
   await waitFor(() => expect(screen.getByTestId("annotator-identity").textContent).toContain("Alice Smith (alice)"));

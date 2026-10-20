@@ -1,5 +1,6 @@
 import { useRef, type ReactNode } from "react";
 import type { CurrentUser } from "../api/client";
+import { personLabel } from "../app/identity";
 import { Button } from "./Button";
 import { ShortcutHelpHost } from "./ShortcutHelp";
 
@@ -12,10 +13,12 @@ export interface AppShellProps {
   nav?: ReactNode;
   navLabel?: string;
   density?: "reading" | "compact";
+  /** Muted second line under the user's identity, e.g. "Project lead". */
+  role?: string;
   children: ReactNode;
 }
 
-export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = "Sections", density = "compact", children }: AppShellProps): JSX.Element {
+export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = "Sections", density = "compact", role, children }: AppShellProps): JSX.Element {
   const mainRef = useRef<HTMLElement>(null);
   const hasNav = nav != null && nav !== false;
   const navigation = hasNav ? <nav className="app-nav" aria-label={navLabel}>{nav}</nav> : null;
@@ -47,7 +50,11 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
       </div>
       <div className="shell-actions">
         {actions}
-        {user && <span className="current-user" data-testid="current-user" title={`Logged in as ${user.username}`}>{user.display_name} · {user.pseudonym}</span>}
+        {/* Identity (D1): "Display name (pseudonym)"; the username stays out of the shell. */}
+        {user && <span className="current-user" data-testid="current-user">
+          <span className="current-user-name">{personLabel(user)}</span>
+          {role && <span className="cell-secondary">{role}</span>}
+        </span>}
         {onLogout && <Button size="sm" onClick={onLogout}>Log out</Button>}
       </div>
     </header>

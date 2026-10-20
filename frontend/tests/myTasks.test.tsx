@@ -25,11 +25,10 @@ describe("My tasks component", () => {
     const onNavigate = vi.fn();
     render(<MyTasks projects={[]} onNavigate={onNavigate} />);
     const rows = await screen.findAllByTestId("task-row");
-    expect(rows.map(row => within(row).getByText(/^doc-/).textContent)).toEqual(["doc-4", "doc-2", "doc-3", "doc-1"]);
+    expect(rows.map(row => within(row).getByText(/^doc-/).textContent)).toEqual(["doc-4 · de", "doc-2 · de", "doc-3 · de", "doc-1 · de"]);
     expect(within(rows[1]).getByText("Review")).toBeDefined();
     expect(within(rows[0]).getByText("Annotation")).toBeDefined();
     expect(within(rows[0]).getByText("Reopened")).toBeDefined();
-    expect(within(rows[0]).getByText("de")).toBeDefined();
     expect(rows[0].querySelector("time")?.getAttribute("datetime")).toBe(tasks[0].updated_at);
     expect(within(rows[0]).getByRole("link", { name: "Continue" }).getAttribute("href")).toBe("#/tasks/4");
     expect(within(rows[1]).getByRole("link", { name: "Continue" })).toBeDefined();
@@ -114,20 +113,20 @@ describe("My tasks component", () => {
     expect((within(select).getByRole("option", { name: "Research (q)" }) as HTMLOptionElement).value).toBe("q");
     expect(within(rows[0]).getByText("Research (p)")).toBeDefined();
     expect(within(rows[1]).getByText("Research (q)")).toBeDefined();
-    expect(rows[0].getAttribute("aria-label")).toBe("Research (p): shared-doc");
-    expect(rows[1].getAttribute("aria-label")).toBe("Research (q): shared-doc");
+    expect(rows[0].getAttribute("aria-label")).toBe("Research (p): shared-doc · de");
+    expect(rows[1].getAttribute("aria-label")).toBe("Research (q): shared-doc · de");
     fireEvent.change(select, { target: { value: "q" } });
     expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q" });
     fireEvent.click(within(rows[1]).getByRole("link", { name: /^(Start|Continue|View)$/ }));
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "task", assignmentId: 12 });
   });
 
-  it("distinguishes duplicate project names in all-managed empty-state assignment links", async () => {
+  it("distinguishes duplicate project names in all-managed empty-state Documents links", async () => {
     const onNavigate = vi.fn();
     vi.mocked(api.listMyTasks).mockResolvedValue([]);
     render(<MyTasks projects={[project("p", "Research", true), project("q", "Research", true)]} onNavigate={onNavigate} />);
-    const first = await screen.findByRole("link", { name: "Assign documents in Research (p)" });
-    const second = screen.getByRole("link", { name: "Assign documents in Research (q)" });
+    const first = await screen.findByRole("link", { name: "Go to Documents in Research (p)" });
+    const second = screen.getByRole("link", { name: "Go to Documents in Research (q)" });
     expect(screen.getByText(/As a project lead, you assign documents/)).toBeDefined();
     expect(first.className).toBe("btn btn-secondary");
     expect(first.getAttribute("href")).toBe("#/projects/p/documents");
@@ -142,7 +141,7 @@ describe("My tasks component", () => {
     const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
     expect(select.value).toBe("empty%/project");
     expect(select.selectedOptions[0].textContent).toBe("Empty project (empty%/project)");
-    expect(screen.getByRole("link", { name: "Assign documents" }).getAttribute("href")).toBe("#/projects/empty%25%2Fproject/documents");
+    expect(screen.getByRole("link", { name: "Go to Documents" }).getAttribute("href")).toBe("#/projects/empty%25%2Fproject/documents");
   });
 
   it("keeps unknown route filters without inventing a project or choosing another one", async () => {
@@ -151,14 +150,14 @@ describe("My tasks component", () => {
     const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
     expect(select.value).toBe("unavailable");
     expect(select.selectedOptions[0].textContent).toBe("unavailable");
-    expect(screen.queryByRole("link", { name: /Assign documents/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Go to Documents/ })).toBeNull();
   });
 
   it("shows ordinary empty notice without inventing an assignment action", async () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([]);
     render(<MyTasks projects={[project("p", "P")]} onNavigate={vi.fn()} />);
     await screen.findByText("No documents are assigned to you yet.");
-    expect(screen.queryByRole("link", { name: /Assign documents/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Go to Documents/ })).toBeNull();
   });
 
   it("keeps an empty raw route filter distinct from All my tasks", async () => {
@@ -177,8 +176,8 @@ describe("My tasks component", () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([]);
     const onNavigate = vi.fn();
     render(<MyTasks projects={[project("p", "Project P", true), project("q", "Project Q", true), project("r", "Other")]} onNavigate={onNavigate} />);
-    const first = await screen.findByRole("link", { name: "Assign documents in Project P (p)" });
-    const second = screen.getByRole("link", { name: "Assign documents in Project Q (q)" });
+    const first = await screen.findByRole("link", { name: "Go to Documents in Project P (p)" });
+    const second = screen.getByRole("link", { name: "Go to Documents in Project Q (q)" });
     expect(screen.getAllByRole("link")).toHaveLength(2);
     fireEvent.click(first);
     expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p" });
@@ -197,7 +196,7 @@ describe("My tasks component", () => {
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     vi.mocked(api.listMyTasks).mockResolvedValue([task(8, "open")]);
     fireEvent(document, new Event("visibilitychange"));
-    expect(await screen.findByText("doc-8")).toBeDefined();
+    expect(await screen.findByText("doc-8 · de")).toBeDefined();
     expect(api.listMyTasks).toHaveBeenCalledTimes(2);
   });
 
@@ -209,9 +208,9 @@ describe("My tasks component", () => {
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
     fireEvent(document, new Event("visibilitychange"));
     await act(async () => { newer.resolve([task(9, "open")]); });
-    expect(await screen.findByText("doc-9")).toBeDefined();
+    expect(await screen.findByText("doc-9 · de")).toBeDefined();
     await act(async () => { older.resolve(tasks); });
-    expect(screen.queryByText("doc-4")).toBeNull();
+    expect(screen.queryByText("doc-4 · de")).toBeNull();
   });
 
   it("ignores stale errors and removes refresh subscriptions on unmount", async () => {
@@ -263,7 +262,38 @@ describe("My tasks component", () => {
     await screen.findAllByTestId("task-row");
     vi.mocked(api.listMyTasks).mockResolvedValue([task(8, "open")]);
     act(() => { notifySessionRestored(); });
-    expect(await screen.findByText("doc-8")).toBeDefined();
+    expect(await screen.findByText("doc-8 · de")).toBeDefined();
+  });
+});
+
+describe("My tasks text label", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("labels tasks by text label and drops the Language column", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([
+      { ...task(5, "open"), case_id: "case-0101", external_id: "EXT-5" },
+      { ...task(6, "open"), external_id: "EXT-6" },
+    ]);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    const rows = await screen.findAllByTestId("task-row");
+    const table = screen.getByRole("table", { name: "My tasks" });
+    expect(within(table).getAllByRole("columnheader").map(header => header.textContent)).toEqual(
+      ["Text", "Project", "Task", "Status", "Last change", "Action"]);
+    expect(within(rows[0]).getByText("case-0101 · de")).toBeDefined();
+    expect(within(rows[0]).queryByText("EXT-5")).toBeNull();
+    expect(rows[0].getAttribute("aria-label")).toBe("Project P (p): case-0101 · de");
+    // Older servers without a case ID fall back to the external ID.
+    expect(within(rows[1]).getByText("EXT-6 · de")).toBeDefined();
+  });
+
+  it("offers Go to Documents to a lead with no tasks", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
+    const onNavigate = vi.fn();
+    render(<MyTasks projects={[project("p", "Project P", true)]} onNavigate={onNavigate} />);
+    const link = await screen.findByRole("link", { name: "Go to Documents" });
+    expect(link.getAttribute("href")).toBe("#/projects/p/documents");
+    fireEvent.click(link);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p" });
   });
 });
 

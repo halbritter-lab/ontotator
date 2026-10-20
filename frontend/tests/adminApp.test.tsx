@@ -22,7 +22,7 @@ beforeEach(() => {
   vi.spyOn(api, "listAssignments").mockResolvedValue([]);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); api.setCsrfToken(null); window.history.replaceState(null, "", "#/"); });
-const link = (name: string) => fireEvent.click(screen.getByRole("link", { name }));
+const link = (name: string | RegExp) => fireEvent.click(screen.getByRole("link", { name }));
 const logout = () => fireEvent.click(screen.getByRole("button", { name: "Log out" }));
 async function create() {
   const form = await screen.findByRole("form", { name: "New user" });
@@ -37,21 +37,21 @@ it("keeps pending issuance and visible one-time code through shell/hash/logout u
   const onLogout = vi.fn(); render(<App user={user} onLogout={onLogout} />);
   await create();
   await waitFor(() => expect(api.adminCreateUser).toHaveBeenCalledOnce());
-  link("My tasks"); logout();
+  link(/^My tasks/); logout();
   await act(async () => {});
   expect(window.location.hash).toBe("#/admin/users"); expect(onLogout).not.toHaveBeenCalled();
   act(() => { window.location.hash = "#/me"; });
   await waitFor(() => expect(window.location.hash).toBe("#/admin/users"));
   await act(async () => pending.resolve(created));
   const dialog = await screen.findByRole("dialog", { name: "Setup code" });
-  link("My tasks"); logout(); await act(async () => {});
+  link(/^My tasks/); logout(); await act(async () => {});
   expect(screen.getByText("setup-secret")).toBeTruthy(); expect(onLogout).not.toHaveBeenCalled();
   fireEvent.click(within(dialog).getByLabelText("I have handed over or stored the code"));
-  link("My tasks"); logout(); await act(async () => {});
+  link(/^My tasks/); logout(); await act(async () => {});
   expect(window.location.hash).toBe("#/admin/users"); expect(onLogout).not.toHaveBeenCalled();
   fireEvent.click(within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
   logout(); await waitFor(() => expect(onLogout).toHaveBeenCalledOnce());
-  link("My tasks"); await screen.findByRole("heading", { name: "My tasks" });
+  link(/^My tasks/); await screen.findByRole("heading", { name: "My tasks" });
   expect(screen.queryByText("setup-secret")).toBeNull();
 });
 
@@ -72,6 +72,8 @@ it("uses controlled document query routes and actual managed-project documents",
 
 it("restores native history during reset issuance and acknowledged code, then permits Back and Forward after Close", async () => {
   window.history.replaceState(null, "", "#/");
+  // An administrator who leads no project stays on My tasks (D7 landing).
+  vi.mocked(api.listProjects).mockResolvedValue([{ ...project, roles: [] }]);
   const pending = deferred<{ code: string; expires_at: string }>();
   vi.spyOn(api, "adminIssueResetCode").mockReturnValue(pending.promise);
   render(<App user={user} />);
@@ -106,12 +108,12 @@ it("guards ordinary user writes without opening a new leave dialog", async () =>
   fireEvent.change(within(form).getByLabelText("Display name (required)"), { target: { value: "Alex updated" } });
   fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
   await waitFor(() => expect(api.adminUpdateUser).toHaveBeenCalledOnce());
-  link("My tasks"); logout(); await act(async () => {});
+  link(/^My tasks/); logout(); await act(async () => {});
   expect(window.location.hash).toBe("#/admin/users"); expect(onLogout).not.toHaveBeenCalled();
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
   expect(screen.queryByRole("dialog", { name: "Changes not saved" })).toBeNull();
   await act(async () => pending.resolve({ ...alex, display_name: "Alex updated" }));
-  link("My tasks"); await screen.findByRole("heading", { name: "My tasks" });
+  link(/^My tasks/); await screen.findByRole("heading", { name: "My tasks" });
 });
 
 it("refreshes authoritative project navigation after creation and a saved name", async () => {
@@ -139,6 +141,8 @@ it("refreshes authoritative project navigation after creation and a saved name",
 
 it("loads ontology administration only on its route and follows actual pinned-project links", async () => {
   window.history.replaceState(null, "", "#/");
+  // An administrator who leads no project stays on My tasks (D7 landing).
+  vi.mocked(api.listProjects).mockResolvedValue([{ ...project, roles: [] }]);
   vi.spyOn(api, "adminListOntologies").mockResolvedValue([{ filename: "hp.json", kind: "ontology", prefix: "HP", release: "2026", language: null, sha256: "a".repeat(64), uploaded_at: "2026-10-01T12:00:00Z", projects: ["p/key"] }] as never);
   render(<App user={user} />);
   await screen.findByRole("heading", { name: "My tasks" });

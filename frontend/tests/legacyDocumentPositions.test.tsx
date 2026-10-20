@@ -62,7 +62,7 @@ describe("assignment App presentation positions", () => {
     const { tasks, ids, positions } = server();
     render(<App user={testUser("ann-0007")} />);
     const table = await screen.findByRole("table", { name: "My tasks" });
-    expect(within(table).getAllByRole("row").slice(1).map(row => within(row).getAllByRole("cell")[0].textContent)).toEqual(ids);
+    expect(within(table).getAllByRole("row").slice(1).map(row => within(row).getAllByRole("cell")[0].textContent)).toEqual(ids.map(id => `${id} · en`));
     expect(tasks.map(task => task.position)).toEqual(positions);
   });
 

@@ -3,6 +3,7 @@ import { api, onSessionRestored, type ProjectSummary, type TaskSummary } from ".
 import { routeHref, type Route } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { assignmentStatusLabels, formatDateTime, taskLabels } from "../app/labels";
+import { textLabel } from "../app/identity";
 import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, Toolbar, type Column } from "../ui";
 
 export interface MyTasksProps {
@@ -24,6 +25,10 @@ export function taskDescription(task: Pick<TaskSummary, "task" | "language" | "s
 }
 
 const projectLabel = (name: string, key: string): string => name === key ? name : `${name} (${key})`;
+
+/** Text label "case-0101 · de"; servers without a case ID fall back to the document's external or internal ID. */
+export const taskText = (task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language">): string =>
+  textLabel({ case_id: task.case_id ?? task.external_id ?? task.document_id, language: task.language });
 
 export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.Element {
   const [state, setState] = useState<TaskState>({ kind: "loading" });
@@ -68,9 +73,8 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
   const countsLabel = project === undefined ? "Task counts" : `Task counts in ${options.get(project) ?? project}`;
   const managed = projects.filter(item => item.can_manage && (project === undefined || item.project_key === project));
   const columns: Column<TaskSummary>[] = [
-    { id: "document", header: "Document", cell: task => task.external_id ?? task.document_id },
+    { id: "text", header: "Text", cell: task => taskText(task) },
     { id: "project", header: "Project", cell: task => projectLabel(task.project_name, task.project_key) },
-    { id: "language", header: "Language", cell: task => task.language },
     { id: "task", header: "Task", cell: task => taskDescription(task) },
     { id: "status", header: "Status", cell: task => <>
       <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>
@@ -89,7 +93,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         onNavigate(route);
-      }}>{project === undefined ? `Assign documents in ${projectLabel(item.name, item.project_key)}` : "Assign documents"}</a>;
+      }}>{managed.length > 1 ? `Go to Documents in ${projectLabel(item.name, item.project_key)}` : "Go to Documents"}</a>;
     })}</Toolbar>
   }>{managed.length > 0 && "As a project lead, you assign documents to people, yourself included, on the Documents page."}</EmptyState>;
   return <section aria-label="My tasks">
@@ -110,7 +114,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
         <li>Submitted: {count(task => task.status === "submitted")}</li>
         <li>of which paused: {count(task => task.held)}</li>
       </ul>}
-      {filtered.length === 0 ? empty : <DataTable label="My tasks" className="data-table--pin-end" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${task.document_id}` })} />}
+      {filtered.length === 0 ? empty : <DataTable label="My tasks" className="data-table--pin-end" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${taskText(task)}` })} />}
     </>}
   </section>;
 }

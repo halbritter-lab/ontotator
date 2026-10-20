@@ -51,7 +51,7 @@ it("labels translation tasks with actual source/target languages and external id
   vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 17, workflow_revision: 0, held: false, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "submitted", updated_at: "2026-10-16T12:00:00Z" }]);
   render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
   expect(await screen.findByText("Translation review (en to de)")).toBeDefined();
-  expect(screen.getByText("EN 1/7")).toBeDefined();
+  expect(screen.getByText("EN 1/7 · de")).toBeDefined();
   expect(screen.getByRole("link", { name: "View" }).getAttribute("href")).toBe("#/tasks/17");
 });
 it("edits own qualification and sends only its changed field", async () => {
