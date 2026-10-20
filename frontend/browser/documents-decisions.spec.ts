@@ -1,9 +1,11 @@
 /**
  * Documents lead table: decision flows on the scenarios S2, S3, S11 to S15
- * (plan Task 7.3; spec "Testing", "Inline confirmation", "Resolved rows and empty state").
+ * (plan Task 7.3; spec "Testing", "Inline confirmation", "Resolved rows and empty state"),
+ * on the lead-workflow layout (row disclosure "Show details, …", stage blocks, Submissions).
  *
  * Every test builds a fresh project through ``POST /__test_documents__`` and logs in
- * as its lead. Person labels are read from the project members. Changes "elsewhere"
+ * as its lead. Person labels are "Display name (pseudonym)" (D1), read from the project
+ * members; the lead's own read "(pseudonym, you)". Changes "elsewhere"
  * (another lead, a reviewer, an annotator) go through the API in their own sessions.
  */
 import { expect, request as playwrightRequest, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
@@ -26,13 +28,24 @@ const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const exactly = (pattern: string) => new RegExp(`^${pattern}$`);
 const requestId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-/** Pseudonym (person label) per fixture role name. */
+/** Person label "Display name (pseudonym)" per fixture role name; the lead's own reads "(pseudonym, you)". */
 async function labelsOf(page: Page, s: DocumentsScenario): Promise<Record<string, string>> {
   const response = await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(s.project)}/members`);
   expect(response.ok(), await response.text()).toBeTruthy();
   const members = (await response.json()) as Member[];
-  const byUsername = new Map(members.map(member => [member.username, member.pseudonym]));
-  return Object.fromEntries(Object.entries(s.users).map(([name, username]) => [name, byUsername.get(username) ?? username]));
+  const byUsername = new Map(members.map(member => [member.username, member]));
+  return Object.fromEntries(Object.entries(s.users).map(([name, username]) => {
+    const member = byUsername.get(username);
+    if (!member) return [name, username];
+    return [name, `${member.display_name} (${member.pseudonym}${username === s.users.lead ? ", you" : ""})`];
+  }));
+}
+
+/** Regex source for a person in a report or pause line: "Display name (ann-0004)" or the pseudonym alone. */
+function personPattern(label: string): string {
+  const match = /^(.*) \((ann-\d+)\)$/.exec(label);
+  if (!match) return esc(label);
+  return `(?:${esc(match[1])} \\()?${match[2]}\\)?`;
 }
 
 const documentsUrl = (s: DocumentsScenario, query = "") => `/#/projects/${encodeURIComponent(s.project)}/documents${query}`;
@@ -87,20 +100,20 @@ async function assignmentOf(page: Page, s: DocumentsScenario, documentId: string
 
 const table = (page: Page) => page.getByRole("table", { name: "Documents", exact: true });
 const disclosure = (page: Page, caseId: string, language: string) =>
-  page.getByRole("button", { name: `Show submissions, ${caseId} · ${language}`, exact: true });
+  page.getByRole("button", { name: `Show details, ${caseId} · ${language}`, exact: true });
 const languageRow = (page: Page, caseId: string, language: string): Locator =>
   table(page).getByRole("row").filter({ has: disclosure(page, caseId, language) });
 const region = (page: Page, caseId: string, language: string) => page.getByRole("region", { name: `${caseId} · ${language}`, exact: true });
 /** The page's polite live region (outside the table). */
 const live = (page: Page) => page.locator('.documents-page > p[role="status"]');
 
-/** Expand a row (if collapsed) and wait until its submissions have loaded. */
+/** Expand a row (if collapsed) and wait until its content (and its submissions, if any) has loaded. */
 async function expand(page: Page, caseId: string, language: string): Promise<Locator> {
   const button = disclosure(page, caseId, language);
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
   await expect(button).toHaveAttribute("aria-expanded", "true");
   const area = region(page, caseId, language);
-  await expect(area.getByRole("heading", { name: /^Submissions \(\d+\)$/, level: 3 })).toBeVisible();
+  await expect(area.getByRole("heading", { name: "More", level: 3 })).toBeVisible();
   await expect(area.getByText("Loading submissions…")).toHaveCount(0);
   return area;
 }
@@ -172,7 +185,7 @@ test("S11 keep: unchecked activation explains, checked keeps and focuses the Sub
   await expect(round1.nth(0).getByRole("cell").first()).toHaveText("Final");
   await expect(round1.nth(1).getByRole("cell").nth(1)).toHaveText(/^Round 1 · latest/);
   // SELECTED_RESULT_REVISED and SELECTED_NEWER_RESULT.
-  await expect(area.getByText(new RegExp(`^Round 1 \\(${ann1}\\) has a newer submission \\(${TIME}\\)\\.$`))).toBeVisible();
+  await expect(area.getByText(new RegExp(`^Round 1 · ${ann1} has a newer submission \\(${TIME}\\)\\.$`))).toBeVisible();
   await expect(area.getByText(new RegExp(`^Round 1 · ${ann2} · v1 was submitted after the final result was chosen \\(${TIME}\\)\\.$`))).toBeVisible();
 
   await area.getByRole("button", { name: "Keep final result…", exact: true }).click();
@@ -245,7 +258,7 @@ test("S11 a kept superseded round stays acknowledged after a hold, resume and re
   });
   await page.reload();
   let area = await expand(page, caseId, "en");
-  await expect(area.getByText(`Round 1 (${labels["ann-0001"]}) has been superseded by Round 2.`, { exact: true })).toBeVisible();
+  await expect(area.getByText(`Round 1 · ${labels["ann-0001"]} has been superseded by Round 2.`, { exact: true })).toBeVisible();
   await area.getByRole("button", { name: "Keep final result…", exact: true }).click();
   const keep = confirmGroup(page, "Keep final result");
   await keep.getByRole("checkbox", { name: "I reviewed these changes and keep this exact result", exact: true }).check();
@@ -298,7 +311,7 @@ test("S2 keep under a decision filter: the row turns Resolved and Next decision 
   await expect(disclosure(page, caseId, "de")).toHaveCount(0);
 
   const area = await expand(page, caseId, "es");
-  await expect(area.getByText(`Round 1 (${labels["ann-0001"]}) is abandoned.`, { exact: true })).toBeVisible();
+  await expect(area.getByText(`Round 1 · ${labels["ann-0001"]} is abandoned.`, { exact: true })).toBeVisible();
   await area.getByRole("button", { name: "Keep final result…", exact: true }).click();
   const keep = confirmGroup(page, "Keep final result");
   await keep.getByRole("checkbox", { name: "I reviewed these changes and keep this exact result", exact: true }).check();
@@ -400,12 +413,12 @@ test("S12 Resume task opens the report with the pause preselected; releasing it 
   // The fr task is paused by the open en report: a note with "Open report", not a decision.
   await openDocuments(page, s);
   const fr = await expand(page, caseId, "fr");
-  const paused = fr.getByRole("listitem").filter({ hasText: `Task paused (${labels["ann-0002"]}).` });
+  const paused = fr.getByRole("listitem").filter({ hasText: new RegExp(`^Task paused \\(${personPattern(labels["ann-0002"])}\\)\\.`) });
   await expect(paused.getByRole("link", { name: "Open report", exact: true })).toHaveAttribute("href", new RegExp(`/problem-reports/${esc(String((s.reports as Record<string, string>).open))}`));
 
   await openDocuments(page, s, "?decision=report-or-pause");
   const de = await expand(page, caseId, "de");
-  const orphan = de.getByRole("listitem").filter({ hasText: `${labels["ann-0001"]}'s task is paused, but its report is resolved.` });
+  const orphan = de.getByRole("listitem").filter({ hasText: new RegExp(`^${personPattern(labels["ann-0001"])}'s task is paused, but its report is resolved\\.`) });
   await orphan.getByRole("link", { name: "Resume task", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
@@ -431,7 +444,7 @@ test("S14 waiting lines: an open translation review and open work after an early
   await expect(de.getByText(`Waiting: translation review of v1 by ${labels.reviewer} is open. You can choose again once it is submitted.`, { exact: true })).toBeVisible();
   await expect(de.getByRole("button", { name: "Keep final result…" })).toHaveCount(0);
   const en = await expand(page, caseId, "en");
-  await expect(en.getByText(`Waiting: Round 1 (${labels["ann-0002"]}) is in progress. You can choose again once it is submitted.`, { exact: true })).toBeVisible();
+  await expect(en.getByText(`Waiting: Round 1 · ${labels["ann-0002"]} is in progress. You can choose again once it is submitted.`, { exact: true })).toBeVisible();
   await expect(en.getByText(`Round 1 · ${labels["ann-0002"]} · in progress, not submitted yet`, { exact: true })).toBeVisible();
   await expect(en.getByRole("button", { name: "Keep final result…" })).toHaveCount(0);
 });
@@ -441,10 +454,13 @@ test("S15 the lead's own result is not selectable when adjudication is separate"
   const caseId = "case-0001";
   await openDocuments(page, s);
   await expect(page.getByRole("navigation", { name: "Pages" })).toContainText("Page 1 of 2");
+  // More than 50 cases: only the case with a decision starts expanded.
+  await expect(page.getByRole("button", { name: `${caseId} · en source`, exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: "case-0002 · en source", exact: true })).toHaveAttribute("aria-expanded", "false");
   const area = await expand(page, caseId, "en");
   const submissions = submissionsTable(area, caseId, "en");
 
-  const own = submissionRow(submissions, `Annotation · Round 1 · ${esc(labels.lead)} \\(you\\) · en v1 · ${TIME}`);
+  const own = submissionRow(submissions, `Annotation · Round 1 · ${esc(labels.lead)} · en v1 · ${TIME}`);
   const blocked = own.getByRole("button", { name: "Use as final…", exact: true });
   await expect(blocked).toHaveAttribute("aria-disabled", "true");
   await expect(blocked).toHaveAccessibleDescription(new RegExp(`${esc(OWN_RESULT_REASON)}$`));
