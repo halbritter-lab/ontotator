@@ -54,6 +54,8 @@ APPEND_ONLY_TABLES = (
     "round_inputs",
     "workflow_command_receipts",
     "review_obligation_resolutions",
+    "translation_acceptances",
+    "discarded_variants",
 )
 
 NAMING_CONVENTION = {
@@ -79,6 +81,15 @@ class ProjectRow(Base):
     """A project; until T2d it is created from an in-memory seed package."""
 
     __tablename__ = "projects"
+    __table_args__ = (
+        CheckConstraint(
+            "annotations_per_text BETWEEN 1 AND 5", name="annotations_per_text"
+        ),
+        CheckConstraint(
+            "import_plan IN ('nothing', 'review_and_annotate_translations')",
+            name="import_plan",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     project_key: Mapped[str] = mapped_column(unique=True)
@@ -117,6 +128,10 @@ class ProjectRow(Base):
     )
     annotate_accepted_translations_only: Mapped[bool] = mapped_column(
         Boolean, server_default=text("true")
+    )
+    annotations_per_text: Mapped[int] = mapped_column(server_default=text("1"))
+    import_plan: Mapped[str] = mapped_column(
+        server_default=text("'review_and_annotate_translations'")
     )
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -895,4 +910,5 @@ class UploadRow(Base):
 # Register workflow mappings after the shared Base and historical tables exist.
 # Register split final-result metadata with the shared schema.
 from ontocurator.storage import final_tables as _final_tables  # noqa: E402,F401
+from ontocurator.storage import plan_tables as _plan_tables  # noqa: E402,F401
 from ontocurator.storage import workflow_tables as _workflow_tables  # noqa: E402, F401

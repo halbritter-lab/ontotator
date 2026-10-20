@@ -1,0 +1,529 @@
+"""Connection-scoped reads and writes of work plans (no transactions of its own).
+
+``effective_plan`` is the only way to read a row's flags: a language version
+without a stored row behaves as the project's import default computes it.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, cast
+
+from sqlalchemy import Connection, and_, case, exists, func, select, tuple_
+from sqlalchemy.dialects.postgresql import insert
+
+from ontocurator.domain import document_rows as rules
+from ontocurator.domain.work_plans import (
+    ImportPlanSetting,
+    LanguageVersion,
+    OpenReport,
+    OpenTask,
+    PlanFlags,
+    RowKey,
+    import_defaults,
+)
+from ontocurator.storage.final_tables import FinalSelectionRow
+from ontocurator.storage.plan_tables import (
+    DiscardedVariantRow,
+    TranslationAcceptanceRow,
+    WorkPlanFlagsRow,
+    WorkPlanRow,
+)
+from ontocurator.storage.tables import (
+    AssignmentRow,
+    DocumentRow,
+    ProjectRow,
+    TranslationReviewRow,
+)
+from ontocurator.storage.workflow_tables import (
+    ProblemReportRow,
+    ProblemReportStateRow,
+    TaskHoldRow,
+    TaskHoldStateRow,
+)
+
+__all__ = [
+    "acceptances",
+    "add_acceptance",
+    "discarded",
+    "effective_plan",
+    "ensure_rows",
+    "final_keys",
+    "language_versions",
+    "open_reports",
+    "open_tasks",
+    "plan_rows",
+    "restored",
+    "revisions",
+    "write_rows",
+]
+
+_OPEN_STATUSES = ("open", "in_progress", "reopened")
+
+
+def _key(row: Any) -> RowKey:
+    return RowKey(row.case_id, row.language)
+
+
+def _in_keys(case_col: Any, language_col: Any, keys: Iterable[RowKey]) -> Any:
+    return tuple_(case_col, language_col).in_([(k.case_id, k.language) for k in keys])
+
+
+def _latest_decisions(conn: Connection, pid: int) -> dict[str, str]:
+    rows = conn.execute(
+        select(TranslationReviewRow.document_id, TranslationReviewRow.decision)
+        .where(TranslationReviewRow.project_id == pid)
+        .distinct(TranslationReviewRow.document_id)
+        .order_by(
+            TranslationReviewRow.document_id,
+            TranslationReviewRow.created_at.desc(),
+            TranslationReviewRow.id.desc(),
+        )
+    )
+    return {row.document_id: row.decision for row in rows}
+
+
+def language_versions(
+    conn: Connection, project_id: int, case_ids: Sequence[str] | None = None
+) -> dict[RowKey, LanguageVersion]:
+    """Every Documents row of the project (or of ``case_ids``) as the plan sees it.
+
+    Discarded roots do not count for ``accepted``, ``marked_in_package`` and
+    ``review_blocked``; the newest version of a root skips corrections whose
+    latest review is rejected or queried (``Version.not_newer``).
+    """
+    query = select(
+        DocumentRow.document_id,
+        DocumentRow.case_id,
+        DocumentRow.language,
+        DocumentRow.external_id,
+        DocumentRow.version,
+        DocumentRow.origin,
+        DocumentRow.derived_from,
+        DocumentRow.translation,
+        DocumentRow.translation_status,
+        DocumentRow.position,
+    ).where(DocumentRow.project_id == project_id)
+    if case_ids is not None:
+        query = query.where(DocumentRow.case_id.in_(list(case_ids)))
+    documents = conn.execute(query).all()
+    if not documents:
+        return {}
+    decisions = _latest_decisions(conn, project_id)
+    packaged = set(
+        conn.execute(
+            select(TranslationAcceptanceRow.document_id).where(
+                TranslationAcceptanceRow.project_id == project_id,
+                TranslationAcceptanceRow.source == "package",
+            )
+        ).scalars()
+    )
+    dropped = set(
+        conn.execute(
+            select(DiscardedVariantRow.document_id).where(
+                DiscardedVariantRow.project_id == project_id
+            )
+        ).scalars()
+    )
+    in_review = set(
+        conn.execute(
+            select(AssignmentRow.document_id).where(
+                AssignmentRow.project_id == project_id,
+                AssignmentRow.task == "translation_review",
+                AssignmentRow.revoked_at.is_(None),
+                AssignmentRow.status.in_(_OPEN_STATUSES),
+            )
+        ).scalars()
+    )
+    groups: dict[RowKey, list[rules.Version]] = defaultdict(list)
+    for row in documents:
+        groups[_key(row)].append(
+            rules.Version(
+                document_id=row.document_id,
+                case_id=row.case_id,
+                language=row.language,
+                external_id=row.external_id,
+                version=row.version,
+                origin=row.origin,
+                derived_from=row.derived_from,
+                translation=row.translation,
+                translation_status=row.translation_status,
+                position=row.position,
+                latest_decision=decisions.get(row.document_id),
+            )
+        )
+    result: dict[RowKey, LanguageVersion] = {}
+    for key, versions in groups.items():
+        chains = rules.build_chains(versions)
+        is_source = any(chain.root.origin == "native" for chain in chains)
+        live = [
+            chain
+            for chain in chains
+            if not any(v.document_id in dropped for v in chain.versions)
+        ]
+        targets = [[v for v in c.versions if not v.not_newer][-1] for c in live]
+        result[key] = LanguageVersion(
+            case_id=key.case_id,
+            language=key.language,
+            is_source=is_source,
+            accepted=bool(targets)
+            and not is_source
+            and all(v.translation_status == "accepted" for v in targets),
+            marked_in_package=bool(targets)
+            and not is_source
+            and all(v.document_id in packaged for v in targets),
+            discarded=not live,
+            review_blocked=not is_source
+            and any(
+                (
+                    chain.newest.translation_status == "reviewed"
+                    and chain.newest.latest_decision in rules.NOT_NEWER
+                )
+                or any(v.document_id in in_review for v in chain.versions)
+                for chain in live
+            ),
+        )
+    return result
+
+
+def plan_rows(
+    conn: Connection, project_id: int, case_ids: Sequence[str] | None = None
+) -> dict[RowKey, PlanFlags]:
+    """Stored rows only."""
+    query = select(
+        WorkPlanFlagsRow.case_id,
+        WorkPlanFlagsRow.language,
+        WorkPlanFlagsRow.review,
+        WorkPlanFlagsRow.annotate,
+    ).where(WorkPlanFlagsRow.project_id == project_id)
+    if case_ids is not None:
+        query = query.where(WorkPlanFlagsRow.case_id.in_(list(case_ids)))
+    return {
+        _key(row): PlanFlags(row.review, row.annotate) for row in conn.execute(query)
+    }
+
+
+def effective_plan(
+    conn: Connection, project_id: int, case_ids: Sequence[str] | None = None
+) -> dict[RowKey, PlanFlags]:
+    """Stored rows plus the import default for language versions without one."""
+    stored = plan_rows(conn, project_id, case_ids)
+    versions = language_versions(conn, project_id, case_ids)
+    missing_cases = {key.case_id for key in versions if key not in stored}
+    if not missing_cases:
+        return stored
+    setting = cast(
+        ImportPlanSetting,
+        conn.execute(
+            select(ProjectRow.import_plan).where(ProjectRow.id == project_id)
+        ).scalar_one(),
+    )
+    defaults = import_defaults(
+        setting, [v for v in versions.values() if v.case_id in missing_cases]
+    )
+    result = dict(stored)
+    for key, flags in defaults.items():
+        result.setdefault(key, flags)
+    return result
+
+
+def revisions(
+    conn: Connection, project_id: int, case_ids: Sequence[str]
+) -> dict[str, int]:
+    """The plan revision per case; a case without a ``work_plans`` row has 1."""
+    result = dict.fromkeys(case_ids, 1)
+    if not result:
+        return result
+    for row in conn.execute(
+        select(WorkPlanRow.case_id, WorkPlanRow.revision).where(
+            WorkPlanRow.project_id == project_id,
+            WorkPlanRow.case_id.in_(list(result)),
+        )
+    ):
+        result[row.case_id] = row.revision
+    return result
+
+
+def restored(conn: Connection, project_id: int) -> dict[RowKey, int]:
+    """Rows whose Annotate returned on a final result, with that revision."""
+    return {
+        _key(row): row.restored_revision
+        for row in conn.execute(
+            select(
+                WorkPlanFlagsRow.case_id,
+                WorkPlanFlagsRow.language,
+                WorkPlanFlagsRow.restored_revision,
+            ).where(
+                WorkPlanFlagsRow.project_id == project_id,
+                WorkPlanFlagsRow.restored_revision.is_not(None),
+            )
+        )
+    }
+
+
+def _bump(conn: Connection, project_id: int, case_ids: Iterable[str]) -> dict[str, int]:
+    upsert = insert(WorkPlanRow).values(
+        [
+            {"project_id": project_id, "case_id": case_id, "revision": 2}
+            for case_id in sorted(set(case_ids))
+        ]
+    )
+    stmt = upsert.on_conflict_do_update(
+        index_elements=[WorkPlanRow.project_id, WorkPlanRow.case_id],
+        set_={"revision": WorkPlanRow.revision + 1, "updated_at": func.now()},
+    ).returning(WorkPlanRow.case_id, WorkPlanRow.revision)
+    return {row.case_id: row.revision for row in conn.execute(stmt)}
+
+
+def write_rows(
+    conn: Connection,
+    project_id: int,
+    rows: Mapping[RowKey, PlanFlags],
+    *,
+    actor_id: int | None,
+    restored: Mapping[RowKey, int | None] = {},
+) -> dict[str, int]:
+    """Upsert flags; each touched case stores its current revision + 1 once.
+
+    A key in ``restored`` sets ``restored_revision`` exactly (None clears it);
+    any other row clears it when its Annotate is off. Returns new revisions.
+    """
+    if not rows:
+        return {}
+    for exact in (True, False):
+        values = [
+            {
+                "project_id": project_id,
+                "case_id": key.case_id,
+                "language": key.language,
+                "review": flags.review,
+                "annotate": flags.annotate,
+                "restored_revision": restored.get(key),
+                "updated_by": actor_id,
+            }
+            for key, flags in rows.items()
+            if (key in restored) is exact
+        ]
+        if not values:
+            continue
+        stmt = insert(WorkPlanFlagsRow).values(values)
+        excluded = stmt.excluded
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                WorkPlanFlagsRow.project_id,
+                WorkPlanFlagsRow.case_id,
+                WorkPlanFlagsRow.language,
+            ],
+            set_={
+                "review": excluded.review,
+                "annotate": excluded.annotate,
+                "updated_by": excluded.updated_by,
+                "updated_at": func.now(),
+                "restored_revision": excluded.restored_revision
+                if exact
+                else case(
+                    (excluded.annotate.is_(False), None),
+                    else_=WorkPlanFlagsRow.restored_revision,
+                ),
+            },
+        )
+        conn.execute(stmt)
+    return _bump(conn, project_id, (key.case_id for key in rows))
+
+
+def ensure_rows(
+    conn: Connection, project_id: int, defaults: Mapping[RowKey, PlanFlags]
+) -> int:
+    """Insert only missing rows (and missing ``work_plans`` rows at revision 1)."""
+    if not defaults:
+        return 0
+    conn.execute(
+        insert(WorkPlanRow)
+        .values(
+            [
+                {"project_id": project_id, "case_id": case_id, "revision": 1}
+                for case_id in sorted({key.case_id for key in defaults})
+            ]
+        )
+        .on_conflict_do_nothing(
+            index_elements=[WorkPlanRow.project_id, WorkPlanRow.case_id]
+        )
+    )
+    inserted = conn.execute(
+        insert(WorkPlanFlagsRow)
+        .values(
+            [
+                {
+                    "project_id": project_id,
+                    "case_id": key.case_id,
+                    "language": key.language,
+                    "review": flags.review,
+                    "annotate": flags.annotate,
+                }
+                for key, flags in defaults.items()
+            ]
+        )
+        .on_conflict_do_nothing(
+            index_elements=[
+                WorkPlanFlagsRow.project_id,
+                WorkPlanFlagsRow.case_id,
+                WorkPlanFlagsRow.language,
+            ]
+        )
+        .returning(WorkPlanFlagsRow.id)
+    ).all()
+    return len(inserted)
+
+
+def open_tasks(
+    conn: Connection, project_id: int, keys: Iterable[RowKey], *, lock: bool = False
+) -> list[OpenTask]:
+    """Non-revoked, not submitted assignments on documents of the rows."""
+    keys = list(keys)
+    if not keys:
+        return []
+    query = (
+        select(
+            AssignmentRow.id,
+            DocumentRow.case_id,
+            DocumentRow.language,
+            AssignmentRow.task,
+            AssignmentRow.user_id,
+        )
+        .join(
+            DocumentRow,
+            and_(
+                DocumentRow.project_id == AssignmentRow.project_id,
+                DocumentRow.document_id == AssignmentRow.document_id,
+            ),
+        )
+        .where(
+            AssignmentRow.project_id == project_id,
+            AssignmentRow.revoked_at.is_(None),
+            AssignmentRow.status != "submitted",
+            _in_keys(DocumentRow.case_id, DocumentRow.language, keys),
+        )
+        .order_by(DocumentRow.case_id, DocumentRow.language, AssignmentRow.id)
+    )
+    if lock:
+        query = query.with_for_update(key_share=True, of=AssignmentRow)
+    return [
+        OpenTask(row.id, row.case_id, row.language, row.task, row.user_id)
+        for row in conn.execute(query)
+    ]
+
+
+def open_reports(
+    conn: Connection, project_id: int, keys: Iterable[RowKey]
+) -> list[OpenReport]:
+    """Open problem reports on documents of the rows; held = an active hold."""
+    keys = list(keys)
+    if not keys:
+        return []
+    held = exists().where(
+        TaskHoldRow.report_id == ProblemReportRow.report_id,
+        TaskHoldStateRow.hold_id == TaskHoldRow.hold_id,
+        TaskHoldStateRow.active.is_(True),
+    )
+    query = (
+        select(
+            ProblemReportRow.report_id,
+            DocumentRow.case_id,
+            DocumentRow.language,
+            ProblemReportRow.assignment_id,
+            held.label("held"),
+        )
+        .join(
+            ProblemReportStateRow,
+            ProblemReportStateRow.report_id == ProblemReportRow.report_id,
+        )
+        .join(AssignmentRow, AssignmentRow.id == ProblemReportRow.assignment_id)
+        .join(
+            DocumentRow,
+            and_(
+                DocumentRow.project_id == AssignmentRow.project_id,
+                DocumentRow.document_id == AssignmentRow.document_id,
+            ),
+        )
+        .where(
+            ProblemReportRow.project_id == project_id,
+            ProblemReportStateRow.state == "open",
+            _in_keys(DocumentRow.case_id, DocumentRow.language, keys),
+        )
+        .order_by(DocumentRow.case_id, DocumentRow.language, ProblemReportRow.report_id)
+    )
+    return [
+        OpenReport(
+            row.report_id, row.case_id, row.language, row.assignment_id, bool(row.held)
+        )
+        for row in conn.execute(query)
+    ]
+
+
+def final_keys(conn: Connection, project_id: int) -> frozenset[RowKey]:
+    return frozenset(
+        _key(row)
+        for row in conn.execute(
+            select(FinalSelectionRow.case_id, FinalSelectionRow.language).where(
+                FinalSelectionRow.project_id == project_id
+            )
+        )
+    )
+
+
+def add_acceptance(
+    conn: Connection,
+    project_id: int,
+    document_id: str,
+    *,
+    source: str,
+    reason: str | None,
+    accepted_by: int | None,
+    upload_id: int | None = None,
+    metadata: Mapping[str, Any] = {},
+) -> None:
+    conn.execute(
+        insert(TranslationAcceptanceRow).values(
+            project_id=project_id,
+            document_id=document_id,
+            source=source,
+            reason=reason,
+            accepted_by=accepted_by,
+            upload_id=upload_id,
+            metadata_=dict(metadata),
+        )
+    )
+
+
+def acceptances(conn: Connection, project_id: int) -> dict[str, dict[str, Any]]:
+    """The newest acceptance record per document."""
+    rows = conn.execute(
+        select(
+            TranslationAcceptanceRow.document_id,
+            TranslationAcceptanceRow.source,
+            TranslationAcceptanceRow.reason,
+            TranslationAcceptanceRow.accepted_by,
+            TranslationAcceptanceRow.accepted_at,
+            TranslationAcceptanceRow.upload_id,
+            TranslationAcceptanceRow.metadata_.label("metadata"),
+        )
+        .where(TranslationAcceptanceRow.project_id == project_id)
+        .distinct(TranslationAcceptanceRow.document_id)
+        .order_by(
+            TranslationAcceptanceRow.document_id, TranslationAcceptanceRow.id.desc()
+        )
+    ).mappings()
+    return {row["document_id"]: dict(row) for row in rows}
+
+
+def discarded(conn: Connection, project_id: int) -> dict[str, dict[str, Any]]:
+    rows = conn.execute(
+        select(
+            DiscardedVariantRow.document_id,
+            DiscardedVariantRow.reason,
+            DiscardedVariantRow.discarded_by,
+            DiscardedVariantRow.discarded_at,
+        ).where(DiscardedVariantRow.project_id == project_id)
+    ).mappings()
+    return {row["document_id"]: dict(row) for row in rows}
