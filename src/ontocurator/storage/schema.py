@@ -9,8 +9,9 @@ from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, create_engine, text
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
 
+from ontocurator.storage.database import connect_args
 from ontocurator.storage.tables import SCHEMA
 
 MIGRATIONS = Path(__file__).parent / "migrations"
@@ -49,7 +50,8 @@ def upgrade(url: str | URL, target: str = "head") -> str:
     resolved = head_revision() if target == "head" else target
     if resolved not in revisions:
         raise ValueError("Migration target must be head or an exact known revision")
-    engine = create_engine(url)
+    parsed = make_url(url) if isinstance(url, str) else url
+    engine = create_engine(parsed, connect_args=connect_args(parsed))
     try:
         with engine.begin() as conn:
             conn.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": UPGRADE_LOCK})

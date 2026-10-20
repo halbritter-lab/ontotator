@@ -17,6 +17,23 @@ from ontocurator.storage.blobs import BlobStore
 
 _numbers = itertools.count()
 
+CONNECT_TIMEOUT_SECONDS = 10
+"""Seconds a new connection may take before the driver gives up.
+
+Without it, a host that drops packets keeps a CLI command waiting for the
+operating system's TCP timeout (minutes) instead of failing fast.
+"""
+
+
+def connect_args(url: URL) -> dict[str, object]:
+    """The driver arguments for ``url``: the default connect timeout, unless set.
+
+    A ``connect_timeout`` in the URL's query wins over the default.
+    """
+    if "connect_timeout" in url.query:
+        return {}
+    return {"connect_timeout": CONNECT_TIMEOUT_SECONDS}
+
 
 def advisory_lock_id(*parts: str) -> int:
     """A signed 64-bit advisory lock id derived from a name."""
@@ -79,6 +96,7 @@ class Database:
             pool_size=pool_size,
             max_overflow=max_overflow,
             pool_pre_ping=True,
+            connect_args=connect_args(parsed),
             # Never repeat statement parameters (password hashes, codes) in
             # errors and logs.
             hide_parameters=True,
