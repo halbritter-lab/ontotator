@@ -57,6 +57,8 @@ def gate(tmp_path):
             "CHECK_CONTAINERS",
             "CHECK_IMAGE",
             "CHECK_VITEST_WORKERS",
+            "CHECK_PYTEST_WORKERS",
+            "CHECK_PLAYWRIGHT_WORKERS",
             "ONTOCURATOR_TEST_PG_URL",
             "CHECK_TEST_FAIL",
         ]:
@@ -85,7 +87,7 @@ def test_default_runs_every_required_phase_serially_with_bounded_workers(gate):
     result, calls = gate()
     assert result.returncode == 0, result.stderr
     assert any("test_admin_error_codes.py" in call for call in calls)
-    assert any("pytest -q --durations=20" in call for call in calls)
+    assert any("pytest -q -n 4 --durations=20" in call for call in calls)
     assert any("--maxWorkers=2 --minWorkers=1" in call for call in calls)
     assert calls == [
         "docker info",
@@ -99,8 +101,8 @@ def test_default_runs_every_required_phase_serially_with_bounded_workers(gate):
         "npm --prefix frontend run api:check",
         "uv run python scripts/check_wheel.py --out-dir build/check-wheel",
         "npm --prefix frontend test -- --maxWorkers=2 --minWorkers=1",
-        "uv run pytest -q --durations=20",
-        "npm --prefix frontend run test:e2e",
+        "uv run pytest -q -n 4 --durations=20",
+        "npm --prefix frontend run test:e2e -- --workers=1",
     ]
     assert "All local checks passed." in result.stdout
     assert "partial" not in result.stdout.lower()
@@ -111,7 +113,7 @@ def test_default_runs_every_required_phase_serially_with_bounded_workers(gate):
     [
         ("static", "ruff check", "docker"),
         ("frontend", "--maxWorkers=2", "docker"),
-        ("backend", "pytest -q --durations=20", "npm"),
+        ("backend", "pytest -q -n 4 --durations=20", "npm"),
         ("browser", "run test:e2e", "uv"),
         ("containers", "container_check.py --smoke", "npm"),
     ],
@@ -190,7 +192,7 @@ def test_backend_does_not_require_frontend_dependencies(gate):
     (gate.workspace / "frontend/node_modules").rmdir()
     result, calls = gate("--only", "backend", ONTOCURATOR_TEST_PG_URL="test-only")
     assert result.returncode == 0, result.stderr
-    assert calls == ["uv run pytest -q --durations=20"]
+    assert calls == ["uv run pytest -q -n 4 --durations=20"]
     result, calls = gate("--only", "frontend")
     assert result.returncode != 0
     assert "frontend dependencies are missing" in result.stderr
@@ -202,4 +204,48 @@ def test_container_smoke_requires_frontend_dependencies_before_docker(gate):
     result, calls = gate("--only", "containers")
     assert result.returncode != 0
     assert "frontend dependencies are missing" in result.stderr
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "workers, expected",
+    [
+        ("0", "uv run pytest -q --durations=20"),
+        ("1", "uv run pytest -q --durations=20"),
+        ("6", "uv run pytest -q -n 6 --durations=20"),
+        ("08", "uv run pytest -q -n 8 --durations=20"),
+    ],
+)
+def test_backend_worker_override_runs_serially_at_one_or_less(gate, workers, expected):
+    result, calls = gate(
+        "--only",
+        "backend",
+        ONTOCURATOR_TEST_PG_URL="test-only",
+        CHECK_PYTEST_WORKERS=workers,
+    )
+    assert result.returncode == 0, result.stderr
+    assert calls == [expected]
+
+
+def test_browser_worker_override_reaches_playwright(gate):
+    result, calls = gate("--only", "browser", CHECK_PLAYWRIGHT_WORKERS="3")
+    assert result.returncode == 0, result.stderr
+    assert calls[-1] == "npm --prefix frontend run test:e2e -- --workers=3"
+
+
+@pytest.mark.parametrize(
+    "stage, variable, workers",
+    [
+        ("backend", "CHECK_PYTEST_WORKERS", "-1"),
+        ("backend", "CHECK_PYTEST_WORKERS", "many"),
+        ("browser", "CHECK_PLAYWRIGHT_WORKERS", "0"),
+        ("browser", "CHECK_PLAYWRIGHT_WORKERS", "1.5"),
+    ],
+)
+def test_backend_and_browser_worker_overrides_are_validated_before_tools(
+    gate, stage, variable, workers
+):
+    result, calls = gate("--only", stage, **{variable: workers})
+    assert result.returncode != 0
+    assert variable in result.stderr
     assert calls == []

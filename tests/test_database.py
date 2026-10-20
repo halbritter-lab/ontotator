@@ -183,7 +183,8 @@ PASSWORD = "p@ss#w%rd/x:y"
 def test_a_password_with_url_characters_survives_the_round_trip(
     tmp_path: Path, source: str
 ) -> None:
-    role = "ontocurator_password_probe"
+    # Roles are cluster-wide: parallel workers share the server (pg_harness).
+    role = f"ontocurator_password_probe_{pg_harness.process_suffix()}"
     _, admin = pg_harness.server()
     with admin.connect() as conn:
         conn.execute(text(f"DROP ROLE IF EXISTS {role}"))

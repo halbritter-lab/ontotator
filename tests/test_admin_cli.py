@@ -297,7 +297,11 @@ def test_recovery_input_is_checked_without_showing_it(
 
 
 def test_an_unreachable_database_is_a_short_error(tmp_path: Path) -> None:
-    url = "postgresql://ontocurator_app:pw-not-shown@127.0.0.1:1/ontocurator"
+    # On Windows a refused port only fails at libpq's timeout (130 s by default).
+    url = (
+        "postgresql://ontocurator_app:pw-not-shown@127.0.0.1:1/ontocurator"
+        "?connect_timeout=2"
+    )
     result = runner.invoke(app, ["admin", "--database-url", url, "users", "list"])
 
     assert result.exit_code == 1

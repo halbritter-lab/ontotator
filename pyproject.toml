@@ -35,6 +35,7 @@ dev = [
     "mypy>=1.15,<3",
     "pytest>=8,<10",
     "pytest-cov>=6,<8",
+    "pytest-xdist>=3.6,<4",
     "ruff>=0.9,<1",
     "testcontainers[postgres]>=4.9,<5",
 ]
