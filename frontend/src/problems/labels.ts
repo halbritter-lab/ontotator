@@ -4,11 +4,18 @@
  * "Paused" / "Resumed" / "Restarted" for tasks; never "hold" or "resolve" in UI text.
  */
 import type { ProblemReportView, ReportEventView, ReportHoldView } from "../api/client";
-import { textLabel } from "../app/identity";
+import { textLabel, type PersonRef } from "../app/identity";
 import { formatTime, personLabel } from "../app/submissionLabels";
 import type { StatusTone } from "../ui";
 
-interface TaskIdentity { assignment_id: number; owner_label: string }
+interface TaskIdentity { assignment_id: number; owner_label: string; owner?: PersonRef | null }
+
+type Ref = PersonRef | null | undefined;
+
+/** A task owner: "Ana Weber (ann-0004)" when the view carries a display name (leads), else the pseudonym. */
+function ownerName(t: TaskIdentity): string {
+  return personLabel(t.owner_label, false, t.owner);
+}
 
 const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
 
@@ -25,7 +32,13 @@ const byCreatedAt = (a: { created_at: string }, b: { created_at: string }): numb
 /** The reporter's own task: its hold (owner label) when present, else the report's own fields. */
 function reporterTask(r: ProblemReportView): TaskIdentity {
   const own = holdsOf(r).find(h => h.assignment_id === r.assignment_id);
-  return { assignment_id: r.assignment_id, owner_label: own?.owner_label ?? r.reporter_label };
+  return { assignment_id: r.assignment_id, owner_label: own?.owner_label ?? r.reporter_label, owner: own ? own.owner : r.reporter };
+}
+
+/** The reporter as a lead reads them: "Ana Weber (ann-0004)"; other viewers keep the pseudonym. */
+export function reporterName(r: ProblemReportView): string {
+  if (!r.viewer_is_lead) return r.reporter_label;
+  return personLabel(r.reporter_label, false, r.reporter);
 }
 
 /** First line of the report text, cut at `max` characters at a word boundary with an ellipsis. */
@@ -44,29 +57,30 @@ export function reportStateBadge(r: ProblemReportView): { text: "Open" | "Closed
   return { text: "Open", tone: "info" };
 }
 
-/** A person as the viewer reads it inside a sentence: "you" (reporter view) or "lead-0002 (you)" (lead view). */
-function personInText(r: ProblemReportView, label: string): string {
-  if (label !== r.viewer_label) return label;
-  return r.viewer_is_lead ? personLabel(label, true) : "you";
+/** A person as the viewer reads it inside a sentence: "you" (reporter view); in lead view "Ana Weber (ann-0004)" or "lead-0002 (you)". */
+function personInText(r: ProblemReportView, label: string, ref?: Ref): string {
+  if (r.viewer_is_lead) return personLabel(label, label === r.viewer_label, ref);
+  return label === r.viewer_label ? "you" : label;
 }
 
 /** "Open" | "Closed by ann-0002 · 19 Oct, 01:31" | "Withdrawn by you · …". */
 export function reportStateFact(r: ProblemReportView, now?: Date): string {
   const { text } = reportStateBadge(r);
   if (r.state === "open") return text;
-  const by = r.state_changed_by_label ? ` by ${personInText(r, r.state_changed_by_label)}` : "";
+  const by = r.state_changed_by_label ? ` by ${personInText(r, r.state_changed_by_label, r.state_changed_by)}` : "";
   const at = r.state_changed_at ? ` · ${formatTime(r.state_changed_at, { now })}` : "";
   return `${text}${by}${at}`;
 }
 
-/** "Task 4 · ann-0004 · accepted-translation · de". */
-export function taskLabel(t: { assignment_id: number; owner_label: string; case_id: string; language: string }): string {
-  return `Task ${t.assignment_id} · ${t.owner_label} · ${textLabel(t)}`;
+/** "Task 4 · ann-0004 · accepted-translation · de"; with a display name (leads) "Task 4 · Ana Weber (ann-0004) · …". */
+export function taskLabel(t: TaskIdentity & { case_id: string; language: string }): string {
+  return `Task ${t.assignment_id} · ${ownerName(t)} · ${textLabel(t)}`;
 }
 
-/** Running-text reference: "Task 4 (ann-0004)". */
+/** Running-text reference: "Task 4 (ann-0004)"; with a display name "Task 4 · Ana Weber (ann-0004)" (never nested parentheses). */
 export function taskRef(t: TaskIdentity): string {
-  return `Task ${t.assignment_id} (${t.owner_label})`;
+  const name = ownerName(t);
+  return name === t.owner_label ? `Task ${t.assignment_id} (${t.owner_label})` : `Task ${t.assignment_id} · ${name}`;
 }
 
 export type TaskFactKind = "paused" | "repaused" | "resumed" | "restarted" | "withdrawn" | "unknown-release";
@@ -169,16 +183,16 @@ function eventSentence(r: ProblemReportView, e: ReportEventView, actor: string):
 
 /** Timeline items, oldest first, creation first; wording and redaction follow `r.viewer_is_lead`. */
 export function historyItems(r: ProblemReportView): HistoryItem[] {
-  const actorOf = (label: string): string => {
-    if (r.viewer_is_lead) return personLabel(label, label === r.viewer_label);
+  const actorOf = (label: string, ref?: Ref): string => {
+    if (r.viewer_is_lead) return personLabel(label, label === r.viewer_label, ref);
     return label === r.reporter_label ? "You" : label;
   };
   const created: HistoryItem = r.viewer_is_lead
-    ? { key: "created", at: r.created_at ?? "", sentence: `${actorOf(r.reporter_label)} reported the problem. Task ${r.assignment_id} paused.` }
+    ? { key: "created", at: r.created_at ?? "", sentence: `${actorOf(r.reporter_label, r.reporter)} reported the problem. Task ${r.assignment_id} paused.` }
     : { key: "created", at: r.created_at ?? "", sentence: "You reported the problem. Your task paused." };
   const events = [...(r.events ?? [])].sort(byCreatedAt);
   const items = events.flatMap(e => {
-    const item = eventSentence(r, e, actorOf(e.actor_label));
+    const item = eventSentence(r, e, actorOf(e.actor_label, e.actor));
     return item ? [{ key: e.event_id, at: e.created_at, ...item }] : [];
   });
   return [created, ...items];
@@ -215,7 +229,7 @@ export function intentState(r: ProblemReportView): Record<Intent, { label: strin
   return {
     close: {
       label: active.length ? "Close report (pauses stay)" : "Close report",
-      consequence: `Records your outcome for ${r.reporter_label}. ${active.length ? `${paused} ${stays}.` : "No task is paused by this report."}`,
+      consequence: `Records your outcome for ${reporterName(r)}. ${active.length ? `${paused} ${stays}.` : "No task is paused by this report."}`,
       unavailable: blockedByState,
     },
     release: {

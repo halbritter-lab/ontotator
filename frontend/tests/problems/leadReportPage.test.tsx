@@ -336,3 +336,72 @@ describe("confirmations", () => {
     expect(history.getByText(/Round 3 abandoned and kept; Round 4 started empty\./)).toBeTruthy();
   });
 });
+
+describe("display names for leads", () => {
+  const ANA = { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false };
+  const BEN = { pseudonym: "ann-0005", display_name: "Ben Ito", is_me: false };
+  const ME = { pseudonym: "lead-0002", display_name: "Lea Lang", is_me: true };
+
+  it("shows Name (ann-…) for reporter, pauses and candidates to a lead", async () => {
+    await setup({
+      view: leadReport({ reporter: ANA, holds: [
+        hold({ owner: ANA, created_by: ANA }),
+        hold({ hold_id: "h7", assignment_id: 7, owner_label: "ann-0005", owner: BEN, active: false, release_action: "resume", released_by_label: "lead-0002", released_by: ME, released_at: T2 }),
+        hold({ hold_id: "h8", assignment_id: 8, owner_label: "ann-0006", owner: { pseudonym: "ann-0006", display_name: "Cleo Park", is_me: false }, active: false, release_action: "resume", released_by_label: "ann-0004", released_by: ANA, released_at: T1 }),
+      ] }),
+      candidates: [candidate({ owner: BEN })],
+    });
+    expect(screen.getByText("accepted-translation · de · Task 4 · Ana Weber (ann-0004) · Annotation · Round 2", { exact: false })).toBeTruthy();
+    expect(screen.getByText(/^Reported by Ana Weber \(ann-0004\)/)).toBeTruthy();
+    const items = within(stateSection()).getAllByRole("listitem").map(li => li.textContent);
+    expect(items[0]).toContain("Task 4 · Ana Weber (ann-0004) · accepted-translation · de");
+    expect(items[1]).toContain("Task 7 · Ben Ito (ann-0005) · accepted-translation · de");
+    expect(items[1]).toContain("Resumed by Lea Lang (lead-0002, you)");
+    expect(items[2]).toContain("Task 8 · Cleo Park (ann-0006)");
+    expect(items[2]).toContain("Resumed by reporter Ana Weber (ann-0004)");
+    expect(within(screen.getByRole("region", { name: "History" })).getByText(/^Ana Weber \(ann-0004\) reported the problem\./)).toBeTruthy();
+    fireEvent.click(intent("Pause other tasks…"));
+    const same = await within(confirmBox("Pause other tasks")).findByRole("group", { name: "Same text: accepted-translation" });
+    expect(within(same).getByRole("checkbox", { name: /Task 7 · Ben Ito \(ann-0005\) · accepted-translation · en/ })).toBeTruthy();
+    cleanup(); vi.restoreAllMocks();
+
+    await setup({ view: leadReport({ state: "resolved", resolution: "Done", state_changed_by_label: "lead-0002", state_changed_by: ME, state_changed_at: T2 }) });
+    expect(stateSection().textContent).toContain("Closed by Lea Lang (lead-0002, you)");
+  });
+
+  it("Pause other tasks search matches display names", async () => {
+    await setup({ candidates: [
+      candidate({ assignment_id: 12, owner_label: "ann-0009", owner: { pseudonym: "ann-0009", display_name: "Dora Diaz", is_me: false }, case_id: "other-text", same_text: false }),
+      candidate({ assignment_id: 13, owner_label: "rev-0001", case_id: "third-text", same_text: false }),
+    ] });
+    fireEvent.click(intent("Pause other tasks…"));
+    const box = within(confirmBox("Pause other tasks"));
+    const search = await box.findByRole("textbox", { name: "Search other tasks" });
+    fireEvent.change(search, { target: { value: "dora" } });
+    expect(box.getByRole("checkbox", { name: /Task 12 · Dora Diaz \(ann-0009\) · other-text · en/ })).toBeTruthy();
+    expect(box.queryByRole("checkbox", { name: /Task 13/ })).toBeNull();
+    fireEvent.change(search, { target: { value: "ann-0009" } });
+    expect(box.getByRole("checkbox", { name: /Task 12/ })).toBeTruthy();
+    fireEvent.change(search, { target: { value: "rev-0001" } });
+    expect(box.getByRole("checkbox", { name: /Task 13 · rev-0001 · third-text/ })).toBeTruthy();
+  });
+
+  it("confirmation copy names the reporter as Name (ann-…)", async () => {
+    const { act } = await setup({ view: leadReport({ reporter: ANA, holds: [hold({ owner: ANA })] }) });
+    expect(screen.getByText(/Records your outcome for Ana Weber \(ann-0004\)\./)).toBeTruthy();
+    fireEvent.click(intent(/^Close report/));
+    let box = within(confirmBox("Close report"));
+    expect(box.getByRole("textbox", { name: /Outcome for Ana Weber \(ann-0004\)/ })).toBeTruthy();
+    expect(box.getByText("Ana Weber (ann-0004) sees this in the report.")).toBeTruthy();
+    fireEvent.click(intent("Agree empty restart…"));
+    box = within(confirmBox("Agree empty restart of Task 4"));
+    expect(box.getByRole("checkbox", { name: /I agreed this restart with Ana Weber \(ann-0004\)/ })).toBeTruthy();
+    expect(box.getByRole("textbox", { name: /Reason \(becomes the outcome Ana Weber \(ann-0004\) sees\)/ })).toBeTruthy();
+    act.mockResolvedValue(leadReport({ reporter: ANA, revision: 2, holds: [hold({ owner: ANA, active: false, release_action: "resume", released_by_label: "lead-0002" })] }));
+    fireEvent.click(intent("Release pause…"));
+    box = within(confirmBox("Release pause"));
+    fireEvent.change(box.getByRole("textbox", { name: /Reason/ }), { target: { value: "Go on" } });
+    fireEvent.click(box.getByRole("button", { name: "Release pause" }));
+    await screen.findByText(/Released the pause on Task 4 · Ana Weber \(ann-0004\)\./);
+  });
+});

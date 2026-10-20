@@ -32,11 +32,13 @@ function ReleasedHold({ report, hold }: { report: ProblemReportView; hold: Repor
     return <><StatusBadge tone="neutral">Restarted</StatusBadge> {ordinal == null ? "An empty round started" : `Round ${ordinal} started empty`}{at}</>;
   }
   if ((hold.release_action === "resume" || hold.release_action === "withdraw") && by) {
+    const name = personLabel(by, by === report.viewer_label, hold.released_by);
     if (by === report.reporter_label) {
       const reason = event?.reason;
-      return <><StatusBadge tone="neutral">Resumed</StatusBadge> by reporter ({by}){at}{reason ? <> · "{reason}"</> : null}</>;
+      // "by reporter (ann-0004)"; with a display name "by reporter Ana Weber (ann-0004)" (no nested parentheses).
+      return <><StatusBadge tone="neutral">Resumed</StatusBadge> by reporter {name === by ? `(${by})` : name}{at}{reason ? <> · "{reason}"</> : null}</>;
     }
-    return <><StatusBadge tone="neutral">Resumed</StatusBadge> by {personLabel(by, by === report.viewer_label)}{at}</>;
+    return <><StatusBadge tone="neutral">Resumed</StatusBadge> by {name}{at}</>;
   }
   return <>Released (no record of who released it)</>;
 }

@@ -9,7 +9,7 @@ import { recordDecision } from "../documents/visitState";
 import { LeadConfirm, releasePreselection } from "../problems/LeadConfirms";
 import { LeadDecide } from "../problems/LeadDecide";
 import { finalResultLabel, LeadStatePanel } from "../problems/LeadStatePanel";
-import { intentState, leadOutcome, type Intent } from "../problems/labels";
+import { intentState, leadOutcome, reporterName, taskRef, type Intent } from "../problems/labels";
 import { ReportTimeline } from "../problems/ReportTimeline";
 import { useLeadReport } from "../problems/useLeadReport";
 import { Button, EmptyState, IconChevronLeft, InlineMessage } from "../ui";
@@ -146,7 +146,7 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
     ...(report.submission ? { annotations: refKey({ kind: "submission", id: report.submission.submission_id }) } : {}),
     ...(documents ? { documents } : {}),
   };
-  const identity = [report.case_id, report.language, `Task ${report.assignment_id} (${report.reporter_label})`,
+  const identity = [report.case_id, report.language, taskRef({ assignment_id: report.assignment_id, owner_label: report.reporter_label, owner: report.viewer_is_lead ? report.reporter : null }),
     report.task ? TASK_TYPES[report.task] : null, report.round_ordinal != null ? `Round ${report.round_ordinal}` : null].filter(Boolean).join(" · ");
   const stateId = `${id}-state`, decideId = `${id}-decide`, historyId = `${id}-history`;
   const states = intentState(report);
@@ -156,7 +156,7 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
     <h1>Problem report</h1>
     <p className="problem-report-identity">{identity} · {link(viewText, "View text")}</p>
     <blockquote className="report-text">{report.reason}</blockquote>
-    <p className="problem-report-meta">Reported by {report.reporter_label}{report.created_at && <> · <Time iso={report.created_at} /></>}</p>
+    <p className="problem-report-meta">Reported by {reporterName(report)}{report.created_at && <> · <Time iso={report.created_at} /></>}</p>
     {report.submission && <p className="problem-report-meta">About the submitted result {report.submission.round_ordinal != null ? `Round ${report.submission.round_ordinal}` : "Initial submission"} · <Time iso={report.submission.recorded_at} /></p>}
 
     <section aria-labelledby={stateId}>

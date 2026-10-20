@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type PauseCandidate, type ProblemActionRequest, type ProblemReportView } from "../api/client";
+import { personLabel } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea, TextInput, type InlineConfirmOutcome } from "../ui";
-import { historyItems, taskLabel, type Intent } from "./labels";
+import { historyItems, reporterName, taskLabel, type Intent } from "./labels";
 import type { ReportLink } from "./LeadStatePanel";
 import type { LeadReportState } from "./useLeadReport";
 
@@ -46,7 +47,7 @@ export interface LeadConfirmProps {
 /** The InlineConfirm of one lead intent (Close, Release pause, Pause other tasks, Agree empty restart, Reopen). */
 export function LeadConfirm({ intent, report, finalText, preselect = [], lead, requests, unavailable, reportLink, onDone, onCancel }: LeadConfirmProps): JSX.Element {
   const id = useId();
-  const reporter = report.reporter_label;
+  const reporter = reporterName(report);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [selected, setSelected] = useState<number[]>(intent === "release" ? preselect : []);
@@ -101,7 +102,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
         const newest = fresh ? [...(fresh.events ?? [])].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).pop() : undefined;
         const items = fresh ? historyItems(fresh) : [];
         setConflictText(items.length > 1 ? items[items.length - 1]!.sentence : "");
-        setOutcome({ kind: "conflict", changedBy: newest?.actor_label ?? null, changedAt: newest?.created_at ?? null,
+        setOutcome({ kind: "conflict", changedBy: newest ? personLabel(newest.actor_label, newest.actor_label === fresh?.viewer_label, newest.actor) : null, changedAt: newest?.created_at ?? null,
           onReview: () => { setOutcome(null); void lead.reload(); } });
       } else if (code === "TASK_HELD") {
         const task = detailNumber(failure, "assignment_id") ?? report.assignment_id;
@@ -182,7 +183,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
       const all = lead.candidates ?? [];
       const sameText = all.filter(c => c.same_text);
       const query = search.trim().toLowerCase();
-      const others = query ? all.filter(c => !c.same_text && (c.case_id.toLowerCase().startsWith(query) || c.owner_label.toLowerCase().includes(query))) : [];
+      const others = query ? all.filter(c => !c.same_text && (c.case_id.toLowerCase().startsWith(query) || c.owner_label.toLowerCase().includes(query) || !!c.owner?.display_name?.toLowerCase().includes(query))) : [];
       const row = (candidate: PauseCandidate) => {
         const paused = candidate.paused_by_this_report;
         const label = `${taskLabel(candidate)}${candidate.reporter_task && !paused ? " (reporter's task)" : ""}`;

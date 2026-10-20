@@ -46,6 +46,25 @@ describe("ReportTimeline", () => {
     expect(container.querySelectorAll("li")).toHaveLength(2);
   });
 
+  it("event actors use personLabel", () => {
+    const lead = report({ viewer_is_lead: true, viewer_label: "lead-0002", reporter: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false }, events: [
+      event({ event_id: "e2", actor_label: "lead-0002", actor: { pseudonym: "lead-0002", display_name: "Lea Lang", is_me: true }, own_task: false, reason: null,
+        affected: [{ assignment_id: 7, owner_label: "ann-0005", case_id: "c", language: "de", task: "annotate" }] }),
+      event({ event_id: "e3", action: "resolve", actor_label: "lead-0003", actor: { pseudonym: "lead-0003", display_name: "Max Mohr", is_me: false }, own_task: false, reason: null, created_at: "2026-10-19T01:31:00Z" }),
+    ] });
+    const { container } = render(<ReportTimeline report={lead} />);
+    const items = [...container.querySelectorAll("li")].map(li => li.textContent);
+    expect(items[0]).toContain("Ana Weber (ann-0004) reported the problem. Task 4 paused.");
+    expect(items[1]).toContain("Lea Lang (lead-0002, you) released the pause on Task 7 (ann-0005).");
+    expect(items[2]).toContain("Max Mohr (lead-0003) closed the report.");
+    cleanup();
+    // Reporters keep pseudonyms even if a reference carries a name.
+    const reporterView = report({ events: [event({ event_id: "e3", action: "resolve", actor_label: "lead-0003", actor: { pseudonym: "lead-0003", display_name: "Max Mohr", is_me: false }, own_task: false, reason: null })] });
+    const second = render(<ReportTimeline report={reporterView} />);
+    expect(second.container.textContent).toContain("lead-0003 closed the report.");
+    expect(second.container.textContent).not.toContain("Max Mohr");
+  });
+
   it("labels_the_list_with_an_optional_heading", () => {
     render(<ReportTimeline report={report()} headingLevel={3} />);
     expect(screen.getByRole("list", { name: "History" })).toBeTruthy();
