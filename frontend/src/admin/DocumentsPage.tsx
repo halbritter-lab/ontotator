@@ -33,6 +33,7 @@ import {
 import { STEP_FILTER_GROUPS, STEP_LABELS, stepLabel } from "../documents/nextStepLabels";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
 import { useShortcut, useShortcutHint } from "../ui/shortcuts";
+import { LeadCorrectionContext, type LeadCorrectionHost } from "../documents/LeadCorrectionPanel";
 import { ResolveTranslation } from "../documents/ResolveTranslation";
 import { SelectByIdsDialog } from "../documents/SelectByIdsDialog";
 import { SelectionBar } from "../documents/SelectionBar";
@@ -774,6 +775,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     </>;
   };
 
+  // "Correct the translation yourself…" in the Translation review block (F1): the lead's own correction.
+  const correctionHost = useMemo<LeadCorrectionHost>(() => ({ projectKey, onNavigate: route => onNavigate(route) }), [projectKey, onNavigate]);
+
   const renderPlan = (row: DocumentRowView, group: DocumentGroupView) =>
     <PlanChips row={row} groupRevision={group.plan_revision} saves={planSaves} size={narrow ? "card" : "table"} />;
 
@@ -784,7 +788,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       <ResolveTranslation key={panel.mode} mode={panel.mode} row={row} projectKey={projectKey}
         revision={planSaves.revisionOf(row.case_id, groupRevision)}
         onAssignReview={() => { setRowPanel(null); void onAssign(row, "translation_review"); }}
-        onCorrect={() => onNavigate({ name: "projectCase", key: projectKey, caseId: row.case_id, variant: row.next_step?.document_id ?? row.open.document_id, ...(Object.keys(viewQuery).length ? { documents: viewQuery } : {}) })}
+        onNavigate={route => onNavigate(route)}
         onDone={(message, saved) => {
           planSaves.noteRevision(saved.caseId, saved.revision);
           announce(message);
@@ -946,7 +950,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         }}>{nextLabel}: {nameOfKey(success.next)}</a></>}
       </div>
     </div>}
-    {content}
+    <LeadCorrectionContext.Provider value={correctionHost}>{content}</LeadCorrectionContext.Provider>
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <Dialog open={uploadOpen} title="Upload texts" size="lg" onClose={() => setUploadOpen(false)}>
       {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus}

@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, type DocumentRowView, type DocumentRowsPage, type PlanRowResult, type RowSubmissions } from "../src/api/client";
+import { api, ApiError, type AssignmentView, type DocumentRowView, type DocumentRowsPage, type PlanRowResult, type RowSubmissions } from "../src/api/client";
 import type { AssignWorkDialogProps } from "../src/admin/AssignWorkDialog";
 import { DocumentsPage, type DocumentsPageProps } from "../src/admin/DocumentsPage";
 import type { ProjectDocumentsQuery, Route } from "../src/app/router";
@@ -9,7 +9,7 @@ import { documentsRowId } from "../src/documents/RowCells";
 import { stageBlockHeadingId } from "../src/documents/StageBlocks";
 import { recordDecision } from "../src/documents/visitState";
 import { useRegisteredShortcuts } from "../src/ui/shortcuts";
-import { final, group, item, notInPlanRow, page, planRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
+import { final, group, item, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
 
 const { expandedProps, assignProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[], assignProps: [] as unknown[] }));
 // The assign dialog has its own tests; here only its wiring (props in, onAssigned / onClose out) matters.
@@ -1026,6 +1026,32 @@ describe("Resolve focuses the Translation review block", () => {
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByRole("group", { name: "Translation not accepted, case-1 · de" })).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(actionButton()));
+  });
+
+  it("no longer navigates to the case viewer for Correct the translation…", async () => {
+    vi.spyOn(api, "getVariantMetadata").mockResolvedValue({ document_id: "case-1-de", text_sha256: "sha-1" } as Awaited<ReturnType<typeof api.getVariantMetadata>>);
+    vi.spyOn(api, "startLeadCorrection").mockResolvedValue({ id: 41 } as AssignmentView);
+    mockRows(page([group("case-1", [rejectedRow("case-1", "de")])]));
+    const { onNavigate } = renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
+    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
+    // The block's own entry is not repeated next to the Resolve options.
+    expect(screen.queryByRole("button", { name: "Correct the translation yourself…" })).toBeNull();
+    fireEvent.click(within(resolveBox()!).getByRole("button", { name: "Correct the translation…" }));
+    const panel = screen.getByRole("group", { name: "Correct the translation, case-1 · de" });
+    expect(translationHeading()!.closest(".stage-block")!.contains(panel)).toBe(true);
+    fireEvent.click(within(panel).getByRole("button", { name: "Open translation review" }));
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 41 }, undefined));
+    expect(api.startLeadCorrection).toHaveBeenCalledWith("p", "case-1-de", { expected_text_sha256: "sha-1", confirm_language: false });
+    expect(onNavigate.mock.calls.some(([route]) => (route as Route).name === "projectCase")).toBe(false);
+
+    // The expanded row alone offers the same panel from the Translation review block.
+    cleanup();
+    mockRows(page([group("case-1", [rejectedRow("case-1", "de")])]));
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Show details, case-1 · de" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Correct the translation yourself…" }));
+    expect(screen.getByRole("group", { name: "Correct the translation, case-1 · de" })).toBeTruthy();
   });
 
   it("cards behave the same", async () => {

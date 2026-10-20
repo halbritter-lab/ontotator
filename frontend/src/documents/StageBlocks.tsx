@@ -4,13 +4,14 @@
  * status badge, people, times and links; the current stage carries an accent top edge.
  * Facts already in the table (next step, owner, plan chips) are not repeated.
  */
-import { useId, type ReactNode } from "react";
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { DocumentRowView, DocumentVersionView, NextStepView, RowSubmissionView } from "../api/client";
 import { personLabel as identityLabel } from "../app/identity";
 import { assignmentStatusLabels, labelFor, plural, taskLabels } from "../app/labels";
 import { formatTime, kindLabels, personLabel, type SubmissionKind } from "../app/submissionLabels";
 import { Button, StatusBadge, type StatusTone } from "../ui";
 import { statusBadgeText, versionName } from "./labels";
+import { LeadCorrectionContext, LeadCorrectionPanel, openLeadCorrection, RESOLVE_CORRECTION_CODES } from "./LeadCorrectionPanel";
 import { acceptanceLabel, acceptanceOf, isDiscarded } from "./TextVersions";
 
 export type BlockStage = "translation_review" | "annotation" | "final";
@@ -87,6 +88,16 @@ export function StageBlocks({ row, submissions = null, lines = {}, onOpenTextVer
   const current = row.next_step ?? null;
   const newest = liveNewest(row);
   const acceptances = newest.map(acceptanceOf);
+  const host = useContext(LeadCorrectionContext);
+  const correctLink = useRef<HTMLButtonElement>(null);
+  const [correcting, setCorrecting] = useState(false);
+  const [refocus, setRefocus] = useState(false);
+  // Cancel in the correction panel returns focus to "Correct the translation yourself…".
+  useEffect(() => {
+    if (!refocus || correcting) return;
+    setRefocus(false);
+    correctLink.current?.focus();
+  }, [refocus, correcting]);
 
   if (plan.discarded || !row.in_plan) {
     return <div className="stage-blocks stage-blocks--none">
@@ -133,6 +144,9 @@ export function StageBlocks({ row, submissions = null, lines = {}, onOpenTextVer
       return status ? [<li key={version.document_id}>{nameOf(version)} · {status}</li>] : [];
     });
     const reviewed = newest.find(version => version.translation_status != null);
+    // The lead's own correction (F1): not repeated next to the Resolve options (`translationSlot`).
+    const ownCorrection = host && !translationSlot ? openLeadCorrection(row) : null;
+    const canCorrect = host != null && !translationSlot && !ownCorrection && current != null && RESOLVE_CORRECTION_CODES.has(current.code);
     const newReview = onAssign && !work.some(item => item.status !== "submitted")
       && newest.some((version, index) => version.translation_status === "accepted" && (acceptances[index]?.source === "lead" || acceptances[index]?.source === "override"));
     return <>
@@ -147,7 +161,11 @@ export function StageBlocks({ row, submissions = null, lines = {}, onOpenTextVer
         {onOpenTextVersions && linkButton(`Text versions (${row.versions.length})`, onOpenTextVersions)}
         {reviewed && onShowTranslationReviews && linkButton("Translation reviews", () => onShowTranslationReviews(reviewed.document_id))}
         {newReview && linkButton("Assign a new review…", () => onAssign(row, "translation_review", { newReviewOfAccepted: true }))}
+        {host && ownCorrection && linkButton("Continue your correction", () => host.onNavigate({ name: "task", assignmentId: ownCorrection.assignment_id }))}
+        {canCorrect && !correcting && <Button ref={correctLink} size="sm" variant="quiet" onClick={() => setCorrecting(true)}>Correct the translation yourself…</Button>}
       </div>
+      {canCorrect && correcting && <LeadCorrectionPanel row={row} projectKey={host.projectKey} onNavigate={host.onNavigate}
+        onCancel={() => { setCorrecting(false); setRefocus(true); }} />}
       {translationSlot}
     </>;
   };

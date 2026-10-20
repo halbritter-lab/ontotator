@@ -1,8 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api, ApiError, type DiscardResult, type PlanRowResult } from "../../src/api/client";
+import { api, ApiError, type AssignmentView, type DiscardResult, type PlanRowResult, type VariantSummary } from "../../src/api/client";
 import { ResolveTranslation, type ResolveTranslationProps } from "../../src/documents/ResolveTranslation";
-import { planRow, stepOf, version } from "./fixtures";
+import { planRow, rejectedRow, stepOf, version } from "./fixtures";
 
 const rejected = () => planRow("case-0101", "de", stepOf("resolve_rejected", { document_id: "case-0101-de" }), {
   versions: [version({ document_id: "case-0101-de", chain_name: "DeepL", origin: "machine_translation", translation_status: "reviewed", latest_review_decision: "rejected" })],
@@ -14,7 +14,7 @@ const notAccepted = () => planRow("case-0101", "de", stepOf("translation_not_acc
 function renderResolve(overrides: Partial<ResolveTranslationProps> = {}) {
   const props: ResolveTranslationProps = {
     mode: "resolve", row: rejected(), projectKey: "p", revision: 3,
-    onAssignReview: vi.fn(), onCorrect: vi.fn(), onDone: vi.fn(), onChanged: vi.fn(), onAnnounce: vi.fn(), onCancel: vi.fn(),
+    onAssignReview: vi.fn(), onNavigate: vi.fn(), onDone: vi.fn(), onChanged: vi.fn(), onAnnounce: vi.fn(), onCancel: vi.fn(),
     ...overrides,
   };
   render(<ResolveTranslation {...props} />);
@@ -41,8 +41,39 @@ it("offers exactly three options", () => {
   expect(within(box).queryByText(/accept/i)).toBeNull();
   fireEvent.click(within(box).getByRole("button", { name: "Assign a new review…" }));
   expect(props.onAssignReview).toHaveBeenCalled();
-  fireEvent.click(within(box).getByRole("button", { name: "Correct the translation…" }));
-  expect(props.onCorrect).toHaveBeenCalled();
+});
+
+it("Correct the translation… opens the panel", async () => {
+  vi.spyOn(api, "getVariantMetadata").mockResolvedValue({ document_id: "case-0101-de", text_sha256: "sha-v1" } as VariantSummary);
+  vi.spyOn(api, "startLeadCorrection").mockResolvedValue({ id: 41 } as AssignmentView);
+  const props = renderResolve();
+  fireEvent.click(screen.getByRole("button", { name: "Correct the translation…" }));
+  expect(screen.queryByRole("group", { name: "Resolve rejected translation, case-0101 · de" })).toBeNull();
+  const panel = screen.getByRole("group", { name: "Correct the translation, case-0101 · de" });
+  expect(within(panel).getByText(/You review v1 yourself/)).toBeTruthy();
+  expect(props.onNavigate).not.toHaveBeenCalled();
+  fireEvent.click(within(panel).getByRole("button", { name: "Open translation review" }));
+  await waitFor(() => expect(props.onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 41 }));
+  expect(api.startLeadCorrection).toHaveBeenCalledWith("p", "case-0101-de", { expected_text_sha256: "sha-v1", confirm_language: false });
+
+  // Cancel returns to the options with focus on "Correct the translation…".
+  cleanup();
+  renderResolve();
+  fireEvent.click(screen.getByRole("button", { name: "Correct the translation…" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Correct the translation, case-0101 · de" })).getByRole("button", { name: "Cancel" }));
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  await waitFor(() => expect(document.activeElement).toBe(within(box).getByRole("button", { name: "Correct the translation…" })));
+});
+
+it("reads Continue your correction while the lead holds one", () => {
+  vi.spyOn(api, "startLeadCorrection");
+  const held = rejectedRow("case-0101", "de", { correcting: true });
+  const props = renderResolve({ row: { ...held, next_step: stepOf("resolve_rejected", { document_id: "case-0101-de" }) } });
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  expect(within(box).queryByRole("button", { name: "Correct the translation…" })).toBeNull();
+  fireEvent.click(within(box).getByRole("button", { name: "Continue your correction" }));
+  expect(props.onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 41 });
+  expect(api.startLeadCorrection).not.toHaveBeenCalled();
 });
 
 it("discards with a required reason and shows consequences", async () => {

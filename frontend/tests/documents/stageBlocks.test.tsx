@@ -1,11 +1,12 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { DocumentRowView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { ExpandedRow } from "../../src/documents/ExpandedRow";
 import { StageBlocks, type StageBlocksProps } from "../../src/documents/StageBlocks";
 import type { RowSubmissionsState } from "../../src/documents/useRowSubmissions";
-import { final, item, planRow, recordedVersion, stepOf, submission, submissions, work } from "./fixtures";
+import { LeadCorrectionContext } from "../../src/documents/LeadCorrectionPanel";
+import { final, item, planRow, recordedVersion, rejectedRow, stepOf, submission, submissions, work } from "./fixtures";
 
 afterEach(cleanup);
 
@@ -166,4 +167,43 @@ it("renders translationSlot inside the Translation review block", () => {
   const annotationOnly = planRow("case-0101", "en", stepOf("assign_annotation", { stage: "annotation" }), { is_source: true });
   renderBlocks(annotationOnly, { translationSlot: <p>Slot content</p> });
   expect(screen.queryByText("Slot content")).toBeNull();
+});
+
+it("offers Correct the translation yourself… only for resolve_rejected and resolve_queried", async () => {
+  const onNavigate = vi.fn();
+  const renderHosted = (target: DocumentRowView, props: Partial<StageBlocksProps> = {}) =>
+    render(<LeadCorrectionContext.Provider value={{ projectKey: "p", onNavigate }}><StageBlocks row={target} now={now} {...props} /></LeadCorrectionContext.Provider>);
+  const correct = () => within(block("Translation review")).queryByRole("button", { name: "Correct the translation yourself…" });
+
+  for (const decision of ["rejected", "query"] as const) {
+    renderHosted(rejectedRow("case-0101", "de", { decision }));
+    expect(correct()).not.toBeNull();
+    cleanup();
+  }
+  // Other steps, no lead host (not the lead's Documents page), or the Resolve options already in the block.
+  renderHosted(planRow("case-0101", "de", stepOf("assign_translation_review", { document_id: "case-0101-de" })));
+  expect(correct()).toBeNull();
+  cleanup();
+  renderBlocks(rejectedRow("case-0101", "de"));
+  expect(correct()).toBeNull();
+  cleanup();
+  renderHosted(rejectedRow("case-0101", "de"), { translationSlot: <p>Resolve options</p> });
+  expect(correct()).toBeNull();
+  cleanup();
+
+  // The panel opens inside the block; Cancel returns to the link.
+  renderHosted(rejectedRow("case-0101", "de", { version: 2 }));
+  fireEvent.click(correct()!);
+  const panel = within(block("Translation review")).getByRole("group", { name: "Correct the translation, case-0101 · de" });
+  expect(within(panel).getByText(/You review v2 yourself/)).toBeTruthy();
+  fireEvent.click(within(panel).getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("group", { name: "Correct the translation, case-0101 · de" })).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(correct()));
+  cleanup();
+
+  // While the lead holds the correction: "Continue your correction" opens the task.
+  renderHosted(rejectedRow("case-0101", "de", { correcting: true }));
+  expect(correct()).toBeNull();
+  fireEvent.click(within(block("Translation review")).getByRole("button", { name: "Continue your correction" }));
+  expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 41 });
 });

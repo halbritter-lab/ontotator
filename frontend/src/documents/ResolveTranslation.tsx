@@ -1,14 +1,17 @@
 /**
  * Lead options for a translation that blocks the plan, shown under the Documents row.
- * - `resolve` (rule 4, D5): exactly "Assign a new review…", "Correct the translation…" and
+ * - `resolve` (rule 4, D5): exactly "Assign a new review…", "Correct the translation…" (the lead's own
+ *   correction, F1; "Continue your correction" while the lead holds one) and
  *   "Discard the {language} translation…" (reason required, consequences confirmed inline).
  * - `not_accepted` (rule 4a, D24): "Turn Review on" or the external-review acceptance with a reason.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type ConsequencesView, type DocumentRowView } from "../api/client";
 import { textLabel } from "../app/identity";
+import type { Route } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea } from "../ui";
+import { correctionDocumentId, LeadCorrectionPanel, openLeadCorrection } from "./LeadCorrectionPanel";
 import { stepLabel } from "./nextStepLabels";
 import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, PLAN_CHANGED_MESSAGE, WITHDRAW_CHECKBOX } from "./PlanChips";
 
@@ -20,8 +23,8 @@ export interface ResolveTranslationProps {
   revision: number;
   /** "Assign a new review…": the assign dialog for a translation review of this row. */
   onAssignReview: () => void;
-  /** "Correct the translation…": the existing correction flow. */
-  onCorrect: () => void;
+  /** Opens the lead's correction task (`{ name: "task", assignmentId }`) or the profile (`{ name: "me" }`). */
+  onNavigate: (route: Route) => void;
   /** Saved: the announcement and the case's new plan revision. */
   onDone: (message: string, saved: { caseId: string; revision: number }) => void;
   /** The plan changed elsewhere (409 `WORK_PLAN_CHANGED`): a case's current revision; the page refetches. */
@@ -50,11 +53,6 @@ function ChangedMessage(): JSX.Element {
   return <InlineMessage tone="info">{PLAN_CHANGED_MESSAGE}</InlineMessage>;
 }
 
-/** The version the options act on: the step's version, else the newest version of the row. */
-function targetDocument(row: DocumentRowView): string {
-  return row.next_step?.document_id ?? row.versions.find(entry => entry.is_newest_in_chain)?.document_id ?? row.open.document_id;
-}
-
 export function ResolveTranslation(props: ResolveTranslationProps): JSX.Element {
   return props.mode === "resolve" ? <ResolveOptions {...props} /> : <NotAcceptedOptions {...props} />;
 }
@@ -66,12 +64,14 @@ function useHeadingFocus() {
 }
 
 function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
-  const { row, projectKey, onAssignReview, onCorrect, onDone, onAnnounce, onCancel } = props;
+  const { row, projectKey, onAssignReview, onNavigate, onDone, onAnnounce, onCancel } = props;
   const id = useId();
   const heading = useHeadingFocus();
   const discardButton = useRef<HTMLButtonElement>(null);
+  const correctButton = useRef<HTMLButtonElement>(null);
   const [discarding, setDiscarding] = useState(false);
-  const [backToOptions, setBackToOptions] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
+  const [backToOptions, setBackToOptions] = useState<"discard" | "correct" | null>(null);
   const [reason, setReason] = useState("");
   const [consequences, setConsequences] = useState<ConsequencesView | null>(null);
   const [understood, setUnderstood] = useState(false);
@@ -81,12 +81,14 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
   const title = `${stepLabel(row.next_step?.code ?? "resolve_rejected")}, ${textLabel(row)}`;
   const discardLabel = `Discard the ${row.language} translation`;
 
-  // Cancel in the discard step returns to the three options with focus on "Discard…".
+  const own = openLeadCorrection(row);
+
+  // Cancel in the discard or correction step returns to the three options with focus on its option.
   useEffect(() => {
-    if (!backToOptions || discarding) return;
-    setBackToOptions(false);
-    discardButton.current?.focus();
-  }, [backToOptions, discarding]);
+    if (!backToOptions || discarding || correcting) return;
+    setBackToOptions(null);
+    (backToOptions === "discard" ? discardButton : correctButton).current?.focus();
+  }, [backToOptions, discarding, correcting]);
 
   const discard = async () => {
     if (busy || !reason.trim()) return;
@@ -94,7 +96,7 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
     setBusy(true); setError(undefined); setChanged(false);
     onAnnounce("Saving…");
     try {
-      const result = await api.discardVariant(projectKey, targetDocument(row), { reason: reason.trim(), confirm });
+      const result = await api.discardVariant(projectKey, correctionDocumentId(row), { reason: reason.trim(), confirm });
       onDone(`The ${row.language} translation of ${row.case_id} was discarded.`, { caseId: result.case_id, revision: result.revision });
     } catch (failure: unknown) {
       onAnnounce("");
@@ -107,7 +109,7 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
   };
   const backFromDiscard = () => {
     setDiscarding(false); setConsequences(null); setUnderstood(false); setError(undefined); setChanged(false);
-    setBackToOptions(true);
+    setBackToOptions("discard");
   };
 
   if (discarding) {
@@ -129,11 +131,17 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
       </InlineConfirm>
     </div>;
   }
+  if (correcting) {
+    return <LeadCorrectionPanel row={row} projectKey={projectKey} onNavigate={onNavigate}
+      onCancel={() => { setCorrecting(false); setBackToOptions("correct"); }} />;
+  }
   return <div className="documents-resolve" role="group" aria-labelledby={`${id}-title`}>
     <h4 id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{title}</h4>
     <div className="documents-resolve-actions">
       <Button size="sm" onClick={onAssignReview}>Assign a new review…</Button>
-      <Button size="sm" onClick={onCorrect}>Correct the translation…</Button>
+      {own
+        ? <Button ref={correctButton} size="sm" onClick={() => onNavigate({ name: "task", assignmentId: own.assignment_id })}>Continue your correction</Button>
+        : <Button ref={correctButton} size="sm" onClick={() => setCorrecting(true)}>Correct the translation…</Button>}
       <Button ref={discardButton} size="sm" onClick={() => setDiscarding(true)}>{discardLabel}…</Button>
       <Button size="sm" variant="quiet" onClick={onCancel}>Cancel</Button>
     </div>

@@ -537,3 +537,24 @@ export type RecordedVersion = DocumentVersionView & VersionRecords;
 export function recordedVersion(overrides: Partial<RecordedVersion> & Pick<RecordedVersion, "document_id">): RecordedVersion {
   return version(overrides) as RecordedVersion;
 }
+
+// ---- Lead correction (F1b) ----
+
+/**
+ * A row whose newest version `{caseId}-{language}` (v`version`) was rejected or queried; with
+ * `correcting`, the lead's own open translation review of it (assignment 41) is listed.
+ */
+export function rejectedRow(caseId: string, language: string, options: { decision?: "rejected" | "query"; version?: number; correcting?: boolean } = {}): DocumentRowView {
+  const decision = options.decision ?? "rejected";
+  const documentId = `${caseId}-${language}`;
+  const versionNumber = options.version ?? 1;
+  const correcting = options.correcting ?? false;
+  const next = correcting
+    ? stepOf("translation_review_in_progress", { document_id: documentId })
+    : stepOf(decision === "rejected" ? "resolve_rejected" : "resolve_queried", { document_id: documentId });
+  return planRow(caseId, language, next, {
+    versions: [version({ document_id: documentId, version: versionNumber, chain_name: "DeepL", origin: "machine_translation", translation_status: "reviewed", latest_review_decision: decision })],
+    work: correcting ? [work({ assignment_id: 41, document_id: documentId, version: versionNumber, task: "translation_review", status: "in_progress", is_me: true, author_label: "lead-0002" })] : [],
+    own_open_assignment_id: correcting ? 41 : null,
+  });
+}
