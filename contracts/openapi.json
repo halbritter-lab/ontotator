@@ -4026,6 +4026,267 @@
         }
       }
     },
+    "/api/v1/projects/{key}/guidelines": {
+      "get": {
+        "tags": [
+          "guidelines"
+        ],
+        "summary": "List Guidelines",
+        "operationId": "list_guidelines_api_v1_projects__key__guidelines_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuidelineListing"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "guidelines"
+        ],
+        "summary": "Publish Guideline",
+        "operationId": "publish_guideline_api_v1_projects__key__guidelines_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_publish_guideline_api_v1_projects__key__guidelines_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuidelineSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/guidelines/{version}": {
+      "get": {
+        "tags": [
+          "guidelines"
+        ],
+        "summary": "Get Guideline",
+        "operationId": "get_guideline_api_v1_projects__key__guidelines__version__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuidelineDocument"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The cached version is still valid."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/guidelines/{version}/withdraw": {
+      "post": {
+        "tags": [
+          "guidelines"
+        ],
+        "summary": "Withdraw Guideline",
+        "operationId": "withdraw_guideline_api_v1_projects__key__guidelines__version__withdraw_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuidelineWithdrawRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuidelineSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/guidelines/{version}/reads": {
+      "post": {
+        "tags": [
+          "guidelines"
+        ],
+        "summary": "Record Guideline Read",
+        "operationId": "record_guideline_read_api_v1_projects__key__guidelines__version__reads_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuidelineReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/progress": {
       "get": {
         "tags": [
@@ -6774,6 +7035,35 @@
         ],
         "title": "Assignment"
       },
+      "AssignmentGuidelineView": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "text"
+            ],
+            "title": "Kind"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "kind",
+          "created_at"
+        ],
+        "title": "AssignmentGuidelineView",
+        "description": "The guideline version in force in the task's project."
+      },
       "AssignmentOpenRequest": {
         "properties": {
           "review_round_target_set_id": {
@@ -7037,6 +7327,26 @@
             "type": "boolean",
             "title": "Lead Correction",
             "default": false
+          },
+          "guideline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssignmentGuidelineView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "guideline_notice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GuidelineNoticeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -7520,6 +7830,31 @@
           "files[]"
         ],
         "title": "Body_create_upload_api_v1_projects__key__uploads_post"
+      },
+      "Body_publish_guideline_api_v1_projects__key__guidelines_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "change_note": {
+            "type": "string",
+            "title": "Change Note",
+            "default": ""
+          },
+          "expected_latest_version": {
+            "type": "string",
+            "pattern": "^[0-9]{0,9}$",
+            "title": "Expected Latest Version",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_publish_guideline_api_v1_projects__key__guidelines_post"
       },
       "Body_upload_ontologies_api_v1_admin_ontologies__post": {
         "properties": {
@@ -10171,6 +10506,459 @@
           "destination"
         ],
         "title": "FinalWarning"
+      },
+      "GuidelineDocument": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "text"
+            ],
+            "title": "Kind"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "change_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/PersonRefView"
+          },
+          "withdrawn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GuidelineWithdrawalView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GuidelineReachView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "not_seen": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/GuidelineNotSeenView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Seen"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "kind",
+          "filename",
+          "size_bytes",
+          "sha256",
+          "change_note",
+          "created_at",
+          "created_by",
+          "body"
+        ],
+        "title": "GuidelineDocument"
+      },
+      "GuidelineListing": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GuidelineSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/GuidelineSummary"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "my_latest_seen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Latest Seen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current",
+          "latest_version",
+          "versions",
+          "my_latest_seen"
+        ],
+        "title": "GuidelineListing"
+      },
+      "GuidelineNotSeenView": {
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/PersonRefView"
+          },
+          "notified": {
+            "type": "boolean",
+            "title": "Notified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "person",
+          "notified"
+        ],
+        "title": "GuidelineNotSeenView"
+      },
+      "GuidelineNoticeChangeView": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "change_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "withdrawn": {
+            "type": "boolean",
+            "title": "Withdrawn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "change_note",
+          "created_at",
+          "withdrawn"
+        ],
+        "title": "GuidelineNoticeChangeView"
+      },
+      "GuidelineNoticeView": {
+        "properties": {
+          "from_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Version"
+          },
+          "to_version": {
+            "type": "integer",
+            "title": "To Version"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/GuidelineNoticeChangeView"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "more": {
+            "type": "integer",
+            "title": "More"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_version",
+          "to_version",
+          "changes",
+          "more"
+        ],
+        "title": "GuidelineNoticeView",
+        "description": "Versions newer than the owner last saw, newest first (at most five)."
+      },
+      "GuidelineReachView": {
+        "properties": {
+          "notified": {
+            "type": "integer",
+            "title": "Notified"
+          },
+          "opened": {
+            "type": "integer",
+            "title": "Opened"
+          },
+          "members": {
+            "type": "integer",
+            "title": "Members"
+          }
+        },
+        "type": "object",
+        "required": [
+          "notified",
+          "opened",
+          "members"
+        ],
+        "title": "GuidelineReachView",
+        "description": "Task members (annotator or adjudicator role) notified of / opening a version."
+      },
+      "GuidelineReadRequest": {
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "notified",
+              "opened"
+            ],
+            "title": "Event"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event"
+        ],
+        "title": "GuidelineReadRequest"
+      },
+      "GuidelineSummary": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "text"
+            ],
+            "title": "Kind"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "change_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/PersonRefView"
+          },
+          "withdrawn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GuidelineWithdrawalView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GuidelineReachView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "not_seen": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/GuidelineNotSeenView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Seen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "kind",
+          "filename",
+          "size_bytes",
+          "sha256",
+          "change_note",
+          "created_at",
+          "created_by"
+        ],
+        "title": "GuidelineSummary",
+        "description": "One version; ``reach`` and ``not_seen`` only for leads and admins."
+      },
+      "GuidelineWithdrawRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "expected_latest_version": {
+            "type": "integer",
+            "title": "Expected Latest Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_latest_version"
+        ],
+        "title": "GuidelineWithdrawRequest"
+      },
+      "GuidelineWithdrawalView": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "by": {
+            "$ref": "#/components/schemas/PersonRefView"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "by",
+          "reason"
+        ],
+        "title": "GuidelineWithdrawalView"
       },
       "HTTPValidationError": {
         "properties": {
@@ -13315,28 +14103,6 @@
             "type": "array",
             "title": "Languages"
           },
-          "guideline_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Guideline Url"
-          },
-          "guideline_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Guideline Version"
-          },
           "allow_spanless_findings": {
             "type": "boolean",
             "title": "Allow Spanless Findings",
@@ -13476,28 +14242,6 @@
             },
             "type": "array",
             "title": "Languages"
-          },
-          "guideline_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Guideline Url"
-          },
-          "guideline_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Guideline Version"
           },
           "allow_spanless_findings": {
             "type": "boolean",

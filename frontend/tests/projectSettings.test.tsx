@@ -80,7 +80,7 @@ describe("project creation", () => {
 });
 
 describe("settings section addresses", () => {
-  const labels = ["General", "Guideline", "Annotation rules", "Workflow", "Creation defaults", "Ontology and profile", "Members"];
+  const labels = ["General", "Guidelines", "Annotation rules", "Workflow", "Creation defaults", "Ontology and profile", "Members"];
 
   it("shows only General at the default address with a nav of links", async () => {
     render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
@@ -92,7 +92,7 @@ describe("settings section addresses", () => {
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
     expect(screen.getByRole("form", { name: "General" })).toBeDefined();
     expect(screen.queryByRole("form", { name: "Rules" })).toBeNull();
-    expect(screen.queryByRole("form", { name: "Guideline" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Guidelines" })).toBeNull();
   });
 
   it("shows the section of its address", async () => {
@@ -155,15 +155,15 @@ describe("settings section addresses", () => {
 
   it("discards the section's edits when leaving with Discard", async () => {
     const routeLeaveRef = { current: null } as MutableRefObject<RouteLeaveGuard | null>;
-    renderSettings("guideline", { routeLeaveRef });
-    fireEvent.change(await screen.findByLabelText("Guideline URL"), { target: { value: "https://example.test/guide" } });
+    renderSettings("general", { routeLeaveRef });
+    fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: "Edited" } });
     await waitFor(() => expect(routeLeaveRef.current).not.toBeNull());
     let leaving: Promise<boolean> | undefined;
     act(() => { leaving = routeLeaveRef.current!(); });
-    const dialog = await screen.findByRole("dialog", { name: "Unsaved changes in Guideline" });
+    const dialog = await screen.findByRole("dialog", { name: "Unsaved changes in General" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Discard" }));
     await expect(leaving!).resolves.toBe(true);
-    expect((screen.getByLabelText("Guideline URL") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText(/^Name/) as HTMLInputElement).value).toBe("Research");
     expect(api.updateProjectSettings).not.toHaveBeenCalled();
   });
 
@@ -216,22 +216,22 @@ describe("project settings sections", () => {
   it("saves only one section and preserves another section's unsaved draft", async () => {
     const view = renderSettings();
     fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: "New name" } });
-    view.show("guideline");
-    fireEvent.change(screen.getByLabelText("Guideline URL"), { target: { value: "https://example.test/guide" } });
+    view.show("rules");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Every axis must be chosen before submission" }));
     view.show("general");
     fireEvent.click(screen.getByRole("button", { name: "Save general" }));
     await screen.findByText("General saved.");
     expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { name: "New name", description: "Original", languages: ["de"] });
-    view.show("guideline");
-    expect((screen.getByLabelText("Guideline URL") as HTMLInputElement).value).toBe("https://example.test/guide");
+    view.show("rules");
+    expect(screen.getByRole("checkbox", { name: "Every axis must be chosen before submission" })).toHaveProperty("checked", true);
   });
 
   it("preserves null clearing and false rule values in section-only PATCH bodies", async () => {
-    const view = renderSettings("guideline");
-    await screen.findByLabelText("Guideline URL");
-    fireEvent.click(screen.getByRole("button", { name: "Save guideline" }));
-    expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { guideline_url: null, guideline_version: null });
-    await screen.findByText("Guideline saved.");
+    const view = renderSettings("general");
+    fireEvent.change(await screen.findByLabelText("Description"), { target: { value: " " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save general" }));
+    expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { name: "Research", description: null, languages: ["de"] });
+    await screen.findByText("General saved.");
     view.show("rules");
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
     await screen.findByText("Rules saved.");
@@ -281,15 +281,15 @@ describe("project settings sections", () => {
     expect(screen.getByRole("button", { name: "Save general" })).toBeDefined();
   });
 
-  it("shows guideline server refusal without losing edited values", async () => {
-    vi.mocked(api.updateProjectSettings).mockRejectedValue(new ApiError(422, "Both required", "GUIDELINE_INCOMPLETE"));
-    renderSettings("guideline");
-    fireEvent.change(await screen.findByLabelText("Guideline URL"), { target: { value: "https://example.test/guide" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save guideline" }));
+  it("shows a server refusal without losing edited values", async () => {
+    vi.mocked(api.updateProjectSettings).mockRejectedValue(new ApiError(422, "Invalid", "SETTINGS_INVALID"));
+    renderSettings("general");
+    fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: "Edited" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save general" }));
     expect(await screen.findByRole("alert")).toBeDefined();
-    expect((screen.getByLabelText("Guideline URL") as HTMLInputElement).value).toBe("https://example.test/guide");
-    expect(within(screen.getByRole("form", { name: "Guideline" })).getByRole("status").textContent).toContain("Unsaved changes");
-    expect(screen.queryByText("Guideline saved.")).toBeNull();
+    expect((screen.getByLabelText(/^Name/) as HTMLInputElement).value).toBe("Edited");
+    expect(within(screen.getByRole("form", { name: "General" })).getByRole("status").textContent).toContain("Unsaved changes");
+    expect(screen.queryByText("General saved.")).toBeNull();
   });
 
   it("ignores stale project loads and discards responses after unmount", async () => {

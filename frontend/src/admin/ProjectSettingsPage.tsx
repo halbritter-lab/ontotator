@@ -36,26 +36,24 @@ export function ProjectSettingsPage(props: ProjectSettingsPageProps): JSX.Elemen
   </section>;
 }
 
-type Section = "General" | "Guideline" | "Rules" | "Workflow" | "Pins" | "Profile" | "Creation defaults";
+type Section = "General" | "Rules" | "Workflow" | "Pins" | "Profile" | "Creation defaults";
 const SECTION_LABELS: Record<SettingsSection, string> = {
-  general: "General", guideline: "Guideline", rules: "Annotation rules", workflow: "Workflow",
+  general: "General", guideline: "Guidelines", rules: "Annotation rules", workflow: "Workflow",
   defaults: "Creation defaults", profile: "Ontology and profile", members: "Members",
 };
 /** The saveable parts behind each address; Members saves its own rows directly. */
 const SECTION_PARTS: Record<SettingsSection, readonly Section[]> = {
-  general: ["General"], guideline: ["Guideline"], rules: ["Rules"], workflow: ["Workflow"],
+  general: ["General"], guideline: [], rules: ["Rules"], workflow: ["Workflow"],
   defaults: ["Creation defaults"], profile: ["Pins", "Profile"], members: [],
 };
 const settingsRoute = (key: string, section: SettingsSection): Route =>
   section === "general" ? { name: "projectSettings", key } : { name: "projectSettings", key, section };
 const generalOf = (settings: ProjectSettings) => ({ name: settings.name, description: settings.description ?? "", languages: settings.languages ?? [] });
-const guidelineOf = (settings: ProjectSettings) => ({ url: settings.guideline_url ?? "", version: settings.guideline_version ?? "" });
 const rulesOf = (settings: ProjectSettings) => ({ allow_spanless_findings: settings.allow_spanless_findings ?? true, require_spanless_note: settings.require_spanless_note ?? true, require_chosen_axes: settings.require_chosen_axes, adjudicator_not_annotator: settings.adjudicator_not_annotator, contiguous_mentions_only: settings.contiguous_mentions_only, annotate_accepted_translations_only: settings.annotate_accepted_translations_only, hidden_axis_values: settings.hidden_axis_values ?? {} });
 
 function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved, section = "general", onNavigate, routeLeaveRef }: ProjectSettingsPageProps & { initial: ProjectSettings; ontologies: OntologyInfo[] }): JSX.Element {
   const [model, setModel] = useState(initial);
   const [general, setGeneral] = useState(() => generalOf(initial));
-  const [guideline, setGuideline] = useState(() => guidelineOf(initial));
   const [rules, setRules] = useState(() => rulesOf(initial));
   const [workflow, setWorkflow] = useState(() => workflowOf(initial));
   const [creationDefaults, setCreationDefaults] = useState(initial.creation_defaults ?? {});
@@ -90,7 +88,6 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
       // Adopt only this section's returned values. Other sections may contain
       // unsaved edits and must not be reset by an unrelated section's save.
       if (part === "General") setGeneral(generalOf(response));
-      if (part === "Guideline") setGuideline(guidelineOf(response));
       if (part === "Rules") setRules(rulesOf(response));
       if (part === "Workflow") setWorkflow(workflowOf(response));
       if (part === "Creation defaults") setCreationDefaults(response.creation_defaults ?? {});
@@ -104,7 +101,6 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   const ids = model.profile.ontologies.map(item => item.ontology_id);
   const work: Record<Section, () => Promise<ProjectSettings>> = {
     General: () => api.updateProjectSettings(projectKey, { name: general.name, description: general.description.trim() ? general.description : null, languages: general.languages }),
-    Guideline: () => api.updateProjectSettings(projectKey, { guideline_url: guideline.url.trim() || null, guideline_version: guideline.version.trim() || null }),
     Rules: () => api.updateProjectSettings(projectKey, rules),
     Workflow: () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text }),
     "Creation defaults": () => api.updateProjectSettings(projectKey, { creation_defaults: creationDefaults }),
@@ -117,7 +113,6 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   };
   const dirty: Record<Section, boolean> = {
     General: JSON.stringify(general) !== JSON.stringify(generalOf(model)),
-    Guideline: JSON.stringify(guideline) !== JSON.stringify(guidelineOf(model)),
     Rules: JSON.stringify(rules) !== JSON.stringify(rulesOf(model)),
     Workflow: JSON.stringify(workflow) !== JSON.stringify(workflowOf(model)),
     Pins: !model.locked && JSON.stringify(pins) !== JSON.stringify(draftPins(model.pins)),
@@ -150,7 +145,6 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   const discard = (parts: readonly Section[]) => {
     for (const part of parts) {
       if (part === "General") setGeneral(generalOf(model));
-      if (part === "Guideline") setGuideline(guidelineOf(model));
       if (part === "Rules") setRules(rulesOf(model));
       if (part === "Workflow") setWorkflow(workflowOf(model));
       if (part === "Creation defaults") setCreationDefaults(model.creation_defaults ?? {});
@@ -189,13 +183,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
         <Button type="submit" loading={busy === "General"}>Save general</Button>
       </fieldset>{feedback("General")}
     </form>; break;
-    case "guideline": content = <form ref={bindSection} tabIndex={-1} aria-label="Guideline" onSubmit={event => submit(event, "Guideline")}>
-      <fieldset disabled={busy !== null}><legend>Guideline</legend>
-        <TextInput id="project-guideline-url" label="Guideline URL" type="url" value={guideline.url} hint="Exported with every annotation set as url@version." onChange={event => { setGuideline({ ...guideline, url: event.target.value }); setSaved(null); }} />
-        <TextInput id="project-guideline-version" label="Guideline version" value={guideline.version} onChange={event => { setGuideline({ ...guideline, version: event.target.value }); setSaved(null); }} />
-        <Button type="submit" loading={busy === "Guideline"}>Save guideline</Button>
-      </fieldset>{feedback("Guideline")}
-    </form>; break;
+    case "guideline": content = <section ref={bindSection} tabIndex={-1} aria-label="Guidelines"><h2>Guidelines</h2></section>; break;
     case "rules": content = <form ref={bindSection} tabIndex={-1} aria-label="Rules" onSubmit={event => submit(event, "Rules")}>
       <fieldset disabled={busy !== null}><legend>Rules</legend>
         <div className="settings-section-actions" role="group" aria-label="Rules save state">

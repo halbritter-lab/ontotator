@@ -32,3 +32,14 @@ it("explains the pending reanchor count and unsupported flagged re-import", () =
   expect(errorMessage(new ApiError(422, "raw", "REANCHOR_ITEMS_UNRESOLVED", { count: 3 }))).toBe("3 finding(s) after text correction still need review. Re-create them or dismiss them with a reason before submitting.");
   expect(errorMessage(new ApiError(422, "raw", "UNSUPPORTED_REVIEW_RESOLUTION"))).toContain("cannot currently be re-imported into proposal storage");
 });
+
+it("names the version and the refused field in guideline refusals", () => {
+  expect(errorMessage(new ApiError(409, "raw", "GUIDELINE_UNCHANGED", { version: 2 }))).toBe("This file is identical to v2. Nothing was published.");
+  expect(errorMessage(new ApiError(409, "raw", "GUIDELINE_ALREADY_WITHDRAWN", { version: 4 }))).toBe("v4 is already withdrawn.");
+  expect(errorMessage(new ApiError(422, "raw", "GUIDELINE_NOTE_INVALID", { field: "change_note" }))).toBe("The change note must be one line of at most 280 characters.");
+  expect(errorMessage(new ApiError(422, "raw", "GUIDELINE_NOTE_INVALID", { field: "reason" }))).toBe("The reason must be one line of at most 280 characters.");
+  expect(errorMessage(new ApiError(413, "raw", "GUIDELINE_TOO_LARGE", { max_bytes: 262144 }))).toBe("The file is larger than 256 KB.");
+  expect(errorMessage(new ApiError(422, "raw", "GUIDELINE_FILE_TYPE", { filename: "a.pdf" }))).toBe("Upload a .md or .txt file.");
+  expect(errorMessage(new ApiError(409, "raw", "GUIDELINE_UNCHANGED", { version: "x" }))).toBe(ERROR_MESSAGES.GUIDELINE_UNCHANGED);
+  expect(Object.hasOwn(ERROR_MESSAGES, "GUIDELINE_INCOMPLETE")).toBe(false);
+});

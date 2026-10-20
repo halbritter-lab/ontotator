@@ -187,6 +187,12 @@ export type AdminUserPatch = Partial<components["schemas"]["PatchUserRequest"]>;
 export type TaskProfile = components["schemas"]["TaskProfile"];
 export type TemplateInfo = components["schemas"]["TemplateInfo"];
 export type ProjectSettingsPatch = Partial<components["schemas"]["ProjectSettingsChange"]>;
+export type GuidelineSummary = components["schemas"]["GuidelineSummary"];
+export type GuidelineListing = components["schemas"]["GuidelineListing"];
+export type GuidelineDocument = components["schemas"]["GuidelineDocument"];
+export type GuidelineNotice = components["schemas"]["GuidelineNoticeView"];
+export type GuidelinePublishInput = { file: File; changeNote: string; expectedLatestVersion: number | null };
+export type GuidelineWithdrawBody = { reason: string | null; expected_latest_version: number };
 export type CreateProjectRequest = components["schemas"]["CreateProjectRequest"];
 export type ProjectPin = components["schemas"]["ProjectPin"];
 export type Member = components["schemas"]["Member"];
@@ -337,6 +343,18 @@ export class ApiClient {
   async updateProjectProfile(key: string, profile: TaskProfile): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/profile`, { method: "PUT", body: JSON.stringify(profile) }); }
   async listMembers(key: string): Promise<Member[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members`, { method: "GET" }); }
   async setMemberRoles(key: string, username: string, roles: string[], revoke = false): Promise<Member> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members/${encodeURIComponent(username)}`, { method: "PUT", body: JSON.stringify({ roles, revoke_assignments: revoke }) }); }
+  async listGuidelines(key: string): Promise<GuidelineListing> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/guidelines`, { method: "GET" }); }
+  async getGuideline(key: string, version: number): Promise<GuidelineDocument> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/guidelines/${version}`, { method: "GET" }); }
+  async publishGuideline(key: string, input: GuidelinePublishInput): Promise<GuidelineSummary> {
+    const body = new FormData();
+    body.append("file", input.file);
+    body.append("change_note", input.changeNote);
+    // An empty value means "no version exists yet" (first upload).
+    body.append("expected_latest_version", input.expectedLatestVersion === null ? "" : String(input.expectedLatestVersion));
+    return this.request(`/api/v1/projects/${encodeURIComponent(key)}/guidelines`, { method: "POST", body });
+  }
+  async withdrawGuideline(key: string, version: number, body: GuidelineWithdrawBody): Promise<GuidelineSummary> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/guidelines/${version}/withdraw`, { method: "POST", body: JSON.stringify(body) }); }
+  async recordGuidelineRead(key: string, version: number, event: "notified" | "opened"): Promise<void> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/guidelines/${version}/reads`, { method: "POST", body: JSON.stringify({ event }) }); }
   async listProjectDocuments(key: string, filters: ProjectDocumentFilters = {}): Promise<ProjectDocumentSummary[]> {
     const query = new URLSearchParams();
     for (const [name, value] of Object.entries(filters)) if (value) query.set(name, value);

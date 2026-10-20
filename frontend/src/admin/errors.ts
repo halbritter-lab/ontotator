@@ -89,7 +89,15 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   DUPLICATE_TEXT: "The upload contains conflicting copies of the same document.",
   EXPORT_UNRESOLVED_INVALID: "A historical unresolved finding is invalid. No export was created. Reopen the affected review assignment, replace or reject the finding, submit the corrected review, then create the export again.",
   EXPORT_EMPTY: "There are no submitted results to export.",
-  GUIDELINE_INCOMPLETE: "Provide both the guideline reference and its version.",
+  GUIDELINE_FILE_TYPE: "Upload a .md or .txt file.",
+  GUIDELINE_TOO_LARGE: "The file is larger than 256 KB.",
+  GUIDELINE_ENCODING: "The file is not UTF-8 text.",
+  GUIDELINE_EMPTY: "The file is empty.",
+  GUIDELINE_UNCHANGED: "This file is identical to the current version. Nothing was published.",
+  GUIDELINE_NOTE_INVALID: "The change note must be one line of at most 280 characters.",
+  GUIDELINE_VERSION_CONFLICT: "Someone published or withdrew a version meanwhile. Review the list and try again.",
+  GUIDELINE_ALREADY_WITHDRAWN: "This version is already withdrawn.",
+  GUIDELINE_NOT_FOUND: "This guideline version does not exist.",
   HOST_NOT_ALLOWED: "This server address is not allowed. Use the configured application address.",
   IDENTITY_MISMATCH: "You can only work under your own pseudonym.",
   INCOMPLETE_AXES: "Choose all required axis values before submitting.",
@@ -192,6 +200,8 @@ export function errorMessage(error: unknown): string {
     const count = error.details.count;
     if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) return `${count} finding(s) after text correction still need review. Re-create them or dismiss them with a reason before submitting.`;
   }
+  const guideline = guidelineMessage(error);
+  if (guideline) return guideline;
   // ORCID's checksum/format explanation is already specific and user-facing.
   if (error instanceof ApiError && error.code === "ORCID_INVALID" && error.message.trim()) return error.message;
   if (error instanceof ApiError && error.code && Object.hasOwn(ERROR_MESSAGES, error.code)) {
@@ -200,4 +210,15 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error && error.message
     ? error.message
     : "Something went wrong. Please try again.";
+}
+
+/** Guideline refusals that name a version (`v{n}`) or the refused field. */
+function guidelineMessage(error: unknown): string | null {
+  if (!(error instanceof ApiError) || typeof error.details !== "object" || error.details === null) return null;
+  const version = error.details.version;
+  const named = typeof version === "number" && Number.isSafeInteger(version) && version > 0;
+  if (error.code === "GUIDELINE_UNCHANGED" && named) return `This file is identical to v${version}. Nothing was published.`;
+  if (error.code === "GUIDELINE_ALREADY_WITHDRAWN" && named) return `v${version} is already withdrawn.`;
+  if (error.code === "GUIDELINE_NOTE_INVALID" && error.details.field === "reason") return "The reason must be one line of at most 280 characters.";
+  return null;
 }

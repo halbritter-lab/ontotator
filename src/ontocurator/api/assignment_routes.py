@@ -16,6 +16,7 @@ from ontocurator.api.routes import (
     get_access,
     open_workspace,
 )
+from ontocurator.application.guidelines import guideline_briefs, guideline_notice
 from ontocurator.application.workspace_opening import WorkspaceOpeningService
 from ontocurator.assignments.confirmations import (
     ConfirmationRow,
@@ -32,7 +33,8 @@ from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Action, Task, can
 from ontocurator.authz.visibility import qualifying_assignment
 from ontocurator.domain.errors import AccessDenied, DomainError
-from ontocurator.storage.tables import AssignmentRow, UserRow
+from ontocurator.domain.guidelines import Notice
+from ontocurator.storage.tables import AssignmentRow, ProjectRow, UserRow
 from ontocurator.storage.workflow_tables import (
     ProblemReportRow,
     TaskHoldRow,
@@ -48,6 +50,47 @@ class ActiveHoldView(BaseModel):
     reason: str
     created_at: datetime
     own_report_id: str | None
+
+
+class AssignmentGuidelineView(BaseModel):
+    """The guideline version in force in the task's project."""
+
+    version: int
+    kind: Literal["markdown", "text"]
+    created_at: datetime
+
+
+class GuidelineNoticeChangeView(BaseModel):
+    version: int
+    change_note: str | None
+    created_at: datetime
+    withdrawn: bool
+
+
+class GuidelineNoticeView(BaseModel):
+    """Versions newer than the owner last saw, newest first (at most five)."""
+
+    from_version: int | None
+    to_version: int
+    changes: list[GuidelineNoticeChangeView]
+    more: int
+
+    @classmethod
+    def of(cls, notice: Notice) -> "GuidelineNoticeView":
+        return cls(
+            from_version=notice.from_version,
+            to_version=notice.to_version,
+            changes=[
+                GuidelineNoticeChangeView(
+                    version=change.version,
+                    change_note=change.change_note,
+                    created_at=change.created_at,
+                    withdrawn=change.withdrawn,
+                )
+                for change in notice.changes
+            ],
+            more=notice.more,
+        )
 
 
 class AssignmentView(BaseModel):
@@ -73,6 +116,9 @@ class AssignmentView(BaseModel):
     active_holds: list[ActiveHoldView] = Field(default_factory=list)
     # FD1: the lead's own translation review of a rejected or queried version.
     lead_correction: bool = False
+    # The version in force; the notice only on the owner's editable rows (G27).
+    guideline: AssignmentGuidelineView | None = None
+    guideline_notice: GuidelineNoticeView | None = None
 
 
 class AssignmentOpenRequest(BaseModel):
@@ -187,7 +233,12 @@ def _service(request: Request) -> AssignmentService:
 def _views(
     request: Request, assignments: list[Assignment], owner_id: int | None = None
 ) -> list[AssignmentView]:
-    """Assignment views; ``owner_id`` adds active pauses to that user's own rows."""
+    """Assignment views; ``owner_id`` adds active pauses to that user's own rows.
+
+    The guideline version is read once per call for all projects, the notice
+    once per project for the owner's unsubmitted rows (holds and read-only
+    rounds are filtered by the client).
+    """
     if not assignments:
         return []
     owned = (
@@ -204,6 +255,28 @@ def _views(
                 )
             ).all()
         )
+        project_ids: dict[str, int] = dict(
+            conn.execute(
+                select(ProjectRow.project_key, ProjectRow.id).where(
+                    ProjectRow.project_key.in_({row.project_key for row in assignments})
+                )
+            ).all()
+        )
+        briefs = guideline_briefs(conn, set(project_ids.values()))
+        notices: dict[str, GuidelineNoticeView | None] = {}
+        for key in sorted(
+            {
+                row.project_key
+                for row in assignments
+                if row.id in owned and row.status != "submitted"
+            }
+        ):
+            notice = (
+                guideline_notice(conn, project_id=project_ids[key], user_id=owner_id)
+                if owner_id is not None
+                else None
+            )
+            notices[key] = GuidelineNoticeView.of(notice) if notice else None
         if owned:
             rows = conn.execute(
                 select(
@@ -232,11 +305,24 @@ def _views(
                         own_report_id=report_id if reporter_id == owner_id else None,
                     )
                 )
+
+    def guideline(key: str) -> AssignmentGuidelineView | None:
+        brief = briefs.get(project_ids[key])
+        if brief is None:
+            return None
+        return AssignmentGuidelineView.model_validate(asdict(brief))
+
     return [
         AssignmentView(
             **asdict(row),
             display_name=names[row.user_id],
             active_holds=holds.get(row.id, []),
+            guideline=guideline(row.project_key),
+            guideline_notice=(
+                notices.get(row.project_key)
+                if row.id in owned and row.status != "submitted"
+                else None
+            ),
         )
         for row in assignments
     ]
