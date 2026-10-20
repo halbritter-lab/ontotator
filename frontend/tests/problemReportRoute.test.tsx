@@ -2,13 +2,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, expect, it, vi } from 'vitest';
 import { api, type DocumentRowsPage, type ProblemReportView, type ProjectSummary } from '../src/api/client';
 import { App } from '../src/App';
-import { routeHref } from '../src/app/router';
+import { routeHref, type Route } from '../src/app/router';
 import { deferred } from './projectFixtures';
 import { testUser } from './session';
 import { hold, report as reportFixture } from './problems/fixtures';
+import { group, page, row } from './documents/fixtures';
 
-vi.mock('../src/tasks/ProblemReportDetail', () => ({ ProblemReportDetail: (props: { projectKey: string; reportId: string; canManage: boolean; action?: string; documents?: object }) =>
-  <section aria-label="Authorized report detail" data-route={JSON.stringify({ action: props.action, documents: props.documents })}>{props.projectKey} · {props.reportId} · {String(props.canManage)}</section> }));
+vi.mock('../src/tasks/ProblemReportDetail', () => ({ ProblemReportDetail: (props: { projectKey: string; reportId: string; canManage: boolean; action?: string; section?: string; documents?: object }) =>
+  <section aria-label="Authorized report detail" data-route={JSON.stringify({ action: props.action, section: props.section, documents: props.documents })}>{props.projectKey} · {props.reportId} · {String(props.canManage)}</section> }));
 const { ProblemReportDetail } = await vi.importActual<typeof import('../src/tasks/ProblemReportDetail')>('../src/tasks/ProblemReportDetail');
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.sessionStorage.clear(); window.history.replaceState(null, '', '#/'); });
 const project: ProjectSummary = { project_key: 'p/key', name: 'Project', can_manage: true, document_count: 1, description: null, roles: ['lead'], allowed_modes: ['independent'] };
@@ -41,6 +42,14 @@ it('passes the documents query and the resume action from the route to the repor
   render(<App user={testUser('lead')} />);
   const detail = await screen.findByRole('region', { name: 'Authorized report detail' });
   expect(JSON.parse(detail.getAttribute('data-route') ?? '{}')).toEqual({ action: 'resume', documents: { decision: 'all', open: ['case 7:en'] } });
+});
+
+it('passes section=decide from the route to the report detail', async () => {
+  window.history.replaceState(null, '', '#/projects/p%2Fkey/problem-reports/report-1?section=decide&documents_segment=decision');
+  vi.spyOn(api, 'listProjects').mockResolvedValue([project]);
+  render(<App user={testUser('lead')} />);
+  const detail = await screen.findByRole('region', { name: 'Authorized report detail' });
+  expect(JSON.parse(detail.getAttribute('data-route') ?? '{}')).toEqual({ section: 'decide', documents: { segment: 'decision' } });
 });
 
 const ownHold = (over = {}) => hold({ assignment_id: 1, owner_label: 'Reporter', case_id: 'case 7', language: 'en', ...over });
@@ -146,4 +155,57 @@ it('records no decision without the documents query, for other actions, or when 
   confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
   await screen.findByText('Could not save. Nothing changed.');
   expect(decided()).toEqual([]);
+});
+
+it('opens at Decide with its heading focused when section=decide', async () => {
+  mockReport();
+  const scroll = vi.fn(); const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = scroll;
+  try {
+    render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage section="decide" documents={documents} onNavigate={vi.fn()} />);
+    const heading = await screen.findByRole('heading', { level: 2, name: 'Decide' });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    expect(scroll).toHaveBeenCalled();
+  } finally { Element.prototype.scrollIntoView = original; }
+});
+
+it('keeps focus where it is without section=decide', async () => {
+  mockReport();
+  render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage documents={documents} onNavigate={vi.fn()} />);
+  const heading = await screen.findByRole('heading', { level: 2, name: 'Decide' });
+  expect(document.activeElement).not.toBe(heading);
+});
+
+it('after a decision offers Back to Documents and Next decision under a segment filter', async () => {
+  const segment = { segment: 'decision', open: ['case 7:en'] };
+  mockReport();
+  const rows = vi.mocked(api.listDocumentRows).mockImplementation(async (_key, filters = {}) => filters.segment === 'decision'
+    ? page([group('case 7', [row({ case_id: 'case 7', language: 'en' })]), group('case-0101', [row({ case_id: 'case-0101', language: 'en', retained: true })]),
+      group('case-0102', [row({ case_id: 'case-0102', language: 'de' })])])
+    : page([]));
+  vi.spyOn(api, 'actOnProblemReport').mockResolvedValue({ ...report, revision: 3, state: 'resolved' });
+  const navigate = vi.fn();
+  render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage section="decide" documents={segment} onNavigate={navigate} />);
+  await loaded();
+  expect(screen.queryByRole('link', { name: /Next decision/ })).toBeNull();
+  confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
+  const outcome = (await screen.findByText(/Report closed/)).closest('.lead-outcome') as HTMLElement;
+  expect(within(outcome).getByRole('link', { name: 'Back to Documents' }).getAttribute('href')).toBe(routeHref({ name: 'projectDocuments', key: 'p/key', ...segment }));
+  const next = await within(outcome).findByRole('link', { name: 'Next decision: case-0102 · de' });
+  const expected: Route = { name: 'projectDocuments', key: 'p/key', segment: 'decision', open: ['case 7:en', 'case-0102:de'] };
+  expect(next.getAttribute('href')).toBe(routeHref(expected));
+  expect(rows).toHaveBeenCalledWith('p/key', expect.objectContaining({ segment: 'decision' }));
+  expect(within(outcome).queryAllByRole('button')).toEqual([]);
+  fireEvent.click(next);
+  expect(navigate).toHaveBeenCalledWith(expected);
+});
+
+it('offers no Next decision without a segment filter', async () => {
+  mockReport(); vi.spyOn(api, 'actOnProblemReport').mockResolvedValue({ ...report, revision: 3, state: 'resolved' });
+  render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage documents={{ language: 'en', open: ['case 7:en'] }} onNavigate={vi.fn()} />);
+  await loaded();
+  confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
+  await screen.findByText(/Report closed/);
+  expect(api.listDocumentRows).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('link', { name: /Next decision/ })).toBeNull();
 });

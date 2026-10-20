@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
-import { api, ApiError, type FinalSelectionSummary, type ProblemReportView } from "../api/client";
+import { api, ApiError, type DocumentRowView, type FinalSelectionSummary, type ProblemReportView } from "../api/client";
+import { rowsQuery } from "../admin/DocumentsPage";
+import { textLabel } from "../app/identity";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Time } from "../app/Time";
 import { ErrorNotice } from "../admin/ErrorNotice";
@@ -17,12 +19,25 @@ const TASK_TYPES = { annotate: "Annotation", review: "Review", translation_revie
 /** Actions that settle the row the lead came from (Documents shows it as decided). */
 const DECIDING: readonly Intent[] = ["close", "release", "restart"];
 
+/** The next row under the Documents segment (or decision) filter the lead came from, same rule as on Documents. */
+async function nextDecision(projectKey: string, documents: ProjectDocumentsQuery, currentKey: string): Promise<DocumentRowView | null> {
+  const request = rowsQuery(documents);
+  if (!request.segment && !request.decision) return null;
+  const page = await api.listDocumentRows(projectKey, request);
+  const rows = page.groups.flatMap(group => group.rows).filter(row => `${row.case_id}:${row.language}` !== currentKey);
+  return (request.segment
+    ? rows.find(row => row.in_plan && row.matches_decision && !row.retained)
+    : rows.find(row => row.matches_decision && row.categories.length > 0)) ?? null;
+}
+
 const isNotFound = (failure: unknown) => failure instanceof ApiError && (failure.code === "REPORT_NOT_FOUND" || failure.status === 404);
 
-export function ProblemReportDetail({ projectKey, reportId, canManage, action: routeAction, documents, onNavigate }: {
+export function ProblemReportDetail({ projectKey, reportId, canManage, action: routeAction, section, documents, onNavigate }: {
   projectKey: string; reportId: string; canManage: boolean;
   /** `resume` opens "Release pause" with the paused task preselected; nothing is sent until the lead confirms. */
   action?: "resume";
+  /** `decide` (from "Decide on report…") scrolls to the Decide section and focuses its heading once loaded. */
+  section?: "decide";
   /** Documents query the lead came from; the back link returns to exactly this view. */
   documents?: ProjectDocumentsQuery;
   onNavigate: (route: Route) => void;
@@ -36,6 +51,10 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
   const [focusTrigger, setFocusTrigger] = useState<{ intent: Intent; n: number } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
+  const [next, setNext] = useState<DocumentRowView | null>(null);
+  const decideHeading = useRef<HTMLHeadingElement>(null);
+  const sectionDone = useRef(false);
+  const nextSeq = useRef(0);
   const requests = useRef(new Map<string, string>());
   const successRef = useRef<HTMLDivElement>(null);
   const routeResumeDone = useRef(false);
@@ -62,6 +81,15 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
   }, [report, routeAction]);
 
   useEffect(() => { if (success) successRef.current?.focus(); }, [success]);
+
+  // `section=decide` from Documents: land on "Decide" once the report is shown.
+  const shown = report !== null;
+  useEffect(() => {
+    if (!shown || section !== "decide" || sectionDone.current) return;
+    sectionDone.current = true;
+    decideHeading.current?.scrollIntoView?.({ block: "start" });
+    decideHeading.current?.focus();
+  }, [shown, section]);
 
   const back: Route = documents ? { name: "projectDocuments", key: projectKey, ...documents }
     : report ? { name: "projectDocuments", key: projectKey, case: report.case_id, language: report.language }
@@ -90,6 +118,7 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
   const openIntent = (intent: Intent) => {
     setSuccess(null);
     setPreselect(intent === "release" ? releasePreselection(report, false) : []);
+    setNext(null); nextSeq.current++;
     setOpen(intent);
   };
   const close = () => {
@@ -101,8 +130,15 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
     lead.replace(after);
     setOpen(null);
     setSuccess(leadOutcome(intent, before, after, released));
+    setNext(null);
+    const seq = ++nextSeq.current;
     // Lets Documents show the row the lead came from as decided.
-    if (documents && DECIDING.includes(intent)) recordDecision(projectKey, `${before.case_id}:${before.language}`);
+    if (documents && DECIDING.includes(intent)) {
+      const key = `${before.case_id}:${before.language}`;
+      recordDecision(projectKey, key);
+      // Under a segment filter: a link to the next row that needs the lead (links only, nothing opens on its own).
+      nextDecision(projectKey, documents, key).then(row => { if (seq === nextSeq.current) setNext(row); }, () => undefined);
+    }
   };
 
   const viewText: Route = {
@@ -129,10 +165,12 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
     </section>
 
     <section aria-labelledby={decideId}>
-      <h2 id={decideId}>Decide</h2>
+      <h2 id={decideId} ref={decideHeading} tabIndex={-1}>Decide</h2>
       {success && <div ref={successRef} tabIndex={-1} className="lead-outcome">
         <InlineMessage tone="success">{success}</InlineMessage>
         {link(back, "Back to Documents")}
+        {next && documents && <> {link({ name: "projectDocuments", key: projectKey, ...documents,
+          open: [...new Set([...(documents.open ?? []), `${next.case_id}:${next.language}`])] }, `Next decision: ${textLabel(next)}`)}</>}
       </div>}
       <LeadDecide report={report} open={open} focusTrigger={focusTrigger}
         onOpen={openIntent}
