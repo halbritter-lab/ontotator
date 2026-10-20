@@ -35,7 +35,8 @@ it("declares_inline_confirm_rules", () => {
 });
 
 it("uses_only_defined_tokens", () => {
-  const defined = new Set([...tokens.matchAll(/(--[\w-]+)\s*:/g)].map(match => match[1]));
+  // Tokens, plus custom properties a component declares itself (for example --toast-offset).
+  const defined = new Set([...tokens.matchAll(/(--[\w-]+)\s*:/g), ...css.matchAll(/(--[\w-]+)\s*:/g)].map(match => match[1]));
   const used = [...css.matchAll(/var\((--[\w-]+)/g)].map(match => match[1]);
   expect(used.filter(name => !defined.has(name))).toEqual([]);
 });
@@ -74,4 +75,31 @@ it("imports_the_lead_workflow_screen_stylesheets", () => {
     expect(index).toContain(`@import "./screens/${name}.css";`);
     expect(read(`../../src/styles/screens/${name}.css`)).toBeTypeOf("string");
   }
+});
+
+it("gives_selection_checkboxes_a_24px_target_with_a_smaller_visual_box", () => {
+  const rule = css.match(/\.checkbox-target \{([^}]*)\}/)?.[1] ?? "";
+  expect(rule).toMatch(/width: 24px/);
+  expect(rule).toMatch(/height: 24px/);
+  expect(rule).toMatch(/appearance: none/);
+  expect(rule).toMatch(/18px 18px/);
+  expect(css).toMatch(/\.checkbox-target:checked \{/);
+  expect(css).toMatch(/\.checkbox-target:focus-visible \{/);
+  const forced = [...css.matchAll(/@media \(forced-colors: active\) \{([\s\S]*?)\n\}/g)].map(match => match[1]).join("\n");
+  expect(forced).toMatch(/\.checkbox-target \{[^}]*appearance: auto/);
+  expect(css).not.toMatch(/\.data-table-group-select \{[^}]*width: 16px/);
+});
+
+it("lifts_the_toast_by_the_measured_offset_of_a_bottom_bar_or_dialog_footer", () => {
+  expect(css).toMatch(/\.ui-toast-region \{[^}]*bottom: calc\(var\(--space-5\) \+ var\(--toast-offset, 0px\)\)/);
+  expect(css).toMatch(/@media \(max-width: 699px\) \{\s*\.ui-toast-region \{ bottom: calc\(var\(--space-3\) \+ var\(--toast-offset, 0px\)\); \}/);
+});
+
+it("stacks_the_plan_table_below_700px_without_mid_word_breaks", () => {
+  const plan = read("../../src/styles/screens/work-plan.css");
+  const narrow = plan.match(/@media \(max-width: 700px\) \{([\s\S]*?)\n\}/)?.[1] ?? "";
+  expect(narrow).toMatch(/\.work-plan-table thead \{[^}]*clip-path: inset\(50%\)/);
+  expect(narrow).toMatch(/\.work-plan-table tr \{[^}]*display: grid/);
+  expect(narrow).toMatch(/\.work-plan-table td::before \{[^}]*content: attr\(data-label\)/);
+  expect(plan).toMatch(/\.work-plan-table th,\s*\.work-plan-table td \{[^}]*overflow-wrap: normal/);
 });

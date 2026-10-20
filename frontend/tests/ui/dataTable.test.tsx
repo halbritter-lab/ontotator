@@ -94,6 +94,7 @@ describe("group_selection", () => {
     expect(box("g2").checked).toBe(true);
     expect(box("g1").closest("th")?.getAttribute("scope")).toBe("rowgroup");
     expect(box("g1").className).toContain("data-table-group-select");
+    expect(box("g1").className).toContain("checkbox-target");
   });
   it("group_selection_reports_toggle_range_and_keep_anchor_modes", () => {
     const onSelect = renderTable();

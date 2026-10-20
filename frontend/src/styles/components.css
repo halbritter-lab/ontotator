@@ -854,10 +854,12 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .ui-tristate[data-state="mixed"] { background: repeating-linear-gradient(45deg, var(--surface-raised), var(--surface-raised) 4px, var(--surface-sunken) 4px, var(--surface-sunken) 8px); }
 .ui-tristate[data-state="on"] { background: var(--success-light); border-color: var(--success); color: var(--success); }
 .ui-tristate[data-state="off"] { background: var(--danger-light); border-color: var(--danger); color: var(--danger); }
+/* --toast-offset: height of a bottom-sticky bar or dialog footer at the viewport bottom (measured by Toast). */
 .ui-toast-region {
+  --toast-offset: 0px;
   position: fixed;
   inset-inline: 0;
-  bottom: var(--space-5);
+  bottom: calc(var(--space-5) + var(--toast-offset, 0px));
   z-index: 900;
   display: flex;
   justify-content: center;
@@ -886,16 +888,29 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .ui-toast .btn:hover { background: var(--text-muted); color: var(--on-accent); }
 .ui-toast .btn:focus-visible { outline: var(--focus-width) solid var(--accent-light); outline-offset: var(--focus-offset); }
 .ui-toast-action { text-decoration: underline; }
-.data-table-group-select {
-  width: 16px;
-  height: 16px;
-  margin: 4px var(--space-2) 4px 0;
+/* Selection checkbox: a 24 x 24 px target around an 18 px box (case checkboxes, "Select all"). */
+.checkbox-target {
+  appearance: none;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border: 0;
+  background:
+    linear-gradient(var(--surface-raised), var(--surface-raised)) center / 15px 15px no-repeat,
+    linear-gradient(var(--border-strong), var(--border-strong)) center / 18px 18px no-repeat;
   vertical-align: middle;
-  accent-color: var(--accent);
   cursor: pointer;
 }
+.checkbox-target:checked {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23ffffff' stroke-width='2'/%3E%3C/svg%3E") center / 14px 14px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) center / 18px 18px no-repeat;
+}
+.checkbox-target:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: 0; }
+.data-table-group-select { margin: 0 var(--space-1) 0 0; }
 @media (max-width: 699px) {
-  .ui-toast-region { bottom: var(--space-3); }
+  .ui-toast-region { bottom: calc(var(--space-3) + var(--toast-offset, 0px)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .ui-toast { animation: none; }
@@ -907,4 +922,5 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
   .ui-tristate:focus-visible,
   .ui-toast .btn:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
   .ui-toast { border: 1px solid CanvasText; }
+  .checkbox-target { appearance: auto; }
 }

@@ -222,6 +222,7 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
         latest.current.showToast({
           message: `${request.language} of ${request.caseId}: ${flagName(request.flag)} ${request.value ? "on" : "off"}`,
           actionLabel: "Undo",
+          undo: true,
           onAction: () => undo(key, result.undo, false),
           ...(result.withdrawn.length ? { note: UNDO_WITHDRAWN_NOTE } : {}),
         });

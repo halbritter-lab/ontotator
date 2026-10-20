@@ -55,6 +55,13 @@ describe("PlanDialog", () => {
     expect(api.previewWorkPlans).toHaveBeenCalledWith("p", { case_ids: caseIds, languages: {} });
   });
 
+  it("labels each cell with its column for the stacked narrow layout", async () => {
+    renderDialog();
+    const table = await screen.findByRole("table");
+    const labels = within(table).getAllByRole("row").slice(1).map(row => Array.from(row.querySelectorAll("td")).map(item => item.getAttribute("data-label")));
+    expect(labels.every(row => row.join("|") === "In selection|Review|Annotate")).toBe(true);
+  });
+
   it("cycles cells and shows mixed with its title", async () => {
     renderDialog();
     const review = await cell("Review, de, keep");

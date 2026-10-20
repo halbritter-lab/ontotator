@@ -83,11 +83,10 @@ async function uploadPreview(page: Page, s: LeadScenario): Promise<Locator> {
   return dialog;
 }
 
-/** Wait for the import to finish and close the upload dialog (the dialog stays open with the result). */
+/** Wait for the import to finish: the upload dialog closes itself and Documents reports the result. */
 async function finishImport(page: Page, dialog: Locator, documents: number) {
-  await expect(dialog.getByText(`Imported ${documents} documents and 0 proposals.`, { exact: true })).toBeVisible({ timeout: 90_000 });
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(dialog).toHaveCount(0);
+  await expect(dialog).toHaveCount(0, { timeout: 90_000 });
+  await expect(toast(page).locator(".ui-toast-message")).toHaveText(`Imported ${documents} documents and 0 proposals.`);
 }
 
 /** Select by case IDs…, paste the list, Select {n}: 2 activations. */
@@ -272,8 +271,8 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   const s = await leadScenario(page, "ROWS");
   await loginLead(page, s);
 
-  // Review off on a fr row with Review only (case-0111…0120): 1 click, Undo toast.
-  const caseId = "case-0111";
+  // Review off on a fr row with Review only (the fixture's "chip" case): 1 click, Undo toast.
+  const caseId = s.cases!.chip;
   const review = () => chip(page, "Review", caseId, "fr");
   const collapsed = page.getByRole("button", { name: `Show en, de, fr not in plan, ${caseId}`, exact: true });
   await expect(review()).toHaveAttribute("aria-pressed", "true");
@@ -300,8 +299,8 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   await expect(review()).toHaveAttribute("aria-pressed", "true");
   await expect(box).not.toBeChecked();
 
-  // Review off on a review + annotate row with the rule on (the fixture's "chip" case) needs the acceptance instead.
-  const both = s.cases!.chip;
+  // Review off on a review + annotate row with the rule on (the fixture's "acceptance" case) needs the acceptance instead.
+  const both = s.cases!.acceptance;
   await chip(page, "Review", both, "fr").click();
   const offer = page.getByRole("group", { name: "Annotate without review" });
   await expect(offer.getByText("This translation was reviewed outside Ontocurator — accept it as it is", { exact: true })).toBeVisible();

@@ -1,11 +1,12 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Toast, useToast } from "../../src/ui/Toast";
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 function Host({ onUndo }: { onUndo: () => void }) {
   const { toast, show, dismiss } = useToast();
-  return <><button onClick={() => show({ message: "fr of case-0101: Review off", actionLabel: "Undo", onAction: onUndo })}>first</button>
+  return <><button onClick={() => show({ message: "fr of case-0101: Review off", actionLabel: "Undo", onAction: onUndo, undo: true })}>first</button>
     <button onClick={() => show({ message: "Plan saved for 20 cases" })}>second</button><input aria-label="field" />
     <input type="checkbox" aria-label="Select case-0101 (3 languages)" />
     <Toast toast={toast} onDismiss={dismiss} /></>;
@@ -60,4 +61,79 @@ it("closes from its close button and after 10 s without hover", () => {
   expect(screen.getByRole("status").textContent).toContain("Plan saved");
   act(() => { vi.advanceTimersByTime(1); });
   expect(screen.getByRole("status").textContent).toBe("");
+});
+it("runs only Undo actions on Ctrl+Z; another action keeps a non-undo icon", () => {
+  const onSelect = vi.fn();
+  function Other() {
+    const { toast, show, dismiss } = useToast();
+    return <><button onClick={() => show({ message: "Assigned 3 cases", actionLabel: "Select the 2 skipped cases", onAction: onSelect })}>assign</button>
+      <Toast toast={toast} onDismiss={dismiss} /></>;
+  }
+  render(<Other />);
+  fireEvent.click(screen.getByText("assign"));
+  fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+  fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+  expect(onSelect).not.toHaveBeenCalled();
+  const action = screen.getByRole("button", { name: "Select the 2 skipped cases" });
+  expect(action.querySelector(".ui-toast-undo-icon")).toBeNull();
+  expect(action.querySelector("svg")).not.toBeNull();
+  fireEvent.click(action);
+  expect(onSelect).toHaveBeenCalledTimes(1);
+});
+it("shows the undo icon on an Undo action", () => {
+  render(<Host onUndo={() => undefined} />);
+  fireEvent.click(screen.getByText("first"));
+  expect(screen.getByRole("button", { name: "Undo" }).querySelector(".ui-toast-undo-icon")).not.toBeNull();
+});
+it("sits above a bottom-sticky selection bar and above a dialog footer at the bottom of the viewport", () => {
+  const height = window.innerHeight;
+  const rect = (top: number, bottom: number) => ({ top, bottom, left: 0, right: 390, width: 390, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  function Page({ obstacle }: { obstacle: "bar" | "footer" | "middle" }) {
+    const { toast, show, dismiss } = useToast();
+    return <>
+      {obstacle === "bar" && <div className="selection-bar selection-bar--bottom" data-testid="obstacle" />}
+      {obstacle === "middle" && <div className="selection-bar selection-bar--bottom" data-testid="obstacle" />}
+      {obstacle === "footer" && <div className="ui-dialog"><div className="modal-actions" data-testid="obstacle" /></div>}
+      <button onClick={() => show({ message: "Saved" })}>show</button>
+      <Toast toast={toast} onDismiss={dismiss} />
+    </>;
+  }
+  const offsetFor = (obstacle: "bar" | "footer" | "middle", top: number, bottom: number) => {
+    const view = render(<Page obstacle={obstacle} />);
+    vi.spyOn(screen.getByTestId("obstacle"), "getBoundingClientRect").mockReturnValue(rect(top, bottom));
+    fireEvent.click(screen.getByText("show"));
+    const value = screen.getByRole("status").style.getPropertyValue("--toast-offset");
+    view.unmount();
+    return value;
+  };
+  expect(offsetFor("bar", height - 120, height)).toBe("120px");
+  expect(offsetFor("footer", height - 76, height - 16)).toBe("76px");
+  // A bar still in the page flow, far above the bottom edge, does not move the toast.
+  expect(offsetFor("middle", 100, 220)).toBe("0px");
+});
+it("moves above a dialog footer that opens while the toast is visible", async () => {
+  const height = window.innerHeight;
+  function Page() {
+    const { toast, show, dismiss } = useToast();
+    const [open, setOpen] = useState(false);
+    return <>
+      {open && <div className="ui-dialog"><div className="modal-actions" data-testid="footer" /></div>}
+      <button onClick={() => show({ message: "Saved" })}>show</button>
+      <button onClick={() => setOpen(true)}>open</button>
+      <Toast toast={toast} onDismiss={dismiss} />
+    </>;
+  }
+  const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const top = this.dataset.testid === "footer" ? height - 76 : 0;
+    const bottom = this.dataset.testid === "footer" ? height - 16 : 0;
+    return { top, bottom, left: 0, right: 0, width: 0, height: bottom - top, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+  });
+  render(<Page />);
+  fireEvent.click(screen.getByText("show"));
+  expect(screen.getByRole("status").style.getPropertyValue("--toast-offset")).toBe("0px");
+  fireEvent.click(screen.getByText("open"));
+  // The DOM change is observed in a microtask; the measurement runs in the next animation frame.
+  await act(async () => { await Promise.resolve(); vi.advanceTimersByTime(50); });
+  expect(screen.getByRole("status").style.getPropertyValue("--toast-offset")).toBe("76px");
+  spy.mockRestore();
 });

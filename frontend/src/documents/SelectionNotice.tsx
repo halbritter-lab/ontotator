@@ -13,6 +13,7 @@ export const ACKNOWLEDGEABLE_CODES: ReadonlySet<string> = new Set([
   "SELECTED_RESULT_REVISED",
   "SELECTED_TEXT_CORRECTED",
   "SELECTED_NEWER_RESULT",
+  "PLAN_RESTORED",
 ]);
 
 /** Reason shown when the project keeps adjudication separate and the final result is the lead's own. */
@@ -100,6 +101,8 @@ function causeSegments(row: DocumentRowView, data: RowSubmissions | null, item: 
         hint: accepted ? `Keep ${finalName}, or choose a result on ${name} once one exists (assign work in Text versions).` : undefined,
       };
     }
+    case "PLAN_RESTORED":
+      return { segments: ["This language version returned to the plan. Confirm its earlier final result."] };
     default:
       return null;
   }

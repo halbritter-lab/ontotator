@@ -51,6 +51,7 @@ it("commits the exact persisted hash and reports actual final job counts", async
   await screen.findByText("Imported 3 documents and 4 proposals.");
   expect(api.commitUpload).toHaveBeenCalledWith("p", 7, "real-plan");
   expect(imported).toHaveBeenCalledOnce();
+  expect(imported).toHaveBeenCalledWith("Imported 3 documents and 4 proposals.");
 });
 it.each(["immediate", "job"])("retains original files for Check again after %s UPLOAD_STALE", async (kind) => {
   render(<UploadPanel projectKey="p" languages={["en"]} onImported={vi.fn()} />); const file = await check();

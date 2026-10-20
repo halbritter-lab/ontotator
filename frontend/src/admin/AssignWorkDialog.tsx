@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { api, ApiError, type BatchAssignRequest, type BatchPersonView, type BatchPreview, type DocumentRowFilters, type DocumentRowView } from "../api/client";
 import { personLabel, textLabel } from "../app/identity";
+import { plural } from "../app/labels";
 import { Button, Dialog, Select } from "../ui";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
@@ -181,7 +182,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     inputs.current.get(target)?.focus();
   };
 
-  const title = props.mode === "cases" ? `Assign · ${props.caseIds.length} cases`
+  const title = props.mode === "cases" ? `Assign · ${plural(props.caseIds.length, "case")}`
     : props.newReviewOfAccepted && task === "translation_review" ? "Assign a new review" : `Assign ${(task ? stepName(task) : "task").toLowerCase()}`;
 
   const summaryLines: string[] = [];
