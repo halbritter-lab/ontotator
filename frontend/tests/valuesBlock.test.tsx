@@ -42,6 +42,17 @@ describe("Values block", () => {
     expect(section.querySelector('[data-axis-field="experiencer"] legend')!.textContent).not.toContain("(required)");
   });
 
+  it("shows human labels for the family member and unknown subject options", () => {
+    const config = axesConfig.map(axis => axis.id === "experiencer"
+      ? { ...axis, options: ["patient", "family_member", "other", "unknown"] } : axis);
+    const { container } = render(<AnnotationPanel {...props({ axesConfig: config })} />);
+    const field = within(container.querySelector<HTMLElement>('[data-axis-field="experiencer"]')!);
+    expect(field.getByRole("option", { name: "Family member" })).toBeDefined();
+    expect(field.getByRole("option", { name: "Unknown" })).toBeDefined();
+    expect(field.queryByText("family_member")).toBeNull();
+    expect(field.queryByText("unknown")).toBeNull();
+  });
+
   it("marks unconfirmed defaults with a dashed option and the word default", () => {
     const { container } = render(<AnnotationPanel {...props({}, ["assertion", "experiencer"])} />);
     const present = screen.getByRole("radio", { name: "Present · default" }) as HTMLInputElement;

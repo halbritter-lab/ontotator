@@ -222,9 +222,9 @@ Choose `AppShell density="reading"` for editor, document and comparison views; c
 
 The shell provides a skip link to `#main`, header/breadcrumb, user/logout and optional navigation. Reading main surfaces preserve the editor's independent scrolling; compact surfaces scroll their main content. In compact density `AppShell` wraps the page in `.shell-page`: one left-aligned column capped at `--page-max-width` (1100px) with `space-6` padding, in which raw `h1`/`h2`/`h3`, `fieldset`/`legend`, `dl`, lists and native fields take the type ramp, and `.form-control`/`.form-select` stop at `--field-max-width` while tables stay full width; pages add no padding of their own. Below 900 px the compact sidebar becomes a wrapping navigation band above the content; the reading shell keeps its "Sections" disclosure. The shell stacks below 700 px. Existing editor layouts adapt at 1279, 1024 and 700 px; use those incumbent transitions rather than making document content unreadably narrow.
 
-### Known deviations
+### Marking-mode line
 
-- **Marking-mode line moves the text.** While adding a mention or a segment, the editor shows one line above the text (`attach-mention-banner` / `pane-intent` in `editor/TextPane.tsx`). It sits in normal flow in the `center-pane` flex column (`styles/screens/editor.css`), so the text moves down when it appears and back up when it closes. This is not the intended behaviour: no text may move (spec C.5); the line should overlay or occupy reserved space. Open until fixed.
+While adding a mention or a segment, the editor shows one line above the text (`attach-mention-banner` / `pane-intent` in `editor/TextPane.tsx`). The text never moves (spec C.5): the line is positioned absolutely over the top of the text sheet (`center-pane` is the positioning context, `styles/screens/editor.css`) instead of taking space in the flow. It is one 32 px line (24 px button plus `space-1` padding top and bottom, a 1 px `--border` shadow line below, `z-index: 2`), which fits the sheet's top padding (`space-6`, also at <=1024 px), so the first line of text stays visible. In the grid layouts (versions, comparison) its grid area is the empty row above the text.
 
 ## Elevation & Depth
 

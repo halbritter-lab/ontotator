@@ -890,6 +890,32 @@ describe("CaseScreen integration", () => {
       expect(search).not.toHaveBeenCalled();
     });
 
+    it("prefills a German document once its search languages arrive after the text was marked", async () => {
+      let resolveOntologies!: (value: any) => void;
+      let resolvePreferences!: (value: any) => void;
+      vi.spyOn(api, "listPackageOntologies").mockReturnValue(new Promise(resolve => { resolveOntologies = resolve; }) as any);
+      vi.spyOn(api, "getPreferences").mockReturnValue(new Promise(resolve => { resolvePreferences = resolve; }) as any);
+      const search = vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const view = structuredClone(sampleView); view.document.language = "de";
+      const rendered = render(<CaseScreen view={view} workspaceId="ws-de-late" onClose={vi.fn()} />);
+      markThe(rendered.container);
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      expect(input.value).toBe("");
+      expect(search).not.toHaveBeenCalled();
+      await act(async () => {
+        resolveOntologies([{ ontology_id: "hp", release: "2024-06-25", sha256: "TEST-HP-SHA", term_count: 11,
+          translations: [{ language: "de", filenames: ["hp-de.babelon.tsv"], term_count: 4 }] }]);
+        resolvePreferences({ last_annotator_id: "user-test", mode_by_package: {}, search_languages_by_annotator: { "user-test": ["de"] } });
+      });
+      await waitFor(() => expect(input.value).toBe("The"));
+      expect(document.activeElement).toBe(input);
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe(3);
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ query: "The", languages: ["de"] }));
+      expect(screen.queryByText("Names are searched in English. Type an English name or a code.")).toBeNull();
+    });
+
     it("Esc in the term search cancels the new finding and focuses the text at the selection end", () => {
       vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
       const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-esc" onClose={vi.fn()} />);

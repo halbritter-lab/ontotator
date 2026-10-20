@@ -5,7 +5,7 @@ export function axisOptionLabel(value: unknown): string {
   if (value === null || value === undefined || value === "") return "Not specified";
   const labels: Record<string, string> = {
     present: "Present", absent: "Absent", uncertain: "Uncertain", patient: "Patient",
-    other: "Other person", current: "Current", historical: "Historical", future: "Future",
+    family_member: "Family member", other: "Other person", unknown: "Unknown", current: "Current", historical: "Historical", future: "Future",
   };
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(labels, value) ? labels[value] : String(value);
 }

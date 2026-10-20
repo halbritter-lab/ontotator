@@ -105,6 +105,28 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotationId, workspaceKey, layerId, searchManager]);
 
+  // The prefill may arrive after mount (the search languages load with the task): apply it once
+  // for the same finding while the user has not typed, shown selected like a prefill on mount.
+  const prefillSettled = useRef(!!initialQuery?.trim());
+  const userTyped = useRef(false);
+  const selectPrefill = useRef(false);
+  useEffect(() => {
+    if (prefillSettled.current || userTyped.current || !initialQuery?.trim()) return;
+    const identity = [annotationId, workspaceKey, layerId, searchManager] as const;
+    if (!identity.every((value, index) => Object.is(value, mountIdentity.current[index]))) return;
+    prefillSettled.current = true;
+    selectPrefill.current = true;
+    setQueryInput(initialQuery);
+    runSearch(initialQuery, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
+  useLayoutEffect(() => {
+    if (!selectPrefill.current) return;
+    selectPrefill.current = false;
+    const input = inputRef.current;
+    if (input && document.activeElement === input) input.select();
+  }, [queryInput]);
+
   useLayoutEffect(() => {
     if (!autoFocus) return;
     const input = inputRef.current;
@@ -170,6 +192,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   };
 
   const handleQueryChange = (val: string) => {
+    userTyped.current = true;
     setQueryInput(val);
     runSearch(val);
   };

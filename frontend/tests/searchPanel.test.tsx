@@ -82,6 +82,51 @@ describe("SearchPanel", () => {
     }
   });
 
+  describe("a prefill that arrives after mount (search languages loaded late)", () => {
+    const panel = (manager: SearchManager, initialQuery?: string) => (
+      <SearchPanel searchManager={manager} annotationId="a" workspaceKey={key} layerId="phenotype"
+        onSelectCandidate={vi.fn()} debounceMs={250} autoFocus initialQuery={initialQuery} />
+    );
+
+    it("is applied once: shown selected and searched at once", () => {
+      const searchOntology = vi.fn().mockResolvedValue(threeHits);
+      const manager = new SearchManager({ searchOntology } as any);
+      const { rerender } = render(panel(manager));
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      expect(input.value).toBe("");
+      rerender(panel(manager, "seizure"));
+      expect(input.value).toBe("seizure");
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe(7);
+      expect(searchOntology).toHaveBeenCalledTimes(1);
+      expect(searchOntology.mock.calls[0][0].query).toBe("seizure");
+      rerender(panel(manager, "seizure"));
+      expect(searchOntology).toHaveBeenCalledTimes(1);
+    });
+
+    it("never overwrites what the user typed", () => {
+      const searchOntology = vi.fn().mockResolvedValue(threeHits);
+      const manager = new SearchManager({ searchOntology } as any);
+      const { rerender } = render(panel(manager));
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "fev" } });
+      rerender(panel(manager, "seizure"));
+      expect(input.value).toBe("fev");
+      expect(searchOntology.mock.calls.every(call => call[0].query !== "seizure")).toBe(true);
+    });
+
+    it("is not applied after the user cleared a typed query", () => {
+      const searchOntology = vi.fn().mockResolvedValue(threeHits);
+      const manager = new SearchManager({ searchOntology } as any);
+      const { rerender } = render(panel(manager));
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "f" } });
+      fireEvent.change(input, { target: { value: "" } });
+      rerender(panel(manager, "seizure"));
+      expect(input.value).toBe("");
+    });
+  });
+
   it("moves the active hit with ArrowDown and ArrowUp without wrap and skips obsolete hits", async () => {
     const input = renderPanel(vi.fn().mockResolvedValue(threeHits));
     fireEvent.change(input, { target: { value: "seizure" } });

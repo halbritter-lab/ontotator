@@ -298,13 +298,8 @@ test("Enter before results arrive never adds a stale hit", async ({ page }) => {
 
 test("German text prefills with German names; French text explains the missing languages", async ({ page }) => {
   const s = await startLoop(page);
-  // The search languages (ontologies with translations, the annotator's preference) load with the task.
-  const languagesLoaded = Promise.all([
-    page.waitForResponse(response => /\/api\/v1\/projects\/[^/]+\/ontologies/.test(response.url())),
-    page.waitForResponse(response => new URL(response.url()).pathname === "/api/v1/preferences"),
-  ]);
+  // Marked at once: if the search languages are still loading, the prefill follows when they arrive.
   await openLoop(page, s, "loop-de");
-  await languagesLoaded;
   await markAndWaitForHits(page, s, "loop-de", "Krampfanfall");
   await expect(search(page)).toHaveValue("Krampfanfall");
   await expect(activeHit(page)).toContainText("Seizure");
