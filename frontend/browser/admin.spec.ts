@@ -116,12 +116,19 @@ async function selectProject(page: Page, key: string) {
   await expect(page.locator("#shell-project-panel")).toBeHidden();
 }
 
-/** Disclosure of the Documents row of one text in English ("Show submissions, {text} · en"). */
+/** Disclosure of the Documents row of one text in English ("Show details, {text} · en"). */
 const rowDisclosure = (page: Page, caseId: string) =>
-  page.getByRole("button", { name: `Show submissions, ${caseId} · en`, exact: true });
+  page.getByRole("button", { name: `Show details, ${caseId} · en`, exact: true });
+
+/** Rows not in the work plan sit behind the case's "en not in plan · show" line. */
+async function showNotInPlan(page: Page, caseId: string) {
+  const toggle = page.getByRole("button", { name: `Show en not in plan, ${caseId}`, exact: true });
+  if (await toggle.count()) await toggle.click();
+}
 
 /** Expand the Documents row of a text and open its "Text versions" list (one version per text here). */
 async function openTextVersions(page: Page, caseId: string) {
+  await showNotInPlan(page, caseId);
   const disclosure = rowDisclosure(page, caseId);
   if ((await disclosure.getAttribute("aria-expanded")) !== "true") await disclosure.click();
   const area = page.getByRole("region", { name: `${caseId} · en`, exact: true });
@@ -132,8 +139,8 @@ async function openTextVersions(page: Page, caseId: string) {
 }
 
 async function importTwoDocuments(page: Page) {
-  await page.getByRole("button", { name: "Upload documents", exact: true }).click();
-  const upload = page.getByRole("dialog", { name: "Upload documents", exact: true });
+  await page.getByRole("button", { name: "Upload texts…", exact: true }).click();
+  const upload = page.getByRole("dialog", { name: "Upload texts", exact: true });
   await upload.getByLabel("Format", { exact: true }).selectOption("text");
   await upload.getByLabel(/^Upload language/).selectOption("en");
   await upload.getByLabel(/^Files/).setInputFiles([
@@ -144,14 +151,15 @@ async function importTwoDocuments(page: Page) {
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
   await expect(preview).toContainText("2 documents added");
   await expect(preview).toContainText("1 with normalized text");
-  const rows = page.getByRole("button", { name: /^Show submissions, / });
+  const rows = page.getByRole("button", { name: /^Show details, / });
   await expect(rows).toHaveCount(0);
-  await upload.getByRole("button", { name: "Import", exact: true }).click();
-  await expect(upload.getByText("Imported 2 documents and 0 proposals.", { exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
+  await upload.getByRole("button", { name: "Import 2 texts", exact: true }).click();
+  // The upload dialog closes itself after the import; Documents reports the result.
   await expect(upload).toHaveCount(0);
+  await expect(page.locator(".ui-toast-message")).toHaveText("Imported 2 documents and 0 proposals.");
+  // One row per text and language ("Nothing planned": behind "en not in plan · show"), both collapsed.
+  for (const caseId of ["one", "two"]) await showNotInPlan(page, caseId);
   await expect(rows).toHaveCount(2);
-  // One row per text and language, both collapsed.
   for (const caseId of ["one", "two"]) await expect(rowDisclosure(page, caseId)).toHaveAttribute("aria-expanded", "false");
 }
 
@@ -161,20 +169,30 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await selectProject(page, setup.key);
   await page.getByRole("link", { name: "Documents", exact: true }).click();
   await importTwoDocuments(page);
-  await page.getByRole("table", { name: "Documents", exact: true }).getByRole("checkbox", { name: "Select one · en", exact: true }).check();
-  await page.getByRole("button", { name: "Propose distribution …", exact: true }).click();
+  // Plan annotation for "one" (its row is not in the plan after the import), then assign it
+  // through the row's Assign dialog and its seeded "Random distribution…".
+  const table = page.getByRole("table", { name: "Documents", exact: true });
+  const annotate = table.getByRole("button", { name: "Annotate, one · en", exact: true });
+  if ((await annotate.getAttribute("aria-pressed")) !== "true") await annotate.click();
+  await expect(annotate).toHaveAttribute("aria-pressed", "true");
+  await table.getByRole("button", { name: "Assign annotation…, one · en", exact: true }).click();
+  const assign = page.getByRole("dialog", { name: "Assign annotation", exact: true });
+  await assign.getByRole("button", { name: "Random distribution…", exact: true }).click();
   const distribution = page.getByRole("dialog", { name: "Propose distribution", exact: true });
   await distribution.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(distribution.getByRole("combobox", { name: "one, slot 1", exact: true })).toHaveValue(setup.annotator.username);
   await distribution.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(distribution).toContainText("Assignment request complete: 1 accepted; 0 refused.");
   await distribution.locator(".modal-actions").getByRole("button", { name: "Close", exact: true }).click();
+  await expect(distribution).toHaveCount(0);
+  if (await assign.count()) await assign.getByRole("button", { name: "Cancel", exact: true }).click();
   await logout(page);
   await redeemCode(page, setup.annotator);
   const tasks = page.getByTestId("task-row");
   await expect(tasks).toHaveCount(1);
-  await expect(tasks.getByRole("cell", { name: "one", exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "two", exact: true })).toHaveCount(0);
+  // My tasks names the text as "{case ID} · {language}".
+  await expect(tasks).toContainText("one · en");
+  await expect(page.getByTestId("task-row").filter({ hasText: "two · en" })).toHaveCount(0);
   await tasks.getByRole("link", { name: /^(Start|Continue|View)$/ }).click();
   await selectText(page, 0, 9);
   await page.getByLabel("Search ontology term").fill("Hypotonia");
@@ -200,7 +218,9 @@ test.describe("Administration through real accounts and jobs", () => {
     await logout(page);
     for (const actor of [setup.lead, setup.annotator]) {
       await redeemCode(page, actor);
-      await expect(page.getByRole("heading", { name: "No documents are assigned to you yet." })).toBeVisible();
+      // D7: a lead lands on Documents of the led project; an annotator on My tasks.
+      if (actor === setup.lead) await expect(page.getByRole("heading", { name: "No texts yet", exact: true })).toBeVisible();
+      else await expect(page.getByRole("heading", { name: "No documents are assigned to you yet." })).toBeVisible();
       await expect(page.getByRole("link", { name: "Users", exact: true })).toHaveCount(0);
       await logout(page);
     }
@@ -242,7 +262,9 @@ test.describe("Administration through real accounts and jobs", () => {
     await expect(row).toBeVisible();
     const submittedColumn = (await people.getByRole("columnheader").allTextContents()).indexOf("Submitted");
     expect(submittedColumn).toBeGreaterThanOrEqual(0);
-    await expect(row.getByRole("cell").nth(submittedColumn)).toHaveText("1");
+    // The person is the row header, not a cell: cells start after it.
+    const headers = await row.getByRole("rowheader").count();
+    await expect(row.getByRole("cell").nth(submittedColumn - headers)).toHaveText("1");
     await page.getByRole("link", { name: "Documents", exact: true }).click();
     const document = await openTextVersions(page, "one");
     await document.locator('summary[aria-label^="Actions for "]').click();

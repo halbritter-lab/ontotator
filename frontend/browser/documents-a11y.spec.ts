@@ -57,7 +57,7 @@ async function openScenario(page: Page, name: string, query = "") {
 
 async function openDocuments(page: Page, s: DocumentsScenario, query = "") {
   await page.goto(documentsUrl(s, query));
-  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
 }
 
 /** The Documents query of the current URL as sorted ``name=value`` pairs (order-independent). */
@@ -182,7 +182,7 @@ test("Screen reader semantics: bar heading and aria-current, group and row heade
   const ann = esc(labels["ann-0004"]);
 
   // Bar: h2 and the active segment.
-  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
   await expect(segment(page, "All")).toHaveAttribute("aria-current", "page");
   await expect(segment(page, "Needs your decision (1)")).not.toHaveAttribute("aria-current", /.+/);
   await expect(segment(page, "No final result (1)")).not.toHaveAttribute("aria-current", /.+/);
@@ -391,7 +391,7 @@ test("Back from the report page and from the case viewer restores the Documents 
   await area.getByRole("link", { name: "Open report", exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
   await page.getByRole("link", { name: "Back to Documents" }).first().click();
-  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
   expect(documentsQueryOf(page.url())).toEqual(query);
   await expect(disclosure(page, caseId, "de")).toHaveAttribute("aria-expanded", "true");
   await expect(segment(page, /^Needs your decision \(\d+\)$/)).toHaveAttribute("aria-current", /page|true/);
@@ -400,7 +400,7 @@ test("Back from the report page and from the case viewer restores the Documents 
   await page.getByRole("link", { name: `Open ${caseId} · de`, exact: true }).click();
   await expect(page.getByRole("heading", { name: `Text: ${caseId}`, level: 1 })).toBeVisible();
   await page.getByRole("link", { name: "Back to Documents", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
   expect(documentsQueryOf(page.url())).toEqual(query);
   await expect(disclosure(page, caseId, "de")).toHaveAttribute("aria-expanded", "true");
 
@@ -408,7 +408,7 @@ test("Back from the report page and from the case viewer restores the Documents 
   await page.getByRole("link", { name: `Open ${caseId} · de`, exact: true }).click();
   await expect(page.getByRole("heading", { name: `Text: ${caseId}`, level: 1 })).toBeVisible();
   await page.goBack();
-  await expect(page.getByRole("heading", { name: "Needs your decision", level: 2 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
   expect(documentsQueryOf(page.url())).toEqual(query);
   expect(s.project).toBeTruthy();
 });

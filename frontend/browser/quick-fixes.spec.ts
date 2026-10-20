@@ -25,6 +25,8 @@ async function value<T>(page: Page, path: string, method = 'GET', data?: unknown
   return await response.json() as T;
 }
 async function assign(page: Page, s: Scenario, username: string) {
+  // Work plan: annotation of the source must be planned before it can be assigned.
+  await value(page, `${root(s)}/work-plans/bulk`, 'PUT', { case_ids: [s.case_id], languages: { source: { annotate: 'on' } } });
   const response = await value<{ created: Assignment[]; refused: unknown[] }>(page, `${root(s)}/assignments`, 'POST', {
     task: 'annotate', rows: [{ document_id: s.documents.source, username }], confirm_language: false,
   });
@@ -223,11 +225,11 @@ test('Q4: export preflight has one primary, Cancel, and tight warning items', as
   // The submitted result has no final selection yet, so the preflight must warn.
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
   const section = page.getByRole('region', { name: 'Selected final results' });
-  await expect(section.getByRole('button', { name: 'Prepare final export' })).toBeVisible();
+  // D8: the preflight runs on opening Export; "Create final export" is the one primary, "Check again" reruns it.
+  await expect(section.getByRole('heading', { name: 'Export preflight' })).toBeVisible();
   await expect(section.locator('.btn-primary')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Prepare final export' }).click();
-  await expect(page.getByRole('heading', { name: 'Export preflight' })).toBeFocused();
-  await expect(section.locator('.btn-primary')).toHaveCount(1);
+  await expect(section.locator('.btn-primary')).toHaveText('Create final export');
+  await expect(section.getByRole('button', { name: 'Check again', exact: true })).toBeVisible();
   // Required: the scenario guarantees at least one warning; an empty list is a failure.
   const item = section.locator('.final-warning-list > li').first();
   await expect(item).toBeVisible();
@@ -237,6 +239,7 @@ test('Q4: export preflight has one primary, Cancel, and tight warning items', as
     return { own: a.top - p.bottom, next: box.bottom - a.bottom + top };
   });
   expect(gaps.own).toBeLessThan(gaps.next);
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByRole('button', { name: 'Prepare final export' })).toBeFocused();
+  await section.getByRole('button', { name: 'Check again', exact: true }).click();
+  await expect(section.getByRole('heading', { name: 'Export preflight' })).toBeVisible();
+  await expect(section.locator('.btn-primary')).toHaveCount(1);
 });
