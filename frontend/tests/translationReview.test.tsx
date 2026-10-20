@@ -9,21 +9,22 @@ import { decisionConsequences, decisionLabels, decisionOutcomes, issueMessages }
 import { ShortcutHelpHost, openShortcutHelp } from "../src/ui/ShortcutHelp";
 import type { ReviewDecisionCode } from "../src/translation/reviewRules";
 
-import type { CoupledScrollOptions, CoupledScrollPane } from "../src/variants/useCoupledScroll";
+import type { AlignRequest, CoupledScrollOptions, CoupledScrollPane } from "../src/variants/useCoupledScroll";
 
 type Pairs = ReadonlyArray<{ paneId: string; paragraph: number }>;
 /** The real hook, wrapped to record the screen's options and, where a test sets them, to report given pairs. */
-const hook = vi.hoisted(() => ({ calls: [] as { panes: readonly CoupledScrollPane[]; options: CoupledScrollOptions }[], pairs: null as Pairs | null }));
+const hook = vi.hoisted(() => ({ calls: [] as { panes: readonly CoupledScrollPane[]; options: CoupledScrollOptions }[], pairs: null as Pairs | null, aligns: [] as AlignRequest[] }));
 vi.mock("../src/variants/useCoupledScroll", async importOriginal => {
   const actual = await importOriginal<typeof import("../src/variants/useCoupledScroll")>();
   return { ...actual, useCoupledScroll: (panes: readonly CoupledScrollPane[], options: CoupledScrollOptions) => {
     hook.calls.push({ panes, options });
     const result = actual.useCoupledScroll(panes, options);
-    return hook.pairs ? { ...result, pairs: hook.pairs } : result;
+    const align = (request: AlignRequest) => { hook.aligns.push(request); return result.align(request); };
+    return { ...result, align, ...(hook.pairs ? { pairs: hook.pairs } : {}) };
   } };
 });
 
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); hook.calls.length = 0; hook.pairs = null; });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); hook.calls.length = 0; hook.pairs = null; hook.aligns.length = 0; });
 function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }, reportActions?: JSX.Element) {
   vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
@@ -438,6 +439,166 @@ it("updates the pair line only after scrolling rests for 150 ms", async () => {
   expect(line()).toBe("Source paragraph 1 ↔ Translation paragraph 1");
   await clock(50);
   expect(line()).toBe("Source paragraph 2 ↔ Translation paragraph 2");
+});
+const FIVE = "One 😀\n\nTwo\n\nThree\n\nFour\n\nFive";
+const comparisonRow = (text = FIVE) => ({ variant: { ...reviewWorkspace().variant, document_id: "comparison-1", external_id: "First MT" }, text });
+const matchingWorkspace = (changes: Parameters<typeof reviewWorkspace>[0] = {}) => reviewWorkspace({ text: FIVE, draft: { text: FIVE, form: {}, revision: 6 },
+  source: { ...reviewWorkspace().source, text: "S one\n\nS two\n\nS three\n\nS four\n\nS five" }, ...changes });
+const matchingButton = () => screen.getByRole("button", { name: "Show matching paragraph" });
+const rectAt = (top: number) => ({ top, bottom: top + 20, left: 0, right: 100, x: 0, y: top, width: 100, height: 20, toJSON: () => ({}) }) as DOMRect;
+/** Places the paragraph markers of a pane at the given viewport tops; the pane itself starts at 0. */
+const placeMarkers = (pane: HTMLElement, tops: number[]) => [...pane.querySelectorAll<HTMLElement>("[data-paragraph]")]
+  .forEach((marker, index) => { vi.spyOn(marker, "getBoundingClientRect").mockReturnValue(rectAt(tops[index] ?? 0)); });
+const caretIn = (offset: number) => { const box = translationBox(); act(() => box.focus()); box.setSelectionRange(offset, offset); return box; };
+const altM = (target: Element | Document = translationBox(), key = "m") => fireEvent.keyDown(target, { key, code: "KeyM", altKey: true });
+it("Show matching paragraph sits after Show changes and Couple scrolling with Kbd Alt M", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  const showChanges = screen.getByRole("checkbox", { name: "Show changes" }), button = matchingButton();
+  expect(screen.getAllByRole("button", { name: "Show matching paragraph" })).toHaveLength(1);
+  expect(button.closest(".translation-column-head")).toBe(showChanges.closest(".translation-column-head"));
+  expect(showChanges.compareDocumentPosition(coupleBox()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(coupleBox()!.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(button.className).toContain("btn-quiet"); expect(button.className).toContain("btn-sm");
+  expect(button.querySelector("kbd")?.textContent).toBe("Alt M");
+  expect(button.querySelector("kbd")?.closest("[aria-hidden='true']")).not.toBeNull();
+  expect(button.title).toBe("Scroll the other text to the paragraph paired with the one at your cursor or the one you clicked.");
+  expect(button.getAttribute("aria-disabled")).toBeNull();
+});
+it("anchor 1: from the textarea uses the caret paragraph with fresh starts", async () => {
+  setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" });
+  vi.useFakeTimers();
+  const edited = `${FIVE}\n\nSix`;
+  typeTranslation(edited);
+  const revision = lastOptions().startsRevision ?? 0;
+  expect(targetStarts()).toHaveLength(5);
+  caretIn(edited.indexOf("Four") + 2);
+  altM();
+  expect(lastOptions().startsRevision).toBe(revision + 1);
+  expect(targetStarts()).toHaveLength(6);
+  expect(hook.aligns).toHaveLength(1);
+  expect(hook.aligns[0]).toMatchObject({ anchor: { paneId: "target", paragraph: 3 }, targets: ["source", "comparison"], topInset: 12 });
+  // The caret offset counts code points: the emoji in paragraph 1 is two UTF-16 units but one character.
+  caretIn(edited.indexOf("Four") - 1);
+  altM();
+  expect(hook.aligns[1].anchor).toEqual({ paneId: "target", paragraph: 2 });
+});
+it("anchor 2: the last click in the source uses the last marker above the click point", async () => {
+  setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" });
+  const source = screen.getByRole("region", { name: "Source (en)" });
+  placeMarkers(source, [-50, 50, 150, 250, 350]);
+  fireEvent(source.querySelector("[data-diff-op]")!, new MouseEvent("pointerdown", { bubbles: true, clientY: 175 }));
+  fireEvent.click(matchingButton());
+  expect(hook.aligns).toHaveLength(1);
+  expect(hook.aligns[0]).toMatchObject({ anchor: { paneId: "source", paragraph: 2 }, targets: ["target", "comparison"], anchorOffset: 150 });
+});
+it("anchor 3: otherwise the paragraph at the top of the last focused or scrolled pane", async () => {
+  setup(matchingWorkspace()); await screen.findByRole("textbox", { name: "Translation (de)" });
+  const source = screen.getByRole("region", { name: "Source (en)" });
+  placeMarkers(source, [-120, -20, 80, 180, 280]);
+  act(() => source.focus());
+  fireEvent.click(matchingButton());
+  expect(hook.aligns[0]).toMatchObject({ anchor: { paneId: "source", paragraph: 1 }, targets: ["target"], anchorOffset: -20 });
+  act(() => source.blur());
+  const editor = translationBox().closest<HTMLElement>(".translation-editor")!;
+  placeMarkers(editor, [-300, -200, -100, 40, 140]);
+  fireEvent.wheel(editor);
+  fireEvent.click(matchingButton());
+  expect(hook.aligns[1]).toMatchObject({ anchor: { paneId: "target", paragraph: 2 }, targets: ["source"], anchorOffset: -100 });
+});
+it("keeps focus, caret and selection", async () => {
+  setup(matchingWorkspace()); await screen.findByRole("textbox", { name: "Translation (de)" });
+  const box = translationBox(); act(() => box.focus()); box.setSelectionRange(5, 8);
+  const editor = box.closest<HTMLElement>(".translation-editor")!;
+  const writes: number[] = [];
+  Object.defineProperty(editor, "scrollTop", { configurable: true, get: () => 0, set: (value: number) => { writes.push(value); } });
+  expect(fireEvent.mouseDown(matchingButton())).toBe(false);
+  fireEvent.click(matchingButton());
+  expect(hook.aligns).toHaveLength(1);
+  expect(document.activeElement).toBe(box);
+  expect(box.selectionStart).toBe(5); expect(box.selectionEnd).toBe(8);
+  expect(writes).toEqual([]);
+});
+it("announces the result in the polite status", async () => {
+  setup(matchingWorkspace()); await screen.findByRole("textbox", { name: "Translation (de)" });
+  caretIn(FIVE.indexOf("Four") + 1);
+  fireEvent.click(matchingButton());
+  const status = screen.getByText("Source paragraph 4 is shown next to translation paragraph 4.");
+  expect(status.getAttribute("role")).toBe("status");
+  expect([...document.querySelectorAll("[role='status'], [aria-live]")].filter(node => node.textContent?.includes("is shown next to"))).toHaveLength(1);
+  vi.useFakeTimers();
+  const edited = `${FIVE}\n\nSix`;
+  typeTranslation(edited);
+  caretIn(edited.indexOf("Four") + 1);
+  fireEvent.click(matchingButton());
+  expect(status.textContent).toBe("Source paragraph 3 is shown next to translation paragraph 4. Paragraph counts differ, so this is an estimate.");
+});
+it("Alt+M works from the textarea, also via event.code, and types nothing", async () => {
+  setup(matchingWorkspace()); await screen.findByRole("textbox", { name: "Translation (de)" });
+  const box = caretIn(FIVE.indexOf("Two"));
+  expect(altM(box)).toBe(false);
+  expect(hook.aligns).toHaveLength(1);
+  expect(altM(box, "µ")).toBe(false);
+  expect(hook.aligns).toHaveLength(2);
+  expect(hook.aligns[1].anchor).toEqual({ paneId: "target", paragraph: 1 });
+  expect(fireEvent.keyDown(box, { key: "m", code: "KeyM" })).toBe(true);
+  expect(hook.aligns).toHaveLength(2);
+  expect(box.value).toBe(FIVE);
+  expect(document.activeElement).toBe(box);
+});
+it("Alt+M does nothing while a dialog is open", async () => {
+  setup(matchingWorkspace());
+  render(<ShortcutHelpHost />);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  act(openShortcutHelp);
+  expect(document.querySelector('[aria-modal="true"]')).not.toBeNull();
+  expect(altM(document.body)).toBe(true);
+  expect(hook.aligns).toHaveLength(0);
+});
+it("help lists Alt+M in group Translation review", async () => {
+  setup();
+  render(<ShortcutHelpHost />);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  act(openShortcutHelp);
+  const group = screen.getByRole("heading", { name: "Translation review" }).closest("section") as HTMLElement;
+  const row = within(group).getByText("Show the paragraph paired with the one at your cursor").parentElement!;
+  expect(row.querySelector("dt")?.textContent).toBe("Alt+M");
+});
+it("below 700 px the action scrolls the target into view with block nearest", async () => {
+  setup(matchingWorkspace(), false, { width: 699, listeners: new Set() });
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(coupleBox()).toBeNull();
+  const source = screen.getByRole("region", { name: "Source (en)" });
+  const into = vi.fn(); source.scrollIntoView = into;
+  const box = caretIn(FIVE.indexOf("Four"));
+  altM(box);
+  expect(hook.aligns).toHaveLength(1);
+  expect(into).toHaveBeenCalledWith({ block: "nearest" });
+  expect(document.activeElement).toBe(box);
+  cleanup(); hook.aligns.length = 0;
+  setup(matchingWorkspace());
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  const wideSource = screen.getByRole("region", { name: "Source (en)" });
+  const wideInto = vi.fn(); wideSource.scrollIntoView = wideInto;
+  altM(caretIn(FIVE.indexOf("Four")));
+  expect(hook.aligns).toHaveLength(1);
+  expect(wideInto).not.toHaveBeenCalled();
+});
+it("works with coupling off and while busy", async () => {
+  const { submit } = setup(matchingWorkspace()); await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(coupleBox()!.checked).toBe(false);
+  altM(caretIn(FIVE.indexOf("Three")));
+  expect(hook.aligns).toHaveLength(1);
+  expect(screen.getByText("Source paragraph 3 is shown next to translation paragraph 3.")).toBeDefined();
+  vi.useFakeTimers();
+  submit.mockReturnValue(new Promise(() => {}));
+  fireEvent.click(radio("Accepted unchanged"));
+  await clock();
+  await act(async () => { fireEvent.click(submitButton()); });
+  await act(async () => { fireEvent.click(within(screen.getByRole("dialog", { name: "Submit this review?" })).getByRole("button", { name: "Submit review" })); });
+  expect(translationBox().disabled).toBe(true);
+  expect(matchingButton().getAttribute("aria-disabled")).toBeNull();
+  fireEvent.click(matchingButton());
+  expect(hook.aligns).toHaveLength(2);
 });
 it("uses only the workspace's comparison choices and shows passed inherited checks on demand", async () => {
   const workspace = reviewWorkspace();
