@@ -8,7 +8,8 @@ import { useJob } from "./useJob";
 import { labelFor, plural, uploadKindLabels, uploadStatusLabels } from "../app/labels";
 
 export interface UploadPanelProps {
-  projectKey: string; languages: readonly string[]; onImported: () => void; canOverrideTranslationStatus?: boolean;
+  projectKey: string; languages: readonly string[]; /** Called once after a finished import with its result ("Imported 9 documents and 0 proposals."). */
+  onImported: (message: string) => void; canOverrideTranslationStatus?: boolean;
   /** Project rule "annotate accepted translations only" (default on): the work plan asks for the external-review acceptance only while it is on. */
   annotateAcceptedOnly?: boolean;
 }
@@ -90,8 +91,9 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
         setView(current);
         if (operation.stage === "commit") {
           if (current.status !== "committed" || !count(job.result?.documents_added) || !count(job.result?.proposals)) throw new Error("The import finished, but its final counts are unavailable. Refresh the upload status.");
-          setImported(`Imported ${plural(job.result.documents_added, "document")} and ${plural(job.result.proposals, "proposal")}.`);
-          onImportedRef.current();
+          const message = `Imported ${plural(job.result.documents_added, "document")} and ${plural(job.result.proposals, "proposal")}.`;
+          setImported(message);
+          onImportedRef.current(message);
         }
         setOperation(null);
         await refreshList(epoch);

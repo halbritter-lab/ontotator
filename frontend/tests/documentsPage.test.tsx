@@ -15,6 +15,11 @@ vi.mock("../src/admin/AssignWorkDialog", () => ({
   AssignWorkDialog: (props: AssignWorkDialogProps) => { assignProps.push(props); return <div role="dialog" aria-label="Assign stub" />; },
 }));
 const lastAssign = () => assignProps.at(-1) as AssignWorkDialogProps;
+// The upload stub reports a finished import with its result message.
+vi.mock("../src/admin/UploadPanel", () => ({
+  UploadPanel: ({ onImported }: { onImported: (message: string) => void }) =>
+    <button type="button" onClick={() => onImported("Imported 9 documents and 0 proposals.")}>Finish import stub</button>,
+}));
 vi.mock("../src/documents/ExpandedRow", async importOriginal => {
   const actual = await importOriginal<typeof import("../src/documents/ExpandedRow")>();
   return {
@@ -272,6 +277,7 @@ describe("case selection", () => {
     const view = renderPage({ query: { language: "de", segment: "assign", page: "2" } });
     await loaded();
     const header = screen.getByRole("checkbox", { name: "Select all 50 filtered cases" });
+    expect(header.className).toContain("checkbox-target");
     fireEvent.click(header);
     await waitFor(() => expect(within(selectionRegion()).getByText("50 cases selected")).toBeTruthy());
     expect(api.listDocumentCaseIds).toHaveBeenCalledWith("p", { language: "de", segment: "assign" });
@@ -674,6 +680,23 @@ describe("row actions", () => {
     expect(within(keep).getByRole("checkbox", { name: "I reviewed these changes and keep this exact result" })).toBeTruthy();
   });
 
+  it("Review changes… opens Keep for a PLAN_RESTORED row", async () => {
+    const s0 = scenarioS0();
+    vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "synthetic-accepted", language: "de", document_id: "synthetic-accepted-de", submission_id: "sub-s0-r1", revision: 2 });
+    const restored = item({ code: "PLAN_RESTORED", cause_id: "PLAN_RESTORED:synthetic-accepted:de:3", category: "confirm-final" });
+    const de = { ...s0.group.rows[1], issues: [restored], next_step: stepOf("confirm_final"), steps: [stepOf("confirm_final")] };
+    mockRows(page([group("synthetic-accepted", [s0.group.rows[0], de])]), s0.submissions);
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Review changes…, synthetic-accepted · de" }));
+    const keep = await screen.findByRole("group", { name: "Keep final result" });
+    expect(within(keep).getByText("This language version returned to the plan. Confirm its earlier final result.")).toBeTruthy();
+    fireEvent.click(within(keep).getByRole("checkbox", { name: "I reviewed these changes and keep this exact result" }));
+    fireEvent.click(within(keep).getByRole("button", { name: "Keep as final" }));
+    await waitFor(() => expect(api.selectFinalResult).toHaveBeenCalledWith("p", expect.objectContaining({
+      acknowledged_cause_ids: ["PLAN_RESTORED:synthetic-accepted:de:3"],
+    })));
+  });
+
   it("Decide on report… navigates to the report with section=decide", async () => {
     mockRows(page([group("case-0390", [planRow("case-0390", "de", stepOf("decide_report", { report_id: "report-0390" }))])]));
     const { onNavigate } = renderPage({ query: { segment: "decision" } });
@@ -749,6 +772,22 @@ describe("plan chips on the page", () => {
     await waitFor(() => expect(upload.getAttribute("aria-disabled")).toBeNull());
     fireEvent.click(upload);
     expect(await screen.findByRole("dialog", { name: "Upload texts" })).toBeTruthy();
+  });
+
+  it("closes the upload dialog after an import, announces the result and reloads the rows", async () => {
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ languages: ["en"], annotate_accepted_translations_only: false } as never);
+    mockRows(scenarioS1().page);
+    renderPage();
+    await loaded();
+    const upload = screen.getByRole("button", { name: "Upload texts…" });
+    await waitFor(() => expect(upload.getAttribute("aria-disabled")).toBeNull());
+    fireEvent.click(upload);
+    const calls = vi.mocked(api.listDocumentRows).mock.calls.length;
+    fireEvent.click(await screen.findByRole("button", { name: "Finish import stub" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Upload texts" })).toBeNull());
+    expect(live().textContent).toBe("Imported 9 documents and 0 proposals.");
+    expect(document.querySelector(".ui-toast-message")?.textContent).toBe("Imported 9 documents and 0 proposals.");
+    await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
   });
 });
 

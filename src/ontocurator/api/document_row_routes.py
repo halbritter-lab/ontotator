@@ -43,6 +43,26 @@ class _View(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class VersionAcceptanceView(_View):
+    """Newest acceptance record of a translation version (lead workflow)."""
+
+    source: Literal["package", "lead", "override"]
+    reason: str | None = None
+    accepted_at: datetime | None = None
+    accepted_by: PersonRefView | None = None
+    # Package metadata (``translation.review``), kept only as given.
+    reviewer: str | None = None
+    reviewed_at: str | None = None
+
+
+class VersionDiscardView(_View):
+    """Discard record of a text version (lead workflow)."""
+
+    reason: str | None = None
+    discarded_at: datetime | None = None
+    discarded_by: PersonRefView | None = None
+
+
 class DocumentVersionView(_View):
     document_id: str
     external_id: str
@@ -57,6 +77,8 @@ class DocumentVersionView(_View):
     is_newest_in_chain: bool
     matches_filter: bool
     last_activity_at: datetime | None
+    acceptance: VersionAcceptanceView | None = None
+    discarded: VersionDiscardView | None = None
 
 
 class WorkItemView(_View):

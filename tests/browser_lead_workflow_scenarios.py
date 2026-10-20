@@ -367,8 +367,10 @@ def build_acceptance(app: FastAPI) -> dict[str, Any]:
 
 
 ROWS_CASES = {
-    # fr review on: one chip click turns it off (Undo restores).
-    "chip": "case-0101",
+    # fr Review only: one chip click turns review off (Undo restores).
+    "chip": "case-0111",
+    # fr review + annotate (rule on): Review off asks for the acceptance instead.
+    "acceptance": "case-0101",
     "rejected": "case-0102",
     "report": "case-0103",
     "choose_final": "case-0104",

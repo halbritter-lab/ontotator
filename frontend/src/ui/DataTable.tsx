@@ -83,7 +83,7 @@ export function DataTable<T>({ label, columns, rows, rowKey, initialSort, empty,
       const { className: headerClassName, ...headerProps } = group.headerProps ?? {};
       return <tbody key={group.key}>
         <tr {...headerProps} className={["data-table-group", headerClassName].filter(Boolean).join(" ")}><th scope="rowgroup" colSpan={columns.length}>
-          {groupSelection && <input type="checkbox" className="data-table-group-select" data-group-key={group.key}
+          {groupSelection && <input type="checkbox" className="data-table-group-select checkbox-target" data-group-key={group.key}
             aria-label={groupSelection.checkboxLabel(group.key)} checked={groupSelection.selected(group.key)}
             onChange={() => undefined} onClick={(event) => groupSelection.onSelect(group.key, groupSelectionModeOf(event))}
             onKeyDown={(event) => moveGroupSelection(event, groupSelection.onSelect)} />}

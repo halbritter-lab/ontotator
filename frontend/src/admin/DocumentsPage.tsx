@@ -571,6 +571,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const latestReload = useRef(rows.reload);
   latestReload.current = rows.reload;
   const planSaves = usePlanSaves({ projectKey, onAnnounce: announce, onChanged: () => latestReload.current(), showToast });
+  // A finished import closes the upload dialog: the imported cases arrive in the reloaded rows with their plan.
+  const importDone = (message: string) => { setUploadOpen(false); showToast({ message }); announce(message); refreshAll(); };
   // Each new rows page: drop local chip flags the server has caught up with; restore focus after a save.
   useEffect(() => {
     if (page) planSaves.refreshed(page.groups);
@@ -808,7 +810,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll}
         exportFinals={page.groups.some(group => group.final_count > 0)} />
       <div className="documents-selection-tools">
-        {page.groups.length > 0 && <Checkbox id="documents-select-all" label={selectAllLabel} checked={allSelected}
+        {page.groups.length > 0 && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
           aria-busy={selectingAll || undefined} onChange={() => { void toggleAll(); }} />}
         <Button variant="quiet" size="sm" onClick={() => setIdsDialogOpen(true)}>Select by case IDs…</Button>
       </div>
@@ -881,7 +883,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <Dialog open={uploadOpen} title="Upload texts" size="lg" onClose={() => setUploadOpen(false)}>
       {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus}
-        annotateAcceptedOnly={settings.annotate_accepted_translations_only ?? true} onImported={refreshAll} />}
+        annotateAcceptedOnly={settings.annotate_accepted_translations_only ?? true} onImported={importDone} />}
     </Dialog>
     {reviewDocument !== null && <ReviewHistory key={reviewDocument} projectKey={projectKey} documentId={reviewDocument} onClose={() => setReviewDocument(null)} />}
     {assignDialog && <AssignWorkDialog {...assignDialog} />}

@@ -222,7 +222,10 @@ def test_lead_override_is_persisted_in_job_and_audited_by_restarted_queue(
         accepted.translation_status == "accepted"
         and accepted.status_reason == "Reviewed = accepted"
     )
-    assert audit_rows(application, "variant.status_override") == [
+    overrides = audit_rows(application, "variant.status_override")
+    assert [
+        {k: v for k, v in row.items() if k != "upload_id"} for row in overrides
+    ] == [
         {
             "document_id": "case~de~v1",
             "from": "automatic_check_failed",
@@ -230,6 +233,7 @@ def test_lead_override_is_persisted_in_job_and_audited_by_restarted_queue(
             "reason": "Reviewed = accepted",
         }
     ]
+    assert all(isinstance(row["upload_id"], int) for row in overrides)
     before = asdict(accepted)
     commit(application, admin, preview(application, admin, path))
     assert asdict(application.state.repo.get_variant("proj", "case~de~v1")) == before

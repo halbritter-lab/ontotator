@@ -214,7 +214,8 @@ def test_rows_mixed_plans_report_rejected_and_row_actions(client):
     bar, rows = lead_rows(client, built)
     assert len({case for case, _lang in rows}) == 30
     cases = built["cases"]
-    assert rows[(cases["chip"], "fr")]["plan_row"]["review"] is True
+    assert flags(rows[(cases["chip"], "fr")]) == (True, False)
+    assert flags(rows[(cases["acceptance"], "fr")]) == (True, True)
     expected = {
         "rejected": ("resolve_rejected", "resolve"),
         "report": ("decide_report", "decide_report"),

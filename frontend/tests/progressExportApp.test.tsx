@@ -30,6 +30,7 @@ beforeEach(() => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listAssignments").mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
+  vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ project: "p/key", selections: [], warnings: [], omissions: [], state_digest: "0".repeat(64) });
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue([{ ...document, status: "not_started", text_length: 4 }] as never);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); window.history.replaceState(null, "", "#/"); });
@@ -90,5 +91,6 @@ it("uses the real Export create request and displays its server denial", async (
   fireEvent.click(within(card).getByRole("button", { name: "Create export" }));
   await screen.findByText("You do not have access to this page.");
   expect(api.startExport).toHaveBeenCalledWith("p/key", "t1");
+  expect(api.finalExportPreflight).toHaveBeenCalledWith("p/key");
   expect(sessionStorage.getItem(storageKey(user.username))).toBeNull();
 });

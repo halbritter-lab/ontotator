@@ -41,9 +41,9 @@ export interface LeadScenario {
   /** ACCEPTANCE: fr cases marked as reviewed in the package, and the others. */
   marked?: string[];
   not_marked?: string[];
-  /** ROWS: the case of each row action (de rows; "chip" is a fr row). */
+  /** ROWS: the case of each row action (de rows; "chip" and "acceptance" are fr rows). */
   cases?: Record<
-    "chip" | "rejected" | "report" | "choose_final" | "review_changes" | "not_in_plan",
+    "chip" | "acceptance" | "rejected" | "report" | "choose_final" | "review_changes" | "not_in_plan",
     string
   >;
   report_id?: string;

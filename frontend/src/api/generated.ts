@@ -2895,6 +2895,8 @@ export interface components {
             matches_filter: boolean;
             /** Last Activity At */
             last_activity_at: string | null;
+            acceptance?: components["schemas"]["VersionAcceptanceView"] | null;
+            discarded?: components["schemas"]["VersionDiscardView"] | null;
         };
         /**
          * Draft
@@ -6105,6 +6107,37 @@ export interface components {
             text: string;
             /** Text Sha256 */
             text_sha256: string;
+        };
+        /**
+         * VersionAcceptanceView
+         * @description Newest acceptance record of a translation version (lead workflow).
+         */
+        VersionAcceptanceView: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "package" | "lead" | "override";
+            /** Reason */
+            reason?: string | null;
+            /** Accepted At */
+            accepted_at?: string | null;
+            accepted_by?: components["schemas"]["PersonRefView"] | null;
+            /** Reviewer */
+            reviewer?: string | null;
+            /** Reviewed At */
+            reviewed_at?: string | null;
+        };
+        /**
+         * VersionDiscardView
+         * @description Discard record of a text version (lead workflow).
+         */
+        VersionDiscardView: {
+            /** Reason */
+            reason?: string | null;
+            /** Discarded At */
+            discarded_at?: string | null;
+            discarded_by?: components["schemas"]["PersonRefView"] | null;
         };
         /** VersionRef */
         VersionRef: {

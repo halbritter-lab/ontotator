@@ -128,6 +128,7 @@ export function SelectionBar({
     latest.current.showToast({
       message,
       actionLabel: "Undo",
+      undo: true,
       onAction: () => undo(result.undo, false),
       ...(result.withdrawn.length ? { note: UNDO_WITHDRAWN_NOTE } : {}),
     });

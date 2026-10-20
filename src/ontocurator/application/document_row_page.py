@@ -118,6 +118,34 @@ class _Context:
         return self.person(self.facts.viewer_user_id, self.facts.viewer_pseudonym)
 
 
+def _acceptance(facts: RowFacts, document_id: str) -> dict[str, Any] | None:
+    """The newest acceptance record of a version (package metadata as given)."""
+    record = facts.acceptances.get(document_id)
+    if record is None:
+        return None
+    metadata = record.get("metadata") or {}
+    accepted_by = record["accepted_by"]
+    return {
+        "source": record["source"],
+        "reason": record["reason"],
+        "accepted_at": record["accepted_at"],
+        "accepted_by": facts.people.get(accepted_by) if accepted_by else None,
+        "reviewer": metadata.get("reviewer"),
+        "reviewed_at": metadata.get("reviewed_at"),
+    }
+
+
+def _discard(facts: RowFacts, document_id: str) -> dict[str, Any] | None:
+    record = facts.discarded.get(document_id)
+    if record is None:
+        return None
+    return {
+        "reason": record["reason"],
+        "discarded_at": record["discarded_at"],
+        "discarded_by": facts.people.get(record["discarded_by"]),
+    }
+
+
 def _report(facts: RowFacts, report_id: str | None) -> dict[str, Any] | None:
     fact = facts.reports.get(report_id) if report_id is not None else None
     if fact is None:
@@ -382,6 +410,8 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
                 "is_newest_in_chain": v.document_id == chain.newest.document_id,
                 "matches_filter": True,
                 "last_activity_at": version_activity[v.document_id],
+                "acceptance": _acceptance(facts, v.document_id),
+                "discarded": _discard(facts, v.document_id),
             }
             for chain in chains
             for v in chain.versions

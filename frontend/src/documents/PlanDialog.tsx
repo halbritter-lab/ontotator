@@ -212,17 +212,18 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
         <tbody>{languages.map(language => {
           const count = language.cases_in_selection === totalCases ? String(language.cases_in_selection) : `${language.cases_in_selection} of ${totalCases}`;
           const cell = (flag: Flag) => {
-            if (flag === "review" && language.key === SOURCE_KEY) return <td className="work-plan-none">–</td>;
+            const column = flag === "review" ? "Review" : "Annotate";
+            if (flag === "review" && language.key === SOURCE_KEY) return <td className="work-plan-none" data-label={column}>–</td>;
             const counts = flag === "review" ? language.review : language.annotate;
             const name = `${flag === "review" ? "Review" : "Annotate"}, ${language.key === SOURCE_KEY ? languageName(language) : language.key}`;
-            if (confirming) return <td><StateText value={shown(language, flag)} /></td>;
+            if (confirming) return <td data-label={column}><StateText value={shown(language, flag)} /></td>;
             if (single) {
               const value = effective(language, flag);
-              return <td><TriStateButton value={value} label={name} describedBy={summaryId} onChange={() => setCell(language.key, flag, value === "on" ? "off" : "on")} /></td>;
+              return <td data-label={column}><TriStateButton value={value} label={name} describedBy={summaryId} onChange={() => setCell(language.key, flag, value === "on" ? "off" : "on")} /></td>;
             }
-            return <td><TriStateButton value={choices[language.key]?.[flag] ?? "keep"} mixed={mixedTitle(counts)} label={name} describedBy={summaryId} onChange={next => setCell(language.key, flag, next)} /></td>;
+            return <td data-label={column}><TriStateButton value={choices[language.key]?.[flag] ?? "keep"} mixed={mixedTitle(counts)} label={name} describedBy={summaryId} onChange={next => setCell(language.key, flag, next)} /></td>;
           };
-          return <tr key={language.key}><th scope="row">{rowLabel(language)}</th><td className="work-plan-count">{count}</td>{cell("review")}{cell("annotate")}</tr>;
+          return <tr key={language.key}><th scope="row">{rowLabel(language)}</th><td className="work-plan-count" data-label="In selection">{count}</td>{cell("review")}{cell("annotate")}</tr>;
         })}</tbody>
       </table></div>}
       <p id={summaryId} className="work-plan-summary" aria-live="polite"><strong>Will change:</strong> {summary}</p>
