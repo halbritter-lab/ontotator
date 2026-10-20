@@ -196,13 +196,19 @@ New module `src/ontocurator/storage/overview_tables.py`, imported at the end of 
 `draft_snapshots.payload` (O0a stores it as opaque jsonb; O2b owns the model in `domain/work_rounds.py`):
 
 ```python
-class DraftSnapshotPayload(BaseModel):          # extra="forbid"
-    format_version: Literal["ontocurator-draft-snapshot/v1"] = "ontocurator-draft-snapshot/v1"
-    origin_key: WorkspaceKey                    # the old assignment's workspace key (document_id = from version)
-    scope: TaskScope                            # build_scope(profile, origin_key.mode) at snapshot time
-    document_version: int                       # version of origin_key.document_id
-    text_sha256: str                            # of that version's text
-    snapshots: list[AnnotationSnapshot]         # Draft.annotations, each with its evidence (encode_snapshot / decode_snapshot)
+class DraftSnapshotPayload(BaseModel):  # extra="forbid"
+    format_version: Literal["ontocurator-draft-snapshot/v1"] = (
+        "ontocurator-draft-snapshot/v1"
+    )
+    origin_key: (
+        WorkspaceKey  # the old assignment's workspace key (document_id = from version)
+    )
+    scope: TaskScope  # build_scope(profile, origin_key.mode) at snapshot time
+    document_version: int  # version of origin_key.document_id
+    text_sha256: str  # of that version's text
+    snapshots: list[
+        AnnotationSnapshot
+    ]  # Draft.annotations, each with its evidence (encode_snapshot / decode_snapshot)
 ```
 
 Downgrade: refuses with a clear `RuntimeError` when any `round_inputs.source_draft_snapshot_id` is set (data would be lost), otherwise drops the new tables and columns and makes `source_submission_id` NOT NULL again.
@@ -212,17 +218,68 @@ Downgrade: refuses with a clear `RuntimeError` when any `round_inputs.source_dra
 ### Pure stage cells (O0b): `src/ontocurator/domain/stage_cells.py`
 
 ```python
-Tone = Literal["none", "undecided", "waiting", "todo", "running", "decision", "rejected", "done"]
-ReviewState = Literal["source", "not_planned", "undecided", "unassigned", "check_failed", "in_progress",
-    "re_review", "paused", "rejected", "query", "not_accepted", "source_changed", "accepted"]
-AnnotationState = Literal["not_planned", "undecided", "after_review", "blocked", "unassigned",
-    "partly_assigned", "in_progress", "paused", "in_review", "consolidating", "old_text_open",
-    "old_text_submitted", "finishing_on_old", "submitted"]
-FinalState = Literal["none", "after_annotation", "after_review", "choose", "confirm", "old_text",
-    "may_be_outdated", "final"]
-CellNote = Literal["machine_translation", "review_only", "translation_rejected", "translation_queried",
-    "translation_not_accepted", "unchanged", "with_corrections", "in_package", "outside", "review_off",
-    "text_change_waiting", "may_change", "not_exported", "carried_on_submit", "v2_not_annotated"]
+Tone = Literal[
+    "none", "undecided", "waiting", "todo", "running", "decision", "rejected", "done"
+]
+ReviewState = Literal[
+    "source",
+    "not_planned",
+    "undecided",
+    "unassigned",
+    "check_failed",
+    "in_progress",
+    "re_review",
+    "paused",
+    "rejected",
+    "query",
+    "not_accepted",
+    "source_changed",
+    "accepted",
+]
+AnnotationState = Literal[
+    "not_planned",
+    "undecided",
+    "after_review",
+    "blocked",
+    "unassigned",
+    "partly_assigned",
+    "in_progress",
+    "paused",
+    "in_review",
+    "consolidating",
+    "old_text_open",
+    "old_text_submitted",
+    "finishing_on_old",
+    "submitted",
+]
+FinalState = Literal[
+    "none",
+    "after_annotation",
+    "after_review",
+    "choose",
+    "confirm",
+    "old_text",
+    "may_be_outdated",
+    "final",
+]
+CellNote = Literal[
+    "machine_translation",
+    "review_only",
+    "translation_rejected",
+    "translation_queried",
+    "translation_not_accepted",
+    "unchanged",
+    "with_corrections",
+    "in_package",
+    "outside",
+    "review_off",
+    "text_change_waiting",
+    "may_change",
+    "not_exported",
+    "carried_on_submit",
+    "v2_not_annotated",
+]
+
 
 @dataclass(frozen=True)
 class OldItem:
@@ -231,41 +288,45 @@ class OldItem:
     assignment_id: int | None = None
     submission_id: str | None = None
 
+
 @dataclass(frozen=True)
 class StageFacts:
     step: StepFacts
     decided: bool = True
-    review_people: tuple[int, ...] = ()             # open translation review(s)
+    review_people: tuple[int, ...] = ()  # open translation review(s)
     review_reason: Literal["correction", "new_review", "source_changed"] | None = None
-    review_decided_by: int | None = None            # latest decision on the newest version
+    review_decided_by: int | None = None  # latest decision on the newest version
     review_decided_at: datetime | None = None
     accepted_how: Literal["unchanged", "corrected", "package", "external"] | None = None
-    accepted_from_version: int | None = None        # "v1 → v2" when corrected
+    accepted_from_version: int | None = None  # "v1 → v2" when corrected
     newest_version: int = 1
-    newest_origin: str | None = None                # VariantOrigin of the target
-    annotators_open: tuple[int, ...] = ()           # on the target(s), not held
-    annotators_submitted: tuple[int, ...] = ()      # on the target(s)
-    round_ordinal: int | None = None                # the one open round, if exactly one
-    findings: int | None = None                     # finding_count when exactly one submission
+    newest_origin: str | None = None  # VariantOrigin of the target
+    annotators_open: tuple[int, ...] = ()  # on the target(s), not held
+    annotators_submitted: tuple[int, ...] = ()  # on the target(s)
+    round_ordinal: int | None = None  # the one open round, if exactly one
+    findings: int | None = None  # finding_count when exactly one submission
     annotation_reviewers: tuple[int, ...] = ()
     consolidators: tuple[int, ...] = ()
-    paused_by: int | None = None                    # reporter of the open report
-    paused_excerpt: str | None = None               # ≤ 60 characters
+    paused_by: int | None = None  # reporter of the open report
+    paused_excerpt: str | None = None  # ≤ 60 characters
     paused_task: Literal["annotate", "translation_review"] | None = None
-    old_open: tuple[OldItem, ...] = ()              # rule 3a items (O2a fills)
-    old_submitted: tuple[OldItem, ...] = ()         # rule 3b items (O2a fills)
-    finishing: tuple[OldItem, ...] = ()             # finish_then_carry items (O2a fills)
-    source_changed_from: int | None = None          # source version of an unreviewed source change (O2a fills)
-    correction_waiting: bool = False                # correction ready_for_review, rule on (edge case)
-    final_causes: tuple[str, ...] = ()              # unacknowledged cause codes
+    old_open: tuple[OldItem, ...] = ()  # rule 3a items (O2a fills)
+    old_submitted: tuple[OldItem, ...] = ()  # rule 3b items (O2a fills)
+    finishing: tuple[OldItem, ...] = ()  # finish_then_carry items (O2a fills)
+    source_changed_from: int | None = (
+        None  # source version of an unreviewed source change (O2a fills)
+    )
+    correction_waiting: bool = False  # correction ready_for_review, rule on (edge case)
+    final_causes: tuple[str, ...] = ()  # unacknowledged cause codes
     final_kind: Literal["round", "consolidation"] | None = None
     final_author: int | None = None
     final_round_ordinal: int | None = None
     final_version: int | None = None
     final_on_newest: bool = True
-    submissions: int = 0                            # eligible submissions (Final "n submissions"): on the target version only, without
-                                                    # sources whose text-change resolution is carried, moved or handed_over (spec VD16)
+    submissions: int = 0  # eligible submissions (Final "n submissions"): on the target version only, without
+    # sources whose text-change resolution is carried, moved or handed_over (spec VD16)
     parallel_roots: bool = False
+
 
 @dataclass(frozen=True)
 class CellDetail:
@@ -281,14 +342,16 @@ class CellDetail:
     excerpt: str | None = None
     reason: str | None = None
     note: CellNote | None = None
-    matching: int | None = None                     # Final "4 of 6 match" (O3b fills for shown rows)
+    matching: int | None = None  # Final "4 of 6 match" (O3b fills for shown rows)
     compared: int | None = None
+
 
 @dataclass(frozen=True)
 class StageCell:
-    state: str            # ReviewState | AnnotationState | FinalState
+    state: str  # ReviewState | AnnotationState | FinalState
     tone: Tone
     detail: CellDetail
+
 
 @dataclass(frozen=True)
 class StageCells:
@@ -296,7 +359,10 @@ class StageCells:
     annotation: StageCell
     final: StageCell
 
+
 STEP_CELL: Mapping[StepCode, Literal["review", "annotation", "final"] | None]
+
+
 def stage_cells(facts: StageFacts, steps: Sequence[Step]) -> StageCells: ...
 ```
 
@@ -367,26 +433,80 @@ API additions in `api/document_row_routes.py` (all with defaults):
 ```python
 class TextChangeService:
     def __init__(self, db: Database, repo: Repository) -> None: ...
-    def preview(self, access: Access, actor: Actor, key: str, *, assignment_id: int | None,
-                submission_id: str | None, target_document_id: str) -> TextChangePreview: ...
-    def move_to_version(self, access: Access, actor: Actor, assignment_id: int, *, target_document_id: str,
-                        expected_workflow_revision: int, request_id: str) -> MoveResult: ...
-    def resolve(self, access: Access, actor: Actor, assignment_id: int, *,
-                resolution: Literal["finish_then_carry", "withdrawn"], target_document_id: str) -> None: ...
-    def carry(self, access: Access, actor: Actor, key: str, submission_id: str, *, target_document_id: str,
-              mode: Literal["author", "other", "dismiss"], username: str | None, confirm_language: bool,
-              request_id: str) -> CarryResult: ...
+    def preview(
+        self,
+        access: Access,
+        actor: Actor,
+        key: str,
+        *,
+        assignment_id: int | None,
+        submission_id: str | None,
+        target_document_id: str,
+    ) -> TextChangePreview: ...
+    def move_to_version(
+        self,
+        access: Access,
+        actor: Actor,
+        assignment_id: int,
+        *,
+        target_document_id: str,
+        expected_workflow_revision: int,
+        request_id: str,
+    ) -> MoveResult: ...
+    def resolve(
+        self,
+        access: Access,
+        actor: Actor,
+        assignment_id: int,
+        *,
+        resolution: Literal["finish_then_carry", "withdrawn"],
+        target_document_id: str,
+    ) -> None: ...
+    def carry(
+        self,
+        access: Access,
+        actor: Actor,
+        key: str,
+        submission_id: str,
+        *,
+        target_document_id: str,
+        mode: Literal["author", "other", "dismiss"],
+        username: str | None,
+        confirm_language: bool,
+        request_id: str,
+    ) -> CarryResult: ...
 
-def auto_carry_on_submit(conn: Connection, repo: Repository, *, project_id: int, project_key: str,
-                         assignment_id: int, submission: Submission) -> None: ...   # O2c, V8; runs inside conn.begin_nested()
+
+def auto_carry_on_submit(
+    conn: Connection,
+    repo: Repository,
+    *,
+    project_id: int,
+    project_key: str,
+    assignment_id: int,
+    submission: Submission,
+) -> None: ...  # O2c, V8; runs inside conn.begin_nested()
 ```
 
 `WorkRoundService` (`application/work_rounds.py:80`) gets
 
 ```python
-def create_in(self, conn: Connection, *, project: str, pid: int, actor: Actor, assignment: Mapping[str, Any],
-              kind: RoundKind, sources: list[str], draft_sources: list[int], reason: str | None,
-              expected_workflow_revision: int, lead: bool, owner: str) -> WorkRoundView: ...
+def create_in(
+    self,
+    conn: Connection,
+    *,
+    project: str,
+    pid: int,
+    actor: Actor,
+    assignment: Mapping[str, Any],
+    kind: RoundKind,
+    sources: list[str],
+    draft_sources: list[int],
+    reason: str | None,
+    expected_workflow_revision: int,
+    lead: bool,
+    owner: str,
+) -> WorkRoundView: ...
 ```
 
 It holds the body of `create` from the revision check (`:261`, `WORKFLOW_REVISION_CONFLICT`) up to and including `result = self.repo.get_work_round(project, rid)` (`:578`), moved verbatim except the owner query (`:267-269`), which `create` runs before the call (`rid` is generated inside as today; `owner` is the assignee's pseudonym; `lead` is `can(fresh, Action.MANAGE_ASSIGNMENTS, project)`). The caller holds the exclusive project lock. **`create_in` writes neither the `WorkflowCommandReceiptRow` nor the `round.create` audit** (`:580-605`): `create` keeps locks, authorization, the receipt lookup, then calls `create_in`, then inserts the receipt and writes `round.create` exactly as today; `TextChangeService` writes its own receipt (its own `request_id` hash) and its `text_change.*` audit, and the V8 hook writes only `text_change.auto_carry`. `RoundKind` (`domain/work_rounds.py:21`) gains `text_change`, `handover`; `CARRY_ROUND_KINDS = frozenset({"carry_forward", "text_change", "handover"})`. Submission kind of a round of any carry kind stays `"carry_forward"` (`domain/submission_labels.py:41-42`), so labels and export formats do not change (plan decision).
@@ -578,13 +698,16 @@ O2c: `AssignRequest` (`api/assignment_routes.py:150-160`) and `BatchAssignReques
 ```python
 @dataclass(frozen=True)
 class Finding:
-    key: str                     # annotation id
+    key: str  # annotation id
     layer_id: str
     term_id: str
-    axes: Mapping[str, str]      # missing axis = default, filled by the caller
+    axes: Mapping[str, str]  # missing axis = default, filled by the caller
     modifiers: frozenset[str]
-    spans: tuple[tuple[int, int], ...]   # evidence segments; () = spanless (document_level or no mentions)
+    spans: tuple[
+        tuple[int, int], ...
+    ]  # evidence segments; () = spanless (document_level or no mentions)
     order: int
+
 
 @dataclass(frozen=True)
 class Agreement:
@@ -593,7 +716,10 @@ class Agreement:
     context_differences: int
     only_here: Mapping[str, int]  # submission id -> count
 
-def compare(findings: Mapping[str, Sequence[Finding]], order: Sequence[str]) -> Agreement: ...
+
+def compare(
+    findings: Mapping[str, Sequence[Finding]], order: Sequence[str]
+) -> Agreement: ...
 ```
 
 - [ ] **Step 1: Failing tests:** `test_overlap_of_one_character_matches`, `test_touching_spans_do_not_match` (`[0,5)` and `[5,9)`), `test_spanless_pairs_match_only_spanless`, `test_axis_difference_is_context_difference`, `test_missing_axis_equals_default`, `test_modifier_sets_compare_as_sets`, `test_one_to_one_exact_first_then_context_then_largest_overlap_then_order`, `test_n_counts_exact_context_and_unmatched`, `test_three_submissions_cluster_in_submission_order`, `test_only_here_per_submission`, `test_layers_and_terms_never_cross`.

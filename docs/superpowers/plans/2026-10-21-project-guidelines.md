@@ -139,16 +139,30 @@ MAX_GUIDELINE_BYTES = 262_144
 MAX_NOTE_CHARS = 280
 NOTICE_LIMIT = 5
 
-def kind_for_filename(filename: str) -> GuidelineKind: ...
+
+def kind_for_filename(filename: str) -> GuidelineKind:
+    ...
     # .md/.markdown -> "markdown", .txt -> "text" (case-insensitive); else DomainError("GUIDELINE_FILE_TYPE")
-def decode_body(data: bytes) -> str: ...
+
+
+def decode_body(data: bytes) -> str:
+    ...
     # > MAX_GUIDELINE_BYTES + 3 raw, or encoded body after BOM removal > MAX_GUIDELINE_BYTES -> GUIDELINE_TOO_LARGE;
     # invalid UTF-8 or a NUL byte -> GUIDELINE_ENCODING; empty or whitespace-only -> GUIDELINE_EMPTY; drops one leading BOM
-def validate_note(value: str | None, *, field: Literal["change_note", "reason"]) -> str | None: ...
+
+
+def validate_note(
+    value: str | None, *, field: Literal["change_note", "reason"]
+) -> str | None:
+    ...
     # strips; "" -> None; > 280 chars or contains "\n"/"\r" -> DomainError("GUIDELINE_NOTE_INVALID", {"field": field})
+
+
 def body_sha256(body: str) -> str: ...
-def guideline_ref(project_key: str, version: int, sha256: str) -> str: ...
+def guideline_ref(project_key: str, version: int, sha256: str) -> str:
+    ...
     # f"urn:ontocurator:{project_key}:guidelines:v{version}#sha256={sha256}"
+
 
 @dataclass(frozen=True)
 class VersionFact:
@@ -157,17 +171,24 @@ class VersionFact:
     change_note: str | None
     withdrawn: bool
 
-def current_version(versions: Sequence[VersionFact]) -> int | None: ...
+
+def current_version(versions: Sequence[VersionFact]) -> int | None:
+    ...
     # highest version if not withdrawn, else None (G25)
+
 
 @dataclass(frozen=True)
 class Notice:
-    from_version: int | None   # S, None for first exposure
-    to_version: int            # L
-    changes: tuple[VersionFact, ...]  # versions in (S, L], newest first, at most NOTICE_LIMIT
+    from_version: int | None  # S, None for first exposure
+    to_version: int  # L
+    changes: tuple[
+        VersionFact, ...
+    ]  # versions in (S, L], newest first, at most NOTICE_LIMIT
     more: int
 
-def compute_notice(versions: Sequence[VersionFact], seen: int | None) -> Notice | None: ...
+
+def compute_notice(versions: Sequence[VersionFact], seen: int | None) -> Notice | None:
+    ...
     # None when no current version or seen >= current
 ```
 
@@ -176,8 +197,11 @@ def compute_notice(versions: Sequence[VersionFact], seen: int | None) -> Notice 
 `storage/repository.py` must not import `application/guidelines.py` (the storage layer never imports `application`; `application` modules import `storage.repository`, so that import would be circular). The readers used by repository code therefore live in storage:
 
 ```python
-def current_guideline_version(conn: Connection, project_id: int) -> int | None: ...   # used by G1a in submit transactions
-def guideline_facts(conn: Connection, project_id: int) -> dict[int, GuidelineFact]: ...
+def current_guideline_version(
+    conn: Connection, project_id: int
+) -> int | None: ...  # used by G1a in submit transactions
+def guideline_facts(conn: Connection, project_id: int) -> dict[int, GuidelineFact]:
+    ...
     # version -> (kind, sha256, withdrawn); used by G1a views and G1b exports
 ```
 
@@ -186,21 +210,52 @@ def guideline_facts(conn: Connection, project_id: int) -> dict[int, GuidelineFac
 ### Service (G0b): `src/ontocurator/application/guidelines.py`
 
 ```python
-def guideline_briefs(conn: Connection, project_ids: Iterable[int]) -> dict[int, GuidelineBrief]: ...
+def guideline_briefs(
+    conn: Connection, project_ids: Iterable[int]
+) -> dict[int, GuidelineBrief]:
+    ...
     # current version per project, one query for all ids; used by api/assignment_routes._views
-def guideline_notice(conn: Connection, *, project_id: int, user_id: int) -> Notice | None: ...
+
+
+def guideline_notice(
+    conn: Connection, *, project_id: int, user_id: int
+) -> Notice | None:
+    ...
     # only called for the owner's editable rows; used by _views
+
 
 class GuidelineService:
     def __init__(self, db: Database) -> None: ...
     def listing(self, access: Access, key: str) -> GuidelineListingRecord: ...
-    def document(self, access: Access, key: str, version: int) -> GuidelineDocumentRecord: ...
-    def upload(self, actor: Actor, key: str, *, filename: str, data: bytes,
-               change_note: str | None, expected_latest_version: int | None) -> GuidelineSummaryRecord: ...
-    def withdraw(self, actor: Actor, key: str, version: int, *, reason: str | None,
-                 expected_latest_version: int) -> GuidelineSummaryRecord: ...
-    def record_read(self, access: Access, key: str, version: int,
-                    event: Literal["notified", "opened"]) -> None: ...
+    def document(
+        self, access: Access, key: str, version: int
+    ) -> GuidelineDocumentRecord: ...
+    def upload(
+        self,
+        actor: Actor,
+        key: str,
+        *,
+        filename: str,
+        data: bytes,
+        change_note: str | None,
+        expected_latest_version: int | None,
+    ) -> GuidelineSummaryRecord: ...
+    def withdraw(
+        self,
+        actor: Actor,
+        key: str,
+        version: int,
+        *,
+        reason: str | None,
+        expected_latest_version: int,
+    ) -> GuidelineSummaryRecord: ...
+    def record_read(
+        self,
+        access: Access,
+        key: str,
+        version: int,
+        event: Literal["notified", "opened"],
+    ) -> None: ...
 ```
 
 `GuidelineBrief` = `(version, kind, created_at)`. The service re-exports nothing from `storage/guidelines.py`; callers import the readers from storage.
