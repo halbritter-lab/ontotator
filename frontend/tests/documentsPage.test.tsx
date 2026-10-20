@@ -136,7 +136,7 @@ it("filters by Next step, Plan, Language and Case ID; More filters holds Final r
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", q: "case-+/" });
   const more = screen.getByText("More filters").closest("details") as HTMLDetailsElement;
   expect(Array.from(more.querySelectorAll("label")).map(label => label.textContent)).toEqual(["Final result", "Origin", "Translation status", "Status", "Sort"]);
-  expect(Array.from((within(more).getByLabelText("Final result") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["Any", "None"]);
+  expect(Array.from((within(more).getByLabelText("Final result") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["Any", "None", "Has a final result"]);
   expect(Array.from((within(more).getByLabelText("Sort") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["Case ID", "Import batch", "Last activity"]);
   expect(Array.from((within(more).getByLabelText("Translation status") as HTMLSelectElement).options).map(option => option.textContent)).toContain("Accepted without review");
   fireEvent.change(within(more).getByLabelText("Final result"), { target: { value: "none" } });
@@ -154,6 +154,77 @@ it("filters by Next step, Plan, Language and Case ID; More filters holds Final r
   // Only case checkboxes and the header checkbox select; no per-row bulk checkboxes, no old "Assign …".
   expect(screen.getAllByRole("checkbox").every(box => box.getAttribute("aria-label")?.startsWith("Select ") || box.id === "documents-select-all")).toBe(true);
   expect(screen.queryByRole("button", { name: "Assign …" })).toBeNull();
+});
+
+describe("exact filters from Progress links", () => {
+  const linked: ProjectDocumentsQuery = { q: "case-01", step: "resolve_rejected,resolve_queried", plan: "review,review_and_annotate", stage: "translation_review", paused: "no", sort: "import", page: "2" };
+
+  it("sends comma-joined filters as lists, final=any and paused", async () => {
+    mockRows(casesPage(3));
+    renderPage({ query: { ...linked, final: "any", step: "resolve_rejected,unknown_step,resolve_queried" } });
+    await loaded();
+    expect(api.listDocumentRows).toHaveBeenCalledWith("p", {
+      q: "case-01", final: "any", step: ["resolve_rejected", "resolve_queried"], stage: "translation_review", plan: ["review", "review_and_annotate"], paused: "no", sort: "import", page: 2,
+    });
+  });
+
+  it("selection filters include q and decision", async () => {
+    mockRows(casesPage(3));
+    vi.spyOn(api, "listDocumentCaseIds").mockResolvedValueOnce({ case_ids: ["case-0101"], total: 1, truncated: false });
+    renderPage({ query: { ...linked, decision: "translation" } });
+    await loaded();
+    const expected = { q: "case-01", decision: "translation", step: ["resolve_rejected", "resolve_queried"], stage: "translation_review", plan: ["review", "review_and_annotate"], paused: "no" };
+    fireEvent.click(caseBox("case-0102"));
+    await waitFor(() => expect(api.selectionSummary).toHaveBeenLastCalledWith("p", ["case-0102"], expected));
+    fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Assign…" }));
+    expect(lastAssign()).toMatchObject({ sort: "import", filters: expected });
+    expect(Object.keys((lastAssign() as { filters?: object }).filters ?? {}).sort()).toEqual(Object.keys(expected).sort());
+    act(() => { lastAssign().onClose(); });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }));
+    await waitFor(() => expect(api.listDocumentCaseIds).toHaveBeenCalledWith("p", { ...expected, sort: "import" }));
+  });
+
+  it("drops a final filter under a decision filter (the API takes one of them)", async () => {
+    mockRows(casesPage(1));
+    renderPage({ query: { decision: "translation", final: "none" } });
+    await loaded();
+    expect(api.listDocumentRows).toHaveBeenCalledWith("p", { decision: "translation" });
+  });
+
+  it("shows Export final results… when bar.finals > 0 even if no shown case has a final", async () => {
+    mockRows(casesPage(2, { bar: { ...casesPage(2).bar, finals: 4 } }));
+    renderPage({ query: { segment: "assign" } });
+    await loaded();
+    expect(screen.getByRole("link", { name: "Export final results…" }).getAttribute("href")).toBe("#/projects/p/export");
+    cleanup();
+    mockRows(casesPage(2));
+    renderPage();
+    await loaded();
+    expect(screen.queryByRole("link", { name: "Export final results…" })).toBeNull();
+  });
+
+  it("shows a readable filter label for multi-value filters", async () => {
+    mockRows(casesPage(1));
+    const onNavigate = vi.fn();
+    renderPage({ query: { step: "resolve_rejected,resolve_queried", plan: "annotate,review_and_annotate", stage: "final,done", paused: "no", final: "any" }, onNavigate });
+    await loaded();
+    const filters = screen.getByRole("group", { name: "Document filters" });
+    const step = within(filters).getByLabelText("Next step") as HTMLSelectElement;
+    expect(step.selectedOptions[0].textContent).toBe("Resolve rejected translation or Resolve queried translation");
+    const plan = within(filters).getByLabelText("Plan") as HTMLSelectElement;
+    expect(plan.selectedOptions[0].textContent).toBe("Annotate or Review and annotate");
+    expect((within(filters).getByLabelText("Final result") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Has a final result");
+    expect(within(filters).getByText("Also filtered: Stage Final result or Done · Not paused")).toBeTruthy();
+    // Picking one value replaces the list.
+    fireEvent.change(plan, { target: { value: "annotate" } });
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", step: "resolve_rejected,resolve_queried", plan: "annotate", stage: "final,done", paused: "no", final: "any" });
+    cleanup();
+    mockRows(casesPage(1));
+    renderPage({ query: { step: "assign_annotation", plan: "review" } });
+    await loaded();
+    expect((screen.getByLabelText("Next step") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Assign annotation");
+    expect(screen.queryByText(/Also filtered/)).toBeNull();
+  });
 });
 
 it("applies the ID filter once after a pause in typing", async () => {

@@ -16,17 +16,20 @@ export interface ProjectDocumentsQuery {
   /** Exact case ID (unlike the `q` prefix search). */
   case?: string;
   decision?: string;
+  /** Final result filter (`none` | `any`; legacy `missing`). */
   final?: string;
   /** Bar segment (`decision` | `assign` | `progress`); exclusive with `decision`. */
   segment?: string;
-  /** Next-step code filter. */
+  /** Next-step code filter; several codes comma-joined (OR), as in Progress links. */
   step?: string;
-  /** Stage filter (`translation_review` | `annotation` | `final` | `done`). */
+  /** Stage filter (`translation_review` | `annotation` | `final` | `done`); comma-joined for several. */
   stage?: string;
   /** Owner of the next step: `me` or a pseudonym. */
   owner?: string;
-  /** Plan filter (`review` | `annotate` | `review_and_annotate` | `not_in_plan`). */
+  /** Plan filter (`review` | `annotate` | `review_and_annotate` | `not_in_plan`); comma-joined for several. */
   plan?: string;
+  /** Rows with (`yes`) or without (`no`) a held annotate or review task. */
+  paused?: string;
   /** Sort order (`case` | `import` | `activity`); absent means Case ID. */
   sort?: string;
   /** Expanded rows as `<case>:<language>`; repeatable in the URL. */
@@ -39,7 +42,7 @@ export interface NavigateOptions { replace?: boolean }
 
 const DOCUMENT_FIELDS = [
   "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
-  "segment", "step", "stage", "owner", "plan", "sort", "page",
+  "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
 ] as const;
 
 function readDocumentsQuery(params: URLSearchParams, prefix = ""): ProjectDocumentsQuery {
@@ -146,7 +149,8 @@ function querySuffix(entries: [string, string | undefined][]): string {
   for (const [key, value] of entries) {
     if (value !== undefined) params.append(key, value);
   }
-  const query = params.toString();
+  // Commas stay readable: multi-value filters are comma-joined (`step=resolve_rejected,resolve_queried`).
+  const query = params.toString().replace(/%2C/gi, ",");
   return query ? `?${query}` : "";
 }
 

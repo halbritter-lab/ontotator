@@ -13,12 +13,10 @@ export interface DecisionBarProps {
   /** Time of the shown counts ("Updated 10:42"). */
   updatedAt?: Date | null;
   onRefresh?: () => void;
-  /** Show the quiet "Export final results…" link (the project has a final result). */
-  exportFinals?: boolean;
 }
 
 /** Filters a segment or category link keeps; everything else (case, open, select, page) is dropped. */
-export const BAR_KEPT_FILTERS = ["language", "status", "q", "origin", "translation_status", "step", "stage", "owner", "plan", "final", "sort"] as const;
+export const BAR_KEPT_FILTERS = ["language", "status", "q", "origin", "translation_status", "step", "stage", "owner", "plan", "paused", "final", "sort"] as const;
 /** Filters "Clear filters" removes (sort is an order, not a filter). */
 const CLEARED_FILTERS = BAR_KEPT_FILTERS.filter(name => name !== "sort");
 
@@ -60,10 +58,11 @@ export function activeCount(bar: DecisionBarView, query: ProjectDocumentsQuery):
 /**
  * Bar (spec "Bar (D21)"): segments All · Needs your decision · To assign · In progress over rows
  * in the plan, decision categories under "Needs your decision", "k of n shown · Clear filters"
- * (n = the active segment's count), "Updated 10:42 · Refresh" and "Export final results…".
+ * (n = the active segment's count), "Updated 10:42 · Refresh" and "Export final results…" (shown
+ * when the project has a final result, `bar.finals`, whatever the filters and page show).
  * Segments are mutually exclusive; every link drops `page`.
  */
-export function DecisionBar({ bar, query, projectKey, onNavigate, updatedAt, onRefresh, exportFinals = false }: DecisionBarProps): JSX.Element {
+export function DecisionBar({ bar, query, projectKey, onNavigate, updatedAt, onRefresh }: DecisionBarProps): JSX.Element {
   const active = activeSegment(query);
   const filtersActive = CLEARED_FILTERS.some(name => query[name] !== undefined && query[name] !== "");
   const categoryActive = query.segment === undefined && query.decision !== undefined && query.decision !== "all";
@@ -100,7 +99,7 @@ export function DecisionBar({ bar, query, projectKey, onNavigate, updatedAt, onR
       <p className="decision-bar-meta">
         {updatedAt && <span>{`Updated ${updatedFormat.format(updatedAt)}`}</span>}
         {onRefresh && <Button size="sm" variant="quiet" onClick={onRefresh}>Refresh</Button>}
-        {exportFinals && link({ name: "projectExport", key: projectKey }, "Export final results…", false, "decision-bar-export")}
+        {(bar.finals ?? 0) > 0 && link({ name: "projectExport", key: projectKey }, "Export final results…", false, "decision-bar-export")}
       </p>
       {active === "decision" && (
         <nav className="decision-bar-categories" aria-label="Decision categories">

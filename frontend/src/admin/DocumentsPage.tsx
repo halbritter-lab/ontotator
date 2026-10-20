@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   api,
   type AssignmentView,
-  type DocumentCaseIdsQuery,
   type DocumentRowFilters,
   type CaseSummary,
   type CurrentUser,
@@ -10,6 +9,7 @@ import {
   type DocumentRowView,
   type DocumentRowsPage,
   type DocumentRowsQuery,
+  type DocumentRowsRequest,
   type Member,
   type NextStepView,
   type ProjectDocumentSummary,
@@ -79,10 +79,10 @@ export const SORT_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["so
 ];
 const DECISIONS = new Set(["all", "report-or-pause", "confirm-final", "translation", "missing-final"]);
 const SEGMENTS = new Set(["decision", "assign", "progress"]);
-const STAGES = new Set(["translation_review", "annotation", "final", "done"]);
+const STAGE_LABELS: Readonly<Record<string, string>> = { translation_review: "Translation review", annotation: "Annotation", final: "Final result", done: "Done" };
 const DOCUMENT_FIELDS = [
   "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
-  "segment", "step", "stage", "owner", "plan", "sort", "page",
+  "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
 ] as const;
 /** The ID filter applies this long after the last keystroke (or at once on Enter and blur). */
 export const ID_FILTER_DELAY_MS = 300;
@@ -96,12 +96,24 @@ function documentsQuery(query: ProjectDocumentsQuery): ProjectDocumentsQuery {
   return result;
 }
 
+/** The known values of a comma-joined route filter: one value as is, several as a list (OR), none as undefined. */
+function listFilter<Value extends string>(value: string | undefined, known: (item: string) => boolean): Value | Value[] | undefined {
+  const values = [...new Set((value ?? "").split(",").filter(known))] as Value[];
+  return values.length > 1 ? values : values[0];
+}
+
+/** The values of a list filter (one value or several). */
+function valuesOf<Value>(value: Value | Value[] | null | undefined): Value[] {
+  return value == null ? [] : Array.isArray(value) ? value : [value];
+}
+
 /**
  * Server query for the rows endpoint; unknown values are dropped. `segment` wins over `decision`;
- * a decision filter wins over the legacy `final=missing`; `final=none` combines with anything.
+ * a decision filter wins over every `final` filter (the API takes one of them). `step`, `stage` and
+ * `plan` are comma-joined in the route (Progress links) and sent as lists.
  */
-export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
-  const result: DocumentRowsQuery = {};
+export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsRequest {
+  const result: DocumentRowsRequest = {};
   if (query.language) result.language = query.language;
   if (STATUS_OPTIONS.some(([value]) => value === query.status)) result.status = query.status as DocumentRowsQuery["status"];
   if (query.q) result.q = query.q;
@@ -109,12 +121,15 @@ export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
   if (TRANSLATION_STATUS_OPTIONS.some(([value]) => value === query.translation_status)) result.translation_status = query.translation_status as DocumentRowsQuery["translation_status"];
   if (query.segment && SEGMENTS.has(query.segment)) result.segment = query.segment as DocumentRowsQuery["segment"];
   else if (query.decision && DECISIONS.has(query.decision)) result.decision = query.decision as DocumentRowsQuery["decision"];
-  if (query.final === "none") result.final = "none";
-  else if (query.final === "missing" && result.decision === undefined) result.final = "missing";
-  if (query.step && Object.hasOwn(STEP_LABELS, query.step)) result.step = query.step as DocumentRowsQuery["step"];
-  if (query.stage && STAGES.has(query.stage)) result.stage = query.stage as DocumentRowsQuery["stage"];
+  if (result.decision === undefined && (query.final === "none" || query.final === "any" || query.final === "missing")) result.final = query.final;
+  const step = listFilter<NonNullable<DocumentRowsQuery["step"]>>(query.step, item => Object.hasOwn(STEP_LABELS, item));
+  if (step !== undefined) result.step = step;
+  const stage = listFilter<NonNullable<DocumentRowsQuery["stage"]>>(query.stage, item => Object.hasOwn(STAGE_LABELS, item));
+  if (stage !== undefined) result.stage = stage;
   if (query.owner) result.owner = query.owner;
-  if (PLAN_OPTIONS.some(([value]) => value === query.plan)) result.plan = query.plan as DocumentRowsQuery["plan"];
+  const plan = listFilter<NonNullable<DocumentRowsQuery["plan"]>>(query.plan, item => PLAN_OPTIONS.some(([value]) => value === item));
+  if (plan !== undefined) result.plan = plan;
+  if (query.paused === "yes" || query.paused === "no") result.paused = query.paused;
   if (query.sort && query.sort !== "case" && SORT_OPTIONS.some(([value]) => value === query.sort)) result.sort = query.sort as DocumentRowsQuery["sort"];
   if (query.case) result.case = query.case;
   const page = Number(query.page);
@@ -122,11 +137,9 @@ export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
   return result;
 }
 
-/** The Documents filters for the selection summary and the batch assign dialog (no paging, no ID prefix). */
-export function selectionFilters(request: DocumentRowsQuery): DocumentRowFilters {
-  const { language, case: caseId, segment, step, stage, owner, plan, final, origin, translation_status: translationStatus, status } = request;
-  const filters: DocumentRowFilters = { language, case: caseId, segment, step, stage, owner, plan, final, origin, translation_status: translationStatus, status };
-  for (const name of Object.keys(filters) as (keyof DocumentRowFilters)[]) if (filters[name] === undefined) delete filters[name];
+/** The Documents filters for the selection summary and the batch assign dialog: every filter except paging, sort and retain. */
+export function selectionFilters(request: DocumentRowsRequest): DocumentRowFilters {
+  const { page: _page, sort: _sort, retain: _retain, ...filters } = request;
   return filters;
 }
 
@@ -202,7 +215,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const [retainState, setRetainState] = useState<{ identity: string; keys: readonly string[] } | null>(null);
   const retain = !decisionActive ? []
     : retainState?.identity === filterIdentity ? retainState.keys : retainedKeys(projectKey, filterIdentity);
-  const rows = useDocumentRows(projectKey, retain.length ? { ...request, retain: [...retain] } : request);
+  // `useDocumentRows` is typed with one value per filter; the client sends lists as repeated parameters.
+  const rows = useDocumentRows(projectKey, (retain.length ? { ...request, retain: [...retain] } : request) as DocumentRowsQuery);
   const page: DocumentRowsPage | null = rows.page;
 
   // Live region: a repeated message is cleared first and set again on the next tick so it is re-announced.
@@ -631,7 +645,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     const { page: _page, ...filters } = request;
     setSelectingAll(true);
     try {
-      const result = await api.listDocumentCaseIds(projectKey, filters as DocumentCaseIdsQuery);
+      const result = await api.listDocumentCaseIds(projectKey, filters);
       announceSelection.current = true;
       applyLimit(selection.add(result.case_ids).truncated || result.truncated);
       setAllFiltered({ identity, ids: result.case_ids });
@@ -802,9 +816,15 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const status = STATUS_OPTIONS.some(([value]) => value === query.status) ? query.status! : "";
   const origin = query.origin && Object.hasOwn(originLabels, query.origin) ? query.origin : "";
   const translationStatus = TRANSLATION_STATUS_OPTIONS.some(([value]) => value === query.translation_status) ? query.translation_status! : "";
-  const step = request.step ?? "";
-  const plan = request.plan ?? "";
-  const finalFilter = query.final === "none" ? "none" : "";
+  // Several values (from a Progress link) show as one extra option naming them all.
+  const stepValues = valuesOf(request.step), planValues = valuesOf(request.plan);
+  const step = stepValues.join(","), plan = planValues.join(",");
+  const finalFilter = request.final === "none" || request.final === "any" ? request.final : "";
+  const stageValues = valuesOf(request.stage);
+  const alsoFiltered = [
+    ...(stageValues.length ? [`Stage ${stageValues.map(value => STAGE_LABELS[value]).join(" or ")}`] : []),
+    ...(request.paused ? [request.paused === "yes" ? "Paused" : "Not paused"] : []),
+  ];
   const sort = request.sort ?? "case";
   const moreActive = status !== "" || origin !== "" || translationStatus !== "" || finalFilter !== "" || sort !== "case";
   // "More filters" is the lead's to open and close; it opens by itself only when one of its filters becomes active.
@@ -850,8 +870,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh · <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
-      <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll}
-        exportFinals={page.groups.some(group => group.final_count > 0)} />
+      <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />
       <div className="documents-selection-tools">
         {page.groups.length > 0 && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
           aria-busy={selectingAll || undefined} onChange={() => { void toggleAll(); }} />}
@@ -882,20 +901,24 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       </Select>
       <Select id="documents-step" label="Next step" value={step} onChange={event => changeFilter({ step: event.target.value || undefined })}>
         <option value="">Any next step</option>
+        {stepValues.length > 1 && <option value={step}>{stepValues.map(stepLabel).join(" or ")}</option>}
         {STEP_FILTER_GROUPS.map(([group, codes]) => <optgroup key={group} label={group}>
           {codes.map(code => <option key={code} value={code}>{stepLabel(code)}</option>)}
         </optgroup>)}
       </Select>
       <Select id="documents-plan" label="Plan" value={plan} onChange={event => changeFilter({ plan: event.target.value || undefined })}>
-        <option value="">Any plan</option>{PLAN_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        <option value="">Any plan</option>
+        {planValues.length > 1 && <option value={plan}>{planValues.map(value => PLAN_OPTIONS.find(([option]) => option === value)?.[1] ?? value).join(" or ")}</option>}
+        {PLAN_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </Select>
       <TextInput id="documents-prefix" label="Case ID" value={idText} onChange={event => typeId(event.target.value)} onBlur={() => applyId(idText)}
         onKeyDown={event => { if (event.key === "Enter") applyId(idText); }} />
+      {alsoFiltered.length > 0 && <p className="muted documents-also-filtered">{`Also filtered: ${alsoFiltered.join(" · ")}`}</p>}
       <details className="documents-more-filters" open={moreOpen} onToggle={event => setMoreOpen(event.currentTarget.open)}>
         <summary>More filters</summary>
         <div className="documents-more-filters-body">
           <Select id="documents-final" label="Final result" value={finalFilter} onChange={event => changeFilter({ final: event.target.value || undefined })}>
-            <option value="">Any</option><option value="none">None</option>
+            <option value="">Any</option><option value="none">None</option><option value="any">Has a final result</option>
           </Select>
           <Select id="documents-origin" label="Origin" value={origin} onChange={event => changeFilter({ origin: event.target.value || undefined })}>
             <option value="">All origins</option>{Object.entries(originLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}

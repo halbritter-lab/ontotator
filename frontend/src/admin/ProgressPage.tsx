@@ -4,7 +4,7 @@ import { personLabel } from "../app/identity";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Button, EmptyState, IconChevronRight, IconWarning, InlineMessage, Toolbar } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
-import { countLabel, ledeSentence, stageCards, type StageCard } from "./progressLabels";
+import { countLabel, ledeSentence, stageCards, type StageCard, type StageRow } from "./progressLabels";
 
 export interface ProgressPageProps { projectKey: string; onNavigate: (route: Route) => void }
 
@@ -52,6 +52,10 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
   const people = (progress?.workload ?? []).map((entry, index) => ({ entry, index }))
     .sort((left, right) => openWork(right.entry) - openWork(left.entry) || left.index - right.index).map(item => item.entry);
 
+  const countContent = (row: StageRow) => <>
+    {row.warning && <IconWarning className="progress-count-warning" />}
+    <span className="progress-count-label">{row.label}</span><span className="progress-count-n">{row.count}</span>
+  </>;
   const stageCard = (card: StageCard, last: boolean) => {
     const percent = card.total > 0 ? Math.round((card.doneCount / card.total) * 100) : 0;
     return <li key={card.id} className="progress-pipeline-item">
@@ -62,10 +66,9 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
         <p className="progress-stage-done"><strong>{`${card.doneCount} of ${card.total}`}</strong>{card.done.slice(`${card.doneCount} of ${card.total}`.length)}</p>
         <ul className="progress-counts">
           {card.rows.map(row => <li key={row.key} className={`progress-count${row.count === 0 ? " progress-count--zero" : ""}`}>
-            <RouteLink route={documents(row.query)} onNavigate={onNavigate} label={`${row.label}: ${row.count}`}>
-              {row.warning && <IconWarning className="progress-count-warning" />}
-              <span className="progress-count-label">{row.label}</span><span className="progress-count-n">{row.count}</span>
-            </RouteLink>
+            {row.query
+              ? <RouteLink route={documents(row.query)} onNavigate={onNavigate} label={`${row.label}: ${row.count}`}>{countContent(row)}</RouteLink>
+              : countContent(row)}
           </li>)}
         </ul>
         {card.footer && <p className="progress-stage-foot">

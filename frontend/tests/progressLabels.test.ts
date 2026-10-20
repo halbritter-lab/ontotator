@@ -28,7 +28,31 @@ describe("progress labels", () => {
     expect(countLabel(1, "needs your decision", "need your decision")).toBe("1 needs your decision");
   });
 
-  it("describes the three stage cards with Documents filters", () => {
+  it("links every count to the server's query", () => {
+    const linked: ProgressStagesView = {
+      ...stages,
+      translation_review: { ...stages.translation_review, links: {
+        to_assign: { plan: ["review", "review_and_annotate"], step: ["assign_translation_review"], stage: [], translation_status: null, paused: null, final: null },
+        rejected_or_queried: { plan: ["review", "review_and_annotate"], step: ["resolve_rejected", "resolve_queried"] },
+        check_failed_with_reviewer: { plan: ["review", "review_and_annotate"], translation_status: "automatic_check_failed", step: ["translation_review_in_progress"] },
+      } },
+      annotation: { ...stages.annotation, links: { paused: { plan: ["annotate", "review_and_annotate"], paused: "yes" }, submitted: { plan: ["annotate", "review_and_annotate"], stage: ["final", "done"], paused: "no" } } },
+      final: { ...stages.final, links: { final: { plan: ["annotate", "review_and_annotate"], final: "any" } } },
+    };
+    const cards = stageCards(linked, null);
+    const query = (card: number, key: string) => cards[card].rows.find(row => row.key === key)?.query;
+    expect(query(0, "to_assign")).toEqual({ plan: "review,review_and_annotate", step: "assign_translation_review" });
+    expect(query(0, "rejected_or_queried")).toEqual({ plan: "review,review_and_annotate", step: "resolve_rejected,resolve_queried" });
+    expect(query(0, "check_failed_with_reviewer")).toEqual({ plan: "review,review_and_annotate", translation_status: "automatic_check_failed", step: "translation_review_in_progress" });
+    expect(query(1, "paused")).toEqual({ plan: "annotate,review_and_annotate", paused: "yes" });
+    expect(query(1, "submitted")).toEqual({ plan: "annotate,review_and_annotate", stage: "final,done", paused: "no" });
+    expect(query(2, "final")).toEqual({ plan: "annotate,review_and_annotate", final: "any" });
+    // A count the server sends no query for has no link (no local query table).
+    expect(query(0, "accepted")).toBeUndefined();
+    expect(stageCards(stages, null).flatMap(card => card.rows).every(row => row.query === undefined)).toBe(true);
+  });
+
+  it("describes the three stage cards", () => {
     const cards = stageCards(stages, 2);
     expect(cards.map(card => card.title)).toEqual(["Translation review", "Annotation", "Final result"]);
     expect(cards.map(card => card.done)).toEqual(["2 of 7 accepted", "2 of 11 fully submitted", "1 of 11 final"]);
@@ -37,25 +61,25 @@ describe("progress labels", () => {
       "11 language versions selected · 2 annotations per text",
       "11 language versions selected for annotation",
     ]);
-    expect(cards[0].rows.map(row => [row.label, row.count, row.query])).toEqual([
-      ["To assign", 3, { step: "assign_translation_review" }],
-      ["In review", 2, { step: "translation_review_in_progress" }],
-      ["Check failed, with reviewer", 1, { step: "translation_review_in_progress", translation_status: "automatic_check_failed" }],
-      ["Rejected or queried · your decision", 0, { decision: "translation" }],
-      ["Accepted", 2, { translation_status: "accepted" }],
+    expect(cards[0].rows.map(row => [row.label, row.count])).toEqual([
+      ["To assign", 3],
+      ["In review", 2],
+      ["Check failed, with reviewer", 1],
+      ["Rejected or queried · your decision", 0],
+      ["Accepted", 2],
     ]);
-    expect(cards[1].rows.map(row => [row.label, row.count, row.query])).toEqual([
-      ["Waiting for translation review", 4, { step: "waiting_for_translation_review" }],
-      ["To assign", 3, { step: "assign_annotation" }],
-      ["In progress", 1, { step: "annotation_in_progress" }],
-      ["Paused by a problem report", 1, { status: "held" }],
-      ["Submitted", 2, { status: "submitted" }],
+    expect(cards[1].rows.map(row => [row.label, row.count])).toEqual([
+      ["Waiting for translation review", 4],
+      ["To assign", 3],
+      ["In progress", 1],
+      ["Paused by a problem report", 1],
+      ["Submitted", 2],
     ]);
-    expect(cards[2].rows.map(row => [row.label, row.count, row.query])).toEqual([
-      ["Not ready (work open)", 9, { final: "none" }],
-      ["To choose · your decision", 1, { step: "choose_final" }],
-      ["To confirm · your decision", 0, { step: "confirm_final" }],
-      ["Final", 1, { stage: "done" }],
+    expect(cards[2].rows.map(row => [row.label, row.count])).toEqual([
+      ["Not ready (work open)", 9],
+      ["To choose · your decision", 1],
+      ["To confirm · your decision", 0],
+      ["Final", 1],
     ]);
     expect(cards[2].footer).toBe("(1 final, 10 would be omitted)");
     expect(cards[1].scope).toContain("2 annotations per text");

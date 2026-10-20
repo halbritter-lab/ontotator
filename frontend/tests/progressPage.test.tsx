@@ -1,18 +1,39 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api, ApiError, AuthError, type ProjectProgress } from "../src/api/client";
+import { api, ApiError, AuthError, type DocumentLinkQuery, type ProjectProgress } from "../src/api/client";
 import { ProgressPage } from "../src/admin/ProgressPage";
 import { settings } from "./projectFixtures";
 
+const REVIEW_ON = { plan: ["review", "review_and_annotate"] } satisfies DocumentLinkQuery;
+const ANNOTATE_ON = { plan: ["annotate", "review_and_annotate"] } satisfies DocumentLinkQuery;
 const progress: ProjectProgress = {
   totals: { documents: 9, unassigned: 3, open: 12, in_progress: 4, submitted: 8, reopened: 2 },
   people: [],
   documents: [{ document_id: "old-document", language: "de", position: null, assignees: [] }],
   lede: { cases: 10, translations_to_review: 5, versions_to_annotate: 11, not_in_plan: 6, needs_decision: 2, to_assign: 6 },
   stages: {
-    translation_review: { scope: "review", done: 2, total: 7, counts: { to_assign: 3, in_review: 2, check_failed: 1, check_failed_with_reviewer: 1, rejected_or_queried: 0, accepted: 2 } },
-    annotation: { scope: "annotate", done: 2, total: 11, counts: { waiting_for_review: 4, to_assign: 3, in_progress: 1, paused: 1, submitted: 2 } },
-    final: { scope: "annotate", done: 1, total: 11, counts: { not_ready: 9, to_choose: 1, to_confirm: 0, final: 1, would_be_omitted: 10 } },
+    translation_review: { scope: "review", done: 2, total: 7, counts: { to_assign: 3, in_review: 2, check_failed: 1, check_failed_with_reviewer: 1, rejected_or_queried: 0, accepted: 2 }, links: {
+      to_assign: { ...REVIEW_ON, step: ["assign_translation_review"] },
+      in_review: { ...REVIEW_ON, step: ["translation_review_in_progress"] },
+      check_failed: { ...REVIEW_ON, translation_status: "automatic_check_failed" },
+      check_failed_with_reviewer: { ...REVIEW_ON, step: ["translation_review_in_progress"], translation_status: "automatic_check_failed" },
+      rejected_or_queried: { ...REVIEW_ON, step: ["resolve_rejected", "resolve_queried"] },
+      accepted: { ...REVIEW_ON, translation_status: "accepted" },
+    } },
+    annotation: { scope: "annotate", done: 2, total: 11, counts: { waiting_for_review: 4, to_assign: 3, in_progress: 1, paused: 1, submitted: 2 }, links: {
+      waiting_for_review: { ...ANNOTATE_ON, step: ["translation_review_in_progress", "waiting_for_translation_review"] },
+      to_assign: { ...ANNOTATE_ON, step: ["assign_annotation"] },
+      in_progress: { ...ANNOTATE_ON, step: ["annotation_in_progress", "annotation_review_in_progress"], paused: "no" },
+      paused: { ...ANNOTATE_ON, paused: "yes" },
+      submitted: { ...ANNOTATE_ON, stage: ["final", "done"], paused: "no" },
+    } },
+    final: { scope: "annotate", done: 1, total: 11, counts: { not_ready: 9, to_choose: 1, to_confirm: 0, final: 1, would_be_omitted: 10 }, links: {
+      not_ready: { ...ANNOTATE_ON, stage: ["translation_review", "annotation"] },
+      to_choose: { ...ANNOTATE_ON, step: ["choose_final"] },
+      to_confirm: { ...ANNOTATE_ON, step: ["confirm_final"] },
+      final: { ...ANNOTATE_ON, final: "any" },
+      would_be_omitted: { ...ANNOTATE_ON, final: "none" },
+    } },
   },
   workload: [
     { person: { pseudonym: "ann-0005", display_name: "Second annotator", is_me: false }, username: "second", translation_reviews_open: 0, annotations_open: 1, reviews_open: 0, paused: 0, submitted: 1 },
@@ -65,24 +86,40 @@ it("renders three stage cards as an ordered list with decorative arrows", async 
   for (const meter of list.querySelectorAll(".progress-meter")) expect(meter.getAttribute("aria-hidden")).toBe("true");
 });
 
-it("links every count to filtered Documents", async () => {
+it("links every count to the server's query", async () => {
   const navigate = vi.fn();
   render(<ProgressPage projectKey="p" onNavigate={navigate} />);
   await pipeline();
-  const toAssign = within(card("Translation review")).getByRole("link", { name: "To assign: 3" });
-  expect(toAssign.getAttribute("href")).toBe("#/projects/p/documents?step=assign_translation_review");
-  expect(within(card("Translation review")).getByRole("link", { name: "Check failed, with reviewer: 1" }).getAttribute("href"))
-    .toBe("#/projects/p/documents?translation_status=automatic_check_failed&step=translation_review_in_progress");
-  expect(within(card("Annotation")).getByRole("link", { name: "To assign: 3" }).getAttribute("href")).toBe("#/projects/p/documents?step=assign_annotation");
-  expect(within(card("Annotation")).getByRole("link", { name: "Paused by a problem report: 1" }).getAttribute("href")).toBe("#/projects/p/documents?status=held");
-  expect(within(card("Final result")).getByRole("link", { name: "To choose · your decision: 1" }).getAttribute("href")).toBe("#/projects/p/documents?step=choose_final");
+  const href = (name: string, label: string) => within(card(name)).getByRole("link", { name: label }).getAttribute("href");
+  const review = "plan=review,review_and_annotate", annotate = "plan=annotate,review_and_annotate";
+  expect(href("Translation review", "To assign: 3")).toBe(`#/projects/p/documents?step=assign_translation_review&${review}`);
+  expect(href("Translation review", "Check failed, with reviewer: 1"))
+    .toBe(`#/projects/p/documents?translation_status=automatic_check_failed&step=translation_review_in_progress&${review}`);
+  expect(href("Translation review", "Rejected or queried · your decision: 0")).toBe(`#/projects/p/documents?step=resolve_rejected,resolve_queried&${review}`);
+  expect(href("Translation review", "Accepted: 2")).toBe(`#/projects/p/documents?translation_status=accepted&${review}`);
+  expect(href("Annotation", "Waiting for translation review: 4")).toBe(`#/projects/p/documents?step=translation_review_in_progress,waiting_for_translation_review&${annotate}`);
+  expect(href("Annotation", "In progress: 1")).toBe(`#/projects/p/documents?step=annotation_in_progress,annotation_review_in_progress&${annotate}&paused=no`);
+  expect(href("Annotation", "Paused by a problem report: 1")).toBe(`#/projects/p/documents?${annotate}&paused=yes`);
+  expect(href("Annotation", "Submitted: 2")).toBe(`#/projects/p/documents?stage=final,done&${annotate}&paused=no`);
+  expect(href("Final result", "Not ready (work open): 9")).toBe(`#/projects/p/documents?stage=translation_review,annotation&${annotate}`);
+  expect(href("Final result", "To choose · your decision: 1")).toBe(`#/projects/p/documents?step=choose_final&${annotate}`);
+  expect(href("Final result", "Final: 1")).toBe(`#/projects/p/documents?final=any&${annotate}`);
   const exportLink = within(card("Final result")).getByRole("link", { name: "Export final results…" });
   expect(exportLink.getAttribute("href")).toBe("#/projects/p/export");
   expect(exportLink.parentElement?.textContent).toContain("(1 final, 10 would be omitted)");
-  fireEvent.click(toAssign);
-  expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", step: "assign_translation_review" });
+  fireEvent.click(within(card("Translation review")).getByRole("link", { name: "Rejected or queried · your decision: 0" }));
+  expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", plan: "review,review_and_annotate", step: "resolve_rejected,resolve_queried" });
   fireEvent.click(exportLink);
   expect(navigate).toHaveBeenCalledWith({ name: "projectExport", key: "p" });
+});
+
+it("shows a count without a server query as text", async () => {
+  const { links: _links, ...review } = progress.stages!.translation_review;
+  vi.mocked(api.getProgress).mockResolvedValueOnce({ ...progress, stages: { ...progress.stages!, translation_review: review } });
+  render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />);
+  await pipeline();
+  expect(within(card("Translation review")).queryByRole("link", { name: "To assign: 3" })).toBeNull();
+  expect(within(card("Translation review")).getByText("To assign").closest("li")?.textContent).toBe("To assign3");
 });
 
 it("mutes zero counts", async () => {

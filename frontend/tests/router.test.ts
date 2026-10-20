@@ -165,6 +165,21 @@ describe("Documents deep-link parameters", () => {
     const viewer: Route = { name: "projectCase", key: "p", caseId: "c", documents: { segment: "progress", plan: "review", sort: "case" } };
     expect(parseRoute(routeHref(viewer))).toEqual(viewer);
   });
+  it("round-trips comma-joined step, stage and plan", () => {
+    const route: Route = { name: "projectDocuments", key: "p", plan: "review,review_and_annotate", step: "resolve_rejected,resolve_queried", stage: "final,done" };
+    expect(routeHref(route)).toBe("#/projects/p/documents?step=resolve_rejected,resolve_queried&stage=final,done&plan=review,review_and_annotate");
+    expect(parseRoute(routeHref(route))).toEqual(route);
+    expect(parseRoute("#/projects/p/documents?step=resolve_rejected%2Cresolve_queried")).toEqual({ name: "projectDocuments", key: "p", step: "resolve_rejected,resolve_queried" });
+    const viewer: Route = { name: "projectCase", key: "p", caseId: "c", documents: { step: "annotation_in_progress,annotation_review_in_progress" } };
+    expect(parseRoute(routeHref(viewer))).toEqual(viewer);
+  });
+  it("keeps final=any and paused", () => {
+    const route: Route = { name: "projectDocuments", key: "p", plan: "annotate,review_and_annotate", final: "any", paused: "no" };
+    expect(routeHref(route)).toBe("#/projects/p/documents?final=any&plan=annotate,review_and_annotate&paused=no");
+    expect(parseRoute(routeHref(route))).toEqual(route);
+    const report: Route = { name: "projectProblemReport", key: "p", reportId: "r", documents: { paused: "yes" } };
+    expect(parseRoute(routeHref(report))).toEqual(report);
+  });
   it("round_trips_the_report_decide_section", () => {
     const report: Route = { name: "projectProblemReport", key: "p", reportId: "r-1", section: "decide" };
     expect(routeHref(report)).toBe("#/projects/p/problem-reports/r-1?section=decide");

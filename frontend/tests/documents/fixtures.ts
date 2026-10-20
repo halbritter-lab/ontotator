@@ -164,6 +164,8 @@ export function barFor(groups: readonly DocumentGroupView[]): DecisionBarView {
     missing_final: count("missing-final"),
     no_final: rows.filter(entry => entry.final === null).length,
     shown: total,
+    // Project-wide in the API; the fixture's project is the given groups.
+    finals: rows.filter(entry => entry.final !== null).length,
   });
 }
 

@@ -67,10 +67,10 @@ it("shows decision categories under Needs your decision and marks a category", (
 });
 
 it("compares shown rows against the active segment's count and offers Clear filters", () => {
-  renderBar({ segment: "assign", language: "de", plan: "review", step: "assign_translation_review", final: "none", page: "2" }, { ...counts, shown: 4 });
+  renderBar({ segment: "assign", language: "de", plan: "review,annotate", step: "assign_translation_review", stage: "final,done", paused: "no", final: "none", page: "2" }, { ...counts, shown: 4 });
   expect(screen.getByText("4 of 12 shown", { exact: false })).toBeTruthy();
   const params = paramsOf("Clear filters");
-  for (const name of ["language", "plan", "step", "final", "page"]) expect(params.has(name)).toBe(false);
+  for (const name of ["language", "plan", "step", "stage", "paused", "final", "page"]) expect(params.has(name)).toBe(false);
   expect(params.get("segment")).toBe("assign");
   cleanup();
   renderBar({ decision: "translation", language: "de" }, { ...counts, shown: 1 });
@@ -78,6 +78,22 @@ it("compares shown rows against the active segment's count and offers Clear filt
   cleanup();
   renderBar({ language: "de" }, { ...counts, shown: 40 });
   expect(screen.queryByRole("link", { name: "Clear filters" })).toBeNull();
+});
+
+it("keeps paused and comma-joined filters on segment links", () => {
+  renderBar({ plan: "annotate,review_and_annotate", paused: "yes", final: "any" });
+  const all = paramsOf("To assign (12)");
+  expect(all.get("plan")).toBe("annotate,review_and_annotate");
+  expect(all.get("paused")).toBe("yes");
+  expect(all.get("final")).toBe("any");
+});
+
+it("shows Export final results… from the project-wide final count", () => {
+  renderBar({ segment: "assign" }, { ...counts, finals: 3, shown: 0 });
+  expect(link("Export final results…").getAttribute("href")).toBe("#/projects/p/export");
+  cleanup();
+  renderBar({}, { ...counts, finals: 0 });
+  expect(screen.queryByRole("link", { name: "Export final results…" })).toBeNull();
 });
 
 it("moves No final result to More filters", () => {
@@ -89,7 +105,7 @@ it("moves No final result to More filters", () => {
 
 it("shows when the rows were updated with Refresh and the export link", () => {
   const onRefresh = vi.fn();
-  renderBar({}, counts, { updatedAt: new Date(2026, 9, 20, 10, 42), onRefresh, exportFinals: true });
+  renderBar({}, { ...counts, finals: 1 }, { updatedAt: new Date(2026, 9, 20, 10, 42), onRefresh });
   expect(screen.getByText("Updated 10:42")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   expect(onRefresh).toHaveBeenCalled();

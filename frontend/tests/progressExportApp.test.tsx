@@ -14,7 +14,7 @@ const progress: ProjectProgress = {
   totals: { documents: 1, unassigned: 1, open: 0, in_progress: 0, submitted: 0, reopened: 0 }, people: [], documents: [document],
   lede: { cases: 1, translations_to_review: 3, versions_to_annotate: 1, not_in_plan: 0, needs_decision: 0, to_assign: 3 },
   stages: {
-    translation_review: { scope: "review", done: 0, total: 3, counts: { to_assign: 3, in_review: 0, check_failed: 0, check_failed_with_reviewer: 0, rejected_or_queried: 0, accepted: 0 } },
+    translation_review: { scope: "review", done: 0, total: 3, counts: { to_assign: 3, in_review: 0, check_failed: 0, check_failed_with_reviewer: 0, rejected_or_queried: 0, accepted: 0 }, links: { to_assign: { plan: ["review", "review_and_annotate"], step: ["assign_translation_review"] } } },
     annotation: { scope: "annotate", done: 0, total: 1, counts: { waiting_for_review: 1, to_assign: 0, in_progress: 0, paused: 0, submitted: 0 } },
     final: { scope: "annotate", done: 0, total: 1, counts: { not_ready: 1, to_choose: 0, to_confirm: 0, final: 0, would_be_omitted: 1 } },
   },
@@ -43,7 +43,7 @@ it("follows a Progress stage count to filtered Documents through App", async () 
   const card = await screen.findByRole("region", { name: "Translation review" });
   expect(api.getProgress).toHaveBeenCalledWith("p/key");
   const link = within(card).getByRole("link", { name: "To assign: 3" });
-  expect(link.getAttribute("href")).toBe("#/projects/p%2Fkey/documents?step=assign_translation_review");
+  expect(link.getAttribute("href")).toBe("#/projects/p%2Fkey/documents?step=assign_translation_review&plan=review,review_and_annotate");
   fireEvent.click(link);
   await screen.findByRole("heading", { name: "Documents" });
   expect(window.location.hash).toBe(link.getAttribute("href"));
