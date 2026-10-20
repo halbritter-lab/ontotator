@@ -161,39 +161,46 @@ ImportPlanSetting = Literal["nothing", "review_and_annotate_translations"]
 TriState = Literal["keep", "on", "off"]
 Preset = Literal["review_and_annotate_translations", "annotate_only"]
 
+
 @dataclass(frozen=True)
 class RowKey:
     case_id: str
     language: str
+
 
 @dataclass(frozen=True)
 class PlanFlags:
     review: bool
     annotate: bool
 
+
 @dataclass(frozen=True)
 class LanguageVersion:
     """One Documents row as the plan sees it."""
+
     case_id: str
     language: str
-    is_source: bool            # the row holds the case's native root(s)
-    accepted: bool             # every root's newest version is `accepted` (False for sources)
-    marked_in_package: bool    # newest version carries a `package` acceptance
-    discarded: bool = False    # every root of the row is discarded
+    is_source: bool  # the row holds the case's native root(s)
+    accepted: bool  # every root's newest version is `accepted` (False for sources)
+    marked_in_package: bool  # newest version carries a `package` acceptance
+    discarded: bool = False  # every root of the row is discarded
     review_blocked: bool = False  # a root's newest version is rejected/queried or has an open translation review (not acceptable externally)
+
 
 @dataclass(frozen=True)
 class LanguageChange:
     review: TriState = "keep"
     annotate: TriState = "keep"
 
+
 @dataclass(frozen=True)
 class OpenTask:
     assignment_id: int
     case_id: str
     language: str
-    task: str                  # "translation_review" | "annotate" | "review"
+    task: str  # "translation_review" | "annotate" | "review"
     user_id: int
+
 
 @dataclass(frozen=True)
 class OpenReport:
@@ -201,29 +208,57 @@ class OpenReport:
     case_id: str
     language: str
     assignment_id: int | None
-    held: bool                 # an active task hold belongs to the report
+    held: bool  # an active task hold belongs to the report
+
 
 @dataclass(frozen=True)
 class Consequences:
     withdrawn: tuple[OpenTask, ...]
     finals_leaving: tuple[RowKey, ...]
     restored: tuple[RowKey, ...]
-    open_reports: tuple[OpenReport, ...] = ()   # open reports on rows whose flag turns off; they stay open
+    open_reports: tuple[
+        OpenReport, ...
+    ] = ()  # open reports on rows whose flag turns off; they stay open
 
     @property
     def any(self) -> bool: ...
+
 
 @dataclass(frozen=True)
 class Invalid:
     key: RowKey
     reason: Literal["source_review", "annotate_not_accepted", "not_acceptable"]
 
-def import_defaults(setting: ImportPlanSetting, rows: Sequence[LanguageVersion]) -> dict[RowKey, PlanFlags]: ...
-def validate(changes: Mapping[RowKey, PlanFlags], rows: Mapping[RowKey, LanguageVersion], *, rule_on: bool, accepting: frozenset[RowKey] = frozenset()) -> list[Invalid]: ...
-def merge(current: Mapping[RowKey, PlanFlags], rows: Mapping[RowKey, LanguageVersion], case_ids: Sequence[str], languages: Mapping[str, LanguageChange]) -> dict[RowKey, PlanFlags]: ...  # key "source" targets each case's source row(s)
-def preset_changes(preset: Preset, rows: Iterable[LanguageVersion]) -> dict[str, LanguageChange]: ...
-def consequences(old: Mapping[RowKey, PlanFlags], new: Mapping[RowKey, PlanFlags], open_tasks: Sequence[OpenTask], finals: frozenset[RowKey], reports: Sequence[OpenReport] = ()) -> Consequences: ...
-def mixed_counts(current: Mapping[RowKey, PlanFlags], keys: Iterable[RowKey]) -> dict[str, int]: ...  # {"review_on", "review_off", "annotate_on", "annotate_off"}
+
+def import_defaults(
+    setting: ImportPlanSetting, rows: Sequence[LanguageVersion]
+) -> dict[RowKey, PlanFlags]: ...
+def validate(
+    changes: Mapping[RowKey, PlanFlags],
+    rows: Mapping[RowKey, LanguageVersion],
+    *,
+    rule_on: bool,
+    accepting: frozenset[RowKey] = frozenset(),
+) -> list[Invalid]: ...
+def merge(
+    current: Mapping[RowKey, PlanFlags],
+    rows: Mapping[RowKey, LanguageVersion],
+    case_ids: Sequence[str],
+    languages: Mapping[str, LanguageChange],
+) -> dict[RowKey, PlanFlags]: ...  # key "source" targets each case's source row(s)
+def preset_changes(
+    preset: Preset, rows: Iterable[LanguageVersion]
+) -> dict[str, LanguageChange]: ...
+def consequences(
+    old: Mapping[RowKey, PlanFlags],
+    new: Mapping[RowKey, PlanFlags],
+    open_tasks: Sequence[OpenTask],
+    finals: frozenset[RowKey],
+    reports: Sequence[OpenReport] = (),
+) -> Consequences: ...
+def mixed_counts(
+    current: Mapping[RowKey, PlanFlags], keys: Iterable[RowKey]
+) -> dict[str, int]: ...  # {"review_on", "review_off", "annotate_on", "annotate_off"}
 ```
 
 Tables (L0a, `src/ontocurator/storage/plan_tables.py`, imported at the end of `storage/tables.py` like `final_tables`): `work_plans(id, project_id, case_id, revision CHECK (revision >= 1), updated_at; unique(project_id, case_id))`, `work_plan_rows(id, project_id, case_id, language, review, annotate, restored_revision NULL, updated_by NULL FK → users, updated_at, created_at; unique(project_id, case_id, language))`, `translation_acceptances(id, project_id, document_id, source CHECK IN ('package','lead','override'), reason NULL CHECK (source = 'package' OR reason IS NOT NULL), accepted_by NULL FK → users, accepted_at, upload_id NULL FK → uploads, metadata jsonb '{}'; FK (project_id, document_id) → documents)`, `discarded_variants(id, project_id, document_id, reason, discarded_by FK → users, discarded_at; unique(project_id, document_id); FK → documents)`. `translation_acceptances` and `discarded_variants` are append-only (added to `APPEND_ONLY_TABLES`). `projects.annotations_per_text` (int, server default 1, CHECK 1–5), `projects.import_plan` (text, server default `'review_and_annotate_translations'`, CHECK in the two values).
@@ -231,18 +266,59 @@ Tables (L0a, `src/ontocurator/storage/plan_tables.py`, imported at the end of `s
 Store (L0a, `src/ontocurator/storage/work_plan_store.py`, conn-scoped, no transactions of its own):
 
 ```python
-def language_versions(conn, project_id: int, case_ids: Sequence[str] | None = None) -> dict[RowKey, LanguageVersion]: ...
-def plan_rows(conn, project_id: int, case_ids: Sequence[str] | None = None) -> dict[RowKey, PlanFlags]: ...   # stored rows only
-def effective_plan(conn, project_id: int, case_ids: Sequence[str] | None = None) -> dict[RowKey, PlanFlags]: ...  # stored rows, plus import_defaults(project.import_plan) for language versions without a stored row
-def revisions(conn, project_id: int, case_ids: Sequence[str]) -> dict[str, int]: ...  # a case without a work_plans row has revision 1
-def restored(conn, project_id: int) -> dict[RowKey, int]: ...   # row → restored_revision
-def write_rows(conn, project_id: int, rows: Mapping[RowKey, PlanFlags], *, actor_id: int | None, restored: Mapping[RowKey, int | None] = {}) -> dict[str, int]: ...  # upsert; each touched case stores current revision + 1 (missing row = 1, so the first write stores 2); a key in `restored` sets restored_revision exactly (None clears); other rows clear it when annotate turns off; returns new revisions
-def ensure_rows(conn, project_id: int, defaults: Mapping[RowKey, PlanFlags]) -> int: ...  # insert only missing rows (work_plans row inserted at revision 1 when missing), return count
-def open_tasks(conn, project_id: int, keys: Iterable[RowKey], *, lock: bool = False) -> list[OpenTask]: ...  # non-revoked, not submitted; lock=True adds .with_for_update(key_share=True) like projects.assignments.unsupported_assignments
-def open_reports(conn, project_id: int, keys: Iterable[RowKey]) -> list[OpenReport]: ...  # problem_report_state.state == 'open' on a document of the row; held = an active task_hold_state for it
+def language_versions(
+    conn, project_id: int, case_ids: Sequence[str] | None = None
+) -> dict[RowKey, LanguageVersion]: ...
+def plan_rows(
+    conn, project_id: int, case_ids: Sequence[str] | None = None
+) -> dict[RowKey, PlanFlags]: ...  # stored rows only
+def effective_plan(
+    conn, project_id: int, case_ids: Sequence[str] | None = None
+) -> dict[
+    RowKey, PlanFlags
+]: ...  # stored rows, plus import_defaults(project.import_plan) for language versions without a stored row
+def revisions(
+    conn, project_id: int, case_ids: Sequence[str]
+) -> dict[str, int]: ...  # a case without a work_plans row has revision 1
+def restored(conn, project_id: int) -> dict[RowKey, int]: ...  # row → restored_revision
+def write_rows(
+    conn,
+    project_id: int,
+    rows: Mapping[RowKey, PlanFlags],
+    *,
+    actor_id: int | None,
+    restored: Mapping[RowKey, int | None] = {},
+) -> dict[
+    str, int
+]: ...  # upsert; each touched case stores current revision + 1 (missing row = 1, so the first write stores 2); a key in `restored` sets restored_revision exactly (None clears); other rows clear it when annotate turns off; returns new revisions
+def ensure_rows(
+    conn, project_id: int, defaults: Mapping[RowKey, PlanFlags]
+) -> int: ...  # insert only missing rows (work_plans row inserted at revision 1 when missing), return count
+def open_tasks(
+    conn, project_id: int, keys: Iterable[RowKey], *, lock: bool = False
+) -> list[
+    OpenTask
+]: ...  # non-revoked, not submitted; lock=True adds .with_for_update(key_share=True) like projects.assignments.unsupported_assignments
+def open_reports(
+    conn, project_id: int, keys: Iterable[RowKey]
+) -> list[
+    OpenReport
+]: ...  # problem_report_state.state == 'open' on a document of the row; held = an active task_hold_state for it
 def final_keys(conn, project_id: int) -> frozenset[RowKey]: ...
-def add_acceptance(conn, project_id: int, document_id: str, *, source: str, reason: str | None, accepted_by: int | None, upload_id: int | None = None, metadata: Mapping[str, Any] = {}) -> None: ...
-def acceptances(conn, project_id: int) -> dict[str, dict[str, Any]]: ...   # newest acceptance per document_id
+def add_acceptance(
+    conn,
+    project_id: int,
+    document_id: str,
+    *,
+    source: str,
+    reason: str | None,
+    accepted_by: int | None,
+    upload_id: int | None = None,
+    metadata: Mapping[str, Any] = {},
+) -> None: ...
+def acceptances(
+    conn, project_id: int
+) -> dict[str, dict[str, Any]]: ...  # newest acceptance per document_id
 def discarded(conn, project_id: int) -> dict[str, dict[str, Any]]: ...
 ```
 
@@ -251,62 +327,171 @@ Error codes (L0b adds to `ADMIN_ERROR_CODES`, `errors.ts` messages and the `app.
 API models (L0b, `src/ontocurator/api/work_plan_routes.py`; `PersonRefView` in `src/ontocurator/api/person_views.py`, loader `person_refs` in `src/ontocurator/application/people.py`):
 
 ```python
-class PersonRefView(BaseModel):          # display_name only for lead callers; None otherwise
+class PersonRefView(BaseModel):  # display_name only for lead callers; None otherwise
     pseudonym: str
     display_name: str | None = None
     is_me: bool = False
 
-class PlanFlagsView(BaseModel): review: bool; annotate: bool; review_applicable: bool; discarded: bool = False
-class RowRefView(BaseModel): case_id: str; language: str
-class WithdrawnTaskView(BaseModel): assignment_id: int; case_id: str; language: str; task: Task; person: PersonRefView
-class OpenReportView(BaseModel): report_id: str; case_id: str; language: str; assignment_id: int | None = None; held: bool = False
-class ConsequencesView(BaseModel): withdrawn: list[WithdrawnTaskView]; finals_leaving: list[RowRefView]; restored: list[RowRefView]; open_reports: list[OpenReportView] = []
-class UndoRowView(BaseModel): case_id: str; language: str; review: bool; annotate: bool; restored_revision: int | None = None
-class UndoView(BaseModel): rows: list[UndoRowView]; revisions: dict[str, int]
-class AcceptExternalReview(BaseModel): reason: str = Field(min_length=1, max_length=2000)
+
+class PlanFlagsView(BaseModel):
+    review: bool
+    annotate: bool
+    review_applicable: bool
+    discarded: bool = False
+
+
+class RowRefView(BaseModel):
+    case_id: str
+    language: str
+
+
+class WithdrawnTaskView(BaseModel):
+    assignment_id: int
+    case_id: str
+    language: str
+    task: Task
+    person: PersonRefView
+
+
+class OpenReportView(BaseModel):
+    report_id: str
+    case_id: str
+    language: str
+    assignment_id: int | None = None
+    held: bool = False
+
+
+class ConsequencesView(BaseModel):
+    withdrawn: list[WithdrawnTaskView]
+    finals_leaving: list[RowRefView]
+    restored: list[RowRefView]
+    open_reports: list[OpenReportView] = []
+
+
+class UndoRowView(BaseModel):
+    case_id: str
+    language: str
+    review: bool
+    annotate: bool
+    restored_revision: int | None = None
+
+
+class UndoView(BaseModel):
+    rows: list[UndoRowView]
+    revisions: dict[str, int]
+
+
+class AcceptExternalReview(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
 
 # PATCH /api/v1/projects/{key}/work-plans/{case_id:path}/{language}
-class PlanRowPatch(BaseModel): review: bool | None = None; annotate: bool | None = None; expected_revision: int; confirm: bool = False; accept_external_review: AcceptExternalReview | None = None
-class PlanRowResult(BaseModel): case_id: str; language: str; flags: PlanFlagsView; revision: int; undo: UndoView; withdrawn: list[WithdrawnTaskView]; accepted_document_ids: list[str]
+class PlanRowPatch(BaseModel):
+    review: bool | None = None
+    annotate: bool | None = None
+    expected_revision: int
+    confirm: bool = False
+    accept_external_review: AcceptExternalReview | None = None
+
+
+class PlanRowResult(BaseModel):
+    case_id: str
+    language: str
+    flags: PlanFlagsView
+    revision: int
+    undo: UndoView
+    withdrawn: list[WithdrawnTaskView]
+    accepted_document_ids: list[str]
+
 
 # POST /work-plans/bulk/preview, PUT /work-plans/bulk
-class LanguageChangeView(BaseModel): review: TriState = "keep"; annotate: TriState = "keep"
-class BulkAcceptance(BaseModel): languages: list[str] = Field(min_length=1); reason: str = Field(min_length=1, max_length=2000)
+class LanguageChangeView(BaseModel):
+    review: TriState = "keep"
+    annotate: TriState = "keep"
+
+
+class BulkAcceptance(BaseModel):
+    languages: list[str] = Field(min_length=1)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
 class BulkPlanRequest(BaseModel):
     case_ids: list[str] = Field(min_length=1, max_length=2000)
-    languages: dict[str, LanguageChangeView] = Field(default_factory=dict)   # "source" = each case's source row(s)
+    languages: dict[str, LanguageChangeView] = Field(
+        default_factory=dict
+    )  # "source" = each case's source row(s)
     preset: Preset | None = None
     accept_external_review: BulkAcceptance | None = None
     expected_revisions: dict[str, int] | None = None
     confirm: bool = False
-class MixedCountView(BaseModel): on: int; off: int
+
+
+class MixedCountView(BaseModel):
+    on: int
+    off: int
+
+
 class LanguagePreviewView(BaseModel):
-    key: str                      # "source" or a language code
-    source_languages: list[str]   # for key "source": e.g. ["en", "fr"] with counts below
+    key: str  # "source" or a language code
+    source_languages: list[str]  # for key "source": e.g. ["en", "fr"] with counts below
     cases_in_selection: int
-    review: MixedCountView | None # None for "source"
+    review: MixedCountView | None  # None for "source"
     annotate: MixedCountView
-    will_change: int              # rows whose flags change
-    not_accepted: int             # translations not accepted (rule on, Annotate on, Review off)
-    not_acceptable: int = 0       # of these: rejected/queried or with an open review (external acceptance refused)
-    in_review: int = 0            # subset of not_acceptable with an open translation review
+    will_change: int  # rows whose flags change
+    not_accepted: int  # translations not accepted (rule on, Annotate on, Review off)
+    not_acceptable: int = 0  # of these: rejected/queried or with an open review (external acceptance refused)
+    in_review: int = 0  # subset of not_acceptable with an open translation review
     marked_in_package: int
-class BulkPreview(BaseModel): cases: int; languages: list[LanguagePreviewView]; changes: int; to_assign: dict[str, int]; consequences: ConsequencesView; invalid: list[RowRefView]; revisions: dict[str, int]; rule_on: bool
-class BulkResult(BaseModel): changed_rows: int; revisions: dict[str, int]; undo: UndoView; withdrawn: list[WithdrawnTaskView]
+
+
+class BulkPreview(BaseModel):
+    cases: int
+    languages: list[LanguagePreviewView]
+    changes: int
+    to_assign: dict[str, int]
+    consequences: ConsequencesView
+    invalid: list[RowRefView]
+    revisions: dict[str, int]
+    rule_on: bool
+
+
+class BulkResult(BaseModel):
+    changed_rows: int
+    revisions: dict[str, int]
+    undo: UndoView
+    withdrawn: list[WithdrawnTaskView]
+
 
 # PUT /work-plans/rows (bulk Undo; exact flags and restored_revision per row)
-class PlanRowsSet(BaseModel): rows: list[UndoRowView] = Field(min_length=1, max_length=20000); expected_revisions: dict[str, int]; undo: bool = False; confirm: bool = False
+class PlanRowsSet(BaseModel):
+    rows: list[UndoRowView] = Field(min_length=1, max_length=20000)
+    expected_revisions: dict[str, int]
+    undo: bool = False
+    confirm: bool = False
+
+
 # undo=True (D22): restored_revision written exactly, no PLAN_RESTORED, finals/restored never need confirm; confirm needed only when tasks assigned after the change would be withdrawn
 
+
 # GET /work-plans/annotation-target-preview?annotations_per_text=n
-class AnnotationTargetPreview(BaseModel): rows_over_target: int
+class AnnotationTargetPreview(BaseModel):
+    rows_over_target: int
+
 
 # POST /case-ids/lookup
-class CaseIdLookup(BaseModel): ids: list[str] = Field(max_length=5000)
-class CaseIdLookupResult(BaseModel): found: list[str]; unknown: list[str]
+class CaseIdLookup(BaseModel):
+    ids: list[str] = Field(max_length=5000)
+
+
+class CaseIdLookupResult(BaseModel):
+    found: list[str]
+    unknown: list[str]
+
 
 # POST /variants/{document_id:path}/discard
-class DiscardRequest(BaseModel): reason: str = Field(min_length=1, max_length=2000); confirm: bool = False
+class DiscardRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+    confirm: bool = False
 ```
 
 409 `WORK_PLAN_CONFIRMATION_REQUIRED` details = `ConsequencesView` JSON. 422 `WORK_PLAN_INVALID` details = `{"reason": "source_review" | "annotate_not_accepted" | "not_acceptable", "rows": [{"case_id", "language", "not_accepted": int, "not_acceptable": int, "marked_in_package": int}]}`. 409 `WORK_PLAN_CHANGED` details = `{"cases": [{"case_id", "revision"}]}`. Project settings: `ProjectSettingsChange` gains `annotations_per_text: int | None = Field(None, ge=1, le=5)` and `import_plan: ImportPlanSetting | None = None` (`None` keeps the stored value; the settings change is a full replace, so this keeps the existing settings page from resetting them in the window between L0b and L5b); `ProjectSettings` returns both as concrete values (`int`, `ImportPlanSetting`). The create-assignment request (`api/assignment_routes.py`) gains `review_accepted_translation: bool = False` (D25). Final preflight (`FinalPreflight`) gains `not_in_plan: list[RowRefView] = []` (rows with a final result and Annotate off; informational, never acknowledged).
@@ -317,39 +502,91 @@ Upload (L0c): `ImportPlan.work_plan: UploadWorkPlan | None = None` with `UploadW
 
 ```python
 # src/ontocurator/domain/next_steps.py (L1, pure)
-StepCode = Literal["decide_report", "resume_task", "confirm_final", "resolve_rejected", "resolve_queried",
-                   "translation_not_accepted", "choose_final", "assign_translation_review", "translation_review_in_progress",
-                   "assign_annotation", "annotation_in_progress", "annotation_review_in_progress",
-                   "waiting_for_translation_review", "done", "translation_accepted"]
+StepCode = Literal[
+    "decide_report",
+    "resume_task",
+    "confirm_final",
+    "resolve_rejected",
+    "resolve_queried",
+    "translation_not_accepted",
+    "choose_final",
+    "assign_translation_review",
+    "translation_review_in_progress",
+    "assign_annotation",
+    "annotation_in_progress",
+    "annotation_review_in_progress",
+    "waiting_for_translation_review",
+    "done",
+    "translation_accepted",
+]
 StepKind = Literal["decision", "assign", "in_progress", "done"]
 Stage = Literal["translation_review", "annotation", "final", "done"]
 Segment = Literal["decision", "assign", "progress"]
-RowAction = Literal["decide_report", "resume_task", "review_changes", "resolve", "accept_or_review", "choose_final",
-                    "assign_translation_review", "assign_annotation"]
+RowAction = Literal[
+    "decide_report",
+    "resume_task",
+    "review_changes",
+    "resolve",
+    "accept_or_review",
+    "choose_final",
+    "assign_translation_review",
+    "assign_annotation",
+]
+
 
 @dataclass(frozen=True)
 class StepFacts:
-    review: bool; annotate: bool; is_source: bool; rule_on: bool; per_text: int
-    open_report_id: str | None; orphan_pause_assignment_id: int | None
-    unacknowledged_final_cause: bool          # incl. PLAN_RESTORED
-    newest_decisions: tuple[str | None, ...]   # latest review decision per root's newest version (realistic: "rejected"/"query" only with status "reviewed")
-    translation_statuses: tuple[str | None, ...]  # newest version status per root (Version.not_newer corrections skipped, as bulk_target)
+    review: bool
+    annotate: bool
+    is_source: bool
+    rule_on: bool
+    per_text: int
+    open_report_id: str | None
+    orphan_pause_assignment_id: int | None
+    unacknowledged_final_cause: bool  # incl. PLAN_RESTORED
+    newest_decisions: tuple[
+        str | None, ...
+    ]  # latest review decision per root's newest version (realistic: "rejected"/"query" only with status "reviewed")
+    translation_statuses: tuple[
+        str | None, ...
+    ]  # newest version status per root (Version.not_newer corrections skipped, as bulk_target)
     open_translation_reviews: int
-    annotation_assignments: int               # non-revoked annotate assignments, minimum over the row's target versions
-    open_annotations: int; open_annotation_reviews: int
-    missing_final: bool                        # missing_final_counts(..., per_text=per_text), restricted to Annotate on
+    annotation_assignments: (
+        int  # non-revoked annotate assignments, minimum over the row's target versions
+    )
+    open_annotations: int
+    open_annotation_reviews: int
+    missing_final: (
+        bool  # missing_final_counts(..., per_text=per_text), restricted to Annotate on
+    )
     has_final: bool
-    check_failed: bool                         # a newest version is automatic_check_failed
+    check_failed: bool  # a newest version is automatic_check_failed
+
 
 @dataclass(frozen=True)
 class Step:
-    code: StepCode; kind: StepKind; stage: Stage; action: RowAction | None
+    code: StepCode
+    kind: StepKind
+    stage: Stage
+    action: RowAction | None
     badges: tuple[Literal["your_decision", "check_failed", "paused"], ...]
-    assigned: int | None = None; target: int | None = None
+    assigned: int | None = None
+    target: int | None = None
 
-def in_plan(facts: StepFacts) -> bool: ...              # review or annotate; the only source of "in plan" (never `not steps`)
-def derive_steps(facts: StepFacts) -> list[Step]: ...  # all matching rules in precedence order; [] when not in_plan; never [] when in_plan
-def segment_of(step: Step) -> Segment | None: ...       # decision: rules 1-5 and 4a, assign: 6 and 8, progress: 7, 9, 10
+
+def in_plan(
+    facts: StepFacts,
+) -> bool: ...  # review or annotate; the only source of "in plan" (never `not steps`)
+def derive_steps(
+    facts: StepFacts,
+) -> list[
+    Step
+]: ...  # all matching rules in precedence order; [] when not in_plan; never [] when in_plan
+def segment_of(
+    step: Step,
+) -> (
+    Segment | None
+): ...  # decision: rules 1-5 and 4a, assign: 6 and 8, progress: 7, 9, 10
 ```
 
 API (L1, `api/document_row_routes.py`): `DocumentRowView` gains `next_step: NextStepView | None = None`, `steps: list[NextStepView] = []`, `plan_row: PlanFlagsView | None = None`, `in_plan: bool = True`; `DocumentGroupView` gains `plan_revision: int = 1`, `not_in_plan_languages: list[str] = []`; `DecisionBarView` gains `in_plan: int = 0`, `needs_decision: int = 0`, `to_assign: int = 0`, `in_progress: int = 0`, `decision_categories: dict[str, int] = {}`. `NextStepView = {code, kind, stage, action, badges, assigned, target, owner: StepOwnerView, detail: StepDetailView | None, report_id, assignment_id, document_id}`; `StepOwnerView = {kind: "you" | "person" | "people" | "none", person: PersonRefView | None, count: int}`; `StepDetailView = {kind: "version" | "source_ready" | "annotations_submitted" | "round" | "report" | "final" | "review_only" | "waiting", version, origin, translation_status, submitted, total, round_ordinal, excerpt, reporter: PersonRefView | None, task_paused: bool}`. Query parameters added: `segment` (`decision|assign|progress`, exclusive with `decision`), `step` (StepCode), `stage`, `owner` (`me` or a pseudonym), `plan` (`review|annotate|review_and_annotate|not_in_plan`), `final` adds `none`, `sort` (`case|import|activity`, default `case`). `GET /api/v1/projects/{key}/document-rows/case-ids` (same filters) → `{case_ids: list[str], total: int, truncated: bool}` (max 2000, list order). `application/document_row_page.py` also exports `sorted_case_ids(facts, case_ids, sort) -> list[str]` (Documents order of any case-ID set; L1b uses it) and `cases_not_shown(facts, case_ids, query) -> int` (selected cases with no row matching the filters).
@@ -360,34 +597,130 @@ L1p: `PersonRefView` fields added next to the existing label strings (`WorkItemV
 
 ```python
 # src/ontocurator/domain/batch_layout.py (pure)
-def layout(case_ids: Sequence[str], people: Sequence[str], *, mode: Literal["one", "split"],
-           remaining: Mapping[str, int], already: Mapping[str, frozenset[str]]) -> tuple[dict[str, list[str]], list[str]]: ...
+def layout(
+    case_ids: Sequence[str],
+    people: Sequence[str],
+    *,
+    mode: Literal["one", "split"],
+    remaining: Mapping[str, int],
+    already: Mapping[str, frozenset[str]],
+) -> tuple[dict[str, list[str]], list[str]]: ...
+
+
 # remaining = per case: target minus non-revoked assignments (translation review: always 1); a case with 0 is skipped
 # returns (case → usernames, skipped cases with reason already_assigned)
 
+
 # POST /api/v1/projects/{key}/assignments/batch/preview
-class DocumentRowFilters(BaseModel):   # the Documents filters, same names and values as the L1 query parameters
-    language: str | None = None; case: str | None = None; segment: Segment | None = None; step: StepCode | None = None
-    stage: Stage | None = None; owner: str | None = None; plan: str | None = None; final: str | None = None
-    origin: str | None = None; translation_status: str | None = None; status: str | None = None
+class DocumentRowFilters(
+    BaseModel
+):  # the Documents filters, same names and values as the L1 query parameters
+    language: str | None = None
+    case: str | None = None
+    segment: Segment | None = None
+    step: StepCode | None = None
+    stage: Stage | None = None
+    owner: str | None = None
+    plan: str | None = None
+    final: str | None = None
+    origin: str | None = None
+    translation_status: str | None = None
+    status: str | None = None
+
+
 class BatchAssignRequest(BaseModel):
-    task: Literal["translation_review", "annotate", "review"]; language: str
-    case_ids: list[str] = Field(min_length=1, max_length=2000)   # the selection; the server orders it by `sort` + `filters`
-    sort: Literal["case", "import", "activity"] = "case"; filters: DocumentRowFilters = Field(default_factory=DocumentRowFilters)
-    mode: Literal["one", "split"]; usernames: list[str] = Field(default_factory=list, max_length=50)
-    review_accepted_translation: bool = False   # D25: translation review of an externally accepted version
-class BatchSkipView(BaseModel): case_id: str; language: str; reason: Literal["waiting_for_review", "not_in_plan", "already_assigned", "step_differs", "discarded"]
-class BatchTargetView(BaseModel): case_id: str; language: str; document_id: str; version: int; remaining: int; usernames: list[str]
-class BatchPersonView(BaseModel): username: str; person: PersonRefView; reads: list[str]; open_before: int; open_after: int; gets: int; first_case: str | None; last_case: str | None; language_mismatch: bool; unavailable: Literal["does_not_read", "role_missing", "inactive"] | None; already_assigned: int
-class BatchPreview(BaseModel): task: str; language: str; versions: int; targets: list[BatchTargetView]; skipped: list[BatchSkipView]; people: list[BatchPersonView]; per_text: int; digest: str
+    task: Literal["translation_review", "annotate", "review"]
+    language: str
+    case_ids: list[str] = Field(
+        min_length=1, max_length=2000
+    )  # the selection; the server orders it by `sort` + `filters`
+    sort: Literal["case", "import", "activity"] = "case"
+    filters: DocumentRowFilters = Field(default_factory=DocumentRowFilters)
+    mode: Literal["one", "split"]
+    usernames: list[str] = Field(default_factory=list, max_length=50)
+    review_accepted_translation: bool = (
+        False  # D25: translation review of an externally accepted version
+    )
+
+
+class BatchSkipView(BaseModel):
+    case_id: str
+    language: str
+    reason: Literal[
+        "waiting_for_review",
+        "not_in_plan",
+        "already_assigned",
+        "step_differs",
+        "discarded",
+    ]
+
+
+class BatchTargetView(BaseModel):
+    case_id: str
+    language: str
+    document_id: str
+    version: int
+    remaining: int
+    usernames: list[str]
+
+
+class BatchPersonView(BaseModel):
+    username: str
+    person: PersonRefView
+    reads: list[str]
+    open_before: int
+    open_after: int
+    gets: int
+    first_case: str | None
+    last_case: str | None
+    language_mismatch: bool
+    unavailable: Literal["does_not_read", "role_missing", "inactive"] | None
+    already_assigned: int
+
+
+class BatchPreview(BaseModel):
+    task: str
+    language: str
+    versions: int
+    targets: list[BatchTargetView]
+    skipped: list[BatchSkipView]
+    people: list[BatchPersonView]
+    per_text: int
+    digest: str
+
+
 # POST /api/v1/projects/{key}/assignments/batch
-class BatchAssignBody(BatchAssignRequest): expected_preview_digest: str; confirm_language: bool = False
-class BatchAssignResult(BaseModel): created: list[AssignmentView]
+class BatchAssignBody(BatchAssignRequest):
+    expected_preview_digest: str
+    confirm_language: bool = False
+
+
+class BatchAssignResult(BaseModel):
+    created: list[AssignmentView]
+
+
 # 409 ASSIGNMENT_BATCH_REFUSED details: {"refused": [{case_id, language, document_id, username, code}]}; 409 ASSIGNMENT_BATCH_STALE
 # POST /api/v1/projects/{key}/document-rows/selection-summary
-class SelectionSummaryRequest(BaseModel): case_ids: list[str] = Field(min_length=1, max_length=2000); filters: DocumentRowFilters = Field(default_factory=DocumentRowFilters)
-class AssignableStepView(BaseModel): task: str; language: str; versions: int; cases: int
-class SelectionSummary(BaseModel): cases: int; steps: list[AssignableStepView]; skipped: dict[str, int]; common: AssignableStepView | None; not_shown: int = 0
+class SelectionSummaryRequest(BaseModel):
+    case_ids: list[str] = Field(min_length=1, max_length=2000)
+    filters: DocumentRowFilters = Field(default_factory=DocumentRowFilters)
+
+
+class AssignableStepView(BaseModel):
+    task: str
+    language: str
+    versions: int
+    cases: int
+
+
+class SelectionSummary(BaseModel):
+    cases: int
+    steps: list[AssignableStepView]
+    skipped: dict[str, int]
+    common: AssignableStepView | None
+    not_shown: int = 0
+
+
 # a row counts for a task when ANY of its steps (not only the first) is that assign step; preview and summary use the same match
 ```
 
@@ -561,7 +894,12 @@ def test_consequences_list_open_reports_of_rows_turned_off():
     report = OpenReport("r1", "c1", "fr", 2, True)
     got = consequences({key: ON_ON}, {key: ON_OFF}, [], frozenset(), [report])
     assert got.open_reports == (report,) and got.any
-    assert consequences({key: OFF_ON}, {key: ON_ON}, [], frozenset(), [report]).open_reports == ()
+    assert (
+        consequences(
+            {key: OFF_ON}, {key: ON_ON}, [], frozenset(), [report]
+        ).open_reports
+        == ()
+    )
 
 
 def test_mixed_counts():
@@ -709,11 +1047,23 @@ from ontocurator.domain.next_steps import StepFacts, derive_steps, in_plan, segm
 
 def facts(**kw):
     base = dict(
-        review=False, annotate=False, is_source=False, rule_on=True, per_text=1,
-        open_report_id=None, orphan_pause_assignment_id=None, unacknowledged_final_cause=False,
-        newest_decisions=(None,), translation_statuses=("ready_for_review",),
-        open_translation_reviews=0, annotation_assignments=0, open_annotations=0,
-        open_annotation_reviews=0, missing_final=False, has_final=False, check_failed=False,
+        review=False,
+        annotate=False,
+        is_source=False,
+        rule_on=True,
+        per_text=1,
+        open_report_id=None,
+        orphan_pause_assignment_id=None,
+        unacknowledged_final_cause=False,
+        newest_decisions=(None,),
+        translation_statuses=("ready_for_review",),
+        open_translation_reviews=0,
+        annotation_assignments=0,
+        open_annotations=0,
+        open_annotation_reviews=0,
+        missing_final=False,
+        has_final=False,
+        check_failed=False,
     )
     base.update(kw)
     return StepFacts(**base)
@@ -725,8 +1075,14 @@ def codes(**kw):
 
 def test_not_in_plan_has_no_step_and_in_plan_is_its_own_fact():
     assert not in_plan(facts()) and derive_steps(facts()) == []
-    for kw in (dict(review=True), dict(annotate=True), dict(review=True, annotate=True)):
-        assert in_plan(facts(**kw)) and derive_steps(facts(**kw))  # never [] while in plan
+    for kw in (
+        dict(review=True),
+        dict(annotate=True),
+        dict(review=True, annotate=True),
+    ):
+        assert in_plan(facts(**kw)) and derive_steps(
+            facts(**kw)
+        )  # never [] while in plan
 
 
 @pytest.mark.parametrize(
@@ -734,19 +1090,77 @@ def test_not_in_plan_has_no_step_and_in_plan_is_its_own_fact():
     [
         (dict(annotate=True, open_report_id="r1"), "decide_report"),
         (dict(annotate=True, orphan_pause_assignment_id=4), "resume_task"),
-        (dict(annotate=True, has_final=True, unacknowledged_final_cause=True), "confirm_final"),
-        (dict(review=True, translation_statuses=("reviewed",), newest_decisions=("rejected",)), "resolve_rejected"),
-        (dict(review=True, translation_statuses=("reviewed",), newest_decisions=("query",)), "resolve_queried"),
-        (dict(annotate=True), "translation_not_accepted"),  # rule 4a: rule on, review off, ready_for_review
-        (dict(annotate=True, translation_statuses=("accepted",), annotation_assignments=1, missing_final=True), "choose_final"),
+        (
+            dict(annotate=True, has_final=True, unacknowledged_final_cause=True),
+            "confirm_final",
+        ),
+        (
+            dict(
+                review=True,
+                translation_statuses=("reviewed",),
+                newest_decisions=("rejected",),
+            ),
+            "resolve_rejected",
+        ),
+        (
+            dict(
+                review=True,
+                translation_statuses=("reviewed",),
+                newest_decisions=("query",),
+            ),
+            "resolve_queried",
+        ),
+        (
+            dict(annotate=True),
+            "translation_not_accepted",
+        ),  # rule 4a: rule on, review off, ready_for_review
+        (
+            dict(
+                annotate=True,
+                translation_statuses=("accepted",),
+                annotation_assignments=1,
+                missing_final=True,
+            ),
+            "choose_final",
+        ),
         (dict(review=True), "assign_translation_review"),
-        (dict(review=True, open_translation_reviews=1), "translation_review_in_progress"),
+        (
+            dict(review=True, open_translation_reviews=1),
+            "translation_review_in_progress",
+        ),
         (dict(annotate=True, translation_statuses=("accepted",)), "assign_annotation"),
-        (dict(annotate=True, translation_statuses=("accepted",), annotation_assignments=1, open_annotations=1), "annotation_in_progress"),
-        (dict(annotate=True, translation_statuses=("accepted",), annotation_assignments=1, open_annotation_reviews=1), "annotation_review_in_progress"),
-        (dict(review=True, annotate=True, open_translation_reviews=1), "translation_review_in_progress"),
+        (
+            dict(
+                annotate=True,
+                translation_statuses=("accepted",),
+                annotation_assignments=1,
+                open_annotations=1,
+            ),
+            "annotation_in_progress",
+        ),
+        (
+            dict(
+                annotate=True,
+                translation_statuses=("accepted",),
+                annotation_assignments=1,
+                open_annotation_reviews=1,
+            ),
+            "annotation_review_in_progress",
+        ),
+        (
+            dict(review=True, annotate=True, open_translation_reviews=1),
+            "translation_review_in_progress",
+        ),
         (dict(review=True, translation_statuses=("accepted",)), "translation_accepted"),
-        (dict(annotate=True, translation_statuses=("accepted",), annotation_assignments=1, has_final=True), "done"),
+        (
+            dict(
+                annotate=True,
+                translation_statuses=("accepted",),
+                annotation_assignments=1,
+                has_final=True,
+            ),
+            "done",
+        ),
     ],
 )
 def test_first_matching_rule_wins(kw, first):
@@ -755,52 +1169,103 @@ def test_first_matching_rule_wins(kw, first):
 
 def test_waiting_for_review_is_in_progress_and_counted_with_open_review_steps():
     steps = derive_steps(facts(review=True, annotate=True, open_translation_reviews=1))
-    assert [s.code for s in steps] == ["translation_review_in_progress", "waiting_for_translation_review"]
+    assert [s.code for s in steps] == [
+        "translation_review_in_progress",
+        "waiting_for_translation_review",
+    ]
     assert {segment_of(s) for s in steps} == {"progress"}
 
 
 def test_failed_check_without_reviewer_is_to_assign_with_badge():
-    [step, *_] = derive_steps(facts(review=True, translation_statuses=("automatic_check_failed",), check_failed=True))
+    [step, *_] = derive_steps(
+        facts(
+            review=True,
+            translation_statuses=("automatic_check_failed",),
+            check_failed=True,
+        )
+    )
     assert step.code == "assign_translation_review" and "check_failed" in step.badges
     assert segment_of(step) == "assign"
 
 
 def test_failed_check_with_open_review_is_never_a_decision():
-    [step, *_] = derive_steps(facts(review=True, check_failed=True, open_translation_reviews=1))
+    [step, *_] = derive_steps(
+        facts(review=True, check_failed=True, open_translation_reviews=1)
+    )
     assert segment_of(step) == "progress"
 
 
 def test_rule_off_lets_annotation_start_before_acceptance():
-    assert codes(review=True, annotate=True, rule_on=False)[:2] == ["assign_translation_review", "assign_annotation"]
+    assert codes(review=True, annotate=True, rule_on=False)[:2] == [
+        "assign_translation_review",
+        "assign_annotation",
+    ]
 
 
 def test_annotate_without_review_on_unaccepted_translation_is_a_decision():
     f = facts(annotate=True)  # D24: rule on, review off, not accepted
     [step, *_] = derive_steps(f)
-    assert in_plan(f) and (step.code, step.action) == ("translation_not_accepted", "accept_or_review")
+    assert in_plan(f) and (step.code, step.action) == (
+        "translation_not_accepted",
+        "accept_or_review",
+    )
     assert segment_of(step) == "decision"
     assert codes(annotate=True, rule_on=False)[0] == "assign_annotation"
-    assert codes(annotate=True, open_translation_reviews=1)[0] == "translation_review_in_progress"
+    assert (
+        codes(annotate=True, open_translation_reviews=1)[0]
+        == "translation_review_in_progress"
+    )
 
 
 def test_choose_final_waits_for_annotations_per_text():
-    kw = dict(annotate=True, is_source=True, translation_statuses=(None,), per_text=2, annotation_assignments=1)
-    assert codes(**kw, missing_final=True)[0] == "assign_annotation"  # 1 of 2 submitted is not final-ready
-    assert codes(**{**kw, "annotation_assignments": 2}, missing_final=True)[0] == "choose_final"
+    kw = dict(
+        annotate=True,
+        is_source=True,
+        translation_statuses=(None,),
+        per_text=2,
+        annotation_assignments=1,
+    )
+    assert (
+        codes(**kw, missing_final=True)[0] == "assign_annotation"
+    )  # 1 of 2 submitted is not final-ready
+    assert (
+        codes(**{**kw, "annotation_assignments": 2}, missing_final=True)[0]
+        == "choose_final"
+    )
 
 
 def test_two_annotations_per_text_counts_assigned():
-    [step, *_] = derive_steps(facts(annotate=True, is_source=True, translation_statuses=(None,), per_text=2, annotation_assignments=1, open_annotations=1))
+    [step, *_] = derive_steps(
+        facts(
+            annotate=True,
+            is_source=True,
+            translation_statuses=(None,),
+            per_text=2,
+            annotation_assignments=1,
+            open_annotations=1,
+        )
+    )
     assert (step.code, step.assigned, step.target) == ("assign_annotation", 1, 2)
 
 
 def test_parallel_roots_use_each_newest_version():
-    assert codes(review=True, translation_statuses=("accepted", "ready_for_review"), newest_decisions=(None, None))[0] == "assign_translation_review"
+    assert (
+        codes(
+            review=True,
+            translation_statuses=("accepted", "ready_for_review"),
+            newest_decisions=(None, None),
+        )[0]
+        == "assign_translation_review"
+    )
 
 
 def test_review_only_row_done_on_acceptance():
     [step] = derive_steps(facts(review=True, translation_statuses=("accepted",)))
-    assert (step.code, step.kind, step.stage) == ("translation_accepted", "done", "done")
+    assert (step.code, step.kind, step.stage) == (
+        "translation_accepted",
+        "done",
+        "done",
+    )
 ```
 
 - [ ] **Step 2:** `uv run pytest tests/test_next_steps_domain.py -q` → FAIL.
@@ -872,35 +1337,62 @@ def test_one_person_gets_every_case():
 
 
 def test_split_evenly_is_contiguous_in_list_order():
-    got, _ = layout(CASES, ["ana", "ben"], mode="split", remaining=ones(CASES), already={})
+    got, _ = layout(
+        CASES, ["ana", "ben"], mode="split", remaining=ones(CASES), already={}
+    )
     assert [got[c] for c in CASES[:10]] == [["ana"]] * 10
     assert [got[c] for c in CASES[10:]] == [["ben"]] * 10
 
 
 def test_remainder_goes_to_the_first_people():
-    got, _ = layout(CASES[:7], ["ana", "ben", "cy"], mode="split", remaining=ones(CASES[:7]), already={})
+    got, _ = layout(
+        CASES[:7],
+        ["ana", "ben", "cy"],
+        mode="split",
+        remaining=ones(CASES[:7]),
+        already={},
+    )
     assert [got[c][0] for c in CASES[:7]] == ["ana"] * 3 + ["ben"] * 2 + ["cy"] * 2
 
 
 def test_rotation_gives_n_distinct_people_per_text():
-    got, _ = layout(CASES[:6], ["ana", "ben", "cy"], mode="split", remaining=ones(CASES[:6], 2), already={})
+    got, _ = layout(
+        CASES[:6],
+        ["ana", "ben", "cy"],
+        mode="split",
+        remaining=ones(CASES[:6], 2),
+        already={},
+    )
     assert all(len(set(p)) == 2 for p in got.values())
     assert got[CASES[0]] == ["ana", "ben"] and got[CASES[5]] == ["cy", "ana"]
 
 
 def test_remaining_per_case_fills_only_open_slots():
     # CASES[0] already has 1 of 2 annotators (ana); CASES[1] has none
-    got, _ = layout(CASES[:2], ["ana", "ben", "cy"], mode="split",
-                    remaining={CASES[0]: 1, CASES[1]: 2}, already={CASES[0]: frozenset({"ana"})})
+    got, _ = layout(
+        CASES[:2],
+        ["ana", "ben", "cy"],
+        mode="split",
+        remaining={CASES[0]: 1, CASES[1]: 2},
+        already={CASES[0]: frozenset({"ana"})},
+    )
     assert len(got[CASES[0]]) == 1 and "ana" not in got[CASES[0]]
     assert len(set(got[CASES[1]])) == 2
 
 
 def test_already_assigned_person_is_skipped_in_split_and_case_skipped_in_one():
     already = {CASES[0]: frozenset({"ana"})}
-    split, _ = layout(CASES[:2], ["ana", "ben"], mode="split", remaining=ones(CASES[:2]), already=already)
+    split, _ = layout(
+        CASES[:2],
+        ["ana", "ben"],
+        mode="split",
+        remaining=ones(CASES[:2]),
+        already=already,
+    )
     assert split[CASES[0]] == ["ben"]
-    one, skipped = layout(CASES[:2], ["ana"], mode="one", remaining=ones(CASES[:2]), already=already)
+    one, skipped = layout(
+        CASES[:2], ["ana"], mode="one", remaining=ones(CASES[:2]), already=already
+    )
     assert CASES[0] not in one and skipped == [CASES[0]]
 
 
@@ -908,7 +1400,9 @@ def test_too_few_people_for_per_text_raises():
     import pytest
 
     with pytest.raises(ValueError, match="at least 2"):
-        layout(CASES[:2], ["ana"], mode="split", remaining=ones(CASES[:2], 2), already={})
+        layout(
+            CASES[:2], ["ana"], mode="split", remaining=ones(CASES[:2], 2), already={}
+        )
 ```
 
 - [ ] **Step 2:** `uv run pytest tests/test_batch_layout.py -q` → FAIL; implement `domain/batch_layout.py` (cases with `remaining == 0` are skipped as `already_assigned`; blocks: `q, r = divmod(m, k)`, the first `r` people get `q + 1`; slot `j < remaining[case]` of a case in block `i` gets `people[(i + j) % k]`; `ValueError("Choose at least n …")` when `max(remaining) > k` in split mode; an already-assigned person is replaced by the next person in rotation not yet on the case; in `one` mode such a case is skipped); rerun → PASS.
