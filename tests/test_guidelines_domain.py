@@ -90,6 +90,8 @@ def test_note_rules() -> None:
         ("x" * 281, "change_note"),
         ("first\nsecond", "reason"),
         ("first\rsecond", "change_note"),
+        ("first2028second", "reason"),
+        ("first\x85second", "change_note"),
     ):
         with pytest.raises(DomainError) as error:
             validate_note(value, field=field)  # type: ignore[arg-type]

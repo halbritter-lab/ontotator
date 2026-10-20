@@ -65,7 +65,7 @@ def validate_note(
     note = value.strip()
     if not note:
         return None
-    if len(note) > MAX_NOTE_CHARS or "\n" in note or "\r" in note:
+    if len(note) > MAX_NOTE_CHARS or note.splitlines() != [note]:
         raise DomainError("GUIDELINE_NOTE_INVALID", {"field": field})
     return note
 

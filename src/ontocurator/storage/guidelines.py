@@ -7,9 +7,11 @@ guideline service in ``application`` (that import would be circular).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from sqlalchemy import Connection, func, select
 
+from ontocurator.domain.guidelines import GuidelineKind
 from ontocurator.storage.guideline_tables import (
     GuidelineVersionRow,
     GuidelineWithdrawalRow,
@@ -18,7 +20,7 @@ from ontocurator.storage.guideline_tables import (
 
 @dataclass(frozen=True)
 class GuidelineFact:
-    kind: str
+    kind: GuidelineKind
     sha256: str
     withdrawn: bool
 
@@ -61,7 +63,9 @@ def guideline_facts(conn: Connection, project_id: int) -> dict[int, GuidelineFac
     )
     return {
         row.version: GuidelineFact(
-            kind=row.kind, sha256=row.body_sha256, withdrawn=bool(row.withdrawn)
+            kind=cast(GuidelineKind, row.kind),
+            sha256=row.body_sha256,
+            withdrawn=bool(row.withdrawn),
         )
         for row in rows
     }
