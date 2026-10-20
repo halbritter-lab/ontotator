@@ -10,7 +10,16 @@ import { group, page, row, version } from "./documents/fixtures";
 const user = testUser("lead", { username: "real-lead", is_system_admin: false });
 const project: ProjectSummary = { project_key: "p/key", name: "Research", description: null, roles: ["lead"], allowed_modes: ["independent"], document_count: 1, can_manage: true };
 const document = { document_id: "ID +/#ß", language: "de", position: null, assignees: [] };
-const progress: ProjectProgress = { totals: { documents: 1, unassigned: 1, open: 0, in_progress: 0, submitted: 0, reopened: 0 }, people: [], documents: [document] };
+const progress: ProjectProgress = {
+  totals: { documents: 1, unassigned: 1, open: 0, in_progress: 0, submitted: 0, reopened: 0 }, people: [], documents: [document],
+  lede: { cases: 1, translations_to_review: 3, versions_to_annotate: 1, not_in_plan: 0, needs_decision: 0, to_assign: 3 },
+  stages: {
+    translation_review: { scope: "review", done: 0, total: 3, counts: { to_assign: 3, in_review: 0, check_failed: 0, check_failed_with_reviewer: 0, rejected_or_queried: 0, accepted: 0 } },
+    annotation: { scope: "annotate", done: 0, total: 1, counts: { waiting_for_review: 1, to_assign: 0, in_progress: 0, paused: 0, submitted: 0 } },
+    final: { scope: "annotate", done: 0, total: 1, counts: { not_ready: 1, to_choose: 0, to_confirm: 0, final: 0, would_be_omitted: 1 } },
+  },
+  workload: [],
+};
 const job = (id: number): JobView => ({ id, kind: "t1_export", status: "succeeded", result: { path: "never-use-server-path" }, error: null, created_at: "2026-10-16T10:00:00Z", finished_at: "2026-10-16T10:01:00Z" });
 const storageKey = (username: string, key = "p/key") => `ontocurator:export:${JSON.stringify([username, key, "t1"])}`;
 beforeEach(() => {
@@ -20,24 +29,24 @@ beforeEach(() => {
   vi.spyOn(api, "getProjectSettings").mockResolvedValue(settings);
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listAssignments").mockResolvedValue([]);
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue([{ ...document, status: "not_started", text_length: 4 }] as never);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); window.history.replaceState(null, "", "#/"); });
 
-it("follows the real Progress Assign link to an encoded document selection through App", async () => {
+it("follows a Progress stage count to filtered Documents through App", async () => {
   window.history.replaceState(null, "", "#/projects/p%2Fkey/progress");
   vi.spyOn(api, "listDocumentRows").mockResolvedValue(page([group("case-1", [row({ case_id: "case-1", language: "de", versions: [version({ document_id: "ID +/#ß" })] })])]));
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   render(<App user={user} />);
-  const table = await screen.findByRole("table", { name: "Progress documents" });
+  const card = await screen.findByRole("region", { name: "Translation review" });
   expect(api.getProgress).toHaveBeenCalledWith("p/key");
-  const assign = within(table).getByRole("link", { name: "Assign" });
-  expect(assign.getAttribute("href")).toBe("#/projects/p%2Fkey/documents?select=ID+%2B%2F%23%C3%9F");
-  fireEvent.click(assign);
+  const link = within(card).getByRole("link", { name: "To assign: 3" });
+  expect(link.getAttribute("href")).toBe("#/projects/p%2Fkey/documents?step=assign_translation_review");
+  fireEvent.click(link);
   await screen.findByRole("heading", { name: "Documents" });
-  await waitFor(() => expect(screen.getByLabelText("Select case-1 · de")).toHaveProperty("checked", true));
-  expect(window.location.hash).toBe(assign.getAttribute("href"));
-  expect(api.listDocumentRows).toHaveBeenCalledWith("p/key", {});
+  expect(window.location.hash).toBe(link.getAttribute("href"));
+  await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledWith("p/key", expect.objectContaining({ step: "assign_translation_review" })));
   expect(screen.getByRole("link", { name: "Documents" }).getAttribute("aria-current")).toBe("page");
 });
 
@@ -70,7 +79,7 @@ it.each([403, 404])("shows actual Progress access denial from its server (%s)", 
   vi.mocked(api.getProgress).mockRejectedValue(new ApiError(status, "private", "NOT_ALLOWED"));
   render(<App user={user} />);
   await screen.findByText("You do not have access to this page.");
-  expect(screen.queryByRole("link", { name: "Assign" })).toBeNull();
+  expect(screen.queryByRole("list", { name: "Pipeline" })).toBeNull();
 });
 
 it("uses the real Export create request and displays its server denial", async () => {

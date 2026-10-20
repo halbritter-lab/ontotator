@@ -1,0 +1,58 @@
+/* Progress page: lede, pipeline stage cards and People (lead workflow L7, spec "Progress (D9)"). */
+
+.progress-lede { margin: var(--space-2) 0 var(--space-5); color: var(--text-muted); }
+.progress-lede a { display: inline-block; min-height: 24px; }
+
+.progress-pipeline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-6); margin: 0 0 var(--space-6); padding: 0; list-style: none; }
+.progress-pipeline-item { position: relative; display: flex; }
+.progress-stage { flex: 1; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); box-shadow: var(--shadow-1); }
+.progress-stage h2 { margin: 0; font-size: var(--size-base); line-height: var(--leading-base); font-weight: var(--weight-strong); }
+.progress-stage-scope { margin: 0 0 var(--space-3); font-size: var(--size-sm); color: var(--text-muted); }
+.progress-meter { height: 6px; margin: var(--space-2) 0 var(--space-1); overflow: hidden; border-radius: 3px; background: var(--surface-sunken); }
+.progress-meter span { display: block; height: 100%; background: var(--success); }
+.progress-stage-done { margin: 0 0 var(--space-3); font-size: var(--size-sm); }
+.progress-counts { margin: 0; padding: 0; list-style: none; }
+.progress-count { border-top: 1px solid var(--border); }
+.progress-count a { display: flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: var(--space-1) 0; }
+.progress-count-label { flex: 1; }
+.progress-count-n { font-variant-numeric: tabular-nums; font-weight: var(--weight-strong); }
+.progress-count-warning { color: var(--warning); }
+.progress-count--zero a { color: var(--text-muted); }
+.progress-count--zero .progress-count-n { font-weight: var(--weight-regular); }
+.progress-stage-foot { margin: var(--space-3) 0 0; font-size: var(--size-sm); }
+
+/* Decorative arrow in the gap after a card. */
+.progress-arrow { position: absolute; top: 50%; right: calc(-1 * var(--space-6)); display: flex; justify-content: center; width: var(--space-6); color: var(--border-strong); transform: translateY(-50%); }
+
+/* Loading skeleton cards */
+.progress-stage--skeleton { display: grid; gap: var(--space-3); min-height: 12rem; align-content: start; }
+.progress-skeleton-bar { display: block; height: 0.75em; max-width: 12rem; border-radius: var(--radius-sm); background: var(--surface-sunken); }
+@media (prefers-reduced-motion: no-preference) {
+  .progress-skeleton-bar { animation: progress-skeleton-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes progress-skeleton-pulse { 50% { opacity: 0.5; } }
+
+.progress-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+
+.progress-people { margin-bottom: var(--space-6); }
+.progress-people-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.progress-people-table tbody th { font-weight: var(--weight-regular); background: transparent; text-align: left; }
+.progress-people-note { margin-top: var(--space-2); font-size: var(--size-sm); }
+
+@media (max-width: 700px) {
+  .progress-pipeline { grid-template-columns: 1fr; gap: var(--space-6); }
+  .progress-arrow { top: auto; right: auto; bottom: calc(-1 * var(--space-6)); left: 50%; height: var(--space-6); width: auto; align-items: center; transform: translateX(-50%) rotate(90deg); }
+
+  /* People: one card per person. */
+  .progress-people-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .progress-people-table, .progress-people-table tbody, .progress-people-table tr { display: block; }
+  .progress-people-table tr { padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+  .progress-people-table th, .progress-people-table td { display: block; padding: 0; border: 0; }
+  .progress-people-table td { display: flex; justify-content: space-between; gap: var(--space-2); font-size: var(--size-sm); }
+  .progress-people-table td::before { content: attr(data-label); color: var(--text-muted); }
+}
+
+@media (forced-colors: active) {
+  .progress-meter span { background: CanvasText; }
+  .progress-skeleton-bar { background: GrayText; }
+}

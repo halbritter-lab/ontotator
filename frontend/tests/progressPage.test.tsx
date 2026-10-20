@@ -1,84 +1,162 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { api, AuthError, type DocumentRowsPage, type ProjectProgress } from "../src/api/client";
+import { api, ApiError, AuthError, type ProjectProgress } from "../src/api/client";
 import { ProgressPage } from "../src/admin/ProgressPage";
+import { settings } from "./projectFixtures";
+
 const progress: ProjectProgress = {
   totals: { documents: 9, unassigned: 3, open: 12, in_progress: 4, submitted: 8, reopened: 2 },
-  people: [
-    { username: "low", display_name: "Low", pseudonym: "Reader L", open: 1, in_progress: 0, submitted: 9, reopened: 7 },
-    { username: "first", display_name: "First tie", pseudonym: "Reader A", open: 2, in_progress: 3, submitted: 1, reopened: 0 },
-    { username: "second", display_name: "Second tie", pseudonym: "Reader B", open: 5, in_progress: 0, submitted: 0, reopened: 0 },
-  ],
-  documents: [
-    { document_id: "z-special +/#ß", language: "de", position: 23, assignees: [
-      { assignment_id: 1, workflow_revision: 0, held: false, username: "first", pseudonym: "Reader A", task: "annotate", status: "submitted" },
-      { assignment_id: 2, workflow_revision: 0, held: false, username: "second", pseudonym: "Reader B", task: "review", status: "open" },
-    ] },
-    { document_id: "a-unassigned", language: "en", position: null, assignees: [] },
+  people: [],
+  documents: [{ document_id: "old-document", language: "de", position: null, assignees: [] }],
+  lede: { cases: 10, translations_to_review: 5, versions_to_annotate: 11, not_in_plan: 6, needs_decision: 2, to_assign: 6 },
+  stages: {
+    translation_review: { scope: "review", done: 2, total: 7, counts: { to_assign: 3, in_review: 2, check_failed: 1, check_failed_with_reviewer: 1, rejected_or_queried: 0, accepted: 2 } },
+    annotation: { scope: "annotate", done: 2, total: 11, counts: { waiting_for_review: 4, to_assign: 3, in_progress: 1, paused: 1, submitted: 2 } },
+    final: { scope: "annotate", done: 1, total: 11, counts: { not_ready: 9, to_choose: 1, to_confirm: 0, final: 1, would_be_omitted: 10 } },
+  },
+  workload: [
+    { person: { pseudonym: "ann-0005", display_name: "Second annotator", is_me: false }, username: "second", translation_reviews_open: 0, annotations_open: 1, reviews_open: 0, paused: 0, submitted: 1 },
+    { person: { pseudonym: "ann-0003", display_name: "Translation reviewer", is_me: false }, username: "reviewer", translation_reviews_open: 2, annotations_open: 0, reviews_open: 0, paused: 0, submitted: 1 },
+    { person: { pseudonym: "ann-0002", display_name: "Lead", is_me: true }, username: "lead", translation_reviews_open: 0, annotations_open: 1, reviews_open: 0, paused: 1, submitted: 0 },
+    { person: { pseudonym: "ann-0006", display_name: null, is_me: false }, username: "former", translation_reviews_open: 0, annotations_open: 0, reviews_open: 0, paused: 0, submitted: 3 },
   ],
 };
-const rows = (total: number): DocumentRowsPage => ({ groups: [], page: 1, page_count: 1, group_count: 0, case_found: true, adjudicator_not_annotator: false,
-  bar: { total, report_or_pause: total, confirm_final: 0, translation: 0, missing_final: 0, no_final: 0, shown: 0 } } as unknown as DocumentRowsPage);
+
 beforeEach(() => {
   vi.spyOn(api, "getProgress").mockResolvedValue(progress);
-  vi.spyOn(api, "listDocumentRows").mockResolvedValue(rows(3));
+  vi.spyOn(api, "getProjectSettings").mockResolvedValue({ ...settings, annotations_per_text: 1 });
+  vi.spyOn(api, "listDocumentRows");
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-it("renders server totals, stable people workload order and document order without mutating input", async () => {
+
+const pipeline = async () => screen.findByRole("list", { name: "Pipeline" });
+const card = (name: string) => screen.getByRole("region", { name });
+
+it("renders the lede with links to the bar segments", async () => {
+  const navigate = vi.fn();
+  render(<ProgressPage projectKey="p" onNavigate={navigate} />);
+  await pipeline();
+  expect(screen.getByText("10 cases · 5 translations to review · 11 language versions to annotate (6 not in plan).", { exact: false })).toBeTruthy();
+  const decision = screen.getByRole("link", { name: "2 need your decision" });
+  expect(decision.getAttribute("href")).toBe("#/projects/p/documents?segment=decision");
+  expect(screen.getByRole("link", { name: "6 to assign" }).getAttribute("href")).toBe("#/projects/p/documents?segment=assign");
+  expect(screen.getByText(/updated \d\d:\d\d/)).toBeTruthy();
+  fireEvent.click(decision);
+  expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", segment: "decision" });
+  expect(api.listDocumentRows).not.toHaveBeenCalled();
+});
+
+it("renders three stage cards as an ordered list with decorative arrows", async () => {
   render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />);
-  const totals = await screen.findByRole("region", { name: "Project totals" });
-  for (const [label, value] of [["Documents", 9], ["Unassigned", 3], ["Open", 12], ["In progress", 4], ["Submitted", 8], ["Reopened", 2]] as const) {
-    expect(within(totals).getByText(label).parentElement?.textContent).toContain(String(value));
-  }
-  const people = within(screen.getByRole("table", { name: "People" })).getAllByRole("row").slice(1);
-  expect(people.map(row => row.textContent)).toEqual([expect.stringContaining("First tie"), expect.stringContaining("Second tie"), expect.stringContaining("Low")]);
-  expect(progress.people[0].username).toBe("low");
-  const docs = within(screen.getByRole("table", { name: "Progress documents" })).getAllByRole("row").slice(1);
-  expect(docs.map(row => row.textContent)).toEqual([expect.stringContaining("z-special"), expect.stringContaining("a-unassigned")]);
-  const assignees = Array.from(screen.getByRole("table", { name: "Progress documents" }).querySelectorAll(".assignee")).map(item => item.textContent);
-  expect(assignees).toEqual(["First tie (Reader A)AnnotationSubmitted", "Second tie (Reader B)ReviewOpen"]);
-  expect(screen.queryByText("Agreement between annotators is not shown here yet.")).toBeNull();
+  const list = await pipeline();
+  expect(list.tagName).toBe("OL");
+  const items = Array.from(list.children) as HTMLElement[];
+  items.forEach(item => expect(item.tagName).toBe("LI"));
+  expect(items).toHaveLength(3);
+  expect(items.map(item => within(item).getByRole("heading").textContent)).toEqual(["Translation review", "Annotation", "Final result"]);
+  const arrows = list.querySelectorAll(".progress-arrow");
+  expect(arrows).toHaveLength(2);
+  arrows.forEach(arrow => expect(arrow.getAttribute("aria-hidden")).toBe("true"));
+  expect(within(card("Translation review")).getByText("7 translations selected for review")).toBeTruthy();
+  expect(within(card("Translation review")).getByText("2 of 7", { exact: false }).closest("p")?.textContent).toBe("2 of 7 accepted");
+  expect(within(card("Annotation")).getByText("11 language versions selected · 1 annotation per text")).toBeTruthy();
+  expect(within(card("Annotation")).getByText("2 of 11", { exact: false }).closest("p")?.textContent).toBe("2 of 11 fully submitted");
+  expect(within(card("Final result")).getByText("1 of 11", { exact: false }).closest("p")?.textContent).toBe("1 of 11 final");
+  for (const meter of list.querySelectorAll(".progress-meter")) expect(meter.getAttribute("aria-hidden")).toBe("true");
 });
-it("filters by any assignment status and treats unassigned as no assignees", async () => {
-  render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />); await screen.findByText("a-unassigned");
-  fireEvent.change(screen.getByLabelText("Document status"), { target: { value: "open" } });
-  expect(screen.getByText("z-special +/#ß")).toBeTruthy(); expect(screen.queryByText("a-unassigned")).toBeNull();
-  fireEvent.change(screen.getByLabelText("Document status"), { target: { value: "submitted" } });
-  expect(screen.getByText("z-special +/#ß")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Document status"), { target: { value: "unassigned" } });
-  expect(screen.getByText("a-unassigned")).toBeTruthy(); expect(screen.queryByText("z-special +/#ß")).toBeNull();
+
+it("links every count to filtered Documents", async () => {
+  const navigate = vi.fn();
+  render(<ProgressPage projectKey="p" onNavigate={navigate} />);
+  await pipeline();
+  const toAssign = within(card("Translation review")).getByRole("link", { name: "To assign: 3" });
+  expect(toAssign.getAttribute("href")).toBe("#/projects/p/documents?step=assign_translation_review");
+  expect(within(card("Translation review")).getByRole("link", { name: "Check failed, with reviewer: 1" }).getAttribute("href"))
+    .toBe("#/projects/p/documents?translation_status=automatic_check_failed&step=translation_review_in_progress");
+  expect(within(card("Annotation")).getByRole("link", { name: "To assign: 3" }).getAttribute("href")).toBe("#/projects/p/documents?step=assign_annotation");
+  expect(within(card("Annotation")).getByRole("link", { name: "Paused by a problem report: 1" }).getAttribute("href")).toBe("#/projects/p/documents?status=held");
+  expect(within(card("Final result")).getByRole("link", { name: "To choose · your decision: 1" }).getAttribute("href")).toBe("#/projects/p/documents?step=choose_final");
+  const exportLink = within(card("Final result")).getByRole("link", { name: "Export final results…" });
+  expect(exportLink.getAttribute("href")).toBe("#/projects/p/export");
+  expect(exportLink.parentElement?.textContent).toContain("(1 final, 10 would be omitted)");
+  fireEvent.click(toAssign);
+  expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", step: "assign_translation_review" });
+  fireEvent.click(exportLink);
+  expect(navigate).toHaveBeenCalledWith({ name: "projectExport", key: "p" });
 });
-it("uses the real encoded documents route and exact ID for Assign", async () => {
-  const navigate = vi.fn(); render(<ProgressPage projectKey="p/a" onNavigate={navigate} />); await screen.findByText("a-unassigned");
-  const link = screen.getAllByRole("link", { name: "Assign" })[0];
-  expect(link.getAttribute("href")).toBe("#/projects/p%2Fa/documents?select=z-special+%2B%2F%23%C3%9F");
-  fireEvent.click(link); expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p/a", select: "z-special +/#ß" });
+
+it("mutes zero counts", async () => {
+  render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />);
+  await pipeline();
+  const zero = within(card("Translation review")).getByRole("link", { name: "Rejected or queried · your decision: 0" });
+  expect(zero.closest("li")?.className).toContain("progress-count--zero");
+  const nonZero = within(card("Translation review")).getByRole("link", { name: "Accepted: 2" });
+  expect(nonZero.closest("li")?.className).not.toContain("progress-count--zero");
 });
-it("shows no access on current server refusal and ignores an earlier project reply", async () => {
+
+it("renders People sorted by open work in the identity format, linked by owner", async () => {
+  const navigate = vi.fn();
+  render(<ProgressPage projectKey="p" onNavigate={navigate} />);
+  const table = await screen.findByRole("table", { name: "People" });
+  expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent))
+    .toEqual(["Person", "Translation reviews open", "Annotations open", "Reviews open", "Paused", "Submitted"]);
+  const rows = within(table).getAllByRole("row").slice(1);
+  expect(rows.map(row => within(row).getByRole("rowheader").textContent)).toEqual([
+    "Translation reviewer (ann-0003)", "Lead (ann-0002, you)", "Second annotator (ann-0005)", "ann-0006",
+  ]);
+  expect(rows[0].textContent).toBe("Translation reviewer (ann-0003)20001");
+  expect(table.textContent).not.toContain("reviewer\u0000");
+  expect(table.textContent).not.toMatch(/\bsecond\b|\bformer\b/);
+  const link = within(rows[0]).getByRole("link", { name: "Translation reviewer (ann-0003)" });
+  expect(link.getAttribute("href")).toBe("#/projects/p/documents?owner=ann-0003");
+  fireEvent.click(link);
+  expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", owner: "ann-0003" });
+  expect(progress.workload?.[0].username).toBe("second");
+});
+
+it("shows skeleton cards while loading and Error with Retry", async () => {
+  let reject!: (reason: unknown) => void;
+  vi.mocked(api.getProgress).mockImplementationOnce(() => new Promise((_, r) => { reject = r; }));
+  render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />);
+  const loading = screen.getByRole("status");
+  expect(loading.textContent).toContain("Loading progress");
+  expect(document.querySelectorAll(".progress-stage--skeleton")).toHaveLength(3);
+  await act(async () => { reject(new ApiError(500, "boom", "INTERNAL")); });
+  expect(document.querySelectorAll(".progress-stage--skeleton")).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await pipeline();
+  expect(api.getProgress).toHaveBeenCalledTimes(2);
+});
+
+it("shows No texts yet for an empty project and no access on refusal", async () => {
+  vi.mocked(api.getProgress).mockResolvedValueOnce({ ...progress, lede: { cases: 0, translations_to_review: 0, versions_to_annotate: 0, not_in_plan: 0, needs_decision: 0, to_assign: 0 }, workload: [] });
+  const { unmount } = render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />);
+  await screen.findByText("No texts yet");
+  expect(screen.queryByRole("list", { name: "Pipeline" })).toBeNull();
+  unmount();
+  vi.mocked(api.getProgress).mockRejectedValueOnce(new AuthError("Forbidden", undefined, "NOT_ALLOWED"));
+  render(<ProgressPage projectKey="q" onNavigate={vi.fn()} />);
+  await screen.findByText("You do not have access to this page.");
+  expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+});
+
+it("ignores an earlier project reply", async () => {
   let resolve!: (value: ProjectProgress) => void;
   vi.mocked(api.getProgress).mockImplementationOnce(() => new Promise(r => { resolve = r; })).mockRejectedValueOnce(new AuthError("Forbidden", undefined, "NOT_ALLOWED"));
   const { rerender } = render(<ProgressPage projectKey="old" onNavigate={vi.fn()} />);
   rerender(<ProgressPage projectKey="new" onNavigate={vi.fn()} />);
   await screen.findByText("You do not have access to this page.");
-  await act(async () => { resolve(progress); }); expect(screen.queryByText("a-unassigned")).toBeNull();
+  await act(async () => { resolve(progress); });
+  expect(screen.queryByRole("list", { name: "Pipeline" })).toBeNull();
 });
-it("links to all open decisions on Documents instead of listing final results and warnings", async () => {
-  const warnings = vi.spyOn(api, "getWorkflowWarnings");
-  const navigate = vi.fn(); render(<ProgressPage projectKey="p" onNavigate={navigate} />);
-  const link = await screen.findByRole("link", { name: "Needs your decision (3)" });
-  expect(link.getAttribute("href")).toBe("#/projects/p/documents?decision=all");
-  expect(api.listDocumentRows).toHaveBeenCalledWith("p", { decision: "all" });
-  expect(screen.queryByRole("region", { name: "Final results and open issues" })).toBeNull();
-  expect(screen.queryByText("Final results and open issues")).toBeNull();
-  expect(warnings).not.toHaveBeenCalled();
-  await screen.findByText("a-unassigned");
-  expect(screen.getAllByRole("link", { name: "Assign" })).toHaveLength(2);
-  fireEvent.click(link); expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", decision: "all" });
-});
-it("omits the decision link when the count cannot be loaded and refreshes it with progress", async () => {
-  vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new AuthError("Forbidden")).mockResolvedValue(rows(5));
-  render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />); await screen.findByText("a-unassigned");
-  expect(screen.queryByRole("link", { name: /Needs your decision/ })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
-  await screen.findByRole("link", { name: "Needs your decision (5)" });
+
+it("no longer renders Totals or the documents table", async () => {
+  render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />);
+  await pipeline();
+  expect(screen.queryByRole("region", { name: "Project totals" })).toBeNull();
+  expect(screen.queryByText("Totals")).toBeNull();
+  expect(screen.queryByRole("table", { name: "Progress documents" })).toBeNull();
+  expect(screen.queryByText("old-document")).toBeNull();
+  expect(screen.queryByLabelText("Document status")).toBeNull();
+  expect(screen.queryByRole("link", { name: "Assign" })).toBeNull();
 });
