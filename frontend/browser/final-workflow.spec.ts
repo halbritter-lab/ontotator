@@ -22,8 +22,6 @@ async function value<T>(page: Page, path: string, method = 'GET', data?: unknown
   return await response.json() as T;
 }
 async function assign(page: Page, s: Scenario, username: string) {
-  // Work plan: annotation of the source must be planned before it can be assigned.
-  await value(page, `${root(s)}/work-plans/bulk`, 'PUT', { case_ids: [s.case_id], languages: { source: { annotate: 'on' } } });
   const response = await value<{ created: Assignment[]; refused: unknown[] }>(page, `${root(s)}/assignments`, 'POST', {
     task: 'annotate', rows: [{ document_id: s.documents.source, username }], confirm_language: false,
   });
@@ -99,9 +97,6 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     const language = docs.find(doc => doc.document_id === s.documents.source)!.language;
     const openRow = async () => {
       const disclosure = page.getByRole('button', { name: `Show details, ${s.case_id} · ${language}`, exact: true });
-      // A row outside the effective plan sits behind the case's "… not in plan · show" line.
-      const notInPlan = page.getByRole('button', { name: `Show ${language} not in plan, ${s.case_id}`, exact: true });
-      if (!await disclosure.count() && await notInPlan.count()) await notInPlan.click();
       if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
       await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
       const area = page.getByRole('region', { name: `${s.case_id} · ${language}`, exact: true });

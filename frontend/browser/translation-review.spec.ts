@@ -66,9 +66,6 @@ async function documentRow(page: Page, id: string) {
   const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
   const name = `${doc.case_id} · ${doc.language}`;
   const disclosure = page.getByRole('button', { name: `Show details, ${name}`, exact: true });
-  // Rows not in the work plan sit behind the case's "… not in plan · show" line.
-  const notInPlan = page.locator(`button.documents-not-in-plan-toggle[aria-expanded="false"][aria-label$=" not in plan, ${doc.case_id}"]`);
-  if (!await disclosure.count() && await notInPlan.count()) await notInPlan.click();
   if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
   const versions = page.getByRole('region', { name, exact: true }).locator('details').filter({ has: page.locator('summary', { hasText: /^Text versions \(\d+\)$/ }) });
   if (!await versions.evaluate(node => (node as HTMLDetailsElement).open)) await versions.locator(':scope > summary').click();
