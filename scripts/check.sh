@@ -24,7 +24,7 @@ Without arguments, run the complete local gate serially.
 
 CHECK_VITEST_WORKERS: positive integer, default 2; use 4 on a dedicated machine.
 CHECK_PYTEST_WORKERS: backend pytest-xdist workers, default 4; 0 or 1 runs serially.
-CHECK_PLAYWRIGHT_WORKERS: positive integer, default 1 (spec files share fixture projects).
+CHECK_PLAYWRIGHT_WORKERS: positive integer, default 3 (spec files use separate projects).
 CHECK_CONTAINERS=1 adds containers to the complete gate; CHECK_IMAGE selects image.
 ONTOCURATOR_TEST_PG_URL may select a disposable PostgreSQL test server.
 HELP
@@ -71,7 +71,7 @@ if runs backend; then
     [[ "$pytest_workers" =~ ^[0-9]+$ ]] \
         || fail "CHECK_PYTEST_WORKERS must be a non-negative integer."
 fi
-playwright_workers="${CHECK_PLAYWRIGHT_WORKERS:-1}"
+playwright_workers="${CHECK_PLAYWRIGHT_WORKERS:-3}"
 if runs browser; then
     [[ "$playwright_workers" =~ ^[1-9][0-9]*$ ]] \
         || fail "CHECK_PLAYWRIGHT_WORKERS must be a positive integer."

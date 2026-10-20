@@ -102,7 +102,7 @@ def test_default_runs_every_required_phase_serially_with_bounded_workers(gate):
         "uv run python scripts/check_wheel.py --out-dir build/check-wheel",
         "npm --prefix frontend test -- --maxWorkers=2 --minWorkers=1",
         "uv run pytest -q -n 4 --durations=20",
-        "npm --prefix frontend run test:e2e -- --workers=1",
+        "npm --prefix frontend run test:e2e -- --workers=3",
     ]
     assert "All local checks passed." in result.stdout
     assert "partial" not in result.stdout.lower()
@@ -228,9 +228,9 @@ def test_backend_worker_override_runs_serially_at_one_or_less(gate, workers, exp
 
 
 def test_browser_worker_override_reaches_playwright(gate):
-    result, calls = gate("--only", "browser", CHECK_PLAYWRIGHT_WORKERS="3")
+    result, calls = gate("--only", "browser", CHECK_PLAYWRIGHT_WORKERS="2")
     assert result.returncode == 0, result.stderr
-    assert calls[-1] == "npm --prefix frontend run test:e2e -- --workers=3"
+    assert calls[-1] == "npm --prefix frontend run test:e2e -- --workers=2"
 
 
 @pytest.mark.parametrize(

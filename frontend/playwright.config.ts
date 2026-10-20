@@ -11,11 +11,13 @@ const python = process.env.E2E_PYTHON ?? (process.platform === "win32"
 
 export default defineConfig({
   testDir: "./browser",
-  // One worker by default; `--workers=N` (CHECK_PLAYWRIGHT_WORKERS in
-  // scripts/check.sh) runs spec files in parallel against the one fixture
-  // server. Tests inside a file stay serial (no fullyParallel): several specs
-  // change the settings of the shared seeded projects and restore them later.
-  workers: 1,
+  // Three workers by default (PLAYWRIGHT_WORKERS or `--workers=N` override;
+  // CHECK_PLAYWRIGHT_WORKERS in scripts/check.sh passes the flag). Spec files
+  // run in parallel against the one fixture server: no two spec files change
+  // the same project (tests/browser_server.py seeds one fixture project per
+  // spec; scenario routes build fresh ones). Tests inside a file stay serial
+  // (no fullyParallel): some change their project's settings and restore them.
+  workers: Number(process.env.PLAYWRIGHT_WORKERS ?? 3),
   globalTeardown: "./playwright.teardown.ts",
   use: { baseURL: `http://127.0.0.1:${port}`, trace: "retain-on-failure" },
   webServer: {
