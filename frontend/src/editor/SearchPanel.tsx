@@ -1,10 +1,15 @@
 import { IconButton } from "../ui/IconButton";
-import { IconClose } from "../ui/icons";
-import React, { useEffect, useRef, useState } from "react";
+import { IconCheck, IconClose } from "../ui/icons";
+import { Button } from "../ui/Button";
+import { InlineMessage } from "../ui/InlineMessage";
+import { Kbd } from "../ui/Kbd";
+import { useShortcutHint } from "../ui/shortcuts";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { SearchCandidate } from "../api/client";
 import { SearchLanguageButton } from "./SearchLanguageButton";
 import type { SearchLanguageControl } from "./searchLanguages";
 import { SearchManager, type SearchState, type WorkspaceKey } from "./searchState";
+import { firstUsableIndex, matchLine } from "./termSearch";
 
 export interface SearchPanelProps {
   canAssign?: boolean;
@@ -18,9 +23,18 @@ export interface SearchPanelProps {
   debounceMs?: number;
   /** Present when the layer's ontology has translations loaded; then the language button is shown. */
   languages?: SearchLanguageControl;
+  /** Prefilled query: shown selected and searched at once on mount (no debounce). */
+  initialQuery?: string;
+  /** Focus the field on mount (preventScroll; scrollIntoView({ block: "nearest" }) only if it is outside the viewport). */
+  autoFocus?: boolean;
+  /** Esc in the field. */
+  onEscape?: () => void;
+  /** Help line under the empty field; default "Name or code, for example HP:0001250". */
+  emptyHint?: string;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
+const DEFAULT_EMPTY_HINT = "Name or code, for example HP:0001250";
 
 export const SearchPanel: React.FC<SearchPanelProps> = ({
   searchManager,
@@ -32,29 +46,44 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   onSelectCandidate,
   debounceMs = SEARCH_DEBOUNCE_MS,
   languages,
+  initialQuery,
+  autoFocus = false,
+  onEscape,
+  emptyHint,
 }) => {
   const languageControl = languages && languages.options.length > 0 ? languages : undefined;
   // Sent with every request when translations are loaded; English is implied.
   const requestLanguages = languageControl?.active;
+  const listboxId = useId();
+  const hintId = `${listboxId}-hint`;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  // A typed query waits for the debounce; while it waits, the shown hits belong to an older query.
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncing, setDebouncing] = useState(false);
   const cancelDebounce = () => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = null;
+    setDebouncing(false);
   };
-  useEffect(() => cancelDebounce, []);
+  useEffect(() => () => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+  }, []);
   const runSearch = (val: string, immediate = false) => {
     cancelDebounce();
     if (immediate || debounceMs <= 0 || !val.trim()) {
       void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages);
       return;
     }
+    setDebouncing(true);
     debounceTimer.current = setTimeout(() => {
       debounceTimer.current = null;
+      setDebouncing(false);
       void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages);
     }, debounceMs);
   };
   const [state, setState] = useState<SearchState>(searchManager.getState());
-  const [queryInput, setQueryInput] = useState<string>("");
+  const [queryInput, setQueryInput] = useState<string>(initialQuery ?? "");
 
   useEffect(() => {
     return searchManager.subscribe((nextState) => {
@@ -62,11 +91,31 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     });
   }, [searchManager]);
 
+  // A new finding starts a new search; the first one may be prefilled and runs at once.
+  // Compared by identity, so a replayed mount effect (StrictMode) keeps the prefill.
+  const mountIdentity = useRef([annotationId, workspaceKey, layerId, searchManager] as const);
   useEffect(() => {
     cancelDebounce();
     searchManager.clear();
-    setQueryInput("");
+    const identity = [annotationId, workspaceKey, layerId, searchManager] as const;
+    const isMount = identity.every((value, index) => Object.is(value, mountIdentity.current[index]));
+    const query = isMount ? initialQuery ?? "" : "";
+    setQueryInput(query);
+    if (query.trim()) runSearch(query, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotationId, workspaceKey, layerId, searchManager]);
+
+  useLayoutEffect(() => {
+    if (!autoFocus) return;
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    input.select();
+    // Below the text (701–1024 px) the field may be out of view: bring only the inspector in, never the text pane.
+    const rect = input.getBoundingClientRect();
+    if (rect.top < 0 || rect.bottom > window.innerHeight) input.scrollIntoView?.({ block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A changed language selection is a new question: ask the pending query again.
   const languagesKey = requestLanguages ? requestLanguages.join(",") : null;
@@ -77,6 +126,48 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     if (queryInput.trim()) runSearch(queryInput, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [languagesKey]);
+
+  useShortcutHint(["↓ / ↑", "Enter"], "Move through term hits; add the active hit", { group: "Finding" });
+
+  const isUsable = (c: SearchCandidate): boolean => canAssign && c.obsolete !== true;
+  const hasQuery = queryInput.trim() !== "";
+  const searching = hasQuery && (debouncing || (state.isLoading && state.query === queryInput));
+  const failed = hasQuery && !searching && !!state.error && state.query === queryInput;
+  // Hits are shown (and can be added) only when they answer the query in the field.
+  const resultsCurrent = hasQuery && state.query === queryInput && !state.isLoading && !debouncing && !state.error;
+  const candidates = resultsCurrent ? state.candidates : [];
+  const expanded = candidates.length > 0;
+
+  // The active hit resets to the first usable one whenever a new result list arrives.
+  const [active, setActive] = useState<{ list: SearchCandidate[]; index: number } | null>(null);
+  const activeIndex = active && active.list === state.candidates
+    ? active.index
+    : firstUsableIndex(state.candidates, canAssign);
+  const shownActive = expanded && activeIndex >= 0 && activeIndex < candidates.length ? activeIndex : -1;
+  const optionId = (index: number) => `${listboxId}-${index}-${candidates[index].term_id}`;
+
+  const scrollActive = useRef(false);
+  useEffect(() => {
+    if (!scrollActive.current) return;
+    scrollActive.current = false;
+    if (shownActive < 0) return;
+    listRef.current?.querySelector<HTMLElement>(`[data-option-index="${shownActive}"]`)?.scrollIntoView?.({ block: "nearest" });
+  }, [shownActive]);
+
+  const moveActive = (step: 1 | -1) => {
+    if (!expanded) return;
+    for (let index = shownActive + step; index >= 0 && index < candidates.length; index += step) {
+      if (isUsable(candidates[index])) {
+        scrollActive.current = true;
+        setActive({ list: state.candidates, index });
+        return;
+      }
+    }
+  };
+
+  const addCandidate = (candidate: SearchCandidate) => {
+    if (isUsable(candidate)) onSelectCandidate(candidate, state.searchId ?? undefined);
+  };
 
   const handleQueryChange = (val: string) => {
     setQueryInput(val);
@@ -89,34 +180,61 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     searchManager.clear();
   };
 
-  const isObsolete = (c: SearchCandidate): boolean => c.obsolete === true;
+  const retry = () => runSearch(queryInput, true);
 
-  // What matched, and in which language when it was not an English name.
-  const matchDetail = (c: SearchCandidate): string =>
-    c.match_language && c.match_language !== "en"
-      ? `${c.match_kind}, ${c.match_language}`
-      : `${c.match_kind}`;
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    switch (event.key) {
+      case "ArrowDown":
+      case "ArrowUp":
+        if (!expanded) return;
+        event.preventDefault();
+        moveActive(event.key === "ArrowDown" ? 1 : -1);
+        return;
+      case "Enter":
+        event.preventDefault();
+        if (resultsCurrent) {
+          if (shownActive >= 0) addCandidate(candidates[shownActive]);
+          return;
+        }
+        // A pending or stale search runs now; its hits need a second Enter.
+        if (state.isLoading && !debouncing && state.query === queryInput) return;
+        retry();
+        return;
+      case "Escape":
+        if (!onEscape) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onEscape();
+        return;
+      default:
+    }
+  };
+
+  const usableCount = candidates.filter(isUsable).length;
+  const termCount = (count: number) => `${count} ${count === 1 ? "term" : "terms"}`;
 
   return (
     <div className="search-panel">
       <div className="form-group">
         <label htmlFor="search-input" className="form-label">
-          Search ontology term
+          Search term
         </label>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div className="search-field-row">
           <input
+            ref={inputRef}
             id="search-input"
             type="text"
+            role="combobox"
             className="form-control"
             placeholder="Name or code"
             value={queryInput}
+            aria-autocomplete="list"
+            aria-expanded={expanded}
+            aria-controls={expanded ? listboxId : undefined}
+            aria-activedescendant={shownActive >= 0 ? optionId(shownActive) : undefined}
+            aria-describedby={hintId}
             onChange={(e) => handleQueryChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                runSearch(queryInput, true);
-              }
-            }}
+            onKeyDown={handleKeyDown}
             autoComplete="off"
           />
           {queryInput && (
@@ -124,90 +242,72 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           )}
           {languageControl && <SearchLanguageButton control={languageControl} />}
         </div>
-        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
-          Search by name or code (e.g. HP:0001250)
+        <div id={hintId} className="search-hint">
+          {!hasQuery ? (
+            emptyHint ?? DEFAULT_EMPTY_HINT
+          ) : searching ? (
+            <span role="status">Searching…</span>
+          ) : failed ? null : resultsCurrent && candidates.length === 0 ? (
+            `No terms match “${queryInput.trim()}”. Change the words, try a code (HP:0001250) or switch search languages.`
+          ) : expanded ? (
+            canAssign ? (
+              <>
+                {termCount(usableCount)} · <Kbd>↓</Kbd><Kbd>↑</Kbd> choose · <Kbd>Enter</Kbd> add · <Kbd>Esc</Kbd> cancel
+              </>
+            ) : (
+              termCount(candidates.length)
+            )
+          ) : null}
         </div>
       </div>
 
-      {state.isLoading && (
-        <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", padding: "8px 0" }}>
-          Searching...
-        </div>
+      {failed && (
+        <InlineMessage tone="error">
+          The term search failed.{" "}
+          <Button size="sm" variant="secondary" onClick={retry}>Retry</Button>
+        </InlineMessage>
       )}
 
-      {state.error && (
-        <div
-          style={{
-            fontSize: "0.85rem",
-            color: "var(--danger)",
-            background: "var(--danger-light)",
-            padding: "8px 12px",
-            borderRadius: "var(--radius)",
-            marginBottom: 8,
-          }}
-        >
-          Error: {state.error}
-        </div>
-      )}
-
-      {state.candidates.length > 0 && (
-        <ul className="candidate-list">
-          {state.candidates.map((cand) => {
-            const obsolete = isObsolete(cand);
-            const candidateTermId = cand.term_id;
-            const targetTermId = currentTermId;
-            const isSelected = candidateTermId === targetTermId;
-
+      {expanded && (
+        <ul ref={listRef} id={listboxId} role="listbox" aria-label="Terms" className="candidate-list">
+          {candidates.map((cand, index) => {
+            const usable = isUsable(cand);
+            const isActive = index === shownActive;
+            const isSelected = cand.term_id === currentTermId;
+            const match = matchLine(cand);
             return (
               <li
-                key={`${candidateTermId}-${cand.rank}`}
-                role="button"
-                tabIndex={obsolete ? -1 : 0}
-                aria-disabled={obsolete || !canAssign}
-                onKeyDown={(event) => {
-                  if (canAssign && !obsolete && (event.key === "Enter" || event.key === " ")) {
-                    event.preventDefault();
-                    onSelectCandidate(cand, state.searchId ?? undefined);
-                  }
+                key={`${cand.term_id}-${cand.rank}-${index}`}
+                id={optionId(index)}
+                data-option-index={index}
+                role="option"
+                aria-selected={isActive}
+                aria-disabled={!usable}
+                className={`candidate-card${cand.obsolete ? " candidate-obsolete" : ""}`}
+                // Keep the focus in the field: the hits are options of the combobox, not buttons.
+                onMouseDown={(event) => event.preventDefault()}
+                onPointerEnter={() => {
+                  if (usable && !isActive) setActive({ list: state.candidates, index });
                 }}
-                className={`candidate-card ${obsolete ? "candidate-obsolete" : ""}`}
-                style={
-                  isSelected
-                    ? { outline: "2px solid var(--accent)", background: "var(--accent-light)" }
-                    : undefined
-                }
-                onClick={() => {
-                  if (!obsolete && canAssign) {
-                    onSelectCandidate(cand, state.searchId ?? undefined);
-                  }
-                }}
+                onClick={() => addCandidate(cand)}
               >
                 <div className="candidate-header">
-                  <span className="candidate-label">{cand.label}</span>
-                  <span className="candidate-id">{candidateTermId}</span>
+                  <strong className="candidate-label">{cand.label}</strong>
+                  <span className="candidate-id">{cand.term_id}</span>
+                  {isActive && canAssign && <Kbd>Enter</Kbd>}
                 </div>
-                {cand.matched_term && cand.matched_term !== cand.label && (
-                  <div style={{ fontSize: "0.8rem", color: "var(--accent)", marginBottom: 2 }}>
-                    {`Match: »${cand.matched_term}« (${matchDetail(cand)})`}
-                  </div>
+                {match && <div className="candidate-match" title={cand.match_kind}>{match}</div>}
+                {cand.definition && (
+                  <div className={`candidate-def${isActive ? "" : " is-clamped"}`}>{cand.definition}</div>
                 )}
-                {cand.definition && <div className="candidate-def">{cand.definition}</div>}
-                {obsolete && (
+                {cand.obsolete && (
                   <span className="warning-badge">
                     Obsolete term (assignment not allowed)
                   </span>
                 )}
                 {isSelected && (
-                  <span
-                    style={{
-                      display: "inline-block",
-                      marginTop: 4,
-                      fontSize: "0.75rem",
-                      fontWeight: 600,
-                      color: "var(--accent)",
-                    }}
-                  >
-                    ✓ Currently selected
+                  <span className="candidate-selected">
+                    <IconCheck /> Currently selected
                   </span>
                 )}
               </li>

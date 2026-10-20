@@ -83,6 +83,9 @@ import {
 } from "../editor/ReviewActions";
 import { useSearchLanguages } from "../editor/searchLanguages";
 import { SearchPanel } from "../editor/SearchPanel";
+import { canPrefill, NO_PREFILL_HINT, prefillQuery } from "../editor/termSearch";
+import { focusTextAt } from "../editor/textFocus";
+import { useMediaQuery } from "../ui/useMediaQuery";
 import { SearchManager } from "../editor/searchState";
 import { TermName } from "../editor/TermName";
 import { TextPane } from "../editor/TextPane";
@@ -382,6 +385,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const rootRef = useRef<HTMLDivElement>(null);
+  // At ≤700 px the editor shows one pane at a time; marking text does not switch panes on its own.
+  const panesLayout = useMediaQuery("(max-width: 700px)");
+  // Back to the text after a cancelled new finding: runs after the text pane re-rendered its runs,
+  // so the caret lands in the current text nodes (offset null: focus only).
+  const [textFocusRequest, setTextFocusRequest] = useState<{ offset: number | null } | null>(null);
+  useEffect(() => {
+    if (!textFocusRequest) return;
+    setTextFocusRequest(null);
+    if (textFocusRequest.offset === null) rootRef.current?.querySelector<HTMLElement>(".text-container")?.focus({ preventScroll: true });
+    else focusTextAt(rootRef.current, view.document.text, textFocusRequest.offset);
+  }, [textFocusRequest, view.document.text]);
+  // A finding without a text span whose reason is required starts in the reason field.
+  useEffect(() => {
+    if (!pendingAnnotation?.isSpanless || !spanlessNotesRequired || panesLayout) return;
+    rootRef.current?.querySelector<HTMLTextAreaElement>("#spanless-reason")?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAnnotation?.annotationId]);
   // Narrow screens: the header and toolbar scroll away above the viewport-high workspace. Choosing
   // a pane or opening the tree brings the workspace to the top, so the whole pane is in view.
   // Above 700 px the wrapper has no box (display: contents) and nothing scrolls.
@@ -1486,6 +1506,28 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         });
       }
     } catch (error) { reportError(error); }
+  };
+
+  // A newly marked span (not re-anchor, not carried): prefilled, focused term search.
+  const pendingIsMarkedSpan = !!pendingAnnotation && !pendingAnnotation.isSpanless && !pendingAnnotation.reanchorItem && !pendingAnnotation.carriedInput;
+  const pendingSearchProps = (pending: NonNullable<typeof pendingAnnotation>) => {
+    if (pending.reanchorItem || pending.carriedInput) return {};
+    const reasonFirst = !!pending.isSpanless && spanlessNotesRequired;
+    const base = {
+      autoFocus: !panesLayout && !reasonFirst,
+      onEscape: () => {
+        const end = pending.segments.reduce((max, segment) => Math.max(max, segment.end), 0);
+        cancelPending();
+        setTextFocusRequest({ offset: pending.isSpanless ? null : end });
+      },
+    };
+    if (pending.isSpanless) return base;
+    const prefill = canPrefill(view.document.language, searchLanguagesFor(pending.layerId)?.active);
+    return {
+      ...base,
+      initialQuery: prefill ? prefillQuery(view.document.text, pending.segments) : undefined,
+      emptyHint: prefill ? undefined : NO_PREFILL_HINT,
+    };
   };
 
   const cancelPending = () => {
@@ -2819,18 +2861,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               </div>
             </section>
           ) : pendingAnnotation ? (
-            <section className="detail-pane" aria-label="New Annotation">
+            <section className="detail-pane" aria-label="New finding">
               <div className="detail-section">
                 <h2>
                   {pendingAnnotation.carriedInput ? "Re-create carried finding" : pendingAnnotation.reanchorItem ? "Re-create finding on corrected text" : pendingAnnotation.isSpanless
-                    ? "Select term for new annotation"
-                    : "Select term for highlighted text"}
+                    ? "New finding without a text span"
+                    : "New finding"}
                 </h2>
-                <p>
-                  {pendingAnnotation.carriedInput ? "Save this finding with the original term and values. Then check it and mark it as checked." : pendingAnnotation.reanchorItem ? "Save this finding, check its evidence and values, then complete the text-change review." : pendingAnnotation.isSpanless
-                    ? "Select a term from the ontology for the new annotation."
-                    : "The annotation will be saved upon selecting a term."}
-                </p>
+                {pendingIsMarkedSpan
+                  ? <p className="pending-quote">“{quoteSegments(view.document.text, pendingAnnotation.segments)}”</p>
+                  : <p>
+                    {pendingAnnotation.carriedInput ? "Save this finding with the original term and values. Then check it and mark it as checked." : pendingAnnotation.reanchorItem ? "Save this finding, check its evidence and values, then complete the text-change review." : "Select a term from the ontology for the new annotation."}
+                  </p>}
                 {pendingAnnotation.reanchorItem && <>
                   <p><TermName termId={savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id} label={termLabel(pendingAnnotation.layerId,savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id)} /> · {pendingAnnotation.layerId}</p>
                   <p>Finding type: {view.layers?.find(layer=>layer.layer_id===pendingAnnotation.layerId)?.annotation_types.find(type=>type.type_id===pendingAnnotation.typeId)?.label ?? pendingAnnotation.typeId}</p>
@@ -2855,6 +2897,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 {!readOnly && !savedPendingReanchor && !pendingAnnotation.carriedInput && <SearchPanel key={pendingAnnotation.annotationId} searchManager={searchManager}
                   annotationId={pendingAnnotation.annotationId} workspaceKey={view.key} layerId={pendingAnnotation.layerId}
                   languages={searchLanguagesFor(pendingAnnotation.layerId)}
+                  {...pendingSearchProps(pendingAnnotation)}
                   onSelectCandidate={(candidate, searchId) => {
                     if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId } });
                     else void createPendingAnnotation(candidate.term_id, searchId);

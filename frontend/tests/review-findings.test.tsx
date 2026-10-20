@@ -498,7 +498,7 @@ describe("Search", () => {
     const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
     const manager = new SearchManager({ searchOntology } as any);
     render(<SearchPanel searchManager={manager} annotationId="a" workspaceKey={key} layerId="phenotype" onSelectCandidate={vi.fn()} />);
-    const input = screen.getByLabelText(/Search ontology term/i);
+    const input = screen.getByRole("combobox", { name: "Search term" });
     for (const value of ["h", "hy", "hyp", "hypo"]) fireEvent.change(input, { target: { value } });
     await act(async () => { vi.advanceTimersByTime(200); });
     expect(searchOntology).not.toHaveBeenCalled();

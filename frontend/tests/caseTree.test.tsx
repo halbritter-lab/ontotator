@@ -564,7 +564,7 @@ describe("the tree in the case screen", () => {
 
     // A new annotation has no term yet: the search gets the whole column.
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
-    expect(screen.getByLabelText(/Search ontology term/i)).toBeDefined();
+    expect(screen.getByRole("combobox", { name: "Search term" })).toBeDefined();
     noTree();
     expect(panel.parentElement!.hidden).toBe(true);
     expect(layout.classList.contains("tree-open")).toBe(false);
@@ -606,7 +606,7 @@ describe("the annotation panel", () => {
     // ... and so is the search for a new one, and the panel after it was cancelled.
     pane.scrollTop = 80;
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
-    expect(within(pane).getByLabelText(/Search ontology term/i)).toBeDefined();
+    expect(within(pane).getByRole("combobox", { name: "Search term" })).toBeDefined();
     expect(pane.scrollTop).toBe(0);
     pane.scrollTop = 60;
     fireEvent.click(entry(container, "a1"));

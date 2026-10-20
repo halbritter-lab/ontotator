@@ -391,7 +391,7 @@ it("uses the search event when assigning a candidate and trusts obsolete metadat
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));
  fireEvent.click(screen.getByRole("button", { name: /Change term|Begriff ändern/i }));
- fireEvent.change(screen.getByLabelText(/Search ontology term|Ontologie-Term suchen/i), { target: { value: "Candidate" } });
+ fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Candidate" } });
  await waitFor(() => expect(screen.getByText("Candidate")).toBeDefined());
  fireEvent.click(screen.getByText("Candidate"));
  await waitFor(() => expect(edit).toHaveBeenCalled());

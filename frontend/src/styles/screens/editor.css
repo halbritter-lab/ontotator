@@ -423,26 +423,27 @@
 
 .candidate-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 .candidate-label {
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: var(--weight-strong);
+  font-size: var(--size-md);
 }
 
 .candidate-id {
+  margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--size-xs);
   color: var(--text-muted);
 }
 
 .candidate-def {
-  font-size: 0.8rem;
+  font-size: var(--size-sm);
   color: var(--text-muted);
-  line-height: 1.35;
+  line-height: var(--leading-sm);
 }
 
 .warning-badge {
@@ -1049,6 +1050,71 @@
 .candidate-def {
   font-size: var(--size-sm);
   line-height: var(--leading-sm);
+}
+
+/* Term search combobox: the field row, the hint line and the active hit. */
+
+.search-field-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.search-hint {
+  margin-top: var(--space-1);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-muted);
+}
+
+.search-panel .notice {
+  margin-bottom: var(--space-2);
+}
+
+.candidate-card[aria-selected="true"],
+.candidate-card[aria-selected="true"]:hover:not(.candidate-obsolete) {
+  background: var(--accent-light);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.candidate-card[aria-selected="true"] .candidate-def {
+  color: var(--text);
+}
+
+.candidate-def.is-clamped {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.candidate-match {
+  margin-bottom: var(--space-1);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  color: var(--text-muted);
+}
+
+.candidate-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  font-size: var(--size-xs);
+  font-weight: var(--weight-strong);
+  color: var(--accent);
+}
+
+.pending-quote {
+  font-family: var(--font-serif);
+  font-size: var(--size-reading);
+  line-height: var(--leading-reading);
+  overflow-wrap: anywhere;
+}
+
+@media (forced-colors: active) {
+  .candidate-card[aria-selected="true"] {
+    outline: var(--focus-width) solid Highlight;
+    outline-offset: calc(-1 * var(--focus-width));
+  }
 }
 
 /* The document: a raised sheet on the paper, set in the serif at reading size. */

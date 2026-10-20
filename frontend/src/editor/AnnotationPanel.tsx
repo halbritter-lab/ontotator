@@ -2,7 +2,7 @@ import { IconButton } from "../ui/IconButton";
 import { Textarea } from "../ui/Textarea";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/Button";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { ProposalSource } from "./ProposalSource";
 import { AiBadge } from "./AiBadge";
 import type { EditorProposal, AnnotationSnapshot, SearchCandidate } from "../api/client";
@@ -103,6 +103,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   searchLanguages,
 }) => {
   const [showSearch, setShowSearch] = useState(false);
+  const changeTermButton = useRef<HTMLButtonElement>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmDetachId, setConfirmDetachId] = useState<string | null>(null);
 
@@ -191,6 +192,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <Button
+              ref={changeTermButton}
               type="button"
               variant="secondary" size="sm"
               data-repair="change-term" onClick={() => setShowSearch(!showSearch)}
@@ -214,6 +216,11 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               currentTermId={currentTerm}
               onSelectCandidate={handleSelectCandidate}
               languages={searchLanguages}
+              autoFocus
+              onEscape={() => {
+                setShowSearch(false);
+                changeTermButton.current?.focus({ preventScroll: true });
+              }}
             />
           </div>
         )}

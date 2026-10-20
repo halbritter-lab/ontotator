@@ -281,9 +281,9 @@ describe("CaseScreen integration", () => {
     vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "s", candidates: [{ term_id: "HP:0001252", label: "Hypotonia", rank: 1 }] } as any);
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
-    fireEvent.change(screen.getByLabelText(/Search ontology term/), { target: { value: "Hypotonia" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
     const candidate = (await screen.findByText("Hypotonia")).closest(".candidate-card")!;
-    fireEvent.keyDown(candidate, { key: "Enter" });
+    fireEvent.click(candidate);
     expect(apply).not.toHaveBeenCalled();
     const reason = screen.getByLabelText(/Reason for no text span/);
     expect(screen.getByRole("button", { name: "Add annotation" })).toHaveProperty("disabled", true);
@@ -300,8 +300,8 @@ describe("CaseScreen integration", () => {
     vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "presets", candidates: [{ term_id: "HP:0001252", label: "Hypotonia", rank: 1 }] } as any);
     render(<CaseScreen view={view} workspaceId="presets" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
-    fireEvent.change(screen.getByLabelText(/Search ontology term/), { target: { value: "Hypotonia" } });
-    fireEvent.keyDown((await screen.findByText("Hypotonia")).closest(".candidate-card")!, { key: "Enter" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
+    fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
     await waitFor(() => expect(apply).toHaveBeenCalledWith("presets", expect.objectContaining({ payload: expect.objectContaining({
       axes_values: { assertion: "absent", experiencer: "other", temporality: null }, chosen_axis_ids: [],
     }) })));
@@ -358,7 +358,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="ws-optional" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
     expect((screen.getByLabelText(/Reason for no text span/) as HTMLTextAreaElement).required).toBe(false);
-    fireEvent.change(screen.getByLabelText(/Search ontology term/), { target: { value: "Hypotonia" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
     fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
     await waitFor(() => expect(apply).toHaveBeenCalledOnce());
     expect(apply.mock.calls[0][1].payload).toMatchObject({ command: "create_annotation", segments: [], term_id: "HP:0001252" });
@@ -563,9 +563,9 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByText(/Add finding without a text span/i));
 
     // Shows search panel for new annotation
-    expect(screen.getByText(/Select term for new annotation|Begriff für neue Annotation wählen/i)).toBeDefined();
-    fireEvent.change(screen.getByLabelText(/Search ontology term|Ontologie-Term suchen/i), { target: { value: "Hypotonia" } });
-    fireEvent.keyDown((await screen.findByText("Hypotonia")).closest(".candidate-card")!, { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "New finding without a text span" })).toBeDefined();
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
+    fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
 
     await waitFor(() => {
       expect(applyCommandSpy).toHaveBeenCalledWith(
@@ -617,7 +617,7 @@ describe("CaseScreen integration", () => {
 
     // The stored selection of this annotator is back after loading.
     const button = await screen.findByRole("button", { name: "Search languages: EN, ES" });
-    fireEvent.change(screen.getByLabelText(/Search ontology term/i), { target: { value: "Krampfanfall" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Krampfanfall" } });
     await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
     expect(search.mock.calls[0][0].languages).toEqual(["es"]);
 
@@ -640,7 +640,7 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByText(/Add finding without a text span/i));
 
     await waitFor(() => expect(listed).toHaveBeenCalledWith(sampleView.key.project_key));
-    expect(screen.getByLabelText(/Search ontology term/i)).toBeDefined();
+    expect(screen.getByRole("combobox", { name: "Search term" })).toBeDefined();
     expect(screen.queryByRole("button", { name: /Search languages/ })).toBeNull();
   });
 
@@ -820,10 +820,10 @@ describe("CaseScreen integration", () => {
     const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 3);
     window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
     fireEvent.mouseUp(text);
-    expect(screen.getByLabelText(/New Annotation|Neue Annotation/i)).toBeDefined();
+    expect(screen.getByRole("region", { name: "New finding" })).toBeDefined();
     expect(mutate).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText(/Search ontology term|Ontologie-Term suchen/i), { target: { value: "Custom" } });
-    fireEvent.keyDown((await screen.findByText("Custom finding")).closest(".candidate-card")!, { key: "Enter" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Custom" } });
+    fireEvent.click((await screen.findByText("Custom finding")).closest(".candidate-card")!);
     await waitFor(() => expect(mutate).toHaveBeenCalledWith("ws-custom", expect.objectContaining({
       expected_revision: 0,
       payload: expect.objectContaining({ command: "create_annotation", layer_id: "phenotype",
@@ -831,6 +831,93 @@ describe("CaseScreen integration", () => {
     })));
     expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ layer_id: "phenotype" }));
     expect(search.mock.calls[0][0].annotation_id).toBe(mutate.mock.calls[0][1].payload.annotation_id);
+  });
+
+  describe("term search after marking text", () => {
+    const markThe = (container: HTMLElement) => {
+      const text = container.querySelector(".text-container")!;
+      const node = text.querySelector(".run")!.firstChild!;
+      const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 3);
+      window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+      fireEvent.mouseUp(text);
+      return text as HTMLElement;
+    };
+    const hits = { search_id: "search-the", candidates: [
+      { term_id: "HP:0000001", label: "Gone", obsolete: true, matched_term: "Gone", match_kind: "label", rank: 1, display_pos: 1 },
+      { term_id: "HP:0001252", label: "Hypotonia", obsolete: false, matched_term: "Hypotonia", match_kind: "label", rank: 2, display_pos: 2 },
+    ] };
+
+    it("marking text focuses the prefilled, selected term search and searches at once", () => {
+      const search = vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-prefill" onClose={vi.fn()} />);
+      markThe(rendered.container);
+      expect(screen.getByRole("heading", { name: "New finding" })).toBeDefined();
+      expect(rendered.container.querySelector(".pending-quote")!.textContent).toBe("“The”");
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe("The");
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe(3);
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ query: "The" }));
+      expect(screen.queryByText("The annotation will be saved upon selecting a term.")).toBeNull();
+    });
+
+    it("Enter adds the active hit and creates the finding with the search event", async () => {
+      vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const view = structuredClone(sampleView);
+      const mutate = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
+      const rendered = render(<CaseScreen view={view} workspaceId="ws-enter" onClose={vi.fn()} />);
+      markThe(rendered.container);
+      const input = screen.getByRole("combobox", { name: "Search term" });
+      await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBe(screen.getAllByRole("option")[1].id));
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(mutate).toHaveBeenCalledWith("ws-enter", expect.objectContaining({
+        payload: expect.objectContaining({ command: "create_annotation", term_id: "HP:0001252",
+          segments: [{ start: 0, end: 3 }], search_event_id: "search-the" }),
+      })));
+    });
+
+    it("does not prefill a German document without German search names and says why", () => {
+      const search = vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const view = structuredClone(sampleView); view.document.language = "de";
+      const rendered = render(<CaseScreen view={view} workspaceId="ws-de" onClose={vi.fn()} />);
+      markThe(rendered.container);
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe("");
+      expect(screen.getByText("Names are searched in English. Type an English name or a code.")).toBeDefined();
+      expect(search).not.toHaveBeenCalled();
+    });
+
+    it("Esc in the term search cancels the new finding and focuses the text at the selection end", () => {
+      vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-esc" onClose={vi.fn()} />);
+      const text = markThe(rendered.container);
+      fireEvent.keyDown(screen.getByRole("combobox", { name: "Search term" }), { key: "Escape" });
+      expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
+      expect(document.activeElement).toBe(text);
+      const selection = window.getSelection()!;
+      expect(selection.isCollapsed).toBe(true);
+      expect(text.contains(selection.anchorNode)).toBe(true);
+      const range = document.createRange(); range.setStart(text, 0); range.setEnd(selection.anchorNode!, selection.anchorOffset);
+      expect(range.toString()).toBe("The");
+    });
+
+    it("focusing the search does not scroll the text pane", () => {
+      vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const focus = vi.spyOn(HTMLElement.prototype, "focus");
+      const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-scroll" onClose={vi.fn()} />);
+      const container = rendered.container.querySelector<HTMLElement>(".text-container")!;
+      container.scrollTop = 40;
+      markThe(rendered.container);
+      const input = screen.getByRole("combobox", { name: "Search term" });
+      const inputFocus = focus.mock.calls.filter((_, index) => focus.mock.contexts[index] === input);
+      expect(inputFocus.length).toBeGreaterThan(0);
+      for (const call of inputFocus) expect(call[0]).toEqual({ preventScroll: true });
+      expect(container.scrollTop).toBe(40);
+      focus.mockRestore();
+    });
   });
 
   it("does not expose imported sources in an independent view", () => {

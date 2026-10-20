@@ -44,7 +44,7 @@ it("offers ontology search for inspection without allowing a submitted annotatio
   render(<CaseScreen view={response.view} workspaceId="ws" onClose={vi.fn()} readOnly />);
   fireEvent.click(Array.from(document.querySelectorAll(".sidebar .doc-item")).find(node => node.textContent?.includes("HP:1"))!);
   fireEvent.click(screen.getByRole("button", { name: "Search ontology" }));
-  expect(await screen.findByRole("textbox", { name: /Search ontology term/ })).toBeDefined();
+  expect(await screen.findByRole("combobox", { name: "Search term" })).toBeDefined();
 });
 
 it("closes an unfinished new-annotation form when the mounted workspace becomes read-only", () => {
@@ -52,9 +52,9 @@ it("closes an unfinished new-annotation form when the mounted workspace becomes 
   const props = { view: response.view, workspaceId: "ws", onClose: vi.fn() };
   const mounted = render(<CaseScreen {...props} />);
   fireEvent.click(screen.getByRole("button", { name: /Add finding without a text span/ }));
-  expect(screen.getByRole("region", { name: "New Annotation" })).toBeDefined();
+  expect(screen.getByRole("region", { name: "New finding" })).toBeDefined();
   mounted.rerender(<CaseScreen {...props} readOnly />);
-  expect(screen.queryByRole("region", { name: "New Annotation" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
 });
 
 it("keeps a submitted workspace readable while disabling submission and new findings", async () => {
