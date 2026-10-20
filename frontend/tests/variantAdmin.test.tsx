@@ -224,10 +224,13 @@ it("keeps original File identity for stale Check again and does not carry its ov
 
 it("retains an unsaved translation gate when another settings section is saved", async () => {
   vi.spyOn(api, "updateProjectSettings").mockResolvedValue({ ...settings, annotate_accepted_translations_only: false });
-  render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} />);
-  const gate = await screen.findByLabelText("Annotate translations only after an accepted review");
-  fireEvent.click(gate); fireEvent.click(screen.getByRole("button", { name: "Save general" }));
+  const view = render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="rules" />);
+  fireEvent.click(await screen.findByLabelText("Annotate translations only after an accepted review"));
+  view.rerender(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="general" />);
+  fireEvent.click(screen.getByRole("button", { name: "Save general" }));
   await screen.findByText("General saved.");
+  view.rerender(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="rules" />);
+  const gate = screen.getByLabelText("Annotate translations only after an accepted review");
   expect((gate as HTMLInputElement).checked).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
   await waitFor(() => expect(api.updateProjectSettings).toHaveBeenLastCalledWith("p", expect.objectContaining({ annotate_accepted_translations_only: true })));
@@ -275,7 +278,7 @@ it("renders exact preview variant lineage and every failed code", () => {
 
 it("loads explicit false annotation gate and saves its changed Rules value", async () => {
   vi.spyOn(api, "updateProjectSettings").mockResolvedValue({ ...settings, annotate_accepted_translations_only: true });
-  render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} />);
+  render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="rules" />);
   const gate = await screen.findByLabelText("Annotate translations only after an accepted review");
   expect((gate as HTMLInputElement).checked).toBe(false);
   fireEvent.click(gate); fireEvent.click(screen.getByRole("button", { name: "Save rules" }));

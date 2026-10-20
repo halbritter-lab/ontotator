@@ -1,8 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { MutableRefObject } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError } from "../src/api/client";
 import { ProjectNewPage } from "../src/admin/ProjectNewPage";
-import { ProjectSettingsPage } from "../src/admin/ProjectSettingsPage";
+import { ProjectSettingsPage, type ProjectSettingsPageProps } from "../src/admin/ProjectSettingsPage";
+import type { RouteLeaveGuard, SettingsSection } from "../src/app/router";
 import { currentUser, deferred, ontologies, profile, settings } from "./projectFixtures";
 
 beforeEach(() => {
@@ -16,6 +18,13 @@ beforeEach(() => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+/** Renders one settings section; `show` switches the address while the editor stays mounted. */
+function renderSettings(section?: SettingsSection, extra: Partial<ProjectSettingsPageProps> = {}) {
+  const page = (next?: SettingsSection) => <ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} section={next} {...extra} />;
+  const view = render(page(section));
+  return { ...view, show: (next?: SettingsSection) => view.rerender(page(next)) };
+}
 
 describe("project creation", () => {
   it("creates from authoritative template IDs and the explicitly selected ontology version", async () => {
@@ -70,11 +79,110 @@ describe("project creation", () => {
   });
 });
 
-describe("project settings sections", () => {
-  it("jumps to rules with scoped save feedback beside the first control and secondary values collapsed", async () => {
+describe("settings section addresses", () => {
+  const labels = ["General", "Guideline", "Annotation rules", "Workflow", "Creation defaults", "Ontology and profile", "Members"];
+
+  it("shows only General at the default address with a nav of links", async () => {
     render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
     const navigation = await screen.findByRole("navigation", { name: "Settings sections" });
-    fireEvent.click(within(navigation).getByRole("button", { name: "Annotation rules" }));
+    const links = within(navigation).getAllByRole("link");
+    expect(links.map(link => link.textContent)).toEqual(labels);
+    expect(links.map(link => link.getAttribute("href"))).toEqual(["", "/guideline", "/rules", "/workflow", "/defaults", "/profile", "/members"].map(suffix => `#/projects/p%2Fkey/settings${suffix}`));
+    expect(within(navigation).getByRole("link", { name: "General" }).getAttribute("aria-current")).toBe("page");
+    expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
+    expect(screen.getByRole("form", { name: "General" })).toBeDefined();
+    expect(screen.queryByRole("form", { name: "Rules" })).toBeNull();
+    expect(screen.queryByRole("form", { name: "Guideline" })).toBeNull();
+  });
+
+  it("shows the section of its address", async () => {
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} section="rules" />);
+    expect(await screen.findByRole("form", { name: "Rules" })).toBeDefined();
+    expect(screen.queryByRole("form", { name: "General" })).toBeNull();
+    expect(screen.queryByRole("form", { name: "Workflow" })).toBeNull();
+    expect(screen.queryByRole("form", { name: "Creation defaults" })).toBeNull();
+    const navigation = screen.getByRole("navigation", { name: "Settings sections" });
+    expect(within(navigation).getByRole("link", { name: "Annotation rules" }).getAttribute("aria-current")).toBe("page");
+    expect(within(navigation).getByRole("link", { name: "General" }).hasAttribute("aria-current")).toBe(false);
+  });
+
+  it("navigates through onNavigate and focuses the new section", async () => {
+    const onNavigate = vi.fn();
+    const view = renderSettings(undefined, { onNavigate });
+    const navigation = await screen.findByRole("navigation", { name: "Settings sections" });
+    fireEvent.click(within(navigation).getByRole("link", { name: "Creation defaults" }));
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectSettings", key: settings.project_key, section: "defaults" });
+    fireEvent.click(within(navigation).getByRole("link", { name: "General" }));
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectSettings", key: settings.project_key });
+    fireEvent.click(within(navigation).getByRole("link", { name: "Workflow" }), { ctrlKey: true });
+    expect(onNavigate).toHaveBeenCalledTimes(2);
+    view.show("defaults");
+    expect(document.activeElement).toBe(screen.getByRole("form", { name: "Creation defaults" }));
+  });
+
+  it("asks Save, Discard or Cancel when leaving a section with unsaved edits", async () => {
+    const routeLeaveRef = { current: null } as MutableRefObject<RouteLeaveGuard | null>;
+    renderSettings(undefined, { routeLeaveRef });
+    fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: "Edited" } });
+    await waitFor(() => expect(routeLeaveRef.current).not.toBeNull());
+
+    let cancelled: Promise<boolean> | undefined;
+    act(() => { cancelled = routeLeaveRef.current!(); });
+    const dialog = await screen.findByRole("dialog", { name: "Unsaved changes in General" });
+    expect(within(dialog).getByRole("button", { name: "Save general" })).toBeDefined();
+    expect(within(dialog).getByRole("button", { name: "Discard" })).toBeDefined();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await expect(cancelled!).resolves.toBe(false);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect((screen.getByLabelText(/^Name/) as HTMLInputElement).value).toBe("Edited");
+
+    vi.mocked(api.updateProjectSettings).mockRejectedValueOnce(new ApiError(422, "Name taken", "INVALID"));
+    let failed: Promise<boolean> | undefined;
+    act(() => { failed = routeLeaveRef.current!(); });
+    let settled = false;
+    void failed!.then(() => { settled = true; });
+    const again = await screen.findByRole("dialog", { name: "Unsaved changes in General" });
+    fireEvent.click(within(again).getByRole("button", { name: "Save general" }));
+    expect(await within(again).findByRole("alert")).toBeDefined();
+    expect(screen.getByRole("dialog", { name: "Unsaved changes in General" })).toBeDefined();
+    expect(settled).toBe(false);
+
+    fireEvent.click(within(again).getByRole("button", { name: "Save general" }));
+    await expect(failed!).resolves.toBe(true);
+    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { name: "Edited", description: "Original", languages: ["de"] });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("discards the section's edits when leaving with Discard", async () => {
+    const routeLeaveRef = { current: null } as MutableRefObject<RouteLeaveGuard | null>;
+    renderSettings("guideline", { routeLeaveRef });
+    fireEvent.change(await screen.findByLabelText("Guideline URL"), { target: { value: "https://example.test/guide" } });
+    await waitFor(() => expect(routeLeaveRef.current).not.toBeNull());
+    let leaving: Promise<boolean> | undefined;
+    act(() => { leaving = routeLeaveRef.current!(); });
+    const dialog = await screen.findByRole("dialog", { name: "Unsaved changes in Guideline" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Discard" }));
+    await expect(leaving!).resolves.toBe(true);
+    expect((screen.getByLabelText("Guideline URL") as HTMLInputElement).value).toBe("");
+    expect(api.updateProjectSettings).not.toHaveBeenCalled();
+  });
+
+  it("does not ask when nothing is unsaved", async () => {
+    const routeLeaveRef = { current: null } as MutableRefObject<RouteLeaveGuard | null>;
+    renderSettings("rules", { routeLeaveRef });
+    await screen.findByRole("form", { name: "Rules" });
+    let allowed: boolean | undefined;
+    await act(async () => { allowed = await (routeLeaveRef.current?.() ?? Promise.resolve(true)); });
+    expect(allowed).toBe(true);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("project settings sections", () => {
+  it("jumps to rules with scoped save feedback beside the first control and secondary values collapsed", async () => {
+    const view = renderSettings();
+    await screen.findByRole("navigation", { name: "Settings sections" });
+    view.show("rules");
     const form = screen.getByRole("form", { name: "Rules" });
     expect(document.activeElement).toBe(form);
     const save = within(form).getByRole("button", { name: "Save rules" });
@@ -84,41 +192,47 @@ describe("project settings sections", () => {
     expect(within(form).getByRole("status").compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const disclosure = within(form).getByText("Hidden axis values").closest("details")!;
     expect(disclosure.open).toBe(false);
-    fireEvent.click(within(navigation).getByRole("button", { name: "General" }));
-    fireEvent.click(within(navigation).getByRole("button", { name: "Annotation rules" }));
-    expect(control).toHaveProperty("value", "optional");
+    view.show("general");
+    view.show("rules");
+    expect(screen.getByRole("combobox", { name: "Findings without a text span" })).toHaveProperty("value", "optional");
     expect(api.updateProjectSettings).not.toHaveBeenCalled();
   });
   it("saves profile-keyed creation defaults without saving another section's rule changes", async () => {
     const updated = { ...settings, creation_defaults: { findings: { phenotype: { assertion: "present" } } }, annotation_policy_revision: 2 };
     vi.mocked(api.updateProjectSettings).mockResolvedValue(updated);
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
-    const preset = await screen.findByRole("combobox", { name: "Default Assertion (Findings / Phenotype)" });
+    const view = renderSettings("rules");
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Every axis must be chosen before submission" }));
+    view.show("defaults");
+    const preset = screen.getByRole("combobox", { name: "Default Assertion (Findings / Phenotype)" });
     expect(preset).toHaveProperty("value", "");
-    fireEvent.click(screen.getByRole("checkbox", { name: "Every axis must be chosen before submission" }));
     fireEvent.change(preset, { target: { value: "present" } });
     fireEvent.click(screen.getByRole("button", { name: "Save creation defaults" }));
     await screen.findByText("Creation defaults saved.");
     expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { creation_defaults: { findings: { phenotype: { assertion: "present" } } } });
-    expect(screen.getByRole("checkbox", { name: "Every axis must be chosen before submission" })).toHaveProperty("checked", true);
     expect(screen.getByRole("combobox", { name: "Default Certainty (Findings / Later type)" })).toHaveProperty("value", "");
+    view.show("rules");
+    expect(screen.getByRole("checkbox", { name: "Every axis must be chosen before submission" })).toHaveProperty("checked", true);
   });
   it("saves only one section and preserves another section's unsaved draft", async () => {
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const view = renderSettings();
     fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: "New name" } });
+    view.show("guideline");
     fireEvent.change(screen.getByLabelText("Guideline URL"), { target: { value: "https://example.test/guide" } });
+    view.show("general");
     fireEvent.click(screen.getByRole("button", { name: "Save general" }));
     await screen.findByText("General saved.");
     expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { name: "New name", description: "Original", languages: ["de"] });
+    view.show("guideline");
     expect((screen.getByLabelText("Guideline URL") as HTMLInputElement).value).toBe("https://example.test/guide");
   });
 
   it("preserves null clearing and false rule values in section-only PATCH bodies", async () => {
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const view = renderSettings("guideline");
     await screen.findByLabelText("Guideline URL");
     fireEvent.click(screen.getByRole("button", { name: "Save guideline" }));
     expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { guideline_url: null, guideline_version: null });
     await screen.findByText("Guideline saved.");
+    view.show("rules");
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
     await screen.findByText("Rules saved.");
     expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, annotate_accepted_translations_only: true, allow_spanless_findings: true, require_spanless_note: true, hidden_axis_values: {} });
@@ -127,7 +241,7 @@ describe("project settings sections", () => {
   it.each([
     ["prohibited", false, true], ["required", true, true], ["optional", true, false],
   ] as const)("persists the %s spanless mode through one setting", async (mode, allow, requireNote) => {
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    renderSettings("rules");
     const control = await screen.findByRole("combobox", { name: "Findings without a text span" });
     expect((control as HTMLSelectElement).value).toBe("required");
     expect(within(control).getAllByRole("option")).toHaveLength(3);
@@ -139,7 +253,7 @@ describe("project settings sections", () => {
 
   it("loads the saved optional mode and preserves its flag when prohibiting spanless findings", async () => {
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, require_spanless_note: false });
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    renderSettings("rules");
     const control = await screen.findByRole("combobox", { name: "Findings without a text span" });
     expect((control as HTMLSelectElement).value).toBe("optional");
     fireEvent.change(control, { target: { value: "prohibited" } });
@@ -148,7 +262,7 @@ describe("project settings sections", () => {
   });
 
   it("uses the real server defaults and every annotation type without guessing", async () => {
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    renderSettings("rules");
     const actual = await screen.findByRole("checkbox", { name: "present" }) as HTMLInputElement;
     expect(actual.disabled).toBe(true);
     expect(actual.title).toBe("The default value cannot be hidden");
@@ -158,17 +272,18 @@ describe("project settings sections", () => {
 
   it("uses separate pin/profile PUTs and keeps locked structures read-only", async () => {
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, locked: true });
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const view = renderSettings("profile");
     expect(await screen.findByText("Locked because work has been submitted. Start a new project for another ontology version.")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Save pins" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save profile" })).toBeNull();
     expect(screen.getByText("a".repeat(64))).toBeDefined();
+    view.show("general");
     expect(screen.getByRole("button", { name: "Save general" })).toBeDefined();
   });
 
   it("shows guideline server refusal without losing edited values", async () => {
     vi.mocked(api.updateProjectSettings).mockRejectedValue(new ApiError(422, "Both required", "GUIDELINE_INCOMPLETE"));
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    renderSettings("guideline");
     fireEvent.change(await screen.findByLabelText("Guideline URL"), { target: { value: "https://example.test/guide" } });
     fireEvent.click(screen.getByRole("button", { name: "Save guideline" }));
     expect(await screen.findByRole("alert")).toBeDefined();
@@ -190,18 +305,19 @@ describe("project settings sections", () => {
 
   it("saves the selected pin with a PUT and adopts returned axis-default metadata", async () => {
     vi.mocked(api.updatePins).mockResolvedValue({ ...settings, pins: [{ ...settings.pins[0], sha256: "b".repeat(64), release: "2027", t1_profile: "generic" }], axis_defaults: {} });
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const view = renderSettings("profile");
     fireEvent.change(await screen.findByLabelText(/^Ontology file for HP/), { target: { value: "b".repeat(64) } });
     fireEvent.change(screen.getByLabelText("T1 profile for HP"), { target: { value: "generic" } });
     fireEvent.click(screen.getByRole("button", { name: "Save pins" }));
     await screen.findByText("Pins saved.");
     expect(api.updatePins).toHaveBeenCalledWith(settings.project_key, [{ ontology_id: "HP", sha256: "b".repeat(64), allowed_roots: ["HP:1"], t1_profile: "generic" }]);
     expect(api.updateProjectSettings).not.toHaveBeenCalled();
+    view.show("rules");
     expect((screen.getByRole("checkbox", { name: "present" }) as HTMLInputElement).disabled).toBe(false);
   });
 
   it("sends an uploaded profile unchanged through the distinct profile PUT", async () => {
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    renderSettings("profile");
     const uploaded = { ...profile, profile_id: "replacement", custom_metadata: { keep: true } };
     fireEvent.change(await screen.findByLabelText("Profile JSON"), { target: { files: [new File([JSON.stringify(uploaded)], "replacement.json")] } });
     await waitFor(() => expect((screen.getByRole("button", { name: "Save profile" }) as HTMLButtonElement).disabled).toBe(false));
@@ -215,7 +331,7 @@ describe("project settings sections", () => {
   it("preserves dirty pin selections across a compatible profile save and submits them afterward", async () => {
     const pending = deferred<typeof settings>();
     vi.mocked(api.updateProjectProfile).mockReturnValue(pending.promise);
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const view = renderSettings("profile");
     fireEvent.change(await screen.findByLabelText(/^Ontology file for HP/), { target: { value: "b".repeat(64) } });
     fireEvent.change(screen.getByLabelText("Allowed roots for HP"), { target: { value: "HP:2, HP:3" } });
     fireEvent.change(screen.getByLabelText("T1 profile for HP"), { target: { value: "generic" } });
@@ -227,7 +343,9 @@ describe("project settings sections", () => {
     expect((screen.getByLabelText(/^Ontology file for HP/) as HTMLSelectElement).value).toBe("b".repeat(64));
     expect((screen.getByLabelText("Allowed roots for HP") as HTMLInputElement).value).toBe("HP:2, HP:3");
     expect((screen.getByLabelText("T1 profile for HP") as HTMLSelectElement).value).toBe("generic");
+    view.show("rules");
     expect((screen.getByRole("checkbox", { name: "present" }) as HTMLInputElement).disabled).toBe(false);
+    view.show("profile");
     expect((screen.getByRole("button", { name: "Save profile" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Save pins" }));
     await screen.findByText("Pins saved.");
@@ -238,7 +356,7 @@ describe("project settings sections", () => {
   it("does not overwrite a newer pin draft when a pin save response arrives", async () => {
     const pending = deferred<typeof settings>();
     vi.mocked(api.updatePins).mockReturnValue(pending.promise);
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    renderSettings("profile");
     fireEvent.change(await screen.findByLabelText("Allowed roots for HP"), { target: { value: "HP:2" } });
     fireEvent.click(screen.getByRole("button", { name: "Save pins" }));
     // A late draft event must survive even while normal UI controls are disabled.
@@ -252,11 +370,13 @@ describe("project settings sections", () => {
   it("lets unsaved rules be explicitly discarded after pin metadata introduces a protected default", async () => {
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, axis_defaults: {}, pins: [{ ...settings.pins[0], t1_profile: "generic" }] });
     vi.mocked(api.updatePins).mockResolvedValue(settings);
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const view = renderSettings("rules");
     fireEvent.click(await screen.findByRole("checkbox", { name: "present" }));
+    view.show("profile");
     fireEvent.change(screen.getByLabelText("T1 profile for HP"), { target: { value: "hpo-phenotype" } });
     fireEvent.click(screen.getByRole("button", { name: "Save pins" }));
     await screen.findByText("Pins saved.");
+    view.show("rules");
     expect((screen.getByRole("checkbox", { name: "present" }) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Discard rule changes" }));
     const defaultValue = screen.getByRole("checkbox", { name: "present" }) as HTMLInputElement;
@@ -323,9 +443,9 @@ describe("creation recovery and lifetime", () => {
 
 describe("workflow settings", () => {
   it("edits Plan for imported texts and Annotations per text under Workflow", async () => {
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
-    const navigation = await screen.findByRole("navigation", { name: "Settings sections" });
-    fireEvent.click(within(navigation).getByRole("button", { name: "Workflow" }));
+    const view = renderSettings();
+    await screen.findByRole("navigation", { name: "Settings sections" });
+    view.show("workflow");
     const form = screen.getByRole("form", { name: "Workflow" });
     expect(document.activeElement).toBe(form);
     const group = within(form).getByRole("radiogroup", { name: "Plan for imported texts" });
@@ -347,7 +467,7 @@ describe("workflow settings", () => {
   it("shows how many rows exceed a lowered target", async () => {
     const preview = vi.spyOn(api, "annotationTargetPreview").mockResolvedValue({ rows_over_target: 4 });
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, annotations_per_text: 3 });
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    renderSettings("workflow");
     const count = await screen.findByRole("spinbutton", { name: /Annotations per text/ });
     expect(screen.queryByText(/Nobody is removed\./)).toBeNull();
     fireEvent.change(count, { target: { value: "2" } });
@@ -364,7 +484,7 @@ describe("workflow settings", () => {
 
   it("always sends import_plan and annotations_per_text on save", async () => {
     vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, import_plan: "nothing", annotations_per_text: 2 });
-    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    renderSettings("workflow");
     const form = await screen.findByRole("form", { name: "Workflow" });
     fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
     await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 2 }));

@@ -1,0 +1,41 @@
+/* Project settings: one section per address, linked from a tab-like row. */
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-block: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  margin-block-end: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.settings-tab:hover {
+  color: var(--accent-hover);
+  border-bottom-color: var(--border-strong);
+}
+
+.settings-tab[aria-current="page"] {
+  font-weight: 600;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.settings-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The tab row already separates the section; no second rule above it. */
+.project-settings-sections > .settings-tabs + :is(form, section, div) {
+  border-top: 0;
+  padding-block-start: 0;
+}

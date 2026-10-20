@@ -209,8 +209,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
     case "adminOntologies": content = <OntologiesPage onNavigate={go} />; break;
     case "projectNew": content = <ProjectNewPage onNavigate={next => { setRetry(value => value + 1); go(next); }} />; break;
-    case "projectSettings": content = <ProjectSettingsPage projectKey={route.key} currentUser={user}
-      onSaved={() => setRetry(value => value + 1)} />; break;
+    case "projectSettings": content = <ProjectSettingsPage projectKey={route.key} currentUser={user} section={route.section}
+      onNavigate={go} routeLeaveRef={routeLeaveRef} onSaved={() => setRetry(value => value + 1)} />; break;
     case "projectDocuments": {
       const currentProject = projects.find(project => project.project_key === route.key);
       // Display capability only; the import endpoint rechecks current authority.
