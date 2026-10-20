@@ -244,7 +244,7 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
       await page.setViewportSize({ width, height: 1000 });
       await page.getByRole("button", { name: /^Finish & Submit/ }).click();
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByText(/Use Add Mention to select supporting text/)).toBeVisible();
+      await expect(dialog.getByText(/Use Add mention to select supporting text/)).toBeVisible();
       await expect(dialog).toContainText("This project requires a text span for findings.");
       await dialog.getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
       await expect(page.getByRole("button", { name: "Add mention", exact: true })).toBeFocused();

@@ -2101,7 +2101,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       : view.require_spanless_note !== false && !(ann.note ?? "").trim() ? "A reason is required for this finding without a text span." : null;
     const remedy = target ? needsSpan ? "Use Edit & Replace to add supporting text, or reject this proposal."
       : "Use Edit & Replace to add an annotation reason. The reviewer note does not supply the annotation reason."
-      : needsSpan ? "Use Add Mention to select supporting text, or delete this finding." : "Enter the reason in the annotation note.";
+      : needsSpan ? "Use Add mention to select supporting text, or delete this finding." : "Enter the reason in the note.";
     return reason ? [{ snapshot, reason, remedy, focus: target ? '[data-repair="edit-proposal"]' : needsSpan ? '[data-repair="add-mention"]' : '[data-repair="annotation-note"]' }] : [];
   });
   const defaulted = defaultedResults(completionResults);
@@ -3170,7 +3170,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onSaveNote={() => { if (selectedAnnotationId) void saveAnnotationNote(selectedAnnotationId).catch(reportError); }}
               detachLastBlockedReason={selectedAnnotation && view.enforce_spanless_rules ? (!view.allow_spanless_findings ? "This project requires a text span for findings." :
                 view.layers?.find(l => l.layer_id === selectedAnnotation.annotation.layer_id)?.annotation_types.find(t => t.type_id === selectedAnnotation.annotation.type_id)?.evidence_policy === "required_on_complete" ? "This annotation type requires a text span." :
-                spanlessNotesRequired && !(selectedAnnotation.annotation.note ?? "").trim() ? "Enter a reason in the annotation note before removing the last mention." : undefined) : undefined}
+                spanlessNotesRequired && !(selectedAnnotation.annotation.note ?? "").trim() ? "Enter a reason in the note before removing the last mention." : undefined) : undefined}
               linkedTarget={linkedTargetForSelectedAnnotation ? {
                 targetId: linkedTargetForSelectedAnnotation.targetKey,
                 termId: linkedTargetForSelectedAnnotation.termId,
