@@ -6,7 +6,9 @@ Run the complete required gate before integration:
 bash scripts/check.sh
 ```
 
-The gate runs its phases serially. Backend tests use one PostgreSQL test server and isolated test databases; Playwright uses one browser worker. Keep other heavy test runs stopped when RAM is limited. Docker must be running for backend and browser checks unless `ONTOCURATOR_TEST_PG_URL` points to a disposable test server. Never point it at production.
+The gate runs its phases one after another. Backend tests run in four pytest-xdist workers that share one PostgreSQL test server; every worker migrates its own template database and every test gets its own copy. Playwright uses one browser worker. Keep other heavy test runs stopped when RAM is limited. Docker must be running for backend and browser checks unless `ONTOCURATOR_TEST_PG_URL` points to a disposable test server. Never point it at production.
+
+The PostgreSQL test container runs with `fsync`, `synchronous_commit` and `full_page_writes` switched off. These settings are for throwaway test servers only: a crash loses data. Never copy them to a deployment.
 
 Frontend unit tests default to at most two workers, with a minimum of one, to leave RAM available for other work. A dedicated machine can opt into four:
 
@@ -15,6 +17,15 @@ CHECK_VITEST_WORKERS=4 bash scripts/check.sh
 ```
 
 `CHECK_VITEST_WORKERS` must be a positive integer. This bounds frontend unit tests; it does not increase backend or browser concurrency.
+
+Backend and browser concurrency have their own settings:
+
+```bash
+CHECK_PYTEST_WORKERS=6 bash scripts/check.sh --only backend   # 0 or 1: serial
+CHECK_PLAYWRIGHT_WORKERS=2 bash scripts/check.sh --only browser
+```
+
+`CHECK_PYTEST_WORKERS` defaults to 4 and must be a non-negative integer; 0 or 1 runs pytest serially without xdist. Plain `uv run pytest` stays serial; add `-n 4` for a parallel run. `CHECK_PLAYWRIGHT_WORKERS` defaults to 1 and must be a positive integer. More browser workers run spec files in parallel against the one fixture server; tests within a file stay serial because some specs change and restore the settings of shared seeded projects.
 
 ## Focused phases
 

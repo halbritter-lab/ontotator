@@ -1,6 +1,47 @@
+import os
 from pathlib import Path
 
 import pytest
+
+_SHARED_URL = "ontocurator_test_pg_url"
+_SHARED_ERROR = "ontocurator_test_pg_error"
+
+
+class _SharedServer:
+    """xdist controller: one PostgreSQL server for every worker (pg_harness).
+
+    Started when the first worker is set up, so serial runs and runs with an
+    explicit ``ONTOCURATOR_TEST_PG_URL`` never start it. A start failure is
+    handed on as well: only the tests that need PostgreSQL fail, with its cause.
+    """
+
+    def __init__(self) -> None:
+        self.started: tuple[str | None, str | None] | None = None
+
+    def pytest_configure_node(self, node) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ONTOCURATOR_TEST_PG_URL"):
+            return
+        if self.started is None:
+            import pg_harness
+
+            try:
+                self.started = (pg_harness.start_shared_server(), None)
+            except RuntimeError as exc:
+                self.started = (None, str(exc))
+        node.workerinput[_SHARED_URL], node.workerinput[_SHARED_ERROR] = self.started
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    workerinput = getattr(config, "workerinput", None)
+    if workerinput is not None:
+        if _SHARED_URL in workerinput:
+            import pg_harness
+
+            pg_harness.use_shared_server(
+                workerinput[_SHARED_URL], workerinput[_SHARED_ERROR]
+            )
+    elif config.pluginmanager.hasplugin("xdist"):
+        config.pluginmanager.register(_SharedServer(), "ontocurator-shared-pg")
 
 
 @pytest.fixture(autouse=True)

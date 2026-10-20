@@ -16,10 +16,12 @@ Without arguments, run the complete local gate serially.
   static      lint, format, types, contracts, cheap contract tests, wheel
   frontend    frontend unit tests
   backend     complete backend tests with the 20 slowest durations
-  browser     frontend build and complete Playwright suite (one worker)
+  browser     frontend build and complete Playwright suite
   containers  opt-in container checks and smoke tests
 
 CHECK_VITEST_WORKERS: positive integer, default 2; use 4 on a dedicated machine.
+CHECK_PYTEST_WORKERS: backend pytest-xdist workers, default 4; 0 or 1 runs serially.
+CHECK_PLAYWRIGHT_WORKERS: positive integer, default 1 (spec files share fixture projects).
 CHECK_CONTAINERS=1 adds containers to the complete gate; CHECK_IMAGE selects image.
 ONTOCURATOR_TEST_PG_URL may select a disposable PostgreSQL test server.
 HELP
@@ -56,6 +58,16 @@ vitest_workers="${CHECK_VITEST_WORKERS:-2}"
 if runs frontend; then
     [[ "$vitest_workers" =~ ^[1-9][0-9]*$ ]] \
         || fail "CHECK_VITEST_WORKERS must be a positive integer."
+fi
+pytest_workers="${CHECK_PYTEST_WORKERS:-4}"
+if runs backend; then
+    [[ "$pytest_workers" =~ ^[0-9]+$ ]] \
+        || fail "CHECK_PYTEST_WORKERS must be a non-negative integer."
+fi
+playwright_workers="${CHECK_PLAYWRIGHT_WORKERS:-1}"
+if runs browser; then
+    [[ "$playwright_workers" =~ ^[1-9][0-9]*$ ]] \
+        || fail "CHECK_PLAYWRIGHT_WORKERS must be a positive integer."
 fi
 
 if runs static || runs backend || [ "$selected" = containers ]; then
@@ -120,10 +132,17 @@ if runs frontend; then
         --maxWorkers="$vitest_workers" --minWorkers=1
 fi
 if runs backend; then
-    step "backend tests (PostgreSQL)" uv run pytest -q --durations=20
+    # pytest-xdist workers share one PostgreSQL server (tests/pg_harness.py).
+    if [ "$((10#$pytest_workers))" -gt 1 ]; then
+        step "backend tests (PostgreSQL)" uv run pytest -q -n "$((10#$pytest_workers))" \
+            --durations=20
+    else
+        step "backend tests (PostgreSQL)" uv run pytest -q --durations=20
+    fi
 fi
 if runs browser; then
-    step "browser tests (Playwright)" npm --prefix frontend run test:e2e
+    step "browser tests (Playwright)" npm --prefix frontend run test:e2e -- \
+        --workers="$((10#$playwright_workers))"
 fi
 if [ "$selected" = containers ] || { [ -z "$selected" ] && [ "${CHECK_CONTAINERS:-0}" = 1 ]; }; then
     container_args=(--smoke)

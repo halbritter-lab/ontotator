@@ -5,6 +5,18 @@ server) or, by default, a testcontainer started on first use. The schema is
 migrated once into a template database as the owner role. Every test database
 is a copy of that template, used through the application role, so grants and
 append-only triggers are exercised exactly as in production.
+
+Parallel runs (pytest-xdist, ``-n N``): the controller process starts the one
+testcontainer before the workers run and hands its URL to every worker
+(``tests/conftest.py``); it stops the container when the run ends. Each worker
+migrates its own template (``ontocurator_template_gw0``, ...) and names its
+databases after itself, so workers never drop or copy each other's databases.
+The cluster-wide roles are created under an advisory lock. Serial runs keep
+the single ``ontocurator_template``.
+
+The container runs with durability switched off (``fsync``,
+``synchronous_commit``, ``full_page_writes``): test-only settings that lose
+data on a crash and must never be copied to a real deployment.
 """
 
 from __future__ import annotations
@@ -26,6 +38,14 @@ from ontocurator.storage.tables import APP_ROLE, OWNER_ROLE, SCHEMA
 IMAGE = "postgres:16.15-alpine3.24"
 PASSWORD = "test-only-password"
 TEMPLATE = "ontocurator_template"
+# Test-only server settings: no durability (a crash loses the data, which a
+# throwaway test server never needs), enough connections for parallel workers.
+SERVER_COMMAND = (
+    "postgres -c max_connections=500 -c fsync=off -c synchronous_commit=off"
+    " -c full_page_writes=off -c shared_buffers=256MB"
+)
+# pg_advisory_lock key that serialises role setup across parallel workers.
+_ROLE_LOCK = 0x6F6E746F
 
 _lock = threading.RLock()
 _server: URL | None = None
@@ -34,6 +54,38 @@ _container: Any = None
 _numbers = itertools.count()
 _by_path: dict[str, str] = {}
 _owner_engines: list[Engine] = []
+# Set in xdist workers: the controller's server URL, or why it did not start.
+_shared: tuple[str | None, str | None] | None = None
+
+
+def _worker() -> str:
+    """The xdist worker id (``gw0``, ...); empty in a serial run."""
+    return os.environ.get("PYTEST_XDIST_WORKER", "")
+
+
+def _template() -> str:
+    worker = _worker()
+    return f"{TEMPLATE}_{worker}" if worker else TEMPLATE
+
+
+def process_suffix() -> str:
+    """Unique per test process (``gw0_1234``); for cluster-wide names such as roles."""
+    return f"{_worker() or 'main'}_{os.getpid()}"
+
+
+def _database_prefix(kind: str) -> str:
+    return f"ontocurator_{kind}_{process_suffix()}"
+
+
+def use_shared_server(url: str | None, error: str | None) -> None:
+    """In an xdist worker: use the controller's server instead of starting one."""
+    global _shared
+    _shared = (url, error)
+
+
+def start_shared_server() -> str:
+    """In the xdist controller: start the server every worker shares."""
+    return _start_server().render_as_string(hide_password=False)
 
 
 def _start_server() -> URL:
@@ -41,6 +93,11 @@ def _start_server() -> URL:
     explicit = os.environ.get("ONTOCURATOR_TEST_PG_URL")
     if explicit:
         return make_url(explicit).set(drivername="postgresql+psycopg")
+    if _shared is not None:
+        url, error = _shared
+        if url is None:
+            raise RuntimeError(error or "The shared PostgreSQL server did not start.")
+        return make_url(url)
     try:
         try:
             from testcontainers.community.postgres import PostgresContainer
@@ -54,10 +111,7 @@ def _start_server() -> URL:
             dbname="postgres",
             driver="psycopg",
         )
-        container.with_command(
-            "postgres -c max_connections=500 -c fsync=off"
-            " -c synchronous_commit=off -c full_page_writes=off"
-        )
+        container.with_command(SERVER_COMMAND)
         e2e_run = os.environ.get("ONTOCURATOR_E2E_RUN")
         if e2e_run:
             # The Playwright run removes its own container by this label
@@ -76,25 +130,29 @@ def _start_server() -> URL:
 
 
 def _prepare_template(server: URL, admin: Engine) -> None:
+    name = _template()
     with admin.connect() as conn:
-        for role in (OWNER_ROLE, APP_ROLE):
-            if not conn.execute(
-                text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": role}
-            ).scalar():
-                conn.execute(text(f"CREATE ROLE {role} LOGIN"))
-            conn.execute(text(f"ALTER ROLE {role} LOGIN PASSWORD '{PASSWORD}'"))
-        conn.execute(text(f"DROP DATABASE IF EXISTS {TEMPLATE} WITH (FORCE)"))
-        conn.execute(text(f"CREATE DATABASE {TEMPLATE} OWNER {OWNER_ROLE}"))
-    template = create_engine(
-        server.set(database=TEMPLATE), isolation_level="AUTOCOMMIT"
-    )
+        # Roles are cluster-wide; parallel workers must not race to create them.
+        conn.execute(text("SELECT pg_advisory_lock(:k)"), {"k": _ROLE_LOCK})
+        try:
+            for role in (OWNER_ROLE, APP_ROLE):
+                if not conn.execute(
+                    text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": role}
+                ).scalar():
+                    conn.execute(text(f"CREATE ROLE {role} LOGIN"))
+                conn.execute(text(f"ALTER ROLE {role} LOGIN PASSWORD '{PASSWORD}'"))
+        finally:
+            conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _ROLE_LOCK})
+        conn.execute(text(f"DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
+        conn.execute(text(f"CREATE DATABASE {name} OWNER {OWNER_ROLE}"))
+    template = create_engine(server.set(database=name), isolation_level="AUTOCOMMIT")
     with template.connect() as conn:
         # The same bootstrap as docker/postgres-init.sh (T2e).
         conn.execute(text("REVOKE CREATE ON SCHEMA public FROM PUBLIC"))
         conn.execute(text(f"CREATE SCHEMA {SCHEMA} AUTHORIZATION {OWNER_ROLE}"))
         conn.execute(text(f"GRANT USAGE ON SCHEMA {SCHEMA} TO {APP_ROLE}"))
     template.dispose()
-    upgrade(server.set(username=OWNER_ROLE, password=PASSWORD, database=TEMPLATE))
+    upgrade(server.set(username=OWNER_ROLE, password=PASSWORD, database=name))
 
 
 def server() -> tuple[URL, Engine]:
@@ -108,7 +166,24 @@ def server() -> tuple[URL, Engine]:
             )
             _prepare_template(url, admin)
             _server, _admin = url, admin
+            if _container is None:
+                # A server this process does not own keeps running: drop what
+                # this process left there. Its own container goes as a whole.
+                atexit.register(_drop_leftovers)
         return _server, _admin
+
+
+def _drop_leftovers() -> None:
+    """Best effort at exit: this process's template and test databases."""
+    if _admin is None:
+        return
+    try:
+        reset()
+        with _admin.connect() as conn:
+            conn.execute(text(f"DROP DATABASE IF EXISTS {_template()} WITH (FORCE)"))
+        _admin.dispose()
+    except Exception:  # the server is already gone; nothing to clean up
+        pass
 
 
 def database_url_for(path: Path | str) -> str:
@@ -122,11 +197,12 @@ def database_url_for(path: Path | str) -> str:
     with _lock:
         name = _by_path.get(key)
         if name is None:
-            name = f"ontocurator_test_{os.getpid()}_{next(_numbers)}"
+            name = f"{_database_prefix('test')}_{next(_numbers)}"
             with admin.connect() as conn:
                 conn.execute(
                     text(
-                        f"CREATE DATABASE {name} TEMPLATE {TEMPLATE} OWNER {OWNER_ROLE}"
+                        f"CREATE DATABASE {name} TEMPLATE {_template()}"
+                        f" OWNER {OWNER_ROLE}"
                     )
                 )
             _by_path[key] = name
@@ -170,7 +246,7 @@ def reset() -> None:
 def unmigrated_database_url(path: Path | str) -> str:
     """Owner URL of a new database with the bootstrap but without the schema."""
     url, admin = server()
-    name = f"ontocurator_empty_{os.getpid()}_{next(_numbers)}"
+    name = f"{_database_prefix('empty')}_{next(_numbers)}"
     with admin.connect() as conn:
         conn.execute(text(f"CREATE DATABASE {name} OWNER {OWNER_ROLE}"))
     engine = create_engine(url.set(database=name), isolation_level="AUTOCOMMIT")
