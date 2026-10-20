@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
-import { api, ApiError, type ReviewWorkspace, type TranslationReviewRecord, type SourceObligationView } from "../api/client";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
+import { api, ApiError, type ReviewWorkspace, type TaskSummary, type TranslationReviewRecord, type SourceObligationView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
+import { nextOpenTask } from "../app/caseOrder";
 import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
-import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconChevronLeft, IconRetry, InlineMessage, Select, StatusBadge, type StatusTone } from "../ui";
+import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconRetry, InlineMessage, Select, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
 import { paragraphStarts } from "../variants/paragraphs";
 import { useCoupledScroll } from "../variants/useCoupledScroll";
@@ -13,7 +14,8 @@ import { SourceObligationReview } from './SourceObligationReview';
 import { notifyFinalSelectionChanged } from '../variants/finalSelectionState';
 import { ChecksSummary, ReviewSummary, SubmitSummary } from "./ReviewParts";
 import { ReviewForm } from "./ReviewForm";
-import { categoryLabels, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName } from "./labels";
+import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type DecisionState } from "./decisionOrigin";
+import { categoryLabels, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, nextTaskLabel, remainingTasksText } from "./labels";
 import { checkReview, type ClinicalCategory, type IssueCode, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
 
 export interface TranslationReviewScreenProps {
@@ -26,6 +28,8 @@ export interface TranslationReviewScreenProps {
   saveBeforeReportRef?: MutableRefObject<(() => Promise<void>) | null>;
 }
 type RawDraft = { text: string; form: Record<string, unknown> };
+/** The reviewer's next open task after submitting (spec A.5). */
+type NextTask = { kind: "loading" } | { kind: "ready"; next: TaskSummary | null; remaining: number } | { kind: "error"; error: unknown };
 const has = (object: object, key: string): boolean => Object.prototype.hasOwnProperty.call(object, key);
 const decision = (value: unknown): value is ReviewDecisionCode => typeof value === "string" && has(decisionLabels, value);
 const category = (value: unknown): value is ClinicalCategory => typeof value === "string" && has(categoryLabels, value);
@@ -42,6 +46,13 @@ function typedForm(raw: Record<string, unknown>): FormValue | null {
     || (raw.rationale !== undefined && raw.rationale !== null && typeof raw.rationale !== "string")) return null;
   return { ...visualForm(raw), decision: raw.decision, clinical_change: raw.clinical_change === true };
 }
+/** The backend form needs clinical_change; a chosen decision without it gets the unticked default. */
+const withClinicalDefault = (form: Record<string, unknown>): Record<string, unknown> =>
+  decision(form.decision) && !has(form, "clinical_change") ? { ...form, clinical_change: false } : form;
+/** Query and Rejected always imply a clinical change; older drafts may lack it. */
+const lacksImpliedClinical = (form: Record<string, unknown>): boolean =>
+  (form.decision === "query" || form.decision === "rejected") && form.clinical_change !== true;
+const decisionKeys: readonly ReviewDecisionCode[] = ["accepted_unchanged", "accepted_corrected", "query", "rejected"];
 const recordForm = (record: TranslationReviewRecord): Record<string, unknown> => ({ decision: record.decision, clinical_change: record.clinical_change, categories: record.categories, rationale: record.rationale });
 
 export function TranslationReviewScreen(props: TranslationReviewScreenProps): JSX.Element {
@@ -67,7 +78,15 @@ export function TranslationReviewScreen(props: TranslationReviewScreenProps): JS
 function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreenProps & { workspace: ReviewWorkspace; onReload: () => void }): JSX.Element {
   const immutableReadOnly = workspace.read_only && (!workspace.assignment.held || workspace.assignment.status === "submitted" || workspace.submitted_record !== null);
   const held = props.held ?? workspace.assignment.held;
-  const [draft, setDraft] = useState<RawDraft>(() => ({ text: workspace.draft.text, form: structuredClone(workspace.draft.form) }));
+  // A stored Query/Rejected draft without the implied clinical change is normalised once on open (and saved).
+  const [normaliseOnOpen] = useState(() => !immutableReadOnly && !held && lacksImpliedClinical(workspace.draft.form));
+  const [draft, setDraft] = useState<RawDraft>(() => {
+    const form = structuredClone(workspace.draft.form);
+    return { text: workspace.draft.text, form: normaliseOnOpen && decision(form.decision) ? chooseDecision(form, form.decision) : form };
+  });
+  /** Client-side origin of the decision (spec A.4); a stored decision counts as the user's. */
+  const [decisionState, setDecisionState] = useState<DecisionState>(USER_ORIGIN);
+  const decisionStateRef = useRef(decisionState); decisionStateRef.current = decisionState;
   const draftRef = useRef(draft); draftRef.current = draft;
   const saver = useRef<DraftSaver<RawDraft> | null>(null);
   const alive = useRef(false), operation = useRef(false), departing = useRef(false), readOnlyRef = useRef(workspace.read_only);
@@ -76,9 +95,15 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const [qualification, setQualification] = useState(workspace.qualification);
   const [submitted, setSubmitted] = useState<TranslationReviewRecord | null>(null);
   const [createdVersion, setCreatedVersion] = useState<number | null>(null);
+  const [nextTask, setNextTask] = useState<NextTask | null>(null), [nextTaskLoad, setNextTaskLoad] = useState(0);
+  const nextTaskButton = useRef<HTMLButtonElement | null>(null);
   const [serverIssues, setServerIssues] = useState<string[]>([]);
   const [showChanges, setShowChanges] = useState(false), [confirming, setConfirming] = useState(false);
   const decisionHeading = useRef<HTMLHeadingElement | null>(null), submitReason = useRef<HTMLDivElement | null>(null);
+  const screenRoot = useRef<HTMLElement | null>(null), submitControl = useRef<HTMLButtonElement | null>(null);
+  const detailsRef = useRef<HTMLDetailsElement | null>(null), detailsSummary = useRef<HTMLElement | null>(null);
+  /** Submit or its reason when one of them was the last focused element; restored when crossing 1100 px. */
+  const focusedControl = useRef<"submit" | "reason" | null>(null);
   const [comparisonId, setComparisonId] = useState(workspace.comparisons[0]?.variant.document_id ?? "");
   const [sourceElement, setSourceElement] = useState<HTMLDivElement | null>(null), [targetElement, setTargetElement] = useState<HTMLDivElement | null>(null), [comparisonElement, setComparisonElement] = useState<HTMLDivElement | null>(null);
   const record = submitted ?? (immutableReadOnly ? workspace.submitted_record : null);
@@ -100,8 +125,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   ], [sourceElement, targetElement, comparisonElement, sourceStarts, targetStarts, comparisonStarts, comparison]);
   const pairing = useCoupledScroll(panes, { enabled: couplingRequested });
   const coupled = couplingRequested && pairing.available;
-  const couplingUnavailable = !canCouple ? 'Coupled scrolling is available in read-only views.'
-    : !pairing.available ? 'Widen the window to at least 1100 px to couple scrolling in side-by-side panes.' : null;
+  /** At least 1100 px: decision in a pinned rail; narrower: decision follows the texts and a bar pins Submit. */
+  const wide = useMediaQuery("(min-width: 1100px)");
   type Leave = { kind: "leave" | "logout"; resolve?: (allowed: boolean) => void; proceed?: () => void };
   const [leave, setLeave] = useState<Leave | null>(null);
   const pendingLeave = useRef<Leave | null>(null), leavePromise = useRef<Promise<boolean> | null>(null);
@@ -115,6 +140,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           return (await api.saveTranslationReviewDraft(props.assignmentId, { ...value, expected_revision })).revision;
         }, onStateChange: () => { if (alive.current && saver.current === instance) refresh(n => n + 1); } });
       saver.current = instance;
+      if (normaliseOnOpen) instance.update(draftRef.current);
     }
     return () => { alive.current = false; saver.current?.dispose(); saver.current = null; pendingLeave.current?.resolve?.(false); pendingLeave.current = null; };
   }, [workspace, props.assignmentId, props.username]);
@@ -185,6 +211,19 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     try { const variant = await api.getVariantMetadata(workspace.assignment.project_key, value.created_variant_id); if (alive.current) setCreatedVersion(variant.version); }
     catch (failure) { if (alive.current) setError(failure); }
   };
+  /** After a successful submit: a fresh My tasks list, so a task assigned meanwhile counts. */
+  const projectKey = workspace.assignment.project_key;
+  useEffect(() => {
+    if (!submitted) return;
+    let active = true;
+    setNextTask({ kind: "loading" });
+    api.listMyTasks().then(tasks => {
+      if (active) setNextTask({ kind: "ready", ...nextOpenTask(tasks, props.assignmentId, projectKey) });
+    }, failure => { if (active) setNextTask({ kind: "error", error: failure }); });
+    return () => { active = false; };
+  }, [submitted, nextTaskLoad, props.assignmentId, projectKey]);
+  const nextTaskId = nextTask?.kind === "ready" ? nextTask.next?.assignment_id : undefined;
+  useEffect(() => { if (nextTaskId !== undefined) nextTaskButton.current?.focus({ preventScroll: true }); }, [nextTaskId]);
   const saveState = saver.current?.state ?? "saved";
   const canSubmit = !readOnly && !busy && form !== null && issues.length === 0 && nonblank(qualification)
     && saveState === "saved" && !saver.current?.hasUnsavedChanges;
@@ -221,8 +260,82 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     if (canSubmit) setConfirming(true);
     else submitReason.current?.focus();
   };
+  const chooseOption = (option: ReviewDecisionCode) => {
+    if (readOnlyRef.current || operation.current) return;
+    const current = draftRef.current;
+    edit({ ...current, form: withClinicalDefault(chooseDecision(current.form, option)) });
+    decisionStateRef.current = USER_ORIGIN; setDecisionState(USER_ORIGIN);
+  };
+  const editText = (nextText: string) => {
+    if (readOnlyRef.current || operation.current) return;
+    const current = draftRef.current;
+    const result = reactToTextEdit(decisionStateRef.current, current.form, workspace.text, nextText);
+    // The whole returned form, so undoing an automatic selection can remove the decision again.
+    edit({ text: nextText, form: result.form === current.form ? result.form : withClinicalDefault(result.form) });
+    decisionStateRef.current = result.state; setDecisionState(result.state);
+  };
+  const keyOptions = { scope: "screen", group: "Translation review", enabled: !readOnly } as const;
+  useShortcut("1", () => chooseOption(decisionKeys[0]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[0]]}` });
+  useShortcut("2", () => chooseOption(decisionKeys[1]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[1]]}` });
+  useShortcut("3", () => chooseOption(decisionKeys[2]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[2]]}` });
+  useShortcut("4", () => chooseOption(decisionKeys[3]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[3]]}` });
   useShortcut("Ctrl+Enter", requestSubmit, { scope: "screen", group: "Translation review", description: "Submit review (asks for confirmation)", enabled: !readOnly, allowInInputs: true });
+  useEffect(() => {
+    const track = (event: FocusEvent) => {
+      const target = event.target;
+      focusedControl.current = target === submitControl.current ? "submit"
+        : target instanceof Element && target.id === "review-submit-reason" ? "reason" : null;
+    };
+    // Click outside the translation details popover closes it.
+    const outside = (event: Event) => {
+      const details = detailsRef.current;
+      if (details?.open && !(event.target instanceof Node && details.contains(event.target))) details.open = false;
+    };
+    document.addEventListener("focusin", track); document.addEventListener("pointerdown", outside);
+    return () => { document.removeEventListener("focusin", track); document.removeEventListener("pointerdown", outside); };
+  }, []);
+  /** Submit and its reason move between rail footer and pinned bar; a focused one keeps the focus. */
+  const wideMounted = useRef(false);
+  useLayoutEffect(() => {
+    if (!wideMounted.current) { wideMounted.current = true; return; }
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    if (focusedControl.current === "submit") submitControl.current?.focus({ preventScroll: true });
+    else if (focusedControl.current === "reason") submitReason.current?.focus({ preventScroll: true });
+  }, [wide]);
+  /** Heights of the bands above and below the texts and of the pinned bar, for the text height below 1100 px. */
+  useEffect(() => {
+    const root = screenRoot.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const bar = root.querySelector<HTMLElement>(".translation-pinned-bar");
+      root.style.setProperty("--review-bar", `${Math.round(bar?.getBoundingClientRect().height ?? 0)}px`);
+      const texts = root.querySelector<HTMLElement>(".translation-texts");
+      const box = texts?.querySelector<HTMLElement>(".translation-column > .translation-text, .translation-column > .translation-editor, .translation-column > .translation-diff");
+      if (!texts || !box) return;
+      // Neither value depends on the text height itself, so setting it cannot loop.
+      const rootTop = root.getBoundingClientRect().top, boxRect = box.getBoundingClientRect();
+      const above = Math.max(0, rootTop) + boxRect.top - rootTop + root.scrollTop;
+      const below = texts.getBoundingClientRect().bottom - boxRect.bottom;
+      root.style.setProperty("--review-bands", `${Math.max(0, Math.round(above + below))}px`);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    root.querySelectorAll(".translation-review > .notice, .translation-review-bar, .translation-checks, .translation-pinned-bar, .translation-column-head, .translation-column-note")
+      .forEach(element => observer.observe(element));
+    return () => observer.disconnect();
+  }, [wide, readOnly, showChanges, comparisonId]);
+  const closeDetails = (event: KeyboardEvent<HTMLDetailsElement>) => {
+    if (event.key !== "Escape" || !event.currentTarget.open) return;
+    event.preventDefault(); event.stopPropagation();
+    event.currentTarget.open = false; detailsSummary.current?.focus({ preventScroll: true });
+  };
   const focusDecision = () => { decisionHeading.current?.scrollIntoView?.({ block: "nearest" }); decisionHeading.current?.focus(); };
+  /** "Change ↓" in the pinned bar: bring the decision legend into view and move focus to it. */
+  const focusDecisionLegend = () => {
+    const legend = screenRoot.current?.querySelector<HTMLElement>("[data-decision-legend]");
+    legend?.scrollIntoView?.({ block: "start" }); legend?.focus({ preventScroll: true });
+  };
 
   const [status, statusTone]: readonly [string, StatusTone] = readOnly ? ["Read-only", "neutral"] : ({
     saved: ["Saved", "neutral"], dirty: ["Changes not saved", "info"], saving: ["Saving…", "info"],
@@ -243,26 +356,33 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const changed = text !== workspace.text;
   const earlier = workspace.previous_reviews.filter(value => value.id !== record?.id);
   const navigateLink = (route: Route, label: ReactNode, className?: string) => <a className={className} href={routeHref(route)} onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); props.onNavigate(route); }}>{label}</a>;
-  const paragraphNote = (left: number, right: number) => <p className="translation-toolbar-note">Paragraphs differ ({left} / {right}); scrolling is approximate.</p>;
+  const paragraphNote = (left: number, right: number) => <span>Paragraphs differ ({left} / {right}); scrolling is approximate.</span>;
+  const paneNames: Record<string, string> = { source: "Source", target: "Translation", comparison: "Comparison" };
+  const reasonShown = submitBlocker !== null || issues.length > 0;
+  /** Reason, key hint and Submit: in the rail footer when wide, in the pinned bar otherwise; one of each in the DOM. */
+  const listedIssues = issues.length > 0 && !busy;
+  /** Pinned bar: one line (first issue or blocker, "and n more"); the full list then stays in the decision form. */
+  const reasonFirst = listedIssues ? issueMessages[issues[0]] : submitBlocker, reasonMore = listedIssues ? issues.length - 1 : 0;
+  const submitReasonElement = reasonShown && <div id="review-submit-reason" ref={submitReason} tabIndex={-1} className="translation-submit-reason" aria-live="polite">
+    {!wide ? <p className="translation-submit-reason-line" title={`${reasonFirst ?? ""}${reasonMore > 0 ? ` and ${reasonMore} more` : ""}`}>
+        <span className="translation-submit-reason-first">{reasonFirst}</span>{reasonMore > 0 && <span className="translation-submit-reason-more">{` and ${reasonMore} more`}</span>}</p>
+      : listedIssues
+        ? <><p>Before submitting:</p><ol className="review-issues" aria-label="Review issues">{issues.map((issue, index) => <li key={`${issue}-${index}`}>{issueMessages[issue]}</li>)}</ol></>
+        : <p>{submitBlocker}</p>}
+  </div>;
+  const qualificationNote = !nonblank(qualification) && <p className="translation-submit-note">{navigateLink({ name: "me" }, "Add your qualification in your profile")}</p>;
+  const submitButton = <Button ref={submitControl} variant="primary" aria-describedby={reasonShown ? "review-submit-reason" : undefined}
+    aria-disabled={canSubmit ? undefined : true} loading={busy} onClick={requestSubmit}>Submit review…</Button>;
 
-  return <section className="translation-review" aria-label="Translation review">
+  return <section className="translation-review" aria-label="Translation review" ref={screenRoot}>
     {held && <InlineMessage tone="warning">Task paused: {props.holdReason ?? workspace.assignment.hold_reason ?? "A project problem needs attention."} Your local translation and review input are kept.</InlineMessage>}
     <Button className="translation-skip" onClick={focusDecision}>Skip to decision</Button>
-    <div className="translation-review-header density-compact">
-      <div className="translation-review-bar">
-        {navigateLink({ name: "tasks" }, <><IconChevronLeft /> Back to my tasks</>, "translation-back")}
-        <div className="translation-review-tools">
-          {props.reportActions}
-          <span role="status" className="translation-save-status"><StatusBadge tone={statusTone}>{status}</StatusBadge></span>
-          <Button variant="quiet" size="sm" icon={<IconRetry />} onClick={() => { void reload(); }}
-            title="Load the latest saved state of this review. Unsaved edits are saved first; if that fails, you choose whether to discard them.">Reload from server</Button>
-        </div>
-      </div>
+    <div className="translation-review-bar density-compact">
       <h1>{workspace.variant.external_id}</h1>
       <div className="translation-review-meta">
-        <p>Translation review · {languageName(sourceLanguage)} <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> {languageName(targetLanguage)}</p>
-        <details className="translation-details">
-          <summary>Translation details</summary>
+        <p>{languageName(sourceLanguage)} <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> {languageName(targetLanguage)}</p>
+        <details className="translation-details" ref={detailsRef} onKeyDown={closeDetails}>
+          <summary ref={detailsSummary}>Translation details</summary>
           <dl>
             {run?.provider != null && <div><dt>Machine translation</dt><dd>{String(run.provider)}</dd></div>}
             {run?.model != null && <div><dt>Model</dt><dd>{String(run.model)}</dd></div>}
@@ -272,38 +392,48 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           </dl>
         </details>
       </div>
+      <div className="translation-review-tools">
+        {props.reportActions}
+        <span role="status" className="translation-save-status"><StatusBadge tone={statusTone}>{status}</StatusBadge></span>
+        <Button variant="quiet" size="sm" icon={<IconRetry />} onClick={() => { void reload(); }}
+          title="Load the latest saved state of this review. Unsaved edits are saved first; if that fails, you choose whether to discard them.">Reload from server</Button>
+      </div>
     </div>
     <ChecksSummary failed={workspace.failed_checks} all={allChecks} />
     <div className="translation-workspace">
       <div className="translation-texts">
-        <div className="translation-toolbar density-compact" role="group" aria-label="Text view">
-          <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
-          <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} disabled={!canCouple || !pairing.available} aria-describedby={couplingUnavailable ? 'review-coupling-note' : undefined} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />
-          {couplingUnavailable && <p id="review-coupling-note" className="translation-toolbar-note">{couplingUnavailable}</p>}
-          {coupled && <><p className="translation-toolbar-note">Paragraphs are paired by position, not by meaning</p><p role="status" className="translation-toolbar-note" aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${({source:'Source',target:'Translation',comparison:'Comparison'} as Record<string,string>)[pair.paneId]} paragraph ${pair.paragraph+1}`).join(' ↔ ')}</p></>}
-          {comparison && <Select id="review-comparison" label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
-            {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} · {row.variant.language}</option>)}</Select>}
-          {coupled && sourceStarts.length !== targetStarts.length && paragraphNote(sourceStarts.length, targetStarts.length)}
-          {coupled && comparison && comparisonStarts.length !== targetStarts.length && paragraphNote(targetStarts.length, comparisonStarts.length)}
-        </div>
         <div className={`translation-columns${comparison ? " translation-columns--comparison" : ""}`}>
           <div className="translation-column">
-            <div className="translation-column-head"><h2 className="translation-column-title">Source ({sourceLanguage})</h2></div>
+            <div className="translation-column-head density-compact"><h2 className="translation-column-title">Source ({sourceLanguage})</h2></div>
             <TextView ref={setSourceElement} text={workspace.source.text} label={`Source (${sourceLanguage})`} lang={sourceLanguage} />
           </div>
           <div className="translation-column">
-            <div className="translation-column-head"><h2 id="review-translation-label" className="translation-column-title">Translation ({targetLanguage})</h2></div>
+            <div className="translation-column-head density-compact">
+              <h2 id="review-translation-label" className="translation-column-title">Translation ({targetLanguage})</h2>
+              <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
+              {canCouple && pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
+              {coupled && <p className="translation-column-hint">
+                <span>Paragraphs are paired by position, not by meaning</span>
+                <span role="status" aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${paneNames[pair.paneId]} paragraph ${pair.paragraph + 1}`).join(" ↔ ")}</span>
+                {sourceStarts.length !== targetStarts.length && paragraphNote(sourceStarts.length, targetStarts.length)}
+                {comparison && comparisonStarts.length !== targetStarts.length && paragraphNote(targetStarts.length, comparisonStarts.length)}
+              </p>}
+            </div>
             {showChanges
               ? <DiffView ref={setTargetElement} before={workspace.text} after={text} lang={targetLanguage} />
               : <TranslationEditor ref={setTargetElement} id="review-translation" labelledBy="review-translation-label" describedBy="review-translation-note"
                   machineText={workspace.text} value={text} lang={targetLanguage} readOnly={readOnly} disabled={busy}
-                  onChange={event => edit({ ...draftRef.current, text: event.target.value })} />}
+                  onChange={event => editText(event.target.value)} />}
             <p id="review-translation-note" className="translation-column-note">{showChanges
               ? "Showing changes against the machine translation. Turn off Show changes to edit."
               : changed ? "Underlined text differs from the machine translation." : "Same as the machine translation."}</p>
           </div>
           {comparison && <div className="translation-column">
-            <div className="translation-column-head"><h2 className="translation-column-title">Comparison</h2></div>
+            <div className="translation-column-head density-compact">
+              <h2 className="translation-column-title">Comparison</h2>
+              <Select id="review-comparison" label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
+                {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} · {row.variant.language}</option>)}</Select>
+            </div>
             <TextView key={comparisonId} ref={setComparisonElement} text={comparison.text} label="Comparison" lang={comparison.variant.language} />
           </div>}
         </div>
@@ -317,12 +447,23 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           {submitted && <InlineMessage tone="success" title="Review submitted"><p>{decisionOutcomes[submitted.decision]}</p>
             {createdVersion !== null && <p>A corrected version v{createdVersion} was created.</p>}
             {submitted.created_variant_id && createdVersion === null && <Button size="sm" onClick={() => { void loadCreated(submitted); }}>Retry corrected version metadata</Button>}</InlineMessage>}
+          {submitted && nextTask && <div className="translation-next-task">
+            {nextTask.kind === "loading" && <Button variant="primary" loading>Next task</Button>}
+            {nextTask.kind === "ready" && nextTask.next && <Button ref={nextTaskButton} variant="primary"
+              onClick={() => props.onNavigate({ name: "task", assignmentId: nextTask.next!.assignment_id })}>{nextTaskLabel(nextTask.next)}</Button>}
+            {nextTask.kind === "ready" && !nextTask.next
+              ? <Button variant="primary" onClick={() => props.onNavigate({ name: "tasks" })}>Back to my tasks</Button>
+              : navigateLink({ name: "tasks" }, "Back to my tasks")}
+            {nextTask.kind === "ready" && <p role="status" className="translation-submit-note">{remainingTasksText(nextTask.remaining)}</p>}
+            {nextTask.kind === "error" && <><ErrorNotice error={nextTask.error} /><Button onClick={() => setNextTaskLoad(n => n + 1)}>Retry</Button></>}
+          </div>}
           {record ? <ReviewSummary record={record} heading="Submitted review" />
-            : held ? <><InlineMessage tone="info">This task is paused. Your review choices are kept.</InlineMessage><ReviewForm value={visualForm(rawForm)} issues={[]} readOnly onChange={() => {}} /></>
+            : held ? <><InlineMessage tone="info">This task is paused. Your review choices are kept.</InlineMessage><ReviewForm value={visualForm(rawForm)} issues={[]} failedCheckCount={workspace.failed_checks.length} readOnly onChange={() => {}} /></>
             : readOnly ? <InlineMessage tone="info">This review can no longer be edited.</InlineMessage>
             : <>
               {decision(rawForm.decision) && !form && <InlineMessage tone="error">The review form contains unsupported values. Update the affected fields before submitting.</InlineMessage>}
-              <ReviewForm value={visualForm(rawForm)} issues={[]} readOnly={busy} onChange={next => {
+              <ReviewForm value={visualForm(rawForm)} issues={!wide && !busy ? issues : []} readOnly={busy} failedCheckCount={workspace.failed_checks.length}
+                autoNote={autoNoteText(decisionState.note)} onChooseDecision={chooseOption} onChange={next => {
                 const current = draftRef.current;
                 edit({ ...current, form: { ...(!has(current.form, "clinical_change") ? { clinical_change: false } : {}), ...current.form, ...next } });
               }} />
@@ -338,19 +479,23 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
               <p className="review-history-text">{value.proposed_text}</p></details>)}
           </section>}
         </div>
-        {!readOnly && <div className="translation-decision-footer">
-          {!nonblank(qualification) && <p className="translation-submit-note">{navigateLink({ name: "me" }, "Add your qualification in your profile")}</p>}
+        {!readOnly && wide && <div className="translation-decision-footer">
+          {qualificationNote}
           {/* Why Submit is unavailable, right next to it; the review rules' issues are listed here too. */}
-          {(submitBlocker || issues.length > 0) && <div id="review-submit-reason" ref={submitReason} tabIndex={-1} className="translation-submit-reason" aria-live="polite">
-            {issues.length > 0 && !busy
-              ? <><p>Before submitting:</p><ol className="review-issues" aria-label="Review issues">{issues.map((issue, index) => <li key={`${issue}-${index}`}>{issueMessages[issue]}</li>)}</ol></>
-              : <p>{submitBlocker}</p>}
-          </div>}
-          <Button variant="primary" aria-describedby={submitBlocker || issues.length > 0 ? "review-submit-reason" : undefined} disabled={!canSubmit} loading={busy} onClick={requestSubmit}>Submit review…</Button>
+          {submitReasonElement}
+          <p className="translation-key-hint">{decisionKeyHint}</p>
+          {submitButton}
         </div>}
       </aside>
     </div>
-    {form && <ConfirmDialog open={confirming} title="Submit this review?" confirmLabel="Submit review" cancelLabel="Keep editing" busy={busy}
+    {!readOnly && !wide && <div className="translation-pinned-bar density-compact" role="region" aria-label="Decision and submit">
+      <p className="translation-pinned-decision"><strong>Decision:</strong> {decision(rawForm.decision) ? decisionLabels[rawForm.decision] : "Not chosen"}</p>
+      <Button variant="quiet" size="sm" onClick={focusDecisionLegend}>Change ↓</Button>
+      {qualificationNote}
+      {submitReasonElement}
+      {submitButton}
+    </div>}
+    {form && <ConfirmDialog focusConfirm open={confirming} title="Submit this review?" confirmLabel="Submit review" cancelLabel="Keep editing" busy={busy}
       message={<SubmitSummary decision={form.decision} clinical={form.clinical_change} categories={form.categories ?? []} rationale={form.rationale} />}
       onCancel={() => setConfirming(false)} onConfirm={() => { void submit(); }} />}
     {leave && <Dialog open title={leave.kind === "logout" ? "Unsaved changes" : "Changes not saved"} onClose={busy ? undefined : () => closeLeave(false)} footer={<>

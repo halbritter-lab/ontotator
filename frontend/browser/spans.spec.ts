@@ -74,7 +74,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
     await page.getByRole("button", { name: /Cancel|Abbrechen/i, exact: true }).click();
     await expect(page.locator(".text-container .run--marked")).toHaveCount(0);
     await selectText(page, 0, 9);
-    await page.getByLabel(/Search ontology term|Ontologie-Term suchen/i).fill("Hypotonia");
+    await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");
     await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
     await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
 
@@ -94,7 +94,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
     await expect(mentionWithOffsets(page, "[0:9]")).toHaveText("“Hypotonia”");
 
     // Extend mention: switch intent to discontinuous segment
-    await page.getByRole("button", { name: "+ Segment", exact: true }).click();
+    await page.getByRole("button", { name: "Add segment", exact: true }).click();
     await selectText(page, 14, 21); // "seizure"
     await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 2");
     await expect(mentionWithOffsets(page, "[0:9], [14:21]")).toHaveText("“Hypotonia … seizure”");

@@ -76,7 +76,7 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
 
   // Back in My tasks the assignment is in progress; reopening resumes it without asking again.
-  await page.getByRole("button", { name: "← My tasks" }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: "My tasks", exact: true }).click();
   await expect(page.getByTestId("task-row").filter({ hasText: "In progress" })).not.toHaveCount(0);
   await openCase(page, { task: "review" });
   await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
@@ -101,7 +101,7 @@ test("real backend: invalid input does not block correction", async ({ page }) =
   await expect(page.getByText(/Review Proposals/i)).toHaveCount(0);
   await page.getByRole("button", { name: /Add finding without a text span/i }).click();
   await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
-  await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
+  await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
   // Selected candidate creates annotation
   await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);
@@ -113,14 +113,14 @@ test("real backend: repeated and discontinuous evidence preserves Unicode offset
   await importFixture(page, "browser-spans");
   await openCase(page, { task: "annotate" });
   await selectText(page, 0, 9);
-  await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
+  await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 1");
-  await page.getByRole("button", { name: "+ Segment", exact: true }).click();
+  await page.getByRole("button", { name: "Add segment", exact: true }).click();
   await selectText(page, 14, 21);
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 2");
   await expect(mentionWithOffsets(page, "[0:9], [14:21]")).toHaveText("“Hypotonia … seizure”");
-  await page.getByRole("button", { name: /\+ Add Mention/i }).click();
+  await page.getByRole("button", { name: "Add mention", exact: true }).click();
   await selectText(page, 23, 27); // UTF-16: emoji plus e and combining acute.
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 3");
   // Stored offsets count code points: [23:26] covers "😀", "e" and the combining accent.

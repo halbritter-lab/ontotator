@@ -67,6 +67,11 @@ function documentsEntries(query: ProjectDocumentsQuery | undefined, prefix = "")
   return entries;
 }
 
+/** Project settings sections; each one has its own address (`…/settings/{section}`). */
+export type SettingsSection = "general" | "guideline" | "rules" | "workflow" | "defaults" | "profile" | "members";
+export const SETTINGS_SECTIONS: readonly SettingsSection[] = ["general", "guideline", "rules", "workflow", "defaults", "profile", "members"];
+const isSettingsSection = (value: string): value is SettingsSection => (SETTINGS_SECTIONS as readonly string[]).includes(value);
+
 export type Route =
   | { name: "tasks"; project?: string }
   | { name: "task"; assignmentId: number }
@@ -74,7 +79,7 @@ export type Route =
   | { name: "adminUsers" }
   | { name: "adminOntologies" }
   | { name: "projectNew" }
-  | { name: "projectSettings"; key: string }
+  | { name: "projectSettings"; key: string; section?: SettingsSection }
   | ({ name: "projectDocuments"; key: string } & ProjectDocumentsQuery)
   | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string; compare?: string; documents?: ProjectDocumentsQuery }
   | { name: "projectProgress"; key: string }
@@ -129,11 +134,16 @@ export function parseRoute(hash: string): Route {
       return { name: "projectCase", key: decodeURIComponent(caseRoute[1]), caseId: decodeURIComponent(caseRoute[2]), ...optional,
         ...(Object.keys(documents).length ? { documents } : {}) };
     }
-    const project = /^#\/projects\/([^/]+)\/(settings|documents|progress|export)$/.exec(path);
+    const settings = /^#\/projects\/([^/]+)\/settings(?:\/([a-z]+))?$/.exec(path);
+    if (settings) {
+      const key = decodeURIComponent(settings[1]);
+      if (settings[2] === undefined) return { name: "projectSettings", key };
+      return isSettingsSection(settings[2]) ? { name: "projectSettings", key, section: settings[2] } : notFound;
+    }
+    const project = /^#\/projects\/([^/]+)\/(documents|progress|export)$/.exec(path);
     if (!project) return notFound;
     const key = decodeURIComponent(project[1]);
     switch (project[2]) {
-      case "settings": return { name: "projectSettings", key };
       case "progress": return { name: "projectProgress", key };
       case "export": return { name: "projectExport", key };
       case "documents": return { name: "projectDocuments", key, ...readDocumentsQuery(params) };
@@ -166,7 +176,7 @@ export function routeHref(route: Route): string {
     case "adminUsers": return "#/admin/users";
     case "adminOntologies": return "#/admin/ontologies";
     case "projectNew": return "#/projects/new";
-    case "projectSettings": return `#/projects/${encodeURIComponent(route.key)}/settings`;
+    case "projectSettings": return `#/projects/${encodeURIComponent(route.key)}/settings${route.section && route.section !== "general" ? `/${route.section}` : ""}`;
     case "projectDocuments":
       return `#/projects/${encodeURIComponent(route.key)}/documents${querySuffix(documentsEntries(route))}`;
     case "projectCase": return `#/projects/${encodeURIComponent(route.key)}/cases/${encodeURIComponent(route.caseId)}${querySuffix([

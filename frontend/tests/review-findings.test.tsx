@@ -176,7 +176,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     const name = "Maximiliane Schmidt-Rottluff";
     render(<CaseScreen view={baseView()} workspaceId="ws" onClose={vi.fn()} annotatorName={name} />);
     const badge = screen.getByTestId("annotator-identity");
-    expect(badge.textContent).toBe(`Annotating as ${name} (dr-a)`);
+    expect(badge.textContent).toBe(`as ${name} (dr-a)`);
     expect(badge.title).toBe(`${name} (dr-a): your annotations and decisions are saved under this pseudonym`);
     // The CSS class .identity-name cuts the name with an ellipsis; the pseudonym is outside it.
     const cut = screen.getByTestId("annotator-name");
@@ -200,7 +200,7 @@ describe("A4/A5: review decisions and notes", () => {
     const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...view.draft, revision: 2, annotations: [updated] });
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByText("HP:0001", { selector: '[data-list-key="annotation:copy"] *' }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirm Assertion value" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm defaults (1)" }));
     await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply.mock.calls[0][1].payload).toEqual(expect.objectContaining({ command: "set_axes", chosen_axis_ids: ["assertion"], axes_values: { assertion: "absent" } }));
     if (explicitRejection) {
@@ -498,7 +498,7 @@ describe("Search", () => {
     const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
     const manager = new SearchManager({ searchOntology } as any);
     render(<SearchPanel searchManager={manager} annotationId="a" workspaceKey={key} layerId="phenotype" onSelectCandidate={vi.fn()} />);
-    const input = screen.getByLabelText(/Search ontology term/i);
+    const input = screen.getByRole("combobox", { name: "Search term" });
     for (const value of ["h", "hy", "hyp", "hypo"]) fireEvent.change(input, { target: { value } });
     await act(async () => { vi.advanceTimersByTime(200); });
     expect(searchOntology).not.toHaveBeenCalled();
@@ -543,12 +543,12 @@ describe("Annotation panel and text pane", () => {
   it("shows a visible banner in add-mention mode that Esc cancels", async () => {
     render(<CaseScreen view={withMention()} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByText("HP:0003"));
-    fireEvent.click(screen.getByRole("button", { name: /\+ Add Mention/ }));
-    expect(screen.getByText(/Adding a mention:/)).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Add mention" }));
+    expect(screen.getByText(/^Adding a mention to .*. Mark the text. Esc cancels.$/)).toBeDefined();
     fireEvent.keyDown(document.body, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByText(/Adding a mention:/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Adding a mention to/)).toBeNull());
     // The annotation stays selected.
-    expect(screen.getByText(/Context Axes/i)).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Values" })).toBeDefined();
   });
 
   it("commits a keyboard (Shift+arrow) selection when Shift is released", () => {

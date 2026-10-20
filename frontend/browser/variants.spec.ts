@@ -138,7 +138,7 @@ test('own history is genuinely submitted, read-only and return-to-draft preserve
   await loginExisting(page, s.users.alice);
   await openCase(page, { documentId: s.documents.target });
   await selectText(page, 0, 9);
-  await page.getByLabel(/Search ontology term/).fill('Hypotonia');
+  await page.getByLabel("Search term", { exact: true }).fill('Hypotonia');
   await page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).click();
   const assertion = page.getByRole('group', { name: 'Assertion', exact: true }).getByRole('radio', { name: 'Present', exact: true });
   const temporality = page.getByRole('group', { name: 'Temporality', exact: true }).getByRole('radio', { name: 'Current', exact: true });

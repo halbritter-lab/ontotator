@@ -6,7 +6,7 @@ const ANNOTATOR = "lang-tester";
 const startSearch = async (page: Page, query: string) => {
   await page.getByRole("button", { name: /Add finding without a text span/i }).click();
   await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
-  await page.getByLabel(/Search ontology term/i).fill(query);
+  await page.getByLabel("Search term", { exact: true }).fill(query);
 };
 const seizure = (page: Page) => page.locator(".candidate-card").filter({ hasText: "HP:0001250" });
 
@@ -25,13 +25,13 @@ test("translations: German search overrides reset on reload while saved personal
   await page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" }).check();
   await page.keyboard.press("Escape");
   await expect(page.locator(".candidate-card").first()).toContainText("Seizure");
-  await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
+  await expect(seizure(page)).toContainText("Matched German name “Krampfanfall”");
 
   // The flag button sits in the row of the search box.
   const button = page.getByRole("button", { name: "Search languages: EN, DE" });
   await expect(button).toBeVisible();
   const box = await button.boundingBox();
-  const input = await page.getByLabel(/Search ontology term/i).boundingBox();
+  const input = await page.getByLabel("Search term", { exact: true }).boundingBox();
   expect(box && input && box.x > input.x + input.width && Math.abs(box.y - input.y) < 4).toBeTruthy();
 
   await button.click();
@@ -47,7 +47,7 @@ test("translations: German search overrides reset on reload while saved personal
   // An editor switch is temporary: re-enable German before testing its reset.
   await page.getByRole("button", { name: "Search languages: EN", exact: true }).click();
   await page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" }).check();
-  await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
+  await expect(seizure(page)).toContainText("Matched German name “Krampfanfall”");
   await page.keyboard.press("Escape");
   // A fresh page restores English plus the English document's language.
   await page.goto("about:blank");
@@ -60,7 +60,7 @@ test("translations: German search overrides reset on reload while saved personal
 
   await page.getByRole("button", { name: "Search languages: EN", exact: true }).click();
   await page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" }).check();
-  await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
+  await expect(seizure(page)).toContainText("Matched German name “Krampfanfall”");
   await expect(page.getByRole("group", { name: "Search languages" }).getByRole("checkbox", { name: "DE" })).toBeChecked();
   await page.keyboard.press("Escape");
 
@@ -74,5 +74,5 @@ test("translations: German search overrides reset on reload while saved personal
   await page.goto("about:blank"); await page.goto(`${LAUNCH_URL}#/?project=translation-fixture`);
   await openCase(page); await startSearch(page, "Krampfanfall");
   await expect(page.getByRole("button", { name: "Search languages: EN, DE", exact: true })).toBeVisible();
-  await expect(seizure(page)).toContainText("Match: »Krampfanfall« (translation, de)");
+  await expect(seizure(page)).toContainText("Matched German name “Krampfanfall”");
 });

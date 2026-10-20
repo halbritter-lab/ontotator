@@ -89,7 +89,7 @@ describe("Dynamic Axes and Non-HPO UI", () => {
 
     // Required indicator on severity
     expect(screen.getByText(/Schweregrad/)).toBeDefined();
-    expect(screen.getByText(/\* \((Required|Pflichtfeld)\)/i)).toBeDefined();
+    expect(screen.getByText(/\(required\)/)).toBeDefined();
 
     // Small axes expose all choices directly.
     expect((screen.getByRole("radio", { name: "severe" }) as HTMLInputElement).checked).toBe(true);
@@ -175,6 +175,6 @@ describe("Dynamic Axes and Non-HPO UI", () => {
     );
 
     expect(container.querySelector('[data-testid="axes-section"]')).toBeNull();
-    expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Values" })).toBeNull();
   });
 });

@@ -212,8 +212,8 @@ describe("CaseScreen integration", () => {
       });
       render(<CaseScreen view={view} workspaceId="ws-note-transport" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} />);
       selectEditableFinding();
-      fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Retained transport note" } });
-      fireEvent.blur(screen.getByLabelText("Annotation note"));
+      fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Retained transport note" } });
+      fireEvent.blur(screen.getByLabelText("Note"));
       return { routeLeaveRef, leaveGuardRef, logout, apply };
     };
 
@@ -224,7 +224,7 @@ describe("CaseScreen integration", () => {
       await screen.findByRole("dialog", { name: "Changes not saved" });
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
       await act(async () => { expect(await departure).toBe(false); });
-      expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Retained transport note");
+      expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Retained transport note");
       act(() => { departure = state.routeLeaveRef.current!(); });
       fireEvent.click(await screen.findByRole("button", { name: "Discard edits and leave" }));
       await act(async () => { expect(await departure).toBe(true); });
@@ -235,12 +235,12 @@ describe("CaseScreen integration", () => {
 
     it.each(failures)("logout releases a failed note flush and retry saves the latest text after %s", async failure => {
       const state = setup(failure); await screen.findByRole("button", { name: "Retry" });
-      fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Latest local explanation" } });
+      fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Latest local explanation" } });
       act(() => state.leaveGuardRef.current?.(state.logout));
       fireEvent.click(await screen.findByRole("button", { name: "Save and log out" }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).toBeNull());
       expect(state.logout).not.toHaveBeenCalled();
-      expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Latest local explanation");
+      expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Latest local explanation");
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
       await screen.findByText(/^Saved$/);
       expect(state.apply).toHaveBeenLastCalledWith("ws-note-transport", expect.objectContaining({ payload: expect.objectContaining({ note: "Latest local explanation" }) }));
@@ -258,9 +258,9 @@ describe("CaseScreen integration", () => {
       />
     );
 
-    expect(screen.getByText(/Case: doc-test-1|Fall: doc-test-1/i)).toBeDefined();
-    expect(screen.getByText(/Annotate from scratch/i)).toBeDefined();
-    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
+    expect(screen.getByRole("heading", { level: 1, name: "doc-test-1" })).toBeDefined();
+    expect(screen.getByText("Independent annotation")).toBeDefined();
+    expect(screen.getByText("No finding selected")).toBeDefined();
   });
 
   it("switches the compact view between text, list, and details", () => {
@@ -281,9 +281,9 @@ describe("CaseScreen integration", () => {
     vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "s", candidates: [{ term_id: "HP:0001252", label: "Hypotonia", rank: 1 }] } as any);
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
-    fireEvent.change(screen.getByLabelText(/Search ontology term/), { target: { value: "Hypotonia" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
     const candidate = (await screen.findByText("Hypotonia")).closest(".candidate-card")!;
-    fireEvent.keyDown(candidate, { key: "Enter" });
+    fireEvent.click(candidate);
     expect(apply).not.toHaveBeenCalled();
     const reason = screen.getByLabelText(/Reason for no text span/);
     expect(screen.getByRole("button", { name: "Add annotation" })).toHaveProperty("disabled", true);
@@ -300,8 +300,8 @@ describe("CaseScreen integration", () => {
     vi.spyOn(api, "searchOntology").mockResolvedValue({ search_id: "presets", candidates: [{ term_id: "HP:0001252", label: "Hypotonia", rank: 1 }] } as any);
     render(<CaseScreen view={view} workspaceId="presets" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
-    fireEvent.change(screen.getByLabelText(/Search ontology term/), { target: { value: "Hypotonia" } });
-    fireEvent.keyDown((await screen.findByText("Hypotonia")).closest(".candidate-card")!, { key: "Enter" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
+    fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
     await waitFor(() => expect(apply).toHaveBeenCalledWith("presets", expect.objectContaining({ payload: expect.objectContaining({
       axes_values: { assertion: "absent", experiencer: "other", temporality: null }, chosen_axis_ids: [],
     }) })));
@@ -358,7 +358,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="ws-optional" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
     expect((screen.getByLabelText(/Reason for no text span/) as HTMLTextAreaElement).required).toBe(false);
-    fireEvent.change(screen.getByLabelText(/Search ontology term/), { target: { value: "Hypotonia" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
     fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
     await waitFor(() => expect(apply).toHaveBeenCalledOnce());
     expect(apply.mock.calls[0][1].payload).toMatchObject({ command: "create_annotation", segments: [], term_id: "HP:0001252" });
@@ -374,7 +374,7 @@ describe("CaseScreen integration", () => {
     const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
     render(<CaseScreen view={view} workspaceId="ws-optional-clear" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
     selectEditableFinding();
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "  " } });
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "  " } });
     await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
     expect(apply).toHaveBeenCalledWith("ws-optional-clear", expect.objectContaining({ payload: { command: "set_annotation_note", annotation_id: "pending-finding", note: null } }));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -414,7 +414,7 @@ describe("CaseScreen integration", () => {
     await waitFor(() => expect(apply).toHaveBeenCalledOnce());
     expect(apply.mock.calls[0][1].payload).not.toHaveProperty("note");
     expect(screen.queryByRole("dialog", { name: "Reason for no text span" })).toBeNull();
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).required).toBe(false);
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).required).toBe(false);
     expect(decide).not.toHaveBeenCalled();
   });
 
@@ -447,11 +447,11 @@ describe("CaseScreen integration", () => {
     const apply = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     selectEditableFinding();
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Clinical explanation" } });
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Clinical explanation" } });
     fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
     selectEditableFinding();
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Clinical explanation");
-    fireEvent.blur(screen.getByLabelText("Annotation note"));
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Clinical explanation");
+    fireEvent.blur(screen.getByLabelText("Note"));
     await waitFor(() => expect(apply).toHaveBeenCalledWith("ws", expect.objectContaining({ payload: { command: "set_annotation_note", annotation_id: "pending-finding", note: "Clinical explanation" } })));
   });
 
@@ -463,15 +463,15 @@ describe("CaseScreen integration", () => {
     const apply = vi.spyOn(api, "applyCommand").mockReturnValue(new Promise((_resolve, reject) => { rejectSave = reject; }));
     render(<CaseScreen view={view} workspaceId="ws-note" onClose={vi.fn()} />);
     selectEditableFinding();
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "First unsaved explanation" } });
-    fireEvent.blur(screen.getByLabelText("Annotation note"));
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "First unsaved explanation" } });
+    fireEvent.blur(screen.getByLabelText("Note"));
     await waitFor(() => expect(apply).toHaveBeenCalledOnce());
     fireEvent.click(document.querySelector('[data-list-key="annotation:second-finding"]')!);
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Second local explanation" } });
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Second local explanation" } });
     await act(async () => { rejectSave(new ValidationError("Delayed note refusal")); });
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Second local explanation");
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Second local explanation");
     selectEditableFinding();
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("First unsaved explanation");
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("First unsaved explanation");
     expect(apply).toHaveBeenCalledWith("ws-note", expect.objectContaining({ payload: expect.objectContaining({ annotation_id: "pending-finding", note: "First unsaved explanation" }) }));
   });
 
@@ -563,9 +563,9 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByText(/Add finding without a text span/i));
 
     // Shows search panel for new annotation
-    expect(screen.getByText(/Select term for new annotation|Begriff für neue Annotation wählen/i)).toBeDefined();
-    fireEvent.change(screen.getByLabelText(/Search ontology term|Ontologie-Term suchen/i), { target: { value: "Hypotonia" } });
-    fireEvent.keyDown((await screen.findByText("Hypotonia")).closest(".candidate-card")!, { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "New finding without a text span" })).toBeDefined();
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
+    fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
 
     await waitFor(() => {
       expect(applyCommandSpy).toHaveBeenCalledWith(
@@ -617,7 +617,7 @@ describe("CaseScreen integration", () => {
 
     // The stored selection of this annotator is back after loading.
     const button = await screen.findByRole("button", { name: "Search languages: EN, ES" });
-    fireEvent.change(screen.getByLabelText(/Search ontology term/i), { target: { value: "Krampfanfall" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Krampfanfall" } });
     await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
     expect(search.mock.calls[0][0].languages).toEqual(["es"]);
 
@@ -640,7 +640,7 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByText(/Add finding without a text span/i));
 
     await waitFor(() => expect(listed).toHaveBeenCalledWith(sampleView.key.project_key));
-    expect(screen.getByLabelText(/Search ontology term/i)).toBeDefined();
+    expect(screen.getByRole("combobox", { name: "Search term" })).toBeDefined();
     expect(screen.queryByRole("button", { name: /Search languages/ })).toBeNull();
   });
 
@@ -790,7 +790,7 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByText("HP:0001252"));
 
     // Click delete
-    fireEvent.click(screen.getByText(/Delete Annotation|Annotation löschen/i));
+    fireEvent.click(screen.getByText("Delete finding"));
     // Deletion requires an explicit confirmation
     fireEvent.click(screen.getByRole("button", { name: /Yes, delete/i }));
 
@@ -820,10 +820,10 @@ describe("CaseScreen integration", () => {
     const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 3);
     window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
     fireEvent.mouseUp(text);
-    expect(screen.getByLabelText(/New Annotation|Neue Annotation/i)).toBeDefined();
+    expect(screen.getByRole("region", { name: "New finding" })).toBeDefined();
     expect(mutate).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText(/Search ontology term|Ontologie-Term suchen/i), { target: { value: "Custom" } });
-    fireEvent.keyDown((await screen.findByText("Custom finding")).closest(".candidate-card")!, { key: "Enter" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Custom" } });
+    fireEvent.click((await screen.findByText("Custom finding")).closest(".candidate-card")!);
     await waitFor(() => expect(mutate).toHaveBeenCalledWith("ws-custom", expect.objectContaining({
       expected_revision: 0,
       payload: expect.objectContaining({ command: "create_annotation", layer_id: "phenotype",
@@ -831,6 +831,484 @@ describe("CaseScreen integration", () => {
     })));
     expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ layer_id: "phenotype" }));
     expect(search.mock.calls[0][0].annotation_id).toBe(mutate.mock.calls[0][1].payload.annotation_id);
+  });
+
+  describe("term search after marking text", () => {
+    const markThe = (container: HTMLElement) => {
+      const text = container.querySelector(".text-container")!;
+      const node = text.querySelector(".run")!.firstChild!;
+      const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 3);
+      window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+      fireEvent.mouseUp(text);
+      return text as HTMLElement;
+    };
+    const hits = { search_id: "search-the", candidates: [
+      { term_id: "HP:0000001", label: "Gone", obsolete: true, matched_term: "Gone", match_kind: "label", rank: 1, display_pos: 1 },
+      { term_id: "HP:0001252", label: "Hypotonia", obsolete: false, matched_term: "Hypotonia", match_kind: "label", rank: 2, display_pos: 2 },
+    ] };
+
+    it("marking text focuses the prefilled, selected term search and searches at once", () => {
+      const search = vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-prefill" onClose={vi.fn()} />);
+      markThe(rendered.container);
+      expect(screen.getByRole("heading", { name: "New finding" })).toBeDefined();
+      expect(rendered.container.querySelector(".pending-quote")!.textContent).toBe("“The”");
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe("The");
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe(3);
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ query: "The" }));
+      expect(screen.queryByText("The annotation will be saved upon selecting a term.")).toBeNull();
+    });
+
+    it("Enter adds the active hit and creates the finding with the search event", async () => {
+      vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const view = structuredClone(sampleView);
+      const mutate = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
+      const rendered = render(<CaseScreen view={view} workspaceId="ws-enter" onClose={vi.fn()} />);
+      markThe(rendered.container);
+      const input = screen.getByRole("combobox", { name: "Search term" });
+      await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBe(screen.getAllByRole("option")[1].id));
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(mutate).toHaveBeenCalledWith("ws-enter", expect.objectContaining({
+        payload: expect.objectContaining({ command: "create_annotation", term_id: "HP:0001252",
+          segments: [{ start: 0, end: 3 }], search_event_id: "search-the" }),
+      })));
+    });
+
+    it("does not prefill a German document without German search names and says why", () => {
+      const search = vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const view = structuredClone(sampleView); view.document.language = "de";
+      const rendered = render(<CaseScreen view={view} workspaceId="ws-de" onClose={vi.fn()} />);
+      markThe(rendered.container);
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe("");
+      expect(screen.getByText("Names are searched in English. Type an English name or a code.")).toBeDefined();
+      expect(search).not.toHaveBeenCalled();
+    });
+
+    it("prefills a German document once its search languages arrive after the text was marked", async () => {
+      let resolveOntologies!: (value: any) => void;
+      let resolvePreferences!: (value: any) => void;
+      vi.spyOn(api, "listPackageOntologies").mockReturnValue(new Promise(resolve => { resolveOntologies = resolve; }) as any);
+      vi.spyOn(api, "getPreferences").mockReturnValue(new Promise(resolve => { resolvePreferences = resolve; }) as any);
+      const search = vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const view = structuredClone(sampleView); view.document.language = "de";
+      const rendered = render(<CaseScreen view={view} workspaceId="ws-de-late" onClose={vi.fn()} />);
+      markThe(rendered.container);
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      expect(input.value).toBe("");
+      expect(search).not.toHaveBeenCalled();
+      await act(async () => {
+        resolveOntologies([{ ontology_id: "hp", release: "2024-06-25", sha256: "TEST-HP-SHA", term_count: 11,
+          translations: [{ language: "de", filenames: ["hp-de.babelon.tsv"], term_count: 4 }] }]);
+        resolvePreferences({ last_annotator_id: "user-test", mode_by_package: {}, search_languages_by_annotator: { "user-test": ["de"] } });
+      });
+      await waitFor(() => expect(input.value).toBe("The"));
+      expect(document.activeElement).toBe(input);
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe(3);
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ query: "The", languages: ["de"] }));
+      expect(screen.queryByText("Names are searched in English. Type an English name or a code.")).toBeNull();
+    });
+
+    it("Esc in the term search cancels the new finding and focuses the text at the selection end", () => {
+      vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-esc" onClose={vi.fn()} />);
+      const text = markThe(rendered.container);
+      fireEvent.keyDown(screen.getByRole("combobox", { name: "Search term" }), { key: "Escape" });
+      expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
+      expect(document.activeElement).toBe(text);
+      const selection = window.getSelection()!;
+      expect(selection.isCollapsed).toBe(true);
+      expect(text.contains(selection.anchorNode)).toBe(true);
+      const range = document.createRange(); range.setStart(text, 0); range.setEnd(selection.anchorNode!, selection.anchorOffset);
+      expect(range.toString()).toBe("The");
+    });
+
+    it("focusing the search does not scroll the text pane", () => {
+      vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+      const focus = vi.spyOn(HTMLElement.prototype, "focus");
+      const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-scroll" onClose={vi.fn()} />);
+      const container = rendered.container.querySelector<HTMLElement>(".text-container")!;
+      container.scrollTop = 40;
+      markThe(rendered.container);
+      const input = screen.getByRole("combobox", { name: "Search term" });
+      const inputFocus = focus.mock.calls.filter((_, index) => focus.mock.contexts[index] === input);
+      expect(inputFocus.length).toBeGreaterThan(0);
+      for (const call of inputFocus) expect(call[0]).toEqual({ preventScroll: true });
+      expect(container.scrollTop).toBe(40);
+      focus.mockRestore();
+    });
+
+    describe("values loop", () => {
+      const allDefaults = { assertion: "present", experiencer: "patient", temporality: "current" };
+      const loopView = (defaults: Record<string, string> = allDefaults, requiredAssertion = false) => {
+        const view = structuredClone(sampleView);
+        view.creation_defaults = { phenotype: { default: defaults } };
+        if (requiredAssertion) view.layers![0].annotation_types[0].axes![0].allow_empty = false;
+        return view;
+      };
+      /** A server that keeps the created finding and its values. */
+      const loopServer = (view: WorkspaceView) => {
+        let current = structuredClone(view.draft);
+        return vi.spyOn(api, "applyCommand").mockImplementation(async (_workspace: string, body: any) => {
+          const p = body.payload;
+          current = structuredClone(current); current.revision += 1;
+          if (p.command === "create_annotation") {
+            const evidence = { mention: { evidence_id: p.evidence_id, segments: p.segments }, version: "ev-1" };
+            current.evidence = [...(current.evidence ?? []), evidence] as any;
+            current.annotations = [...(current.annotations ?? []), { schema_version: "ontocurator-annotation/v3", version: "v1",
+              document_id: view.document.document_id, text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
+              annotation: { annotation_id: p.annotation_id, document_id: view.document.document_id, layer_id: p.layer_id,
+                type_id: p.type_id, term_id: p.term_id, axes_values: p.axes_values,
+                axes_defaulted: Object.keys(p.axes_values).filter(id => p.axes_values[id] != null && !p.chosen_axis_ids.includes(id)),
+                evidence_refs: [{ evidence_id: p.evidence_id, version: "ev-1" }],
+                provenance: { actor: { actor_id: "user-test", kind: "human" }, method: "manual", source_refs: [] } },
+              evidence: [evidence] }] as any;
+          }
+          // Like Annotation.with_axes plus _set_axes in the backend: a changed value and a chosen id
+          // both leave axes_defaulted; an unchanged, unchosen default stays.
+          if (p.command === "set_axes") {
+            current.annotations = current.annotations!.map(snapshot => snapshot.annotation.annotation_id !== p.annotation_id ? snapshot
+              : { ...snapshot, annotation: { ...snapshot.annotation, axes_values: p.axes_values,
+                axes_defaulted: (snapshot.annotation.axes_defaulted ?? []).filter(id => !p.chosen_axis_ids.includes(id)
+                  && p.axes_values[id] === snapshot.annotation.axes_values?.[id]) } });
+          }
+          return structuredClone(current);
+        });
+      };
+      const addHypotonia = async (container: HTMLElement) => {
+        const text = markThe(container);
+        const input = screen.getByRole("combobox", { name: "Search term" });
+        await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBe(screen.getAllByRole("option")[1].id));
+        fireEvent.keyDown(input, { key: "Enter" });
+        return text;
+      };
+      const announcer = () => document.querySelector("[data-carried-announcer]")!.textContent;
+      const setAxesCalls = (apply: ReturnType<typeof loopServer>) => apply.mock.calls.filter(call => (call[1] as any).payload.command === "set_axes");
+
+      it("after adding a term focuses Confirm defaults and announces the defaults", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-loop" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        expect(document.activeElement!.textContent).toContain("Confirm defaults (3)");
+        expect(announcer()).toBe("Hypotonia added. Values from defaults: Present, Patient, Current. Confirm defaults or change a value.");
+      });
+
+      it("after adding a term focuses the first required empty value instead", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView({ experiencer: "patient", temporality: "current" }, true);
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-required" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).closest('[data-axis-field="assertion"]')).not.toBeNull());
+        expect((document.activeElement as HTMLInputElement).type).toBe("radio");
+        expect(announcer()).toBe("Hypotonia added. Values from defaults: Patient, Current. Confirm defaults or change a value.");
+      });
+
+      it("D confirms all defaults in one set_axes and returns focus to the text after the mark", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        const apply = loopServer(view);
+        const focus = vi.spyOn(HTMLElement.prototype, "focus");
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-d" onClose={vi.fn()} />);
+        const text = await addHypotonia(rendered.container);
+        text.scrollTop = 25;
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        fireEvent.keyDown(document.body, { key: "d" });
+        await waitFor(() => expect(document.activeElement).toBe(rendered.container.querySelector(".text-container")));
+        const calls = setAxesCalls(apply);
+        expect(calls).toHaveLength(1);
+        expect((calls[0][1] as any).payload).toEqual(expect.objectContaining({ command: "set_axes",
+          axes_values: allDefaults, chosen_axis_ids: ["assertion", "experiencer", "temporality"] }));
+        expect(announcer()).toBe("Confirmed: Vorhandensein (Assertion) Present, Betroffene Person (Experiencer) Patient, Zeitlicher Bezug (Temporality) Current.");
+        const selection = window.getSelection()!;
+        expect(selection.isCollapsed).toBe(true);
+        const range = document.createRange(); range.setStart(text, 0); range.setEnd(selection.anchorNode!, selection.anchorOffset);
+        expect(range.toString()).toBe("The");
+        expect(text.scrollTop).toBe(25);
+        for (const [index, call] of focus.mock.calls.entries()) {
+          if (focus.mock.contexts[index] === text || (focus.mock.contexts[index] as HTMLElement).hasAttribute?.("data-confirm-defaults")) {
+            expect(call[0]).toEqual({ preventScroll: true });
+          }
+        }
+        focus.mockRestore();
+        await waitFor(() => expect(screen.queryByRole("button", { name: /Confirm defaults/ })).toBeNull());
+      });
+
+      it("V focuses the first defaulted value and arrow changes are sent once", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView({ experiencer: "patient", temporality: "current" });
+        const apply = loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-v" onClose={vi.fn()} />);
+        const text = await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        text.focus();
+        vi.useFakeTimers();
+        try {
+          fireEvent.keyDown(text, { key: "v" });
+          const patient = document.activeElement as HTMLInputElement;
+          expect(patient.closest('[data-axis-field="experiencer"]')).not.toBeNull();
+          expect(patient.checked).toBe(true);
+          fireEvent.keyDown(patient, { key: "ArrowRight" });
+          fireEvent.click(screen.getByRole("radio", { name: "Other person" }));
+          fireEvent.keyDown(screen.getByRole("radio", { name: "Other person" }), { key: "ArrowLeft" });
+          fireEvent.click(screen.getByRole("radio", { name: /^Patient/ }));
+          fireEvent.keyDown(screen.getByRole("radio", { name: /^Patient/ }), { key: "ArrowRight" });
+          fireEvent.click(screen.getByRole("radio", { name: "Other person" }));
+          expect(setAxesCalls(apply)).toHaveLength(0);
+          await act(async () => { vi.advanceTimersByTime(300); });
+        } finally { vi.useRealTimers(); }
+        await waitFor(() => expect(setAxesCalls(apply)).toHaveLength(1));
+        expect((setAxesCalls(apply)[0][1] as any).payload).toEqual(expect.objectContaining({
+          axes_values: { assertion: null, experiencer: "other", temporality: "current" }, chosen_axis_ids: ["experiencer"] }));
+      });
+
+      it("/ focuses the term search of a new finding and opens Change term for an own finding", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-slash" onClose={vi.fn()} />);
+        const text = markThe(rendered.container);
+        text.focus();
+        fireEvent.keyDown(text, { key: "/" });
+        expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Search term" }));
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        expect(screen.queryByRole("combobox", { name: "Search term" })).toBeNull();
+        fireEvent.keyDown(document.activeElement!, { key: "/" });
+        expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Search term" }));
+        expect(screen.getByRole("button", { name: "Close search" })).toBeDefined();
+        // With the search already open, "/" focuses it again.
+        (document.activeElement as HTMLElement).blur();
+        fireEvent.keyDown(document.body, { key: "/" });
+        expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Search term" }));
+      });
+
+      it("never fires / V D in text fields, with Shift for D and V, or in read-only and proposal views", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        const apply = loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-guard" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        const note = screen.getByLabelText("Note");
+        note.focus();
+        for (const key of ["d", "v", "/"]) fireEvent.keyDown(note, { key });
+        expect(document.activeElement).toBe(note);
+        fireEvent.keyDown(document.body, { key: "D", shiftKey: true });
+        fireEvent.keyDown(document.body, { key: "V", shiftKey: true });
+        expect(document.activeElement).toBe(note);
+        rendered.rerender(<CaseScreen view={view} workspaceId="ws-guard" onClose={vi.fn()} readOnly />);
+        fireEvent.keyDown(document.body, { key: "d" });
+        fireEvent.keyDown(document.body, { key: "v" });
+        fireEvent.keyDown(document.body, { key: "/" });
+        await act(async () => { await Promise.resolve(); });
+        expect(setAxesCalls(apply)).toHaveLength(0);
+        expect(screen.queryByRole("combobox", { name: "Search term" })).toBeNull();
+      });
+
+      it("never fires D for a selected proposal in review mode", async () => {
+        const { view, proposal } = proposalView();
+        proposal.annotation.axes_values = { assertion: "present" }; proposal.annotation.axes_defaulted = ["assertion"];
+        const apply = vi.spyOn(api, "applyCommand");
+        render(<CaseScreen view={view} workspaceId="ws-proposal" onClose={vi.fn()} />);
+        fireEvent.keyDown(window, { key: "j" });
+        fireEvent.keyDown(document.body, { key: "d" });
+        fireEvent.keyDown(document.body, { key: "v" });
+        await act(async () => { await Promise.resolve(); });
+        expect(apply).not.toHaveBeenCalled();
+      });
+
+      it("lists /, V and D under Finding in ? help", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-help" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+        fireEvent.keyDown(document.body, { key: "?" });
+        const help = await screen.findByRole("dialog");
+        expect(within(help).getByText("Finding")).toBeDefined();
+        expect(within(help).getByText("Focus the term search")).toBeDefined();
+        expect(within(help).getByText("Focus the values")).toBeDefined();
+        expect(within(help).getByText("Confirm all default values")).toBeDefined();
+      });
+
+      it("renames the findings badge to Defaults to confirm", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = loopView();
+        loopServer(view);
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-badge" onClose={vi.fn()} />);
+        await addHypotonia(rendered.container);
+        expect(await screen.findByText("Defaults to confirm")).toBeDefined();
+        expect(screen.queryByText("Defaulted axes")).toBeNull();
+      });
+
+      it("at 700 px shows the New finding bar instead of switching panes and opens the focused search on Choose term", async () => {
+        const original = window.matchMedia;
+        window.matchMedia = ((query: string) => ({
+          matches: query === "(max-width: 700px)", media: query, onchange: null,
+          addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+        })) as unknown as typeof window.matchMedia;
+        try {
+          vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+          const view = loopView();
+          loopServer(view);
+          const rendered = render(<CaseScreen view={view} workspaceId="ws-narrow" onClose={vi.fn()} />);
+          const text = markThe(rendered.container);
+          const layout = () => rendered.container.querySelector(".app-layout")!;
+          expect(layout().classList.contains("mobile-pane-text")).toBe(true);
+          const bar = rendered.container.querySelector<HTMLElement>(".pending-bar")!;
+          expect(bar.textContent).toContain("New finding “The” · Choose term");
+          expect(within(bar).getByRole("button", { name: "Cancel" })).toBeDefined();
+          expect(document.activeElement).not.toBe(screen.getByRole("combobox", { name: "Search term" }));
+          fireEvent.click(within(bar).getByRole("button", { name: "Choose term" }));
+          expect(layout().classList.contains("mobile-pane-details")).toBe(true);
+          const input = screen.getByRole("combobox", { name: "Search term" });
+          await waitFor(() => expect(document.activeElement).toBe(input));
+          await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBe(screen.getAllByRole("option")[1].id));
+          fireEvent.keyDown(input, { key: "Enter" });
+          await waitFor(() => expect((document.activeElement as HTMLElement).hasAttribute("data-confirm-defaults")).toBe(true));
+          fireEvent.keyDown(document.body, { key: "d" });
+          const back = await screen.findByRole("button", { name: "Back to text" });
+          await waitFor(() => expect(document.activeElement).toBe(back));
+          fireEvent.click(back);
+          expect(layout().classList.contains("mobile-pane-text")).toBe(true);
+          await waitFor(() => expect(document.activeElement).toBe(text));
+          expect(screen.queryByRole("button", { name: "Back to text" })).toBeNull();
+        } finally { window.matchMedia = original; }
+      });
+
+      it("at 700 px with nothing to confirm focuses Back to text after adding a term", async () => {
+        const original = window.matchMedia;
+        window.matchMedia = ((query: string) => ({
+          matches: query === "(max-width: 700px)", media: query, onchange: null,
+          addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+        })) as unknown as typeof window.matchMedia;
+        try {
+          vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+          const view = loopView({});
+          loopServer(view);
+          const rendered = render(<CaseScreen view={view} workspaceId="ws-narrow-empty" onClose={vi.fn()} />);
+          markThe(rendered.container);
+          fireEvent.click(within(rendered.container.querySelector<HTMLElement>(".pending-bar")!).getByRole("button", { name: "Choose term" }));
+          const input = screen.getByRole("combobox", { name: "Search term" });
+          await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBe(screen.getAllByRole("option")[1].id));
+          fireEvent.keyDown(input, { key: "Enter" });
+          await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Back to text" })));
+        } finally { window.matchMedia = original; }
+      });
+
+      /** Two saved findings with unconfirmed defaults, selectable from the findings list. */
+      const twoFindings = () => {
+        const view = withEditableFinding(loopView());
+        const a = view.draft.annotations![0];
+        a.annotation.annotation_id = "finding-a";
+        a.annotation.axes_values = { ...allDefaults }; a.annotation.axes_defaulted = ["assertion", "experiencer", "temporality"];
+        const b = structuredClone(a); b.annotation.annotation_id = "finding-b";
+        view.draft.annotations = [a, b];
+        return view;
+      };
+      const selectFinding = (id: string) => fireEvent.click(document.querySelector(`[data-list-key="annotation:${id}"]`)!);
+      const arrowTo = (from: RegExp, to: string) => {
+        fireEvent.keyDown(screen.getByRole("radio", { name: from }), { key: "ArrowRight" });
+        fireEvent.click(screen.getByRole("radio", { name: to }));
+      };
+
+      it("sends a pending arrow change to its own finding when another finding is selected within 300 ms", async () => {
+        const view = twoFindings();
+        const apply = loopServer(view);
+        render(<CaseScreen view={view} workspaceId="ws-switch" onClose={vi.fn()} />);
+        selectFinding("finding-a");
+        vi.useFakeTimers();
+        try {
+          arrowTo(/^Present/, "Absent");
+          act(() => { vi.advanceTimersByTime(100); });
+          selectFinding("finding-b");
+          await act(async () => { vi.advanceTimersByTime(400); });
+        } finally { vi.useRealTimers(); }
+        await waitFor(() => expect(setAxesCalls(apply)).toHaveLength(1));
+        expect((setAxesCalls(apply)[0][1] as any).payload).toEqual(expect.objectContaining({
+          annotation_id: "finding-a", axes_values: { ...allDefaults, assertion: "absent" }, chosen_axis_ids: ["assertion"] }));
+      });
+
+      it("V, an arrow change and D within 300 ms send the change first and then confirm the remaining defaults", async () => {
+        const view = twoFindings();
+        const apply = loopServer(view);
+        render(<CaseScreen view={view} workspaceId="ws-vd" onClose={vi.fn()} />);
+        selectFinding("finding-a");
+        vi.useFakeTimers();
+        try {
+          fireEvent.keyDown(document.body, { key: "v" });
+          const present = document.activeElement as HTMLInputElement;
+          expect(present.closest('[data-axis-field="assertion"]')).not.toBeNull();
+          fireEvent.keyDown(present, { key: "ArrowRight" });
+          fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
+          fireEvent.keyDown(document.body, { key: "d" });
+          await act(async () => { vi.advanceTimersByTime(400); });
+        } finally { vi.useRealTimers(); }
+        await waitFor(() => expect(setAxesCalls(apply)).toHaveLength(2));
+        const [first, second] = setAxesCalls(apply).map(call => (call[1] as any).payload);
+        const shown = { ...allDefaults, assertion: "absent" };
+        expect(first).toEqual(expect.objectContaining({ axes_values: shown, chosen_axis_ids: ["assertion"] }));
+        expect(second).toEqual(expect.objectContaining({ axes_values: shown, chosen_axis_ids: ["experiencer", "temporality"] }));
+      });
+
+      it("a failed confirmation shows the inline error and keeps the focus on Confirm defaults", async () => {
+        const view = twoFindings();
+        vi.spyOn(api, "applyCommand").mockRejectedValue(new ValidationError("Save refused"));
+        render(<CaseScreen view={view} workspaceId="ws-confirm-fail" onClose={vi.fn()} />);
+        selectFinding("finding-a");
+        const button = screen.getByRole("button", { name: "Confirm defaults (3)" });
+        button.focus();
+        fireEvent.click(button);
+        const section = document.querySelector<HTMLElement>("[data-values-section]")!;
+        await waitFor(() => expect(within(section).getByRole("alert").textContent).toContain("The values could not be confirmed. Try again."));
+        expect(document.activeElement).toBe(screen.getByRole("button", { name: "Confirm defaults (3)" }));
+        expect(document.querySelector("[data-carried-announcer]")?.textContent ?? "").not.toContain("Confirmed:");
+      });
+
+      it("queues a pending arrow change before the logout guard looks at the queue", async () => {
+        const view = twoFindings();
+        let release!: () => void;
+        const hold = new Promise<void>(resolve => { release = resolve; });
+        const server = loopServer(view);
+        const inner = server.getMockImplementation()!;
+        server.mockImplementation(async (...args) => { await hold; return inner(...args); });
+        const leaveGuardRef = { current: null as ((proceed: () => void) => void) | null };
+        render(<CaseScreen view={view} workspaceId="ws-guard-flush" onClose={vi.fn()} leaveGuardRef={leaveGuardRef} />);
+        selectFinding("finding-a");
+        arrowTo(/^Present/, "Absent");
+        const proceed = vi.fn();
+        act(() => { leaveGuardRef.current!(proceed); });
+        expect(proceed).not.toHaveBeenCalled();
+        expect(await screen.findByRole("dialog", { name: "Unsaved changes" })).toBeDefined();
+        await act(async () => { release(); await hold; });
+        await waitFor(() => expect(setAxesCalls(server)).toHaveLength(1));
+      });
+
+      it("queues a pending arrow change before leaving the case", async () => {
+        const view = twoFindings();
+        const apply = loopServer(view);
+        const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
+        render(<CaseScreen view={view} workspaceId="ws-leave-flush" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
+        selectFinding("finding-a");
+        arrowTo(/^Present/, "Absent");
+        let left!: Promise<boolean>;
+        act(() => { left = routeLeaveRef.current!(); });
+        expect(await left).toBe(true);
+        expect(setAxesCalls(apply)).toHaveLength(1);
+      });
+    });
   });
 
   it("does not expose imported sources in an independent view", () => {
@@ -945,7 +1423,7 @@ describe("CaseScreen integration", () => {
     expect(row.textContent).toContain("Betroffene Person (Experiencer): Other person");
     expect(row.textContent).toContain("Zeitlicher Bezug (Temporality): Historical");
     fireEvent.keyDown(row, { key: "Enter" });
-    expect(screen.getByRole("textbox", { name: "Annotation note" })).toBeDefined();
+    expect(screen.getByRole("textbox", { name: "Note" })).toBeDefined();
   });
 
   it.each([
@@ -969,7 +1447,7 @@ describe("CaseScreen integration", () => {
     expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
     expect(submit).not.toHaveBeenCalled();
     await waitFor(() => expect(allow && requireNote && evidencePolicy === "optional"
-      ? screen.getByLabelText("Annotation note") : screen.getByRole("button", { name: /Add Mention/ })).toBe(document.activeElement));
+      ? screen.getByLabelText("Note") : screen.getByRole("button", { name: "Add mention" })).toBe(document.activeElement));
   });
 
   it("does not request a reason when a text span is required", () => {
@@ -978,7 +1456,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="prohibited" onClose={vi.fn()} />);
     selectEditableFinding();
     expect(screen.queryByLabelText(/Reason for no text span/)).toBeNull();
-    expect(screen.getByLabelText("Annotation note")).toHaveProperty("required", false);
+    expect(screen.getByLabelText("Note")).toHaveProperty("required", false);
   });
 
   it.each([false, true])("explains current submission rules without restricting legacy edits (%s)", allow => {
@@ -1132,10 +1610,12 @@ describe("CaseScreen integration", () => {
     fireEvent.click(document.querySelector<HTMLElement>('[data-open-item="defaulted"] button')!);
     await waitFor(() => expect((document.activeElement as HTMLElement).closest('[data-axis-field="assertion"]')).not.toBeNull());
     expect((screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }) as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByText("Defaulted axes")).toBeDefined();
+    expect(screen.getByText("Defaults to confirm")).toBeDefined();
     expect(apply).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /Confirm Vorhandensein.* value/ }));
-    await waitFor(() => expect(apply).toHaveBeenCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({ chosen_axis_ids: ["assertion"] }) })));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm defaults (3)" }));
+    await waitFor(() => expect(apply).toHaveBeenCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({
+      command: "set_axes", chosen_axis_ids: ["assertion", "experiencer", "temporality"] }) })));
+    expect(apply).toHaveBeenCalledTimes(1);
   });
 
   it("outcome keys set decisions repeatedly and zero resets while inputs, IME and dialogs suppress them", async () => {
@@ -1359,8 +1839,8 @@ describe("CaseScreen integration", () => {
     const decide = vi.spyOn(api, "recordDecision").mockResolvedValue({ ...saved, revision: 2 });
     render(<CaseScreen view={view} workspaceId="ws-note" onClose={vi.fn()} />);
     selectEditableFinding();
-    fireEvent.change(screen.getByLabelText("Annotation note"), { target: { value: "Specific clinical reason" } });
-    fireEvent.blur(screen.getByLabelText("Annotation note"));
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Specific clinical reason" } });
+    fireEvent.blur(screen.getByLabelText("Note"));
     await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-note", expect.objectContaining({ expected_revision: 1,
       payload: expect.objectContaining({ outcome: "changed", target, replacement: { annotation_id: "pending-finding", version: "note-version" } }) })));
     expect(apply).toHaveBeenCalledOnce();
@@ -1415,13 +1895,13 @@ describe("CaseScreen integration", () => {
     fireEvent.change(screen.getByLabelText(/Reason for no text span/), { target: { value: "Revised reason before supporting text" } });
     fireEvent.blur(screen.getByLabelText(/Reason for no text span/));
     await screen.findByText(/^Saved$/); expect(decide).not.toHaveBeenCalled(); expect(apply).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add Mention" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add mention" }));
     const text = document.querySelector(".text-container")!;
     const node = text.querySelector(".run")!.firstChild!;
     const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 3);
     window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range); fireEvent.mouseUp(text);
     await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-required-copy", expect.objectContaining({ payload: expect.objectContaining({ target, outcome: "changed", replacement: { annotation_id: "pending-finding", version: "supported-copy" } }) })));
-    expect((screen.getByLabelText("Annotation note") as HTMLTextAreaElement).value).toBe("Revised reason before supporting text");
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Revised reason before supporting text");
     await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
   });
 
@@ -1564,6 +2044,91 @@ describe("CaseScreen integration", () => {
       expect(screen.getByRole("status").textContent).toMatch(/Offline – changes not saved/);
       await waitFor(() => expect(finishButton().getAttribute("aria-busy")).not.toBe("true"));
       expect(screen.queryByRole("dialog", { name: /Submit case/i })).toBeNull();
+    });
+  });
+
+  describe("editor polish", () => {
+    const task = { assignment_id: 17, workflow_revision: 0, held: false, project_key: "pkg-1", project_name: "Project", document_id: "doc-test-1",
+      external_id: "accepted-translation", language: "de", source_language: "en", target_language: "de", task: "annotate" as const,
+      status: "in_progress" as const, updated_at: "2026-10-16T12:00:00Z" };
+    const assignmentNavigation = { tasks: [task], current: task, onNavigate: vi.fn() };
+    const withMention = (view: WorkspaceView) => {
+      const evidence = { mention: { evidence_id: "ev-h", segments: [{ start: 26, end: 35 }] }, version: "ev-1" };
+      view.draft.evidence = [evidence] as any;
+      view.draft.annotations = [{ schema_version: "ontocurator-annotation/v3", version: "v1",
+        document_id: view.document.document_id, text_sha256: "text", ontology_sha256: "ontology", layer_config_sha256: "layer",
+        annotation: { annotation_id: "ann-h", document_id: view.document.document_id, layer_id: "phenotype",
+          type_id: "default", term_id: "HP:0001252", axes_values: {}, evidence_refs: [{ evidence_id: "ev-h", version: "ev-1" }],
+          provenance: { actor: { actor_id: "user-test", kind: "human" }, method: "manual", source_refs: [] } }, evidence: [evidence] }] as any;
+      return view;
+    };
+    const selectMention = () => fireEvent.click(document.querySelector('[data-list-key="annotation:ann-h"]')!);
+
+    it("shows the empty inspector without the typo", () => {
+      const rendered = render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} />);
+      expect(screen.getByRole("heading", { name: "No finding selected" })).toBeDefined();
+      expect(screen.getByText("Select a finding in the list or in the text, or mark text to add one.")).toBeDefined();
+      expect(document.body.textContent).not.toMatch(/text,or/);
+      rendered.unmount();
+      render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} readOnly />);
+      expect(screen.getByText("Select a finding in the list or in the text to see its details.")).toBeDefined();
+    });
+
+    it("has no My tasks button on assignment routes and keeps Dashboard on the legacy path", () => {
+      const rendered = render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} assignmentNavigation={assignmentNavigation} />);
+      const toolbar = screen.getByRole("group", { name: "Case" });
+      expect(within(toolbar).queryByRole("button", { name: /My tasks/ })).toBeNull();
+      expect(within(toolbar).queryByRole("button", { name: /Dashboard/ })).toBeNull();
+      rendered.unmount();
+      render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} />);
+      expect(screen.getByRole("button", { name: "← Dashboard" })).toBeDefined();
+    });
+
+    it("renders the document name as h1 and the plain case navigation", () => {
+      const rendered = render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} assignmentNavigation={assignmentNavigation} />);
+      const title = screen.getByRole("heading", { level: 1 });
+      expect(title.textContent).toBe("accepted-translation");
+      expect(title.classList.contains("case-title")).toBe(true);
+      expect(screen.getByText("Case 1 of 1")).toBeDefined();
+      rendered.unmount();
+      render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} />);
+      expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("doc-test-1");
+      expect(screen.queryByText(/Case: doc-test-1/)).toBeNull();
+    });
+
+    it("names modes and identity without jargon", () => {
+      render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} annotatorName="Alice" />);
+      const badge = screen.getByText("Independent annotation");
+      expect(badge.getAttribute("title")).toBe("You do not see proposals from other people or tools.");
+      expect(screen.getByTestId("annotator-identity").textContent).toBe("as Alice (user-test)");
+      expect(document.body.textContent).not.toMatch(/Annotating as|Annotate from scratch/);
+    });
+
+    it("hides the selection intent and explains segment and mention adding", async () => {
+      vi.spyOn(api, "resolveTermLabels").mockResolvedValue([{ layer_id: "phenotype", term_id: "HP:0001252", label: "Hypotonia" }] as any);
+      render(<CaseScreen view={withMention(structuredClone(sampleView))} workspaceId="ws" onClose={vi.fn()} />);
+      expect(screen.queryByText(/Selection intent/)).toBeNull();
+      selectMention();
+      await screen.findByRole("heading", { level: 2, name: /Hypotonia/ });
+      expect(screen.queryByText(/Selection intent/)).toBeNull();
+      expect(screen.queryByText(/Mark the text/)).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Add segment" }));
+      expect(screen.getByText("Adding a segment to mention 1 of Hypotonia. Mark the text. Esc cancels.")).toBeDefined();
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByText(/Adding a segment/)).toBeNull());
+      fireEvent.click(screen.getByRole("button", { name: "Add mention" }));
+      expect(screen.getByText("Adding a mention to Hypotonia. Mark the text. Esc cancels.")).toBeDefined();
+      expect(screen.queryByText(/Adding a segment/)).toBeNull();
+    });
+
+    it("uses Add mention, Add segment, Delete finding and Note", () => {
+      render(<CaseScreen view={withMention(structuredClone(sampleView))} workspaceId="ws" onClose={vi.fn()} />);
+      selectMention();
+      expect(screen.getByRole("button", { name: "Add mention" })).toBeDefined();
+      expect(screen.getByRole("button", { name: "Add segment" })).toBeDefined();
+      expect(screen.getByRole("button", { name: "Delete finding" })).toBeDefined();
+      expect(screen.getByLabelText("Note")).toBeDefined();
+      expect(document.body.textContent).not.toMatch(/\+ Add Mention|\+ Segment|Delete Annotation/);
     });
   });
 });

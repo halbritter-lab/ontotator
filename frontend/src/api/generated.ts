@@ -5709,6 +5709,8 @@ export interface components {
             target_language?: string | null;
             /** Case Id */
             case_id?: string | null;
+            /** Failed Check Count */
+            failed_check_count?: number | null;
         };
         /** TemplateInfo */
         TemplateInfo: {

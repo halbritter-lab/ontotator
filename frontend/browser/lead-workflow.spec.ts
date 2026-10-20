@@ -471,14 +471,14 @@ test("annotator sees only pseudonyms", async ({ page }) => {
   await expect(page.getByRole("cell", { name: `${s.cases!.report} · de`, exact: true })).toBeVisible();
   await noOthers("My tasks");
   await page.getByRole("link", { name: /^View paused task/ }).or(page.getByRole("button", { name: /^View paused task/ })).first().click();
-  await expect(page.getByText(`Annotating as ${person(s, "annotator")}`)).toBeVisible();
+  await expect(page.getByTestId("annotator-identity")).toHaveText(`as ${person(s, "annotator")}`);
   await expect(page.getByText("The German text drops the second seizure episode", { exact: false }).first()).toBeVisible();
   await noOthers("paused task screen");
   await page.goBack();
   await expect(page.getByRole("heading", { name: "My tasks", level: 1 })).toBeVisible();
   await page.getByRole("row").filter({ hasText: `${s.cases!.choose_final} · de` }).getByRole("link", { name: /^View/ })
     .or(page.getByRole("row").filter({ hasText: `${s.cases!.choose_final} · de` }).getByRole("button", { name: /^View/ })).first().click();
-  await expect(page.getByText(`Annotating as ${person(s, "annotator")}`)).toBeVisible();
+  await expect(page.getByTestId("annotator-identity")).toHaveText(`as ${person(s, "annotator")}`);
   await noOthers("submitted task screen");
 });
 

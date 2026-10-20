@@ -16750,6 +16750,17 @@
               }
             ],
             "title": "Case Id"
+          },
+          "failed_check_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed Check Count"
           }
         },
         "type": "object",

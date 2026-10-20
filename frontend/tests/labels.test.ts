@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignmentStatusLabels, formatDateTime, humanize, jobStatusLabels, labelFor, plural, roleLabels, taskLabels, uploadKindLabels, uploadStatusLabels } from "../src/app/labels";
+import { assignmentStatusLabels, formatDateTime, taskCrumbLabel, humanize, jobStatusLabels, labelFor, plural, roleLabels, taskLabels, uploadKindLabels, uploadStatusLabels } from "../src/app/labels";
 import { taskActionLabels, taskDescription } from "../src/tasks/MyTasks";
 
 describe("workflow labels", () => {
@@ -49,5 +49,12 @@ describe("my task actions", () => {
     expect(taskDescription({ task: "annotate", language: "de" })).toBe("Annotation");
     expect(taskDescription({ task: "translation_review", language: "de", source_language: "en", target_language: "de" })).toBe("Translation review (en to de)");
     expect(taskDescription({ task: "translation_review", language: "de", source_language: null })).toBe("Translation review (unknown language to de)");
+  });
+
+  it("names a task for the breadcrumb", () => {
+    expect(taskCrumbLabel({ external_id: "failed-translation", document_id: "d", task: "translation_review", language: "de" })).toBe("failed-translation · Translation review (de)");
+    expect(taskCrumbLabel({ external_id: "accepted-translation", document_id: "d", task: "annotate", language: "de" })).toBe("accepted-translation · Annotation (de)");
+    expect(taskCrumbLabel({ external_id: null, document_id: "doc-7", task: "review", language: "en" })).toBe("doc-7 · Review (en)");
+    expect(taskCrumbLabel({ external_id: "", document_id: "doc-7", task: "review", language: "en" })).toBe("doc-7 · Review (en)");
   });
 });

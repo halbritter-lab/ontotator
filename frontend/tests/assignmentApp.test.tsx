@@ -170,8 +170,8 @@ it.each(["open", "submitted"] as const)("retains the actual submitted dialog aft
   expect(within(submit).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
   fireEvent.click(within(submit).getByRole("button", { name: "Submit case" }));
   const dialog = await screen.findByRole("dialog", { name: "Case submitted" });
-  // Editor list and its refresh after submit, plus the shell's "My tasks (n)" count.
-  await waitFor(() => expect(api.listMyTasks).toHaveBeenCalledTimes(3));
+  // Editor list and its refresh after submit, the shell's "My tasks (n)" count and the breadcrumb's task name.
+  await waitFor(() => expect(api.listMyTasks).toHaveBeenCalledTimes(4));
   expect((screen.getByRole("button", { name: /Finish & Submit Case/ }) as HTMLButtonElement).disabled).toBe(true);
   expect(open).toHaveBeenCalledTimes(1);
   expect(first.read_only).toBe(false);

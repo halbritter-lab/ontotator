@@ -293,18 +293,18 @@ it("strictly separates selection between review targets and own annotations in s
  fireEvent.click(screen.getAllByText("HP:1")[0]);
  // Should show Review-Entscheidung, but NOT AnnotationPanel
  expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
- expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
+ expect(screen.queryByRole("heading", { name: "Values" })).toBeNull();
 
  // Click own annotation HP:2:
  fireEvent.click(screen.getAllByText("HP:2")[0]);
  // Should show AnnotationPanel, but NOT ReviewActions!
  expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
- expect(screen.getByText(/Context Axes|Kontext-Achsen/i)).toBeDefined();
+ expect(screen.getByRole("heading", { name: "Values" })).toBeDefined();
 
  // Click back on HP:1:
  fireEvent.click(screen.getAllByText("HP:1")[0]);
  expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
- expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
+ expect(screen.queryByRole("heading", { name: "Values" })).toBeNull();
 });
 
 it("lets the server resolve review targets only after opening explicitly opened assigned review task (blinding)", async () => {
@@ -370,7 +370,7 @@ it("binds a changed decision to the replacement version after queued edits", asy
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:1"));
  fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
- await screen.findByText(/Context Axes/);
+ await screen.findByRole("heading", { name: "Values" });
  expect(apply).not.toHaveBeenCalled(); // Existing adopted copy is resumed rather than cloned again.
  fireEvent.click(screen.getByRole("radio", { name: /Present|Vorhanden/i }));
  await waitFor(() => expect(finish).toBeDefined());
@@ -391,7 +391,7 @@ it("uses the search event when assigning a candidate and trusts obsolete metadat
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));
  fireEvent.click(screen.getByRole("button", { name: /Change term|Begriff ändern/i }));
- fireEvent.change(screen.getByLabelText(/Search ontology term|Ontologie-Term suchen/i), { target: { value: "Candidate" } });
+ fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Candidate" } });
  await waitFor(() => expect(screen.getByText("Candidate")).toBeDefined());
  fireEvent.click(screen.getByText("Candidate"));
  await waitFor(() => expect(edit).toHaveBeenCalled());
@@ -437,7 +437,7 @@ it("merges rapid span extensions against the latest saved evidence", async () =>
  const edit = vi.spyOn(api, "applyCommand").mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })).mockResolvedValue({ ...view.draft, revision: 2 });
  const rendered = render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:3"));
- fireEvent.click(screen.getByRole("button", { name: /Switch to »Additional segment«|Auf »Weiteres Segment«/i }));
+ fireEvent.click(screen.getAllByRole("button", { name: "Add segment" })[0]);
  const drag = (start: number, end: number) => {
    const node = rendered.container.querySelector('.text-container .run[data-start="5"]')!.firstChild!;
    const range = document.createRange();
@@ -516,13 +516,13 @@ it("renders all review targets and own annotations in text with distinct styling
 
   // Clicking the own mention in the text selects the own annotation:
   fireEvent.click(ownRuns[0]);
-  expect(screen.getByText(/Context Axes|Kontext-Achsen/i)).toBeDefined();
+  expect(screen.getByRole("heading", { name: "Values" })).toBeDefined();
   expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
 
   // Clicking a target mention in the text selects that review target:
   fireEvent.click(rendered.container.querySelectorAll(".run--target")[1]);
   expect(screen.getByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeDefined();
-  expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Values" })).toBeNull();
 });
 
 it("adopts a review proposal as an editable copy and records 'changed' only once the copy differs", async () => {
@@ -607,7 +607,7 @@ it("adopts a review proposal as an editable copy and records 'changed' only once
   expect(commands[0].source_version).toBe("target-v1");
 
   // 2. The inspector switches to the copy, but no "changed" decision exists yet (copy is identical)
-  await waitFor(() => expect(screen.getByText(/Context Axes/i)).toBeDefined());
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Values" })).toBeDefined());
   expect(decideSpy).not.toHaveBeenCalled();
   expect(screen.getByText(/Replacement for proposal/i)).toBeDefined();
 
@@ -615,7 +615,7 @@ it("adopts a review proposal as an editable copy and records 'changed' only once
   fireEvent.click(screen.getByRole("button", { name: /View review target/i }));
   await waitFor(() => expect(screen.getByText(/Review decision for this proposal/i)).toBeDefined());
   fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/i }));
-  await waitFor(() => expect(screen.getByText(/Context Axes/i)).toBeDefined());
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Values" })).toBeDefined());
   expect(commands.length).toBe(1);
 
   // 4. Actually changing the copy records "changed" bound to the new version
@@ -737,16 +737,16 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
   // 2. Clicking the replacement link in the sidebar selects the replacement annotation (AnnotationPanel opens)
   fireEvent.click(replLink);
   await waitFor(() => {
-    expect(screen.getByText(/Context Axes|Kontext-Achsen/i)).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Values" })).toBeDefined();
   });
   expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
 
   // 3. Clicking the selected annotation in the sidebar again deselects it
   fireEvent.click(screen.getAllByText("HP:0003")[1]);
   await waitFor(() => {
-    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
+    expect(screen.getByText("No finding selected")).toBeDefined();
   });
-  expect(screen.queryByText(/Context Axes|Kontext-Achsen/i)).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Values" })).toBeNull();
   expect(screen.queryByText(/Review decision for this proposal|Review-Entscheidung für diesen Vorschlag/i)).toBeNull();
 
   // 4. Selecting target1 in sidebar opens ReviewActions, then clicking it again deselects it
@@ -757,7 +757,7 @@ it("displays replacement term link in sidebar and allows deselecting so no term 
   // Click target1 again to deselect
   fireEvent.click(screen.getAllByText("HP:0001")[0]);
   await waitFor(() => {
-    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
+    expect(screen.getByText("No finding selected")).toBeDefined();
   });
 });
 
@@ -830,7 +830,7 @@ it("supports review keyboard shortcuts: 1 (confirm), 2 (reject), Escape (deselec
   // 4. Press Escape to deselect
   fireEvent.keyDown(window, { key: "Escape" });
   await waitFor(() => {
-    expect(screen.getByText(/No annotation selected|Keine Annotation ausgewählt/i)).toBeDefined();
+    expect(screen.getByText("No finding selected")).toBeDefined();
   });
 });
 });

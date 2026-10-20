@@ -38,3 +38,8 @@ it("shows the role as a muted second line under the identity", () => {
   expect(identity.querySelector(".current-user-name")?.textContent).toBe("Alex (a1)");
   expect(identity.querySelector(".cell-secondary")?.textContent).toBe("Project lead");
 });
+it("passes a crumb title through", () => {
+  render(<AppShell user={null} breadcrumb={[{ label: "My tasks", onClick: vi.fn() }, { label: "doc · Annotation (de)", title: "Assignment 17" }]}>Content</AppShell>);
+  expect(screen.getByText("doc · Annotation (de)").getAttribute("title")).toBe("Assignment 17");
+  expect(screen.getByRole("button", { name: "My tasks" }).getAttribute("title")).toBeNull();
+});

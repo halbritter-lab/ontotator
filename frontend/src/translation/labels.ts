@@ -1,3 +1,4 @@
+import type { TaskSummary } from "../api/client";
 import type { ClinicalCategory, IssueCode, ReviewDecisionCode } from "./reviewRules";
 
 /** English presentation keyed by domain codes, ready for later translation. */
@@ -29,13 +30,28 @@ export const issueMessages: Readonly<Record<IssueCode, string>> = {
   CATEGORIES_WITHOUT_CHANGE: "Categories need a clinical change.",
 };
 
-/** One-line explanation shown under each decision option. */
+/** Short hint shown under each decision option; the confirmation dialog keeps `decisionConsequences`. */
 export const decisionDescriptions: Readonly<Record<ReviewDecisionCode, string>> = {
-  accepted_unchanged: "The translation is correct as it stands. You made no edits.",
-  accepted_corrected: "You corrected the translation. Your version is accepted.",
-  query: "The meaning may differ clinically and needs clarification. Not accepted.",
-  rejected: "The translation changes clinical meaning and cannot be used. Not accepted.",
+  accepted_unchanged: "Correct as it stands. No edits.",
+  accepted_corrected: "Your corrected version is accepted.",
+  query: "Meaning may differ clinically. Not accepted.",
+  rejected: "Changes clinical meaning. Not accepted.",
 };
+
+/** Query and Rejected always mean a clinically relevant change; this line replaces the checkbox for them. */
+export const clinicalChangeFacts: Readonly<Record<"query" | "rejected", string>> = {
+  query: "Clinically relevant change: yes, always for a query.",
+  rejected: "Clinically relevant change: yes, always for a rejection.",
+};
+
+/** Hint under "Rationale"; it asks for a note when Accepted unchanged overrides failed checks. */
+export function rationaleHint(decision: ReviewDecisionCode | undefined, clinical: boolean, failedCheckCount: number): string {
+  if (clinical) return "Required for a clinically relevant change.";
+  if (decision === "accepted_unchanged" && failedCheckCount > 0) return "Optional. Say why the flagged difference is correct.";
+  return "Optional.";
+}
+
+export const decisionKeyHint = "Ctrl + Enter submits · 1–4 choose a decision outside the text";
 
 /** What submitting each decision will do, for the confirmation dialog. */
 export const decisionConsequences: Readonly<Record<ReviewDecisionCode, string>> = {
@@ -53,7 +69,18 @@ export const decisionOutcomes: Readonly<Record<ReviewDecisionCode, string>> = {
   rejected: "The translation is marked as reviewed and rejected. It is not accepted for annotation.",
 };
 
-/** Hint under "Clinically relevant change", following the review rules for each decision. */
+/** The "Next task" button after submitting (spec A.5). */
+export function nextTaskLabel(task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language">): string {
+  return `Next task: ${task.external_id ?? task.case_id ?? task.document_id} (${task.language})`;
+}
+
+/** Open tasks left in the project after submitting, besides the one just submitted. */
+export function remainingTasksText(count: number): string {
+  if (count <= 0) return "No more open tasks in this project.";
+  return `${count} more open ${count === 1 ? "task" : "tasks"} in this project.`;
+}
+
+/** Hint under "Clinically relevant change", following the review rules for each decision (the checkbox is shown for the Accepted decisions only). */
 export const clinicalChangeHints: Readonly<Record<ReviewDecisionCode, string>> = {
   accepted_unchanged: "Not allowed with Accepted unchanged. Clear it or choose another decision.",
   accepted_corrected: "Tick this if your correction changes the clinical meaning.",
@@ -83,8 +110,14 @@ export const checkExplanations: Readonly<Record<string, string>> = {
   numbers_changed: "The translation run's check found numbers in the translation that differ from those in the source.",
 };
 export const unknownCheckExplanation = "The translation run reported this check as failed. Ontocurator has no description for it; ask the project lead what it checks.";
-export const checkNoLocation = "This check does not point to a text location. Compare the source and the translation yourself.";
-export const checkDeviationGuidance = "Choose Accepted unchanged and say in the rationale why the difference is correct. If it changes the clinical meaning, choose Query or Rejected with the category Number or unit.";
+export const checkNoLocation = "It does not point to a text location; compare the texts yourself.";
+
+const valueCheckCodes: ReadonlySet<string> = new Set(["units_added", "numbers_changed"]);
+/** What to do when a check failed but the translation is right; only number and unit checks name the category. */
+export function checkDeviationGuidance(code: string): string {
+  const start = "Choose Accepted unchanged (or Accepted with corrections if you edited it). You can say in the rationale why the difference is correct. If it changes the clinical meaning, choose Query or Rejected";
+  return valueCheckCodes.has(code) ? `${start} with the category Number or unit.` : `${start}.`;
+}
 
 export function checkExplanation(code: string): string {
   return Object.hasOwn(checkExplanations, code) ? checkExplanations[code] : unknownCheckExplanation;
@@ -92,6 +125,29 @@ export function checkExplanation(code: string): string {
 
 export function failedChecksTitle(count: number): string {
   return count === 1 ? "1 automatic check failed" : `${count} automatic checks failed`;
+}
+
+/** Check label without "in translation", for lists of several checks; unknown codes keep `checkLabel`. */
+export function shortCheckLabel(code: unknown): string {
+  const label = checkLabel(code);
+  return typeof code === "string" && Object.hasOwn(checkLabels, code) ? label.replace(/ in translation$/, "") : label;
+}
+
+/** One-line summary of failed checks: "{n} automatic check(s) failed: {labels}". */
+export function checkBandText(failedCodes: readonly string[]): string {
+  const count = failedCodes.length;
+  if (count === 1) return `1 automatic check failed: ${checkLabel(failedCodes[0])}`;
+  const [first, second] = failedCodes.map(shortCheckLabel);
+  const labels = count === 2 ? `${first} and ${second}` : `${first}, ${second} and ${count - 2} more`;
+  return `${count} automatic checks failed: ${labels}`;
+}
+
+export function calmCheckText(count: number): string {
+  return count === 1 ? "1 automatic check passed." : `All ${count} automatic checks passed.`;
+}
+
+export function allChecksLine(passed: number, failed: number): string {
+  return `All checks: ${passed} passed, ${failed} failed`;
 }
 
 /** Translation status of a document after a review, in words. */

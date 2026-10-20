@@ -37,7 +37,7 @@ async function createHypotonia(page: Page, annotator: string) {
   await importFixture(page, annotator);
   await openCase(page, { task: "annotate" });
   await selectText(page, 0, 9);
-  await page.getByLabel(/Search ontology term/i).fill("Hypotonia");
+  await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
   await expect(revision(page)).toHaveAttribute("title", "Revision 1");
   await expect(mentionWithOffsets(page, "[0:9]")).toBeVisible();
@@ -61,7 +61,7 @@ test.describe("resizing mention spans", () => {
     await expect(mentionWithOffsets(page, "[4:17]")).toBeVisible();
 
     // Dragging did not start a new annotation.
-    await expect(page.getByLabel("New Annotation")).toHaveCount(0);
+    await expect(page.getByLabel("New finding")).toHaveCount(0);
     await expect(page.locator(".sidebar [data-list-key^='annotation:']")).toHaveCount(1);
   });
 
@@ -95,7 +95,7 @@ test.describe("resizing mention spans", () => {
   test("selecting text still works next to a mention with handles", async ({ page }) => {
     await createHypotonia(page, "resize-select");
     await selectText(page, 14, 21);
-    await expect(page.getByLabel("New Annotation")).toBeVisible();
+    await expect(page.getByLabel("New finding")).toBeVisible();
     await expect(revision(page)).toHaveAttribute("title", "Revision 1");
   });
 
@@ -140,17 +140,19 @@ test.describe("resizing mention spans", () => {
     await createHypotonia(page, "resize-still");
     const top = () => page.locator(".text-container .run").first().evaluate((el) => el.getBoundingClientRect().top);
     const before = await top();
-    await page.getByRole("button", { name: "+ Segment", exact: true }).click();
+    await page.getByRole("button", { name: "Add segment", exact: true }).click();
+    await expect(page.locator(".pane-intent")).toBeVisible();
     expect(await top()).toBe(before);
-    await page.getByRole("button", { name: /Switch to/ }).click();
-    await page.getByRole("button", { name: /Add Mention/ }).click();
+    await page.locator(".pane-intent").getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(page.locator(".pane-intent")).toHaveCount(0);
+    await page.getByRole("button", { name: "Add mention", exact: true }).click();
     await expect(page.locator(".attach-mention-banner")).toBeVisible();
     expect(await top()).toBe(before);
   });
 
   test("two handles on nearly the same spot: lower half grabs the end, upper half the start", async ({ page }) => {
     await createHypotonia(page, "resize-crowded");
-    await page.getByRole("button", { name: "+ Segment", exact: true }).click();
+    await page.getByRole("button", { name: "Add segment", exact: true }).click();
     await selectText(page, 10, 13); // "and", one space after "Hypotonia"
     await expect(mentionWithOffsets(page, "[0:9], [10:13]")).toBeVisible();
     const handles = page.locator(".text-container .resize-handle");

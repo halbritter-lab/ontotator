@@ -29,7 +29,11 @@ const SENSORINEURAL = "HP:0000407";
 /** Mark text, search a term and pick it; the new annotation stays selected. */
 async function annotate(page: Page, start: number, end: number, query: string, termId: string, expectedRevision: number) {
   await selectText(page, start, end);
-  await page.getByLabel(/Search ontology term/i).fill(query);
+  // At 700 px and below a new mark stays in the text pane; its "New finding" bar opens the term search.
+  if ((page.viewportSize()?.width ?? 1280) <= 700) {
+    await page.getByRole("group", { name: "New finding", exact: true }).getByRole("button", { name: "Choose term", exact: true }).click();
+  }
+  await page.getByLabel("Search term", { exact: true }).fill(query);
   await page.locator(".candidate-card").filter({ hasText: termId }).click();
   await expect(revision(page)).toHaveAttribute("title", `Revision ${expectedRevision}`);
 }
@@ -458,7 +462,7 @@ test.describe("ontology tree", () => {
     const host = page.locator(".tree-host");
     const column = { x: inspector.x, y: inspector.y, width: inspector.width, height: text.height };
     await selectText(page, 0, 9);
-    const search = page.getByLabel(/Search ontology term/i);
+    const search = page.getByLabel("Search term", { exact: true });
     await expect(search).toBeVisible();
     await expect(host).toBeHidden();
     await expect(host).toHaveCount(1);
@@ -750,7 +754,7 @@ test.describe("ontology tree", () => {
 
       // A new annotation: the tree steps aside and the search has the strip, as it is without the tree.
       await selectText(page, 0, 9);
-      await expect(page.getByLabel(/Search ontology term/i)).toBeVisible();
+      await expect(page.getByLabel("Search term", { exact: true })).toBeVisible();
       await expect(page.locator(".tree-host")).toBeHidden();
       expectSameBox(await box(page.locator(".inspector-pane")), inspectorBefore);
       expectSameBox(await box(page.locator(".center-pane")), textBefore);

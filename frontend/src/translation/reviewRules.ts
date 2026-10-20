@@ -14,8 +14,13 @@ export interface ReviewForm {
 // Python str.strip whitespace: JS trim additionally removes BOM and misses NEL/1C–1F.
 const pythonWhitespaceOnly = /^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$/u;
 
-function canonicalText(text: string): string {
+export function canonicalText(text: string): string {
   return text.replace(/^\ufeff+/, "").replace(/\r\n?/g, "\n").normalize("NFC");
+}
+
+/** Whether the proposed text differs from the machine text, compared like `checkReview` does. */
+export function textDiffers(machineText: string, text: string): boolean {
+  return canonicalText(text) !== canonicalText(machineText);
 }
 
 export function checkReview(form: ReviewForm, machineText: string, proposedText: string): IssueCode[] {

@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SearchPanel } from "../src/editor/SearchPanel";
+import { SearchPanel, type SearchPanelProps } from "../src/editor/SearchPanel";
 import { toggledSelection, type SearchLanguageControl } from "../src/editor/searchLanguages";
 import { SearchManager } from "../src/editor/searchState";
 
@@ -14,7 +14,7 @@ const key = {
   target_set_id: "empty",
 };
 
-const renderPanel = (searchOntology: ReturnType<typeof vi.fn>) => {
+const renderPanel = (searchOntology: ReturnType<typeof vi.fn>, props: Partial<SearchPanelProps> = {}) => {
   const manager = new SearchManager({ searchOntology } as any);
   render(
     <SearchPanel
@@ -24,20 +24,237 @@ const renderPanel = (searchOntology: ReturnType<typeof vi.fn>) => {
       layerId="phenotype"
       onSelectCandidate={vi.fn()}
       debounceMs={0}
+      {...props}
     />
   );
-  return screen.getByLabelText(/Search ontology term/i);
+  return screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
 };
+
+const hit = (term_id: string, label: string, extra: Record<string, unknown> = {}) => ({
+  term_id, label, definition: `${label} definition.`, matched_term: label, match_kind: "label",
+  rank: 1, display_pos: 1, obsolete: false, route: "lexical", ...extra,
+});
+const threeHits = { search_id: "s-1", candidates: [
+  hit("HP:0000001", "Obsolete seizure", { obsolete: true }),
+  hit("HP:0001250", "Seizure"),
+  hit("HP:0002373", "Febrile seizure"),
+] };
+const options = () => screen.queryAllByRole("option");
+const activeId = (input: HTMLElement) => input.getAttribute("aria-activedescendant");
 
 describe("SearchPanel", () => {
   afterEach(cleanup);
 
-  it("has no strategy selector, only the search box and one hint", () => {
-    renderPanel(vi.fn().mockResolvedValue({ search_id: "s", candidates: [] }));
-
+  it("is an ARIA combobox with a listbox of options", async () => {
+    const input = renderPanel(vi.fn().mockResolvedValue(threeHits));
     expect(screen.queryByLabelText(/Search Strategy/i)).toBeNull();
-    expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.getByText("Search by name or code (e.g. HP:0001250)")).toBeDefined();
+    expect(input.id).toBe("search-input");
+    expect(input.getAttribute("aria-autocomplete")).toBe("list");
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.change(input, { target: { value: "seizure" } });
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(input.getAttribute("aria-expanded")).toBe("true");
+    const listbox = screen.getByRole("listbox", { name: "Terms" });
+    expect(input.getAttribute("aria-controls")).toBe(listbox.id);
+    for (const option of options()) expect(option.hasAttribute("tabindex")).toBe(false);
+    expect(options()[0].getAttribute("aria-disabled")).toBe("true");
+    expect(options()[1].getAttribute("aria-disabled")).toBe("false");
+  });
+
+  it("runs a prefilled query at once, shows it selected and makes the first usable hit active", async () => {
+    vi.useFakeTimers();
+    try {
+      const searchOntology = vi.fn().mockResolvedValue(threeHits);
+      const input = renderPanel(searchOntology, { initialQuery: "seizure", autoFocus: true, debounceMs: 250 });
+      expect(searchOntology).toHaveBeenCalledTimes(1);
+      expect(searchOntology.mock.calls[0][0].query).toBe("seizure");
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe("seizure");
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe(7);
+      await act(async () => { await Promise.resolve(); });
+      expect(options()).toHaveLength(3);
+      expect(activeId(input)).toBe(options()[1].id);
+      expect(options()[1].getAttribute("aria-selected")).toBe("true");
+      expect(document.querySelector(".search-hint")!.textContent).toBe("2 terms · ↓↑ choose · Enter add · Esc cancel");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  describe("a prefill that arrives after mount (search languages loaded late)", () => {
+    const panel = (manager: SearchManager, initialQuery?: string) => (
+      <SearchPanel searchManager={manager} annotationId="a" workspaceKey={key} layerId="phenotype"
+        onSelectCandidate={vi.fn()} debounceMs={250} autoFocus initialQuery={initialQuery} />
+    );
+
+    it("is applied once: shown selected and searched at once", () => {
+      const searchOntology = vi.fn().mockResolvedValue(threeHits);
+      const manager = new SearchManager({ searchOntology } as any);
+      const { rerender } = render(panel(manager));
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      expect(input.value).toBe("");
+      rerender(panel(manager, "seizure"));
+      expect(input.value).toBe("seizure");
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe(7);
+      expect(searchOntology).toHaveBeenCalledTimes(1);
+      expect(searchOntology.mock.calls[0][0].query).toBe("seizure");
+      rerender(panel(manager, "seizure"));
+      expect(searchOntology).toHaveBeenCalledTimes(1);
+    });
+
+    it("never overwrites what the user typed", () => {
+      const searchOntology = vi.fn().mockResolvedValue(threeHits);
+      const manager = new SearchManager({ searchOntology } as any);
+      const { rerender } = render(panel(manager));
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "fev" } });
+      rerender(panel(manager, "seizure"));
+      expect(input.value).toBe("fev");
+      expect(searchOntology.mock.calls.every(call => call[0].query !== "seizure")).toBe(true);
+    });
+
+    it("is not applied after the user cleared a typed query", () => {
+      const searchOntology = vi.fn().mockResolvedValue(threeHits);
+      const manager = new SearchManager({ searchOntology } as any);
+      const { rerender } = render(panel(manager));
+      const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "f" } });
+      fireEvent.change(input, { target: { value: "" } });
+      rerender(panel(manager, "seizure"));
+      expect(input.value).toBe("");
+    });
+  });
+
+  it("moves the active hit with ArrowDown and ArrowUp without wrap and skips obsolete hits", async () => {
+    const input = renderPanel(vi.fn().mockResolvedValue(threeHits));
+    fireEvent.change(input, { target: { value: "seizure" } });
+    await waitFor(() => expect(activeId(input)).toBe(options()[1].id));
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(activeId(input)).toBe(options()[2].id);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(activeId(input)).toBe(options()[2].id);
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(activeId(input)).toBe(options()[1].id);
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(activeId(input)).toBe(options()[1].id);
+  });
+
+  it("adds the active hit on Enter", async () => {
+    const onSelectCandidate = vi.fn();
+    const input = renderPanel(vi.fn().mockResolvedValue(threeHits), { onSelectCandidate });
+    fireEvent.change(input, { target: { value: "seizure" } });
+    await waitFor(() => expect(activeId(input)).toBe(options()[1].id));
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSelectCandidate).toHaveBeenCalledWith(expect.objectContaining({ term_id: "HP:0001250" }), "s-1");
+  });
+
+  it("never adds a stale hit: Enter while a search is pending runs it and waits for a second Enter", async () => {
+    const onSelectCandidate = vi.fn();
+    const searchOntology = vi.fn().mockResolvedValue(threeHits);
+    const input = renderPanel(searchOntology, { onSelectCandidate, debounceMs: 10_000 });
+    fireEvent.change(input, { target: { value: "hypo" } });
+    expect(searchOntology).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(searchOntology).toHaveBeenCalledTimes(1);
+    expect(searchOntology.mock.calls[0][0].query).toBe("hypo");
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(onSelectCandidate).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSelectCandidate).toHaveBeenCalledTimes(1);
+    expect(searchOntology).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides hits of an earlier query while the new one is pending", async () => {
+    const input = renderPanel(vi.fn().mockResolvedValue(threeHits), { debounceMs: 10_000 });
+    fireEvent.change(input, { target: { value: "seizure" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.change(input, { target: { value: "seizures" } });
+    expect(options()).toHaveLength(0);
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+    expect(input.hasAttribute("aria-activedescendant")).toBe(false);
+  });
+
+  it("calls onEscape on Esc", () => {
+    const onEscape = vi.fn();
+    const input = renderPanel(vi.fn().mockResolvedValue(threeHits), { onEscape });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(onEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves the active hit on pointer hover and adds on click", async () => {
+    const onSelectCandidate = vi.fn();
+    const input = renderPanel(vi.fn().mockResolvedValue(threeHits), { onSelectCandidate });
+    fireEvent.change(input, { target: { value: "seizure" } });
+    await waitFor(() => expect(activeId(input)).toBe(options()[1].id));
+    fireEvent.pointerEnter(options()[2]);
+    expect(activeId(input)).toBe(options()[2].id);
+    fireEvent.pointerEnter(options()[0]);
+    expect(activeId(input)).toBe(options()[2].id);
+    fireEvent.click(options()[0]);
+    expect(onSelectCandidate).not.toHaveBeenCalled();
+    fireEvent.click(options()[2]);
+    expect(onSelectCandidate).toHaveBeenCalledWith(expect.objectContaining({ term_id: "HP:0002373" }), "s-1");
+  });
+
+  it("shows Searching…, the no-hits sentence and a retryable error", async () => {
+    let resolve: (value: unknown) => void = () => {};
+    const searchOntology = vi.fn()
+      .mockImplementationOnce(() => new Promise((r) => { resolve = r; }))
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(threeHits);
+    const input = renderPanel(searchOntology);
+    fireEvent.change(input, { target: { value: "xyz" } });
+    expect(screen.getByRole("status").textContent).toBe("Searching…");
+    await act(async () => { resolve({ search_id: "s", candidates: [] }); });
+    expect(await screen.findByText("No terms match “xyz”. Change the words, try a code (HP:0001250) or switch search languages.")).toBeDefined();
+    fireEvent.change(input, { target: { value: "abc" } });
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("The term search failed.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(searchOntology).toHaveBeenCalledTimes(3));
+    await screen.findByRole("alert");
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(searchOntology).toHaveBeenCalledTimes(4));
+    expect(searchOntology.mock.calls[3][0].query).toBe("abc");
+    await waitFor(() => expect(options()).toHaveLength(3));
+  });
+
+  it("shows one-line definitions and the full definition on the active hit", async () => {
+    const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [
+      hit("HP:0001250", "Seizure", { matched_term: "Absence seizure", match_kind: "hasExactSynonym" }),
+      hit("HP:0002373", "Febrile seizure"),
+    ] });
+    const input = renderPanel(searchOntology);
+    fireEvent.change(input, { target: { value: "seizure" } });
+    await waitFor(() => expect(activeId(input)).toBe(options()[0].id));
+    const defs = options().map((option) => option.querySelector(".candidate-def")!);
+    expect(defs[0].classList.contains("is-clamped")).toBe(false);
+    expect(defs[1].classList.contains("is-clamped")).toBe(true);
+    const match = options()[0].querySelector(".candidate-match")!;
+    expect(match.textContent).toBe("Matched synonym “Absence seizure”");
+    expect(match.getAttribute("title")).toBe("hasExactSynonym");
+    expect(options()[1].querySelector(".candidate-match")).toBeNull();
+  });
+
+  it("marks the current term with an icon and text, not a glyph", async () => {
+    const input = renderPanel(vi.fn().mockResolvedValue(threeHits), { currentTermId: "HP:0002373" });
+    fireEvent.change(input, { target: { value: "seizure" } });
+    const marker = await screen.findByText("Currently selected");
+    expect(marker.closest(".candidate-selected")!.querySelector("svg")).not.toBeNull();
+    expect(document.body.textContent).not.toContain("✓");
+  });
+
+  it("shows the empty hint", () => {
+    renderPanel(vi.fn().mockResolvedValue(threeHits));
+    expect(screen.getByText("Name or code, for example HP:0001250")).toBeDefined();
+    cleanup();
+    renderPanel(vi.fn().mockResolvedValue(threeHits), { emptyHint: "Type an English name." });
+    expect(screen.getByText("Type an English name.")).toBeDefined();
+    expect(screen.queryByText("Name or code, for example HP:0001250")).toBeNull();
   });
 
   it("clear_search_is_named_and_clears_the_query", async () => {
@@ -65,7 +282,7 @@ describe("SearchPanel", () => {
     expect(searchOntology.mock.calls[1][0].query).toBe("seizure");
   });
 
-  it("shows what matched with its kind, and the language when it is not English", async () => {
+  it("shows what matched, and the language when it is not English", async () => {
     const searchOntology = vi.fn().mockResolvedValue({
       search_id: "s",
       candidates: [
@@ -103,9 +320,9 @@ describe("SearchPanel", () => {
     const input = renderPanel(searchOntology);
     fireEvent.change(input, { target: { value: "muskel" } });
 
-    expect(await screen.findByText("Match: »Muskelhypotonie« (translation, de)")).toBeDefined();
-    expect(screen.getByText("Match: »Seizures« (hasExactSynonym)")).toBeDefined();
-    expect(screen.getAllByText(/^Match:/)).toHaveLength(2);
+    expect(await screen.findByText("Matched German name “Muskelhypotonie”")).toBeDefined();
+    expect(screen.getByText("Matched synonym “Seizures”")).toBeDefined();
+    expect(screen.getAllByText(/^Matched /)).toHaveLength(2);
   });
 });
 
@@ -166,7 +383,7 @@ describe("SearchPanel language selection", () => {
     render(<Harness searchOntology={searchOntology} initial={["es"]} onStore={vi.fn()} />);
 
     const button = screen.getByRole("button", { name: "Search languages: EN, ES" });
-    const input = screen.getByLabelText(/Search ontology term/i);
+    const input = screen.getByRole("combobox", { name: "Search term" });
     expect(button.closest(".search-language")!.parentElement).toBe(input.parentElement);
 
     fireEvent.change(input, { target: { value: "krampf" } });
@@ -178,7 +395,7 @@ describe("SearchPanel language selection", () => {
     const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
     const onStore = vi.fn();
     render(<Harness searchOntology={searchOntology} initial={undefined} onStore={onStore} />);
-    const input = screen.getByLabelText(/Search ontology term/i);
+    const input = screen.getByRole("combobox", { name: "Search term" });
 
     fireEvent.change(input, { target: { value: "krampf" } });
     await waitFor(() => expect(searchOntology).toHaveBeenCalledTimes(1));

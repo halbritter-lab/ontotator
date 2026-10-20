@@ -71,6 +71,21 @@ class TranslationReviewRecord(BaseModel):
     created_at: datetime
 
 
+def failed_translation_checks(
+    translation: dict[str, Any] | None,
+) -> list[TranslationCheck]:
+    """Failed automatic checks of a translation run (spec A.7).
+
+    The review workspace lists them; My tasks shows their count.
+    """
+    checks = (translation or {}).get("checks", [])
+    return [
+        check
+        for check in (TranslationCheck.model_validate(c) for c in checks)
+        if not check.passed
+    ]
+
+
 @dataclass(frozen=True)
 class ReviewText:
     variant: VariantInfo
@@ -318,10 +333,6 @@ class TranslationReviewService:
                 )
             ).all()
             by_id = {document_id: text for document_id, text in texts}
-            checks = [
-                TranslationCheck.model_validate(c)
-                for c in (ancestor.translation or {}).get("checks", [])
-            ]
             return ReviewWorkspace(
                 assignment,
                 variant,
@@ -329,7 +340,7 @@ class TranslationReviewService:
                 self._text(conn, pid, variant),
                 ReviewText(source, self._text(conn, pid, source)),
                 [ReviewText(v, by_id[v.document_id]) for v in comparisons],
-                [c for c in checks if not c.passed],
+                failed_translation_checks(ancestor.translation),
                 draft,
                 user["qualification"],
                 self._records(

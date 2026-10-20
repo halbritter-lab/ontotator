@@ -58,3 +58,14 @@ export function orderTasks(
   if (index + 1 < matching.length) adjacent.next = matching[index + 1].assignment_id;
   return adjacent;
 }
+
+/** Unsubmitted tasks of the same project in My tasks (server) order, without the current one (spec A.5). */
+export function nextOpenTask(
+  tasks: readonly TaskSummary[],
+  currentAssignmentId: number,
+  projectKey: string,
+): { next: TaskSummary | null; remaining: number } {
+  const open = tasks.filter((task) =>
+    task.project_key === projectKey && task.assignment_id !== currentAssignmentId && task.status !== "submitted");
+  return { next: open[0] ?? null, remaining: open.length };
+}

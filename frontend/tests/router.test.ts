@@ -1,6 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { navigate, parseRoute, routeHref, useRoute, type Route } from "../src/app/router";
+import { navigate, parseRoute, routeHref, SETTINGS_SECTIONS, useRoute, type Route } from "../src/app/router";
 
 beforeEach(() => { window.history.replaceState(null, "", "/"); });
 afterEach(() => {
@@ -190,5 +190,16 @@ describe("Documents deep-link parameters", () => {
   });
   it("drops_unknown_report_actions", () => {
     expect(parseRoute("#/projects/p/problem-reports/r?action=restart")).toEqual({ name: "projectProblemReport", key: "p", reportId: "r" });
+  });
+});
+
+describe("settings section addresses", () => {
+  it("parses and builds settings section addresses", () => {
+    expect(parseRoute("#/projects/a/settings")).toEqual({ name: "projectSettings", key: "a" });
+    expect(parseRoute("#/projects/a/settings/rules")).toEqual({ name: "projectSettings", key: "a", section: "rules" });
+    expect(parseRoute("#/projects/a/settings/unknown").name).toBe("notFound");
+    expect(routeHref({ name: "projectSettings", key: "a", section: "general" })).toBe("#/projects/a/settings");
+    expect(routeHref({ name: "projectSettings", key: "a", section: "defaults" })).toBe("#/projects/a/settings/defaults");
+    for (const section of SETTINGS_SECTIONS) expect(parseRoute(routeHref({ name: "projectSettings", key: "a", section }))).toMatchObject({ key: "a" });
   });
 });

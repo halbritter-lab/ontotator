@@ -60,7 +60,7 @@ it.each(["submitted", "snapshot"] as const)("rejects every retained edit callbac
     expect(callbacks.text.readOnly).toBe(true);
   }
   await act(async () => {
-    own.onUpdateTerm("HP:3"); own.onUpdateAxes({ assertion: "absent" }); own.onConfirmAxis?.("assertion");
+    own.onUpdateTerm("HP:3"); own.onUpdateAxes({ assertion: "absent" }); own.onConfirmDefaults?.(["assertion"]);
     own.onAttachMention([{ start: 8, end: 11 }]); own.onDetachMention("ev"); own.onDeleteAnnotation("own");
     own.onSetIntent("new_mention");
     text.onSelection({ segments: [{ start: 1, end: 3 }], intent: "new_mention" });

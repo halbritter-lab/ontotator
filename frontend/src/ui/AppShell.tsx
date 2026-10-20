@@ -4,7 +4,11 @@ import { personLabel } from "../app/identity";
 import { Button } from "./Button";
 import { ShortcutHelpHost } from "./ShortcutHelp";
 
-export interface Crumb { label: string; onClick?: () => void; href?: string }
+export interface Crumb {
+  label: string; onClick?: () => void; href?: string;
+  /** Extra detail on hover, e.g. the assignment number behind a named task. */
+  title?: string;
+}
 export interface AppShellProps {
   user: CurrentUser | null;
   onLogout?: () => void;
@@ -42,9 +46,9 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
         <span className="shell-subtitle">Clinical Curation Workbench</span>
         {!!breadcrumb?.length && <nav aria-label="Breadcrumb"><ol className="shell-breadcrumb">
           {breadcrumb.map((crumb, index) => <li key={index}>
-            {index === breadcrumb.length - 1 ? <span aria-current="page">{crumb.label}</span>
-              : crumb.onClick ? <Button variant="quiet" size="sm" onClick={crumb.onClick}>{crumb.label}</Button>
-              : crumb.href ? <a href={crumb.href}>{crumb.label}</a> : <span>{crumb.label}</span>}
+            {index === breadcrumb.length - 1 ? <span aria-current="page" title={crumb.title}>{crumb.label}</span>
+              : crumb.onClick ? <Button variant="quiet" size="sm" title={crumb.title} onClick={crumb.onClick}>{crumb.label}</Button>
+              : crumb.href ? <a href={crumb.href} title={crumb.title}>{crumb.label}</a> : <span title={crumb.title}>{crumb.label}</span>}
           </li>)}
         </ol></nav>}
       </div>

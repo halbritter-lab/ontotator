@@ -59,18 +59,7 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
   };
 
   return (
-    <div
-      className="case-navigation"
-      data-testid="case-navigation"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius)",
-        background: "var(--surface-raised)",
-        overflow: "hidden",
-      }}
-    >
+    <div className="case-navigation" data-testid="case-navigation">
       <IconButton label="Previous Case" icon={<IconChevronLeft />}
         type="button"
         variant="secondary" size="sm"
@@ -114,19 +103,9 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
           })}
         </Select>
       ) : (
-        <span
-          style={{
-            fontSize: "0.82rem",
-            fontWeight: 600,
-            color: "var(--text)",
-            padding: "0 10px",
-            whiteSpace: "nowrap",
-            borderLeft: "1px solid var(--border)",
-            borderRight: "1px solid var(--border)",
-            lineHeight: "26px",
-          }}
-        >
-          Case {position} of {total}: {currentDocumentId}
+        // The document name is the page's h1; the id stays available on hover.
+        <span className="case-navigation__label" title={currentDocumentId}>
+          Case {position} of {total}
         </span>
       )}
 
