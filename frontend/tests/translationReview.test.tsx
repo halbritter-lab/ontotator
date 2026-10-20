@@ -9,7 +9,21 @@ import { decisionConsequences, decisionLabels, decisionOutcomes, issueMessages }
 import { ShortcutHelpHost, openShortcutHelp } from "../src/ui/ShortcutHelp";
 import type { ReviewDecisionCode } from "../src/translation/reviewRules";
 
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+import type { CoupledScrollOptions, CoupledScrollPane } from "../src/variants/useCoupledScroll";
+
+type Pairs = ReadonlyArray<{ paneId: string; paragraph: number }>;
+/** The real hook, wrapped to record the screen's options and, where a test sets them, to report given pairs. */
+const hook = vi.hoisted(() => ({ calls: [] as { panes: readonly CoupledScrollPane[]; options: CoupledScrollOptions }[], pairs: null as Pairs | null }));
+vi.mock("../src/variants/useCoupledScroll", async importOriginal => {
+  const actual = await importOriginal<typeof import("../src/variants/useCoupledScroll")>();
+  return { ...actual, useCoupledScroll: (panes: readonly CoupledScrollPane[], options: CoupledScrollOptions) => {
+    hook.calls.push({ panes, options });
+    const result = actual.useCoupledScroll(panes, options);
+    return hook.pairs ? { ...result, pairs: hook.pairs } : result;
+  } };
+});
+
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); hook.calls.length = 0; hook.pairs = null; });
 function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }, reportActions?: JSX.Element) {
   vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
@@ -253,18 +267,177 @@ it("clinical-off clears categories through the actual controlled form but retain
   fireEvent.click(screen.getByRole("checkbox", { name: "Clinically relevant change" })); await clock();
   expect(save).toHaveBeenCalledWith(17, { expected_revision: 6, text: "Changed", form: { decision: "accepted_corrected", clinical_change: false, categories: [], rationale: "Keep rationale" } });
 });
-it("couples only opted-in reading views and clears the request on return to editing", async () => {
+const COUPLING_NOTE = "Paragraphs are paired by position, not by meaning. Merged or split paragraphs shift the pairing.";
+const EDITING_NOTE = "While you edit, only the other texts follow your translation.";
+const coupleBox = () => screen.queryByRole<HTMLInputElement>("checkbox", { name: "Couple scrolling" });
+const translationBox = () => screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Translation (de)" });
+const typeTranslation = (value: string) => fireEvent.change(translationBox(), { target: { value } });
+const lastOptions = () => hook.calls.at(-1)!.options;
+const targetStarts = () => {
+  const starts = hook.calls.at(-1)!.panes.find(pane => pane.id === "target")!.starts;
+  return typeof starts === "function" ? starts() : starts;
+};
+it("offers Couple scrolling beside the editable translation, unchecked by default", async () => {
   setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
-  expect(screen.queryByRole('checkbox',{name:'Couple scrolling'})).toBeNull();
-  fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'}));
-  const box=screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
-  expect(box.checked).toBe(false); expect(box.disabled).toBe(false); fireEvent.click(box);
-  expect(screen.getByText('Paragraphs are paired by position, not by meaning')).toBeDefined();
-  expect(screen.getByLabelText('Paragraph pairing')).toBeDefined();
-  fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'}));
-  expect(screen.queryByRole('checkbox',{name:'Couple scrolling'})).toBeNull();
-  fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'}));
-  expect(screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'}).checked).toBe(false);
+  const box = coupleBox()!;
+  expect(box.checked).toBe(false); expect(box.disabled).toBe(false);
+  expect(box.closest(".translation-column-head")?.textContent).toContain("Translation (de)");
+  expect(translationBox().readOnly).toBe(false);
+  expect(screen.queryByText(COUPLING_NOTE)).toBeNull();
+  fireEvent.click(box);
+  expect(coupleBox()!.checked).toBe(true);
+  expect(screen.getByText(COUPLING_NOTE)).toBeDefined();
+  expect(screen.getByRole("status", { name: "Paragraph pairing" })).toBeDefined();
+});
+it("keeps the request across edits and Show changes", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(coupleBox()!);
+  typeTranslation("Changed");
+  expect(coupleBox()!.checked).toBe(true);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
+  expect(coupleBox()!.checked).toBe(true);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
+  expect(coupleBox()!.checked).toBe(true);
+  typeTranslation("Changed again");
+  expect(coupleBox()!.checked).toBe(true);
+});
+it("resets the request on comparison change, reload and submit", async () => {
+  const workspace = reviewWorkspace({ comparisons: [
+    { variant: { ...reviewWorkspace().variant, document_id: "comparison-1", external_id: "First MT" }, text: "First comparison" },
+    { variant: { ...reviewWorkspace().variant, document_id: "comparison-2", external_id: "Second MT" }, text: "Second comparison" }] });
+  const { open } = setup(workspace); await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(coupleBox()!);
+  fireEvent.change(screen.getByRole("combobox", { name: "Comparison translation" }), { target: { value: "comparison-2" } });
+  expect(coupleBox()!.checked).toBe(false);
+  fireEvent.click(coupleBox()!);
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Reload from server" })); });
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(open).toHaveBeenCalledTimes(2);
+  expect(coupleBox()!.checked).toBe(false);
+  fireEvent.click(coupleBox()!);
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole("radio", { name: "Accepted with corrections" }));
+  typeTranslation("Corrected");
+  await clock();
+  expect(coupleBox()!.checked).toBe(true);
+  await confirmSubmit();
+  expect(screen.getByText("Review submitted")).toBeDefined();
+  expect(coupleBox()!.checked).toBe(false);
+});
+it("passes fixedLeader target only while the editable translation is shown", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(lastOptions()).toMatchObject({ minWidth: 700, fixedLeader: "target", frozenPaneId: "target" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
+  expect(lastOptions().minWidth).toBe(700);
+  expect(lastOptions().fixedLeader).toBeUndefined(); expect(lastOptions().frozenPaneId).toBeUndefined();
+  cleanup(); hook.calls.length = 0;
+  setup(reviewWorkspace({ read_only: true, submitted_record: reviewRecord() })); await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(lastOptions().fixedLeader).toBeUndefined(); expect(lastOptions().frozenPaneId).toBeUndefined();
+});
+it("recomputes translation starts 300 ms after the last edit, at once on blur, and not during composition", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  vi.useFakeTimers();
+  fireEvent.click(coupleBox()!);
+  const revision = () => lastOptions().startsRevision ?? 0;
+  const before = revision();
+  const differ = (translation: number) => `Paragraphs differ (source 2, translation ${translation}); the other text may show a neighbouring paragraph.`;
+  expect(screen.getByText(differ(1))).toBeDefined();
+  fireEvent.compositionStart(translationBox());
+  typeTranslation("A\n\nB");
+  await clock(500);
+  expect(targetStarts()).toEqual([0]); expect(revision()).toBe(before);
+  expect(screen.getByText(differ(1))).toBeDefined();
+  fireEvent.compositionEnd(translationBox());
+  await clock(299);
+  expect(targetStarts()).toEqual([0]);
+  await clock(1);
+  expect(targetStarts()).toEqual([0, 3]); expect(revision()).toBe(before + 1);
+  expect(screen.queryByText(differ(1))).toBeNull();
+  typeTranslation("A\n\nB\n\nC");
+  await clock(200);
+  typeTranslation("A\n\nB\n\nC\n\nD");
+  await clock(200);
+  expect(targetStarts()).toEqual([0, 3]);
+  await clock(100);
+  expect(targetStarts()).toEqual([0, 3, 6, 9]);
+  expect(screen.getByText(differ(4))).toBeDefined();
+  typeTranslation("A");
+  fireEvent.blur(translationBox());
+  expect(targetStarts()).toEqual([0]);
+  expect(screen.getByText(differ(1))).toBeDefined();
+});
+it("a recompute never changes selectionStart or the translation scrollTop", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  vi.useFakeTimers();
+  fireEvent.click(coupleBox()!);
+  const editor = translationBox().closest<HTMLElement>(".translation-editor")!;
+  const writes: number[] = [];
+  Object.defineProperty(editor, "scrollTop", { configurable: true, get: () => 40, set: (value: number) => { writes.push(value); } });
+  typeTranslation("First\n\nSecond\n\nThird");
+  translationBox().setSelectionRange(9, 11);
+  const revision = lastOptions().startsRevision ?? 0;
+  await clock(300);
+  expect(lastOptions().startsRevision).toBe(revision + 1);
+  expect(translationBox().selectionStart).toBe(9); expect(translationBox().selectionEnd).toBe(11);
+  expect(writes).toEqual([]);
+});
+it("shows the always note and the editing note while coupled and editing", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(screen.queryByText(EDITING_NOTE)).toBeNull();
+  fireEvent.click(coupleBox()!);
+  expect(screen.getByText(COUPLING_NOTE)).toBeDefined();
+  expect(screen.getByText(EDITING_NOTE)).toBeDefined();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
+  expect(screen.getByText(COUPLING_NOTE)).toBeDefined();
+  expect(screen.queryByText(EDITING_NOTE)).toBeNull();
+  expect(screen.queryByText("Paragraphs are paired by position, not by meaning")).toBeNull();
+});
+it("names both counts when they differ", async () => {
+  const workspace = reviewWorkspace({ comparisons: [{ variant: { ...reviewWorkspace().variant, document_id: "comparison-1", external_id: "First MT" }, text: "One\n\nTwo\n\nThree" }] });
+  setup(workspace); await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(coupleBox()!);
+  expect(screen.getByText("Paragraphs differ (source 2, translation 1); the other text may show a neighbouring paragraph.")).toBeDefined();
+  expect(screen.getByText("Paragraphs differ (translation 1, comparison 3); the other text may show a neighbouring paragraph.")).toBeDefined();
+  expect(screen.queryByText(/scrolling is approximate/)).toBeNull();
+});
+it("announces a count change from edits once", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  vi.useFakeTimers();
+  fireEvent.click(coupleBox()!);
+  const changedNote = "Your edits changed the number of paragraphs (1 → 2). Pairing after that point may be off.";
+  expect(screen.queryByText(changedNote)).toBeNull();
+  typeTranslation("A\n\nB");
+  await clock(300);
+  const note = screen.getByText(changedNote);
+  expect(note.closest("[aria-live='polite']")).not.toBeNull();
+  typeTranslation("A\n\nBB");
+  await clock(300);
+  expect(screen.getAllByText(changedNote)).toHaveLength(1);
+  expect(screen.getByText(changedNote)).toBe(note);
+  typeTranslation("Back to one");
+  await clock(300);
+  expect(screen.queryByText(changedNote)).toBeNull();
+});
+it("updates the pair line only after scrolling rests for 150 ms", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  vi.useFakeTimers();
+  fireEvent.click(coupleBox()!);
+  const line = () => screen.getByRole("status", { name: "Paragraph pairing" }).textContent;
+  hook.pairs = [{ paneId: "source", paragraph: 0 }, { paneId: "target", paragraph: 0 }];
+  typeTranslation("Changed");
+  await clock(149);
+  expect(line()).toBe("");
+  await clock(1);
+  expect(line()).toBe("Source paragraph 1 ↔ Translation paragraph 1");
+  hook.pairs = [{ paneId: "source", paragraph: 1 }, { paneId: "target", paragraph: 0 }];
+  typeTranslation("Changed again");
+  await clock(100);
+  hook.pairs = [{ paneId: "source", paragraph: 1 }, { paneId: "target", paragraph: 1 }];
+  typeTranslation("Changed once more");
+  await clock(100);
+  expect(line()).toBe("Source paragraph 1 ↔ Translation paragraph 1");
+  await clock(50);
+  expect(line()).toBe("Source paragraph 2 ↔ Translation paragraph 2");
 });
 it("uses only the workspace's comparison choices and shows passed inherited checks on demand", async () => {
   const workspace = reviewWorkspace();
@@ -361,26 +534,28 @@ it('allows explicit coupling on a submitted read-only target',async()=>{
   await screen.findByRole('textbox',{name:'Translation (de)'});
   const box=screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
   expect(box.disabled).toBe(false);expect(box.checked).toBe(false);fireEvent.click(box);expect(box.checked).toBe(true);
-  expect(screen.getByText('Paragraphs are paired by position, not by meaning')).toBeDefined();
+  expect(screen.getByText(COUPLING_NOTE)).toBeDefined();
+  expect(screen.queryByText(EDITING_NOTE)).toBeNull();
 });
 
-it('pauses read-only coupling while stacked and retains opt-in through a resize', async () => {
-  const viewport = { width: 1024, listeners: new Set<() => void>() };
+it.each([
+  ["a read-only target", () => reviewWorkspace({ read_only: true, submitted_record: reviewRecord() })],
+  ["the editable translation", () => reviewWorkspace()],
+])("offers coupling at 800 px and hides it below 700 px, keeping the request (%s)", async (_, workspace) => {
+  const viewport = { width: 800, listeners: new Set<() => void>() };
   const resize = (width: number) => act(() => { viewport.width = width; viewport.listeners.forEach(listener => listener()); });
-  setup(reviewWorkspace({ read_only: true, submitted_record: reviewRecord() }), false, viewport);
+  setup(workspace(), false, viewport);
   await screen.findByRole('textbox', { name: 'Translation (de)' });
   const couple = () => screen.queryByRole<HTMLInputElement>('checkbox', { name: 'Couple scrolling' });
-  expect(couple()).toBeNull();
-  expect(screen.queryByText(/widen/i)).toBeNull();
-  resize(1100);
   expect(couple()!.checked).toBe(false);
   fireEvent.click(couple()!);
   expect(screen.getByRole('status', { name: 'Paragraph pairing' })).toBeDefined();
-  resize(1099);
+  resize(699);
   expect(couple()).toBeNull();
-  expect(screen.queryByText('Paragraphs are paired by position, not by meaning')).toBeNull();
+  expect(screen.queryByText(/widen/i)).toBeNull();
+  expect(screen.queryByText(COUPLING_NOTE)).toBeNull();
   expect(screen.queryByRole('status', { name: 'Paragraph pairing' })).toBeNull();
-  resize(1440);
+  resize(700);
   expect(couple()!.checked).toBe(true);
 });
 
@@ -523,11 +698,14 @@ it("folds the text toolbar into the column heads", async () => {
   expect(screen.getByRole("checkbox", { name: "Show changes" }).closest(".translation-column-head")?.textContent).toContain("Translation (de)");
   expect(screen.queryByRole("group", { name: "Text view" })).toBeNull();
 });
-it("hides Couple scrolling while it is unavailable and offers it on a read-only target at 1440 px", async () => {
-  setup();
+it("hides Couple scrolling below 700 px without a sentence and offers it in the translation column head at 1440 px", async () => {
+  setup(undefined, false, { width: 699, listeners: new Set() });
   await screen.findByRole("textbox", { name: "Translation (de)" });
   expect(screen.queryByRole("checkbox", { name: "Couple scrolling" })).toBeNull();
   expect(screen.queryByText("Coupled scrolling is available in read-only views.")).toBeNull();
+  cleanup();
+  setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
   fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
   expect(screen.getByRole("checkbox", { name: "Couple scrolling" }).closest(".translation-column-head")?.textContent).toContain("Translation (de)");
 });

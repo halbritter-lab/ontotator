@@ -15,7 +15,7 @@ import { notifyFinalSelectionChanged } from '../variants/finalSelectionState';
 import { ChecksSummary, ReviewSummary, SubmitSummary } from "./ReviewParts";
 import { ReviewForm } from "./ReviewForm";
 import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type DecisionState } from "./decisionOrigin";
-import { categoryLabels, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, nextTaskLabel, remainingTasksText, reviewIssueMessage } from "./labels";
+import { categoryLabels, comparisonCountsDiffer, couplingEditingNote, couplingNote, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, nextTaskLabel, paragraphCountChanged, paragraphCountsDiffer, remainingTasksText, reviewIssueMessage } from "./labels";
 import { checkReview, type ClinicalCategory, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
 
 export interface TranslationReviewScreenProps {
@@ -120,20 +120,51 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const text = record?.proposed_text ?? draft.text, rawForm = record ? recordForm(record) : draft.form;
   const form = typedForm(rawForm), issues = form ? checkReview(form, workspace.text, text) : [];
   const comparison = workspace.comparisons.find(row => row.variant.document_id === comparisonId);
+  /** The editable translation is shown: it is the fixed leader and its pairing waits for a recompute (spec 2.2, 2.3). */
+  const editing = !readOnly && !showChanges;
   const sourceStarts = useMemo(() => paragraphStarts(workspace.source.text), [workspace.source.text]);
-  const targetStarts = useMemo(() => paragraphStarts(text), [text]);
   const comparisonStarts = useMemo(() => paragraphStarts(comparison?.text ?? ""), [comparison?.text]);
-  const canCouple = readOnly || showChanges;
-  const couplingIdentity = useMemo(() => ({}), [workspace, text, showChanges, readOnly, comparisonId]);
+  /** Translation starts lag the text while editing: 300 ms after the last edit, at once on blur, never during composition. */
+  const [targetStarts, setTargetStarts] = useState(() => paragraphStarts(text));
+  const [startsRevision, setStartsRevision] = useState(0);
+  /** Paragraph count of the text loaded with the workspace; a count changed by edits is announced in the notes. */
+  const [loadedCount] = useState(() => targetStarts.length);
+  // The hook reads starts through getters, so a recompute bumps the revision instead of rebinding the panes.
+  const startsRef = useRef({ source: sourceStarts, target: targetStarts, comparison: comparisonStarts });
+  startsRef.current.source = sourceStarts; startsRef.current.comparison = comparisonStarts;
+  const textRef = useRef(text); textRef.current = text;
+  const startsText = useRef(text), startsTimer = useRef<number | undefined>(undefined), composing = useRef(false);
+  const commitStarts = () => {
+    window.clearTimeout(startsTimer.current); startsTimer.current = undefined;
+    if (startsText.current === textRef.current) return;
+    startsText.current = textRef.current;
+    const next = paragraphStarts(textRef.current);
+    startsRef.current.target = next; setTargetStarts(next); setStartsRevision(revision => revision + 1);
+  };
+  const scheduleStarts = () => { window.clearTimeout(startsTimer.current); startsTimer.current = window.setTimeout(commitStarts, 300); };
+  // A layout effect, so the starts are current before the hook binds to a newly shown surface.
+  useLayoutEffect(() => {
+    if (!editing) commitStarts();
+    else if (!composing.current && startsText.current !== text) scheduleStarts();
+  }, [text, editing]);
+  useEffect(() => () => window.clearTimeout(startsTimer.current), []);
+  const couplingIdentity = useMemo(() => ({}), [workspace, comparisonId, readOnly]);
   const [requestedCoupling, setRequestedCoupling] = useState<object | null>(null);
-  const couplingRequested = canCouple && requestedCoupling === couplingIdentity;
+  const couplingRequested = requestedCoupling === couplingIdentity;
   const panes = useMemo(() => [
-    { id: 'source', element: sourceElement, starts: sourceStarts },
-    { id: 'target', element: targetElement, starts: targetStarts },
-    { id: 'comparison', element: comparison ? comparisonElement : null, starts: comparisonStarts },
-  ], [sourceElement, targetElement, comparisonElement, sourceStarts, targetStarts, comparisonStarts, comparison]);
-  const pairing = useCoupledScroll(panes, { enabled: couplingRequested });
+    { id: 'source', element: sourceElement, starts: () => startsRef.current.source },
+    { id: 'target', element: targetElement, starts: () => startsRef.current.target },
+    { id: 'comparison', element: comparison ? comparisonElement : null, starts: () => startsRef.current.comparison },
+  ], [sourceElement, targetElement, comparisonElement, comparison]);
+  const pairing = useCoupledScroll(panes, { enabled: couplingRequested, minWidth: 700, startsRevision,
+    fixedLeader: editing ? "target" : undefined, frozenPaneId: editing ? "target" : undefined });
   const coupled = couplingRequested && pairing.available;
+  /** The pair line follows only once scrolling rests, so it does not chatter (spec 2.7). */
+  const [restingPairs, setRestingPairs] = useState(pairing.pairs);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setRestingPairs(pairing.pairs), 150);
+    return () => window.clearTimeout(timer);
+  }, [pairing.pairs]);
   /** At least 1100 px: decision in a pinned rail; narrower: decision follows the texts and a bar pins Submit. */
   const wide = useMediaQuery("(min-width: 1100px)");
   type Leave = { kind: "leave" | "logout"; resolve?: (allowed: boolean) => void; proceed?: () => void };
@@ -365,7 +396,6 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const changed = text !== workspace.text;
   const earlier = workspace.previous_reviews.filter(value => value.id !== record?.id);
   const navigateLink = (route: Route, label: ReactNode, className?: string) => <a className={className} href={routeHref(route)} onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); props.onNavigate(route); }}>{label}</a>;
-  const paragraphNote = (left: number, right: number) => <span>Paragraphs differ ({left} / {right}); scrolling is approximate.</span>;
   const paneNames: Record<string, string> = { source: "Source", target: "Translation", comparison: "Comparison" };
   const reasonShown = submitBlocker !== null || issues.length > 0;
   /** Reason, key hint and Submit: in the rail footer when wide, in the pinned bar otherwise; one of each in the DOM. */
@@ -420,19 +450,24 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
             <div className="translation-column-head density-compact">
               <h2 id="review-translation-label" className="translation-column-title">Translation ({targetLanguage})</h2>
               <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
-              {canCouple && pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
+              {pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
               {coupled && <p className="translation-column-hint">
-                <span>Paragraphs are paired by position, not by meaning</span>
-                <span role="status" aria-label="Paragraph pairing">{pairing.pairs.map(pair => `${paneNames[pair.paneId]} paragraph ${pair.paragraph + 1}`).join(" ↔ ")}</span>
-                {sourceStarts.length !== targetStarts.length && paragraphNote(sourceStarts.length, targetStarts.length)}
-                {comparison && comparisonStarts.length !== targetStarts.length && paragraphNote(targetStarts.length, comparisonStarts.length)}
+                <span>{couplingNote}</span>
+                {editing && <span>{couplingEditingNote}</span>}
+                <span role="status" aria-label="Paragraph pairing">{restingPairs.map(pair => `${paneNames[pair.paneId]} paragraph ${pair.paragraph + 1}`).join(" ↔ ")}</span>
+                {sourceStarts.length !== targetStarts.length && <span>{paragraphCountsDiffer(sourceStarts.length, targetStarts.length)}</span>}
+                {comparison && comparisonStarts.length !== targetStarts.length && <span>{comparisonCountsDiffer(targetStarts.length, comparisonStarts.length)}</span>}
+                <span aria-live="polite">{targetStarts.length !== loadedCount && paragraphCountChanged(loadedCount, targetStarts.length)}</span>
               </p>}
             </div>
             {showChanges
               ? <DiffView ref={setTargetElement} before={workspace.text} after={text} lang={targetLanguage} />
               : <TranslationEditor ref={setTargetElement} id="review-translation" labelledBy="review-translation-label" describedBy="review-translation-note"
                   machineText={workspace.text} value={text} lang={targetLanguage} readOnly={readOnly} disabled={busy}
-                  onChange={event => editText(event.target.value)} />}
+                  onChange={event => editText(event.target.value)}
+                  onBlur={() => { composing.current = false; commitStarts(); }}
+                  onCompositionStart={() => { composing.current = true; window.clearTimeout(startsTimer.current); }}
+                  onCompositionEnd={() => { composing.current = false; scheduleStarts(); }} />}
             <p id="review-translation-note" className="translation-column-note">{showChanges
               ? "Showing changes against the machine translation. Turn off Show changes to edit."
               : changed ? "Underlined text differs from the machine translation." : "Same as the machine translation."}</p>

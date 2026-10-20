@@ -197,3 +197,16 @@ export function formatReviewDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : dateTime.format(date);
 }
+
+/** Coupled scrolling notes (editor-axes-and-coupled-scroll spec 2.6). */
+export const couplingNote = "Paragraphs are paired by position, not by meaning. Merged or split paragraphs shift the pairing.";
+export const couplingEditingNote = "While you edit, only the other texts follow your translation.";
+export function paragraphCountsDiffer(source: number, translation: number): string {
+  return `Paragraphs differ (source ${source}, translation ${translation}); the other text may show a neighbouring paragraph.`;
+}
+export function comparisonCountsDiffer(translation: number, comparison: number): string {
+  return `Paragraphs differ (translation ${translation}, comparison ${comparison}); the other text may show a neighbouring paragraph.`;
+}
+export function paragraphCountChanged(before: number, after: number): string {
+  return `Your edits changed the number of paragraphs (${before} → ${after}). Pairing after that point may be off.`;
+}
