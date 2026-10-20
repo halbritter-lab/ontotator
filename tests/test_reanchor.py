@@ -321,3 +321,51 @@ def test_both_result_paths_leave_original_snapshot_and_evidence_untouched(new):
     if isinstance(result, Carried):
         result.source.annotation.axes_values["assertion"] = "absent"
         assert snap.model_dump() == original_snapshot
+
+
+def _clinical_text(paragraphs=14):
+    """The size and repetitiveness of the browser workflow fixture's source text."""
+    return "Hypotonia. " + "\n\n".join(
+        f"Paragraph {index + 1}. Dose 5 mg. A😀é "
+        + "The patient describes symptoms and the clinician checks each detail. " * 18
+        for index in range(paragraphs)
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda text: text,
+        lambda text: text + "\n\nUpdated source: additional clinical detail.",
+        lambda text: text.replace("Paragraph 7.", "Paragraph seven."),
+    ],
+    ids=["unchanged", "appended", "edited-middle"],
+)
+def test_long_repetitive_text_maps_without_quadratic_matching(change):
+    """A consolidation round maps each input under the exclusive project lock.
+
+    A full character SequenceMatcher took seconds per call on an 18k-codepoint
+    repetitive text (the browser fixture), so starting consolidation exceeded
+    the request timeouts and blocked every other project command meanwhile.
+    """
+    import time
+
+    old = _clinical_text()
+    new = change(old)
+    started = time.perf_counter()
+    m = text_map(old, new)
+    assert time.perf_counter() - started < 0.5
+    unchanged = old.index("Paragraph 3.")
+    assert map_span(m, unchanged, unchanged + 12) == (unchanged, unchanged + 12)
+    last = old.rindex("Paragraph 14.")
+    shift = new.rindex("Paragraph 14.") - last
+    assert map_span(m, last, last + 13) == (last + shift, last + shift + 13)
+
+
+def test_common_prefix_and_suffix_stay_exact_blocks():
+    assert text_map("abc", "abc") == TextMap(((0, 0, 3),))
+    assert text_map("ab", "abab") == TextMap(((0, 0, 2),))
+    m = text_map("head middle tail", "head CHANGED tail")
+    assert map_span(m, 0, 5) == (0, 5)
+    assert map_span(m, 11, 16) == (12, 17)
+    assert map_span(m, 5, 11) is None

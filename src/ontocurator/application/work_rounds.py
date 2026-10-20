@@ -408,6 +408,9 @@ class WorkRoundService:
                     project, source.origin_key.document_id
                 )
                 assert old_document is not None
+                # One map per source text, not per snapshot: this runs under the
+                # exclusive project lock.
+                mapping = text_map(old_document.text, document.text)
                 for original in source.snapshots:
                     if original.annotation.layer_id not in scope.editable_layer_ids:
                         raise DomainError(
@@ -427,7 +430,7 @@ class WorkRoundService:
                         original.evidence,
                         old_document.text,
                         document.text,
-                        text_map(old_document.text, document.text),
+                        mapping,
                     )
                     target = None
                     if isinstance(mapped, Carried):
