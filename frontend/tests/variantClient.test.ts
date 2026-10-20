@@ -26,7 +26,7 @@ const text: Schemas["VariantText"] = {
 const ref: Schemas["VersionRef"] = { kind: "proposals", id: refId, label: "Tool", created_at: time };
 const annotationVersion: Schemas["AnnotationVersion"] = { ref, annotations: [], evidence: [] };
 const assignment: Schemas["AssignmentView"] = {
-  id: 41, workflow_revision: 0, held: false, project_key: project, document_id: documentId, user_id: 4, username: "reviewer",
+  id: 41, workflow_revision: 0, held: false, lead_correction: false, project_key: project, document_id: documentId, user_id: 4, username: "reviewer",
   pseudonym: "own-pseudo", display_name: "Reviewer", task: "translation_review", status: "submitted", created_at: time,
   updated_at: time, revoked_at: null, last_submission_id: "tr-7", external_id: "external-1",
 };
@@ -42,7 +42,7 @@ const workspace: Schemas["ReviewWorkspace"] = {
   assignment: { ...assignment }, variant, translation_ancestor: variant, text: text.text,
   source: { variant: { ...variant, document_id: "source", language: "en" }, text: "Original" },
   comparisons: [], failed_checks: [], draft: { text: text.text, form: {}, revision: 3 },
-  qualification: "Reviewer", previous_reviews: [record], read_only: true, submitted_record: record,
+  qualification: "Reviewer", previous_reviews: [record], read_only: true, submitted_record: record, lead_correction: false,
 };
 const pending: Schemas["ReanchorItem"] = {
   proposal_set_id: 8, source_ref: { annotation_id: "urn:source", version: "v1" },

@@ -25,6 +25,12 @@ class CorrectionAssignmentRequest(BaseModel):
     confirm_language: bool = False
 
 
+class LeadCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_text_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    confirm_language: bool = False
+
+
 class SourceObligationView(SourceReviewObligation):
     old_source_text: str
     new_source_text: str
@@ -51,6 +57,21 @@ def assign_correction(
     principal: PrincipalDep,
 ) -> AssignmentView:
     row = _service(request).assign_correction(
+        Actor.user(principal.user_id, principal.username), key, doc, **body.model_dump()
+    )
+    return _views(request, [row])[0]
+
+
+@router.post("/projects/{key}/documents/{doc:path}/lead-correction")
+def start_lead_correction(
+    key: str,
+    doc: str,
+    body: LeadCorrectionRequest,
+    request: Request,
+    principal: PrincipalDep,
+) -> AssignmentView:
+    """F1: the lead reviews a rejected or queried version themselves."""
+    row = _service(request).start_lead_correction(
         Actor.user(principal.user_id, principal.username), key, doc, **body.model_dump()
     )
     return _views(request, [row])[0]

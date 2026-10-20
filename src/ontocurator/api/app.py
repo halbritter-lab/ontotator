@@ -406,6 +406,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "TASK_HELD": 409,
                     "VARIANT_REVIEW_STALE": 409,
                     "TRANSLATION_NOT_ACCEPTED": 409,
+                    "LEAD_CORRECTION_NOT_AVAILABLE": 409,
                     "LANGUAGE_CONFIRMATION_REQUIRED": 409,
                     "REASSIGN_CONFIRMATION_REQUIRED": 409,
                     "ADJUDICATOR_IS_ANNOTATOR": 409,

@@ -3797,6 +3797,68 @@
         }
       }
     },
+    "/api/v1/projects/{key}/documents/{doc}/lead-correction": {
+      "post": {
+        "tags": [
+          "translation-workflow"
+        ],
+        "summary": "Start Lead Correction",
+        "description": "F1: the lead reviews a rejected or queried version themselves.",
+        "operationId": "start_lead_correction_api_v1_projects__key__documents__doc__lead_correction_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeadCorrectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/translation-reviews/{assignment_id}/source-obligations": {
       "get": {
         "tags": [
@@ -6628,6 +6690,11 @@
               }
             ],
             "title": "Hold Reason"
+          },
+          "lead_correction": {
+            "type": "boolean",
+            "title": "Lead Correction",
+            "default": false
           }
         },
         "type": "object",
@@ -6905,6 +6972,11 @@
             },
             "type": "array",
             "title": "Active Holds"
+          },
+          "lead_correction": {
+            "type": "boolean",
+            "title": "Lead Correction",
+            "default": false
           }
         },
         "type": "object",
@@ -10371,6 +10443,26 @@
         ],
         "title": "LayerDefinition",
         "description": "Definition of an annotation layer binding an ontology and types."
+      },
+      "LeadCorrectionRequest": {
+        "properties": {
+          "expected_text_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Expected Text Sha256"
+          },
+          "confirm_language": {
+            "type": "boolean",
+            "title": "Confirm Language",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_text_sha256"
+        ],
+        "title": "LeadCorrectionRequest"
       },
       "LoginRequest": {
         "properties": {
@@ -14411,6 +14503,11 @@
                 "type": "null"
               }
             ]
+          },
+          "lead_correction": {
+            "type": "boolean",
+            "title": "Lead Correction",
+            "default": false
           }
         },
         "type": "object",

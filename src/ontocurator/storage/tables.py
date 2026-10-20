@@ -819,6 +819,8 @@ class AssignmentRow(Base):
     hold_reason: Mapped[str | None]
     active_round_id: Mapped[str | None]
     workflow_revision: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
+    # FD1: the lead's own translation review of a rejected or queried version.
+    lead_correction: Mapped[bool] = mapped_column(server_default=text("false"))
 
 
 class TranslationReviewRow(Base):

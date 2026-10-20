@@ -1,5 +1,6 @@
 """Explicit re-review of accepted translations and exact source-change causes."""
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -10,21 +11,29 @@ from ontocurator.application.translation_reviews import (
     TranslationReviewRecord,
     TranslationReviewService,
 )
-from ontocurator.assignments.eligibility import load_variants
+from ontocurator.assignments.eligibility import (
+    check_variant_assignable,
+    load_variants,
+)
 from ontocurator.assignments.service import Assignment, AssignmentService
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.policy import Access
 from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.errors import DomainError, RevisionConflict
+from ontocurator.domain.errors import AccessDenied, DomainError, RevisionConflict
 from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.work_plans import RowKey
 from ontocurator.domain.work_rounds import derive_source_obligations
 from ontocurator.jobs.queue import JobQueue
+from ontocurator.projects.assignments import revoke_assignments
 from ontocurator.storage.database import Database
 from ontocurator.storage.plan_tables import DiscardedVariantRow
 from ontocurator.storage.tables import (
     AssignmentRow,
+    ProjectMembershipRow,
     TranslationReviewDraftRow,
+    TranslationReviewRow,
+    UserLanguageRow,
+    UserRow,
 )
 from ontocurator.storage.workflow_tables import (
     ReviewObligationResolutionRow,
@@ -171,6 +180,177 @@ class TranslationWorkflowService:
                 },
             )
             return assignments._get(conn, assignment.id)
+
+    def start_lead_correction(
+        self,
+        actor: Actor,
+        project_key: str,
+        document_id: str,
+        *,
+        expected_text_sha256: str,
+        confirm_language: bool = False,
+    ) -> Assignment:
+        """F1: the lead reviews a rejected or queried version themselves.
+
+        An ordinary translation review assigned to the lead with
+        ``lead_correction`` (FD1); only the lead role grants it (FD2), so the
+        task-role check is not applied. Submitted only as
+        ``accepted_corrected`` (FD4, ``TranslationReviewService.submit``).
+        """
+        if actor.user_id is None:
+            raise AccessDenied("NOT_ALLOWED", "Only a project lead can do this.")
+        lead = actor.user_id
+        assignments = AssignmentService(self.db)
+        with self.db.transaction() as conn:
+            project = assignments._prepare(conn, actor, project_key, lead)
+            pid = project["id"]
+            if "lead" not in set(
+                conn.execute(
+                    select(ProjectMembershipRow.role).where(
+                        ProjectMembershipRow.project_id == pid,
+                        ProjectMembershipRow.user_id == lead,
+                    )
+                ).scalars()
+            ):
+                raise AccessDenied("NOT_ALLOWED", "You may not manage this project.")
+            variants = load_variants(conn, pid)
+            variant = variants.get(document_id)
+            if variant is None:
+                raise DomainError("DOCUMENT_NOT_FOUND")
+            if variant.text_sha256 != expected_text_sha256:
+                raise DomainError("VARIANT_REVIEW_STALE")
+            existing = assignments.active_for(
+                conn, pid, document_id, lead, "translation_review"
+            )
+            if existing is not None and existing.lead_correction:
+                assignments._locked(conn, existing.id)
+                from ontocurator.application.workflow_guards import (
+                    require_task_writable,
+                )
+
+                require_task_writable(conn, existing.id)
+                if existing.status != "submitted":
+                    return existing
+            self._require_lead_correction_available(conn, pid, variant, variants, lead)
+            if existing is not None and existing.status != "submitted":
+                # The lead's own ordinary review (as annotator) is still open.
+                raise DomainError(
+                    "LEAD_CORRECTION_NOT_AVAILABLE", {"reason": "review_open"}
+                )
+            qualification = conn.execute(
+                select(UserRow.qualification).where(UserRow.id == lead)
+            ).scalar_one()
+            required = check_variant_assignable(
+                project, variant, "translation_review", variants.get
+            )
+            languages = list(
+                conn.execute(
+                    select(UserLanguageRow.language)
+                    .where(UserLanguageRow.user_id == lead)
+                    .order_by(UserLanguageRow.language)
+                ).scalars()
+            )
+            mismatch = not set(languages) >= required
+            if mismatch and not confirm_language:
+                raise DomainError(
+                    "LANGUAGE_CONFIRMATION_REQUIRED",
+                    {
+                        "document_language": variant.language,
+                        "user_languages": languages,
+                        "required_languages": sorted(required),
+                    },
+                )
+            if not (qualification or "").strip():
+                raise DomainError("QUALIFICATION_REQUIRED")
+            self._plan_review(conn, actor, pid, variant)
+            now = datetime.now(UTC)
+            if existing is not None:
+                # A submitted earlier review of this lead (also an annotator)
+                # holds the one active slot; the correction is a new task.
+                revoke_assignments(
+                    conn,
+                    actor,
+                    pid,
+                    [dict(assignments._locked(conn, existing.id))],
+                    now,
+                    reason="lead_correction",
+                )
+            assignment = assignments._create(
+                conn,
+                actor,
+                project,
+                document_id,
+                lead,
+                "translation_review",
+                (variant.language, languages, mismatch, sorted(required)),
+                now,
+                lead_correction=True,
+            )
+            record_audit(
+                conn,
+                actor,
+                "translation.lead_correction_started",
+                target_type="assignment",
+                target_id=assignment.id,
+                project_id=pid,
+                details={
+                    "document_id": document_id,
+                    "text_sha256": expected_text_sha256,
+                    "assignment_id": assignment.id,
+                },
+                at=now,
+            )
+            return assignment
+
+    @staticmethod
+    def _require_lead_correction_available(
+        conn: Connection,
+        project_id: int,
+        variant: VariantInfo,
+        variants: Mapping[str, VariantInfo],
+        lead: int,
+    ) -> None:
+        """FD3: the newest version of its chain, last decided rejected or
+        query, with no open translation review of someone else."""
+        decision = conn.execute(
+            select(TranslationReviewRow.decision)
+            .where(
+                TranslationReviewRow.project_id == project_id,
+                TranslationReviewRow.document_id == variant.document_id,
+            )
+            .order_by(TranslationReviewRow.id.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        reason = None
+        if variant.version != max(
+            v.version
+            for v in variants.values()
+            if (v.external_id, v.language) == (variant.external_id, variant.language)
+        ):
+            reason = "not_newest"
+        elif variant.translation_status != "reviewed" or decision not in (
+            "rejected",
+            "query",
+        ):
+            reason = "not_rejected_or_queried"
+        elif (
+            conn.execute(
+                select(AssignmentRow.id)
+                .where(
+                    AssignmentRow.project_id == project_id,
+                    AssignmentRow.document_id == variant.document_id,
+                    AssignmentRow.task == "translation_review",
+                    AssignmentRow.revoked_at.is_(None),
+                    AssignmentRow.status != "submitted",
+                    AssignmentRow.user_id != lead,
+                )
+                .limit(1)
+            ).first()
+            is not None
+        ):
+            reason = "review_open"
+        if reason is not None:
+            raise DomainError("LEAD_CORRECTION_NOT_AVAILABLE", {"reason": reason})
 
     @staticmethod
     def _plan_review(

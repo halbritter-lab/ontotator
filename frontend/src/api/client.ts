@@ -97,6 +97,7 @@ export type RoundSourceView = components["schemas"]["RoundSourceView"];
 export type AssignmentSubmissionView = components["schemas"]["AssignmentSubmissionView"];
 export type SourceObligationView = components["schemas"]["SourceObligationView"];
 export type CorrectionAssignmentRequest = components["schemas"]["CorrectionAssignmentRequest"];
+export type LeadCorrectionRequest = components["schemas"]["LeadCorrectionRequest"];
 export type ResolveSourceObligationRequest = components["schemas"]["ResolveSourceObligationRequest"];
 export type ProblemReportRequest = components["schemas"]["ProblemReportRequest"];
 export type ProblemActionRequest = components["schemas"]["ProblemActionRequest"];
@@ -815,6 +816,11 @@ export class ApiClient {
 
   async assignTranslationCorrection(projectKey: string, documentId: string, body: CorrectionAssignmentRequest): Promise<AssignmentView> {
     return this.request(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/translation-correction-assignment`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  /** F1: the lead reviews a rejected or queried version themselves. */
+  async startLeadCorrection(projectKey: string, documentId: string, body: LeadCorrectionRequest): Promise<AssignmentView> {
+    return this.request(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/lead-correction`, { method: "POST", body: JSON.stringify(body) });
   }
 
   async listSourceObligations(assignmentId: number): Promise<SourceObligationView[]> {

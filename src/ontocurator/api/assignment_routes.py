@@ -71,6 +71,8 @@ class AssignmentView(BaseModel):
     held: bool = False
     hold_reason: str | None = None
     active_holds: list[ActiveHoldView] = Field(default_factory=list)
+    # FD1: the lead's own translation review of a rejected or queried version.
+    lead_correction: bool = False
 
 
 class AssignmentOpenRequest(BaseModel):

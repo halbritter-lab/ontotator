@@ -101,6 +101,7 @@ def qualifying_assignment(user_id: int) -> ColumnElement[bool]:
             *(
                 and_(
                     AssignmentRow.task == task,
+                    AssignmentRow.lead_correction.is_(False),
                     exists().where(
                         ProjectMembershipRow.project_id == AssignmentRow.project_id,
                         ProjectMembershipRow.user_id == user_id,
@@ -108,7 +109,18 @@ def qualifying_assignment(user_id: int) -> ColumnElement[bool]:
                     ),
                 )
                 for task, roles in TASK_ROLES.items()
-            )
+            ),
+            # FD2: a lead's own correction holds through the lead role only;
+            # it ends with that role even if the lead is also an annotator.
+            and_(
+                AssignmentRow.task == "translation_review",
+                AssignmentRow.lead_correction.is_(True),
+                exists().where(
+                    ProjectMembershipRow.project_id == AssignmentRow.project_id,
+                    ProjectMembershipRow.user_id == user_id,
+                    ProjectMembershipRow.role == "lead",
+                ),
+            ),
         ),
     )
 

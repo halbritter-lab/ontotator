@@ -11,7 +11,7 @@ export function taskOf(view: OpenWorkspaceResponse["view"], id = 1): TaskSummary
 /** Add the actual assignment-open envelope to an existing workspace fixture. */
 export function assigned(response: OpenWorkspaceResponse, id = 1): AssignmentWorkspace {
   const task = taskOf(response.view, id);
-  return { ...response, assignment: { id, workflow_revision: 0, held: false, project_key: task.project_key, document_id: task.document_id,
+  return { ...response, assignment: { id, workflow_revision: 0, held: false, lead_correction: false, project_key: task.project_key, document_id: task.document_id,
     user_id: 1, display_name: "Test user", username: "test-user", pseudonym: response.view.key.annotator_id, task: task.task,
     status: response.read_only ? "submitted" : "open", created_at: task.updated_at, updated_at: task.updated_at,
     revoked_at: null, last_submission_id: null } };

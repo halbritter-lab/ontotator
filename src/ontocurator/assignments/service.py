@@ -91,6 +91,8 @@ class Assignment:
     workflow_revision: int = 0
     held: bool = False
     hold_reason: str | None = None
+    # FD1: the lead's own translation review of a rejected or queried version.
+    lead_correction: bool = False
 
 
 @dataclass(frozen=True)
@@ -133,6 +135,7 @@ def _assignments() -> Select[tuple[object, ...]]:
             AssignmentRow.workflow_revision,
             AssignmentRow.held,
             AssignmentRow.hold_reason,
+            AssignmentRow.lead_correction,
             DocumentRow.external_id,
         )
         .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
@@ -365,6 +368,8 @@ class AssignmentService:
         task: Task,
         eligibility: tuple[str, list[str], bool, list[str]],
         now: datetime,
+        *,
+        lead_correction: bool = False,
     ) -> Assignment:
         assignment_id = conn.execute(
             insert(AssignmentRow)
@@ -377,6 +382,7 @@ class AssignmentService:
                 created_by=actor.user_id,
                 created_at=now,
                 updated_at=now,
+                lead_correction=lead_correction,
             )
             .returning(AssignmentRow.id)
         ).scalar_one()

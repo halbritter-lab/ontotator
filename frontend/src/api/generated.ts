@@ -1001,6 +1001,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/documents/{doc}/lead-correction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Lead Correction
+         * @description F1: the lead reviews a rejected or queried version themselves.
+         */
+        post: operations["start_lead_correction_api_v1_projects__key__documents__doc__lead_correction_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/translation-reviews/{assignment_id}/source-obligations": {
         parameters: {
             query?: never;
@@ -2105,6 +2125,11 @@ export interface components {
             held: boolean;
             /** Hold Reason */
             hold_reason?: string | null;
+            /**
+             * Lead Correction
+             * @default false
+             */
+            lead_correction: boolean;
         };
         /** AssignmentOpenRequest */
         AssignmentOpenRequest: {
@@ -2210,6 +2235,11 @@ export interface components {
             hold_reason?: string | null;
             /** Active Holds */
             active_holds?: components["schemas"]["ActiveHoldView"][];
+            /**
+             * Lead Correction
+             * @default false
+             */
+            lead_correction: boolean;
         };
         /**
          * AxisDefinition
@@ -3433,6 +3463,16 @@ export interface components {
             default_type_id: string;
             /** Annotation Types */
             annotation_types: components["schemas"]["AnnotationTypeDefinition"][];
+        };
+        /** LeadCorrectionRequest */
+        LeadCorrectionRequest: {
+            /** Expected Text Sha256 */
+            expected_text_sha256: string;
+            /**
+             * Confirm Language
+             * @default false
+             */
+            confirm_language: boolean;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -4930,6 +4970,11 @@ export interface components {
             /** Read Only */
             read_only: boolean;
             submitted_record: components["schemas"]["TranslationReviewRecord"] | null;
+            /**
+             * Lead Correction
+             * @default false
+             */
+            lead_correction: boolean;
         };
         /** RoundInputResolution */
         RoundInputResolution: {
@@ -8426,6 +8471,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CorrectionAssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_lead_correction_api_v1_projects__key__documents__doc__lead_correction_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeadCorrectionRequest"];
             };
         };
         responses: {

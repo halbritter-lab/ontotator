@@ -20,6 +20,7 @@ from ontocurator.authz.visibility import (
 )
 from ontocurator.domain.errors import DomainError, RevisionConflict
 from ontocurator.domain.translation_review import (
+    LEAD_CORRECTION_DECISION,
     REVIEW_POLICY,
     ClinicalCategory,
     ReviewDecisionCode,
@@ -97,6 +98,8 @@ class ReviewWorkspace:
     previous_reviews: list[TranslationReviewRecord]
     read_only: bool
     submitted_record: TranslationReviewRecord | None
+    # FD1: the lead reviews this version themselves (accepted_corrected only).
+    lead_correction: bool = False
 
 
 class TranslationReviewService:
@@ -334,6 +337,7 @@ class TranslationReviewService:
                 ),
                 assignment.status == "submitted" or assignment.held,
                 submitted,
+                assignment.lead_correction,
             )
 
     def save_draft(
@@ -404,6 +408,10 @@ class TranslationReviewService:
                         "fields": [".".join(map(str, e["loc"])) for e in exc.errors()],
                     },
                 ) from None
+            if assignment.lead_correction and form.decision != "accepted_corrected":
+                raise DomainError(
+                    "REVIEW_INVALID", {"issues": [LEAD_CORRECTION_DECISION]}
+                )
             issues = check_review(form, machine_text=machine, proposed_text=draft.text)
             if issues:
                 raise DomainError("REVIEW_INVALID", {"issues": issues})

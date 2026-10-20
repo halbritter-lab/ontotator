@@ -12,6 +12,8 @@ ClinicalCategory = Literal[
     "omission", "addition", "assertion", "value", "anatomy", "terminology", "source"
 ]
 REVIEW_POLICY = "ontocurator-translation-review/v1"
+# FD4: a lead correction is submitted only as "accepted_corrected".
+LEAD_CORRECTION_DECISION = "LEAD_CORRECTION_DECISION"
 
 
 class ReviewForm(BaseModel):

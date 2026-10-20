@@ -33,7 +33,7 @@ function server(mode: WorkspaceMode = "independent") {
   vi.spyOn(api, "getAssignmentMetadata").mockImplementation(async assignmentId => {
     const task = tasks.find(row => row.assignment_id === assignmentId);
     if (!task) throw new Error("Unassigned fixture ID");
-    return { id: task.assignment_id, workflow_revision: 0, held: false, project_key: task.project_key, document_id: task.document_id, task: task.task,
+    return { id: task.assignment_id, workflow_revision: 0, held: false, lead_correction: false, project_key: task.project_key, document_id: task.document_id, task: task.task,
       user_id: 1, username: "ann-0007", pseudonym: "ann-0007", display_name: "Test user", status: task.status,
       created_at: task.updated_at, updated_at: task.updated_at, revoked_at: null, last_submission_id: null };
   });
