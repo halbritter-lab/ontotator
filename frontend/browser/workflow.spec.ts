@@ -10,7 +10,7 @@ import {
   TEST_PASSWORD,
 } from "./helpers";
 
-const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
+const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture-workflow", annotator);
 
 test("first run: log in without projects, get a T1 import, open a case without typing initials", async ({ page }) => {
   // A user without assignments sees the empty list, and nothing to upload.
@@ -90,8 +90,8 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
   await page.reload();
   await expect(page.getByText("Submitted. The project lead can reopen it for changes.")).toBeVisible();
   await expect(page.getByRole("button", { name: /^Finish & Submit/ })).toBeDisabled();
-  await page.goto(`${LAUNCH_URL}#/?project=browser-fixture`);
-  await expect(page.locator("#project-select")).toHaveValue("browser-fixture");
+  await page.goto(`${LAUNCH_URL}#/?project=browser-fixture-workflow`);
+  await expect(page.locator("#project-select")).toHaveValue("browser-fixture-workflow");
   await expect(page.getByText(/Forbidden|Unauthorized|Error loading/)).toHaveCount(0);
 });
 

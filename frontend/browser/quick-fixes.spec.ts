@@ -51,7 +51,7 @@ async function scenario(page: Page): Promise<Scenario> {
 }
 
 test('Q7: focused resize handle shows a focus-ring ring without moving text', async ({ page }) => {
-  await importPackage(page, '', 'browser-fixture', 'quick-fix-q7');
+  await importPackage(page, '', 'browser-fixture-quick-fixes', 'quick-fix-q7');
   await openCase(page, { task: 'annotate' });
   await selectText(page, 0, 9);
   await page.getByLabel("Search term", { exact: true }).fill('Hypotonia');

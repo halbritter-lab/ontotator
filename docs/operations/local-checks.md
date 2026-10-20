@@ -6,7 +6,7 @@ Run the complete required gate before integration:
 bash scripts/check.sh
 ```
 
-The gate runs its phases one after another. Backend tests run in four pytest-xdist workers that share one PostgreSQL test server; every worker migrates its own template database and every test gets its own copy. Playwright uses one browser worker. Keep other heavy test runs stopped when RAM is limited. Docker must be running for backend and browser checks unless `ONTOCURATOR_TEST_PG_URL` points to a disposable test server. Never point it at production.
+The gate runs its phases one after another. Backend tests run in four pytest-xdist workers that share one PostgreSQL test server; every worker migrates its own template database and every test gets its own copy. Playwright uses three browser workers. Keep other heavy test runs stopped when RAM is limited. Docker must be running for backend and browser checks unless `ONTOCURATOR_TEST_PG_URL` points to a disposable test server. Never point it at production.
 
 The PostgreSQL test container runs with `fsync`, `synchronous_commit` and `full_page_writes` switched off. These settings are for throwaway test servers only: a crash loses data. Never copy them to a deployment.
 
@@ -22,10 +22,10 @@ Backend and browser concurrency have their own settings:
 
 ```bash
 CHECK_PYTEST_WORKERS=6 bash scripts/check.sh --only backend   # 0 or 1: serial
-CHECK_PLAYWRIGHT_WORKERS=2 bash scripts/check.sh --only browser
+CHECK_PLAYWRIGHT_WORKERS=1 bash scripts/check.sh --only browser   # serial, for low RAM
 ```
 
-`CHECK_PYTEST_WORKERS` defaults to 4 and must be a non-negative integer; 0 or 1 runs pytest serially without xdist. Plain `uv run pytest` stays serial; add `-n 4` for a parallel run. `CHECK_PLAYWRIGHT_WORKERS` defaults to 1 and must be a positive integer. More browser workers run spec files in parallel against the one fixture server; tests within a file stay serial because some specs change and restore the settings of shared seeded projects.
+`CHECK_PYTEST_WORKERS` defaults to 4 and must be a non-negative integer; 0 or 1 runs pytest serially without xdist. Plain `uv run pytest` stays serial; add `-n 4` for a parallel run. `CHECK_PLAYWRIGHT_WORKERS` defaults to 3 and must be a positive integer; a direct `npx playwright test` also uses three workers unless `--workers=N` or `PLAYWRIGHT_WORKERS=N` says otherwise. Workers run spec files in parallel against the one fixture server. This is safe because no two spec files use the same mutable project: `tests/browser_server.py` seeds one small fixture project per spec that needs it (`browser-fixture-<spec>`), and the other specs build fresh projects through test-only scenario routes. Tests within a file stay serial because some change and restore the settings of their own project. A new spec must follow the same rule: build its own project through a scenario route, or add itself to `FIXTURE_SPECS` in `tests/browser_server.py`; never reuse another spec's project.
 
 ## Inner loop for work packages
 

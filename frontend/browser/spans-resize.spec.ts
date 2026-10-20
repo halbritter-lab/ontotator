@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { importPackage, mentionWithOffsets, openCase, selectText } from "./helpers";
 
-const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
+const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture-spans-resize", annotator);
 const revision = (page: Page) => page.locator(".status-badge");
 
 /** Viewport point just inside the left edge of the character at `offset` (UTF-16) of the document text. */
