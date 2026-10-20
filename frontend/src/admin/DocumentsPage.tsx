@@ -816,6 +816,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       </div>
       {selectionError !== undefined && <ErrorNotice error={selectionError} />}
       {!narrow && selectionBar}
+      <h2 className="visually-hidden">Texts</h2>
       {body}
       {narrow && selectionBar}
       <Toast toast={toast} onDismiss={dismissToast} />
