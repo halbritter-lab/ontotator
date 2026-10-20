@@ -2,8 +2,10 @@ import type { ImportPlan } from "../api/client";
 import { InlineMessage } from "../ui";
 import { plural } from "../app/labels";
 import { originLabels, translationStatusLabels } from "./variantMetadata";
+import { UploadWorkPlan, type UploadWorkPlanProps } from "./UploadWorkPlan";
 
-export function UploadPreview({ plan }: { plan: ImportPlan }): JSX.Element {
+/** `workPlan` adds the "Work plan" step (before Import) when the preview carries a work plan. */
+export function UploadPreview({ plan, workPlan }: { plan: ImportPlan; workPlan?: Omit<UploadWorkPlanProps, "workPlan"> }): JSX.Element {
   const grouped = new Map<string, NonNullable<ImportPlan["errors"]>>();
   for (const issue of plan.errors ?? []) grouped.set(issue.code, [...(grouped.get(issue.code) ?? []), issue]);
   return <section className="detail-section" aria-label="Upload preview">
@@ -28,5 +30,6 @@ export function UploadPreview({ plan }: { plan: ImportPlan }): JSX.Element {
       {!!set.refused.length && <details><summary>Refusal rules ({set.refused.length})</summary><ul>{set.refused.map((item, refusalIndex) => <li key={refusalIndex}>{item.annotation_id}: {item.rule} · {Object.entries(item.detail).map(([key, value]) => `${key}: ${value}`).join(", ")}</li>)}</ul></details>}
       {!!Object.keys(set.proposals.notes ?? {}).length && <details><summary>Imported notes</summary><ul>{Object.entries(set.proposals.notes ?? {}).flatMap(([id, notes]) => notes.map((note, noteIndex) => <li key={`${id}-${noteIndex}`}>{id}: {note}</li>))}</ul></details>}
     </section>)}
+    {workPlan && plan.work_plan && plan.committable && <UploadWorkPlan key={plan.plan_sha256} workPlan={plan.work_plan} {...workPlan} />}
   </section>;
 }

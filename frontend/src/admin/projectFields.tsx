@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { OntologyInfo, ProjectPin, TaskProfile } from "../api/client";
+import { api, type OntologyInfo, type ProjectPin, type ProjectSettings, type TaskProfile } from "../api/client";
 import { InlineMessage, Select, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 
@@ -74,5 +74,49 @@ export function ProfileUpload({ onChange, disabled, id = "project-profile-file" 
     {reading && <InlineMessage tone="info">Reading profile…</InlineMessage>}
     {error !== undefined && <ErrorNotice error={error} />}
     {preview && <ul aria-label="Profile layers">{preview.layers.map(layer => <li key={layer.id}>{layer.label} ({layer.id})</li>)}</ul>}
+  </>;
+}
+
+export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number }
+export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1 });
+const importPlanOptions: { value: WorkflowDraft["import_plan"]; label: string }[] = [
+  { value: "nothing", label: "Nothing planned" },
+  { value: "review_and_annotate_translations", label: "Review and annotate all translations" },
+];
+
+/**
+ * Settings › Workflow: the work plan of imported texts and the number of independent annotations
+ * per text. Lowering the number shows how many rows already have more annotators (server preview).
+ */
+export function WorkflowFields({ projectKey, value, saved, onChange, disabled }: {
+  projectKey: string; value: WorkflowDraft; saved: WorkflowDraft; onChange: (value: WorkflowDraft) => void; disabled?: boolean;
+}): JSX.Element {
+  const prefix = useId().replace(/:/g, "");
+  const target = value.annotations_per_text;
+  const lowered = Number.isInteger(target) && target >= 1 && target <= 5 && target < saved.annotations_per_text;
+  const [over, setOver] = useState<{ target: number; rows: number } | null>(null);
+  useEffect(() => {
+    if (!lowered) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      api.annotationTargetPreview(projectKey, target).then(result => { if (active) setOver({ target, rows: result.rows_over_target }); }, () => { if (active) setOver(null); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [projectKey, target, lowered]);
+  const rows = lowered && over?.target === target ? over.rows : null;
+  return <>
+    <div className="form-group">
+      <div id={`${prefix}-plan-label`} className="form-label">Plan for imported texts</div>
+      <div role="radiogroup" aria-labelledby={`${prefix}-plan-label`} aria-describedby={`${prefix}-plan-hint`} className="settings-radio-group">
+        {importPlanOptions.map(option => <label key={option.value} className="form-checkbox-row">
+          <input type="radio" name={`${prefix}-import-plan`} value={option.value} checked={value.import_plan === option.value} disabled={disabled} onChange={() => onChange({ ...value, import_plan: option.value })} />
+          <span>{option.label}</span>
+        </label>)}
+      </div>
+      <div id={`${prefix}-plan-hint`} className="field-hint">Applies to texts imported from now on.</div>
+    </div>
+    <TextInput id={`${prefix}-annotations`} label="Annotations per text" type="number" min={1} max={5} step={1} required hint="How many people annotate each text independently." value={Number.isFinite(target) ? String(target) : ""} disabled={disabled}
+      onChange={event => onChange({ ...value, annotations_per_text: event.target.value === "" ? Number.NaN : Number(event.target.value) })} />
+    {rows !== null && <p role="status" className="field-hint">{rows > 0 ? `${rows} ${rows === 1 ? "row has" : "rows have"} more annotators than the new target. Nobody is removed.` : "Nobody is removed."}</p>}
   </>;
 }

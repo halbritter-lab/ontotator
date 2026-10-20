@@ -5,7 +5,7 @@ import { ErrorNotice } from "./ErrorNotice";
 import { HiddenAxisValuesField } from "./HiddenAxisValuesField";
 import { LanguagesField } from "./LanguagesField";
 import { MembersSection } from "./MembersSection";
-import { draftPins, PinFields, ProfileUpload, serializePins, type UploadedProfile } from "./projectFields";
+import { draftPins, PinFields, ProfileUpload, serializePins, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
 import { axisOptionLabel } from "../editor/axisLabels";
 export interface ProjectSettingsPageProps { projectKey: string; currentUser: CurrentUser; onSaved?: (settings: ProjectSettings) => void }
 
@@ -27,7 +27,7 @@ export function ProjectSettingsPage(props: ProjectSettingsPageProps): JSX.Elemen
   </section>;
 }
 
-type Section = "General" | "Guideline" | "Rules" | "Pins" | "Profile" | "Creation defaults";
+type Section = "General" | "Guideline" | "Rules" | "Workflow" | "Pins" | "Profile" | "Creation defaults";
 const generalOf = (settings: ProjectSettings) => ({ name: settings.name, description: settings.description ?? "", languages: settings.languages ?? [] });
 const guidelineOf = (settings: ProjectSettings) => ({ url: settings.guideline_url ?? "", version: settings.guideline_version ?? "" });
 const rulesOf = (settings: ProjectSettings) => ({ allow_spanless_findings: settings.allow_spanless_findings ?? true, require_spanless_note: settings.require_spanless_note ?? true, require_chosen_axes: settings.require_chosen_axes, adjudicator_not_annotator: settings.adjudicator_not_annotator, contiguous_mentions_only: settings.contiguous_mentions_only, annotate_accepted_translations_only: settings.annotate_accepted_translations_only, hidden_axis_values: settings.hidden_axis_values ?? {} });
@@ -37,6 +37,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved 
   const [general, setGeneral] = useState(() => generalOf(initial));
   const [guideline, setGuideline] = useState(() => guidelineOf(initial));
   const [rules, setRules] = useState(() => rulesOf(initial));
+  const [workflow, setWorkflow] = useState(() => workflowOf(initial));
   const [creationDefaults, setCreationDefaults] = useState(initial.creation_defaults ?? {});
   const [pins, setPins] = useState(() => draftPins(initial.pins));
   const [uploaded, setUploaded] = useState<UploadedProfile | null>(null);
@@ -61,6 +62,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved 
       if (section === "General") setGeneral(generalOf(response));
       if (section === "Guideline") setGuideline(guidelineOf(response));
       if (section === "Rules") setRules(rulesOf(response));
+      if (section === "Workflow") setWorkflow(workflowOf(response));
       if (section === "Creation defaults") setCreationDefaults(response.creation_defaults ?? {});
       if (section === "Pins") setPins(current => current === pins ? draftPins(response.pins) : current);
       if (section === "Profile") { setUploaded(null); setProfileGeneration(value => value + 1); }
@@ -76,6 +78,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved 
     General: JSON.stringify(general) !== JSON.stringify(generalOf(model)),
     Guideline: JSON.stringify(guideline) !== JSON.stringify(guidelineOf(model)),
     Rules: JSON.stringify(rules) !== JSON.stringify(rulesOf(model)),
+    Workflow: JSON.stringify(workflow) !== JSON.stringify(workflowOf(model)),
     Pins: JSON.stringify(pins) !== JSON.stringify(draftPins(model.pins)),
     Profile: uploaded !== null,
     "Creation defaults": JSON.stringify(creationDefaults) !== JSON.stringify(model.creation_defaults ?? {}),
@@ -84,7 +87,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved 
   const ids = model.profile.ontologies.map(item => item.ontology_id);
   return <div className="project-settings-sections">
     <p>{model.name} ({model.project_key})</p>
-    <nav aria-label="Settings sections" className="settings-section-navigation">{["General", "Guideline", "Annotation rules", "Creation defaults", "Ontology and profile", "Members"].map(section => <Button key={section} variant="quiet" onClick={() => {
+    <nav aria-label="Settings sections" className="settings-section-navigation">{["General", "Guideline", "Annotation rules", "Workflow", "Creation defaults", "Ontology and profile", "Members"].map(section => <Button key={section} variant="quiet" onClick={() => {
       const element = sectionTargets.current[section]; element?.scrollIntoView?.({ block: "start" }); element?.focus({ preventScroll: true });
     }}>{section}</Button>)}</nav>
     <form ref={target("General")} tabIndex={-1} aria-label="General" onSubmit={event => submit(event, "General", () => api.updateProjectSettings(projectKey, { name: general.name, description: general.description.trim() ? general.description : null, languages: general.languages }))}>
@@ -122,6 +125,12 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved 
         <Checkbox id="project-rule-translations" label="Annotate translations only after an accepted review" checked={rules.annotate_accepted_translations_only} onChange={event => { setRules({ ...rules, annotate_accepted_translations_only: event.target.checked }); setSaved(null); }} />
         <details className="settings-secondary-rules"><summary>More rule settings: hidden axis values</summary><HiddenAxisValuesField profile={model.profile} axisDefaults={model.axis_defaults} value={rules.hidden_axis_values} onChange={hidden_axis_values => { setRules({ ...rules, hidden_axis_values }); setSaved(null); }} disabled={busy !== null} /></details>
       </fieldset>
+    </form>
+    <form ref={target("Workflow")} tabIndex={-1} aria-label="Workflow" onSubmit={event => submit(event, "Workflow", () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text }))}>
+      <fieldset disabled={busy !== null}><legend>Workflow</legend>
+        <WorkflowFields projectKey={projectKey} value={workflow} saved={workflowOf(model)} disabled={busy !== null} onChange={value => { setWorkflow(value); setSaved(null); }} />
+        <Button type="submit" loading={busy === "Workflow"}>Save workflow</Button>
+      </fieldset>{feedback("Workflow")}
     </form>
     <form ref={target("Creation defaults")} tabIndex={-1} aria-label="Creation defaults" onSubmit={event => submit(event, "Creation defaults", () => api.updateProjectSettings(projectKey, { creation_defaults: creationDefaults }))}>
       <fieldset disabled={busy !== null}><legend>Creation defaults</legend>

@@ -1,0 +1,61 @@
+/* Work plan: plan dialog (D19), upload "Work plan" step and Settings › Workflow. */
+.work-plan-dialog { display: grid; gap: var(--space-3); }
+.work-plan-table-scroll { overflow-x: auto; }
+.work-plan-table { width: 100%; }
+.work-plan-table th[scope="row"] { font-weight: var(--weight-strong); overflow-wrap: anywhere; }
+.work-plan-count,
+.work-plan-none { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.work-plan-note { color: var(--text-muted); font-size: var(--size-xs); }
+
+/* Read-only cell values of the confirmation step: text with icon, never colour alone. */
+.work-plan-state { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--size-xs); font-weight: var(--weight-strong); color: var(--text-muted); }
+.work-plan-state[data-state="on"] { color: var(--success); }
+.work-plan-state .icon { width: 12px; height: 12px; }
+
+.work-plan-summary {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--notice-info-border);
+  border-radius: var(--radius);
+  background: var(--notice-info-fill);
+  color: var(--notice-info-text);
+  font-size: var(--size-sm);
+}
+
+.work-plan-acceptance,
+.work-plan-warning {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--notice-warning-border);
+  border-radius: var(--radius);
+  background: var(--notice-warning-fill);
+  color: var(--notice-warning-text);
+  font-size: var(--size-sm);
+}
+.work-plan-acceptance p,
+.work-plan-warning ul { margin: 0; }
+.work-plan-warning ul { padding-inline-start: var(--space-4); }
+.work-plan-acceptance-title { font-weight: var(--weight-strong); }
+.work-plan-acceptance .form-group,
+.work-plan-confirm .form-group { margin-bottom: 0; }
+.work-plan-confirm { display: grid; gap: var(--space-2); }
+
+.modal-actions .work-plan-save-reason { margin-inline-end: auto; color: var(--text-muted); font-size: var(--size-sm); }
+
+.work-plan-upload { display: grid; gap: var(--space-2); }
+.work-plan-cases > summary { cursor: pointer; width: fit-content; }
+
+.settings-radio-group { display: grid; gap: var(--space-1); }
+
+/* Narrow: the dialog is a full-height sheet (Dialog); the table keeps its columns and language names wrap. */
+@media (max-width: 700px) {
+  .work-plan-table th,
+  .work-plan-table td { padding-inline: var(--space-1); }
+}
+
+@media (forced-colors: active) {
+  .work-plan-summary,
+  .work-plan-acceptance,
+  .work-plan-warning { border-color: CanvasText; }
+}

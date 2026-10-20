@@ -218,3 +218,24 @@ it("counts distinct refused proposals per set while retaining every violated rul
   expect(screen.getByText("first: hidden_axis_value · axis: certainty")).toBeTruthy();
   expect(screen.getByText("second: axis_not_chosen · axis: temporality")).toBeTruthy();
 });
+it("commits the chosen plan with the upload", async () => {
+  const workPlan: NonNullable<ImportPlan["work_plan"]> = {
+    setting: "review_and_annotate_translations", existing_rows_kept: 0,
+    languages: [{ key: "de", source_languages: [], rows: 1, versions: 1, review: true, annotate: true, source_rule: null, marked_in_package: 0, not_accepted: 1 }],
+    cases: [{ case_id: "case-1", language: "de", review: true, annotate: true, new_row: true, accepted: false, marked_in_package: false }],
+  };
+  vi.mocked(api.getUpload).mockResolvedValue({ ...view, preview: { ...plan, work_plan: workPlan } });
+  render(<UploadPanel projectKey="p" languages={["en"]} onImported={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Format"), { target: { value: "text" } });
+  fireEvent.change(screen.getByLabelText(/^Upload language/), { target: { value: "en" } });
+  await userEvent.upload(screen.getByLabelText(/^Files/), new File(["text"], "case.txt"));
+  fireEvent.submit(screen.getByRole("button", { name: "Check" }).closest("form")!);
+  fireEvent.click(await screen.findByRole("button", { name: "Annotate, de" }));
+  fireEvent.click(screen.getByText("Adjust per case…"));
+  fireEvent.click(screen.getByRole("button", { name: "Review, case-1 · de" }));
+  fireEvent.click(screen.getByRole("button", { name: "Import 1 text" }));
+  await waitFor(() => expect(api.commitUpload).toHaveBeenCalledWith("p", 7, "real-plan", undefined, {
+    plan_languages: { de: { review: true, annotate: false } },
+    plan_cases: [{ case_id: "case-1", language: "de", review: false, annotate: false }],
+  }));
+});

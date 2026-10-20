@@ -320,3 +320,53 @@ describe("creation recovery and lifetime", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 });
+
+describe("workflow settings", () => {
+  it("edits Plan for imported texts and Annotations per text under Workflow", async () => {
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const navigation = await screen.findByRole("navigation", { name: "Settings sections" });
+    fireEvent.click(within(navigation).getByRole("button", { name: "Workflow" }));
+    const form = screen.getByRole("form", { name: "Workflow" });
+    expect(document.activeElement).toBe(form);
+    const group = within(form).getByRole("radiogroup", { name: "Plan for imported texts" });
+    const all = within(group).getByRole("radio", { name: "Review and annotate all translations" });
+    expect(all).toHaveProperty("checked", true);
+    expect(within(form).getByText("Applies to texts imported from now on.")).toBeTruthy();
+    fireEvent.click(within(group).getByRole("radio", { name: "Nothing planned" }));
+    const count = within(form).getByRole("spinbutton", { name: /Annotations per text/ });
+    expect(count).toHaveProperty("min", "1");
+    expect(count).toHaveProperty("max", "5");
+    expect(within(form).getByText("How many people annotate each text independently.")).toBeTruthy();
+    fireEvent.change(count, { target: { value: "3" } });
+    vi.mocked(api.updateProjectSettings).mockResolvedValue({ ...settings, import_plan: "nothing", annotations_per_text: 3 });
+    fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
+    await within(form).findByText("Workflow saved.");
+    expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 3 });
+  });
+
+  it("shows how many rows exceed a lowered target", async () => {
+    const preview = vi.spyOn(api, "annotationTargetPreview").mockResolvedValue({ rows_over_target: 4 });
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, annotations_per_text: 3 });
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const count = await screen.findByRole("spinbutton", { name: /Annotations per text/ });
+    expect(screen.queryByText(/Nobody is removed\./)).toBeNull();
+    fireEvent.change(count, { target: { value: "2" } });
+    expect(await screen.findByText("4 rows have more annotators than the new target. Nobody is removed.")).toBeTruthy();
+    expect(preview).toHaveBeenLastCalledWith(settings.project_key, 2);
+    preview.mockResolvedValue({ rows_over_target: 0 });
+    fireEvent.change(count, { target: { value: "1" } });
+    await waitFor(() => expect(preview).toHaveBeenLastCalledWith(settings.project_key, 1));
+    expect(await screen.findByText("Nobody is removed.")).toBeTruthy();
+    expect(screen.queryByText(/rows have more annotators/)).toBeNull();
+    fireEvent.change(count, { target: { value: "4" } });
+    await waitFor(() => expect(screen.queryByText(/Nobody is removed\./)).toBeNull());
+  });
+
+  it("always sends import_plan and annotations_per_text on save", async () => {
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, import_plan: "nothing", annotations_per_text: 2 });
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
+    const form = await screen.findByRole("form", { name: "Workflow" });
+    fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 2 }));
+  });
+});

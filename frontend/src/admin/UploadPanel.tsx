@@ -1,16 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type UploadView, type StatusOverride } from "../api/client";
 import { Button, Checkbox, Field, InlineMessage, Select, TextInput, Toolbar } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { UploadPreview } from "./UploadPreview";
+import { importLabel, type UploadWorkPlanResult } from "./UploadWorkPlan";
 import { useJob } from "./useJob";
 import { labelFor, plural, uploadKindLabels, uploadStatusLabels } from "../app/labels";
 
-export interface UploadPanelProps { projectKey: string; languages: readonly string[]; onImported: () => void; canOverrideTranslationStatus?: boolean }
+export interface UploadPanelProps {
+  projectKey: string; languages: readonly string[]; onImported: () => void; canOverrideTranslationStatus?: boolean;
+  /** Project rule "annotate accepted translations only" (default on): the work plan asks for the external-review acceptance only while it is on. */
+  annotateAcceptedOnly?: boolean;
+}
 type Operation = { projectKey: string; uploadId: number; jobId: number; stage: "preview" | "commit" };
 const count = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0;
 
-export function UploadPanel({ projectKey, languages, onImported, canOverrideTranslationStatus = false }: UploadPanelProps): JSX.Element {
+export function UploadPanel({ projectKey, languages, onImported, canOverrideTranslationStatus = false, annotateAcceptedOnly = true }: UploadPanelProps): JSX.Element {
+  const importReasonId = `upload-import-reason-${useId().replace(/:/g, "")}`;
   const [kind, setKind] = useState<"t1" | "text">("t1");
   const [language, setLanguage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -28,6 +34,12 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
   const setOverrides = (change: (current: Record<string, StatusOverride>) => Record<string, StatusOverride>) => setOverrideDraft(current => ({ identity: overrideIdentity, values: change(current.identity === overrideIdentity ? current.values : {}) }));
   const statusOverrides = canOverrideTranslationStatus ? Object.values(overrides) : [];
   const missingReason = statusOverrides.some(item => !item.reason.trim());
+  const [workPlanDraft, setWorkPlanDraft] = useState<{ identity: string; result: UploadWorkPlanResult } | null>(null);
+  const workPlan = view?.status === "ready" && view.preview?.committable ? view.preview.work_plan ?? null : null;
+  const workPlanResult = workPlan && workPlanDraft?.identity === overrideIdentity ? workPlanDraft.result : null;
+  const planBlocked = workPlanResult?.blockedReason ?? null;
+  // Rows accepted by "Accept without review" need no external-review acceptance in the work plan.
+  const acceptedRows = new Set(statusOverrides.flatMap(item => (view?.preview?.variants ?? []).filter(variant => variant.external_id === item.external_id && variant.language === item.language && variant.version === item.version).map(variant => `${variant.case_id}:${variant.language}`)));
   const lifetime = useRef(0);
   const mutation = useRef(false);
   const request = useRef(0);
@@ -102,11 +114,12 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
     finally { if (lifetime.current === epoch) { mutation.current = false; setWorking(false); } }
   };
   const commit = async () => {
-    if (mutation.current || busy || stale || missingReason || view?.status !== "ready" || !view.preview?.committable || !view.plan_sha256) return;
+    if (mutation.current || busy || stale || missingReason || planBlocked || view?.status !== "ready" || !view.preview?.committable || !view.plan_sha256) return;
     const epoch = lifetime.current;
     mutation.current = true; setWorking(true); setError(undefined); setImported(null); handled.current = null;
     try {
-      const created = await (statusOverrides.length ? api.commitUpload(projectKey, view.id, view.plan_sha256, statusOverrides) : api.commitUpload(projectKey, view.id, view.plan_sha256));
+      const created = await (workPlan ? api.commitUpload(projectKey, view.id, view.plan_sha256, statusOverrides.length ? statusOverrides : undefined, workPlanResult?.plan ?? { plan_languages: {}, plan_cases: [] })
+        : statusOverrides.length ? api.commitUpload(projectKey, view.id, view.plan_sha256, statusOverrides) : api.commitUpload(projectKey, view.id, view.plan_sha256));
       if (lifetime.current === epoch) setOperation({ projectKey, uploadId: created.upload_id, jobId: created.job_id, stage: "commit" });
     } catch (err: unknown) {
       if (lifetime.current === epoch) { setError(err); setStale(err instanceof ApiError && err.code === "UPLOAD_STALE"); }
@@ -154,7 +167,7 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
     {stale && (files.length ? <Button disabled={busy} onClick={() => { void check(); }}>Check again</Button> : <p>Select the original files to check again.</p>)}
     {operation?.stage === "commit" && busy && <InlineMessage tone="info">Importing …</InlineMessage>}
     {imported && <InlineMessage tone="success">{imported}</InlineMessage>}
-    {view && <><p>Upload {view.id} · {labelFor(uploadStatusLabels, view.status)}</p>{view.preview && <UploadPreview plan={view.preview} />}
+    {view && <><p>Upload {view.id} · {labelFor(uploadStatusLabels, view.status)}</p>{view.preview && <UploadPreview plan={view.preview} workPlan={view.status === "ready" ? { ruleOn: annotateAcceptedOnly, canAccept: canOverrideTranslationStatus, acceptedRows, disabled: busy || stale, onChange: result => setWorkPlanDraft({ identity: overrideIdentity, result }) } : undefined} />}
       {canOverrideTranslationStatus && view.status === "ready" && view.preview?.variants?.some(item => item.status !== null) && <fieldset disabled={busy || stale}><legend>Accept without review</legend>
         <p>Explicitly accept a translation without review. A reason is required for every selected variant.</p>
         {view.preview.variants.filter(item => item.status !== null).map(item => {
@@ -170,7 +183,8 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
         })}
       </fieldset>}
       {view.status === "previewing" && <><InlineMessage tone="info">Checking …</InlineMessage>{view.preview_job_id == null && <Button disabled={busy} onClick={() => { void resume(view.id); }}>Refresh status</Button>}</>}
-      {["ready", "invalid"].includes(view.status) && <Toolbar label="Preview actions"><Button variant="primary" disabled={busy || stale || missingReason || view.status !== "ready" || !view.preview?.committable || !view.plan_sha256} onClick={() => { void commit(); }}>Import</Button><Button disabled={busy} onClick={() => { void discard(); }}>Discard</Button></Toolbar>}
+      {["ready", "invalid"].includes(view.status) && <Toolbar label="Preview actions"><Button variant="primary" disabled={busy || stale || missingReason || view.status !== "ready" || !view.preview?.committable || !view.plan_sha256} aria-disabled={planBlocked ? true : undefined} aria-describedby={planBlocked ? importReasonId : undefined} onClick={() => { void commit(); }}>{workPlan ? importLabel(workPlan, view.kind) : "Import"}</Button><Button disabled={busy} onClick={() => { void discard(); }}>Discard</Button></Toolbar>}
+      {planBlocked && <p id={importReasonId} className="field-hint">{planBlocked}</p>}
     </>}
     <section className="detail-section"><h3>Recent uploads</h3>{listError !== undefined && <ErrorNotice error={listError} />}<Button disabled={busy} onClick={() => { void refreshList(lifetime.current); }}>Refresh uploads</Button>
       {uploads.length ? <ul>{uploads.map(item => <li key={item.id}>Upload {item.id} · {labelFor(uploadKindLabels, item.kind)} · {labelFor(uploadStatusLabels, item.status)} · {item.files.map(file => file.filename).join(", ")} <Button size="sm" disabled={busy} onClick={() => { void resume(item.id); }}>Resume upload {item.id}</Button></li>)}</ul> : <p>No retained uploads.</p>}
