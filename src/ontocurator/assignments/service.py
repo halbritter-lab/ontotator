@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
 
+from pydantic import ValidationError
 from sqlalchemy import (
     Connection,
     RowMapping,
@@ -718,7 +719,11 @@ class AssignmentService:
                         project_variants[row["document_id"]], project_variants.get
                     )
                     source, target = original.language, row["language"]
-                    failed = len(failed_translation_checks(ancestor.translation))
+                    try:
+                        failed = len(failed_translation_checks(ancestor.translation))
+                    except ValidationError:
+                        # A malformed stored run must not hide every task.
+                        failed = None
                 result.append(
                     TaskSummary(
                         **row,
