@@ -23,6 +23,15 @@ from ontocurator.domain.project_rules import (
     rule_violations,
 )
 from ontocurator.domain.variants import VariantInfo
+from ontocurator.domain.work_plans import (
+    OFF,
+    SOURCE_KEY,
+    ImportPlanSetting,
+    LanguageVersion,
+    PlanFlags,
+    RowKey,
+    import_defaults,
+)
 from ontocurator.exchange.t1 import (
     ImportedProposals,
     Pin,
@@ -117,6 +126,160 @@ class PlannedSet(BaseModel):
     action: Literal["add", "already_imported"]
 
 
+class UploadPlanLanguage(BaseModel):
+    """One row of the upload's "Work plan" step: the sources or one language."""
+
+    key: str  # "source" or a language code
+    source_languages: list[str]  # for "source": the languages of the new sources
+    versions: int  # new versions in the bundle for the new rows of this key
+    review: bool | None  # None for "source"
+    annotate: bool
+    source_rule: Literal["always", "if_no_translation"] | None
+    marked_in_package: int  # new rows whose translation the package marks reviewed
+    not_accepted: int  # new translation rows that are not accepted
+
+
+class UploadPlanCase(BaseModel):
+    case_id: str
+    language: str
+    review: bool | None  # None for a source row
+    annotate: bool
+    new_row: bool  # False: an existing row that keeps its plan
+
+
+class UploadWorkPlan(BaseModel):
+    setting: ImportPlanSetting
+    languages: list[UploadPlanLanguage]
+    cases: list[UploadPlanCase]
+    existing_rows_kept: int
+
+
+@dataclass(frozen=True)
+class WorkPlanContext:
+    """Stored plan state of the upload's cases, read under the import lock."""
+
+    setting: ImportPlanSetting
+    rule_on: bool = True  # annotate_accepted_translations_only
+    versions: Mapping[RowKey, LanguageVersion] = field(default_factory=dict)
+    flags: Mapping[RowKey, PlanFlags] = field(default_factory=dict)  # effective
+    stored: frozenset[RowKey] = frozenset()  # rows with a stored plan row
+
+
+@dataclass(frozen=True)
+class PlannedRow:
+    """One language version the upload touches."""
+
+    version: LanguageVersion
+    new: bool  # gets the import default (no live versions before this upload)
+    stored: bool  # a stored plan row exists (a fully discarded row is overwritten)
+    added: int  # versions this upload adds to the row
+    targets: tuple[PlannedVariant, ...] = ()  # newest new version per root
+
+
+def planned_rows(
+    variants: Sequence[PlannedVariant], added: set[str], ctx: WorkPlanContext
+) -> dict[RowKey, PlannedRow]:
+    """Rows of the planned variants; a row without live versions so far is new."""
+    groups: dict[RowKey, list[PlannedVariant]] = {}
+    for variant in variants:
+        groups.setdefault(RowKey(variant.case_id, variant.language), []).append(variant)
+    result: dict[RowKey, PlannedRow] = {}
+    for key in sorted(groups, key=lambda k: (k.case_id, k.language)):
+        fresh = [v for v in groups[key] if v.document_id in added]
+        existing = ctx.versions.get(key)
+        new = bool(fresh) and (existing is None or existing.discarded)
+        if existing is not None and not new:
+            result[key] = PlannedRow(existing, False, key in ctx.stored, len(fresh))
+            continue
+        considered = fresh if new else groups[key]
+        parents = {v.derived_from for v in considered if v.origin == "correction"}
+        targets = tuple(v for v in considered if v.document_id not in parents)
+        is_source = any(v.origin == "native" for v in considered)
+        translated = bool(targets) and not is_source
+        version = LanguageVersion(
+            case_id=key.case_id,
+            language=key.language,
+            is_source=is_source,
+            accepted=translated and all(t.status == "accepted" for t in targets),
+            marked_in_package=translated and all(t.marked_in_package for t in targets),
+        )
+        result[key] = PlannedRow(version, new, key in ctx.stored, len(fresh), targets)
+    return result
+
+
+def row_defaults(
+    rows: Mapping[RowKey, PlannedRow], ctx: WorkPlanContext
+) -> dict[RowKey, PlanFlags]:
+    """Import defaults of the new rows, seeing every live row of their cases."""
+    new = {key: row.version for key, row in rows.items() if row.new}
+    cases = {key.case_id for key in new}
+    others = [
+        version
+        for key, version in ctx.versions.items()
+        if key.case_id in cases and key not in new and not version.discarded
+    ]
+    defaults = import_defaults(ctx.setting, [*new.values(), *others])
+    return {key: defaults[key] for key in new}
+
+
+def plan_key(version: LanguageVersion) -> str:
+    return SOURCE_KEY if version.is_source else version.language
+
+
+def upload_work_plan(
+    rows: Mapping[RowKey, PlannedRow], ctx: WorkPlanContext
+) -> UploadWorkPlan:
+    defaults = row_defaults(rows, ctx)
+    on = ctx.setting == "review_and_annotate_translations"
+    grouped: dict[str, list[PlannedRow]] = {}
+    for row in rows.values():
+        if row.new:
+            grouped.setdefault(plan_key(row.version), []).append(row)
+    order = sorted(grouped, key=lambda k: (k != SOURCE_KEY, k))
+    languages = []
+    for name in order:
+        items = grouped[name]
+        source = name == SOURCE_KEY
+        languages.append(
+            UploadPlanLanguage(
+                key=name,
+                source_languages=sorted({r.version.language for r in items})
+                if source
+                else [],
+                versions=sum(r.added for r in items),
+                review=None if source else on,
+                annotate=on,
+                source_rule="if_no_translation" if source and on else None,
+                marked_in_package=sum(r.version.marked_in_package for r in items),
+                not_accepted=0
+                if source
+                else sum(not r.version.accepted for r in items),
+            )
+        )
+    cases = []
+    for key, row in rows.items():
+        flags = defaults[key] if row.new else ctx.flags.get(key, OFF)
+        cases.append(
+            UploadPlanCase(
+                case_id=key.case_id,
+                language=key.language,
+                review=None if row.version.is_source else flags.review,
+                annotate=flags.annotate,
+                new_row=row.new,
+            )
+        )
+    return UploadWorkPlan(
+        setting=ctx.setting,
+        languages=languages,
+        cases=cases,
+        existing_rows_kept=sum(not row.new for row in rows.values()),
+    )
+
+
+def added_documents(plan: ImportPlan) -> set[str]:
+    return {d.document_id for d in plan.documents if d.action == "add"}
+
+
 class ImportPlan(BaseModel):
     variants: list[PlannedVariant] = Field(default_factory=list)
     input_sha256: str = ""
@@ -132,6 +295,7 @@ class ImportPlan(BaseModel):
     state_sha256: str
     plan_sha256: str = ""
     committable: bool = True
+    work_plan: UploadWorkPlan | None = None
 
 
 def _report_issues(
@@ -511,7 +675,21 @@ def plan_import(
         ),
     }
     plan.committable = not plan.errors
+    return _hashed(plan)
+
+
+def _hashed(plan: ImportPlan) -> ImportPlan:
     plan.plan_sha256 = canonical_hash(
         plan.model_dump(mode="json", exclude={"plan_sha256"})
     )
     return plan
+
+
+def case_ids(plan: ImportPlan) -> list[str]:
+    return sorted({variant.case_id for variant in plan.variants})
+
+
+def with_work_plan(plan: ImportPlan, ctx: WorkPlanContext) -> ImportPlan:
+    """The plan with the default work plan of its rows, re-hashed."""
+    rows = planned_rows(plan.variants, added_documents(plan), ctx)
+    return _hashed(plan.model_copy(update={"work_plan": upload_work_plan(rows, ctx)}))

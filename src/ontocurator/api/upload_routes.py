@@ -15,7 +15,14 @@ from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import PayloadTooLarge
 from ontocurator.domain.proposals import ProposalSetView
 from ontocurator.exchange.jobs import store_file
-from ontocurator.exchange.uploads import UploadFileInfo, UploadService, UploadView
+from ontocurator.exchange.uploads import (
+    CasePlanChoice,
+    ImportAcceptance,
+    PlanChoice,
+    UploadFileInfo,
+    UploadService,
+    UploadView,
+)
 from ontocurator.exchange.variant_overrides import StatusOverride
 
 router = APIRouter(prefix="/api/v1/projects/{key}", tags=["uploads"])
@@ -30,6 +37,11 @@ class CommitUpload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     plan_sha256: str
     status_overrides: list[StatusOverride] = Field(default_factory=list)
+    # Work plan of the new rows: by language row ("source" or a code), then per
+    # case; plus translations accepted as reviewed outside Ontocurator.
+    plan_languages: dict[str, PlanChoice] = Field(default_factory=dict)
+    plan_cases: list[CasePlanChoice] = Field(default_factory=list)
+    accept_external_review: ImportAcceptance | None = None
 
 
 def _service(request: Request, principal: Any) -> UploadService:
@@ -106,7 +118,13 @@ def commit_upload(
     _guard(request, Action.IMPORT_DOCUMENTS, key)
     return UploadCreated(
         **_service(request, principal).commit(
-            key, upload_id, body.plan_sha256, body.status_overrides
+            key,
+            upload_id,
+            body.plan_sha256,
+            body.status_overrides,
+            plan_languages=body.plan_languages,
+            plan_cases=body.plan_cases,
+            accept_external_review=body.accept_external_review,
         )
     )
 

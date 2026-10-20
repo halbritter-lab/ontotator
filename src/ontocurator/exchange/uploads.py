@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import ontospan
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, func, insert, select, update
 
 from ontocurator.auth.audit import Actor, record_audit
@@ -19,15 +20,29 @@ from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile
 from ontocurator.domain.project_rules import ProjectRules
 from ontocurator.domain.variants import VariantInfo
+from ontocurator.domain.work_plans import (
+    ImportPlanSetting,
+    PlanFlags,
+    RowKey,
+    validate,
+)
 from ontocurator.exchange.plan import (
     ImportPlan,
     IncomingUnit,
     Issue,
     PlannedDocument,
+    PlannedRow,
     PlannedSet,
     ProjectImportState,
+    WorkPlanContext,
+    added_documents,
+    case_ids,
     plan_import,
+    plan_key,
+    planned_rows,
     read_t1_upload,
+    row_defaults,
+    with_work_plan,
 )
 from ontocurator.exchange.t1 import ImportCounts, ImportedDocument, ImportedSet
 from ontocurator.exchange.text import read_text_upload
@@ -36,9 +51,10 @@ from ontocurator.exchange.variant_overrides import (
     normalize_overrides,
     validate_targets,
 )
-from ontocurator.exchange.variant_plan import identity
+from ontocurator.exchange.variant_plan import identity, package_review
 from ontocurator.jobs.queue import Job, JobContext, JobQueue
 from ontocurator.projects.runtime import project_state, require_state
+from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import Repository, _lock_id
 from ontocurator.storage.tables import (
@@ -47,6 +63,41 @@ from ontocurator.storage.tables import (
     ProposalSetRow,
     UploadRow,
 )
+
+
+class PlanChoice(BaseModel):
+    """Plan flags chosen in the upload's "Work plan" step."""
+
+    model_config = ConfigDict(extra="forbid")
+    review: bool | None = None  # None keeps the default (always for sources)
+    annotate: bool
+
+
+class CasePlanChoice(PlanChoice):
+    case_id: str
+    language: str
+
+
+class ImportAcceptance(BaseModel):
+    """Translations of these languages were reviewed outside Ontocurator."""
+
+    model_config = ConfigDict(extra="forbid")
+    languages: list[str] = Field(min_length=1)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class PlanChoices(BaseModel):
+    """The commit's plan overrides and acceptance, as stored in the job."""
+
+    plan_languages: dict[str, PlanChoice] = Field(default_factory=dict)
+    plan_cases: list[CasePlanChoice] = Field(default_factory=list)
+    accept_external_review: ImportAcceptance | None = None
+
+    @property
+    def any(self) -> bool:
+        return bool(
+            self.plan_languages or self.plan_cases or self.accept_external_review
+        )
 
 
 class UploadFileInfo(BaseModel):
@@ -149,6 +200,35 @@ def prepare_plan(
     prepared: tuple[list[tuple[str, list[IncomingUnit]]], list[Issue]] | None = None,
 ) -> tuple[ImportPlan, list[tuple[str, list[IncomingUnit]]]]:
     """Caller holds import/structure locks before fresh inventory and planning."""
+    plan, sources, _ = _prepare(
+        db, conn, key, project_id, kind, language, files, prepared=prepared
+    )
+    return plan, sources
+
+
+def _plan_context(
+    conn: Connection, project_id: int, row: Any, cases: Sequence[str]
+) -> WorkPlanContext:
+    return WorkPlanContext(
+        setting=cast(ImportPlanSetting, row.import_plan),
+        rule_on=row.annotate_accepted_translations_only,
+        versions=work_plan_store.language_versions(conn, project_id, cases),
+        flags=work_plan_store.effective_plan(conn, project_id, cases),
+        stored=frozenset(work_plan_store.plan_rows(conn, project_id, cases)),
+    )
+
+
+def _prepare(
+    db: Database,
+    conn: Connection,
+    key: str,
+    project_id: int,
+    kind: str,
+    language: str | None,
+    files: Sequence[dict[str, Any]],
+    *,
+    prepared: tuple[list[tuple[str, list[IncomingUnit]]], list[Issue]] | None = None,
+) -> tuple[ImportPlan, list[tuple[str, list[IncomingUnit]]], WorkPlanContext]:
     row = conn.execute(select(ProjectRow).where(ProjectRow.id == project_id)).one()
     profile = TaskProfile.model_validate(row.task_profile)
     sources, reader_issues = (
@@ -192,6 +272,7 @@ def prepare_plan(
             "structure": project_state(conn, key),
             "languages": row.languages,
             "annotate_accepted_translations_only": row.annotate_accepted_translations_only,
+            "import_plan": row.import_plan,
         }
     )
     state = ProjectImportState(
@@ -201,16 +282,15 @@ def prepare_plan(
         context,
         {v.document_id: v for v in Repository(db).list_variants(key)},
     )
-    return (
-        plan_import(
-            [u for _, us in sources for u in us],
-            state,
-            profile,
-            ProjectRules.of(row),
-            issues,
-        ),
-        sources,
+    plan = plan_import(
+        [u for _, us in sources for u in us],
+        state,
+        profile,
+        ProjectRules.of(row),
+        issues,
     )
+    ctx = _plan_context(conn, project_id, row, case_ids(plan))
+    return with_work_plan(plan, ctx), sources, ctx
 
 
 def apply_plan(
@@ -369,15 +449,21 @@ def _overrides(
 ) -> dict[str, str]:
     normalized = normalize_overrides(values)
     if normalized:
-        if actor.user_id is None and not actor.label.startswith("cli:"):
-            raise DomainError(
-                "NOT_ALLOWED",
-                "Only the explicit CLI operator may override without a user",
-            )
-        require_project_management(
-            conn, actor, key, project_id, Action.OVERRIDE_TRANSLATION_STATUS
-        )
+        _require_override(conn, actor, key, project_id)
     return validate_targets(plan, normalized)
+
+
+def _require_override(
+    conn: Connection, actor: Actor, key: str, project_id: int
+) -> None:
+    if actor.user_id is None and not actor.label.startswith("cli:"):
+        raise DomainError(
+            "NOT_ALLOWED",
+            "Only the explicit CLI operator may override without a user",
+        )
+    require_project_management(
+        conn, actor, key, project_id, Action.OVERRIDE_TRANSLATION_STATUS
+    )
 
 
 def _apply_overrides(
@@ -386,6 +472,8 @@ def _apply_overrides(
     project_id: int,
     plan: ImportPlan,
     accepted: dict[str, str],
+    *,
+    upload_id: int | None = None,
 ) -> None:
     variants = {v.document_id: v for v in plan.variants}
     for document_id, reason in accepted.items():
@@ -400,6 +488,15 @@ def _apply_overrides(
             )
             .values(translation_status="accepted", status_reason=reason)
         )
+        work_plan_store.add_acceptance(
+            conn,
+            project_id,
+            document_id,
+            source="override",
+            reason=reason,
+            accepted_by=actor.user_id,
+            upload_id=upload_id,
+        )
         record_audit(
             conn,
             actor,
@@ -412,6 +509,226 @@ def _apply_overrides(
                 "from": previous.status,
                 "to": "accepted",
                 "reason": reason,
+            },
+        )
+
+
+def _not_in_upload(details: dict[str, Any]) -> DomainError:
+    return DomainError("WORK_PLAN_INVALID", {"reason": "not_in_upload", **details})
+
+
+def _choose(current: PlanFlags, choice: PlanChoice) -> PlanFlags:
+    review = current.review if choice.review is None else choice.review
+    return PlanFlags(review, choice.annotate)
+
+
+def _row_order(key: RowKey) -> tuple[str, str]:
+    return key.case_id, key.language
+
+
+def _resolve_work_plan(
+    conn: Connection,
+    actor: Actor,
+    key: str,
+    project_id: int,
+    plan: ImportPlan,
+    ctx: WorkPlanContext,
+    choices: PlanChoices,
+    overridden: Mapping[str, str],
+) -> tuple[dict[RowKey, PlanFlags], dict[RowKey, PlannedRow], frozenset[RowKey]]:
+    """Flags of the new rows: default, then language choice, then case choice.
+
+    Returns the flags, the touched rows and the rows the lead accepts as
+    reviewed outside Ontocurator; refuses an invalid plan before any write.
+    """
+    rows = planned_rows(plan.variants, added_documents(plan), ctx)
+    if overridden:
+        for row_key, row in rows.items():
+            if row.new and not row.version.is_source:
+                accepted = bool(row.targets) and all(
+                    t.status == "accepted" or t.document_id in overridden
+                    for t in row.targets
+                )
+                rows[row_key] = replace(
+                    row, version=replace(row.version, accepted=accepted)
+                )
+    new = {k: r for k, r in rows.items() if r.new}
+    flags = row_defaults(rows, ctx)
+    unknown = sorted(
+        set(choices.plan_languages) - {plan_key(r.version) for r in new.values()}
+    )
+    if unknown:
+        raise _not_in_upload({"languages": unknown, "rows": []})
+    for row_key, row in new.items():
+        choice = choices.plan_languages.get(plan_key(row.version))
+        if choice is not None:
+            flags[row_key] = _choose(flags[row_key], choice)
+    missing = []
+    for case_choice in choices.plan_cases:
+        row_key = RowKey(case_choice.case_id, case_choice.language)
+        if row_key in new:
+            flags[row_key] = _choose(flags[row_key], case_choice)
+        else:
+            missing.append({"case_id": row_key.case_id, "language": row_key.language})
+    if missing:
+        raise _not_in_upload({"languages": [], "rows": missing})
+    accepting: frozenset[RowKey] = frozenset()
+    acceptance = choices.accept_external_review
+    if acceptance is not None:
+        if not acceptance.reason.strip():
+            raise DomainError(
+                "OVERRIDE_REASON_REQUIRED", "Accepting a translation requires a reason."
+            )
+        _require_override(conn, actor, key, project_id)
+        translated = {
+            r.version.language for r in new.values() if not r.version.is_source
+        }
+        unknown = sorted(set(acceptance.languages) - translated)
+        if unknown:
+            raise _not_in_upload({"languages": unknown, "rows": []})
+        accepting = frozenset(
+            row_key
+            for row_key, row in new.items()
+            if not row.version.is_source
+            and row.version.language in acceptance.languages
+            and not row.version.accepted
+            and flags[row_key].annotate
+            and not flags[row_key].review
+        )
+    invalid = validate(
+        flags,
+        {k: r.version for k, r in new.items()},
+        rule_on=ctx.rule_on,
+        accepting=accepting,
+    )
+    if invalid:
+        raise DomainError(
+            "WORK_PLAN_INVALID",
+            {
+                "reason": invalid[0].reason,
+                "rows": [
+                    {
+                        "case_id": item.key.case_id,
+                        "language": item.key.language,
+                        "not_accepted": int(not new[item.key].version.accepted),
+                        "not_acceptable": int(item.reason == "not_acceptable"),
+                        "marked_in_package": int(
+                            new[item.key].version.marked_in_package
+                        ),
+                    }
+                    for item in invalid
+                ],
+            },
+        )
+    return flags, rows, accepting
+
+
+def _apply_work_plan(
+    conn: Connection,
+    actor: Actor,
+    key: str,
+    project_id: int,
+    plan: ImportPlan,
+    ctx: WorkPlanContext,
+    choices: PlanChoices,
+    overridden: Mapping[str, str],
+    *,
+    upload_id: int | None,
+) -> None:
+    """Plan rows plus package and lead acceptances, inside the import transaction.
+
+    Existing rows keep their (effective) flags, now stored; a fully discarded
+    row that gets a new root is overwritten with its new flags.
+    """
+    flags, rows, accepting = _resolve_work_plan(
+        conn, actor, key, project_id, plan, ctx, choices, overridden
+    )
+    kept = {
+        row_key: value
+        for row_key, value in ctx.flags.items()
+        if row_key not in ctx.stored and row_key not in flags
+    }
+    work_plan_store.ensure_rows(
+        conn,
+        project_id,
+        {**kept, **{k: v for k, v in flags.items() if not rows[k].stored}},
+    )
+    overwrite = {k: v for k, v in flags.items() if rows[k].stored}
+    if overwrite:
+        work_plan_store.write_rows(conn, project_id, overwrite, actor_id=actor.user_id)
+    added = added_documents(plan)
+    for variant in plan.variants:
+        if variant.marked_in_package and variant.document_id in added:
+            work_plan_store.add_acceptance(
+                conn,
+                project_id,
+                variant.document_id,
+                source="package",
+                reason=None,
+                accepted_by=None,
+                upload_id=upload_id,
+                metadata=package_review(variant.translation),
+            )
+    acceptance = choices.accept_external_review
+    for row_key in sorted(accepting, key=_row_order):
+        assert acceptance is not None
+        reason = acceptance.reason.strip()
+        for target in rows[row_key].targets:
+            if target.status == "accepted" or target.document_id in overridden:
+                continue
+            conn.execute(
+                update(DocumentRow)
+                .where(
+                    DocumentRow.project_id == project_id,
+                    DocumentRow.document_id == target.document_id,
+                )
+                .values(translation_status="accepted", status_reason=reason)
+            )
+            work_plan_store.add_acceptance(
+                conn,
+                project_id,
+                target.document_id,
+                source="lead",
+                reason=reason,
+                accepted_by=actor.user_id,
+                upload_id=upload_id,
+            )
+            record_audit(
+                conn,
+                actor,
+                "translation.accept_external_review",
+                target_type="document",
+                target_id=target.document_id,
+                project_id=project_id,
+                details={
+                    "document_id": target.document_id,
+                    "from": target.status,
+                    "to": "accepted",
+                    "reason": reason,
+                    "upload_id": upload_id,
+                },
+            )
+    if flags:
+        record_audit(
+            conn,
+            actor,
+            "work_plan.import",
+            target_type="project",
+            target_id=key,
+            project_id=project_id,
+            details={
+                "upload_id": upload_id,
+                "setting": ctx.setting,
+                **choices.model_dump(mode="json"),
+                "rows": [
+                    {
+                        "case_id": k.case_id,
+                        "language": k.language,
+                        "review": flags[k].review,
+                        "annotate": flags[k].annotate,
+                    }
+                    for k in sorted(flags, key=_row_order)
+                ],
             },
         )
 
@@ -468,7 +785,7 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
     with db.transaction() as conn:
         project_id = lock_import(conn, key, actor)
         require_state(conn, key, expected)
-        plan, sources = prepare_plan(
+        plan, sources, plan_ctx = _prepare(
             db, conn, key, project_id, kind, language, files, prepared=prepared
         )
         accepted = _overrides(
@@ -476,6 +793,18 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
         )
         counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
         _apply_overrides(conn, actor, project_id, plan, accepted)
+        # Without a preview the new rows get the project default.
+        _apply_work_plan(
+            conn,
+            actor,
+            key,
+            project_id,
+            plan,
+            plan_ctx,
+            PlanChoices(),
+            accepted,
+            upload_id=None,
+        )
         from ontocurator.exchange.reanchor_job import import_pair_result
 
         summary = {
@@ -518,7 +847,7 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                 raise DomainError(
                     "UPLOAD_STALE", "Upload is no longer in the expected state."
                 )
-            plan, sources = prepare_plan(
+            plan, sources, plan_ctx = _prepare(
                 db, conn, key, project_id, row.kind, row.language, row.files
             )
             if commit:
@@ -534,8 +863,32 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                     plan,
                     job.payload.get("status_overrides", []),
                 )
+                choices = PlanChoices.model_validate(
+                    {
+                        name: job.payload[name]
+                        for name in PlanChoices.model_fields
+                        if job.payload.get(name) is not None
+                    }
+                )
+                # Refuse an invalid plan before any document is written.
+                _resolve_work_plan(
+                    conn, actor, key, project_id, plan, plan_ctx, choices, accepted
+                )
                 counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
-                _apply_overrides(conn, actor, project_id, plan, accepted)
+                _apply_overrides(
+                    conn, actor, project_id, plan, accepted, upload_id=upload_id
+                )
+                _apply_work_plan(
+                    conn,
+                    actor,
+                    key,
+                    project_id,
+                    plan,
+                    plan_ctx,
+                    choices,
+                    accepted,
+                    upload_id=upload_id,
+                )
                 from ontocurator.exchange.reanchor_job import import_pair_result
 
                 result = {
@@ -683,8 +1036,21 @@ class UploadService:
         upload_id: int,
         digest: str,
         status_overrides: Sequence[StatusOverride] = (),
+        *,
+        plan_languages: Mapping[str, PlanChoice] | None = None,
+        plan_cases: Sequence[CasePlanChoice] = (),
+        accept_external_review: ImportAcceptance | None = None,
     ) -> dict[str, int]:
         normalized = normalize_overrides(status_overrides)
+        choices = PlanChoices(
+            plan_languages=dict(plan_languages or {}),
+            plan_cases=list(plan_cases),
+            accept_external_review=accept_external_review.model_copy(
+                update={"reason": accept_external_review.reason.strip()}
+            )
+            if accept_external_review is not None
+            else None,
+        )
         with self.db.transaction() as conn:
             project_id = lock_import(conn, key, self.actor)
             row = self._row(conn, project_id, upload_id)
@@ -692,21 +1058,27 @@ class UploadService:
                 raise DomainError(
                     "UPLOAD_STALE", "Upload is not ready or the plan hash changed."
                 )
-            if normalized:
-                plan, _ = prepare_plan(
+            if normalized or choices.any:
+                plan, _, ctx = _prepare(
                     self.db, conn, key, project_id, row.kind, row.language, row.files
                 )
                 if plan.plan_sha256 != digest:
                     raise DomainError(
                         "UPLOAD_STALE", "Project changed since preview; upload again."
                     )
-                _overrides(conn, self.actor, key, project_id, plan, normalized)
+                accepted = _overrides(
+                    conn, self.actor, key, project_id, plan, normalized
+                )
+                _resolve_work_plan(
+                    conn, self.actor, key, project_id, plan, ctx, choices, accepted
+                )
             job_id = self.queue.enqueue(
                 "upload_commit",
                 {
                     "project": key,
                     "upload_id": upload_id,
                     "status_overrides": [item.model_dump() for item in normalized],
+                    **(choices.model_dump(mode="json") if choices.any else {}),
                 },
                 project_id=project_id,
                 actor=self.actor,

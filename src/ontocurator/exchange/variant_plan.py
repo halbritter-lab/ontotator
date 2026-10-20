@@ -38,6 +38,23 @@ class PlannedVariant:
     status: TranslationStatus | None
     failed_checks: tuple[str, ...]
     status_reason: str | None = None
+    # A newly imported translation the package marks as reviewed (D20).
+    marked_in_package: bool = False
+
+
+PACKAGE_REVIEWED = "Marked as reviewed in the package"
+
+
+def marked_reviewed(translation: Mapping[str, Any] | None) -> bool:
+    """``translation.review.status == "reviewed"``; anything else is not marked."""
+    review = (translation or {}).get("review")
+    return isinstance(review, Mapping) and review.get("status") == "reviewed"
+
+
+def package_review(translation: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Reviewer, time and note of a package review, as given."""
+    review = (translation or {}).get("review") or {}
+    return {k: review[k] for k in ("reviewer", "reviewed_at", "note") if k in review}
 
 
 def identity(unit: IncomingUnit) -> Identity:
@@ -149,6 +166,7 @@ def resolve_variants(
                 ),
                 translation=next(iter(runs.values()), None),
             )
+            marked = False
             if old:
                 if unit.case_id is not None and unit.case_id != old.case_id:
                     raise DomainError(
@@ -233,12 +251,17 @@ def resolve_variants(
                     )
                 doc_id = variant_document_id(key[0], key[1], key[2], occupied)
                 status: TranslationStatus | None = None
+                status_reason: str | None = None
                 if origin in TRANSLATION_ORIGINS:
-                    status = (
-                        "automatic_check_failed"
-                        if failed_checks(unit.translation)
-                        else "ready_for_review"
-                    )
+                    marked = marked_reviewed(unit.translation)
+                    if marked:
+                        status, status_reason = "accepted", PACKAGE_REVIEWED
+                    else:
+                        status = (
+                            "automatic_check_failed"
+                            if failed_checks(unit.translation)
+                            else "ready_for_review"
+                        )
                 elif origin == "correction" and source:
                     try:
                         if is_translation_chain(source, inventory.get):
@@ -257,7 +280,7 @@ def resolve_variants(
                     source.document_id if source else None,
                     unit.translation,
                     status,
-                    None,
+                    status_reason,
                     doc.text_sha256,
                 )
                 source_in_upload = (
@@ -280,6 +303,7 @@ def resolve_variants(
                     result.translation_status,
                     failed_checks(result.translation),
                     result.status_reason,
+                    marked,
                 )
             )
             return result
