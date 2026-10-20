@@ -12,6 +12,42 @@
         ],
         "createdAt": "2026-10-19T10:54:48.665Z",
         "reason": "orchestrator: forced-colors fallback for the final-row marker (box-shadow is dropped in forced colors), specified by Documents plan Task 3.6"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/mockups/lead-workflow-20261020/documents.html"
+        ],
+        "createdAt": "2026-10-20T08:58:12.392Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/mockups/lead-workflow-20261020/assign-dialog.html"
+        ],
+        "createdAt": "2026-10-20T08:58:12.670Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/mockups/lead-workflow-20261020/progress.html"
+        ],
+        "createdAt": "2026-10-20T08:58:12.921Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/mockups/lead-workflow-20261020/work-plan.html"
+        ],
+        "createdAt": "2026-10-20T09:19:42.754Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
       }
     ]
   }
