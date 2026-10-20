@@ -16,6 +16,8 @@ from ontocurator.api.work_plan_routes import PlanFlagsView
 from ontocurator.application.document_rows import (
     MAX_RETAIN,
     DocumentRowsService,
+    FinalFilter,
+    Paused,
     PlanFilter,
     RowQuery,
     Segment,
@@ -270,6 +272,9 @@ class DecisionBarView(BaseModel):
     missing_final: int = Field(validation_alias="missing-final")
     no_final: int
     shown: int
+    # Rows with a final result in the whole project, independent of filters
+    # and paging (FD12: Documents shows "Export final results…" when > 0).
+    finals: int = 0
     # Segments (D21): rows in the plan by the kind of their next step.
     in_plan: int = 0
     needs_decision: int = 0
@@ -380,16 +385,20 @@ def _filters(
     | Literal["accepted_without_review"]
     | None = None,
     decision: Decision | None = None,
-    final: Literal["missing", "none"] | None = None,
+    final: FinalFilter | None = None,
     case: str | None = None,
     segment: Segment | None = None,
-    step: StepCode | None = None,
-    stage: Stage | None = None,
+    step: Annotated[list[StepCode] | None, Query()] = None,
+    stage: Annotated[list[Stage] | None, Query()] = None,
     owner: Annotated[str | None, Query(description='"me" or a pseudonym')] = None,
-    plan: PlanFilter | None = None,
+    plan: Annotated[list[PlanFilter] | None, Query()] = None,
+    paused: Paused | None = None,
     sort: Sort = "case",
 ) -> dict[str, Any]:
-    """Filters shared by the rows page and the filtered case IDs."""
+    """Filters shared by the rows page and the filtered case IDs.
+
+    ``step``, ``stage`` and ``plan`` repeat: OR within one, AND across.
+    """
     if decision is not None and final is not None:
         raise _exclusive("final", "decision")
     if decision is not None and segment is not None:
@@ -404,10 +413,11 @@ def _filters(
         "final": final,
         "case": case,
         "segment": segment,
-        "step": step,
-        "stage": stage,
+        "step": tuple(step or ()),
+        "stage": tuple(stage or ()),
         "owner": owner,
-        "plan": plan,
+        "plan": tuple(plan or ()),
+        "paused": paused,
         "sort": sort,
     }
 

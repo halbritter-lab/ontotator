@@ -1,9 +1,10 @@
 """Progress (spec "Screens: Progress (D9)") from the Documents derivation.
 
-The lede, the stage cards and the workload count the rows that
-``document_row_page.row_states`` derives for the Documents table, so the
-Progress counts equal the Documents bar ("Testing": Documents and Progress
-counts equal). The caller has authorized a lead and holds the shared project
+Every stage count is the number of rows its Documents link lists (follow-up
+spec FD11): ``LINKS`` holds the query per count, and each count applies the
+Documents row predicate ``row_matches`` with that query, so a count equals
+``bar.shown`` of ``GET document-rows`` with its link. The lede counts the
+same rows. The caller has authorized a lead and holds the shared project
 lock.
 """
 
@@ -13,99 +14,93 @@ from typing import Any
 
 from sqlalchemy import Connection, select
 
-from ontocurator.application.document_row_page import RowState, row_states
-from ontocurator.application.document_rows import RowFacts, load_facts
+from ontocurator.application.document_row_page import RowContext, row_matches
+from ontocurator.application.document_rows import RowFacts, RowQuery, load_facts
 from ontocurator.assignments.batch import WAITING_FOR_REVIEW_STEPS
 from ontocurator.domain import document_rows as rules
-from ontocurator.domain.next_steps import row_stage
 from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import UserRow
 
-_IN_PROGRESS = frozenset({"annotation_in_progress", "annotation_review_in_progress"})
-_PAUSABLE = frozenset({"annotate", "review"})
+Link = dict[str, Any]  # RowQuery keyword arguments
+REVIEW_ON: Link = {"plan": ("review", "review_and_annotate")}
+ANNOTATE_ON: Link = {"plan": ("annotate", "review_and_annotate")}
+CHECK_FAILED: Link = {"translation_status": "automatic_check_failed"}
+
+# Card -> (scope, the count that is "done", count -> Documents query); the
+# link table of the follow-up spec ("F2"), plus ``check_failed`` and
+# ``would_be_omitted``.
+LINKS: dict[str, tuple[str, str, dict[str, Link]]] = {
+    "translation_review": (
+        "review",
+        "accepted",
+        {
+            "to_assign": REVIEW_ON | {"step": ("assign_translation_review",)},
+            "in_review": REVIEW_ON | {"step": ("translation_review_in_progress",)},
+            "check_failed": REVIEW_ON | CHECK_FAILED,
+            "check_failed_with_reviewer": REVIEW_ON
+            | CHECK_FAILED
+            | {"step": ("translation_review_in_progress",)},
+            "rejected_or_queried": REVIEW_ON
+            | {"step": ("resolve_rejected", "resolve_queried")},
+            "accepted": REVIEW_ON | {"translation_status": "accepted"},
+        },
+    ),
+    "annotation": (
+        "annotate",
+        "submitted",
+        {
+            "waiting_for_review": ANNOTATE_ON
+            | {"step": tuple(sorted(WAITING_FOR_REVIEW_STEPS))},
+            "to_assign": ANNOTATE_ON | {"step": ("assign_annotation",)},
+            "in_progress": ANNOTATE_ON
+            | {
+                "step": ("annotation_in_progress", "annotation_review_in_progress"),
+                "paused": "no",
+            },
+            "paused": ANNOTATE_ON | {"paused": "yes"},
+            "submitted": ANNOTATE_ON | {"stage": ("final", "done"), "paused": "no"},
+        },
+    ),
+    "final": (
+        "annotate",
+        "final",
+        {
+            "not_ready": ANNOTATE_ON | {"stage": ("translation_review", "annotation")},
+            "to_choose": ANNOTATE_ON | {"step": ("choose_final",)},
+            "to_confirm": ANNOTATE_ON | {"step": ("confirm_final",)},
+            "final": ANNOTATE_ON | {"final": "any"},
+            "would_be_omitted": ANNOTATE_ON | {"final": "none"},
+        },
+    ),
+}
 
 
-def _codes(state: RowState) -> set[str]:
-    return {step["code"] for step in state.row["steps"]}
+def _link_view(link: Link) -> dict[str, Any]:
+    """A link as ``DocumentLinkQuery`` fields (repeatable filters as lists)."""
+    return {
+        name: list(value) if isinstance(value, tuple) else value
+        for name, value in link.items()
+    }
 
 
-def _card(scope: str, done: int, total: int, counts: dict[str, int]) -> dict[str, Any]:
-    return {"scope": scope, "done": done, "total": total, "counts": counts}
-
-
-def _translation_review(states: list[RowState]) -> dict[str, Any]:
-    """Rows with Review on (effective: translations, not discarded)."""
-    counts = dict.fromkeys(
-        (
-            "to_assign",
-            "in_review",
-            "check_failed",
-            "check_failed_with_reviewer",
-            "rejected_or_queried",
-            "accepted",
-        ),
-        0,
-    )
-    scope = [state for state in states if state.review]
-    for state in scope:
-        facts, codes = state.step_facts, _codes(state)
-        failed = "automatic_check_failed" in facts.translation_statuses
-        counts["to_assign"] += "assign_translation_review" in codes
-        counts["in_review"] += "translation_review_in_progress" in codes
-        counts["check_failed"] += failed
-        counts["check_failed_with_reviewer"] += (
-            failed and facts.open_translation_reviews > 0
-        )
-        counts["rejected_or_queried"] += bool(
-            codes & {"resolve_rejected", "resolve_queried"}
-        )
-        counts["accepted"] += all(
-            status == "accepted" for status in facts.translation_statuses
-        )
-    return _card("review", counts["accepted"], len(scope), counts)
-
-
-def _annotation(states: list[RowState]) -> dict[str, Any]:
-    """Rows with Annotate on: where their annotation work stands.
-
-    "Waiting for review" uses the batch's waiting steps (a translation review
-    runs or is still to come). "In progress", "Paused" and "Submitted" do not
-    overlap: a row with a held annotate/review task is paused only, and a row
-    at the final/done stage counts as submitted only while none of its
-    annotation work runs or is paused (e.g. not after a reopen).
-    """
-    counts = dict.fromkeys(
-        ("waiting_for_review", "to_assign", "in_progress", "paused", "submitted"), 0
-    )
-    scope = [state for state in states if state.annotate]
-    for state in scope:
-        stage, codes = row_stage(state.step_facts), _codes(state)
-        paused = any(
-            item["held"] and item["task"] in _PAUSABLE for item in state.row["work"]
-        )
-        running = not paused and bool(codes & _IN_PROGRESS)
-        counts["waiting_for_review"] += bool(codes & WAITING_FOR_REVIEW_STEPS)
-        counts["to_assign"] += "assign_annotation" in codes
-        counts["in_progress"] += running
-        counts["paused"] += paused
-        counts["submitted"] += stage in ("final", "done") and not paused and not running
-    return _card("annotate", counts["submitted"], len(scope), counts)
-
-
-def _final(states: list[RowState]) -> dict[str, Any]:
-    """Rows with Annotate on: final result state; rows without one leave export."""
-    counts = dict.fromkeys(
-        ("not_ready", "to_choose", "to_confirm", "final", "would_be_omitted"), 0
-    )
-    scope = [state for state in states if state.annotate]
-    for state in scope:
-        stage, codes = row_stage(state.step_facts), _codes(state)
-        counts["not_ready"] += stage in ("translation_review", "annotation")
-        counts["to_choose"] += "choose_final" in codes
-        counts["to_confirm"] += "confirm_final" in codes
-        counts["final"] += state.has_final
-        counts["would_be_omitted"] += not state.has_final
-    return _card("annotate", counts["final"], len(scope), counts)
+def _card(context: RowContext, name: str) -> dict[str, Any]:
+    scope, done, links = LINKS[name]
+    rows = [
+        row
+        for key, row in context.rows.items()
+        if context.flags[key][0 if scope == "review" else 1]
+    ]
+    counts = {
+        count: sum(1 for row in rows if row_matches(context, row, RowQuery(**link)))
+        for count, link in links.items()
+    }
+    return {
+        "scope": scope,
+        "done": counts[done],
+        "total": len(rows),
+        "counts": counts,
+        "links": {count: _link_view(link) for count, link in links.items()},
+    }
 
 
 def _workload(conn: Connection, facts: RowFacts) -> list[dict[str, Any]]:
@@ -174,7 +169,8 @@ def progress_view(
 ) -> dict[str, Any]:
     """Lede, stage cards and workload of project ``key`` (lead view)."""
     facts = load_facts(conn, repo, key, pid, viewer_user_id)
-    states = row_states(facts)
+    context = RowContext(facts)
+    states = context.states()
     segments = rules.segment_counts(
         (
             state.row["in_plan"],
@@ -183,7 +179,8 @@ def progress_view(
         )
         for state in states
     )
-    review = _translation_review(states)
+    stages = {name: _card(context, name) for name in LINKS}
+    review = stages["translation_review"]
     return {
         "lede": {
             "cases": len({state.key[0] for state in states}),
@@ -193,10 +190,6 @@ def progress_view(
             "needs_decision": segments["needs_decision"],
             "to_assign": segments["to_assign"],
         },
-        "stages": {
-            "translation_review": review,
-            "annotation": _annotation(states),
-            "final": _final(states),
-        },
+        "stages": stages,
         "workload": _workload(conn, facts),
     }

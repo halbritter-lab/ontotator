@@ -11,14 +11,17 @@ from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.job_routes import EXPORT_ACTIONS, authorized_project
 from ontocurator.api.person_views import PersonRefView
 from ontocurator.api.routes import get_access
+from ontocurator.application.document_rows import FinalFilter, Paused, PlanFilter
 from ontocurator.application.progress import progress_view
 from ontocurator.assignments.batch import open_task_counts
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Action, can
 from ontocurator.authz.scoped import project_not_found
 from ontocurator.domain.errors import AccessDenied, DomainError
+from ontocurator.domain.next_steps import Stage, StepCode
 from ontocurator.domain.profile_templates import PROFILE_TEMPLATES
 from ontocurator.domain.profiles import TaskProfile
+from ontocurator.domain.variants import TranslationStatus
 from ontocurator.exchange.t1 import Pin
 from ontocurator.projects.service import (
     ProjectPin,
@@ -116,14 +119,31 @@ class ProgressLedeView(BaseModel):
     to_assign: int
 
 
+class DocumentLinkQuery(BaseModel):
+    """Documents filters of one Progress count (follow-up spec FD11).
+
+    ``GET document-rows`` with these filters (lists as repeated parameters)
+    lists exactly the counted rows: the count equals its ``bar.shown``.
+    """
+
+    plan: list[PlanFilter] = Field(default_factory=list)
+    step: list[StepCode] = Field(default_factory=list)
+    stage: list[Stage] = Field(default_factory=list)
+    translation_status: TranslationStatus | None = None
+    paused: Paused | None = None
+    final: FinalFilter | None = None
+
+
 class ProgressStageView(BaseModel):
     """One stage card: rows in ``scope`` (Review or Annotate on), ``done`` of
-    ``total`` and row counts per state (keys per card, see the spec)."""
+    ``total`` and row counts per state (keys per card, see the spec), each
+    with the Documents query that lists its rows (``links``, same keys)."""
 
     scope: Literal["review", "annotate"]
     done: int
     total: int
     counts: dict[str, int]
+    links: dict[str, DocumentLinkQuery] = Field(default_factory=dict)
 
 
 class ProgressStagesView(BaseModel):

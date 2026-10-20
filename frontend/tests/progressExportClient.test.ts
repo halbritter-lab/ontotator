@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { ApiClient, onCsrfRejected, onSessionExpired, type ProjectProgress } from "../src/api/client";
+import { ApiClient, onCsrfRejected, onSessionExpired, type DocumentLinkQuery, type ProjectProgress } from "../src/api/client";
 afterEach(() => vi.unstubAllGlobals());
 it("uses actual progress/export endpoints, escaping project keys and preserving CSRF JSON transport", async () => {
   const fetch = vi.fn().mockImplementation(() => Promise.resolve(new Response("{}")));
@@ -72,4 +72,24 @@ it("reads progress stages and workload", async () => {
   expect(progress.stages?.translation_review.counts.check_failed_with_reviewer).toBe(1);
   expect(progress.stages?.final.counts.would_be_omitted).toBe(3);
   expect(progress.workload?.[0].person).toEqual({ pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false });
+});
+it("reads progress links", async () => {
+  const links = {
+    rejected_or_queried: { plan: ["review", "review_and_annotate"], step: ["resolve_rejected", "resolve_queried"], stage: [], translation_status: null, paused: null, final: null },
+  } satisfies Record<string, DocumentLinkQuery>;
+  const body = { documents: [], people: [], totals: { documents: 0, unassigned: 0, open: 0, in_progress: 0, submitted: 0, reopened: 0 },
+    stages: { translation_review: { scope: "review", done: 0, total: 1, counts: { rejected_or_queried: 1 }, links },
+      annotation: { scope: "annotate", done: 0, total: 0, counts: {} }, final: { scope: "annotate", done: 0, total: 0, counts: {} } } } satisfies ProjectProgress;
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body))));
+  const progress = await new ApiClient().getProgress("proj");
+  expect(progress.stages?.translation_review.links?.rejected_or_queried.step).toEqual(["resolve_rejected", "resolve_queried"]);
+  expect(progress.stages?.annotation.links).toBeUndefined();
+});
+it("sends repeatable Documents filters as repeated parameters", async () => {
+  const fetch = vi.fn().mockImplementation(() => Promise.resolve(new Response("{}"))); vi.stubGlobal("fetch", fetch);
+  const client = new ApiClient();
+  await client.listDocumentRows("p", { step: ["resolve_rejected", "resolve_queried"], plan: "review", paused: "no", final: "any", stage: null, retain: ["c1:de"] });
+  await client.listDocumentCaseIds("p", { plan: ["annotate", "review_and_annotate"], stage: ["final", "done"], q: "" });
+  expect(fetch.mock.calls[0][0]).toBe("/api/v1/projects/p/document-rows?step=resolve_rejected&step=resolve_queried&plan=review&paused=no&final=any&retain=c1%3Ade");
+  expect(fetch.mock.calls[1][0]).toBe("/api/v1/projects/p/document-rows/case-ids?plan=annotate&plan=review_and_annotate&stage=final&stage=done");
 });

@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from sqlalchemy import func, insert, select, update
+from tests_support_reviews import insert_review
 from work_plan_support import _user, assign, set_rule, submit
 
 from ontocurator.domain.work_plans import PlanFlags, RowKey
@@ -540,8 +541,6 @@ def test_review_accepted_translation_targets_externally_accepted_rows_only(env):
 def test_review_accepted_translation_skips_versions_with_a_correction(env, tmp_path):
     """D25 as ``enable_review_for_accepted``: a version with a correction
     derived from it (here a rejected one, so v1 stays newest) is no target."""
-    from tests_support_reviews import insert_review
-
     lead = env.app.state.accounts.get_by_username("leader")
     corrected = import_correction(env, tmp_path, CASES[0])
     set_status(env, "accepted", *CASES[:2])
@@ -629,3 +628,57 @@ def test_routes_are_lead_only(env):
         response = ana.post(f"{BASE}/{path}", json=payload)
         assert response.status_code == 403, (path, response.text)
     assert assignment_count(env) == 0
+
+
+def test_summary_not_shown_respects_q_and_decision(env):
+    set_status(env, "reviewed", CASES[0])
+    from tests_support_reviews import insert_review
+
+    assign(env, de(CASES[1]), "ana", "translation_review")
+    insert_review(env.db, "proj", de(CASES[0]), "rejected")
+    prefix = summary(env, CASES, filters={"q": CASES[0]})
+    assert prefix["not_shown"] == len(CASES) - 1
+    decision = summary(env, CASES, filters={"decision": "translation"})
+    assert decision["not_shown"] == len(CASES) - 1
+    # Filters never change the assignable steps.
+    assert prefix["steps"] == decision["steps"] == summary(env, CASES)["steps"]
+
+
+def test_preview_accepts_all_documents_filters(env):
+    plain = preview(env, "translation_review", sort="import")
+    filtered = preview(
+        env,
+        "translation_review",
+        sort="import",
+        filters={
+            "q": CASES[0],
+            "decision": "all",
+            "step": ["assign_translation_review", "translation_review_in_progress"],
+            "stage": ["translation_review"],
+            "plan": ["review", "review_and_annotate"],
+            "paused": "no",
+        },
+    )
+    assert filtered["targets"] == plain["targets"]
+    assert filtered["skipped"] == plain["skipped"]
+    single = summary(
+        env, CASES, filters={"step": "assign_translation_review", "final": "any"}
+    )
+    assert single["not_shown"] == len(CASES)
+
+
+def test_decision_with_final_or_segment_is_422(env):
+    for filters in (
+        {"decision": "all", "final": "none"},
+        {"decision": "all", "segment": "assign"},
+    ):
+        response = env.lead.post(
+            f"{BASE}/document-rows/selection-summary",
+            json={"case_ids": CASES, "filters": filters},
+        )
+        assert response.status_code == 422, response.text
+        response = env.lead.post(
+            f"{BASE}/assignments/batch/preview",
+            json=body("translation_review", filters=filters),
+        )
+        assert response.status_code == 422, response.text

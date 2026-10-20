@@ -70,6 +70,7 @@ def test_bar_uses_underscore_keys_and_rows_carry_retained(case_env):
         "missing_final",
         "no_final",
         "shown",
+        "finals",
         "in_plan",
         "needs_decision",
         "to_assign",

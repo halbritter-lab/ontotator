@@ -12,7 +12,13 @@ from ontocurator.api.document_projection import AssignmentFilter
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.person_views import PersonRefView
 from ontocurator.api.routes import get_access
-from ontocurator.application.document_rows import PlanFilter, RowQuery
+from ontocurator.application.document_rows import (
+    Decision,
+    FinalFilter,
+    Paused,
+    PlanFilter,
+    RowQuery,
+)
 from ontocurator.assignments.batch import BatchAssignmentService, BatchSpec
 from ontocurator.auth.audit import Actor
 from ontocurator.domain.next_steps import Segment, Stage, StepCode
@@ -24,22 +30,39 @@ BatchTask = Literal["translation_review", "annotate", "review"]
 
 
 class DocumentRowFilters(BaseModel):
-    """The Documents filters, same names and values as its query parameters."""
+    """The Documents filters, same names and values as its query parameters.
+
+    ``step``, ``stage`` and ``plan`` take one value or a list (OR within one
+    filter, AND across filters). Filters never change batch targets, their
+    order, ``steps``, ``common`` or ``skipped``; they drive ``not_shown``.
+    """
 
     model_config = ConfigDict(extra="forbid")
     language: str | None = None
-    case: str | None = None
-    segment: Segment | None = None
-    step: StepCode | None = None
-    stage: Stage | None = None
-    owner: str | None = None
-    plan: PlanFilter | None = None
-    final: Literal["missing", "none"] | None = None
+    status: AssignmentFilter | None = None
+    q: str | None = None
     origin: VariantOrigin | None = None
     translation_status: (
         TranslationStatus | Literal["accepted_without_review"] | None
     ) = None
-    status: AssignmentFilter | None = None
+    decision: Decision | None = None
+    final: FinalFilter | None = None
+    case: str | None = None
+    segment: Segment | None = None
+    step: StepCode | list[StepCode] | None = None
+    stage: Stage | list[Stage] | None = None
+    owner: str | None = None
+    plan: PlanFilter | list[PlanFilter] | None = None
+    paused: Paused | None = None
+
+    @model_validator(mode="after")
+    def _exclusive(self) -> Self:
+        # As on the rows endpoint (``document_row_routes._filters``).
+        if self.decision is not None and self.final is not None:
+            raise ValueError("decision and final are mutually exclusive")
+        if self.decision is not None and self.segment is not None:
+            raise ValueError("decision and segment are mutually exclusive")
+        return self
 
     def query(self, sort: str = "case") -> RowQuery:
         return RowQuery(**self.model_dump(), sort=sort)  # type: ignore[arg-type]

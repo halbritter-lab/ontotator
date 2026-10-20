@@ -303,7 +303,13 @@ def test_empty_project_progress_has_explicit_zero_totals(project):
             "to_assign": 0,
         },
         "stages": {
-            name: {"scope": scope, "done": 0, "total": 0, "counts": counts}
+            name: {
+                "scope": scope,
+                "done": 0,
+                "total": 0,
+                "counts": counts,
+                "links": response.json()["stages"][name]["links"],
+            }
             for name, scope, counts in (
                 (
                     "translation_review",

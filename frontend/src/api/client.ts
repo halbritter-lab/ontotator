@@ -82,10 +82,34 @@ export type AssignableStepView = components["schemas"]["AssignableStepView"];
 export type SelectionSummary = components["schemas"]["SelectionSummary"];
 /** Optional work-plan part of an upload commit (absent: the old body is sent). */
 export type CommitUploadPlan = Partial<Pick<components["schemas"]["CommitUpload"], "plan_languages" | "plan_cases" | "accept_external_review">>;
-/** Filters of the Documents read API; `retain` keys are "{case_id}:{language}". */
-export type DocumentRowsQuery = Omit<NonNullable<operations["document_rows_api_v1_projects__key__document_rows_get"]["parameters"]["query"]>, "retain"> & { retain?: readonly string[] };
-/** Filters of the filtered case IDs (the Documents filters without page and retain). */
-export type DocumentCaseIdsQuery = NonNullable<operations["document_case_ids_api_v1_projects__key__document_rows_case_ids_get"]["parameters"]["query"]>;
+type RowsParameters = Omit<NonNullable<operations["document_rows_api_v1_projects__key__document_rows_get"]["parameters"]["query"]>, "retain">;
+type CaseIdsParameters = NonNullable<operations["document_case_ids_api_v1_projects__key__document_rows_case_ids_get"]["parameters"]["query"]>;
+/** Repeatable filters (`step`, `stage`, `plan`) with one value each. */
+type SingleFilters<Query> = { [Name in keyof Query]: NonNullable<Query[Name]> extends readonly (infer Item)[] ? Item | null : Query[Name] };
+/** Repeatable filters with one value or several (OR); sent as repeated parameters. */
+type RepeatableFilters<Query> = { [Name in keyof Query]: NonNullable<Query[Name]> extends readonly (infer Item)[] ? Item | Item[] | null : Query[Name] };
+/** Filters of the Documents read API, one value per filter; `retain` keys are "{case_id}:{language}". */
+export type DocumentRowsQuery = SingleFilters<RowsParameters> & { retain?: readonly string[] };
+/** Filters of the filtered case IDs (the Documents filters without page and retain), one value per filter. */
+export type DocumentCaseIdsQuery = SingleFilters<CaseIdsParameters>;
+/** Documents rows request: `step`, `stage` and `plan` may hold several values (FD10). */
+export type DocumentRowsRequest = RepeatableFilters<RowsParameters> & { retain?: readonly string[] };
+/** Filtered case IDs request: `step`, `stage` and `plan` may hold several values (FD10). */
+export type DocumentCaseIdsRequest = RepeatableFilters<CaseIdsParameters>;
+/** One Progress count's Documents query (FD11). */
+export type DocumentLinkQuery = components["schemas"]["DocumentLinkQuery"];
+
+/** Documents filters as query parameters: arrays repeat, empty values are omitted. */
+function filterParams(filters: Readonly<Record<string, unknown>>, skip: readonly string[] = []): URLSearchParams {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(filters)) {
+    if (skip.includes(name)) continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item !== undefined && item !== null && item !== "") query.append(name, String(item));
+    }
+  }
+  return query;
+}
 export type SubmissionHistorySummary = components['schemas']['SubmissionHistorySummary'];
 export type SubmissionHistoryDetail = components['schemas']['SubmissionHistoryDetail'];
 export type OpenWorkspaceRequest = components["schemas"]["OpenWorkspaceRequest"];
@@ -319,23 +343,16 @@ export class ApiClient {
     return this.request<ProjectDocumentSummary[]>(`/api/v1/projects/${encodeURIComponent(key)}/documents${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
 
-  /** Lead-only Documents rows; empty filters are omitted, `retain` repeats. */
-  async listDocumentRows(key: string, filters: DocumentRowsQuery = {}): Promise<DocumentRowsPage> {
-    const query = new URLSearchParams();
-    for (const [name, value] of Object.entries(filters)) {
-      if (name === "retain") continue;
-      if (value !== undefined && value !== null && value !== "") query.set(name, String(value));
-    }
+  /** Lead-only Documents rows; empty filters are omitted, `step`/`stage`/`plan` and `retain` repeat. */
+  async listDocumentRows(key: string, filters: DocumentRowsRequest = {}): Promise<DocumentRowsPage> {
+    const query = filterParams(filters, ["retain"]);
     for (const item of filters.retain ?? []) query.append("retain", item);
     return this.request<DocumentRowsPage>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
 
   /** Case IDs matching the Documents filters, in list order (at most 2000). */
-  async listDocumentCaseIds(key: string, filters: DocumentCaseIdsQuery = {}): Promise<DocumentCaseIds> {
-    const query = new URLSearchParams();
-    for (const [name, value] of Object.entries(filters)) {
-      if (value !== undefined && value !== null && value !== "") query.set(name, String(value));
-    }
+  async listDocumentCaseIds(key: string, filters: DocumentCaseIdsRequest = {}): Promise<DocumentCaseIds> {
+    const query = filterParams(filters);
     return this.request<DocumentCaseIds>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/case-ids${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
 

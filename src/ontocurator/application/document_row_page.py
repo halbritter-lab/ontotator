@@ -762,7 +762,16 @@ _PLAN_OPTIONS: dict[tuple[bool, bool], str] = {
 
 
 def _plan_matches(ctx: _Context, key: RowKey, query: RowQuery) -> bool:
-    return query.plan is None or _PLAN_OPTIONS[ctx.flags[key]] == query.plan
+    return not query.plan or _PLAN_OPTIONS[ctx.flags[key]] in query.plan
+
+
+# Tasks whose hold pauses the row (Progress "Paused by a problem report").
+_PAUSABLE = frozenset({"annotate", "review"})
+
+
+def is_paused(row: Mapping[str, Any]) -> bool:
+    """The row has a held annotate or review task (filter ``paused``)."""
+    return any(item["held"] and item["task"] in _PAUSABLE for item in row["work"])
 
 
 def _row_level_matches(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -> bool:
@@ -773,12 +782,12 @@ def _row_level_matches(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -
         return False
     if not _plan_matches(ctx, key, query):
         return False
-    if query.step is not None and not any(
-        step["code"] == query.step for step in row["steps"]
-    ):
+    if query.step and not any(step["code"] in query.step for step in row["steps"]):
         return False
     step = row["next_step"]
-    if query.stage is not None and (step is None or step["stage"] != query.stage):
+    if query.stage and (step is None or step["stage"] not in query.stage):
+        return False
+    if query.paused is not None and is_paused(row) != (query.paused == "yes"):
         return False
     if query.owner is not None:
         owner = ctx.facts.viewer_pseudonym if query.owner == "me" else query.owner
@@ -832,6 +841,8 @@ def _matches_decision(
         return False
     if query.final == "none" and not _no_final(ctx, key):
         return False
+    if query.final == "any" and not ctx.has_final[key]:
+        return False
     if query.segment is not None and ctx.segments[key] != query.segment:
         return False
     if query.decision is None:
@@ -839,6 +850,13 @@ def _matches_decision(
     if query.decision == "all":
         return bool(row["categories"])
     return query.decision in row["categories"]
+
+
+def _matches(ctx: _Context, row: dict[str, Any], query: RowQuery) -> bool:
+    """The row is listed for ``query`` (filters and decision-like filters)."""
+    key = (row["case_id"], row["language"])
+    filtered = _apply_filters(ctx, row, query)
+    return filtered and _matches_decision(ctx, key, row, query)
 
 
 def _retain_keys(query: RowQuery) -> set[RowKey]:
@@ -925,12 +943,36 @@ class RowContext:
         ``matches_filter`` for ``query``.
         """
         shown = {
-            key[0]
-            for key, row in self.rows.items()
-            if _apply_filters(self._ctx, row, query)
-            and _matches_decision(self._ctx, key, row, query)
+            key[0] for key, row in self.rows.items() if _matches(self._ctx, row, query)
         }
         return sum(1 for case_id in dict.fromkeys(case_ids) if case_id not in shown)
+
+    def states(self) -> list[RowState]:
+        """Every row with its step facts, in (case, language) order."""
+        ctx = self._ctx
+        return [
+            RowState(
+                key=key,
+                row=row,
+                step_facts=ctx.step_facts[key],
+                segment=ctx.segments[key],
+                review=ctx.flags[key][0],
+                annotate=ctx.flags[key][1],
+                has_final=ctx.has_final[key],
+            )
+            for key, row in self.rows.items()
+        ]
+
+
+def row_matches(context: RowContext, row: dict[str, Any], query: RowQuery) -> bool:
+    """The Documents row predicate: ``row`` is listed for ``query``.
+
+    One predicate for the table, the filtered case IDs, the selection summary
+    and the Progress counts (follow-up spec FD11); ``bar.shown`` counts the
+    matching rows that are in the plan and in the active segment. Marks the
+    row's versions' ``matches_filter`` for ``query``.
+    """
+    return _matches(context._ctx, row, query)
 
 
 def row_context(facts: RowFacts) -> RowContext:
@@ -949,27 +991,6 @@ class RowState:
     review: bool  # effective flags (sources never review, discarded rows off)
     annotate: bool
     has_final: bool  # a live final result
-
-
-def row_states(facts: RowFacts) -> list[RowState]:
-    """Every row of the project with its step facts, in (case, language) order."""
-    ctx = _Context(facts)
-    states = []
-    for key in sorted(ctx.by_row):
-        row = _build_row(ctx, *key)
-        review, annotate = ctx.flags[key]
-        states.append(
-            RowState(
-                key=key,
-                row=row,
-                step_facts=ctx.step_facts[key],
-                segment=ctx.segments[key],
-                review=review,
-                annotate=annotate,
-                has_final=ctx.has_final[key],
-            )
-        )
-    return states
 
 
 def _matching_cases(facts: RowFacts, query: RowQuery) -> set[str]:
@@ -1012,6 +1033,8 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
         )
     )
     bar["no_final"] = sum(1 for key in rows if _no_final(ctx, key))
+    # Rows with a final result in the whole project (FD12: the Export link).
+    bar["finals"] = sum(1 for key in rows if ctx.has_final[key])
     bar.update(
         rules.segment_counts(
             (
@@ -1034,7 +1057,8 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
     for key, row in rows.items():
         filtered, decision = matches[key]
         row["matches_decision"] = decision
-        if filtered and _in_active_segment(ctx, key, row, query):
+        # "k of n shown": every filter applies, the final filter included.
+        if filtered and decision and _in_active_segment(ctx, key, row, query):
             shown_bar += 1
         if key == pinned_key:
             row["pinned"] = True

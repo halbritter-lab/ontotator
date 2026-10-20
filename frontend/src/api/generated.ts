@@ -2689,6 +2689,11 @@ export interface components {
             /** Shown */
             shown: number;
             /**
+             * Finals
+             * @default 0
+             */
+            finals: number;
+            /**
              * In Plan
              * @default 0
              */
@@ -2803,32 +2808,63 @@ export interface components {
             not_in_plan_languages?: string[];
         };
         /**
+         * DocumentLinkQuery
+         * @description Documents filters of one Progress count (follow-up spec FD11).
+         *
+         *     ``GET document-rows`` with these filters (lists as repeated parameters)
+         *     lists exactly the counted rows: the count equals its ``bar.shown``.
+         */
+        DocumentLinkQuery: {
+            /** Plan */
+            plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan")[];
+            /** Step */
+            step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[];
+            /** Stage */
+            stage?: ("translation_review" | "annotation" | "final" | "done")[];
+            /** Translation Status */
+            translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
+            /** Paused */
+            paused?: ("yes" | "no") | null;
+            /** Final */
+            final?: ("missing" | "none" | "any") | null;
+        };
+        /**
          * DocumentRowFilters
          * @description The Documents filters, same names and values as its query parameters.
+         *
+         *     ``step``, ``stage`` and ``plan`` take one value or a list (OR within one
+         *     filter, AND across filters). Filters never change batch targets, their
+         *     order, ``steps``, ``common`` or ``skipped``; they drive ``not_shown``.
          */
         DocumentRowFilters: {
             /** Language */
             language?: string | null;
+            /** Status */
+            status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
+            /** Q */
+            q?: string | null;
+            /** Origin */
+            origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
+            /** Translation Status */
+            translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
+            /** Decision */
+            decision?: ("all" | "report-or-pause" | "confirm-final" | "translation" | "missing-final") | null;
+            /** Final */
+            final?: ("missing" | "none" | "any") | null;
             /** Case */
             case?: string | null;
             /** Segment */
             segment?: ("decision" | "assign" | "progress") | null;
             /** Step */
-            step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | null;
+            step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
             /** Stage */
-            stage?: ("translation_review" | "annotation" | "final" | "done") | null;
+            stage?: ("translation_review" | "annotation" | "final" | "done") | ("translation_review" | "annotation" | "final" | "done")[] | null;
             /** Owner */
             owner?: string | null;
             /** Plan */
-            plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan") | null;
-            /** Final */
-            final?: ("missing" | "none") | null;
-            /** Origin */
-            origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
-            /** Translation Status */
-            translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
-            /** Status */
-            status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
+            plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan") | ("review" | "annotate" | "review_and_annotate" | "not_in_plan")[] | null;
+            /** Paused */
+            paused?: ("yes" | "no") | null;
         };
         /** DocumentRowView */
         DocumentRowView: {
@@ -4272,7 +4308,8 @@ export interface components {
         /**
          * ProgressStageView
          * @description One stage card: rows in ``scope`` (Review or Annotate on), ``done`` of
-         *     ``total`` and row counts per state (keys per card, see the spec).
+         *     ``total`` and row counts per state (keys per card, see the spec), each
+         *     with the Documents query that lists its rows (``links``, same keys).
          */
         ProgressStageView: {
             /**
@@ -4287,6 +4324,10 @@ export interface components {
             /** Counts */
             counts: {
                 [key: string]: number;
+            };
+            /** Links */
+            links?: {
+                [key: string]: components["schemas"]["DocumentLinkQuery"];
             };
         };
         /** ProgressStagesView */
@@ -8092,14 +8133,15 @@ export interface operations {
                 origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
                 translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
                 decision?: ("all" | "report-or-pause" | "confirm-final" | "translation" | "missing-final") | null;
-                final?: ("missing" | "none") | null;
+                final?: ("missing" | "none" | "any") | null;
                 case?: string | null;
                 segment?: ("decision" | "assign" | "progress") | null;
-                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | null;
-                stage?: ("translation_review" | "annotation" | "final" | "done") | null;
+                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
+                stage?: ("translation_review" | "annotation" | "final" | "done")[] | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;
-                plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan") | null;
+                plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan")[] | null;
+                paused?: ("yes" | "no") | null;
                 sort?: "case" | "import" | "activity";
             };
             header?: never;
@@ -8141,14 +8183,15 @@ export interface operations {
                 origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
                 translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
                 decision?: ("all" | "report-or-pause" | "confirm-final" | "translation" | "missing-final") | null;
-                final?: ("missing" | "none") | null;
+                final?: ("missing" | "none" | "any") | null;
                 case?: string | null;
                 segment?: ("decision" | "assign" | "progress") | null;
-                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | null;
-                stage?: ("translation_review" | "annotation" | "final" | "done") | null;
+                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
+                stage?: ("translation_review" | "annotation" | "final" | "done")[] | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;
-                plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan") | null;
+                plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan")[] | null;
+                paused?: ("yes" | "no") | null;
                 sort?: "case" | "import" | "activity";
             };
             header?: never;

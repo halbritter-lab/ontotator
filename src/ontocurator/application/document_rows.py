@@ -68,31 +68,56 @@ MAX_RETAIN = 200
 EXCERPT_LENGTH = 120
 
 
+FinalFilter = Literal["missing", "none", "any"]
+Paused = Literal["yes", "no"]
+
+
+def _values(value: Any) -> tuple[Any, ...]:
+    """A repeatable filter as a tuple: ``None`` -> (), one value -> (value,)."""
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    return tuple(dict.fromkeys(value))
+
+
 @dataclass(frozen=True)
 class RowQuery:
+    """Documents filters (follow-up spec FD10).
+
+    ``step``, ``stage`` and ``plan`` are repeatable: OR within one filter, AND
+    across filters; empty means no filter. A single string is accepted as one
+    value.
+    """
+
     language: str | None = None
     status: str | None = None  # unassigned|open|in_progress|submitted|reopened|held
     q: str | None = None
     origin: str | None = None
     translation_status: str | None = None  # adds accepted_without_review
     decision: Decision | None = None
-    # "missing": no final result (any row); "none": Annotate on, no final result.
-    final: Literal["missing", "none"] | None = None
+    # "missing": no final result (any row); "none": Annotate on, no final
+    # result; "any": the row has a final result.
+    final: FinalFilter | None = None
     case: str | None = None
     page: int = 1
     segment: Segment | None = None  # bar segment of the row's next step
-    step: StepCode | None = None  # any of the row's steps
-    stage: Stage | None = None  # stage of the row's next step
+    step: tuple[StepCode, ...] = ()  # any of the row's steps
+    stage: tuple[Stage, ...] = ()  # stage of the row's next step
     owner: str | None = None  # "me" or a pseudonym (owner of the next step)
-    # Exclusive: review / annotate = only that flag on, review_and_annotate =
-    # both, not_in_plan = neither (effective flags).
-    plan: PlanFilter | None = None
+    # Exclusive per row: review / annotate = only that flag on,
+    # review_and_annotate = both, not_in_plan = neither (effective flags).
+    plan: tuple[PlanFilter, ...] = ()
+    # "yes": the row has a held annotate or review task; "no": it has none.
+    paused: Paused | None = None
     sort: Sort = "case"
     # "{case_id}:{language}" keys kept visible this visit (Task 5.9). A key
     # splits at the last ":" (case ids may contain ":"; language codes do not).
     retain: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        for name in ("step", "stage", "plan"):
+            object.__setattr__(self, name, _values(getattr(self, name)))
         if self.decision is not None and self.final is not None:
             raise ValueError("decision and final are mutually exclusive")
         if self.decision is not None and self.segment is not None:

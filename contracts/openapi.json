@@ -2729,7 +2729,8 @@
                 {
                   "enum": [
                     "missing",
-                    "none"
+                    "none",
+                    "any"
                   ],
                   "type": "string"
                 },
@@ -2784,25 +2785,28 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "decide_report",
-                    "resume_task",
-                    "confirm_final",
-                    "resolve_rejected",
-                    "resolve_queried",
-                    "translation_not_accepted",
-                    "choose_final",
-                    "assign_translation_review",
-                    "translation_review_in_progress",
-                    "assign_annotation",
-                    "annotation_in_progress",
-                    "annotation_review_in_progress",
-                    "waiting_for_translation_review",
-                    "done",
-                    "translation_accepted",
-                    "needs_attention"
-                  ],
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "decide_report",
+                      "resume_task",
+                      "confirm_final",
+                      "resolve_rejected",
+                      "resolve_queried",
+                      "translation_not_accepted",
+                      "choose_final",
+                      "assign_translation_review",
+                      "translation_review_in_progress",
+                      "assign_annotation",
+                      "annotation_in_progress",
+                      "annotation_review_in_progress",
+                      "waiting_for_translation_review",
+                      "done",
+                      "translation_accepted",
+                      "needs_attention"
+                    ],
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -2818,13 +2822,16 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "translation_review",
-                    "annotation",
-                    "final",
-                    "done"
-                  ],
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "translation_review",
+                      "annotation",
+                      "final",
+                      "done"
+                    ],
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -2858,11 +2865,34 @@
             "schema": {
               "anyOf": [
                 {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "review",
+                      "annotate",
+                      "review_and_annotate",
+                      "not_in_plan"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Plan"
+            }
+          },
+          {
+            "name": "paused",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
                   "enum": [
-                    "review",
-                    "annotate",
-                    "review_and_annotate",
-                    "not_in_plan"
+                    "yes",
+                    "no"
                   ],
                   "type": "string"
                 },
@@ -2870,7 +2900,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Plan"
+              "title": "Paused"
             }
           },
           {
@@ -3099,7 +3129,8 @@
                 {
                   "enum": [
                     "missing",
-                    "none"
+                    "none",
+                    "any"
                   ],
                   "type": "string"
                 },
@@ -3154,25 +3185,28 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "decide_report",
-                    "resume_task",
-                    "confirm_final",
-                    "resolve_rejected",
-                    "resolve_queried",
-                    "translation_not_accepted",
-                    "choose_final",
-                    "assign_translation_review",
-                    "translation_review_in_progress",
-                    "assign_annotation",
-                    "annotation_in_progress",
-                    "annotation_review_in_progress",
-                    "waiting_for_translation_review",
-                    "done",
-                    "translation_accepted",
-                    "needs_attention"
-                  ],
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "decide_report",
+                      "resume_task",
+                      "confirm_final",
+                      "resolve_rejected",
+                      "resolve_queried",
+                      "translation_not_accepted",
+                      "choose_final",
+                      "assign_translation_review",
+                      "translation_review_in_progress",
+                      "assign_annotation",
+                      "annotation_in_progress",
+                      "annotation_review_in_progress",
+                      "waiting_for_translation_review",
+                      "done",
+                      "translation_accepted",
+                      "needs_attention"
+                    ],
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -3188,13 +3222,16 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "translation_review",
-                    "annotation",
-                    "final",
-                    "done"
-                  ],
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "translation_review",
+                      "annotation",
+                      "final",
+                      "done"
+                    ],
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -3228,11 +3265,34 @@
             "schema": {
               "anyOf": [
                 {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "review",
+                      "annotate",
+                      "review_and_annotate",
+                      "not_in_plan"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Plan"
+            }
+          },
+          {
+            "name": "paused",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
                   "enum": [
-                    "review",
-                    "annotate",
-                    "review_and_annotate",
-                    "not_in_plan"
+                    "yes",
+                    "no"
                   ],
                   "type": "string"
                 },
@@ -3240,7 +3300,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Plan"
+              "title": "Paused"
             }
           },
           {
@@ -8235,6 +8295,11 @@
             "type": "integer",
             "title": "Shown"
           },
+          "finals": {
+            "type": "integer",
+            "title": "Finals",
+            "default": 0
+          },
           "in_plan": {
             "type": "integer",
             "title": "In Plan",
@@ -8515,6 +8580,113 @@
         ],
         "title": "DocumentGroupView"
       },
+      "DocumentLinkQuery": {
+        "properties": {
+          "plan": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "review",
+                "annotate",
+                "review_and_annotate",
+                "not_in_plan"
+              ]
+            },
+            "type": "array",
+            "title": "Plan"
+          },
+          "step": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "decide_report",
+                "resume_task",
+                "confirm_final",
+                "resolve_rejected",
+                "resolve_queried",
+                "translation_not_accepted",
+                "choose_final",
+                "assign_translation_review",
+                "translation_review_in_progress",
+                "assign_annotation",
+                "annotation_in_progress",
+                "annotation_review_in_progress",
+                "waiting_for_translation_review",
+                "done",
+                "translation_accepted",
+                "needs_attention"
+              ]
+            },
+            "type": "array",
+            "title": "Step"
+          },
+          "stage": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "translation_review",
+                "annotation",
+                "final",
+                "done"
+              ]
+            },
+            "type": "array",
+            "title": "Stage"
+          },
+          "translation_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translated",
+                  "automatic_check_failed",
+                  "ready_for_review",
+                  "reviewed",
+                  "accepted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Status"
+          },
+          "paused": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "yes",
+                  "no"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused"
+          },
+          "final": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "missing",
+                  "none",
+                  "any"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final"
+          }
+        },
+        "type": "object",
+        "title": "DocumentLinkQuery",
+        "description": "Documents filters of one Progress count (follow-up spec FD11).\n\n``GET document-rows`` with these filters (lists as repeated parameters)\nlists exactly the counted rows: the count equals its ``bar.shown``."
+      },
       "DocumentRowFilters": {
         "properties": {
           "language": {
@@ -8527,6 +8699,109 @@
               }
             ],
             "title": "Language"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "unassigned",
+                  "open",
+                  "in_progress",
+                  "submitted",
+                  "reopened",
+                  "held"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "native",
+                  "machine_translation",
+                  "human_translation",
+                  "correction"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "translation_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translated",
+                  "automatic_check_failed",
+                  "ready_for_review",
+                  "reviewed",
+                  "accepted"
+                ]
+              },
+              {
+                "type": "string",
+                "const": "accepted_without_review"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Status"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "report-or-pause",
+                  "confirm-final",
+                  "translation",
+                  "missing-final"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "final": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "missing",
+                  "none",
+                  "any"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final"
           },
           "case": {
             "anyOf": [
@@ -8579,6 +8854,30 @@
                 ]
               },
               {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "decide_report",
+                    "resume_task",
+                    "confirm_final",
+                    "resolve_rejected",
+                    "resolve_queried",
+                    "translation_not_accepted",
+                    "choose_final",
+                    "assign_translation_review",
+                    "translation_review_in_progress",
+                    "assign_annotation",
+                    "annotation_in_progress",
+                    "annotation_review_in_progress",
+                    "waiting_for_translation_review",
+                    "done",
+                    "translation_accepted",
+                    "needs_attention"
+                  ]
+                },
+                "type": "array"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -8594,6 +8893,18 @@
                   "final",
                   "done"
                 ]
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "translation_review",
+                    "annotation",
+                    "final",
+                    "done"
+                  ]
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -8624,89 +8935,43 @@
                 ]
               },
               {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "review",
+                    "annotate",
+                    "review_and_annotate",
+                    "not_in_plan"
+                  ]
+                },
+                "type": "array"
+              },
+              {
                 "type": "null"
               }
             ],
             "title": "Plan"
           },
-          "final": {
+          "paused": {
             "anyOf": [
               {
                 "type": "string",
                 "enum": [
-                  "missing",
-                  "none"
+                  "yes",
+                  "no"
                 ]
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Final"
-          },
-          "origin": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "native",
-                  "machine_translation",
-                  "human_translation",
-                  "correction"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin"
-          },
-          "translation_status": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "translated",
-                  "automatic_check_failed",
-                  "ready_for_review",
-                  "reviewed",
-                  "accepted"
-                ]
-              },
-              {
-                "type": "string",
-                "const": "accepted_without_review"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Translation Status"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "unassigned",
-                  "open",
-                  "in_progress",
-                  "submitted",
-                  "reopened",
-                  "held"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
+            "title": "Paused"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "DocumentRowFilters",
-        "description": "The Documents filters, same names and values as its query parameters."
+        "description": "The Documents filters, same names and values as its query parameters.\n\n``step``, ``stage`` and ``plan`` take one value or a list (OR within one\nfilter, AND across filters). Filters never change batch targets, their\norder, ``steps``, ``common`` or ``skipped``; they drive ``not_shown``."
       },
       "DocumentRowView": {
         "properties": {
@@ -12685,6 +12950,13 @@
             },
             "type": "object",
             "title": "Counts"
+          },
+          "links": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DocumentLinkQuery"
+            },
+            "type": "object",
+            "title": "Links"
           }
         },
         "type": "object",
@@ -12695,7 +12967,7 @@
           "counts"
         ],
         "title": "ProgressStageView",
-        "description": "One stage card: rows in ``scope`` (Review or Annotate on), ``done`` of\n``total`` and row counts per state (keys per card, see the spec)."
+        "description": "One stage card: rows in ``scope`` (Review or Annotate on), ``done`` of\n``total`` and row counts per state (keys per card, see the spec), each\nwith the Documents query that lists its rows (``links``, same keys)."
       },
       "ProgressStagesView": {
         "properties": {
