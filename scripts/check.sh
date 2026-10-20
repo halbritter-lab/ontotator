@@ -10,6 +10,7 @@ selected=""
 usage() {
     cat <<'HELP'
 Usage: bash scripts/check.sh [--only STAGE]
+       bash scripts/check.sh --quick [--base REF] [PATH...]
 
 Without arguments, run the complete local gate serially.
 --only runs a partial gate: static | frontend | backend | browser | containers
@@ -18,6 +19,8 @@ Without arguments, run the complete local gate serially.
   backend     complete backend tests with the 20 slowest durations
   browser     frontend build and complete Playwright suite
   containers  opt-in container checks and smoke tests
+--quick runs the inner-loop partial gate (scripts/check-affected.sh): static
+  checks plus only the tests affected by PATH or by the changes against REF.
 
 CHECK_VITEST_WORKERS: positive integer, default 2; use 4 on a dedicated machine.
 CHECK_PYTEST_WORKERS: backend pytest-xdist workers, default 4; 0 or 1 runs serially.
@@ -39,6 +42,10 @@ if [ "$#" -gt 0 ]; then
             [ "$#" -eq 1 ] || fail "--help accepts no other arguments."
             usage
             exit 0
+            ;;
+        --quick)
+            shift
+            exec bash scripts/check-affected.sh "$@"
             ;;
         --only)
             [ "$#" -eq 2 ] || fail "Use --only with exactly one stage; see --help."

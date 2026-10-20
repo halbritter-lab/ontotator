@@ -27,6 +27,31 @@ CHECK_PLAYWRIGHT_WORKERS=2 bash scripts/check.sh --only browser
 
 `CHECK_PYTEST_WORKERS` defaults to 4 and must be a non-negative integer; 0 or 1 runs pytest serially without xdist. Plain `uv run pytest` stays serial; add `-n 4` for a parallel run. `CHECK_PLAYWRIGHT_WORKERS` defaults to 1 and must be a positive integer. More browser workers run spec files in parallel against the one fixture server; tests within a file stay serial because some specs change and restore the settings of shared seeded projects.
 
+## Inner loop for work packages
+
+Work-package agents use the quick path while iterating; the full gate (`bash scripts/check.sh`) runs once per finished plan and again before merge:
+
+```bash
+bash scripts/check.sh --quick                         # changes against main
+bash scripts/check.sh --quick --base feat/x           # changes against another ref
+bash scripts/check.sh --quick src/ontocurator/auth/passwords.py frontend/src/editor/autosave.ts
+```
+
+`--quick` runs `scripts/check-affected.sh`. It runs the static checks (Ruff lint/format, mypy, frontend types, OpenAPI/TypeScript/admin error catalog drift) and then only the affected tests. Without paths it uses the files changed since the merge base with the base ref (default `main`, or `CHECK_BASE`) plus uncommitted and untracked files.
+
+- Backend: changed `tests/**/test_*.py`; `tests/test_<module>.py` and `tests/test_<module>_*.py` for a changed `src/ontocurator/**/<module>.py`; and test modules that import a changed module or test helper. Python changes without such tests re-run the last failures (`pytest --lf`). A change to `tests/conftest.py` or `tests/pg_harness.py` asks for `--only backend`. Workers: `CHECK_PYTEST_WORKERS`, default 2, never more than the selected files.
+- Frontend: `vitest related --run` for changed `frontend/src` and `frontend/tests` files; `CHECK_VITEST_WORKERS` bounds the workers (default 2). Frontend configuration changes ask for `--only frontend`.
+
+The selection follows direct imports only, and it skips the wheel build and Playwright. It is a partial gate and never replaces the full gate. pytest-testmon is not used because it conflicts with pytest-xdist.
+
+## Test speed settings
+
+Outside `tests/test_passwords*`, `tests/test_accounts*`, `tests/test_sessions*` and `tests/test_admin_cli*`, an autouse fixture in `tests/conftest.py` switches the Argon2 hasher of `ontocurator.auth.passwords` to t=1, m=8 MiB, p=1. Hashing, verification, `needs_rehash` and the supplied-hash policy switch together, so logins behave as in production without the cost. The parameters exist only in the test suite; production code has no switch for them. The excluded modules keep the production parameters because they test hashing, the hash policy and rehash on login.
+
+Frontend unit tests without DOM access start with `// @vitest-environment node`; all others use jsdom. Add the comment only to tests that use neither DOM, browser storage, `fetch` nor Testing Library.
+
+The default of four pytest-xdist workers stays: with 16 GB RAM and the PostgreSQL container, other work and parallel test runs need the headroom. Raise it per run with `CHECK_PYTEST_WORKERS` on a dedicated machine.
+
 ## Focused phases
 
 Use an explicit phase during development to avoid repeating unrelated work:

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import cases from "../../contracts/translation-review-cases.json";
 import { checkReview, textDiffers, type ReviewForm } from "../src/translation/reviewRules";

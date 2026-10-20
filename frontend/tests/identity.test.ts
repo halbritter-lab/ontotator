@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it } from "vitest";
 import { personLabel, textLabel } from "../src/app/identity";
 

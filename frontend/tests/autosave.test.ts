@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthError, ConflictError, ValidationError } from "../src/api/client";
 import { createMutationQueue, UnsavedChangesError, type QueueState } from "../src/editor/autosave";

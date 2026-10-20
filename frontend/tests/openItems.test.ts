@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { CarriedState } from "../src/editor/carried/checkState";
 import { collectOpenItems, nextOpenItem, submitBlockedReason, summaryLine, type OpenItem } from "../src/editor/openItems";

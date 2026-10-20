@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN } from "../src/translation/decisionOrigin";
 

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { canPrefill, firstUsableIndex, matchLine, prefillQuery } from "../src/editor/termSearch";
 

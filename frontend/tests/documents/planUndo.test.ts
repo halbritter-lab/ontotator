@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, type BulkResult, type UndoView } from "../../src/api/client";
 import { runPlanUndo } from "../../src/documents/planUndo";

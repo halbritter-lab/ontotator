@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { AnnotationSnapshot, Draft } from "../src/api/client";
 import { defaultedResults, resultSnapshots } from "../src/editor/decisionSemantics";

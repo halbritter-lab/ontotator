@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:related": "vitest related --run --passWithNoTests",
     "api:generate": "openapi-typescript ../contracts/openapi.json -o src/api/generated.ts",
     "api:check": "node scripts/check-api-drift.js",
     "test:e2e": "npm run build && playwright test",

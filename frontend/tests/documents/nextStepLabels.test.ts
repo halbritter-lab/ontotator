@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { NextStepView } from "../../src/api/client";
 import { actionLabel, ownerLabel, secondaryLine, stepLabel, STEP_LABELS } from "../../src/documents/nextStepLabels";

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { carriedFromLine, dismissedLine, instructionLine, linkedMetaLine, missingReason, textSpanLine, valuesLines, whatToCheckContext } from "../../src/editor/carried/instructions";
 

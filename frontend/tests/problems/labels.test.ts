@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { FinalSelectionSummary } from "../../src/api/client";
 import { finalResultLabel } from "../../src/problems/LeadStatePanel";
